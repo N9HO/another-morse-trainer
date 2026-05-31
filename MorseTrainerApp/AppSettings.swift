@@ -17,6 +17,35 @@ enum RevealMode: String, Codable, CaseIterable, Identifiable {
 }
 
 /// How much Morse the learner already knows — sets the starting characters.
+/// How long a practice session lasts before the trainer stops and shows a
+/// summary. `seconds == nil` means open-ended ("until I stop").
+enum PracticeDuration: String, Codable, CaseIterable, Identifiable {
+    var id: String { rawValue }
+    case oneMin, fiveMin, tenMin, fifteenMin, thirtyMin, untilStop
+
+    var seconds: TimeInterval? {
+        switch self {
+        case .oneMin:    return 60
+        case .fiveMin:   return 300
+        case .tenMin:    return 600
+        case .fifteenMin: return 900
+        case .thirtyMin: return 1800
+        case .untilStop: return nil
+        }
+    }
+
+    var label: String {
+        switch self {
+        case .oneMin:    return "1 minute"
+        case .fiveMin:   return "5 minutes"
+        case .tenMin:    return "10 minutes"
+        case .fifteenMin: return "15 minutes"
+        case .thirtyMin: return "30 minutes"
+        case .untilStop: return "Until I stop"
+        }
+    }
+}
+
 enum Proficiency: String, Codable, CaseIterable, Identifiable {
     case none                  // I know nothing
     case someLetters           // I know some of the letters

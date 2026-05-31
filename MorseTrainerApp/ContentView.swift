@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ContentView: View {
     @EnvironmentObject var model: AppModel
+    var onExit: () -> Void = {}
     @State private var showSettings = false
     @State private var showStats = false
     @State private var typedAnswer = ""
@@ -12,7 +13,12 @@ struct ContentView: View {
 
     var body: some View {
         NavigationStack {
+            Group {
+            if model.sessionEnded {
+                sessionSummaryView
+            } else {
             VStack(spacing: 24) {
+                sessionBar
                 statusArea
                     .frame(maxHeight: .infinity)
 
@@ -37,6 +43,8 @@ struct ContentView: View {
                 }
             }
             .padding()
+            }
+            }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .principal) { modeMenu }
@@ -63,7 +71,7 @@ struct ContentView: View {
                 StatsView().environmentObject(model)
             }
             .onAppear {
-                if model.drill == nil { model.start() }
+                if model.drill == nil && !model.sessionEnded { model.startSession() }
             }
         }
     }
@@ -279,6 +287,89 @@ struct ContentView: View {
             .buttonStyle(.borderedProminent)
         } else {
             Color.clear.frame(height: 50)
+        }
+    }
+}
+
+    // MARK: - Session timer bar
+
+    @ViewBuilder
+    private var sessionBar: some View {
+        HStack {
+            Label(sessionTimeText, systemImage: "timer")
+                .monospacedDigit()
+            Spacer()
+            Button(role: .destructive) {
+                model.endSession()
+            } label: {
+                Text("End")
+            }
+        }
+        .font(.subheadline)
+        .foregroundStyle(.secondary)
+    }
+
+    private var sessionTimeText: String {
+        guard let remaining = model.sessionRemaining else { return "No time limit" }
+        let total = Int(remaining.rounded())
+        return String(format: "%d:%02d", total / 60, total % 60)
+    }
+
+    // MARK: - Session summary
+
+    private var sessionSummaryView: some View {
+        let s = model.sessionSummary
+        let timed = s.duration.seconds != nil
+        return VStack(spacing: 22) {
+            Image(systemName: "checkmark.seal.fill")
+                .font(.system(size: 64))
+                .foregroundStyle(.green)
+            VStack(spacing: 4) {
+                Text(timed ? "Time's up!" : "Session complete")
+                    .font(.largeTitle).bold()
+                Text("\(s.duration.label) · \(s.mode.title)")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+
+            VStack(spacing: 14) {
+                summaryRow("Answered", "\(s.attempts)")
+                summaryRow("Accuracy", s.attempts == 0 ? "—" : "\(Int((s.accuracy * 100).rounded()))%")
+                summaryRow("Fastest", s.fastest.map { String(format: "%.2f s", $0) } ?? "—")
+                summaryRow("Median TTR", s.medianTTR.map { String(format: "%.2f s", $0) } ?? "—")
+            }
+            .padding()
+            .frame(maxWidth: .infinity)
+            .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 14))
+
+            VStack(spacing: 12) {
+                Button {
+                    model.startSession()
+                } label: {
+                    Label("Practice again", systemImage: "arrow.clockwise")
+                        .font(.headline)
+                        .frame(maxWidth: .infinity, minHeight: 52)
+                }
+                .buttonStyle(.borderedProminent)
+
+                Button {
+                    onExit()
+                } label: {
+                    Text("Change setup")
+                        .font(.headline)
+                        .frame(maxWidth: .infinity, minHeight: 52)
+                }
+                .buttonStyle(.bordered)
+            }
+        }
+        .padding()
+    }
+
+    private func summaryRow(_ label: String, _ value: String) -> some View {
+        HStack {
+            Text(label).foregroundStyle(.secondary)
+            Spacer()
+            Text(value).font(.title3.monospacedDigit()).bold()
         }
     }
 }

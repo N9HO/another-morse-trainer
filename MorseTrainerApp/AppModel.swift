@@ -37,6 +37,26 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .typed:              return "Type what you hear"
         }
     }
+    /// A one-line explanation shown on the setup screen so the learner can pick
+    /// the teaching style that fits what they want to practice.
+    var blurb: String {
+        switch self {
+        case .characters:
+            return "The core Koch drill: hear one character at full speed and tap it from four sound-alikes. Grows into pairs, triples, then words as you improve."
+        case .words:
+            return "Copy whole common ham-radio words and pick the right one from four look-alikes."
+        case .abbreviations:
+            return "Hear a CW abbreviation or Q-code (like ES or QTH) and choose what it means."
+        case .prosigns:
+            return "Recognize run-together prosigns such as <AR> and <SK> by their rhythm."
+        case .headCopy:
+            return "Listen to a word, copy it in your head, then reveal and self-grade — no buttons. Builds true head-copy."
+        case .typed:
+            return "Hear a word or call sign and type exactly what you heard. Free recall — the closest thing to real copying."
+        case .confusion:
+            return "Targeted review of the exact character pairs you mix up most, drilled head-to-head until they stick."
+        }
+    }
 }
 
 /// The app's single source of truth. Connects the tested MorseKit quiz engines
@@ -59,6 +79,16 @@ final class AppModel: ObservableObject {
     @Published private(set) var lastTTR: TimeInterval?
     @Published private(set) var justUnlocked: String?
     @Published private(set) var summary: String = ""
+
+    // Session timer & running tally (for the timed-practice feature).
+    @Published private(set) var sessionRemaining: TimeInterval?   // nil = no limit
+    @Published private(set) var sessionEnded = false
+    private var sessionEndDate: Date?
+    private var sessionTimer: Timer?
+    private var sessionAttempts = 0
+    private var sessionCorrect = 0
+    private var sessionFastest: TimeInterval?
+    private var sessionTTRs: [TimeInterval] = []
 
     private let engine: TrainerEngine
     private let charLadder: ProgressiveCharacters
@@ -107,6 +137,12 @@ final class AppModel: ObservableObject {
     var isHeadCopy: Bool { mode == .headCopy }
     var isTyped: Bool { mode == .typed }
 
+    /// The teaching style chosen on the setup screen (mirrors `settings`).
+    var learningMode: TrainingMode {
+        get { TrainingMode(rawValue: settings.learningMode) ?? .characters }
+        set { settings.learningMode = newValue.rawValue }
+    }
+
     private static func config(from s: AppSettings) -> TrainerEngine.Config {
         TrainerEngine.Config(
             wpm: s.wpm,
@@ -146,6 +182,95 @@ final class AppModel: ObservableObject {
 
     func start() {
         newDrill()
+    }
+
+    // MARK: - Practice session (timed)
+
+    struct SessionSummary {
+        let attempts: Int
+        let correct: Int
+        let accuracy: Double
+        let fastest: TimeInterval?
+        let medianTTR: TimeInterval?
+        let duration: PracticeDuration
+        let mode: TrainingMode
+    }
+
+    /// Begin a fresh practice session: apply the chosen learning style, reset
+    /// the running tally, start the countdown (if any), and hand out a drill.
+    func startSession() {
+        mode = learningMode
+        sessionEnded = false
+        sessionAttempts = 0
+        sessionCorrect = 0
+        sessionFastest = nil
+        sessionTTRs = []
+        sessionTimer?.invalidate()
+        sessionTimer = nil
+
+        if let secs = settings.practiceDuration.seconds {
+            sessionEndDate = Date().addingTimeInterval(secs)
+            sessionRemaining = secs
+            let timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+                Task { @MainActor in self?.sessionTick() }
+            }
+            sessionTimer = timer
+        } else {
+            sessionEndDate = nil
+            sessionRemaining = nil
+        }
+        start()
+    }
+
+    private func sessionTick() {
+        guard let end = sessionEndDate else { return }
+        let remaining = end.timeIntervalSinceNow
+        if remaining <= 0 {
+            sessionRemaining = 0
+            endSession()
+        } else {
+            sessionRemaining = remaining
+        }
+    }
+
+    /// Stop the session, cancel any pending auto-advance, and show the summary.
+    func endSession() {
+        sessionTimer?.invalidate()
+        sessionTimer = nil
+        sessionEndDate = nil
+        advanceGeneration += 1   // cancel any pending auto-advance
+        phase = .idle
+        sessionEnded = true
+    }
+
+    /// Add one answered drill to the running session tally.
+    private func noteSessionResult(correct: Bool, ttr: TimeInterval) {
+        sessionAttempts += 1
+        if correct { sessionCorrect += 1 }
+        if ttr > 0 {
+            sessionTTRs.append(ttr)
+            if correct { sessionFastest = min(sessionFastest ?? .infinity, ttr) }
+        }
+    }
+
+    var sessionSummary: SessionSummary {
+        let accuracy = sessionAttempts == 0 ? 0 : Double(sessionCorrect) / Double(sessionAttempts)
+        let median: TimeInterval?
+        if sessionTTRs.isEmpty {
+            median = nil
+        } else {
+            let sorted = sessionTTRs.sorted()
+            let mid = sorted.count / 2
+            median = sorted.count % 2 == 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid]
+        }
+        return SessionSummary(
+            attempts: sessionAttempts,
+            correct: sessionCorrect,
+            accuracy: accuracy,
+            fastest: sessionFastest,
+            medianTTR: median,
+            duration: settings.practiceDuration,
+            mode: mode)
     }
 
     private func newDrill() {
@@ -190,6 +315,7 @@ final class AppModel: ObservableObject {
         justUnlocked = outcome.unlocked
         summary = source.summary
         phase = .answered
+        noteSessionResult(correct: outcome.correct, ttr: ttr)
         saveProgress()
 
         // Keep the rhythm going: correct answers auto-advance (unless a new
@@ -289,6 +415,7 @@ final class AppModel: ObservableObject {
         let outcome = source.record(choice: choice, ttr: lastTTR ?? 0)
         lastCorrect = outcome.correct
         summary = source.summary
+        noteSessionResult(correct: outcome.correct, ttr: lastTTR ?? 0)
         next()
     }
 
