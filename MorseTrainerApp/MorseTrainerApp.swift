@@ -18,7 +18,7 @@ struct RootView: View {
 
     var body: some View {
         if started {
-            ContentView()
+            ContentView(onExit: { withAnimation { started = false } })
         } else {
             IntroView(onStart: { withAnimation { started = true } })
         }

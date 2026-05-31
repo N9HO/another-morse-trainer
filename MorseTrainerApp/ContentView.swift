@@ -289,7 +289,6 @@ struct ContentView: View {
             Color.clear.frame(height: 50)
         }
     }
-}
 
     // MARK: - Session timer bar
 

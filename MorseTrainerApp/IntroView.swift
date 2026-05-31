@@ -13,6 +13,20 @@ struct IntroView: View {
         )
     }
 
+    private var learningModeBinding: Binding<TrainingMode> {
+        Binding(
+            get: { model.learningMode },
+            set: { model.learningMode = $0 }
+        )
+    }
+
+    private var durationBinding: Binding<PracticeDuration> {
+        Binding(
+            get: { model.settings.practiceDuration },
+            set: { model.settings.practiceDuration = $0 }
+        )
+    }
+
     var body: some View {
         VStack(spacing: 28) {
             Spacer(minLength: 8)
@@ -42,6 +56,22 @@ struct IntroView: View {
             }
             .padding(.horizontal, 8)
 
+            VStack(alignment: .leading, spacing: 8) {
+                Text("How do you want to learn?")
+                    .font(.subheadline).foregroundStyle(.secondary)
+                Picker("Learning style", selection: learningModeBinding) {
+                    ForEach(TrainingMode.allCases) { m in
+                        Label(m.title, systemImage: m.icon).tag(m)
+                    }
+                }
+                .pickerStyle(.menu)
+                Text(model.learningMode.blurb)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
             VStack(spacing: 8) {
                 Text("Where are you starting?")
                     .font(.subheadline).foregroundStyle(.secondary)
@@ -53,9 +83,23 @@ struct IntroView: View {
                 .pickerStyle(.menu)
             }
 
+            VStack(spacing: 8) {
+                Text("How long do you want to practice?")
+                    .font(.subheadline).foregroundStyle(.secondary)
+                Picker("Duration", selection: durationBinding) {
+                    ForEach(PracticeDuration.allCases) { d in
+                        Text(d.label).tag(d)
+                    }
+                }
+                .pickerStyle(.menu)
+            }
+
             Spacer(minLength: 8)
 
-            Button(action: onStart) {
+            Button {
+                model.startSession()
+                onStart()
+            } label: {
                 Text("Start Training")
                     .font(.headline)
                     .frame(maxWidth: .infinity, minHeight: 52)

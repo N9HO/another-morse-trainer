@@ -80,6 +80,12 @@ struct AppSettings: Codable, Equatable {
     /// Optional punctuation the user has opted into studying (e.g. ",", "/", ".").
     var selectedPunctuation: Set<String> = []
 
+    // Session setup
+    /// Chosen teaching style for the next session (a TrainingMode rawValue).
+    var learningMode: String = "characters"
+    /// How long a practice session runs before it stops and shows a summary.
+    var practiceDuration: PracticeDuration = .fiveMin
+
     // Feedback (defaults per spec: show right/wrong, reveal only on miss, no replay)
     var showCorrectness: Bool = true
     var reveal: RevealMode = .onWrong
@@ -115,6 +121,7 @@ extension AppSettings {
     enum CodingKeys: String, CodingKey {
         case toneFrequency, wpm, farnsworth, effectiveWpm, proficiency, ttrThreshold
         case distractorsFromFullAlphabet, selectedPunctuation
+        case learningMode, practiceDuration
         case showCorrectness, reveal, allowReplay
     }
 
@@ -129,6 +136,8 @@ extension AppSettings {
         s.ttrThreshold = try c.decodeIfPresent(Double.self, forKey: .ttrThreshold) ?? s.ttrThreshold
         s.distractorsFromFullAlphabet = try c.decodeIfPresent(Bool.self, forKey: .distractorsFromFullAlphabet) ?? s.distractorsFromFullAlphabet
         s.selectedPunctuation = try c.decodeIfPresent(Set<String>.self, forKey: .selectedPunctuation) ?? s.selectedPunctuation
+        s.learningMode = try c.decodeIfPresent(String.self, forKey: .learningMode) ?? s.learningMode
+        s.practiceDuration = try c.decodeIfPresent(PracticeDuration.self, forKey: .practiceDuration) ?? s.practiceDuration
         s.showCorrectness = try c.decodeIfPresent(Bool.self, forKey: .showCorrectness) ?? s.showCorrectness
         s.reveal = try c.decodeIfPresent(RevealMode.self, forKey: .reveal) ?? s.reveal
         s.allowReplay = try c.decodeIfPresent(Bool.self, forKey: .allowReplay) ?? s.allowReplay
