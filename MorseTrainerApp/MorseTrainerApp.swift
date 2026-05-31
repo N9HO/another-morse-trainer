@@ -8,6 +8,8 @@ struct MorseTrainerApp: App {
         WindowGroup {
             RootView()
                 .environmentObject(model)
+                .tint(Theme.teal)              // brand accent on all controls
+                .preferredColorScheme(.dark)   // navy-friendly dark UI
         }
     }
 }
@@ -17,10 +19,13 @@ struct RootView: View {
     @State private var started = false
 
     var body: some View {
-        if started {
-            ContentView(onExit: { withAnimation { started = false } })
-        } else {
-            IntroView(onStart: { withAnimation { started = true } })
+        ZStack {
+            Theme.Background()
+            if started {
+                ContentView(onExit: { withAnimation { started = false } })
+            } else {
+                IntroView(onStart: { withAnimation { started = true } })
+            }
         }
     }
 }

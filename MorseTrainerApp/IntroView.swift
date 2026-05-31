@@ -49,20 +49,21 @@ struct IntroView: View {
     }
 
     var body: some View {
-        VStack(spacing: 28) {
-            Spacer(minLength: 8)
+        VStack(spacing: 0) {
+            ScrollView {
+                VStack(spacing: 28) {
+                    Spacer(minLength: 8)
 
-            VStack(spacing: 12) {
-                Image(systemName: "antenna.radiowaves.left.and.right")
-                    .font(.system(size: 64))
-                    .foregroundStyle(.blue)
-                Text("Morse Trainer")
-                    .font(.largeTitle).bold()
-                Text("Learn Morse code by ear — the proven Koch method.")
-                    .font(.headline)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-            }
+                    VStack(spacing: 12) {
+                        logoMark
+                        Text("Another Morse Trainer")
+                            .font(.largeTitle).bold()
+                            .multilineTextAlignment(.center)
+                        Text("Learn Morse code by ear — the proven Koch method.")
+                            .font(.headline)
+                            .foregroundStyle(Theme.textSecondary)
+                            .multilineTextAlignment(.center)
+                    }
 
             VStack(alignment: .leading, spacing: 18) {
                 howItWorks(icon: "ear",
@@ -155,7 +156,9 @@ struct IntroView: View {
                 .pickerStyle(.menu)
             }
 
-            Spacer(minLength: 8)
+                }
+                .padding(24)
+            }
 
             Button {
                 model.startSession()
@@ -166,19 +169,42 @@ struct IntroView: View {
                     .frame(maxWidth: .infinity, minHeight: 52)
             }
             .buttonStyle(.borderedProminent)
+            .padding(.horizontal, 24)
+            .padding(.bottom, 12)
         }
-        .padding(24)
+    }
+
+    /// Brand mark for the welcome screen: the real logo if it's been added to
+    /// the asset catalog, otherwise a styled placeholder in the brand colors.
+    @ViewBuilder
+    private var logoMark: some View {
+        if let ui = UIImage(named: "AMTLogo") {
+            Image(uiImage: ui)
+                .resizable()
+                .scaledToFit()
+                .frame(maxWidth: 220)
+                .clipShape(RoundedRectangle(cornerRadius: 28))
+        } else {
+            ZStack {
+                Circle()
+                    .strokeBorder(Theme.teal, lineWidth: 6)
+                    .frame(width: 120, height: 120)
+                Image(systemName: "antenna.radiowaves.left.and.right")
+                    .font(.system(size: 52))
+                    .foregroundStyle(.white)
+            }
+        }
     }
 
     private func howItWorks(icon: String, title: String, detail: String) -> some View {
         HStack(alignment: .top, spacing: 14) {
             Image(systemName: icon)
                 .font(.title2)
-                .foregroundStyle(.blue)
+                .foregroundStyle(Theme.teal)
                 .frame(width: 32)
             VStack(alignment: .leading, spacing: 2) {
                 Text(title).font(.headline)
-                Text(detail).font(.subheadline).foregroundStyle(.secondary)
+                Text(detail).font(.subheadline).foregroundStyle(Theme.textSecondary)
             }
         }
     }

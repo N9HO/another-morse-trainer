@@ -412,14 +412,17 @@ final class AppModel: ObservableObject {
         case .abbreviations:
             let item = MorseData.abbreviationItems.randomElement()
                 ?? MorseItem(id: "ES", playable: .text("ES"), answer: "and", display: "ES")
-            let spelled = item.display.map(String.init).joined(separator: " ")
+            // Spell the token in lowercase letters so TTS says "q t h", not
+            // "capital Q…", then the meaning.
+            let spelled = item.display.lowercased().map(String.init).joined(separator: " ")
             return ListenItem(playable: item.playable,
                               display: "\(item.display) — \(item.answer)",
                               spoken: "\(spelled). \(item.answer)")
         }
     }
 
-    /// Human-readable name for a single character so TTS says it clearly.
+    /// Human-readable name for a single character so TTS says just the letter
+    /// (lowercased so the synthesizer doesn't announce "capital A").
     private func spokenName(for ch: Character) -> String {
         switch ch {
         case "?": return "question mark"
@@ -428,7 +431,7 @@ final class AppModel: ObservableObject {
         case "/": return "slash"
         case "=": return "equals"
         case "+": return "plus"
-        default:  return String(ch)
+        default:  return String(ch).lowercased()
         }
     }
 
