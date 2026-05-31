@@ -3,7 +3,7 @@ import SwiftUI
 
 /// The four ways to practice.
 enum TrainingMode: String, CaseIterable, Identifiable {
-    case characters, words, abbreviations, prosigns
+    case characters, words, abbreviations, prosigns, headCopy
     var id: String { rawValue }
     var title: String {
         switch self {
@@ -11,6 +11,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .words:        return "Words"
         case .abbreviations: return "Abbreviations"
         case .prosigns:     return "Prosigns"
+        case .headCopy:     return "Head Copy"
         }
     }
     var icon: String {
@@ -19,6 +20,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .words:         return "textformat"
         case .abbreviations: return "text.bubble"
         case .prosigns:      return "antenna.radiowaves.left.and.right"
+        case .headCopy:      return "brain.head.profile"
         }
     }
     /// In meaning-based modes the question is "what are they saying?"
@@ -27,6 +29,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .characters, .words: return "What did you hear?"
         case .abbreviations:      return "What are they saying?"
         case .prosigns:           return "Which prosign?"
+        case .headCopy:           return "Copy it in your head…"
         }
     }
 }
@@ -37,7 +40,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
 @MainActor
 final class AppModel: ObservableObject {
 
-    enum Phase { case idle, playing, awaiting, answered }
+    enum Phase { case idle, playing, awaiting, revealed, answered }
 
     @Published var settings: AppSettings {
         didSet { settings.save(); applySettings() }
@@ -57,6 +60,7 @@ final class AppModel: ObservableObject {
     private let wordsQuiz: PhraseQuiz
     private let abbrevQuiz: PhraseQuiz
     private let prosignQuiz: PhraseQuiz
+    private let headCopyQuiz: PhraseQuiz
 
     private let player = MorsePlayer()
     private var toneEndDate: Date?
@@ -72,6 +76,7 @@ final class AppModel: ObservableObject {
         self.wordsQuiz = PhraseQuiz(name: "Words", items: MorseData.wordItems)
         self.abbrevQuiz = PhraseQuiz(name: "Abbreviations", items: MorseData.abbreviationItems)
         self.prosignQuiz = PhraseQuiz(name: "Prosigns", items: MorseData.prosignItems)
+        self.headCopyQuiz = PhraseQuiz(name: "Head Copy", items: MorseData.wordAndCallSignItems)
         restoreProgress()
         reconcilePunctuation()
         applyPhraseConfig(from: loaded)
@@ -84,8 +89,11 @@ final class AppModel: ObservableObject {
         case .words:        return wordsQuiz
         case .abbreviations: return abbrevQuiz
         case .prosigns:     return prosignQuiz
+        case .headCopy:     return headCopyQuiz
         }
     }
+
+    var isHeadCopy: Bool { mode == .headCopy }
 
     private static func config(from s: AppSettings) -> TrainerEngine.Config {
         TrainerEngine.Config(
@@ -97,7 +105,7 @@ final class AppModel: ObservableObject {
     }
 
     private func applyPhraseConfig(from s: AppSettings) {
-        for quiz in [wordsQuiz, abbrevQuiz, prosignQuiz] {
+        for quiz in [wordsQuiz, abbrevQuiz, prosignQuiz, headCopyQuiz] {
             quiz.config.ttrThreshold = s.ttrThreshold
         }
     }
@@ -108,7 +116,11 @@ final class AppModel: ObservableObject {
         reconcilePunctuation()
     }
 
-    var timing: MorseTiming { MorseTiming(wpm: settings.wpm) }
+    var timing: MorseTiming {
+        settings.farnsworth
+            ? MorseTiming(characterWpm: settings.wpm, effectiveWpm: settings.effectiveWpm)
+            : MorseTiming(wpm: settings.wpm)
+    }
 
     // MARK: - Mode switching
 
@@ -214,6 +226,26 @@ final class AppModel: ObservableObject {
             if a.mastered != b.mastered { return !a.mastered }           // unmastered first
             return (a.medianTTR ?? .infinity) > (b.medianTTR ?? .infinity) // slowest first
         }
+    }
+
+    // MARK: - Head copy flow
+
+    /// Head copy: after hearing the word and copying it mentally, reveal the
+    /// answer to self-check. The TTR clock captures recall time.
+    func revealHeadCopy() {
+        guard isHeadCopy, phase == .awaiting, let end = toneEndDate else { return }
+        lastTTR = Date().timeIntervalSince(end)
+        phase = .revealed
+    }
+
+    /// Head copy: self-grade whether you got it, record it, and move on.
+    func gradeHeadCopy(_ gotIt: Bool) {
+        guard isHeadCopy, phase == .revealed, let drill else { return }
+        let choice = gotIt ? drill.correct : "\u{1}miss"   // a guaranteed non-match for a miss
+        let outcome = source.record(choice: choice, ttr: lastTTR ?? 0)
+        lastCorrect = outcome.correct
+        summary = source.summary
+        next()
     }
 
     var showsNextButton: Bool {

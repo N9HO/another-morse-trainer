@@ -58,6 +58,16 @@ check("dah = 3 dits", approxEqual(t.dah, 3 * t.dit, 1e-9))
 check("'E' lasts exactly one dit", approxEqual(t.duration(of: "E"), t.dit, 1e-9))
 check("'A' = dit + gap + dah", approxEqual(t.duration(of: "A"), t.dit + t.elementGap + t.dah, 1e-9))
 
+// Farnsworth timing
+print("\nFarnsworth timing:")
+let std = MorseTiming(wpm: 20)
+let farns = MorseTiming(characterWpm: 20, effectiveWpm: 10)
+check("character elements unchanged by Farnsworth", farns.dit == std.dit && farns.dah == std.dah)
+check("Farnsworth stretches the character gap", farns.characterGap > std.characterGap)
+check("standard spacing unit equals dit when no Farnsworth", abs(std.spacingUnit - std.unit) < 1e-9)
+check("effective==character ⇒ no stretch",
+      abs(MorseTiming(characterWpm: 20, effectiveWpm: 20).characterGap - std.characterGap) < 1e-9)
+
 // Distance / distractors
 print("\nClosest-sounding distractors:")
 let X: Character = "X", B: Character = "B", P: Character = "P", Y: Character = "Y"

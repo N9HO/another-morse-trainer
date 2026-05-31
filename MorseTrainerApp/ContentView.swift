@@ -24,8 +24,12 @@ struct ContentView: View {
                     .buttonStyle(.bordered)
                 }
 
-                choiceGrid
-                bottomBar
+                if model.isHeadCopy {
+                    headCopyControls
+                } else {
+                    choiceGrid
+                    bottomBar
+                }
             }
             .padding()
             .navigationBarTitleDisplayMode(.inline)
@@ -91,10 +95,12 @@ struct ContentView: View {
                     .foregroundStyle(.blue)
                 Text("Listen…").font(.title3).foregroundStyle(.secondary)
             case .awaiting:
-                Image(systemName: "ear")
+                Image(systemName: model.isHeadCopy ? "brain.head.profile" : "ear")
                     .font(.system(size: 60))
                     .foregroundStyle(.blue)
                 Text(model.mode.prompt).font(.title3).foregroundStyle(.secondary)
+            case .revealed:
+                revealView
             case .answered:
                 feedbackView
             }
@@ -135,6 +141,51 @@ struct ContentView: View {
                     .foregroundStyle(.orange)
                     .padding(.top, 4)
             }
+        }
+    }
+
+    // MARK: - Head copy
+
+    @ViewBuilder
+    private var revealView: some View {
+        VStack(spacing: 8) {
+            Text("You heard:").font(.subheadline).foregroundStyle(.secondary)
+            Text(model.drill?.revealPrimary ?? "")
+                .font(.system(size: 44, weight: .bold, design: .monospaced))
+            if let ttr = model.lastTTR {
+                Text(String(format: "recalled in %.1f s", ttr))
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var headCopyControls: some View {
+        switch model.phase {
+        case .awaiting:
+            Button {
+                model.revealHeadCopy()
+            } label: {
+                Text("Reveal")
+                    .font(.headline)
+                    .frame(maxWidth: .infinity, minHeight: 56)
+            }
+            .buttonStyle(.borderedProminent)
+        case .revealed:
+            HStack(spacing: 16) {
+                Button { model.gradeHeadCopy(false) } label: {
+                    Label("Missed it", systemImage: "xmark")
+                        .font(.headline).frame(maxWidth: .infinity, minHeight: 56)
+                }
+                .buttonStyle(.borderedProminent).tint(.red)
+                Button { model.gradeHeadCopy(true) } label: {
+                    Label("Got it", systemImage: "checkmark")
+                        .font(.headline).frame(maxWidth: .infinity, minHeight: 56)
+                }
+                .buttonStyle(.borderedProminent).tint(.green)
+            }
+        default:
+            Color.clear.frame(height: 56)
         }
     }
 

@@ -38,7 +38,11 @@ enum Proficiency: String, Codable, CaseIterable, Identifiable {
 struct AppSettings: Codable, Equatable {
     // Audio
     var toneFrequency: Double = 600     // Hz, adjustable live
-    var wpm: Double = 33
+    var wpm: Double = 33                // character speed
+    /// Farnsworth: stretch the spacing between characters (multi-character
+    /// content only) down to this effective WPM, while characters stay at `wpm`.
+    var farnsworth: Bool = false
+    var effectiveWpm: Double = 18
 
     // Learning
     var proficiency: Proficiency = .none
@@ -80,7 +84,7 @@ struct AppSettings: Codable, Equatable {
 // (Declared in an extension to keep the automatic memberwise initializer.)
 extension AppSettings {
     enum CodingKeys: String, CodingKey {
-        case toneFrequency, wpm, proficiency, ttrThreshold
+        case toneFrequency, wpm, farnsworth, effectiveWpm, proficiency, ttrThreshold
         case distractorsFromFullAlphabet, selectedPunctuation
         case showCorrectness, reveal, allowReplay
     }
@@ -90,6 +94,8 @@ extension AppSettings {
         var s = AppSettings()
         s.toneFrequency = try c.decodeIfPresent(Double.self, forKey: .toneFrequency) ?? s.toneFrequency
         s.wpm = try c.decodeIfPresent(Double.self, forKey: .wpm) ?? s.wpm
+        s.farnsworth = try c.decodeIfPresent(Bool.self, forKey: .farnsworth) ?? s.farnsworth
+        s.effectiveWpm = try c.decodeIfPresent(Double.self, forKey: .effectiveWpm) ?? s.effectiveWpm
         s.proficiency = try c.decodeIfPresent(Proficiency.self, forKey: .proficiency) ?? s.proficiency
         s.ttrThreshold = try c.decodeIfPresent(Double.self, forKey: .ttrThreshold) ?? s.ttrThreshold
         s.distractorsFromFullAlphabet = try c.decodeIfPresent(Bool.self, forKey: .distractorsFromFullAlphabet) ?? s.distractorsFromFullAlphabet

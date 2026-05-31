@@ -34,6 +34,20 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    Toggle("Farnsworth spacing", isOn: $model.settings.farnsworth)
+                    if model.settings.farnsworth {
+                        sliderRow(title: "Effective speed",
+                                  value: $model.settings.effectiveWpm,
+                                  range: 8...max(9, model.settings.wpm), step: 1,
+                                  format: { "\(Int($0)) WPM" })
+                    }
+                } header: {
+                    Text("Farnsworth (multi-character)")
+                } footer: {
+                    Text("Keeps each character at full speed but adds extra space between characters, so you have time to recognize them. Applies to words, groups, and other multi-character content — single characters are unaffected.")
+                }
+
+                Section {
                     Picker("I already know…", selection: proficiencyBinding) {
                         ForEach(Proficiency.allCases) { level in
                             Text(level.label).tag(level)
