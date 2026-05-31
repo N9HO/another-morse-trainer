@@ -118,7 +118,9 @@ struct ContentView: View {
                 Image(systemName: model.isHeadCopy ? "brain.head.profile" : "ear")
                     .font(.system(size: 60))
                     .foregroundStyle(.blue)
-                Text(model.mode.prompt).font(.title3).foregroundStyle(.secondary)
+                Text(awaitingPrompt)
+                    .font(.title3).foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
             case .revealed:
                 revealView
             case .answered:
@@ -127,6 +129,13 @@ struct ContentView: View {
         }
         .multilineTextAlignment(.center)
         .animation(.easeInOut(duration: 0.15), value: model.phase)
+    }
+
+    /// During the answer phase, prefer a drill-specific question (the QSO
+    /// simulator sets one) over the generic per-mode prompt.
+    private var awaitingPrompt: String {
+        if let q = model.drill?.question, !q.isEmpty { return q }
+        return model.mode.prompt
     }
 
     @ViewBuilder

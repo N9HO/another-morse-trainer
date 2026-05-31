@@ -176,6 +176,13 @@ final class MorsePlayer {
             let chars = Array(text)
             var result: [(tone: Double, gap: Double)] = []
             for (ci, ch) in chars.enumerated() {
+                // A space is a word gap: stretch the previous character's
+                // trailing gap to a full word gap. Only QSO-style multi-word
+                // transmissions contain spaces — single tokens are unaffected.
+                if ch == " " {
+                    if !result.isEmpty { result[result.count - 1].gap = timing.wordGap }
+                    continue
+                }
                 let els = MorseCode.elements(for: ch)
                 guard !els.isEmpty else { continue }
                 let afterChar = ci == chars.count - 1 ? 0 : timing.characterGap

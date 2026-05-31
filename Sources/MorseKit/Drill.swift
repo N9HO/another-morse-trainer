@@ -13,17 +13,22 @@ public struct Drill: Sendable, Equatable {
     public let revealPrimary: String
     /// Smaller supporting text on reveal (e.g. the dot-dash pattern or meaning).
     public let revealSecondary: String
+    /// Optional question/context shown above the choices (e.g. the QSO
+    /// simulator's "What's their name?"). Empty for simple recognition drills.
+    public let question: String
 
     public init(playable: MorseItem.Playable,
                 options: [String],
                 correct: String,
                 revealPrimary: String,
-                revealSecondary: String) {
+                revealSecondary: String,
+                question: String = "") {
         self.playable = playable
         self.options = options
         self.correct = correct
         self.revealPrimary = revealPrimary
         self.revealSecondary = revealSecondary
+        self.question = question
     }
 }
 

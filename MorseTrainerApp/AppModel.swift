@@ -4,7 +4,7 @@ import MediaPlayer
 
 /// The ways to practice.
 enum TrainingMode: String, CaseIterable, Identifiable {
-    case characters, words, abbreviations, prosigns, headCopy, typed, confusion, listen
+    case characters, words, abbreviations, prosigns, headCopy, typed, confusion, listen, qso
     var id: String { rawValue }
     var title: String {
         switch self {
@@ -16,6 +16,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .typed:        return "Type It"
         case .confusion:    return "Confusion Drill"
         case .listen:       return "Listen & Learn"
+        case .qso:          return "QSO Simulator"
         }
     }
     var icon: String {
@@ -28,6 +29,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .typed:         return "keyboard"
         case .confusion:     return "arrow.left.arrow.right"
         case .listen:        return "headphones"
+        case .qso:           return "person.wave.2"
         }
     }
     /// In meaning-based modes the question is "what are they saying?"
@@ -39,6 +41,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .headCopy:           return "Copy it in your head…"
         case .typed:              return "Type what you hear"
         case .listen:             return "Listen…"
+        case .qso:                return "Copy the other station"
         }
     }
     /// A one-line explanation shown on the setup screen so the learner can pick
@@ -61,6 +64,8 @@ enum TrainingMode: String, CaseIterable, Identifiable {
             return "Targeted review of the exact character pairs you mix up most, drilled head-to-head until they stick."
         case .listen:
             return "Hands-free: hear the code, then the answer spoken aloud — no tapping. Keeps playing with the screen locked, so you can learn while driving or walking."
+        case .qso:
+            return "Work a simulated on-air contact: a station answers your CQ and you copy their callsign, signal report, name, and QTH — one ragchew at a time."
         }
     }
 }
@@ -104,6 +109,7 @@ final class AppModel: ObservableObject {
     private let headCopyQuiz: PhraseQuiz
     private let typedQuiz: PhraseQuiz
     private let confusionQuiz: ConfusionQuiz
+    private let qsoSim = QSOSimulator()
 
     private let player = MorsePlayer()
     private let speech = SpeechPlayer()
@@ -146,6 +152,7 @@ final class AppModel: ObservableObject {
         case .typed:        return typedQuiz
         case .confusion:    return confusionQuiz
         case .listen:       return charLadder   // unused: Listen runs its own loop
+        case .qso:          return qsoSim
         }
     }
 

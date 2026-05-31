@@ -105,6 +105,27 @@ public enum MorseData {
         "W5KFT", "K3LR", "N2IC", "W6OAT", "K1TTT"
     ]
 
+    // MARK: Operator names & QTHs (for the QSO simulator)
+
+    /// Common operator first names heard on the air (ragchew "NAME" field).
+    public static let opNames: [String] = [
+        "JIM","BOB","TOM","DAVE","JOHN","MIKE","BILL","STEVE","DAN","PAUL",
+        "GARY","KEN","RON","RICK","JOE","FRANK","ED","AL","PHIL","MARK",
+        "PETE","SAM","CARL","RAY","LARRY","JACK","ROY","HANK","WALT","ART"
+    ]
+
+    /// QTH locations (US state abbreviations) for the ragchew "QTH" field.
+    public static let qthList: [String] = [
+        "OH","TX","CA","NY","FL","PA","IL","MI","GA","NC",
+        "VA","WA","AZ","CO","OR","TN","MO","IN","WI","MN",
+        "KS","IA","OK","AR","UT","NV","ME","NH","VT","ID"
+    ]
+
+    /// Common signal reports given in a QSO.
+    public static let rstValues: [String] = [
+        "599","579","559","569","589","539","449","459","558","578"
+    ]
+
     // MARK: Prosigns → (run-together pattern, meaning)
 
     public static let prosigns: [(name: String, pattern: String, meaning: String)] = [

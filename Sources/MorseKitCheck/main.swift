@@ -275,6 +275,32 @@ do {
     }
 }
 
+// QSO simulator
+print("\nQSO simulator:")
+do {
+    let qso = QSOSimulator(rng: SeededRNG(seed: 42))
+    let firstCall = qso.station.call
+    var questions = Set<String>()
+    var optionsOK = true, correctOK = true, hasQuestion = true
+    for _ in 0..<4 {
+        let d = qso.nextDrill()
+        if !(d.options.count == 4 && Set(d.options).count == 4) { optionsOK = false }
+        if !d.options.contains(d.correct) { correctOK = false }
+        if d.question.isEmpty { hasQuestion = false }
+        questions.insert(d.question)
+        _ = qso.record(choice: d.correct, ttr: 0.5)
+    }
+    check("QSO drills present 4 distinct options", optionsOK)
+    check("QSO correct answer is always among the options", correctOK)
+    check("each QSO step carries a question", hasQuestion)
+    check("a QSO asks 4 distinct questions (call, RST, name, QTH)", questions.count == 4)
+    check("finishing the exchange completes one QSO", qso.completedQSOs == 1)
+    let d = qso.nextDrill()
+    check("a fresh QSO begins after the last step", d.options.contains(d.correct))
+    check("the first step copies the station's callsign",
+          QSOSimulator(rng: SeededRNG(seed: 42)).nextDrill().correct == firstCall)
+}
+
 print("\n────────────────────────────")
 if failures == 0 {
     print("✅ All \(checks) checks passed.\n")
