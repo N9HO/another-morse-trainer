@@ -214,6 +214,67 @@ do {
     check("ladder reaches Words & Call Signs", reachedPhrases)
 }
 
+// Confusion-pair tracking & drill
+print("\nConfusion pairs:")
+do {
+    let eng = TrainerEngine(seedCount: 2, rng: SeededRNG(seed: 21))
+    eng.setActiveCharacters(["X", "Y", "B", "P", "E", "T"])
+    let qX = TrainerEngine.Question(target: "X", options: ["X", "Y", "B", "P"])
+    // Heard X but answered Y three times, answered B once.
+    eng.record(answer: "Y", for: qX, ttr: 0.5)
+    eng.record(answer: "Y", for: qX, ttr: 0.5)
+    eng.record(answer: "Y", for: qX, ttr: 0.5)
+    eng.record(answer: "B", for: qX, ttr: 0.5)
+    check("a wrong answer records who you confused it with",
+          eng.confusions.count(target: "X", chosen: "Y") == 3)
+    eng.record(answer: "X", for: qX, ttr: 0.4)   // a correct answer …
+    check("a correct answer records no confusion",
+          eng.confusions.count(target: "X", chosen: "X") == 0)
+    check("strongest confusion is heard-X-picked-Y",
+          eng.confusions.entries().first.map { $0.target == "X" && $0.chosen == "Y" } == true)
+    check("strongest unordered pair is X/Y with count 3",
+          eng.confusions.pairs().first.map { $0.count == 3 && Set([$0.a, $0.b]) == Set<Character>(["X", "Y"]) } == true)
+
+    eng.easeConfusion(target: "X", chosen: "Y")
+    check("a correct recognition eases the pair",
+          eng.confusions.count(target: "X", chosen: "Y") == 2)
+
+    // The confusion drill should pit the confused pair head-to-head.
+    let cq = ConfusionQuiz(engine: eng, rng: SeededRNG(seed: 3))
+    let cdrill = cq.nextDrill()
+    check("confusion drill has 4 distinct options",
+          cdrill.options.count == 4 && Set(cdrill.options).count == 4)
+    check("confusion drill includes the correct answer", cdrill.options.contains(cdrill.correct))
+    check("confusion drill targets a confused character (X)", cdrill.correct == "X")
+    check("confusion drill offers a real confuser on the buttons",
+          cdrill.options.contains("Y") || cdrill.options.contains("B"))
+
+    // Recording a review answer must not graduate a new Koch character.
+    let beforeCount = eng.activeCharacters.count
+    _ = cq.record(choice: cdrill.correct, ttr: 0.4)
+    check("confusion drill records without introducing a new character",
+          eng.activeCharacters.count == beforeCount)
+
+    // Always usable, even before any errors exist.
+    let fresh = TrainerEngine(seedCount: 4, rng: SeededRNG(seed: 9))
+    let cq2 = ConfusionQuiz(engine: fresh, rng: SeededRNG(seed: 9))
+    let fdrill = cq2.nextDrill()
+    check("confusion drill works before any confusion data exists",
+          fdrill.options.count == 4 && fdrill.options.contains(fdrill.correct))
+
+    // Confusion data survives a save/load round-trip.
+    do {
+        let data = try JSONEncoder().encode(eng.snapshot)
+        let restored = try JSONDecoder().decode(TrainerEngine.Snapshot.self, from: data)
+        let e2 = TrainerEngine(seedCount: 1)
+        e2.restore(from: restored)
+        check("confusions survive a save/load round-trip",
+              e2.confusions.count(target: "X", chosen: "Y") == eng.confusions.count(target: "X", chosen: "Y"))
+    } catch {
+        check("confusion encode/decode without throwing", false)
+    }
+}
+
 print("\n────────────────────────────")
 if failures == 0 {
     print("✅ All \(checks) checks passed.\n")

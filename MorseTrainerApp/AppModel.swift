@@ -3,7 +3,7 @@ import SwiftUI
 
 /// The four ways to practice.
 enum TrainingMode: String, CaseIterable, Identifiable {
-    case characters, words, abbreviations, prosigns, headCopy
+    case characters, words, abbreviations, prosigns, headCopy, typed, confusion
     var id: String { rawValue }
     var title: String {
         switch self {
@@ -12,6 +12,8 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .abbreviations: return "Abbreviations"
         case .prosigns:     return "Prosigns"
         case .headCopy:     return "Head Copy"
+        case .typed:        return "Type It"
+        case .confusion:    return "Confusion Drill"
         }
     }
     var icon: String {
@@ -21,15 +23,18 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .abbreviations: return "text.bubble"
         case .prosigns:      return "antenna.radiowaves.left.and.right"
         case .headCopy:      return "brain.head.profile"
+        case .typed:         return "keyboard"
+        case .confusion:     return "arrow.left.arrow.right"
         }
     }
     /// In meaning-based modes the question is "what are they saying?"
     var prompt: String {
         switch self {
-        case .characters, .words: return "What did you hear?"
+        case .characters, .words, .confusion: return "What did you hear?"
         case .abbreviations:      return "What are they saying?"
         case .prosigns:           return "Which prosign?"
         case .headCopy:           return "Copy it in your head…"
+        case .typed:              return "Type what you hear"
         }
     }
 }
@@ -61,6 +66,8 @@ final class AppModel: ObservableObject {
     private let abbrevQuiz: PhraseQuiz
     private let prosignQuiz: PhraseQuiz
     private let headCopyQuiz: PhraseQuiz
+    private let typedQuiz: PhraseQuiz
+    private let confusionQuiz: ConfusionQuiz
 
     private let player = MorsePlayer()
     private var toneEndDate: Date?
@@ -77,6 +84,8 @@ final class AppModel: ObservableObject {
         self.abbrevQuiz = PhraseQuiz(name: "Abbreviations", items: MorseData.abbreviationItems)
         self.prosignQuiz = PhraseQuiz(name: "Prosigns", items: MorseData.prosignItems)
         self.headCopyQuiz = PhraseQuiz(name: "Head Copy", items: MorseData.wordAndCallSignItems)
+        self.typedQuiz = PhraseQuiz(name: "Type It", items: MorseData.wordAndCallSignItems)
+        self.confusionQuiz = ConfusionQuiz(engine: engine)
         restoreProgress()
         reconcilePunctuation()
         applyPhraseConfig(from: loaded)
@@ -90,10 +99,13 @@ final class AppModel: ObservableObject {
         case .abbreviations: return abbrevQuiz
         case .prosigns:     return prosignQuiz
         case .headCopy:     return headCopyQuiz
+        case .typed:        return typedQuiz
+        case .confusion:    return confusionQuiz
         }
     }
 
     var isHeadCopy: Bool { mode == .headCopy }
+    var isTyped: Bool { mode == .typed }
 
     private static func config(from s: AppSettings) -> TrainerEngine.Config {
         TrainerEngine.Config(
@@ -105,7 +117,7 @@ final class AppModel: ObservableObject {
     }
 
     private func applyPhraseConfig(from s: AppSettings) {
-        for quiz in [wordsQuiz, abbrevQuiz, prosignQuiz, headCopyQuiz] {
+        for quiz in [wordsQuiz, abbrevQuiz, prosignQuiz, headCopyQuiz, typedQuiz] {
             quiz.config.ttrThreshold = s.ttrThreshold
         }
     }
@@ -193,6 +205,16 @@ final class AppModel: ObservableObject {
         }
     }
 
+    // MARK: - Typed free-recall
+
+    /// "Type what you hear": grade the typed text against the played item.
+    /// Normalizes case/whitespace, then reuses the standard answer path.
+    func submitTyped(_ text: String) {
+        let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        guard !normalized.isEmpty else { return }
+        select(normalized)
+    }
+
     // MARK: - Stats (for the stats screen)
 
     struct CharStat: Identifiable {
@@ -225,6 +247,28 @@ final class AppModel: ObservableObject {
         return stats.sorted { a, b in
             if a.mastered != b.mastered { return !a.mastered }           // unmastered first
             return (a.medianTTR ?? .infinity) > (b.medianTTR ?? .infinity) // slowest first
+        }
+    }
+
+    struct ConfusionPair: Identifiable {
+        let id: String
+        let a: Character
+        let b: Character
+        let aPattern: String
+        let bPattern: String
+        let count: Int
+    }
+
+    /// Your most-confused character pairs (both error directions summed),
+    /// strongest first — the same data the Confusion Drill mode trains on.
+    var confusionPairs: [ConfusionPair] {
+        engine.confusions.pairs(minCount: 1).prefix(8).map { p in
+            ConfusionPair(
+                id: "\(p.a)\(p.b)",
+                a: p.a, b: p.b,
+                aPattern: MorseCode.pattern(for: p.a) ?? "",
+                bPattern: MorseCode.pattern(for: p.b) ?? "",
+                count: p.count)
         }
     }
 

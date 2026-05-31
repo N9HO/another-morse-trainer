@@ -4,6 +4,8 @@ struct ContentView: View {
     @EnvironmentObject var model: AppModel
     @State private var showSettings = false
     @State private var showStats = false
+    @State private var typedAnswer = ""
+    @FocusState private var typedFocused: Bool
 
     private let columns = [GridItem(.flexible(), spacing: 16),
                            GridItem(.flexible(), spacing: 16)]
@@ -26,6 +28,9 @@ struct ContentView: View {
 
                 if model.isHeadCopy {
                     headCopyControls
+                } else if model.isTyped {
+                    typedEntry
+                    bottomBar
                 } else {
                     choiceGrid
                     bottomBar
@@ -187,6 +192,40 @@ struct ContentView: View {
         default:
             Color.clear.frame(height: 56)
         }
+    }
+
+    // MARK: - Typed free-recall
+
+    @ViewBuilder
+    private var typedEntry: some View {
+        VStack(spacing: 12) {
+            TextField("Type what you heard", text: $typedAnswer)
+                .textFieldStyle(.roundedBorder)
+                .font(.system(.title2, design: .monospaced))
+                .multilineTextAlignment(.center)
+                .textInputAutocapitalization(.characters)
+                .autocorrectionDisabled()
+                .submitLabel(.send)
+                .focused($typedFocused)
+                .disabled(model.phase == .answered)
+                .onSubmit(submitTyped)
+            Button(action: submitTyped) {
+                Text("Submit")
+                    .font(.headline)
+                    .frame(maxWidth: .infinity, minHeight: 50)
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(model.phase != .awaiting
+                      || typedAnswer.trimmingCharacters(in: .whitespaces).isEmpty)
+        }
+        .onChange(of: model.drill) { _ in typedAnswer = "" }
+        .onChange(of: model.phase) { newPhase in
+            if newPhase == .awaiting { typedFocused = true }
+        }
+    }
+
+    private func submitTyped() {
+        model.submitTyped(typedAnswer)
     }
 
     // MARK: - Choices

@@ -48,6 +48,9 @@ public final class TrainerEngine {
 
     public private(set) var activeCharacters: [Character]
     public private(set) var stats: [Character: CharacterStats]
+    /// Which character the learner picked when they got one wrong — the raw
+    /// material for the confusion-pair drills.
+    public private(set) var confusions = ConfusionMatrix()
     public var config: Config
 
     private var rng: any RandomNumberGenerator
@@ -133,11 +136,28 @@ public final class TrainerEngine {
 
     @discardableResult
     public func record(answer: Character, for question: Question, ttr: TimeInterval) -> Outcome {
-        let correct = answer == question.target
-        stats[question.target, default: CharacterStats(character: question.target)]
-            .record(correct: correct, ttr: ttr)
+        let correct = noteAttempt(answer: answer, target: question.target, ttr: ttr)
         let added = advanceIfReady()
         return Outcome(correct: correct, addedCharacter: added)
+    }
+
+    /// Record one attempt's outcome — updating the character's stats and, on a
+    /// miss, the confusion matrix — *without* advancing the Koch ladder. Returns
+    /// whether the answer was correct. Used by `record(answer:for:)` and by
+    /// review drills (e.g. the confusion-pair quiz) that shouldn't graduate new
+    /// characters.
+    @discardableResult
+    public func noteAttempt(answer: Character, target: Character, ttr: TimeInterval) -> Bool {
+        let correct = answer == target
+        stats[target, default: CharacterStats(character: target)].record(correct: correct, ttr: ttr)
+        if !correct { confusions.record(target: target, chosen: answer) }
+        return correct
+    }
+
+    /// Ease a confused pairing after a correct recognition (used by the
+    /// confusion-pair drill so sorted-out pairs fade from rotation).
+    public func easeConfusion(target: Character, chosen: Character) {
+        confusions.ease(target: target, chosen: chosen)
     }
 
     public struct Outcome: Sendable, Equatable {
@@ -196,12 +216,16 @@ public final class TrainerEngine {
     public struct Snapshot: Codable, Sendable {
         public var activeCharacters: [Character]
         public var stats: [CharacterStats]
+        public var confusions: ConfusionMatrix
 
-        enum CodingKeys: String, CodingKey { case activeCharacters, stats }
+        enum CodingKeys: String, CodingKey { case activeCharacters, stats, confusions }
 
-        public init(activeCharacters: [Character], stats: [CharacterStats]) {
+        public init(activeCharacters: [Character],
+                    stats: [CharacterStats],
+                    confusions: ConfusionMatrix = ConfusionMatrix()) {
             self.activeCharacters = activeCharacters
             self.stats = stats
+            self.confusions = confusions
         }
 
         public init(from decoder: Decoder) throws {
@@ -209,21 +233,25 @@ public final class TrainerEngine {
             activeCharacters = try c.decode([String].self, forKey: .activeCharacters)
                 .compactMap { $0.first }
             stats = try c.decode([CharacterStats].self, forKey: .stats)
+            // Older snapshots predate confusion tracking.
+            confusions = try c.decodeIfPresent(ConfusionMatrix.self, forKey: .confusions) ?? ConfusionMatrix()
         }
 
         public func encode(to encoder: Encoder) throws {
             var c = encoder.container(keyedBy: CodingKeys.self)
             try c.encode(activeCharacters.map(String.init), forKey: .activeCharacters)
             try c.encode(stats, forKey: .stats)
+            try c.encode(confusions, forKey: .confusions)
         }
     }
 
     public var snapshot: Snapshot {
-        Snapshot(activeCharacters: activeCharacters, stats: Array(stats.values))
+        Snapshot(activeCharacters: activeCharacters, stats: Array(stats.values), confusions: confusions)
     }
 
     public func restore(from snapshot: Snapshot) {
         activeCharacters = snapshot.activeCharacters
         stats = Dictionary(uniqueKeysWithValues: snapshot.stats.map { ($0.character, $0) })
+        confusions = snapshot.confusions
     }
 }

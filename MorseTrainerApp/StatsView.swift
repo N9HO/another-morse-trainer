@@ -23,6 +23,18 @@ struct StatsView: View {
                         row(stat)
                     }
                 }
+
+                if !model.confusionPairs.isEmpty {
+                    Section {
+                        ForEach(model.confusionPairs) { pair in
+                            confusionRow(pair)
+                        }
+                    } header: {
+                        Text("Most-confused pairs")
+                    } footer: {
+                        Text("Characters you've mixed up most often. Drill them head-to-head in the Confusion Drill mode — each one you get right eases the pair.")
+                    }
+                }
             }
             .navigationTitle("Your Stats")
             .navigationBarTitleDisplayMode(.inline)
@@ -67,6 +79,30 @@ struct StatsView: View {
 
             Image(systemName: stat.mastered ? "checkmark.seal.fill" : "circle.dashed")
                 .foregroundStyle(stat.mastered ? .green : .secondary)
+        }
+    }
+
+    private func confusionRow(_ pair: AppModel.ConfusionPair) -> some View {
+        HStack(spacing: 12) {
+            charBadge(String(pair.a), pair.aPattern)
+            Image(systemName: "arrow.left.arrow.right")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            charBadge(String(pair.b), pair.bPattern)
+            Spacer()
+            Text("\(pair.count)×")
+                .font(.body.monospacedDigit())
+                .foregroundStyle(.orange)
+        }
+    }
+
+    private func charBadge(_ ch: String, _ pattern: String) -> some View {
+        VStack(spacing: 2) {
+            Text(ch)
+                .font(.system(.title3, design: .monospaced)).bold()
+            Text(pattern)
+                .font(.system(.caption2, design: .monospaced))
+                .foregroundStyle(.secondary)
         }
     }
 
