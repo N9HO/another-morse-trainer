@@ -46,6 +46,44 @@ enum PracticeDuration: String, Codable, CaseIterable, Identifiable {
     }
 }
 
+/// Hands-free "Listen & Learn" delay between the Morse code and the spoken
+/// English answer. Mirrors Morse Code Ninja's tiers (Standard → ICR-Territory).
+enum AnswerGap: String, Codable, CaseIterable, Identifiable {
+    case standard, rapidFire, warp, icr
+    var id: String { rawValue }
+
+    var seconds: TimeInterval {
+        switch self {
+        case .standard:  return 1.3
+        case .rapidFire: return 1.0
+        case .warp:      return 0.5
+        case .icr:       return 0.2
+        }
+    }
+
+    var label: String {
+        switch self {
+        case .standard:  return "Standard (1.3 s)"
+        case .rapidFire: return "Rapid Fire (1.0 s)"
+        case .warp:      return "Warp (0.5 s)"
+        case .icr:       return "ICR-Territory (0.2 s)"
+        }
+    }
+}
+
+/// What the hands-free "Listen & Learn" mode announces.
+enum ListenContent: String, Codable, CaseIterable, Identifiable {
+    case characters, words, abbreviations
+    var id: String { rawValue }
+    var label: String {
+        switch self {
+        case .characters:    return "Characters"
+        case .words:         return "Words"
+        case .abbreviations: return "Abbreviations & Q-codes"
+        }
+    }
+}
+
 enum Proficiency: String, Codable, CaseIterable, Identifiable {
     case none                  // I know nothing
     case someLetters           // I know some of the letters
@@ -86,6 +124,12 @@ struct AppSettings: Codable, Equatable {
     /// How long a practice session runs before it stops and shows a summary.
     var practiceDuration: PracticeDuration = .fiveMin
 
+    // Listen & Learn (hands-free)
+    /// What the hands-free mode announces.
+    var listenContent: ListenContent = .characters
+    /// Delay between the code and the spoken answer in hands-free mode.
+    var listenGap: AnswerGap = .standard
+
     // Feedback (defaults per spec: show right/wrong, reveal only on miss, no replay)
     var showCorrectness: Bool = true
     var reveal: RevealMode = .onWrong
@@ -122,6 +166,7 @@ extension AppSettings {
         case toneFrequency, wpm, farnsworth, effectiveWpm, proficiency, ttrThreshold
         case distractorsFromFullAlphabet, selectedPunctuation
         case learningMode, practiceDuration
+        case listenContent, listenGap
         case showCorrectness, reveal, allowReplay
     }
 
@@ -138,6 +183,8 @@ extension AppSettings {
         s.selectedPunctuation = try c.decodeIfPresent(Set<String>.self, forKey: .selectedPunctuation) ?? s.selectedPunctuation
         s.learningMode = try c.decodeIfPresent(String.self, forKey: .learningMode) ?? s.learningMode
         s.practiceDuration = try c.decodeIfPresent(PracticeDuration.self, forKey: .practiceDuration) ?? s.practiceDuration
+        s.listenContent = try c.decodeIfPresent(ListenContent.self, forKey: .listenContent) ?? s.listenContent
+        s.listenGap = try c.decodeIfPresent(AnswerGap.self, forKey: .listenGap) ?? s.listenGap
         s.showCorrectness = try c.decodeIfPresent(Bool.self, forKey: .showCorrectness) ?? s.showCorrectness
         s.reveal = try c.decodeIfPresent(RevealMode.self, forKey: .reveal) ?? s.reveal
         s.allowReplay = try c.decodeIfPresent(Bool.self, forKey: .allowReplay) ?? s.allowReplay

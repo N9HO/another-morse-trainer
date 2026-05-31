@@ -27,6 +27,20 @@ struct IntroView: View {
         )
     }
 
+    private var listenContentBinding: Binding<ListenContent> {
+        Binding(
+            get: { model.settings.listenContent },
+            set: { model.settings.listenContent = $0 }
+        )
+    }
+
+    private var listenGapBinding: Binding<AnswerGap> {
+        Binding(
+            get: { model.settings.listenGap },
+            set: { model.settings.listenGap = $0 }
+        )
+    }
+
     var body: some View {
         VStack(spacing: 28) {
             Spacer(minLength: 8)
@@ -71,6 +85,32 @@ struct IntroView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+
+            if model.learningMode == .listen {
+                VStack(alignment: .leading, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("What should it announce?")
+                            .font(.subheadline).foregroundStyle(.secondary)
+                        Picker("Announce", selection: listenContentBinding) {
+                            ForEach(ListenContent.allCases) { c in
+                                Text(c.label).tag(c)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                    }
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Gap before the spoken answer")
+                            .font(.subheadline).foregroundStyle(.secondary)
+                        Picker("Answer gap", selection: listenGapBinding) {
+                            ForEach(AnswerGap.allCases) { g in
+                                Text(g.label).tag(g)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
 
             VStack(spacing: 8) {
                 Text("Where are you starting?")

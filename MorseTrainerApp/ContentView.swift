@@ -19,27 +19,32 @@ struct ContentView: View {
             } else {
             VStack(spacing: 24) {
                 sessionBar
-                statusArea
-                    .frame(maxHeight: .infinity)
 
-                if model.settings.allowReplay, model.drill != nil {
-                    Button {
-                        model.replay()
-                    } label: {
-                        Label("Replay", systemImage: "speaker.wave.2.fill")
-                            .font(.headline)
-                    }
-                    .buttonStyle(.bordered)
-                }
-
-                if model.isHeadCopy {
-                    headCopyControls
-                } else if model.isTyped {
-                    typedEntry
-                    bottomBar
+                if model.isListen {
+                    listenView
                 } else {
-                    choiceGrid
-                    bottomBar
+                    statusArea
+                        .frame(maxHeight: .infinity)
+
+                    if model.settings.allowReplay, model.drill != nil {
+                        Button {
+                            model.replay()
+                        } label: {
+                            Label("Replay", systemImage: "speaker.wave.2.fill")
+                                .font(.headline)
+                        }
+                        .buttonStyle(.bordered)
+                    }
+
+                    if model.isHeadCopy {
+                        headCopyControls
+                    } else if model.isTyped {
+                        typedEntry
+                        bottomBar
+                    } else {
+                        choiceGrid
+                        bottomBar
+                    }
                 }
             }
             .padding()
@@ -71,7 +76,9 @@ struct ContentView: View {
                 StatsView().environmentObject(model)
             }
             .onAppear {
-                if model.drill == nil && !model.sessionEnded { model.startSession() }
+                if model.drill == nil && !model.sessionEnded && !model.isListening {
+                    model.startSession()
+                }
             }
         }
     }
@@ -200,6 +207,54 @@ struct ContentView: View {
         default:
             Color.clear.frame(height: 56)
         }
+    }
+
+    // MARK: - Listen & Learn (hands-free)
+
+    private var listenView: some View {
+        VStack(spacing: 28) {
+            Spacer()
+
+            Image(systemName: model.phase == .playing
+                  ? "dot.radiowaves.left.and.right" : "headphones")
+                .font(.system(size: 72))
+                .foregroundStyle(.blue)
+                .symbolEffect(.pulse, isActive: model.phase == .playing && !model.listenPaused)
+
+            if model.listenPaused {
+                Text("Paused").font(.title3).foregroundStyle(.secondary)
+            } else if model.phase == .playing {
+                Text("Listen…").font(.title3).foregroundStyle(.secondary)
+            } else if !model.listenDisplay.isEmpty {
+                Text(model.listenDisplay)
+                    .font(.system(size: 44, weight: .bold, design: .monospaced))
+                    .multilineTextAlignment(.center)
+                    .minimumScaleFactor(0.5)
+                    .transition(.opacity)
+            } else {
+                Text("Getting ready…").font(.title3).foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            Button {
+                model.toggleListening()
+            } label: {
+                Label(model.listenPaused ? "Resume" : "Pause",
+                      systemImage: model.listenPaused ? "play.fill" : "pause.fill")
+                    .font(.headline)
+                    .frame(maxWidth: .infinity, minHeight: 56)
+            }
+            .buttonStyle(.borderedProminent)
+
+            Text("Plays with the screen locked — pocket your phone and keep listening. Control it from the lock screen too.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxHeight: .infinity)
+        .animation(.easeInOut(duration: 0.2), value: model.listenDisplay)
+        .animation(.easeInOut(duration: 0.2), value: model.phase)
     }
 
     // MARK: - Typed free-recall

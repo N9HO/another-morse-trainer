@@ -1,9 +1,10 @@
 import Foundation
 import SwiftUI
+import MediaPlayer
 
-/// The four ways to practice.
+/// The ways to practice.
 enum TrainingMode: String, CaseIterable, Identifiable {
-    case characters, words, abbreviations, prosigns, headCopy, typed, confusion
+    case characters, words, abbreviations, prosigns, headCopy, typed, confusion, listen
     var id: String { rawValue }
     var title: String {
         switch self {
@@ -14,6 +15,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .headCopy:     return "Head Copy"
         case .typed:        return "Type It"
         case .confusion:    return "Confusion Drill"
+        case .listen:       return "Listen & Learn"
         }
     }
     var icon: String {
@@ -25,6 +27,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .headCopy:      return "brain.head.profile"
         case .typed:         return "keyboard"
         case .confusion:     return "arrow.left.arrow.right"
+        case .listen:        return "headphones"
         }
     }
     /// In meaning-based modes the question is "what are they saying?"
@@ -35,6 +38,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .prosigns:           return "Which prosign?"
         case .headCopy:           return "Copy it in your head…"
         case .typed:              return "Type what you hear"
+        case .listen:             return "Listen…"
         }
     }
     /// A one-line explanation shown on the setup screen so the learner can pick
@@ -55,6 +59,8 @@ enum TrainingMode: String, CaseIterable, Identifiable {
             return "Hear a word or call sign and type exactly what you heard. Free recall — the closest thing to real copying."
         case .confusion:
             return "Targeted review of the exact character pairs you mix up most, drilled head-to-head until they stick."
+        case .listen:
+            return "Hands-free: hear the code, then the answer spoken aloud — no tapping. Keeps playing with the screen locked, so you can learn while driving or walking."
         }
     }
 }
@@ -100,8 +106,16 @@ final class AppModel: ObservableObject {
     private let confusionQuiz: ConfusionQuiz
 
     private let player = MorsePlayer()
+    private let speech = SpeechPlayer()
     private var toneEndDate: Date?
     private var advanceGeneration = 0
+
+    // Hands-free "Listen & Learn" loop.
+    @Published private(set) var isListening = false
+    @Published private(set) var listenPaused = false
+    @Published private(set) var listenDisplay = ""     // current item, shown on screen
+    private var listenGeneration = 0
+    private var remoteCommandsWired = false
 
     private static let progressKey = "MorseTrainer.progress"
 
@@ -136,6 +150,7 @@ final class AppModel: ObservableObject {
 
     var isHeadCopy: Bool { mode == .headCopy }
     var isTyped: Bool { mode == .typed }
+    var isListen: Bool { mode == .listen }
 
     /// The teaching style chosen on the setup screen (mirrors `settings`).
     var learningMode: TrainingMode {
@@ -181,7 +196,160 @@ final class AppModel: ObservableObject {
     // MARK: - Game loop
 
     func start() {
-        newDrill()
+        if mode == .listen {
+            startListening()
+        } else {
+            stopListening()
+            newDrill()
+        }
+    }
+
+    // MARK: - Listen & Learn (hands-free)
+
+    private struct ListenItem {
+        let playable: MorseItem.Playable
+        let display: String   // shown on screen
+        let spoken: String    // announced via TTS
+    }
+
+    /// Begin the hands-free loop: play code → wait the chosen gap → speak the
+    /// answer → repeat. Keeps going with the screen locked (background audio).
+    private func startListening() {
+        listenGeneration += 1
+        isListening = true
+        listenPaused = false
+        wireRemoteCommandsIfNeeded()
+        listenStep()
+    }
+
+    /// Stop the loop entirely (mode change, session end, reset).
+    func stopListening() {
+        guard isListening else { return }
+        isListening = false
+        listenPaused = false
+        listenGeneration += 1
+        speech.stop()
+        listenDisplay = ""
+        phase = .idle
+        clearNowPlaying()
+    }
+
+    func pauseListening() {
+        guard isListening, !listenPaused else { return }
+        listenPaused = true
+        listenGeneration += 1   // cancel the in-flight chain
+        speech.stop()
+        phase = .idle
+        updateNowPlaying()
+    }
+
+    func resumeListening() {
+        guard isListening, listenPaused else { return }
+        listenPaused = false
+        listenStep()
+    }
+
+    func toggleListening() {
+        listenPaused ? resumeListening() : pauseListening()
+    }
+
+    /// One play → gap → speak → schedule-next cycle. Each async hop re-checks the
+    /// generation so a pause/stop/mode-change cleanly cancels the chain.
+    private func listenStep() {
+        let gen = listenGeneration
+        guard isListening, !listenPaused else { return }
+
+        let item = nextListenItem()
+        listenDisplay = ""             // hide the answer while the code plays
+        phase = .playing
+        updateNowPlaying()
+
+        player.play(playable: item.playable,
+                    frequency: settings.toneFrequency,
+                    timing: timing) { [weak self] in
+            guard let self, self.listenGeneration == gen, self.isListening, !self.listenPaused else { return }
+            let gap = self.settings.listenGap.seconds
+            DispatchQueue.main.asyncAfter(deadline: .now() + gap) {
+                guard self.listenGeneration == gen, self.isListening, !self.listenPaused else { return }
+                self.listenDisplay = item.display
+                self.phase = .revealed
+                self.updateNowPlaying()
+                self.speech.speak(item.spoken) {
+                    guard self.listenGeneration == gen, self.isListening, !self.listenPaused else { return }
+                    self.sessionAttempts += 1   // count items announced this session
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
+                        guard self.listenGeneration == gen, self.isListening, !self.listenPaused else { return }
+                        self.listenStep()
+                    }
+                }
+            }
+        }
+    }
+
+    private func nextListenItem() -> ListenItem {
+        switch settings.listenContent {
+        case .characters:
+            let ch = engine.activeCharacters.randomElement() ?? "E"
+            return ListenItem(playable: .text(String(ch)),
+                              display: String(ch),
+                              spoken: spokenName(for: ch))
+        case .words:
+            let item = MorseData.wordItems.randomElement()
+                ?? MorseItem(id: "THE", playable: .text("THE"), answer: "THE", display: "THE")
+            return ListenItem(playable: item.playable, display: item.display, spoken: item.answer)
+        case .abbreviations:
+            let item = MorseData.abbreviationItems.randomElement()
+                ?? MorseItem(id: "ES", playable: .text("ES"), answer: "and", display: "ES")
+            let spelled = item.display.map(String.init).joined(separator: " ")
+            return ListenItem(playable: item.playable,
+                              display: "\(item.display) — \(item.answer)",
+                              spoken: "\(spelled). \(item.answer)")
+        }
+    }
+
+    /// Human-readable name for a single character so TTS says it clearly.
+    private func spokenName(for ch: Character) -> String {
+        switch ch {
+        case "?": return "question mark"
+        case ",": return "comma"
+        case ".": return "period"
+        case "/": return "slash"
+        case "=": return "equals"
+        case "+": return "plus"
+        default:  return String(ch)
+        }
+    }
+
+    // MARK: Lock-screen / remote controls
+
+    private func wireRemoteCommandsIfNeeded() {
+        guard !remoteCommandsWired else { return }
+        remoteCommandsWired = true
+        let center = MPRemoteCommandCenter.shared()
+        center.playCommand.addTarget { [weak self] _ in
+            Task { @MainActor in self?.resumeListening() }
+            return .success
+        }
+        center.pauseCommand.addTarget { [weak self] _ in
+            Task { @MainActor in self?.pauseListening() }
+            return .success
+        }
+        center.togglePlayPauseCommand.addTarget { [weak self] _ in
+            Task { @MainActor in self?.toggleListening() }
+            return .success
+        }
+    }
+
+    private func updateNowPlaying() {
+        var info: [String: Any] = [:]
+        info[MPMediaItemPropertyTitle] = listenDisplay.isEmpty ? "Listening…" : listenDisplay
+        info[MPMediaItemPropertyArtist] = "Morse Trainer · Listen & Learn"
+        info[MPNowPlayingInfoPropertyPlaybackRate] = listenPaused ? 0.0 : 1.0
+        MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+    }
+
+    private func clearNowPlaying() {
+        MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
     }
 
     // MARK: - Practice session (timed)
@@ -239,6 +407,7 @@ final class AppModel: ObservableObject {
         sessionTimer = nil
         sessionEndDate = nil
         advanceGeneration += 1   // cancel any pending auto-advance
+        stopListening()
         phase = .idle
         sessionEnded = true
     }
