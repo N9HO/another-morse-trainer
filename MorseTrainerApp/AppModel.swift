@@ -103,7 +103,7 @@ final class AppModel: ObservableObject {
 
     private let engine: TrainerEngine
     private let charLadder: ProgressiveCharacters
-    private let wordsQuiz: PhraseQuiz
+    private var wordsQuiz: PhraseQuiz   // rebuilt when the word tier changes
     private let abbrevQuiz: PhraseQuiz
     private let prosignQuiz: PhraseQuiz
     private let headCopyQuiz: PhraseQuiz
@@ -130,7 +130,7 @@ final class AppModel: ObservableObject {
         self.settings = loaded
         self.engine = TrainerEngine(config: AppModel.config(from: loaded), seedCount: 2)
         self.charLadder = ProgressiveCharacters(engine: engine)
-        self.wordsQuiz = PhraseQuiz(name: "Words", items: MorseData.wordItems)
+        self.wordsQuiz = PhraseQuiz(name: "Words", items: MorseData.topWordItems(loaded.wordTier.count))
         self.abbrevQuiz = PhraseQuiz(name: "Abbreviations", items: MorseData.abbreviationItems)
         self.prosignQuiz = PhraseQuiz(name: "Prosigns", items: MorseData.prosignItems)
         self.headCopyQuiz = PhraseQuiz(name: "Head Copy", items: MorseData.wordAndCallSignItems)
@@ -179,6 +179,10 @@ final class AppModel: ObservableObject {
     }
 
     private func applyPhraseConfig(from s: AppSettings) {
+        // Rebuild the Words quiz if the chosen "Top N" tier changed.
+        if wordsQuiz.items.count != s.wordTier.count {
+            wordsQuiz = PhraseQuiz(name: "Words", items: MorseData.topWordItems(s.wordTier.count))
+        }
         for quiz in [wordsQuiz, abbrevQuiz, prosignQuiz, headCopyQuiz, typedQuiz] {
             quiz.config.ttrThreshold = s.ttrThreshold
         }
@@ -305,7 +309,7 @@ final class AppModel: ObservableObject {
                               display: String(ch),
                               spoken: spokenName(for: ch))
         case .words:
-            let item = MorseData.wordItems.randomElement()
+            let item = MorseData.topWordItems(settings.wordTier.count).randomElement()
                 ?? MorseItem(id: "THE", playable: .text("THE"), answer: "THE", display: "THE")
             return ListenItem(playable: item.playable, display: item.display, spoken: item.answer)
         case .abbreviations:

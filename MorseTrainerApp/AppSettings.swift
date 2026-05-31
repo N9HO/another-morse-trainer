@@ -71,6 +71,27 @@ enum AnswerGap: String, Codable, CaseIterable, Identifiable {
     }
 }
 
+/// How many of the ranked (ham-weighted, frequency-ordered) words to draw from
+/// in Words mode — the QRQ "Top N" tiers.
+enum WordTier: String, Codable, CaseIterable, Identifiable {
+    case top100, top300, top500
+    var id: String { rawValue }
+    var count: Int {
+        switch self {
+        case .top100: return 100
+        case .top300: return 300
+        case .top500: return 500
+        }
+    }
+    var label: String {
+        switch self {
+        case .top100: return "Top 100 words"
+        case .top300: return "Top 300 words"
+        case .top500: return "Top 500 words"
+        }
+    }
+}
+
 /// What the hands-free "Listen & Learn" mode announces.
 enum ListenContent: String, Codable, CaseIterable, Identifiable {
     case characters, words, abbreviations
@@ -130,6 +151,9 @@ struct AppSettings: Codable, Equatable {
     /// Delay between the code and the spoken answer in hands-free mode.
     var listenGap: AnswerGap = .standard
 
+    /// How big a word pool Words mode (and Listen words) draws from.
+    var wordTier: WordTier = .top100
+
     // Feedback (defaults per spec: show right/wrong, reveal only on miss, no replay)
     var showCorrectness: Bool = true
     var reveal: RevealMode = .onWrong
@@ -166,7 +190,7 @@ extension AppSettings {
         case toneFrequency, wpm, farnsworth, effectiveWpm, proficiency, ttrThreshold
         case distractorsFromFullAlphabet, selectedPunctuation
         case learningMode, practiceDuration
-        case listenContent, listenGap
+        case listenContent, listenGap, wordTier
         case showCorrectness, reveal, allowReplay
     }
 
@@ -185,6 +209,7 @@ extension AppSettings {
         s.practiceDuration = try c.decodeIfPresent(PracticeDuration.self, forKey: .practiceDuration) ?? s.practiceDuration
         s.listenContent = try c.decodeIfPresent(ListenContent.self, forKey: .listenContent) ?? s.listenContent
         s.listenGap = try c.decodeIfPresent(AnswerGap.self, forKey: .listenGap) ?? s.listenGap
+        s.wordTier = try c.decodeIfPresent(WordTier.self, forKey: .wordTier) ?? s.wordTier
         s.showCorrectness = try c.decodeIfPresent(Bool.self, forKey: .showCorrectness) ?? s.showCorrectness
         s.reveal = try c.decodeIfPresent(RevealMode.self, forKey: .reveal) ?? s.reveal
         s.allowReplay = try c.decodeIfPresent(Bool.self, forKey: .allowReplay) ?? s.allowReplay

@@ -303,6 +303,19 @@ do {
     check("a fresh QSO begins after the last step", !d2.correct.isEmpty)
 }
 
+// Word tiers (ham-weighted Top N words)
+print("\nWord tiers:")
+check("ranked word list has at least 500 entries", MorseData.rankedWords.count >= 500)
+check("ranked words are unique", Set(MorseData.rankedWords).count == MorseData.rankedWords.count)
+check("Top 100 returns 100 items", MorseData.topWordItems(100).count == 100)
+check("Top 300 returns 300 items", MorseData.topWordItems(300).count == 300)
+check("Top 500 returns 500 items", MorseData.topWordItems(500).count == 500)
+check("word item ids are unique", Set(MorseData.topWordItems(500).map { $0.id }).count == 500)
+check("a smaller tier is a prefix of a larger tier",
+      Array(MorseData.topWordItems(500).prefix(100)) == MorseData.topWordItems(100))
+check("ham vocabulary ranks first (CQ in Top 100)",
+      MorseData.topWordItems(100).contains { $0.answer == "CQ" })
+
 print("\n────────────────────────────")
 if failures == 0 {
     print("✅ All \(checks) checks passed.\n")

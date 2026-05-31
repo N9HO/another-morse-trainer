@@ -20,8 +20,17 @@ struct SettingsView: View {
                     }
                     sliderRow(title: "Speed",
                               value: $model.settings.wpm,
-                              range: 15...40, step: 1,
+                              range: 15...60, step: 1,
                               format: { "\(Int($0)) WPM" })
+                    if model.settings.wpm >= 40 {
+                        Label {
+                            Text("QRQ territory — \(Int(model.settings.wpm)) WPM. Great for pushing instant recognition once 30+ feels comfortable.")
+                        } icon: {
+                            Image(systemName: "hare.fill")
+                        }
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                    }
                     if model.settings.wpm < 33 {
                         Label {
                             Text("Below 33 WPM it's easy to start *counting* the dits and dahs instead of hearing each character as a single sound. Training at 33+ WPM builds instant, by-ear recognition — the whole point of the Koch method. If you need more time to answer, raise “Recognize within” instead of slowing the code.")

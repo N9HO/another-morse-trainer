@@ -41,6 +41,13 @@ struct IntroView: View {
         )
     }
 
+    private var wordTierBinding: Binding<WordTier> {
+        Binding(
+            get: { model.settings.wordTier },
+            set: { model.settings.wordTier = $0 }
+        )
+    }
+
     var body: some View {
         VStack(spacing: 28) {
             Spacer(minLength: 8)
@@ -108,6 +115,20 @@ struct IntroView: View {
                         }
                         .pickerStyle(.menu)
                     }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
+            if model.learningMode == .words {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("How big a word pool?")
+                        .font(.subheadline).foregroundStyle(.secondary)
+                    Picker("Word pool", selection: wordTierBinding) {
+                        ForEach(WordTier.allCases) { t in
+                            Text(t.label).tag(t)
+                        }
+                    }
+                    .pickerStyle(.menu)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }

@@ -142,10 +142,23 @@ public enum MorseData {
 
     // MARK: Item builders for each quiz mode
 
-    /// Words mode: hear the word, choose the word.
+    /// Words mode: hear the word, choose the word. Drawn from the ranked
+    /// (ham-weighted, frequency-ordered) list in MorseDataWords.swift, deduped
+    /// so every item id is unique.
     public static var wordItems: [MorseItem] {
-        let words = commonWords + hamWords.filter { !commonWords.contains($0) }
-        return words.map { MorseItem(id: $0, playable: .text($0), answer: $0, display: $0) }
+        topWordItems(rankedWords.count)
+    }
+
+    /// The most-useful `limit` words (the QRQ "Top N" tiers), deduplicated.
+    public static func topWordItems(_ limit: Int) -> [MorseItem] {
+        var seen = Set<String>()
+        var items: [MorseItem] = []
+        for w in rankedWords {
+            guard seen.insert(w).inserted else { continue }
+            items.append(MorseItem(id: "word-\(w)", playable: .text(w), answer: w, display: w))
+            if items.count >= limit { break }
+        }
+        return items
     }
 
     /// Abbreviations mode: hear the abbreviation/Q-code, choose its meaning.
