@@ -41,7 +41,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .headCopy:           return "Copy it in your head…"
         case .typed:              return "Type what you hear"
         case .listen:             return "Listen…"
-        case .qso:                return "Copy the other station"
+        case .qso:                return "Type what you copy"
         }
     }
     /// A one-line explanation shown on the setup screen so the learner can pick
@@ -65,7 +65,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .listen:
             return "Hands-free: hear the code, then the answer spoken aloud — no tapping. Keeps playing with the screen locked, so you can learn while driving or walking."
         case .qso:
-            return "Work a simulated on-air contact: a station answers your CQ and you copy their callsign, signal report, name, and QTH — one ragchew at a time."
+            return "Work a simulated POTA contact: you call CQ, a station answers, and you type what you copy — their callsign, then their state. One contact at a time."
         }
     }
 }
@@ -159,6 +159,9 @@ final class AppModel: ObservableObject {
     var isHeadCopy: Bool { mode == .headCopy }
     var isTyped: Bool { mode == .typed }
     var isListen: Bool { mode == .listen }
+    var isQSO: Bool { mode == .qso }
+    /// Modes that take a free-typed answer rather than tapping a choice.
+    var usesTypedEntry: Bool { mode == .typed || mode == .qso }
 
     /// The teaching style chosen on the setup screen (mirrors `settings`).
     var learningMode: TrainingMode {

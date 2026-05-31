@@ -275,30 +275,32 @@ do {
     }
 }
 
-// QSO simulator
+// QSO simulator (Phase 1: typed POTA, single station)
 print("\nQSO simulator:")
 do {
     let qso = QSOSimulator(rng: SeededRNG(seed: 42))
-    let firstCall = qso.station.call
-    var questions = Set<String>()
-    var optionsOK = true, correctOK = true, hasQuestion = true
-    for _ in 0..<4 {
-        let d = qso.nextDrill()
-        if !(d.options.count == 4 && Set(d.options).count == 4) { optionsOK = false }
-        if !d.options.contains(d.correct) { correctOK = false }
-        if d.question.isEmpty { hasQuestion = false }
-        questions.insert(d.question)
-        _ = qso.record(choice: d.correct, ttr: 0.5)
-    }
-    check("QSO drills present 4 distinct options", optionsOK)
-    check("QSO correct answer is always among the options", correctOK)
-    check("each QSO step carries a question", hasQuestion)
-    check("a QSO asks 4 distinct questions (call, RST, name, QTH)", questions.count == 4)
-    check("finishing the exchange completes one QSO", qso.completedQSOs == 1)
-    let d = qso.nextDrill()
-    check("a fresh QSO begins after the last step", d.options.contains(d.correct))
-    check("the first step copies the station's callsign",
-          QSOSimulator(rng: SeededRNG(seed: 42)).nextDrill().correct == firstCall)
+    let call = qso.station.call
+    let state = qso.station.state
+
+    let d0 = qso.nextDrill()
+    check("the first step copies the station's callsign", d0.correct == call)
+    check("each QSO step carries a question", !d0.question.isEmpty)
+    check("typed answer is graded case/space-insensitively",
+          qso.record(choice: " \(call.lowercased()) ", ttr: 0.5).correct == true)
+
+    let d1 = qso.nextDrill()
+    check("the second step copies the station's state", d1.correct == state)
+    check("the two steps ask different questions", d0.question != d1.question)
+
+    let out = qso.record(choice: state, ttr: 0.5)
+    check("finishing the exchange logs one QSO", qso.completedQSOs == 1)
+    check("completing a contact reports it as logged (unlocked)", out.unlocked == call)
+
+    check("a wrong copy scores incorrect",
+          QSOSimulator(rng: SeededRNG(seed: 7)).record(choice: "NOPE", ttr: 0.5).correct == false)
+
+    let d2 = qso.nextDrill()
+    check("a fresh QSO begins after the last step", !d2.correct.isEmpty)
 }
 
 print("\n────────────────────────────")

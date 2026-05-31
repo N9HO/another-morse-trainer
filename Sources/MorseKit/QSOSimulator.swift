@@ -1,24 +1,28 @@
 import Foundation
 
-/// A single-station ragchew QSO simulator (inspired by MorseWalker).
+/// A POTA-style QSO simulator (inspired by MorseWalker), Phase 1: a single
+/// station works you and you **type what you copy**.
 ///
-/// You've called CQ and a station comes back. The simulator plays each of the
-/// other operator's transmissions in Morse and, step by step, asks you to copy
-/// what they sent — their callsign, the signal report they gave you, their
-/// name, and their QTH — as a multiple-choice question with sound-alike
-/// distractors. After the four-step exchange completes, a fresh station calls
-/// and the next QSO begins.
+/// You've called "CQ POTA" as a park activator. A hunter comes back. The
+/// simulator plays each of their transmissions in Morse and asks you to copy
+/// the exchange — their callsign, then their state — by typing it. POTA
+/// exchanges are short and fixed (callsign + state), so this drills the two
+/// things you copy on every contact. After both fields are copied the QSO is
+/// logged and the next station calls.
 ///
-/// Pure logic (no audio/UI) so it can be unit-tested on its own; it plugs into
-/// the same `QuizSource` loop every other mode uses.
+/// Pure logic (no audio/UI) so it can be unit-tested; it plugs into the same
+/// `QuizSource` loop every other mode uses. Answers are graded by the typed
+/// entry, which upper-cases and trims before calling `record`.
+///
+/// Phase 2 (not yet built): pileups (multiple simultaneous callers), QSB
+/// fading, QRN noise, adjustable caller count, and zero-beat vs. offset
+/// callers — see the memory notes.
 public final class QSOSimulator: QuizSource {
 
     /// The station you're currently working.
     public struct Station: Sendable, Equatable {
         public let call: String
-        public let name: String
-        public let qth: String
-        public let rst: String   // the report THEY give YOU
+        public let state: String
     }
 
     public private(set) var station: Station
@@ -31,7 +35,7 @@ public final class QSOSimulator: QuizSource {
     private struct Step {
         let transmission: String   // what the station sends, in Morse
         let question: String       // what to copy
-        let answer: String         // the correct copy
+        let answer: String         // the correct copy (upper-case, trimmed)
         let pool: [String]         // where sound-alike distractors come from
         let reveal: String         // shown when revealing on a miss
     }
@@ -40,14 +44,14 @@ public final class QSOSimulator: QuizSource {
         self.rng = rng
         // Placeholder so all stored properties are initialized before we can
         // call instance methods; immediately replaced by a real QSO.
-        self.station = Station(call: "", name: "", qth: "", rst: "")
+        self.station = Station(call: "", state: "")
         startNewQSO()
     }
 
     // MARK: - QuizSource
 
     public var summary: String {
-        completedQSOs == 0 ? "Working \(station.call)" : "\(completedQSOs) QSOs · \(station.call)"
+        completedQSOs == 0 ? "CQ POTA · \(station.call)" : "\(completedQSOs) in the log"
     }
 
     public func nextDrill() -> Drill {
@@ -64,10 +68,17 @@ public final class QSOSimulator: QuizSource {
 
     public func record(choice: String, ttr: TimeInterval) -> DrillOutcome {
         guard index < steps.count else { return DrillOutcome(correct: false, unlocked: nil) }
-        let correct = choice == steps[index].answer
+        // Normalize the same way the typed entry does, so "w1aw " == "W1AW".
+        let given = choice.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        let correct = given == steps[index].answer
         index += 1
-        if index >= steps.count { completedQSOs += 1 }
-        return DrillOutcome(correct: correct, unlocked: nil)
+        // A logged contact ("unlocked") lets the UI celebrate the completed QSO.
+        var logged: String? = nil
+        if index >= steps.count {
+            completedQSOs += 1
+            logged = station.call
+        }
+        return DrillOutcome(correct: correct, unlocked: logged)
     }
 
     // MARK: - QSO generation
@@ -81,29 +92,21 @@ public final class QSOSimulator: QuizSource {
     private static func randomStation(using rng: inout any RandomNumberGenerator) -> Station {
         Station(
             call: MorseData.callSigns.randomElement(using: &rng) ?? "W1AW",
-            name: MorseData.opNames.randomElement(using: &rng) ?? "JIM",
-            qth: MorseData.qthList.randomElement(using: &rng) ?? "OH",
-            rst: MorseData.rstValues.randomElement(using: &rng) ?? "599")
+            state: MorseData.qthList.randomElement(using: &rng) ?? "OH")
     }
 
     private static func buildSteps(for s: Station) -> [Step] {
         [
             Step(transmission: "\(s.call) \(s.call)",
-                 question: "A station answered your CQ — what's their callsign?",
+                 question: "A station answered your CQ POTA — copy their callsign:",
                  answer: s.call, pool: MorseData.callSigns, reveal: s.call),
-            Step(transmission: "UR RST \(s.rst) \(s.rst)",
-                 question: "What signal report did they give you?",
-                 answer: s.rst, pool: MorseData.rstValues, reveal: "RST \(s.rst)"),
-            Step(transmission: "NAME \(s.name) \(s.name)",
-                 question: "What's their name?",
-                 answer: s.name, pool: MorseData.opNames, reveal: "NAME \(s.name)"),
-            Step(transmission: "QTH \(s.qth) \(s.qth)",
-                 question: "What's their QTH (location)?",
-                 answer: s.qth, pool: MorseData.qthList, reveal: "QTH \(s.qth)"),
+            Step(transmission: "599 \(s.state) \(s.state)",
+                 question: "Copy their exchange — what's their state?",
+                 answer: s.state, pool: MorseData.qthList, reveal: "599 \(s.state)"),
         ]
     }
 
-    // MARK: - Options
+    // MARK: - Options (kept for an optional hint; typed entry ignores them)
 
     /// Correct answer plus the three closest-sounding others from `pool`.
     private func makeOptions(answer: String, pool: [String]) -> [String] {
@@ -117,7 +120,6 @@ public final class QSOSimulator: QuizSource {
         for o in others where opts.count < 4 {
             if !opts.contains(o.val) { opts.append(o.val) }
         }
-        // Safety pad for unusually small pools so there are always 4 buttons.
         var i = 0
         while opts.count < 4 {
             let filler = "\(answer)\(i)"

@@ -38,7 +38,7 @@ struct ContentView: View {
 
                     if model.isHeadCopy {
                         headCopyControls
-                    } else if model.isTyped {
+                    } else if model.usesTypedEntry {
                         typedEntry
                         bottomBar
                     } else {
