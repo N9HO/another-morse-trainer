@@ -145,6 +145,7 @@ final class AppModel: ObservableObject {
         case .headCopy:     return headCopyQuiz
         case .typed:        return typedQuiz
         case .confusion:    return confusionQuiz
+        case .listen:       return charLadder   // unused: Listen runs its own loop
         }
     }
 

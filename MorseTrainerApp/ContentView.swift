@@ -219,7 +219,6 @@ struct ContentView: View {
                   ? "dot.radiowaves.left.and.right" : "headphones")
                 .font(.system(size: 72))
                 .foregroundStyle(.blue)
-                .symbolEffect(.pulse, isActive: model.phase == .playing && !model.listenPaused)
 
             if model.listenPaused {
                 Text("Paused").font(.title3).foregroundStyle(.secondary)
