@@ -4,7 +4,7 @@ import MediaPlayer
 
 /// The ways to practice.
 enum TrainingMode: String, CaseIterable, Identifiable {
-    case characters, words, abbreviations, prosigns, headCopy, typed, confusion, listen, qso
+    case characters, words, abbreviations, prosigns, headCopy, typed, confusion, listen, qso, story
     var id: String { rawValue }
     var title: String {
         switch self {
@@ -17,6 +17,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .confusion:    return "Confusion Drill"
         case .listen:       return "Listen & Learn"
         case .qso:          return "QSO Simulator"
+        case .story:        return "Short Stories"
         }
     }
     var icon: String {
@@ -30,6 +31,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .confusion:     return "arrow.left.arrow.right"
         case .listen:        return "headphones"
         case .qso:           return "person.wave.2"
+        case .story:         return "book"
         }
     }
     /// In meaning-based modes the question is "what are they saying?"
@@ -42,6 +44,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .typed:              return "Type what you hear"
         case .listen:             return "Listen…"
         case .qso:                return "Type what you copy"
+        case .story:              return "Copy the passage"
         }
     }
     /// A one-line explanation shown on the setup screen so the learner can pick
@@ -66,6 +69,8 @@ enum TrainingMode: String, CaseIterable, Identifiable {
             return "Hands-free: hear the code, then the answer spoken aloud — no tapping. Keeps playing with the screen locked, so you can learn while driving or walking."
         case .qso:
             return "Work a simulated POTA contact: you call CQ, a station answers, and you type what you copy — their callsign, then their state. One contact at a time."
+        case .story:
+            return "Continuous copy: hear a short story sent end to end. Copy it on paper or in your head, then reveal the text to check yourself."
         }
     }
 }
@@ -153,6 +158,7 @@ final class AppModel: ObservableObject {
         case .confusion:    return confusionQuiz
         case .listen:       return charLadder   // unused: Listen runs its own loop
         case .qso:          return qsoSim
+        case .story:        return charLadder   // unused: Stories run their own playback
         }
     }
 
@@ -160,6 +166,7 @@ final class AppModel: ObservableObject {
     var isTyped: Bool { mode == .typed }
     var isListen: Bool { mode == .listen }
     var isQSO: Bool { mode == .qso }
+    var isStory: Bool { mode == .story }
     /// Modes that take a free-typed answer rather than tapping a choice.
     var usesTypedEntry: Bool { mode == .typed || mode == .qso }
 
@@ -211,12 +218,102 @@ final class AppModel: ObservableObject {
     // MARK: - Game loop
 
     func start() {
+        storyGeneration += 1   // cancel any in-flight story playback
+        storyPlaying = false
         if mode == .listen {
+            startStory(active: false)
             startListening()
+        } else if mode == .story {
+            stopListening()
+            startStoryMode()
         } else {
             stopListening()
+            startStory(active: false)
             newDrill()
         }
+    }
+
+    // MARK: - Short Stories (continuous copy)
+
+    @Published private(set) var storyActive = false
+    @Published private(set) var storyPlaying = false
+    @Published private(set) var storyRevealed = false
+    @Published private(set) var storyTitle = ""
+    @Published private(set) var storyText = ""
+    private var storyGeneration = 0
+    private var storyIndex = 0
+
+    /// Set up story mode (pick a passage, wait for the Play tap).
+    private func startStoryMode() {
+        storyGeneration += 1
+        storyActive = true
+        storyPlaying = false
+        storyRevealed = false
+        pickStory()
+        phase = .idle
+    }
+
+    /// Toggle the `storyActive` flag (used to tear down when leaving the mode).
+    private func startStory(active: Bool) {
+        if !active {
+            storyActive = false
+            storyPlaying = false
+            storyRevealed = false
+        }
+    }
+
+    private func pickStory() {
+        let stories = MorseData.stories
+        guard !stories.isEmpty else { storyTitle = ""; storyText = ""; return }
+        let n = stories.count
+        let s = stories[((storyIndex % n) + n) % n]
+        storyTitle = s.title
+        storyText = s.text
+        summary = "Story \((((storyIndex % n) + n) % n) + 1) of \(n)"
+    }
+
+    /// Send the whole passage as one continuous transmission.
+    func playStory() {
+        guard isStory, !storyText.isEmpty else { return }
+        storyGeneration += 1
+        let gen = storyGeneration
+        storyRevealed = false
+        storyPlaying = true
+        phase = .playing
+        player.play(playable: .text(storyText),
+                    frequency: settings.toneFrequency,
+                    timing: timing) { [weak self] in
+            guard let self, self.storyGeneration == gen else { return }
+            self.storyPlaying = false
+            self.phase = .awaiting
+            self.sessionAttempts += 1
+        }
+    }
+
+    /// Stop sending without revealing (cancels the completion via generation).
+    func stopStory() {
+        guard isStory else { return }
+        storyGeneration += 1
+        player.stop()
+        storyPlaying = false
+        phase = .idle
+    }
+
+    /// Show the passage text to check your copy.
+    func revealStory() {
+        guard isStory else { return }
+        storyRevealed = true
+    }
+
+    /// Advance to the next passage (does not auto-play).
+    func nextStory() {
+        storyGeneration += 1
+        player.stop()
+        storyIndex += 1
+        storyPlaying = false
+        storyRevealed = false
+        pickStory()
+        phase = .idle
     }
 
     // MARK: - Listen & Learn (hands-free)
@@ -423,6 +520,10 @@ final class AppModel: ObservableObject {
         sessionEndDate = nil
         advanceGeneration += 1   // cancel any pending auto-advance
         stopListening()
+        storyGeneration += 1     // cancel any story playback
+        if isStory { player.stop() }
+        storyActive = false
+        storyPlaying = false
         phase = .idle
         sessionEnded = true
     }

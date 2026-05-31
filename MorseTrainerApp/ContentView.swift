@@ -22,6 +22,8 @@ struct ContentView: View {
 
                 if model.isListen {
                     listenView
+                } else if model.isStory {
+                    storyView
                 } else {
                     statusArea
                         .frame(maxHeight: .infinity)
@@ -76,7 +78,8 @@ struct ContentView: View {
                 StatsView().environmentObject(model)
             }
             .onAppear {
-                if model.drill == nil && !model.sessionEnded && !model.isListening {
+                if model.drill == nil && !model.sessionEnded
+                    && !model.isListening && !model.storyActive {
                     model.startSession()
                 }
             }
@@ -215,6 +218,96 @@ struct ContentView: View {
             }
         default:
             Color.clear.frame(height: 56)
+        }
+    }
+
+    // MARK: - Short Stories (continuous copy)
+
+    private var storyView: some View {
+        VStack(spacing: 20) {
+            VStack(spacing: 4) {
+                Text(model.storyTitle)
+                    .font(.title3).bold()
+                    .multilineTextAlignment(.center)
+                Text("Public-domain fable · continuous copy")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+
+            // Copy area: hidden until revealed.
+            ScrollView {
+                if model.storyRevealed {
+                    Text(model.storyText)
+                        .font(.system(.title3, design: .monospaced))
+                        .lineSpacing(6)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .textSelection(.enabled)
+                        .transition(.opacity)
+                } else {
+                    VStack(spacing: 12) {
+                        Image(systemName: model.storyPlaying
+                              ? "dot.radiowaves.left.and.right" : "book.closed")
+                            .font(.system(size: 56))
+                            .foregroundStyle(.blue)
+                        Text(model.storyPlaying
+                             ? "Sending… copy along"
+                             : "Press Play, then copy what you hear")
+                            .font(.callout).foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 160)
+                }
+            }
+            .frame(maxHeight: .infinity)
+            .padding()
+            .background(Color(.secondarySystemBackground),
+                        in: RoundedRectangle(cornerRadius: 14))
+
+            storyControls
+        }
+        .animation(.easeInOut(duration: 0.2), value: model.storyRevealed)
+        .animation(.easeInOut(duration: 0.2), value: model.storyPlaying)
+    }
+
+    @ViewBuilder
+    private var storyControls: some View {
+        HStack(spacing: 12) {
+            if model.storyPlaying {
+                Button {
+                    model.stopStory()
+                } label: {
+                    Label("Stop", systemImage: "stop.fill")
+                        .font(.headline).frame(maxWidth: .infinity, minHeight: 52)
+                }
+                .buttonStyle(.bordered)
+            } else {
+                Button {
+                    model.playStory()
+                } label: {
+                    Label(model.storyRevealed ? "Replay" : "Play",
+                          systemImage: "play.fill")
+                        .font(.headline).frame(maxWidth: .infinity, minHeight: 52)
+                }
+                .buttonStyle(.borderedProminent)
+            }
+
+            if !model.storyRevealed {
+                Button {
+                    model.revealStory()
+                } label: {
+                    Label("Reveal", systemImage: "eye")
+                        .font(.headline).frame(maxWidth: .infinity, minHeight: 52)
+                }
+                .buttonStyle(.bordered)
+                .disabled(model.storyPlaying)
+            }
+
+            Button {
+                model.nextStory()
+            } label: {
+                Label("Next", systemImage: "forward.fill")
+                    .font(.headline).frame(maxWidth: .infinity, minHeight: 52)
+            }
+            .buttonStyle(.bordered)
         }
     }
 
