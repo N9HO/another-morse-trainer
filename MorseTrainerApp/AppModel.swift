@@ -56,7 +56,8 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         switch self {
         case .characters:    return "Core Koch drill"
         case .words:         return "Whole ham words"
-        case .abbreviations: return "CW & Q-codes"
+        case .abbreviations: return "CW abbreviations"
+        case .qCodes:        return "Q-signal shorthand"
         case .prosigns:      return "Run-together signals"
         case .headCopy:      return "Copy in your head"
         case .typed:         return "Free-recall typing"

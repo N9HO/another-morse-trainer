@@ -77,4 +77,15 @@ extension View {
     func brandCard(cornerRadius: CGFloat = Theme.cornerRadius) -> some View {
         modifier(BrandCard(cornerRadius: cornerRadius))
     }
+
+    /// A gentle repeating pulse on SF Symbols where supported (iOS 17+); a
+    /// no-op on earlier systems so the call site stays clean.
+    @ViewBuilder
+    func symbolEffectPulseIfAvailable() -> some View {
+        if #available(iOS 17.0, *) {
+            self.symbolEffect(.pulse, options: .repeating)
+        } else {
+            self
+        }
+    }
 }

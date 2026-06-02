@@ -422,7 +422,8 @@ struct ContentView: View {
             VStack(spacing: 10) {
                 Image(systemName: "mic.fill")
                     .font(.system(size: 44))
-                    .foregroundStyle(.blue)
+                    .foregroundStyle(Theme.teal)
+                    .symbolEffectPulseIfAvailable()
                 Text("Speak your answer").font(.headline)
                 if model.mode == .characters {
                     Text("Tip: use phonetics for single letters — say “Bravo” for B, “Niner” for 9.")
@@ -440,7 +441,10 @@ struct ContentView: View {
                 Text(model.voiceGuess ?? "")
                     .font(.system(size: 40, weight: .bold, design: .monospaced))
                 HStack(spacing: 16) {
-                    Button { model.confirmVoiceGuess(false) } label: {
+                    Button {
+                        Haptics.tap()
+                        model.confirmVoiceGuess(false)
+                    } label: {
                         Label("No", systemImage: "xmark")
                             .font(.headline).frame(maxWidth: .infinity, minHeight: 52)
                     }
