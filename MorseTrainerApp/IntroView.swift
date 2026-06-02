@@ -71,7 +71,7 @@ struct IntroView: View {
                            detail: "Hear a character at full speed (33 WPM) — fast enough to learn the sound, not count beeps.")
                 howItWorks(icon: "hand.tap",
                            title: "Choose",
-                           detail: "Tap what you heard from four close-sounding options.")
+                           detail: "Tap what you heard. You start with just the characters you've met and get more close-sounding options as you learn.")
                 howItWorks(icon: "chart.line.uptrend.xyaxis",
                            title: "Level up",
                            detail: "Get quick and accurate, and new characters unlock automatically.")
