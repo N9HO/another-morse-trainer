@@ -45,6 +45,13 @@ struct IntroView: View {
         )
     }
 
+    private var voiceResponseBinding: Binding<Bool> {
+        Binding(
+            get: { model.settings.voiceResponse },
+            set: { model.settings.voiceResponse = $0 }
+        )
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             ScrollView {
@@ -112,7 +119,7 @@ struct IntroView: View {
                        detail: "Hear a character at full speed (33 WPM) — fast enough to learn the sound, not count beeps.")
             howItWorks(icon: "hand.tap",
                        title: "Choose",
-                       detail: "Tap what you heard from four close-sounding options.")
+                       detail: "Tap what you heard. You start with just the characters you've met and get more close-sounding options as you learn.")
             howItWorks(icon: "chart.line.uptrend.xyaxis",
                        title: "Level up",
                        detail: "Get quick and accurate, and new characters unlock automatically.")
@@ -166,6 +173,21 @@ struct IntroView: View {
             if model.learningMode == .words {
                 inlinePicker(title: "How big a word pool?",
                              selection: wordTierBinding) { (t: WordTier) in t.label }
+            }
+
+            if model.learningMode == .characters || model.learningMode == .words {
+                Divider().overlay(Theme.hairline)
+                Toggle(isOn: voiceResponseBinding) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Label("Answer with your voice", systemImage: "mic.fill")
+                            .font(.subheadline).bold()
+                        Text("Say your answer instead of tapping. Use phonetics for letters (“Bravo” for B); say words normally.")
+                            .font(.footnote)
+                            .foregroundStyle(Theme.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .tint(Theme.teal)
             }
         }
         .padding(18)

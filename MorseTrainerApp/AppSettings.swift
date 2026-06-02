@@ -135,7 +135,10 @@ struct AppSettings: Codable, Equatable {
     // Learning
     var proficiency: Proficiency = .none
     var ttrThreshold: Double = 1.0      // seconds; "fast enough" bar for mastery
-    var distractorsFromFullAlphabet: Bool = true
+    /// The most answer choices to ever show. Choices are always limited to
+    /// characters the learner has already met, and the count grows with that
+    /// set up to this cap. Baseline is 4; clamped to `answerChoiceRange`.
+    var maxAnswerChoices: Int = 4
     /// Optional punctuation the user has opted into studying (e.g. ",", "/", ".").
     var selectedPunctuation: Set<String> = []
 
@@ -154,10 +157,18 @@ struct AppSettings: Codable, Equatable {
     /// How big a word pool Words mode (and Listen words) draws from.
     var wordTier: WordTier = .top100
 
+    /// Answer by speaking instead of tapping (Characters & Words modes). A
+    /// per-session choice made on the setup screen.
+    var voiceResponse: Bool = false
+
     // Feedback (defaults per spec: show right/wrong, reveal only on miss, no replay)
     var showCorrectness: Bool = true
     var reveal: RevealMode = .onWrong
     var allowReplay: Bool = false
+
+    /// Allowed range for `maxAnswerChoices`. The upper bound is a hard stop so
+    /// the choice grid stays usable on a phone.
+    static let answerChoiceRange: ClosedRange<Int> = 4...6
 
     static let storageKey = "MorseTrainer.settings"
 
@@ -188,9 +199,9 @@ struct AppSettings: Codable, Equatable {
 extension AppSettings {
     enum CodingKeys: String, CodingKey {
         case toneFrequency, wpm, farnsworth, effectiveWpm, proficiency, ttrThreshold
-        case distractorsFromFullAlphabet, selectedPunctuation
+        case maxAnswerChoices, selectedPunctuation
         case learningMode, practiceDuration
-        case listenContent, listenGap, wordTier
+        case listenContent, listenGap, wordTier, voiceResponse
         case showCorrectness, reveal, allowReplay
     }
 
@@ -203,13 +214,16 @@ extension AppSettings {
         s.effectiveWpm = try c.decodeIfPresent(Double.self, forKey: .effectiveWpm) ?? s.effectiveWpm
         s.proficiency = try c.decodeIfPresent(Proficiency.self, forKey: .proficiency) ?? s.proficiency
         s.ttrThreshold = try c.decodeIfPresent(Double.self, forKey: .ttrThreshold) ?? s.ttrThreshold
-        s.distractorsFromFullAlphabet = try c.decodeIfPresent(Bool.self, forKey: .distractorsFromFullAlphabet) ?? s.distractorsFromFullAlphabet
+        let mac = try c.decodeIfPresent(Int.self, forKey: .maxAnswerChoices) ?? s.maxAnswerChoices
+        s.maxAnswerChoices = min(max(mac, AppSettings.answerChoiceRange.lowerBound),
+                                 AppSettings.answerChoiceRange.upperBound)
         s.selectedPunctuation = try c.decodeIfPresent(Set<String>.self, forKey: .selectedPunctuation) ?? s.selectedPunctuation
         s.learningMode = try c.decodeIfPresent(String.self, forKey: .learningMode) ?? s.learningMode
         s.practiceDuration = try c.decodeIfPresent(PracticeDuration.self, forKey: .practiceDuration) ?? s.practiceDuration
         s.listenContent = try c.decodeIfPresent(ListenContent.self, forKey: .listenContent) ?? s.listenContent
         s.listenGap = try c.decodeIfPresent(AnswerGap.self, forKey: .listenGap) ?? s.listenGap
         s.wordTier = try c.decodeIfPresent(WordTier.self, forKey: .wordTier) ?? s.wordTier
+        s.voiceResponse = try c.decodeIfPresent(Bool.self, forKey: .voiceResponse) ?? s.voiceResponse
         s.showCorrectness = try c.decodeIfPresent(Bool.self, forKey: .showCorrectness) ?? s.showCorrectness
         s.reveal = try c.decodeIfPresent(RevealMode.self, forKey: .reveal) ?? s.reveal
         s.allowReplay = try c.decodeIfPresent(Bool.self, forKey: .allowReplay) ?? s.allowReplay

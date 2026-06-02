@@ -149,6 +149,7 @@ public final class ProgressiveCharacters: QuizSource {
     public func jumpToStage(_ newStage: Stage) {
         if newStage != .singles && engine.activeCharacters.count < 10 {
             engine.setActiveCharacters(MorseCode.kochOrder)
+            engine.setExposedCharacters(MorseCode.kochOrder)   // dev jump: treat all as met
         }
         stage = newStage
         stageResults.removeAll()
@@ -162,16 +163,17 @@ public final class ProgressiveCharacters: QuizSource {
 
     private func groupDrill(size: Int) -> Drill {
         let pool = engine.activeCharacters
+        let cap = max(1, engine.config.optionCount)
         let group = String((0..<size).map { _ in pool.randomElement(using: &rng)! })
         var options = [group]
         var attempts = 0
-        while options.count < 4 && attempts < 40 {
+        while options.count < cap && attempts < cap * 10 {
             attempts += 1
             let candidate = mutate(group, pool: pool)
             if candidate != group && !options.contains(candidate) { options.append(candidate) }
         }
         // Fallback: pad with fresh random groups if mutation didn't find enough.
-        while options.count < 4 {
+        while options.count < cap {
             let g = String((0..<size).map { _ in pool.randomElement(using: &rng)! })
             if !options.contains(g) { options.append(g) }
         }
@@ -193,13 +195,14 @@ public final class ProgressiveCharacters: QuizSource {
     }
 
     private func prosignDrill() -> Drill {
+        let cap = max(1, engine.config.optionCount)
         let target = prosignItems.randomElement(using: &rng)!
         var options = [target.answer]
         let others = prosignItems
             .filter { $0.id != target.id }
             .sorted { MorseDistance.distance(target.soundKey, $0.soundKey)
                     < MorseDistance.distance(target.soundKey, $1.soundKey) }
-        for item in others where options.count < 4 {
+        for item in others where options.count < cap {
             if !options.contains(item.answer) { options.append(item.answer) }
         }
         options.shuffle(using: &rng)
@@ -210,13 +213,14 @@ public final class ProgressiveCharacters: QuizSource {
     }
 
     private func phraseDrill() -> Drill {
+        let cap = max(1, engine.config.optionCount)
         let target = phraseItems.randomElement(using: &rng)!
         var options = [target.answer]
         let others = phraseItems
             .filter { $0.id != target.id }
             .map { (answer: $0.answer, dist: MorseDistance.distance(target.soundKey, $0.soundKey)) }
             .sorted { $0.dist < $1.dist }
-        for candidate in others where options.count < 4 {
+        for candidate in others where options.count < cap {
             if !options.contains(candidate.answer) { options.append(candidate.answer) }
         }
         options.shuffle(using: &rng)

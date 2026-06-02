@@ -12,10 +12,10 @@ public final class TrainerEngine {
     public struct Config: Sendable, Equatable {
         public var wpm: Double
         public var ttrThreshold: TimeInterval
+        /// The most answer choices to ever show. Early on the learner sees
+        /// fewer — the count grows with how many characters they've met (see
+        /// `exposedCharacters`) and tops out here.
         public var optionCount: Int
-        /// If true, distractors may be any character; if false, only ones
-        /// already in the active set are offered.
-        public var distractorsFromFullAlphabet: Bool
         public var masteryWindow: Int
         public var requiredAccuracy: Double
 
@@ -23,14 +23,12 @@ public final class TrainerEngine {
             wpm: Double = 33,
             ttrThreshold: TimeInterval = 1.0,
             optionCount: Int = 4,
-            distractorsFromFullAlphabet: Bool = true,
             masteryWindow: Int = 5,
             requiredAccuracy: Double = 0.9
         ) {
             self.wpm = wpm
             self.ttrThreshold = ttrThreshold
             self.optionCount = optionCount
-            self.distractorsFromFullAlphabet = distractorsFromFullAlphabet
             self.masteryWindow = masteryWindow
             self.requiredAccuracy = requiredAccuracy
         }
@@ -48,6 +46,12 @@ public final class TrainerEngine {
 
     public private(set) var activeCharacters: [Character]
     public private(set) var stats: [Character: CharacterStats]
+    /// Characters the learner has actually *met* — either presented at least
+    /// once as a question, or granted up front by a declared proficiency level.
+    /// Answer choices are drawn only from this set, and early on the number of
+    /// choices grows with it: a single option until a second character has been
+    /// seen, two until a third, and so on up to `config.optionCount`.
+    public private(set) var exposedCharacters: Set<Character> = []
     /// Which character the learner picked when they got one wrong — the raw
     /// material for the confusion-pair drills.
     public private(set) var confusions = ConfusionMatrix()
@@ -117,19 +121,14 @@ public final class TrainerEngine {
     }
 
     private func pickDistractors(for target: Character) -> [Character] {
-        let needed = max(0, config.optionCount - 1)
-        let primaryPool = config.distractorsFromFullAlphabet ? MorseCode.alphabet : activeCharacters
-        var picks = MorseDistance.nearestNeighbors(to: target, in: primaryPool, count: needed)
-        // If the active-set pool was too small, top up from the full alphabet.
-        if picks.count < needed {
-            let extra = MorseDistance.nearestNeighbors(
-                to: target,
-                in: MorseCode.alphabet.filter { !picks.contains($0) && $0 != target },
-                count: needed - picks.count
-            )
-            picks.append(contentsOf: extra)
-        }
-        return picks
+        // Only ever offer characters the learner has already met. The target is
+        // counted as met (this very question introduces it if it's new), so the
+        // number of options grows from one and tops out at `optionCount`.
+        let exposedPool = activeCharacters.filter { $0 != target && exposedCharacters.contains($0) }
+        let cap = max(1, config.optionCount)
+        let optionsToShow = min(cap, exposedPool.count + 1)   // +1 for the target itself
+        let needed = max(0, optionsToShow - 1)
+        return MorseDistance.nearestNeighbors(to: target, in: exposedPool, count: needed)
     }
 
     // MARK: - Recording answers & progression
@@ -148,6 +147,7 @@ public final class TrainerEngine {
     /// characters.
     @discardableResult
     public func noteAttempt(answer: Character, target: Character, ttr: TimeInterval) -> Bool {
+        exposedCharacters.insert(target)   // presenting it counts as meeting it
         let correct = answer == target
         stats[target, default: CharacterStats(character: target)].record(correct: correct, ttr: ttr)
         if !correct { confusions.record(target: target, chosen: answer) }
@@ -188,6 +188,14 @@ public final class TrainerEngine {
         }
     }
 
+    /// Replace the set of characters considered "already met." A declared
+    /// proficiency level front-loads its characters here so the learner sees a
+    /// full set of choices right away; a true beginner starts empty and builds
+    /// up one option at a time as each character is introduced.
+    public func setExposedCharacters(_ characters: [Character]) {
+        exposedCharacters = Set(characters)
+    }
+
     /// Add one character to the active set (e.g. opting into a punctuation mark).
     public func addActiveCharacter(_ character: Character) {
         guard !activeCharacters.contains(character) else { return }
@@ -217,15 +225,18 @@ public final class TrainerEngine {
         public var activeCharacters: [Character]
         public var stats: [CharacterStats]
         public var confusions: ConfusionMatrix
+        public var exposedCharacters: Set<Character>
 
-        enum CodingKeys: String, CodingKey { case activeCharacters, stats, confusions }
+        enum CodingKeys: String, CodingKey { case activeCharacters, stats, confusions, exposedCharacters }
 
         public init(activeCharacters: [Character],
                     stats: [CharacterStats],
-                    confusions: ConfusionMatrix = ConfusionMatrix()) {
+                    confusions: ConfusionMatrix = ConfusionMatrix(),
+                    exposedCharacters: Set<Character> = []) {
             self.activeCharacters = activeCharacters
             self.stats = stats
             self.confusions = confusions
+            self.exposedCharacters = exposedCharacters
         }
 
         public init(from decoder: Decoder) throws {
@@ -235,6 +246,13 @@ public final class TrainerEngine {
             stats = try c.decode([CharacterStats].self, forKey: .stats)
             // Older snapshots predate confusion tracking.
             confusions = try c.decodeIfPresent(ConfusionMatrix.self, forKey: .confusions) ?? ConfusionMatrix()
+            // Snapshots predating exposure tracking: treat every active character
+            // as already met, so existing learners keep their full set of choices.
+            if let exposed = try c.decodeIfPresent([String].self, forKey: .exposedCharacters) {
+                exposedCharacters = Set(exposed.compactMap { $0.first })
+            } else {
+                exposedCharacters = Set(activeCharacters)
+            }
         }
 
         public func encode(to encoder: Encoder) throws {
@@ -242,16 +260,19 @@ public final class TrainerEngine {
             try c.encode(activeCharacters.map(String.init), forKey: .activeCharacters)
             try c.encode(stats, forKey: .stats)
             try c.encode(confusions, forKey: .confusions)
+            try c.encode(exposedCharacters.map(String.init), forKey: .exposedCharacters)
         }
     }
 
     public var snapshot: Snapshot {
-        Snapshot(activeCharacters: activeCharacters, stats: Array(stats.values), confusions: confusions)
+        Snapshot(activeCharacters: activeCharacters, stats: Array(stats.values),
+                 confusions: confusions, exposedCharacters: exposedCharacters)
     }
 
     public func restore(from snapshot: Snapshot) {
         activeCharacters = snapshot.activeCharacters
         stats = Dictionary(uniqueKeysWithValues: snapshot.stats.map { ($0.character, $0) })
         confusions = snapshot.confusions
+        exposedCharacters = snapshot.exposedCharacters
     }
 }

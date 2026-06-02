@@ -94,12 +94,21 @@ for i in 0..<5 { sloppy.record(correct: i % 2 == 0, ttr: 0.5) }
 check("fast but inaccurate ⇒ not mastered", !sloppy.isMastered(ttrThreshold: 1.0))
 
 // Engine: questions
-print("\nQuestion generation:")
+print("\nQuestion generation (choices grow with what the learner has met):")
 let engine = TrainerEngine(seedCount: 2, rng: SeededRNG(seed: 42))
+let q0 = engine.nextQuestion()
+check("a brand-new learner sees a single option", q0.options.count == 1)
+check("that lone option is the target", q0.options == [q0.target])
+// Once a second character has been met, two options appear.
+engine.setExposedCharacters(engine.activeCharacters)   // pretend both seeds were met
 let q = engine.nextQuestion()
-check("4 options", q.options.count == 4)
-check("options are distinct", Set(q.options).count == 4)
+check("with two characters met, two options appear", q.options.count == 2)
+check("options are distinct", Set(q.options).count == q.options.count)
 check("target is among the options", q.options.contains(q.target))
+// The count tops out at the configured cap (default 4).
+let capped = TrainerEngine(seedCount: 6, rng: SeededRNG(seed: 42))
+capped.setExposedCharacters(capped.activeCharacters)
+check("choices are capped at the configured maximum (4)", capped.nextQuestion().options.count == 4)
 
 // Engine: progression
 print("\nProgression (Koch):")
@@ -138,6 +147,8 @@ do {
     fresh.restore(from: restored)
     check("active set survives a save/load round-trip", fresh.activeCharacters == e.activeCharacters)
     check("stats survive a save/load round-trip", fresh.stats.count == e.stats.count)
+    check("the met-characters set survives a save/load round-trip",
+          fresh.exposedCharacters == e.exposedCharacters)
 } catch {
     check("encode/decode without throwing", false)
 }
@@ -155,17 +166,28 @@ check("words list is non-trivial", MorseData.wordItems.count > 50)
 
 let pq = PhraseQuiz(name: "Abbreviations", items: abbrevItems, rng: SeededRNG(seed: 9))
 let d = pq.nextDrill()
-check("phrase drill has 4 options", d.options.count == 4)
-check("phrase options are distinct", Set(d.options).count == 4)
-check("phrase options include the correct meaning", d.options.contains(d.correct))
+check("the first phrase drill shows a single option", d.options.count == 1)
+check("that lone option is the correct answer", d.options == [d.correct])
 check("recording the correct meaning scores correct",
       pq.record(choice: d.correct, ttr: 0.8).correct == true)
+// As more items are heard, the choice count grows toward the cap (4).
+var maxPhraseOpts = d.options.count
+var phraseOptionsStayDistinct = true
+for _ in 0..<60 {
+    let dd = pq.nextDrill()
+    maxPhraseOpts = max(maxPhraseOpts, dd.options.count)
+    if Set(dd.options).count != dd.options.count { phraseOptionsStayDistinct = false }
+    if !dd.options.contains(dd.correct) { phraseOptionsStayDistinct = false }
+    _ = pq.record(choice: dd.correct, ttr: 0.8)
+}
+check("phrase choices grow to the cap (4) as items are heard", maxPhraseOpts == 4)
+check("phrase options stay distinct and include the answer", phraseOptionsStayDistinct)
 
 // Character engine via the shared QuizSource protocol
 print("\nUnified quiz protocol:")
 let src: QuizSource = TrainerEngine(seedCount: 2, rng: SeededRNG(seed: 5))
 let cd = src.nextDrill()
-check("character drill exposes 4 string options", cd.options.count == 4)
+check("a fresh character drill exposes a single string option", cd.options.count == 1)
 check("character drill correct is among options", cd.options.contains(cd.correct))
 check("recording correct via protocol scores correct",
       src.record(choice: cd.correct, ttr: 0.5).correct == true)
@@ -219,6 +241,7 @@ print("\nConfusion pairs:")
 do {
     let eng = TrainerEngine(seedCount: 2, rng: SeededRNG(seed: 21))
     eng.setActiveCharacters(["X", "Y", "B", "P", "E", "T"])
+    eng.setExposedCharacters(["X", "Y", "B", "P", "E", "T"])   // all have been met
     let qX = TrainerEngine.Question(target: "X", options: ["X", "Y", "B", "P"])
     // Heard X but answered Y three times, answered B once.
     eng.record(answer: "Y", for: qX, ttr: 0.5)
@@ -257,6 +280,7 @@ do {
 
     // Always usable, even before any errors exist.
     let fresh = TrainerEngine(seedCount: 4, rng: SeededRNG(seed: 9))
+    fresh.setExposedCharacters(fresh.activeCharacters)   // all four have been met
     let cq2 = ConfusionQuiz(engine: fresh, rng: SeededRNG(seed: 9))
     let fdrill = cq2.nextDrill()
     check("confusion drill works before any confusion data exists",
@@ -315,6 +339,68 @@ check("a smaller tier is a prefix of a larger tier",
       Array(MorseData.topWordItems(500).prefix(100)) == MorseData.topWordItems(100))
 check("ham vocabulary ranks first (CQ in Top 100)",
       MorseData.topWordItems(100).contains { $0.answer == "CQ" })
+
+// Voice response matching
+print("\nVoice matching:")
+do {
+    let matcher = VoiceMatcher()
+    let letters = ["B", "E", "R", "P"]
+
+    let nato = matcher.interpret(["bravo"], candidates: letters)
+    check("NATO 'bravo' → B, confidently", nato.token == "B" && nato.isConfident)
+
+    let homophone = matcher.interpret(["bee"], candidates: ["B", "D", "E", "P"])
+    check("letter name 'bee' → B", homophone.token == "B" && homophone.isConfident)
+
+    let digit = matcher.interpret(["niner"], candidates: ["9", "1", "5", "E"])
+    check("ham digit 'niner' → 9", digit.token == "9" && digit.isConfident)
+
+    let word = matcher.interpret(["the"], candidates: ["THE", "HE", "BE", "TEN"])
+    check("spoken word 'the' → THE", word.token == "THE" && word.isConfident)
+
+    let spelled = matcher.interpret(["charlie quebec"], candidates: ["CQ", "DE", "RST"])
+    check("spelled NATO 'charlie quebec' → CQ", spelled.token == "CQ")
+
+    let garbled = matcher.interpret(["zzzz"], candidates: ["B", "E"])
+    check("garbled input yields a guess but not confidently",
+          garbled.token != nil && !garbled.isConfident)
+
+    let ranked = matcher.rankedCandidates(["three"], pool: ["V", "E", "P", "3", "B", "T"], limit: 4)
+    check("ranked fallback puts the closest ('3') first", ranked.first == "3")
+    check("ranked fallback returns at most the limit", ranked.count == 4)
+
+    let ctx = matcher.contextualStrings(for: ["B"])
+    check("contextual strings include the NATO word for B", ctx.contains("bravo"))
+    check("contextual strings include the letter name for B", ctx.contains("bee"))
+}
+
+print("\nVoice profile (personalization):")
+do {
+    var profile = VoiceProfile()
+    check("a fresh profile is empty", profile.isEmpty)
+    check("unknown phrase has no suggestion", profile.suggestion(for: "wotsit") == nil)
+
+    profile.record(heard: "Wotsit", answer: "B")
+    profile.record(heard: "wotsit", answer: "B")
+    profile.record(heard: "wotsit", answer: "D")
+    check("profile learns the user's mapping (majority wins)",
+          profile.suggestion(for: "wotsit") == "B")
+    check("suggestion is case/punctuation insensitive",
+          profile.suggestion(for: "  wotsit! ") == "B")
+
+    var matcher = VoiceMatcher(profile: profile)
+    let ambiguous = matcher.interpret(["wotsit"], candidates: ["B", "D"])
+    check("a learned phrase resolves an otherwise-ambiguous answer",
+          ambiguous.token == "B" && ambiguous.isConfident)
+
+    // Survives a JSON round-trip (how it's persisted).
+    let data = try! JSONEncoder().encode(profile)
+    let restored = try! JSONDecoder().decode(VoiceProfile.self, from: data)
+    check("profile survives a JSON round-trip", restored == profile)
+    matcher = VoiceMatcher(profile: restored)
+    check("restored profile still personalizes",
+          matcher.interpret(["wotsit"], candidates: ["B", "D"]).token == "B")
+}
 
 print("\n────────────────────────────")
 if failures == 0 {

@@ -21,6 +21,10 @@ public final class PhraseQuiz: QuizSource {
     public var config: Config
 
     private var attemptsById: [String: [CharacterStats.Attempt]] = [:]
+    /// Items the learner has actually heard at least once. Choices are drawn
+    /// only from here, and their number grows with it (just the answer at first)
+    /// up to `config.optionCount`.
+    private var exposedIds: Set<String> = []
     private var rng: any RandomNumberGenerator
     private var lastItem: MorseItem?
 
@@ -41,6 +45,7 @@ public final class PhraseQuiz: QuizSource {
     public func nextDrill() -> Drill {
         let target = pickTarget()
         lastItem = target
+        exposedIds.insert(target.id)   // hearing it counts as meeting it
         let options = buildOptions(for: target)
         return Drill(
             playable: target.playable,
@@ -63,11 +68,17 @@ public final class PhraseQuiz: QuizSource {
 
     // MARK: Selection
 
-    /// Distinct answer labels: correct one plus closest-sounding others.
+    /// Distinct answer labels: correct one plus closest-sounding others. Only
+    /// items the learner has already heard are eligible, and the number of
+    /// choices grows with that set up to `config.optionCount`.
     private func buildOptions(for target: MorseItem) -> [String] {
-        let needed = max(0, config.optionCount - 1)
-        let others = items
-            .filter { $0.id != target.id && $0.answer != target.answer }
+        let cap = max(1, config.optionCount)
+        let pool = items.filter {
+            exposedIds.contains($0.id) && $0.id != target.id && $0.answer != target.answer
+        }
+        let optionsToShow = min(cap, pool.count + 1)   // +1 for the target itself
+        let needed = max(0, optionsToShow - 1)
+        let others = pool
             .map { (answer: $0.answer, dist: MorseDistance.distance(target.soundKey, $0.soundKey)) }
             .sorted { $0.dist != $1.dist ? $0.dist < $1.dist : $0.answer < $1.answer }
 
