@@ -154,6 +154,10 @@ struct AppSettings: Codable, Equatable {
     /// How big a word pool Words mode (and Listen words) draws from.
     var wordTier: WordTier = .top100
 
+    /// Answer by speaking instead of tapping (Characters & Words modes). A
+    /// per-session choice made on the setup screen.
+    var voiceResponse: Bool = false
+
     // Feedback (defaults per spec: show right/wrong, reveal only on miss, no replay)
     var showCorrectness: Bool = true
     var reveal: RevealMode = .onWrong
@@ -190,7 +194,7 @@ extension AppSettings {
         case toneFrequency, wpm, farnsworth, effectiveWpm, proficiency, ttrThreshold
         case distractorsFromFullAlphabet, selectedPunctuation
         case learningMode, practiceDuration
-        case listenContent, listenGap, wordTier
+        case listenContent, listenGap, wordTier, voiceResponse
         case showCorrectness, reveal, allowReplay
     }
 
@@ -210,6 +214,7 @@ extension AppSettings {
         s.listenContent = try c.decodeIfPresent(ListenContent.self, forKey: .listenContent) ?? s.listenContent
         s.listenGap = try c.decodeIfPresent(AnswerGap.self, forKey: .listenGap) ?? s.listenGap
         s.wordTier = try c.decodeIfPresent(WordTier.self, forKey: .wordTier) ?? s.wordTier
+        s.voiceResponse = try c.decodeIfPresent(Bool.self, forKey: .voiceResponse) ?? s.voiceResponse
         s.showCorrectness = try c.decodeIfPresent(Bool.self, forKey: .showCorrectness) ?? s.showCorrectness
         s.reveal = try c.decodeIfPresent(RevealMode.self, forKey: .reveal) ?? s.reveal
         s.allowReplay = try c.decodeIfPresent(Bool.self, forKey: .allowReplay) ?? s.allowReplay

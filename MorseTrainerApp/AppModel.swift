@@ -121,6 +121,19 @@ final class AppModel: ObservableObject {
     private var toneEndDate: Date?
     private var advanceGeneration = 0
 
+    // Voice response (Characters & Words modes): answer by speaking.
+    enum VoiceState: Equatable { case inactive, listening, confirming, fallback }
+    @Published private(set) var voiceState: VoiceState = .inactive
+    @Published private(set) var voiceHeardText: String?      // raw best transcript
+    @Published private(set) var voiceGuess: String?          // token to confirm
+    @Published private(set) var voiceFallbackOptions: [String] = []  // closest-to-input
+    private let voiceRecognizer = VoiceRecognizer()
+    private var voiceMatcher = VoiceMatcher()
+    private var voiceProfile = VoiceProfile() { didSet { saveVoiceProfile() } }
+    private var voiceOnsetDate: Date?
+    private var voiceTranscripts: [String] = []
+    private static let voiceProfileKey = "MorseTrainer.voiceProfile"
+
     // Hands-free "Listen & Learn" loop.
     @Published private(set) var isListening = false
     @Published private(set) var listenPaused = false
@@ -144,6 +157,7 @@ final class AppModel: ObservableObject {
         restoreProgress()
         reconcilePunctuation()
         applyPhraseConfig(from: loaded)
+        restoreVoiceProfile()
         summary = charLadder.summary
     }
 
@@ -169,6 +183,12 @@ final class AppModel: ObservableObject {
     var isStory: Bool { mode == .story }
     /// Modes that take a free-typed answer rather than tapping a choice.
     var usesTypedEntry: Bool { mode == .typed || mode == .qso }
+    /// Whether the learner answers by voice this session (Characters & Words).
+    var usesVoiceResponse: Bool {
+        settings.voiceResponse && (mode == .characters || mode == .words)
+    }
+    /// True when mic/speech permission was refused, so the UI can fall back.
+    var voicePermissionDenied: Bool { voiceRecognizer.authorization == .denied }
 
     /// The teaching style chosen on the setup screen (mirrors `settings`).
     var learningMode: TrainingMode {
@@ -218,6 +238,7 @@ final class AppModel: ObservableObject {
     // MARK: - Game loop
 
     func start() {
+        resetVoiceRound()
         storyGeneration += 1   // cancel any in-flight story playback
         storyPlaying = false
         if mode == .listen {
@@ -502,6 +523,13 @@ final class AppModel: ObservableObject {
             sessionEndDate = nil
             sessionRemaining = nil
         }
+
+        // Voice response: get permission up front and warm up the custom
+        // language model so the first drill doesn't stall.
+        if settings.voiceResponse && (mode == .characters || mode == .words) {
+            voiceRecognizer.requestAuthorization()
+            voiceRecognizer.prepareCustomLanguageModel(phrases: voiceUniversePhrases())
+        }
         start()
     }
 
@@ -522,6 +550,7 @@ final class AppModel: ObservableObject {
         sessionTimer = nil
         sessionEndDate = nil
         advanceGeneration += 1   // cancel any pending auto-advance
+        resetVoiceRound()
         stopListening()
         storyGeneration += 1     // cancel any story playback
         if isStory { player.stop() }
@@ -563,6 +592,7 @@ final class AppModel: ObservableObject {
 
     private func newDrill() {
         advanceGeneration += 1   // cancel any pending auto-advance
+        resetVoiceRound()
         justUnlocked = nil
         lastCorrect = nil
         lastSelected = nil
@@ -580,7 +610,10 @@ final class AppModel: ObservableObject {
                     timing: timing) { [weak self] in
             guard let self else { return }
             self.toneEndDate = Date()   // TTR clock starts when the last tone ends
-            if self.phase == .playing { self.phase = .awaiting }
+            if self.phase == .playing {
+                self.phase = .awaiting
+                if self.usesVoiceResponse { self.beginVoiceListening() }
+            }
         }
     }
 
@@ -594,7 +627,13 @@ final class AppModel: ObservableObject {
 
     func select(_ choice: String) {
         guard phase == .awaiting, drill != nil, let end = toneEndDate else { return }
-        let ttr = Date().timeIntervalSince(end)
+        commitAnswer(choice, ttr: Date().timeIntervalSince(end))
+    }
+
+    /// Record an answer, show feedback, and auto-advance on a clean correct.
+    /// Shared by tap-to-choose, voice, and typed entry.
+    private func commitAnswer(_ choice: String, ttr: TimeInterval) {
+        guard drill != nil else { return }
         let outcome = source.record(choice: choice, ttr: ttr)
 
         lastSelected = choice
@@ -617,6 +656,138 @@ final class AppModel: ObservableObject {
                 self.next()
             }
         }
+    }
+
+    // MARK: - Voice response
+
+    /// Cancel any in-flight listening and clear the per-round voice state.
+    private func resetVoiceRound() {
+        voiceRecognizer.stop()
+        voiceState = .inactive
+        voiceHeardText = nil
+        voiceGuess = nil
+        voiceFallbackOptions = []
+        voiceOnsetDate = nil
+        voiceTranscripts = []
+    }
+
+    /// Start listening for the spoken answer (called when the tone finishes).
+    private func beginVoiceListening() {
+        guard let drill else { return }
+        voiceState = .listening
+        voiceOnsetDate = nil
+        voiceTranscripts = []
+        voiceMatcher.profile = voiceProfile
+        voiceRecognizer.start(
+            contextualStrings: voiceMatcher.contextualStrings(for: drill.options),
+            onOnset: { [weak self] in self?.markVoiceOnset() },
+            onResult: { [weak self] transcripts in self?.handleVoiceResult(transcripts) }
+        )
+    }
+
+    /// Stamp the time-to-recognize clock at the *start* of the spoken answer.
+    private func markVoiceOnset() {
+        guard voiceState == .listening, voiceOnsetDate == nil else { return }
+        voiceOnsetDate = Date()
+    }
+
+    private func handleVoiceResult(_ transcripts: [String]) {
+        guard usesVoiceResponse, phase == .awaiting, voiceState == .listening,
+              let drill else { return }
+        voiceTranscripts = transcripts
+        voiceHeardText = transcripts.first
+
+        // No usable audio (silence, or permission denied): fall back to tapping
+        // the standard choices so the learner is never stuck.
+        guard !transcripts.isEmpty else {
+            presentFallback(using: Array(drill.options.prefix(4)))
+            return
+        }
+
+        let interpretation = voiceMatcher.interpret(transcripts, candidates: drill.options)
+        if let token = interpretation.token, interpretation.isConfident {
+            gradeVoiceAnswer(token)
+        } else if let guess = interpretation.token {
+            voiceGuess = guess
+            voiceState = .confirming
+        } else {
+            presentFallback(using: rankedFallback())
+        }
+    }
+
+    /// Respond to the "Did you say X?" prompt.
+    func confirmVoiceGuess(_ yes: Bool) {
+        guard voiceState == .confirming, let guess = voiceGuess else { return }
+        if yes {
+            if let heard = voiceHeardText { learnVoice(heard: heard, answer: guess) }
+            gradeVoiceAnswer(guess)
+        } else {
+            // Offer the answers that sound closest to what they actually said.
+            presentFallback(using: rankedFallback())
+        }
+    }
+
+    /// Pick one of the closest-sounding answers after rejecting the guess.
+    func selectVoiceFallback(_ choice: String) {
+        guard voiceState == .fallback else { return }
+        if let heard = voiceHeardText { learnVoice(heard: heard, answer: choice) }
+        gradeVoiceAnswer(choice)
+    }
+
+    private func presentFallback(using options: [String]) {
+        voiceRecognizer.stop()
+        voiceFallbackOptions = options
+        voiceState = .fallback
+    }
+
+    /// The answers closest to what was heard, drawn from the whole answer pool
+    /// plus the drill's own options (so the right answer can still appear).
+    private func rankedFallback() -> [String] {
+        guard let drill else { return [] }
+        var pool = voiceAnswerPool()
+        for option in drill.options where !pool.contains(option) { pool.append(option) }
+        let ranked = voiceMatcher.rankedCandidates(voiceTranscripts, pool: pool, limit: 4)
+        return ranked.isEmpty ? Array(drill.options.prefix(4)) : ranked
+    }
+
+    /// The universe of valid answers for the current voice-enabled mode.
+    private func voiceAnswerPool() -> [String] {
+        switch mode {
+        case .characters: return engine.activeCharacters.map { String($0) }
+        case .words:      return wordsQuiz.items.map { $0.answer }
+        default:          return drill?.options ?? []
+        }
+    }
+
+    /// Every spoken form of every possible answer — used to bias recognition.
+    private func voiceUniversePhrases() -> [String] {
+        voiceMatcher.contextualStrings(for: voiceAnswerPool())
+    }
+
+    private func gradeVoiceAnswer(_ choice: String) {
+        guard phase == .awaiting, let end = toneEndDate else { return }
+        voiceRecognizer.stop()
+        voiceState = .inactive
+        let onset = voiceOnsetDate ?? Date()
+        commitAnswer(choice, ttr: max(0, onset.timeIntervalSince(end)))
+    }
+
+    private func learnVoice(heard: String, answer: String) {
+        voiceProfile.record(heard: heard, answer: answer)
+        voiceMatcher.profile = voiceProfile
+    }
+
+    private func saveVoiceProfile() {
+        if let data = try? JSONEncoder().encode(voiceProfile) {
+            UserDefaults.standard.set(data, forKey: Self.voiceProfileKey)
+        }
+    }
+
+    private func restoreVoiceProfile() {
+        guard let data = UserDefaults.standard.data(forKey: Self.voiceProfileKey),
+              let profile = try? JSONDecoder().decode(VoiceProfile.self, from: data) else { return }
+        voiceProfile = profile
+        voiceMatcher.profile = profile
     }
 
     // MARK: - Typed free-recall
