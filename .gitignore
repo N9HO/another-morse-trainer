@@ -13,3 +13,6 @@ xcuserdata/
 *.xcscmblueprint
 *.xccheckout
 *.moved-aside
+
+# Sim build output (xcodebuild -derivedDataPath)
+build-sim/

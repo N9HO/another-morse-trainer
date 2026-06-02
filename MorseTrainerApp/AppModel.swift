@@ -71,6 +71,8 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .listen:        return "Hands-free, eyes-free"
         case .qso:           return "Simulated contact"
         case .story:         return "Continuous copy"
+        case .exam:          return "ARRL/FCC code exam"
+        case .qrq:           return "High-speed copy"
         }
     }
 
@@ -106,6 +108,29 @@ enum TrainingMode: String, CaseIterable, Identifiable {
             return "Push your speed: hear whole words and call signs at 35 or 40 WPM and type what you copy. Too fast to count dits — this trains instant, whole-word recognition (QRQ = “send faster”)."
         }
     }
+
+    /// Whether a Koch starting-level ("what do you already know") choice changes
+    /// this mode's drill. Only the modes that draw from the progressive character
+    /// ladder care — the rest use fixed content pools, so asking would be noise.
+    var usesStartingLevel: Bool {
+        switch self {
+        case .characters, .confusion: return true
+        default:                      return false
+        }
+    }
+
+    /// Whether a session-length choice applies. Exam (a fixed-format proficiency
+    /// run) and Story (one passage played end to end) are self-contained, so a
+    /// "how long?" question is meaningless for them.
+    var usesSessionLength: Bool {
+        switch self {
+        case .exam, .story: return false
+        default:            return true
+        }
+    }
+
+    /// True when starting this mode should prompt for any pre-session options.
+    var needsSetup: Bool { usesStartingLevel || usesSessionLength }
 }
 
 /// The app's single source of truth. Connects the tested MorseKit quiz engines

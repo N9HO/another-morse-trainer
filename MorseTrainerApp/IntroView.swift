@@ -7,22 +7,10 @@ struct IntroView: View {
     @EnvironmentObject var model: AppModel
     var onStart: () -> Void
 
+    @State private var showingSetup = false
+
     private let tileColumns = [GridItem(.flexible(), spacing: 14),
                                GridItem(.flexible(), spacing: 14)]
-
-    private var proficiency: Binding<Proficiency> {
-        Binding(
-            get: { model.settings.proficiency },
-            set: { model.configureProficiency($0) }   // no audio on the intro
-        )
-    }
-
-    private var durationBinding: Binding<PracticeDuration> {
-        Binding(
-            get: { model.settings.practiceDuration },
-            set: { model.settings.practiceDuration = $0 }
-        )
-    }
 
     private var listenContentBinding: Binding<ListenContent> {
         Binding(
@@ -86,33 +74,9 @@ struct IntroView: View {
                 VStack(spacing: 28) {
                     header
 
-                    howItWorksCard
-
                     modePicker
 
                     modeOptions
-
-                    fieldCard(title: "Where are you starting?",
-                              systemImage: "figure.stairs") {
-                        Picker("Starting level", selection: proficiency) {
-                            ForEach(Proficiency.allCases) { level in
-                                Text(level.label).tag(level)
-                            }
-                        }
-                        .pickerStyle(.menu)
-                        .tint(Theme.tealBright)
-                    }
-
-                    fieldCard(title: "How long do you want to practice?",
-                              systemImage: "timer") {
-                        Picker("Duration", selection: durationBinding) {
-                            ForEach(PracticeDuration.allCases) { d in
-                                Text(d.label).tag(d)
-                            }
-                        }
-                        .pickerStyle(.menu)
-                        .tint(Theme.tealBright)
-                    }
 
                     Spacer(minLength: 8)
                 }
@@ -121,6 +85,10 @@ struct IntroView: View {
             }
 
             startBar
+        }
+        .sheet(isPresented: $showingSetup) {
+            SessionSetupSheet(onStart: onStart)
+                .environmentObject(model)
         }
     }
 
@@ -132,29 +100,12 @@ struct IntroView: View {
             Text("Another Morse Trainer")
                 .font(.largeTitle).bold()
                 .multilineTextAlignment(.center)
-            Text("Learn Morse code by ear — the proven Koch method.")
-                .font(.headline)
+            Text("A proud part of the Carrier Wave ecosystem.")
+                .font(.subheadline)
                 .foregroundStyle(Theme.textSecondary)
                 .multilineTextAlignment(.center)
         }
         .padding(.top, 8)
-    }
-
-    private var howItWorksCard: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            howItWorks(icon: "ear",
-                       title: "Listen",
-                       detail: "Hear a character at full speed (33 WPM) — fast enough to learn the sound, not count beeps.")
-            howItWorks(icon: "hand.tap",
-                       title: "Choose",
-                       detail: "Tap what you heard. You start with just the characters you've met and get more close-sounding options as you learn.")
-            howItWorks(icon: "chart.line.uptrend.xyaxis",
-                       title: "Level up",
-                       detail: "Get quick and accurate, and new characters unlock automatically.")
-        }
-        .padding(18)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .brandCard()
     }
 
     // MARK: - Mode picker (tiles)
@@ -282,10 +233,14 @@ struct IntroView: View {
     private var startBar: some View {
         Button {
             Haptics.tap()
-            model.startSession()
-            onStart()
+            if model.learningMode.needsSetup {
+                showingSetup = true
+            } else {
+                model.startSession()
+                onStart()
+            }
         } label: {
-            Text("Start Training")
+            Text(model.learningMode.needsSetup ? "Continue" : "Start Training")
                 .font(.headline)
                 .frame(maxWidth: .infinity, minHeight: 54)
         }
@@ -295,7 +250,9 @@ struct IntroView: View {
         .padding(.top, 12)
         .padding(.bottom, 12)
         .background(.ultraThinMaterial)
-        .accessibilityHint("Begins a \(model.settings.practiceDuration.label) session of \(model.learningMode.title).")
+        .accessibilityHint(model.learningMode.needsSetup
+            ? "Opens session options for \(model.learningMode.title)."
+            : "Begins a session of \(model.learningMode.title).")
     }
 
     // MARK: - Building blocks
@@ -304,22 +261,6 @@ struct IntroView: View {
         Label(text, systemImage: systemImage)
             .font(.title3).bold()
             .foregroundStyle(.primary)
-    }
-
-    /// A labelled container holding one control, in the brand card style.
-    private func fieldCard<Content: View>(title: String,
-                                          systemImage: String,
-                                          @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Label(title, systemImage: systemImage)
-                .font(.subheadline).bold()
-                .foregroundStyle(Theme.textSecondary)
-            content()
-                .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .padding(18)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .brandCard()
     }
 
     /// A row with a label and a trailing menu picker, sized for the option card.
@@ -370,19 +311,6 @@ struct IntroView: View {
         }
     }
 
-    private func howItWorks(icon: String, title: String, detail: String) -> some View {
-        HStack(alignment: .top, spacing: 14) {
-            Image(systemName: icon)
-                .font(.title2)
-                .foregroundStyle(Theme.teal)
-                .frame(width: 32)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.headline)
-                Text(detail).font(.subheadline).foregroundStyle(Theme.textSecondary)
-            }
-        }
-        .accessibilityElement(children: .combine)
-    }
 }
 
 /// One selectable training-mode tile: icon, name, and a short tagline. The
@@ -446,6 +374,113 @@ private struct ModeTile: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(mode.title). \(mode.tagline)")
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+    }
+}
+
+/// Pre-session options for the chosen mode, shown when Start is tapped. Only the
+/// knobs that actually change this mode's drill appear — so the fixed-format Code
+/// Exam never asks "how long?" or "what do you already know?".
+private struct SessionSetupSheet: View {
+    @EnvironmentObject var model: AppModel
+    @Environment(\.dismiss) private var dismiss
+    var onStart: () -> Void
+
+    private var proficiency: Binding<Proficiency> {
+        Binding(
+            get: { model.settings.proficiency },
+            set: { model.configureProficiency($0) }   // no audio on the setup sheet
+        )
+    }
+
+    private var durationBinding: Binding<PracticeDuration> {
+        Binding(
+            get: { model.settings.practiceDuration },
+            set: { model.settings.practiceDuration = $0 }
+        )
+    }
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                Theme.Background()
+                ScrollView {
+                    VStack(spacing: 20) {
+                        Text(model.learningMode.blurb)
+                            .font(.footnote)
+                            .foregroundStyle(Theme.textSecondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .fixedSize(horizontal: false, vertical: true)
+
+                        if model.learningMode.usesStartingLevel {
+                            card(title: "Where are you starting?", systemImage: "figure.stairs") {
+                                Picker("Starting level", selection: proficiency) {
+                                    ForEach(Proficiency.allCases) { level in
+                                        Text(level.label).tag(level)
+                                    }
+                                }
+                                .pickerStyle(.menu)
+                                .tint(Theme.tealBright)
+                            }
+                        }
+
+                        if model.learningMode.usesSessionLength {
+                            card(title: "How long do you want to practice?", systemImage: "timer") {
+                                Picker("Duration", selection: durationBinding) {
+                                    ForEach(PracticeDuration.allCases) { d in
+                                        Text(d.label).tag(d)
+                                    }
+                                }
+                                .pickerStyle(.menu)
+                                .tint(Theme.tealBright)
+                            }
+                        }
+                    }
+                    .padding(24)
+                }
+            }
+            .navigationTitle(model.learningMode.title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+            }
+            .safeAreaInset(edge: .bottom) {
+                Button {
+                    Haptics.tap()
+                    model.startSession()
+                    onStart()
+                    dismiss()
+                } label: {
+                    Text("Start Training")
+                        .font(.headline)
+                        .frame(maxWidth: .infinity, minHeight: 54)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(Theme.teal)
+                .padding(.horizontal, 24)
+                .padding(.vertical, 12)
+                .background(.ultraThinMaterial)
+            }
+        }
+        .presentationDetents([.medium, .large])
+    }
+
+    /// A labelled container holding one control, in the brand card style.
+    @ViewBuilder
+    private func card<Content: View>(title: String,
+                                     systemImage: String,
+                                     @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label(title, systemImage: systemImage)
+                .font(.subheadline).bold()
+                .foregroundStyle(Theme.textSecondary)
+            content()
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(18)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .brandCard()
     }
 }
 
