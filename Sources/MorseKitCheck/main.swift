@@ -340,6 +340,68 @@ check("a smaller tier is a prefix of a larger tier",
 check("ham vocabulary ranks first (CQ in Top 100)",
       MorseData.topWordItems(100).contains { $0.answer == "CQ" })
 
+// Voice response matching
+print("\nVoice matching:")
+do {
+    let matcher = VoiceMatcher()
+    let letters = ["B", "E", "R", "P"]
+
+    let nato = matcher.interpret(["bravo"], candidates: letters)
+    check("NATO 'bravo' → B, confidently", nato.token == "B" && nato.isConfident)
+
+    let homophone = matcher.interpret(["bee"], candidates: ["B", "D", "E", "P"])
+    check("letter name 'bee' → B", homophone.token == "B" && homophone.isConfident)
+
+    let digit = matcher.interpret(["niner"], candidates: ["9", "1", "5", "E"])
+    check("ham digit 'niner' → 9", digit.token == "9" && digit.isConfident)
+
+    let word = matcher.interpret(["the"], candidates: ["THE", "HE", "BE", "TEN"])
+    check("spoken word 'the' → THE", word.token == "THE" && word.isConfident)
+
+    let spelled = matcher.interpret(["charlie quebec"], candidates: ["CQ", "DE", "RST"])
+    check("spelled NATO 'charlie quebec' → CQ", spelled.token == "CQ")
+
+    let garbled = matcher.interpret(["zzzz"], candidates: ["B", "E"])
+    check("garbled input yields a guess but not confidently",
+          garbled.token != nil && !garbled.isConfident)
+
+    let ranked = matcher.rankedCandidates(["three"], pool: ["V", "E", "P", "3", "B", "T"], limit: 4)
+    check("ranked fallback puts the closest ('3') first", ranked.first == "3")
+    check("ranked fallback returns at most the limit", ranked.count == 4)
+
+    let ctx = matcher.contextualStrings(for: ["B"])
+    check("contextual strings include the NATO word for B", ctx.contains("bravo"))
+    check("contextual strings include the letter name for B", ctx.contains("bee"))
+}
+
+print("\nVoice profile (personalization):")
+do {
+    var profile = VoiceProfile()
+    check("a fresh profile is empty", profile.isEmpty)
+    check("unknown phrase has no suggestion", profile.suggestion(for: "wotsit") == nil)
+
+    profile.record(heard: "Wotsit", answer: "B")
+    profile.record(heard: "wotsit", answer: "B")
+    profile.record(heard: "wotsit", answer: "D")
+    check("profile learns the user's mapping (majority wins)",
+          profile.suggestion(for: "wotsit") == "B")
+    check("suggestion is case/punctuation insensitive",
+          profile.suggestion(for: "  wotsit! ") == "B")
+
+    var matcher = VoiceMatcher(profile: profile)
+    let ambiguous = matcher.interpret(["wotsit"], candidates: ["B", "D"])
+    check("a learned phrase resolves an otherwise-ambiguous answer",
+          ambiguous.token == "B" && ambiguous.isConfident)
+
+    // Survives a JSON round-trip (how it's persisted).
+    let data = try! JSONEncoder().encode(profile)
+    let restored = try! JSONDecoder().decode(VoiceProfile.self, from: data)
+    check("profile survives a JSON round-trip", restored == profile)
+    matcher = VoiceMatcher(profile: restored)
+    check("restored profile still personalizes",
+          matcher.interpret(["wotsit"], candidates: ["B", "D"]).token == "B")
+}
+
 print("\n────────────────────────────")
 if failures == 0 {
     print("✅ All \(checks) checks passed.\n")

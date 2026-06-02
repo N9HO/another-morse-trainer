@@ -43,6 +43,9 @@ struct ContentView: View {
                     } else if model.usesTypedEntry {
                         typedEntry
                         bottomBar
+                    } else if model.usesVoiceResponse {
+                        voiceResponseView
+                        bottomBar
                     } else {
                         choiceGrid
                         bottomBar
@@ -392,6 +395,82 @@ struct ContentView: View {
 
     private func submitTyped() {
         model.submitTyped(typedAnswer)
+    }
+
+    // MARK: - Voice response
+
+    @ViewBuilder
+    private var voiceResponseView: some View {
+        switch model.voiceState {
+        case .inactive:
+            Color.clear.frame(height: 80)
+
+        case .listening:
+            VStack(spacing: 10) {
+                Image(systemName: "mic.fill")
+                    .font(.system(size: 44))
+                    .foregroundStyle(.blue)
+                Text("Speak your answer").font(.headline)
+                if model.mode == .characters {
+                    Text("Tip: use phonetics for single letters — say “Bravo” for B, “Niner” for 9.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+            }
+            .frame(maxWidth: .infinity)
+
+        case .confirming:
+            VStack(spacing: 14) {
+                Text("Did you say…")
+                    .font(.subheadline).foregroundStyle(.secondary)
+                Text(model.voiceGuess ?? "")
+                    .font(.system(size: 40, weight: .bold, design: .monospaced))
+                HStack(spacing: 16) {
+                    Button { model.confirmVoiceGuess(false) } label: {
+                        Label("No", systemImage: "xmark")
+                            .font(.headline).frame(maxWidth: .infinity, minHeight: 52)
+                    }
+                    .buttonStyle(.bordered)
+                    Button { model.confirmVoiceGuess(true) } label: {
+                        Label("Yes", systemImage: "checkmark")
+                            .font(.headline).frame(maxWidth: .infinity, minHeight: 52)
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+            }
+
+        case .fallback:
+            VStack(spacing: 10) {
+                if let heard = model.voiceHeardText, !heard.isEmpty {
+                    Text("Heard “\(heard)” — pick the closest:")
+                        .font(.footnote).foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                } else {
+                    Text("Tap your answer:")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
+                voiceFallbackGrid
+            }
+        }
+    }
+
+    private var voiceFallbackGrid: some View {
+        LazyVGrid(columns: columns, spacing: 16) {
+            ForEach(model.voiceFallbackOptions, id: \.self) { option in
+                Button {
+                    model.selectVoiceFallback(option)
+                } label: {
+                    Text(option)
+                        .font(optionFont(option))
+                        .multilineTextAlignment(.center)
+                        .minimumScaleFactor(0.6)
+                        .frame(maxWidth: .infinity, minHeight: 80)
+                        .padding(.horizontal, 4)
+                }
+                .buttonStyle(.borderedProminent)
+            }
+        }
     }
 
     // MARK: - Choices

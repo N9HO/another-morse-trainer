@@ -48,6 +48,13 @@ struct IntroView: View {
         )
     }
 
+    private var voiceResponseBinding: Binding<Bool> {
+        Binding(
+            get: { model.settings.voiceResponse },
+            set: { model.settings.voiceResponse = $0 }
+        )
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             ScrollView {
@@ -130,6 +137,19 @@ struct IntroView: View {
                         }
                     }
                     .pickerStyle(.menu)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
+            if model.learningMode == .characters || model.learningMode == .words {
+                Toggle(isOn: voiceResponseBinding) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Answer with your voice").font(.subheadline)
+                        Text("Say your answer instead of tapping. Use phonetics for letters (“Bravo” for B); say words normally.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
