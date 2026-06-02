@@ -37,11 +37,17 @@ def _in_scope(channel_id: int) -> bool:
     return not settings.watch_channel_ids or channel_id in settings.watch_channel_ids
 
 
-async def _process(message: discord.Message) -> None:
-    """Triage one message and, if warranted, file an issue + reply."""
+async def _process(message: discord.Message, explicit: bool = False) -> None:
+    """Triage one message and, if warranted, file an issue + reply.
+
+    `explicit` = a maintainer reacted with the trigger emoji. In that case we bias
+    toward filing and ALWAYS reply (silence on an explicit request is confusing).
+    """
     author = message.author.display_name
     content = (message.content or "").strip()
     if not content:
+        if explicit:
+            await _reply(message, "I can't read any text on that message to triage. 🤔")
         return
 
     try:
@@ -50,17 +56,20 @@ async def _process(message: discord.Message) -> None:
         log.exception("Failed to fetch open issues; proceeding without dedup")
         open_issues = []
 
-    verdict = await triage(author, content, open_issues)
-    log.info("Triaged message %s: kind=%s should_file=%s dup=%s",
-             message.id, verdict.kind, verdict.should_file, verdict.is_duplicate)
+    verdict = await triage(author, content, open_issues, explicit=explicit)
+    log.info("Triaged message %s: kind=%s should_file=%s dup=%s (explicit=%s)",
+             message.id, verdict.kind, verdict.should_file, verdict.is_duplicate, explicit)
 
     if verdict.is_duplicate and verdict.duplicate_of:
         await _reply(message, f"Looks like a duplicate of #{verdict.duplicate_of}. 🔁")
         return
 
     if not verdict.should_file:
-        # Only nudge for borderline questions; stay silent on pure noise.
-        if verdict.kind == "question" and verdict.reply:
+        # On an explicit request, always explain why we're not filing.
+        # In auto mode, only nudge for borderline questions; stay silent on noise.
+        if explicit:
+            await _reply(message, verdict.reply or "I don't think this needs an issue. 👍")
+        elif verdict.kind == "question" and verdict.reply:
             await _reply(message, verdict.reply)
         return
 
@@ -116,7 +125,7 @@ async def on_raw_reaction_add(payload: discord.RawReactionActionEvent) -> None:
         return
     if message.author.bot:
         return
-    await _process(message)
+    await _process(message, explicit=True)
 
 
 def main() -> None:

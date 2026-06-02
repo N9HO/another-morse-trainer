@@ -86,7 +86,10 @@ Timing, Progressive Characters).
 - End the body with a line like: "_Reported via Discord by {author}._"
 - labels: use 'bug' for bugs and 'enhancement' for features, plus 'needs-info' if the \
 report is too thin to act on.
-- reply: a friendly, concise one-liner suitable to post back in the Discord thread."""
+- reply: ALWAYS write a friendly, concise one-liner suitable to post back in the \
+Discord thread — even when you are not filing. If you won't file, the reply should say \
+why in a helpful way (e.g. what extra detail would let you file it, or that it reads \
+like a question/duplicate). Never leave reply empty."""
 
 
 def _format_open_issues(open_issues: list[dict]) -> str:
@@ -95,12 +98,24 @@ def _format_open_issues(open_issues: list[dict]) -> str:
     return "\n".join(f"#{i['number']}: {i['title']}" for i in open_issues)
 
 
-def _triage_sync(author: str, content: str, open_issues: list[dict]) -> Verdict:
+def _triage_sync(
+    author: str, content: str, open_issues: list[dict], explicit: bool = False
+) -> Verdict:
+    explicit_note = (
+        "\n\nNOTE: A maintainer explicitly flagged this message for triage. "
+        "Treat it as worth filing (should_file = true) unless it is a duplicate of an "
+        "open issue or clearly not a bug/feature request (e.g. pure chatter). If it is "
+        "a real but thin bug/feature, still file it and add the 'needs-info' label "
+        "rather than declining."
+        if explicit
+        else ""
+    )
     user_text = (
         f"Discord message from {author}:\n"
         f"\"\"\"\n{content}\n\"\"\"\n\n"
         f"Currently open issues (for duplicate detection):\n"
         f"{_format_open_issues(open_issues)}"
+        f"{explicit_note}"
     )
 
     response = _client.messages.parse(
@@ -134,6 +149,14 @@ def _triage_sync(author: str, content: str, open_issues: list[dict]) -> Verdict:
     return verdict
 
 
-async def triage(author: str, content: str, open_issues: list[dict]) -> Verdict:
-    """Triage a single message without blocking the event loop."""
-    return await asyncio.to_thread(_triage_sync, author, content, open_issues)
+async def triage(
+    author: str, content: str, open_issues: list[dict], explicit: bool = False
+) -> Verdict:
+    """Triage a single message without blocking the event loop.
+
+    `explicit` = a maintainer directly asked for this (e.g. reacted with the trigger
+    emoji), which biases toward filing and always produces a reply.
+    """
+    return await asyncio.to_thread(
+        _triage_sync, author, content, open_issues, explicit
+    )
