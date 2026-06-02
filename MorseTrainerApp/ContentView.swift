@@ -6,7 +6,9 @@ struct ContentView: View {
     @State private var showSettings = false
     @State private var showStats = false
     @State private var typedAnswer = ""
+    @State private var examCopy = ""
     @FocusState private var typedFocused: Bool
+    @FocusState private var examCopyFocused: Bool
 
     private let columns = [GridItem(.flexible(), spacing: 16),
                            GridItem(.flexible(), spacing: 16)]
@@ -24,6 +26,8 @@ struct ContentView: View {
                     listenView
                 } else if model.isStory {
                     storyView
+                } else if model.isExam {
+                    examView
                 } else {
                     statusArea
                         .frame(maxHeight: .infinity)
@@ -88,7 +92,7 @@ struct ContentView: View {
             }
             .onAppear {
                 if model.drill == nil && !model.sessionEnded
-                    && !model.isListening && !model.storyActive {
+                    && !model.isListening && !model.storyActive && !model.isExam {
                     model.startSession()
                 }
             }
@@ -326,6 +330,209 @@ struct ContentView: View {
                     .font(.headline).frame(maxWidth: .infinity, minHeight: 52)
             }
             .buttonStyle(.bordered)
+        }
+    }
+
+    // MARK: - Code Exam (ARRL/FCC-style proficiency exam)
+
+    @ViewBuilder
+    private var examView: some View {
+        switch model.examStage {
+        case .ready:    examReadyView
+        case .playing:  examPlayingView
+        case .copy:     examCopyView
+        case .question: examQuestionView
+        case .results:  examResultsView
+        }
+    }
+
+    private var examHeader: some View {
+        VStack(spacing: 4) {
+            Text("Code Proficiency Exam")
+                .font(.title3).bold()
+                .multilineTextAlignment(.center)
+            Text("\(model.examSpeed.label) · \(model.examGrading.label)")
+                .font(.caption).foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+        }
+    }
+
+    private var examReadyView: some View {
+        VStack(spacing: 24) {
+            Spacer()
+            examHeader
+            Image(systemName: "checkmark.seal")
+                .font(.system(size: 64))
+                .foregroundStyle(Theme.teal)
+            Text(model.examGrading == .solidCopy
+                 ? "Listen to the whole transmission and copy it. To pass, get \(model.examRequiredRun) characters in a row correct."
+                 : "Listen to the whole transmission, then answer questions about what was sent.")
+                .font(.callout).foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal)
+            Spacer()
+            Button {
+                model.playExam()
+            } label: {
+                Label("Start Sending", systemImage: "play.fill")
+                    .font(.headline).frame(maxWidth: .infinity, minHeight: 56)
+            }
+            .buttonStyle(.borderedProminent)
+        }
+        .frame(maxHeight: .infinity)
+    }
+
+    private var examPlayingView: some View {
+        VStack(spacing: 24) {
+            Spacer()
+            examHeader
+            Image(systemName: "dot.radiowaves.left.and.right")
+                .font(.system(size: 72))
+                .foregroundStyle(.blue)
+            Text("Sending… copy along")
+                .font(.title3).foregroundStyle(.secondary)
+            Spacer()
+            Button {
+                model.stopExam()
+            } label: {
+                Label("Stop", systemImage: "stop.fill")
+                    .font(.headline).frame(maxWidth: .infinity, minHeight: 52)
+            }
+            .buttonStyle(.bordered)
+        }
+        .frame(maxHeight: .infinity)
+    }
+
+    private var examCopyView: some View {
+        VStack(spacing: 16) {
+            examHeader
+            Text("Type everything you copied:")
+                .font(.subheadline).foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            TextEditor(text: $examCopy)
+                .font(.system(.body, design: .monospaced))
+                .textInputAutocapitalization(.characters)
+                .autocorrectionDisabled()
+                .focused($examCopyFocused)
+                .frame(minHeight: 160)
+                .padding(8)
+                .background(Color(.secondarySystemBackground),
+                            in: RoundedRectangle(cornerRadius: 12))
+            Button {
+                model.submitExamCopy(examCopy)
+            } label: {
+                Text("Grade my copy")
+                    .font(.headline).frame(maxWidth: .infinity, minHeight: 52)
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(examCopy.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            Spacer(minLength: 0)
+        }
+        .onAppear { examCopyFocused = true }
+    }
+
+    private var examQuestionView: some View {
+        VStack(spacing: 18) {
+            HStack {
+                Text("Question \(model.examQuestionNumber) of \(model.examQuestionCount)")
+                    .font(.subheadline).foregroundStyle(.secondary)
+                Spacer()
+            }
+            Text(model.examQuestion?.prompt ?? "")
+                .font(.title3).bold()
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 8)
+
+            LazyVGrid(columns: columns, spacing: 16) {
+                ForEach(model.examQuestion?.options ?? [], id: \.self) { option in
+                    Button {
+                        model.answerExamQuestion(option)
+                    } label: {
+                        Text(option)
+                            .font(optionFont(option))
+                            .multilineTextAlignment(.center)
+                            .minimumScaleFactor(0.6)
+                            .frame(maxWidth: .infinity, minHeight: 72)
+                            .padding(.horizontal, 4)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(examTint(for: option))
+                    .disabled(model.examAnswerCorrect != nil)
+                }
+            }
+
+            if let correct = model.examAnswerCorrect {
+                Text(correct ? "Correct" : "Not quite")
+                    .font(.headline)
+                    .foregroundStyle(correct ? .green : .red)
+            }
+
+            Spacer(minLength: 0)
+
+            if model.examAnswerCorrect != nil {
+                Button {
+                    model.nextExamQuestion()
+                } label: {
+                    Text("Next")
+                        .font(.headline).frame(maxWidth: .infinity, minHeight: 50)
+                }
+                .buttonStyle(.borderedProminent)
+            } else {
+                Color.clear.frame(height: 50)
+            }
+        }
+    }
+
+    private func examTint(for option: String) -> Color {
+        guard model.examAnswerCorrect != nil else { return .blue }
+        if option == model.examQuestion?.answer { return .green }
+        if option == model.examSelected, model.examAnswerCorrect == false { return .red }
+        return .gray
+    }
+
+    private var examResultsView: some View {
+        ScrollView {
+            VStack(spacing: 20) {
+                examHeader
+                Image(systemName: model.examPassed ? "checkmark.seal.fill" : "xmark.seal.fill")
+                    .font(.system(size: 64))
+                    .foregroundStyle(model.examPassed ? .green : .red)
+                Text(model.examPassed ? "Passed" : "Not yet")
+                    .font(.largeTitle).bold()
+                    .foregroundStyle(model.examPassed ? .green : .red)
+
+                if model.examGrading == .solidCopy, let r = model.examCopyResult {
+                    Text("Longest solid run: \(r.longestRun) / \(r.required) characters")
+                        .font(.headline)
+                        .multilineTextAlignment(.center)
+                } else {
+                    Text("Score: \(model.examScoreText)")
+                        .font(.headline)
+                }
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("What was sent:")
+                        .font(.subheadline).foregroundStyle(.secondary)
+                    Text(model.examPassageText)
+                        .font(.system(.body, design: .monospaced))
+                        .lineSpacing(5)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .padding()
+                .background(Color(.secondarySystemBackground),
+                            in: RoundedRectangle(cornerRadius: 12))
+
+                Button {
+                    examCopy = ""
+                    model.newExam()
+                } label: {
+                    Label("New exam", systemImage: "arrow.clockwise")
+                        .font(.headline).frame(maxWidth: .infinity, minHeight: 52)
+                }
+                .buttonStyle(.borderedProminent)
+            }
         }
     }
 

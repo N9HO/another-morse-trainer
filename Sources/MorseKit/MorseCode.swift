@@ -32,7 +32,10 @@ public enum MorseCode {
     public static let optionalPunctuation: [Character: String] = [
         ",": "--..--",   // comma
         "/": "-..-.",    // slash
-        ".": ".-.-.-"    // period
+        ".": ".-.-.-",   // period
+        "=": "-...-"     // the BT prosign / "double dash" used as a CW section
+                         // separator (kept out of the UI punctuation picker, but
+                         // sendable so exam passages can key authentic BT breaks)
     ]
 
     /// Pattern lookup across both the base table and optional punctuation.

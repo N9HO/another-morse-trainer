@@ -45,10 +45,38 @@ struct IntroView: View {
         )
     }
 
+    private var qrqSpeedBinding: Binding<QrqSpeed> {
+        Binding(
+            get: { model.settings.qrqSpeed },
+            set: { model.settings.qrqSpeed = $0 }
+        )
+    }
+
     private var voiceResponseBinding: Binding<Bool> {
         Binding(
             get: { model.settings.voiceResponse },
             set: { model.settings.voiceResponse = $0 }
+        )
+    }
+
+    private var examSpeedBinding: Binding<ExamSpeed> {
+        Binding(
+            get: { model.settings.examSpeed },
+            set: { model.settings.examSpeed = $0 }
+        )
+    }
+
+    private var examGradingBinding: Binding<ExamGrading> {
+        Binding(
+            get: { model.settings.examGrading },
+            set: { model.settings.examGrading = $0 }
+        )
+    }
+
+    private var examUseBundledBinding: Binding<Bool> {
+        Binding(
+            get: { model.settings.examUseBundled },
+            set: { model.settings.examUseBundled = $0 }
         )
     }
 
@@ -163,6 +191,9 @@ struct IntroView: View {
                     .foregroundStyle(Theme.teal)
             }
 
+            // Mode-specific configuration (grouped so the surrounding builder
+            // stays well under SwiftUI's per-block child limit).
+            Group {
             if model.learningMode == .listen {
                 inlinePicker(title: "What should it announce?",
                              selection: listenContentBinding) { (c: ListenContent) in c.label }
@@ -170,9 +201,58 @@ struct IntroView: View {
                              selection: listenGapBinding) { (g: AnswerGap) in g.label }
             }
 
+            if model.learningMode == .exam {
+                VStack(alignment: .leading, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Exam speed")
+                            .font(.subheadline).foregroundStyle(.secondary)
+                        Picker("Exam speed", selection: examSpeedBinding) {
+                            ForEach(ExamSpeed.allCases) { s in
+                                Text(s.label).tag(s)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                    }
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("How to pass")
+                            .font(.subheadline).foregroundStyle(.secondary)
+                        Picker("Grading", selection: examGradingBinding) {
+                            ForEach(ExamGrading.allCases) { g in
+                                Text(g.label).tag(g)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                    }
+                    Toggle(isOn: examUseBundledBinding) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Use a built-in passage").font(.subheadline)
+                            Text("Practice a ready-made exam text instead of a freshly generated one.")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
             if model.learningMode == .words {
                 inlinePicker(title: "How big a word pool?",
                              selection: wordTierBinding) { (t: WordTier) in t.label }
+            }
+
+            if model.learningMode == .qrq {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("QRQ speed")
+                        .font(.subheadline).foregroundStyle(.secondary)
+                    Picker("QRQ speed", selection: qrqSpeedBinding) {
+                        ForEach(QrqSpeed.allCases) { s in
+                            Text(s.label).tag(s)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
 
             if model.learningMode == .characters || model.learningMode == .words {
@@ -189,6 +269,7 @@ struct IntroView: View {
                 }
                 .tint(Theme.teal)
             }
+        }
         }
         .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)

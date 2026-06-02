@@ -4,7 +4,7 @@ import MediaPlayer
 
 /// The ways to practice.
 enum TrainingMode: String, CaseIterable, Identifiable {
-    case characters, words, abbreviations, qCodes, prosigns, headCopy, typed, confusion, listen, qso, story
+    case characters, words, abbreviations, qCodes, prosigns, headCopy, typed, confusion, listen, qso, story, exam, qrq
     var id: String { rawValue }
     var title: String {
         switch self {
@@ -19,6 +19,8 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .listen:       return "Listen & Learn"
         case .qso:          return "QSO Simulator"
         case .story:        return "Short Stories"
+        case .exam:         return "Code Exam"
+        case .qrq:          return "QRQ Speed"
         }
     }
     var icon: String {
@@ -34,6 +36,8 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .listen:        return "headphones"
         case .qso:           return "person.wave.2"
         case .story:         return "book"
+        case .exam:          return "checkmark.seal"
+        case .qrq:           return "hare"
         }
     }
     /// In meaning-based modes the question is "what are they saying?"
@@ -48,6 +52,8 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .listen:             return "Listen…"
         case .qso:                return "Type what you copy"
         case .story:              return "Copy the passage"
+        case .exam:               return "Copy the exam transmission"
+        case .qrq:                return "Type what you hear"
         }
     }
     /// A very short descriptor shown on the mode-selection tiles (intro screen).
@@ -94,6 +100,10 @@ enum TrainingMode: String, CaseIterable, Identifiable {
             return "Work a simulated POTA contact: you call CQ, a station answers, and you type what you copy — their callsign, then their state. One contact at a time."
         case .story:
             return "Continuous copy: hear a short story sent end to end. Copy it on paper or in your head, then reveal the text to check yourself."
+        case .exam:
+            return "Sit a recreation of the old ARRL/FCC code-proficiency exam: a 5-minute QSO-style transmission at 5, 13, or 20 WPM. Pass with one minute of solid copy (25 characters in a row) or by answering questions about what was sent."
+        case .qrq:
+            return "Push your speed: hear whole words and call signs at 35 or 40 WPM and type what you copy. Too fast to count dits — this trains instant, whole-word recognition (QRQ = “send faster”)."
         }
     }
 }
@@ -137,8 +147,11 @@ final class AppModel: ObservableObject {
     private let prosignQuiz: PhraseQuiz
     private let headCopyQuiz: PhraseQuiz
     private let typedQuiz: PhraseQuiz
+    private let qrqQuiz: PhraseQuiz
     private let confusionQuiz: ConfusionQuiz
     private let qsoSim = QSOSimulator()
+    private var examSession: ExamSession?
+    private var examSampleIndex = 0
 
     private let player = MorsePlayer()
     private let speech = SpeechPlayer()
@@ -178,6 +191,7 @@ final class AppModel: ObservableObject {
         self.prosignQuiz = PhraseQuiz(name: "Prosigns", items: MorseData.prosignItems)
         self.headCopyQuiz = PhraseQuiz(name: "Head Copy", items: MorseData.wordAndCallSignItems)
         self.typedQuiz = PhraseQuiz(name: "Type It", items: MorseData.wordAndCallSignItems)
+        self.qrqQuiz = PhraseQuiz(name: "QRQ", items: MorseData.wordAndCallSignItems)
         self.confusionQuiz = ConfusionQuiz(engine: engine)
         restoreProgress()
         reconcilePunctuation()
@@ -199,6 +213,8 @@ final class AppModel: ObservableObject {
         case .listen:       return charLadder   // unused: Listen runs its own loop
         case .qso:          return qsoSim
         case .story:        return charLadder   // unused: Stories run their own playback
+        case .exam:         return (examSession as QuizSource?) ?? charLadder   // exam runs its own flow
+        case .qrq:          return qrqQuiz
         }
     }
 
@@ -207,8 +223,10 @@ final class AppModel: ObservableObject {
     var isListen: Bool { mode == .listen }
     var isQSO: Bool { mode == .qso }
     var isStory: Bool { mode == .story }
+    var isExam: Bool { mode == .exam }
+    var isQRQ: Bool { mode == .qrq }
     /// Modes that take a free-typed answer rather than tapping a choice.
-    var usesTypedEntry: Bool { mode == .typed || mode == .qso }
+    var usesTypedEntry: Bool { mode == .typed || mode == .qso || mode == .qrq }
     /// Whether the learner answers by voice this session (Characters & Words).
     var usesVoiceResponse: Bool {
         settings.voiceResponse && (mode == .characters || mode == .words)
@@ -235,7 +253,7 @@ final class AppModel: ObservableObject {
         if wordsQuiz.items.count != s.wordTier.count {
             wordsQuiz = PhraseQuiz(name: "Words", items: MorseData.topWordItems(s.wordTier.count))
         }
-        for quiz in [wordsQuiz, abbrevQuiz, qCodeQuiz, prosignQuiz, headCopyQuiz, typedQuiz] {
+        for quiz in [wordsQuiz, abbrevQuiz, qCodeQuiz, prosignQuiz, headCopyQuiz, typedQuiz, qrqQuiz] {
             quiz.config.ttrThreshold = s.ttrThreshold
             quiz.config.optionCount = s.maxAnswerChoices
         }
@@ -248,7 +266,9 @@ final class AppModel: ObservableObject {
     }
 
     var timing: MorseTiming {
-        settings.farnsworth
+        // QRQ overrides the global WPM with its high-speed (35/40) character rate.
+        if mode == .qrq { return MorseTiming(wpm: settings.qrqSpeed.wpm) }
+        return settings.farnsworth
             ? MorseTiming(characterWpm: settings.wpm, effectiveWpm: settings.effectiveWpm)
             : MorseTiming(wpm: settings.wpm)
     }
@@ -277,6 +297,10 @@ final class AppModel: ObservableObject {
         } else if mode == .story {
             stopListening()
             startStoryMode()
+        } else if mode == .exam {
+            stopListening()
+            startStory(active: false)
+            startExamMode()
         } else {
             stopListening()
             startStory(active: false)
@@ -365,6 +389,195 @@ final class AppModel: ObservableObject {
         storyRevealed = false
         pickStory()
         phase = .idle
+    }
+
+    // MARK: - Code Exam (ARRL/FCC-style proficiency exam)
+
+    /// Where we are in one exam: waiting to start, sending the passage, taking
+    /// a typed copy, answering questions, or showing the result.
+    enum ExamStage { case ready, playing, copy, question, results }
+
+    @Published private(set) var examStage: ExamStage = .ready
+    @Published private(set) var examPlaying = false
+    @Published private(set) var examRevealed = false
+    // Solid-copy grading.
+    @Published private(set) var examCopyResult: ExamCopyResult?
+    // Question grading.
+    @Published private(set) var examQuestion: ExamQuestion?
+    @Published private(set) var examQuestionNumber = 0   // 1-based, for display
+    @Published private(set) var examQuestionCount = 0
+    @Published private(set) var examSelected: String?
+    @Published private(set) var examAnswerCorrect: Bool?
+    @Published private(set) var examCorrectCount = 0
+    private var examGeneration = 0
+
+    var examSpeed: ExamSpeed { examSession?.speed ?? settings.examSpeed }
+    var examGrading: ExamGrading { examSession?.grading ?? settings.examGrading }
+    /// Pretty, prosign-annotated passage text for the reveal screen.
+    var examPassageText: String { examSession?.passage.displayText ?? "" }
+    var examRequiredRun: Int { ExamSession.requiredRun }
+
+    /// Timing for the exam comes from its license speed (Farnsworth at 5 WPM),
+    /// overriding the global WPM setting.
+    private var examTiming: MorseTiming { examSession?.speed.timing ?? timing }
+
+    private func makeExamSession() -> ExamSession {
+        let speed = settings.examSpeed
+        let grading = settings.examGrading
+        if settings.examUseBundled {
+            let samples = MorseData.examSamples(for: speed)
+            if !samples.isEmpty {
+                let n = samples.count
+                let sample = samples[((examSampleIndex % n) + n) % n]
+                return ExamSession(speed: speed, grading: grading, passage: sample.passage)
+            }
+        }
+        return ExamSession(speed: speed, grading: grading)
+    }
+
+    /// Set up an exam (build the session, wait for the Start/Play tap).
+    private func startExamMode() {
+        examGeneration += 1
+        let session = makeExamSession()
+        examSession = session
+        examStage = .ready
+        examPlaying = false
+        examRevealed = false
+        examCopyResult = nil
+        examSelected = nil
+        examAnswerCorrect = nil
+        examCorrectCount = 0
+        examQuestion = nil
+        examQuestionNumber = 0
+        examQuestionCount = session.questions.count
+        phase = .idle
+        summary = session.summary
+    }
+
+    /// Send the whole exam transmission, then move on to copy or questions.
+    func playExam() {
+        guard isExam, let session = examSession else { return }
+        examGeneration += 1
+        let gen = examGeneration
+        examRevealed = false
+        examPlaying = true
+        examStage = .playing
+        phase = .playing
+        player.play(playable: .text(session.passage.sentText),
+                    frequency: settings.toneFrequency,
+                    timing: examTiming) { [weak self] in
+            guard let self, self.examGeneration == gen else { return }
+            self.examPlaying = false
+            self.sessionAttempts += 1
+            switch session.grading {
+            case .solidCopy:
+                self.examStage = .copy
+                self.phase = .awaiting
+            case .questions:
+                self.beginExamQuestions()
+            }
+        }
+    }
+
+    /// Stop sending the passage without grading (cancels via generation).
+    func stopExam() {
+        guard isExam else { return }
+        examGeneration += 1
+        player.stop()
+        examPlaying = false
+        examStage = .ready
+        phase = .idle
+    }
+
+    // MARK: Solid copy
+
+    /// Grade the typed copy: pass needs 25 correct characters in a row.
+    func submitExamCopy(_ text: String) {
+        guard isExam, let session = examSession, examStage == .copy else { return }
+        let result = session.gradeSolidCopy(text)
+        examCopyResult = result
+        _ = session.record(choice: text, ttr: 0)
+        noteSessionResult(correct: result.passed, ttr: 0)
+        examRevealed = true
+        examStage = .results
+        phase = .idle
+    }
+
+    // MARK: Questions
+
+    private func beginExamQuestions() {
+        guard examSession != nil else { return }
+        examStage = .question
+        loadExamQuestion()
+    }
+
+    private func loadExamQuestion() {
+        guard let session = examSession else { return }
+        examSelected = nil
+        examAnswerCorrect = nil
+        let idx = min(session.questionIndex, max(0, session.questions.count - 1))
+        examQuestion = session.questions.isEmpty ? nil : session.questions[idx]
+        examQuestionNumber = session.questionIndex + 1
+        summary = session.summary
+        phase = .awaiting
+    }
+
+    /// Record an answer to the current question (no auto-advance — the learner
+    /// taps Next to continue, so they can read the feedback).
+    func answerExamQuestion(_ choice: String) {
+        guard isExam, let session = examSession, examStage == .question,
+              examAnswerCorrect == nil else { return }
+        let outcome = session.record(choice: choice, ttr: 0)
+        examSelected = choice
+        examAnswerCorrect = outcome.correct
+        examCorrectCount = session.correctCount
+        noteSessionResult(correct: outcome.correct, ttr: 0)
+        phase = .answered
+    }
+
+    /// Advance to the next question, or to the results when finished.
+    func nextExamQuestion() {
+        guard isExam, let session = examSession, examStage == .question else { return }
+        if session.isComplete {
+            examRevealed = true
+            examStage = .results
+            phase = .idle
+        } else {
+            loadExamQuestion()
+        }
+    }
+
+    /// Show the full passage text on the results screen.
+    func revealExam() {
+        guard isExam else { return }
+        examRevealed = true
+    }
+
+    /// Start a fresh exam (new passage / next bundled sample).
+    func newExam() {
+        examGeneration += 1
+        player.stop()
+        examSampleIndex += 1
+        startExamMode()
+    }
+
+    /// "7 / 10" style score for question mode.
+    var examScoreText: String {
+        guard let session = examSession else { return "" }
+        return "\(session.correctCount) / \(session.questions.count)"
+    }
+
+    /// Whether the exam was passed by the historical rule for its grading mode.
+    var examPassed: Bool {
+        guard let session = examSession else { return false }
+        switch session.grading {
+        case .solidCopy:
+            return examCopyResult?.passed ?? false
+        case .questions:
+            // Historically ~10 questions with a 7-of-10 (≈74%) passing bar.
+            let total = session.questions.count
+            return total > 0 && Double(session.correctCount) / Double(total) >= 0.7
+        }
     }
 
     // MARK: - Listen & Learn (hands-free)
@@ -586,6 +799,9 @@ final class AppModel: ObservableObject {
         if isStory { player.stop() }
         storyActive = false
         storyPlaying = false
+        examGeneration += 1      // cancel any exam playback
+        if isExam { player.stop() }
+        examPlaying = false
         phase = .idle
         sessionEnded = true
     }

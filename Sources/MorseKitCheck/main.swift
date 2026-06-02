@@ -402,6 +402,109 @@ do {
           matcher.interpret(["wotsit"], candidates: ["B", "D"]).token == "B")
 }
 
+// QRQ high-speed timing (35 / 40 WPM)
+print("\nQRQ high-speed timing:")
+check("35 WPM dit ≈ 34.29 ms", approxEqual(MorseTiming(wpm: 35).dit, 1.2 / 35))
+check("40 WPM dit ≈ 30.00 ms", approxEqual(MorseTiming(wpm: 40).dit, 0.030))
+check("40 WPM is faster than 35 WPM", MorseTiming(wpm: 40).dit < MorseTiming(wpm: 35).dit)
+check("QRQ uses standard spacing (no Farnsworth stretch)",
+      abs(MorseTiming(wpm: 40).spacingUnit - MorseTiming(wpm: 40).unit) < 1e-9)
+
+// Code proficiency exam (ARRL/FCC-style)
+print("\nExam speeds & timing:")
+check("'=' (BT) keys as -...-", MorseCode.pattern(for: "=") == "-...-")
+check("novice exam is 5 WPM effective", ExamSpeed.novice5.effectiveWpm == 5)
+check("novice uses Farnsworth (faster characters than effective)",
+      ExamSpeed.novice5.characterWpm > ExamSpeed.novice5.effectiveWpm)
+let novTiming = ExamSpeed.novice5.timing
+check("novice character speed is ~13 WPM", approxEqual(novTiming.wpm, 13))
+check("novice spacing is stretched (Farnsworth)",
+      novTiming.characterGap > novTiming.elementGap * 3)
+let genTiming = ExamSpeed.general13.timing
+check("general exam is standard 13 WPM (no Farnsworth stretch)",
+      genTiming.wpm == 13 && abs(genTiming.spacingUnit - genTiming.unit) < 1e-9)
+check("extra exam is 20 WPM", ExamSpeed.extra20.effectiveWpm == 20)
+
+print("\nExam passage & question generation:")
+do {
+    let session = ExamSession(speed: .general13, grading: .questions, rng: SeededRNG(seed: 42))
+    let p = session.passage
+    check("passage names the operator from the pool", MorseData.opNames.contains(p.name))
+    check("passage QTH is a US state from the pool", MorseData.qthList.contains(p.qth))
+    check("passage RST is from the pool", MorseData.rstValues.contains(p.rst))
+    check("passage rig is from the pool", MorseData.rigs.contains(p.rig))
+    check("two different callsigns in the exchange", p.toCall != p.deCall)
+    check("sent text keys BT separators with '='", p.sentText.contains(" = "))
+    check("sent text contains the operator name", p.sentText.contains(p.name))
+    check("copy text drops the '=' separators", !p.copyText.contains("="))
+    check("display text shows the <BT> prosign", p.displayText.contains("<BT>"))
+    check("display text signs off with <KN>", p.displayText.contains("<KN>"))
+
+    check("ten questions are generated", session.questions.count == 10)
+    var allFour = true, allDistinct = true, allIncludeAnswer = true
+    for q in session.questions {
+        if q.options.count != 4 { allFour = false }
+        if Set(q.options).count != q.options.count { allDistinct = false }
+        if !q.options.contains(q.answer) { allIncludeAnswer = false }
+    }
+    check("every question offers 4 options", allFour)
+    check("every question's options are distinct", allDistinct)
+    check("every question includes its correct answer", allIncludeAnswer)
+
+    let first = session.nextDrill()
+    check("a question drill carries a prompt", !first.question.isEmpty)
+    check("the first question plays the passage", first.playable == .text(p.sentText))
+    check("a wrong answer scores incorrect",
+          session.record(choice: "\u{1}nope", ttr: 0).correct == false)
+    let d2 = session.nextDrill()
+    check("a correct answer scores correct",
+          session.record(choice: d2.correct, ttr: 0).correct == true)
+    check("correct count tracks right answers", session.correctCount == 1)
+    check("later questions don't replay the passage",
+          d2.playable == .text(""))
+
+    while !session.isComplete {
+        let d = session.nextDrill()
+        _ = session.record(choice: d.correct, ttr: 0)
+    }
+    check("exam completes after all questions are answered", session.isComplete)
+}
+
+print("\nExam solid-copy grading (25 in a row):")
+do {
+    let sample = MorseData.examSamples.first { $0.speed == .novice5 }!
+    let session = ExamSession(speed: .novice5, grading: .solidCopy,
+                              passage: sample.passage, rng: SeededRNG(seed: 1))
+    let copy = session.passage.copyText
+    check("required solid-copy run is the historical 25", ExamSession.requiredRun == 25)
+    check("the passage is long enough to attempt 25 in a row", copy.count >= 25)
+
+    let perfect = session.gradeSolidCopy(copy)
+    check("a perfect copy passes", perfect.passed && perfect.longestRun == copy.count)
+    check("exactly 25 characters in a row passes",
+          session.gradeSolidCopy(String(copy.prefix(25))).passed)
+    let r24 = session.gradeSolidCopy(String(copy.prefix(24)))
+    check("24 characters in a row fails", !r24.passed)
+    check("the 24-run reports a longest run of 24", r24.longestRun == 24)
+    check("garbage copy fails", !session.gradeSolidCopy("zzzz qqqq wwww").passed)
+    check("grading is case-insensitive",
+          session.gradeSolidCopy(String(copy.prefix(25)).lowercased()).passed)
+    check("a stray '=' in the copy is tolerated",
+          session.gradeSolidCopy("= " + String(copy.prefix(25))).passed)
+
+    check("record() grades a passing solid copy as correct",
+          session.record(choice: copy, ttr: 0).correct == true)
+    check("solid-copy drill exposes the copy target as the answer",
+          ExamSession(speed: .novice5, grading: .solidCopy,
+                      passage: sample.passage).nextDrill().correct == copy)
+
+    // Bundled library is available at each speed.
+    check("bundled exam passages exist for every speed",
+          !MorseData.examSamples(for: .novice5).isEmpty
+          && !MorseData.examSamples(for: .general13).isEmpty
+          && !MorseData.examSamples(for: .extra20).isEmpty)
+}
+
 print("\n────────────────────────────")
 if failures == 0 {
     print("✅ All \(checks) checks passed.\n")

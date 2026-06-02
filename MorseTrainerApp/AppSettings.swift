@@ -92,6 +92,25 @@ enum WordTier: String, Codable, CaseIterable, Identifiable {
     }
 }
 
+/// Character speed for QRQ ("send faster") high-speed copy practice. Above
+/// these rates you can no longer count dits — you copy whole words by sound.
+enum QrqSpeed: String, Codable, CaseIterable, Identifiable {
+    case wpm35, wpm40
+    var id: String { rawValue }
+    var wpm: Double {
+        switch self {
+        case .wpm35: return 35
+        case .wpm40: return 40
+        }
+    }
+    var label: String {
+        switch self {
+        case .wpm35: return "35 WPM"
+        case .wpm40: return "40 WPM"
+        }
+    }
+}
+
 /// What the hands-free "Listen & Learn" mode announces.
 enum ListenContent: String, Codable, CaseIterable, Identifiable {
     case characters, words, abbreviations
@@ -157,9 +176,20 @@ struct AppSettings: Codable, Equatable {
     /// How big a word pool Words mode (and Listen words) draws from.
     var wordTier: WordTier = .top100
 
+    /// Character speed for QRQ high-speed copy practice (35 or 40 WPM).
+    var qrqSpeed: QrqSpeed = .wpm35
+
     /// Answer by speaking instead of tapping (Characters & Words modes). A
     /// per-session choice made on the setup screen.
     var voiceResponse: Bool = false
+
+    // Code Exam (ARRL/FCC-style proficiency exam)
+    /// License-tied exam speed (5 / 13 / 20 WPM).
+    var examSpeed: ExamSpeed = .general13
+    /// How the exam is graded: solid copy or content questions.
+    var examGrading: ExamGrading = .questions
+    /// Use a bundled (ready-made) passage instead of a freshly generated one.
+    var examUseBundled: Bool = false
 
     // Feedback (defaults per spec: show right/wrong, reveal only on miss, no replay)
     var showCorrectness: Bool = true
@@ -202,6 +232,8 @@ extension AppSettings {
         case maxAnswerChoices, selectedPunctuation
         case learningMode, practiceDuration
         case listenContent, listenGap, wordTier, voiceResponse
+        case qrqSpeed
+        case examSpeed, examGrading, examUseBundled
         case showCorrectness, reveal, allowReplay
     }
 
@@ -223,7 +255,11 @@ extension AppSettings {
         s.listenContent = try c.decodeIfPresent(ListenContent.self, forKey: .listenContent) ?? s.listenContent
         s.listenGap = try c.decodeIfPresent(AnswerGap.self, forKey: .listenGap) ?? s.listenGap
         s.wordTier = try c.decodeIfPresent(WordTier.self, forKey: .wordTier) ?? s.wordTier
+        s.qrqSpeed = try c.decodeIfPresent(QrqSpeed.self, forKey: .qrqSpeed) ?? s.qrqSpeed
         s.voiceResponse = try c.decodeIfPresent(Bool.self, forKey: .voiceResponse) ?? s.voiceResponse
+        s.examSpeed = try c.decodeIfPresent(ExamSpeed.self, forKey: .examSpeed) ?? s.examSpeed
+        s.examGrading = try c.decodeIfPresent(ExamGrading.self, forKey: .examGrading) ?? s.examGrading
+        s.examUseBundled = try c.decodeIfPresent(Bool.self, forKey: .examUseBundled) ?? s.examUseBundled
         s.showCorrectness = try c.decodeIfPresent(Bool.self, forKey: .showCorrectness) ?? s.showCorrectness
         s.reveal = try c.decodeIfPresent(RevealMode.self, forKey: .reveal) ?? s.reveal
         s.allowReplay = try c.decodeIfPresent(Bool.self, forKey: .allowReplay) ?? s.allowReplay
