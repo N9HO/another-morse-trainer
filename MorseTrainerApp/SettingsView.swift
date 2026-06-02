@@ -73,12 +73,20 @@ struct SettingsView: View {
                               value: $model.settings.ttrThreshold,
                               range: 0.5...3.0, step: 0.1,
                               format: { String(format: "%.1f s", $0) })
-                    Toggle("Distractors from whole alphabet",
-                           isOn: $model.settings.distractorsFromFullAlphabet)
+                    Stepper(value: $model.settings.maxAnswerChoices,
+                            in: AppSettings.answerChoiceRange) {
+                        HStack {
+                            Text("Answer choices")
+                            Spacer()
+                            Text("\(model.settings.maxAnswerChoices)")
+                                .foregroundStyle(.secondary)
+                                .monospacedDigit()
+                        }
+                    }
                 } header: {
                     Text("Learning")
                 } footer: {
-                    Text("When you consistently recognize a letter within this time, a new letter is added.")
+                    Text("When you consistently recognize a letter within this time, a new letter is added. Answer choices only ever include characters you've already met — the number of buttons grows as you learn, up to this many.")
                 }
 
                 Section {
