@@ -180,8 +180,7 @@ final class AppModel: ObservableObject {
         TrainerEngine.Config(
             wpm: s.wpm,
             ttrThreshold: s.ttrThreshold,
-            optionCount: 4,
-            distractorsFromFullAlphabet: s.distractorsFromFullAlphabet
+            optionCount: s.maxAnswerChoices
         )
     }
 
@@ -192,6 +191,7 @@ final class AppModel: ObservableObject {
         }
         for quiz in [wordsQuiz, abbrevQuiz, prosignQuiz, headCopyQuiz, typedQuiz] {
             quiz.config.ttrThreshold = s.ttrThreshold
+            quiz.config.optionCount = s.maxAnswerChoices
         }
     }
 
@@ -744,7 +744,13 @@ final class AppModel: ObservableObject {
     /// intro screen, where audio shouldn't fire yet).
     func configureProficiency(_ proficiency: Proficiency) {
         settings.proficiency = proficiency
-        engine.setActiveCharacters(AppModel.characters(for: proficiency))
+        let chars = AppModel.characters(for: proficiency)
+        engine.setActiveCharacters(chars)
+        // A declared proficiency front-loads its characters as "already met" so
+        // the learner sees a full set of choices right away. A true beginner
+        // ("I know nothing") starts from a single option and builds up as each
+        // new character is introduced.
+        engine.setExposedCharacters(proficiency == .none ? [] : chars)
         charLadder.resetToSingles()   // changing the set restarts the ladder
         reconcilePunctuation()
         saveProgress()

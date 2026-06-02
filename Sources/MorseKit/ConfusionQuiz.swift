@@ -40,20 +40,15 @@ public final class ConfusionQuiz: QuizSource {
         var options: [String] = [String(target)]
         if let confuser { options.append(String(confuser)) }
 
-        // Fill the remaining slots with the nearest-sounding neighbors so the
-        // whole lineup stays plausibly confusable.
-        let pool = engine.activeCharacters.filter { $0 != target && $0 != confuser }
-        let extras = MorseDistance.nearestNeighbors(to: target, in: pool, count: max(0, 4 - options.count))
-        options.append(contentsOf: extras.map(String.init))
-
-        // Top up from the whole alphabet if the active set was too small.
-        if options.count < 4 {
-            let more = MorseDistance.nearestNeighbors(
-                to: target,
-                in: MorseCode.alphabet.filter { c in c != target && !options.contains(String(c)) },
-                count: 4 - options.count)
-            options.append(contentsOf: more.map(String.init))
+        // Fill the remaining slots with the nearest-sounding characters the
+        // learner has already met, so the lineup stays plausibly confusable
+        // without ever introducing an unfamiliar character.
+        let cap = max(1, engine.config.optionCount)
+        let pool = engine.activeCharacters.filter {
+            $0 != target && $0 != confuser && engine.exposedCharacters.contains($0)
         }
+        let extras = MorseDistance.nearestNeighbors(to: target, in: pool, count: max(0, cap - options.count))
+        options.append(contentsOf: extras.map(String.init))
         options.shuffle(using: &rng)
 
         return Drill(
