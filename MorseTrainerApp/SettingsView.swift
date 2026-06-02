@@ -41,6 +41,7 @@ struct SettingsView: View {
                         .foregroundStyle(.orange)
                     }
                 }
+                .listRowBackground(Theme.navyElevated)
 
                 Section {
                     Toggle("Farnsworth spacing", isOn: $model.settings.farnsworth)
@@ -55,6 +56,7 @@ struct SettingsView: View {
                 } footer: {
                     Text("Keeps each character at full speed but adds extra space between characters, so you have time to recognize them. Applies to words, groups, and other multi-character content — single characters are unaffected.")
                 }
+                .listRowBackground(Theme.navyElevated)
 
                 Section {
                     Picker("I already know…", selection: proficiencyBinding) {
@@ -67,6 +69,7 @@ struct SettingsView: View {
                 } footer: {
                     Text("Sets which characters you start with. Changing this restarts your active set.")
                 }
+                .listRowBackground(Theme.navyElevated)
 
                 Section {
                     sliderRow(title: "Recognize within",
@@ -88,6 +91,7 @@ struct SettingsView: View {
                 } footer: {
                     Text("When you consistently recognize a letter within this time, a new letter is added. Answer choices only ever include characters you've already met — the number of buttons grows as you learn, up to this many.")
                 }
+                .listRowBackground(Theme.navyElevated)
 
                 Section {
                     ForEach(AppSettings.availablePunctuation, id: \.symbol) { entry in
@@ -109,6 +113,7 @@ struct SettingsView: View {
                 } footer: {
                     Text("“?” is already part of the base letters & numbers. Turn on any of these extras to mix them into your practice.")
                 }
+                .listRowBackground(Theme.navyElevated)
 
                 Section("Feedback") {
                     Toggle("Show right / wrong", isOn: $model.settings.showCorrectness)
@@ -119,6 +124,7 @@ struct SettingsView: View {
                     }
                     Toggle("Show replay button", isOn: $model.settings.allowReplay)
                 }
+                .listRowBackground(Theme.navyElevated)
 
                 Section {
                     ForEach(ProgressiveCharacters.Stage.allCases, id: \.self) { stage in
@@ -138,6 +144,7 @@ struct SettingsView: View {
                 } footer: {
                     Text("Jumps the Characters track to a stage for testing. Stages beyond Characters expand your active set to all letters & numbers.")
                 }
+                .listRowBackground(Theme.navyElevated)
 
                 Section {
                     Button(role: .destructive) {
@@ -146,7 +153,10 @@ struct SettingsView: View {
                         Label("Reset all progress", systemImage: "trash")
                     }
                 }
+                .listRowBackground(Theme.navyElevated)
             }
+            .scrollContentBackground(.hidden)
+            .background(Theme.Background())
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
