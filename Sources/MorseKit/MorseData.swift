@@ -87,14 +87,17 @@ public enum MorseData {
     // MARK: Q-codes → meaning
 
     public static let qCodes: [(token: String, meaning: String)] = [
-        ("QRL","is this frequency in use"), ("QRM","you are being interfered with"),
-        ("QRN","I am troubled by static"), ("QRO","increase power"),
-        ("QRP","low power"), ("QRQ","send faster"), ("QRS","send slower"),
-        ("QRT","stop sending"), ("QRU","I have nothing for you"),
-        ("QRV","I am ready"), ("QRX","stand by"), ("QRZ","who is calling me"),
-        ("QSB","your signals are fading"), ("QSL","I acknowledge receipt"),
-        ("QSO","a contact"), ("QSY","change frequency"),
-        ("QTH","my location is"), ("QTR","the correct time is")
+        ("QRG","your exact frequency is"), ("QRL","is this frequency in use?"),
+        ("QRM","man-made interference"), ("QRN","atmospheric noise / static"),
+        ("QRO","increase power"), ("QRP","low power"),
+        ("QRQ","send faster"), ("QRS","send slower"),
+        ("QRT","stop sending / going off air"), ("QRU","I have nothing for you"),
+        ("QRV","I am ready"), ("QRX","wait / stand by"),
+        ("QRZ","who is calling me?"), ("QSB","your signals are fading"),
+        ("QSK","full break-in"), ("QSL","acknowledge / received"),
+        ("QSO","a contact"), ("QSP","relay a message"),
+        ("QSY","change frequency"), ("QTH","my location is"),
+        ("QTR","the correct time is")
     ]
 
     // MARK: Call signs (realistic structure for word/call-sign practice)
@@ -162,9 +165,17 @@ public enum MorseData {
         return items
     }
 
-    /// Abbreviations mode: hear the abbreviation/Q-code, choose its meaning.
+    /// Abbreviations mode: hear the abbreviation, choose its meaning.
     public static var abbreviationItems: [MorseItem] {
-        (abbreviations + qCodes).map {
+        abbreviations.map {
+            MorseItem(id: $0.token, playable: .text($0.token),
+                      answer: $0.meaning, display: $0.token)
+        }
+    }
+
+    /// Q-code mode: hear the three-letter Q-signal, choose what it means.
+    public static var qCodeItems: [MorseItem] {
+        qCodes.map {
             MorseItem(id: $0.token, playable: .text($0.token),
                       answer: $0.meaning, display: $0.token)
         }
