@@ -130,14 +130,15 @@ public enum MorseData {
 
     public static let prosigns: [(name: String, pattern: String, meaning: String)] = [
         ("<AR>", ".-.-.",     "over — end of message"),
+        ("<K>",  "-.-",       "go ahead — any station"),
+        ("<KN>", "-.--.",     "go ahead — named station only"),
+        ("<BT>", "-...-",     "separator / new section"),
         ("<SK>", "...-.-",    "end of contact"),
-        ("<BT>", "-...-",     "break / new paragraph"),
-        ("<KN>", "-.--.",     "go ahead, named station"),
         ("<AS>", ".-...",     "wait / stand by"),
-        ("<CT>", "-.-.-",     "attention / start"),
-        ("<SN>", "...-.",     "understood"),
         ("<BK>", "-...-.-",   "break — back to you"),
-        ("<SOS>", "...---...", "distress")
+        ("<CT>", "-.-.-",     "attention / start"),
+        ("<CL>", "-.-..-..",  "closing — going off air"),
+        ("<SN>", "...-.",     "understood")
     ]
 
     // MARK: Item builders for each quiz mode
