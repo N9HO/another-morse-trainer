@@ -90,7 +90,11 @@ struct ContentView: View {
         Menu {
             ForEach(TrainingMode.allCases) { m in
                 Button {
+                    guard m != model.mode else { return }
+                    // Changing modes ends this session and returns to setup;
+                    // the new session only begins on the next explicit start.
                     model.setMode(m)
+                    onExit()
                 } label: {
                     Label(m.title, systemImage: m.icon)
                 }
