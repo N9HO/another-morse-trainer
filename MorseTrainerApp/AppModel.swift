@@ -209,9 +209,10 @@ final class AppModel: ObservableObject {
 
     // MARK: - Mode switching
 
-    /// Switching modes ends the current session — it does not restart one.
-    /// The chosen mode becomes the selection for the next session, which only
-    /// begins when the user starts again from the setup screen (a new window).
+    /// Switching modes ends the current session and surfaces its summary — it
+    /// does not restart one. The chosen mode becomes the selection for the next
+    /// session, which only begins on an explicit start ("Practice again" or a
+    /// fresh start from setup).
     func setMode(_ newMode: TrainingMode) {
         guard newMode != mode else { return }
         learningMode = newMode
