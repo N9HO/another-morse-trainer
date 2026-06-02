@@ -141,6 +141,54 @@ enum Proficiency: String, Codable, CaseIterable, Identifiable {
     }
 }
 
+/// Atmospheric noise (QRN) level for the QSO simulator.
+enum QRNLevel: String, Codable, CaseIterable, Identifiable {
+    case off, normal, moderate, heavy
+    var id: String { rawValue }
+    /// White-noise amplitude added across the band.
+    var amplitude: Float {
+        switch self {
+        case .off:      return 0
+        case .normal:   return 0.04
+        case .moderate: return 0.10
+        case .heavy:    return 0.20
+        }
+    }
+    var label: String {
+        switch self {
+        case .off:      return "Off"
+        case .normal:   return "Normal"
+        case .moderate: return "Moderate"
+        case .heavy:    return "Heavy"
+        }
+    }
+}
+
+/// QSO / contest simulator preferences (MorseWalker-style). Persisted as part of
+/// AppSettings; every field has a default so older saves upgrade cleanly.
+struct QSOSettings: Codable, Equatable {
+    var mode: QSOContestMode = .pota
+    var maxStations: Int = 4
+    var minWPM: Double = 18
+    var maxWPM: Double = 28
+    var farnsworth: Bool = false
+    /// Hz of pitch spread across callers (0 = all zero-beat on your tone).
+    var toneSpread: Double = 250
+    var minVolume: Double = 0.5
+    var maxVolume: Double = 1.0
+    var minDelay: Double = 0.2
+    var maxDelay: Double = 1.5
+    var qsbEnabled: Bool = false
+    var qrn: QRNLevel = .off
+    var cutNumbersEnabled: Bool = false
+    var cutDigits: Set<String> = ["0", "9"]
+    var rstRequired: Bool = false
+    var bustBehavior: BustBehavior = .forgiving
+    var giveUpEnabled: Bool = false
+    var formats: Set<CallsignFormat> = Set(CallsignFormat.commonDefaults)
+    var usOnly: Bool = true
+}
+
 /// All user-adjustable preferences. Persisted as JSON in UserDefaults.
 struct AppSettings: Codable, Equatable {
     // Audio
@@ -191,6 +239,9 @@ struct AppSettings: Codable, Equatable {
     /// Use a bundled (ready-made) passage instead of a freshly generated one.
     var examUseBundled: Bool = false
 
+    /// QSO / contest pileup simulator settings.
+    var qso = QSOSettings()
+
     // Feedback (defaults per spec: show right/wrong, reveal only on miss, no replay)
     var showCorrectness: Bool = true
     var reveal: RevealMode = .onWrong
@@ -234,6 +285,7 @@ extension AppSettings {
         case listenContent, listenGap, wordTier, voiceResponse
         case qrqSpeed
         case examSpeed, examGrading, examUseBundled
+        case qso
         case showCorrectness, reveal, allowReplay
     }
 
@@ -260,6 +312,7 @@ extension AppSettings {
         s.examSpeed = try c.decodeIfPresent(ExamSpeed.self, forKey: .examSpeed) ?? s.examSpeed
         s.examGrading = try c.decodeIfPresent(ExamGrading.self, forKey: .examGrading) ?? s.examGrading
         s.examUseBundled = try c.decodeIfPresent(Bool.self, forKey: .examUseBundled) ?? s.examUseBundled
+        s.qso = try c.decodeIfPresent(QSOSettings.self, forKey: .qso) ?? s.qso
         s.showCorrectness = try c.decodeIfPresent(Bool.self, forKey: .showCorrectness) ?? s.showCorrectness
         s.reveal = try c.decodeIfPresent(RevealMode.self, forKey: .reveal) ?? s.reveal
         s.allowReplay = try c.decodeIfPresent(Bool.self, forKey: .allowReplay) ?? s.allowReplay

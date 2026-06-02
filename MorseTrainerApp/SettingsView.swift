@@ -127,6 +127,74 @@ struct SettingsView: View {
                 .listRowBackground(Theme.navyElevated)
 
                 Section {
+                    Picker("Mode", selection: $model.settings.qso.mode) {
+                        ForEach(QSOContestMode.allCases) { Text($0.label).tag($0) }
+                    }
+                    if model.settings.qso.mode.isPileup {
+                        Stepper(value: $model.settings.qso.maxStations, in: 1...8) {
+                            Text("Max callers: \(model.settings.qso.maxStations)")
+                        }
+                    }
+                    sliderRow(title: "Min speed", value: $model.settings.qso.minWPM,
+                              range: 12...45, step: 1, format: { "\(Int($0)) WPM" })
+                    sliderRow(title: "Max speed", value: $model.settings.qso.maxWPM,
+                              range: 12...45, step: 1, format: { "\(Int($0)) WPM" })
+                    Toggle("Farnsworth spacing", isOn: $model.settings.qso.farnsworth)
+                    sliderRow(title: "Tone spread", value: $model.settings.qso.toneSpread,
+                              range: 0...500, step: 10,
+                              format: { $0 < 10 ? "Zero-beat" : "±\(Int($0)) Hz" })
+                } header: {
+                    Text("QSO Simulator")
+                } footer: {
+                    Text("Changes apply to your next QSO session. Tone spread splits callers across the band; zero-beat stacks them all on your pitch.")
+                }
+                .listRowBackground(Theme.navyElevated)
+
+                Section("QSO · Signals") {
+                    Toggle("QSB (fading)", isOn: $model.settings.qso.qsbEnabled)
+                    Picker("QRN (noise)", selection: $model.settings.qso.qrn) {
+                        ForEach(QRNLevel.allCases) { Text($0.label).tag($0) }
+                    }
+                    sliderRow(title: "Min wait", value: $model.settings.qso.minDelay,
+                              range: 0...3, step: 0.1, format: { String(format: "%.1f s", $0) })
+                    sliderRow(title: "Max wait", value: $model.settings.qso.maxDelay,
+                              range: 0...4, step: 0.1, format: { String(format: "%.1f s", $0) })
+                }
+                .listRowBackground(Theme.navyElevated)
+
+                Section {
+                    Toggle("Copy RST too", isOn: $model.settings.qso.rstRequired)
+                    Picker("On a busted call", selection: $model.settings.qso.bustBehavior) {
+                        ForEach(BustBehavior.allCases) { Text($0.label).tag($0) }
+                    }
+                    Toggle("Callers can give up", isOn: $model.settings.qso.giveUpEnabled)
+                    Toggle("Cut numbers", isOn: $model.settings.qso.cutNumbersEnabled)
+                    if model.settings.qso.cutNumbersEnabled {
+                        ForEach(CutNumbers.cuttableDigits, id: \.self) { d in
+                            Toggle("\(d) → \(CutNumbers.map[d].map(String.init) ?? "")",
+                                   isOn: cutBinding(d))
+                        }
+                    }
+                } header: {
+                    Text("QSO · Realism")
+                } footer: {
+                    Text("Give-up: a station you keep busting drops out after a few misses, but the pileup continues. Cut numbers send numerals as letters (0→T, 9→N) — you can type either form.")
+                }
+                .listRowBackground(Theme.navyElevated)
+
+                Section {
+                    Toggle("US callsigns only", isOn: $model.settings.qso.usOnly)
+                    ForEach(CallsignFormat.allCases) { f in
+                        Toggle(f.label, isOn: formatBinding(f))
+                    }
+                } header: {
+                    Text("QSO · Callsigns")
+                } footer: {
+                    Text("Which callsign shapes appear in pileups. Turn off US-only to mix in DX prefixes.")
+                }
+                .listRowBackground(Theme.navyElevated)
+
+                Section {
                     ForEach(ProgressiveCharacters.Stage.allCases, id: \.self) { stage in
                         Button {
                             model.previewStage(stage)
@@ -183,6 +251,29 @@ struct SettingsView: View {
         Binding(
             get: { model.settings.proficiency },
             set: { model.setProficiency($0) }
+        )
+    }
+
+    /// A toggle binding for one cut-number digit.
+    private func cutBinding(_ digit: Character) -> Binding<Bool> {
+        let key = String(digit)
+        return Binding(
+            get: { model.settings.qso.cutDigits.contains(key) },
+            set: { isOn in
+                if isOn { model.settings.qso.cutDigits.insert(key) }
+                else { model.settings.qso.cutDigits.remove(key) }
+            }
+        )
+    }
+
+    /// A toggle binding for one callsign format.
+    private func formatBinding(_ format: CallsignFormat) -> Binding<Bool> {
+        Binding(
+            get: { model.settings.qso.formats.contains(format) },
+            set: { isOn in
+                if isOn { model.settings.qso.formats.insert(format) }
+                else if model.settings.qso.formats.count > 1 { model.settings.qso.formats.remove(format) }
+            }
         )
     }
 

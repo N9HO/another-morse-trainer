@@ -127,6 +127,77 @@ final class MorsePlayer {
         setSamples(floats)
     }
 
+    // MARK: - Pileup (multiple simultaneous transmissions)
+
+    /// One station's transmission in a pileup. Rendered at its own pitch/speed
+    /// and summed with the others, offset by `startDelay`, so callers overlap —
+    /// zero-beat (same tone) or split (different tone), just like a real pileup.
+    struct PileupVoice {
+        let text: String
+        let frequency: Double
+        let timing: MorseTiming
+        let gain: Float            // 0…1 relative loudness
+        let startDelay: TimeInterval
+        let qsbRate: Double?       // slow-fade rate in Hz; nil = steady signal
+    }
+
+    /// Mix `voices` into one buffer and play it. Optional `qrn` adds atmospheric
+    /// hiss across the whole band. `onFinished` fires after the longest voice.
+    func playPileup(_ voices: [PileupVoice],
+                    qrn: Float = 0,
+                    onFinished: @escaping () -> Void) {
+        activate()
+        let mixed = mixPileup(voices, qrn: qrn)
+        guard !mixed.isEmpty else { onFinished(); return }
+        generation += 1
+        let token = generation
+        setSamples(mixed)
+        let duration = Double(mixed.count) / sampleRate
+        DispatchQueue.main.asyncAfter(deadline: .now() + duration) { [weak self] in
+            guard let self, self.generation == token else { return }
+            onFinished()
+        }
+    }
+
+    private func mixPileup(_ voices: [PileupVoice], qrn: Float) -> [Float] {
+        let rendered = voices.map { v -> (samples: [Float], offset: Int, gain: Float, qsb: Double?) in
+            (render(playable: .text(v.text), timing: v.timing, frequency: v.frequency),
+             max(0, Int(v.startDelay * sampleRate)), v.gain, v.qsbRate)
+        }
+        let total = rendered.map { $0.offset + $0.samples.count }.max() ?? 0
+        guard total > 0 else { return [] }
+        var out = [Float](repeating: 0, count: total)
+
+        for r in rendered {
+            let qsbOmega = r.qsb.map { 2.0 * Double.pi * $0 / sampleRate }
+            for i in 0..<r.samples.count {
+                var a = r.samples[i] * r.gain
+                if let w = qsbOmega {
+                    // Gentle 0.35…1.0 fade so some signals swell and dip.
+                    let env = 0.675 + 0.325 * sin(w * Double(r.offset + i))
+                    a *= Float(env)
+                }
+                out[r.offset + i] += a
+            }
+        }
+
+        if qrn > 0 {
+            var st: UInt64 = 0x2545F4914F6CDD1D
+            for i in 0..<total {
+                st = st &* 6364136223846793005 &+ 1442695040888963407
+                let n = Float(Int32(truncatingIfNeeded: st >> 33)) / Float(Int32.max)
+                out[i] += n * qrn
+            }
+        }
+
+        // Sum can exceed ±1 with several loud callers — scale down to avoid hard
+        // clipping (a busy pileup is loud, which is realistic).
+        var peak: Float = 0
+        for v in out { let a = abs(v); if a > peak { peak = a } }
+        if peak > 1 { let inv = 1 / peak; for i in 0..<total { out[i] *= inv } }
+        return out
+    }
+
     private func setSamples(_ new: [Float]) {
         state.withLock { play in
             play.samples = new

@@ -7,8 +7,10 @@ struct ContentView: View {
     @State private var showStats = false
     @State private var typedAnswer = ""
     @State private var examCopy = ""
+    @State private var qsoText = ""
     @FocusState private var typedFocused: Bool
     @FocusState private var examCopyFocused: Bool
+    @FocusState private var qsoFocused: Bool
 
     private let columns = [GridItem(.flexible(), spacing: 16),
                            GridItem(.flexible(), spacing: 16)]
@@ -28,6 +30,8 @@ struct ContentView: View {
                     storyView
                 } else if model.isExam {
                     examView
+                } else if model.isQSO {
+                    qsoView
                 } else {
                     statusArea
                         .frame(maxHeight: .infinity)
@@ -92,7 +96,8 @@ struct ContentView: View {
             }
             .onAppear {
                 if model.drill == nil && !model.sessionEnded
-                    && !model.isListening && !model.storyActive && !model.isExam {
+                    && !model.isListening && !model.storyActive && !model.isExam
+                    && !model.qsoActive {
                     model.startSession()
                 }
             }
@@ -585,6 +590,141 @@ struct ContentView: View {
 
     // MARK: - Typed free-recall
 
+    // MARK: - QSO Simulator (pileup)
+
+    @ViewBuilder
+    private var qsoView: some View {
+        VStack(spacing: 16) {
+            qsoStatusCard
+            qsoLogList
+                .frame(maxHeight: .infinity)
+            qsoInputBar
+        }
+        .onChange(of: model.qsoReadyToLog) { ready in
+            if ready { Haptics.success() }
+        }
+    }
+
+    private var qsoStatusCard: some View {
+        VStack(spacing: 10) {
+            Text(model.qsoMode.label)
+                .font(.subheadline).foregroundStyle(Theme.textSecondary)
+            Text(qsoStatusLine)
+                .font(.title2).bold()
+                .foregroundStyle(model.qsoReadyToLog ? .green : Theme.tealBright)
+                .multilineTextAlignment(.center)
+                .animation(.easeInOut(duration: 0.2), value: qsoStatusLine)
+            HStack(spacing: 28) {
+                qsoStat("Logged", "\(model.qsoCount)")
+                qsoStat("Rate", "\(Int(model.qsoRate))/hr")
+                qsoStat("Acc", "\(Int((model.qsoAccuracy * 100).rounded()))%")
+            }
+            if model.qsoBusy {
+                Label("Receiving…", systemImage: "dot.radiowaves.left.and.right")
+                    .font(.caption).foregroundStyle(Theme.teal)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding()
+        .brandCard()
+    }
+
+    private func qsoStat(_ label: String, _ value: String) -> some View {
+        VStack(spacing: 2) {
+            Text(value).font(.system(.title3, design: .rounded)).bold()
+            Text(label).font(.caption2).foregroundStyle(.secondary)
+        }
+    }
+
+    private var qsoStatusLine: String {
+        if model.qsoReadyToLog, let c = model.qsoWorkingCall { return "✓ \(c) — send TU" }
+        if let c = model.qsoWorkingCall { return "Working \(c)" }
+        if model.qsoActiveCount > 0 { return "\(model.qsoActiveCount) calling" }
+        return "Press CQ to call"
+    }
+
+    private var qsoPlaceholder: String {
+        if model.qsoReadyToLog { return "Send TU to log" }
+        if model.qsoWorkingCall != nil { return "Copy their exchange" }
+        if model.qsoActiveCount > 0 { return "Type a call (partial OK)" }
+        return "Press CQ to call"
+    }
+
+    @ViewBuilder
+    private var qsoLogList: some View {
+        if model.qsoLog.isEmpty {
+            VStack(spacing: 8) {
+                Image(systemName: "antenna.radiowaves.left.and.right")
+                    .font(.largeTitle).foregroundStyle(Theme.teal.opacity(0.5))
+                Text("Your log is empty — work some stations!")
+                    .font(.footnote).foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            ScrollView {
+                LazyVStack(spacing: 0) {
+                    ForEach(model.qsoLog) { q in
+                        HStack {
+                            Text(q.call)
+                                .font(.system(.body, design: .monospaced)).bold()
+                            Spacer()
+                            Text(q.exchange)
+                                .font(.system(.body, design: .monospaced))
+                                .foregroundStyle(Theme.textSecondary)
+                            Text("\(q.wpm)w")
+                                .font(.caption2).foregroundStyle(.secondary)
+                                .frame(width: 42, alignment: .trailing)
+                        }
+                        .padding(.vertical, 8)
+                        .padding(.horizontal, 12)
+                        Divider().overlay(Theme.hairline)
+                    }
+                }
+            }
+            .brandCard()
+        }
+    }
+
+    private var qsoInputBar: some View {
+        VStack(spacing: 10) {
+            HStack(spacing: 10) {
+                TextField(qsoPlaceholder, text: $qsoText)
+                    .textFieldStyle(.roundedBorder)
+                    .font(.system(.title2, design: .monospaced))
+                    .textInputAutocapitalization(.characters)
+                    .autocorrectionDisabled()
+                    .submitLabel(.send)
+                    .focused($qsoFocused)
+                    .onSubmit(qsoPrimary)
+                if model.qsoCanRepeat {
+                    Button { model.qsoRepeat() } label: {
+                        Image(systemName: "questionmark")
+                            .font(.headline)
+                            .frame(minWidth: 44, minHeight: 38)
+                    }
+                    .buttonStyle(.bordered)
+                    .accessibilityLabel("Ask for a repeat")
+                }
+            }
+            Button(action: qsoPrimary) {
+                Text(model.qsoActionLabel)
+                    .font(.headline)
+                    .frame(maxWidth: .infinity, minHeight: 50)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(model.qsoReadyToLog ? .green : Theme.teal)
+        }
+    }
+
+    private func qsoPrimary() {
+        if model.qsoActionLabel == "CQ" {
+            model.qsoCQ()
+        } else {
+            model.qsoPrimaryAction(qsoText)
+        }
+        qsoText = ""
+    }
+
     @ViewBuilder
     private var typedEntry: some View {
         VStack(spacing: 12) {
@@ -794,10 +934,18 @@ struct ContentView: View {
             }
 
             VStack(spacing: 14) {
-                summaryRow("Answered", "\(s.attempts)")
-                summaryRow("Accuracy", s.attempts == 0 ? "—" : "\(Int((s.accuracy * 100).rounded()))%")
-                summaryRow("Fastest", s.fastest.map { String(format: "%.2f s", $0) } ?? "—")
-                summaryRow("Median TTR", s.medianTTR.map { String(format: "%.2f s", $0) } ?? "—")
+                if s.mode == .qso {
+                    summaryRow("QSOs logged", "\(model.qsoCount)")
+                    summaryRow("Rate", "\(Int(model.qsoSessionRate.rounded()))/hr")
+                    summaryRow("Clean copy", model.qsoCount + model.qsoBusts == 0
+                               ? "—" : "\(Int((model.qsoAccuracy * 100).rounded()))%")
+                    summaryRow("Busts", "\(model.qsoBusts)")
+                } else {
+                    summaryRow("Answered", "\(s.attempts)")
+                    summaryRow("Accuracy", s.attempts == 0 ? "—" : "\(Int((s.accuracy * 100).rounded()))%")
+                    summaryRow("Fastest", s.fastest.map { String(format: "%.2f s", $0) } ?? "—")
+                    summaryRow("Median TTR", s.medianTTR.map { String(format: "%.2f s", $0) } ?? "—")
+                }
             }
             .padding()
             .frame(maxWidth: .infinity)

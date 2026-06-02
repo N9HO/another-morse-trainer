@@ -423,6 +423,28 @@ private struct SessionSetupSheet: View {
                             }
                         }
 
+                        if model.learningMode == .qso {
+                            card(title: "QSO type", systemImage: "antenna.radiowaves.left.and.right") {
+                                Picker("QSO type", selection: Binding(
+                                    get: { model.settings.qso.mode },
+                                    set: { model.settings.qso.mode = $0 }
+                                )) {
+                                    ForEach(QSOContestMode.allCases) { m in
+                                        Text(m.label).tag(m)
+                                    }
+                                }
+                                .pickerStyle(.menu)
+                                .tint(Theme.tealBright)
+                                Text(model.settings.qso.mode.blurb)
+                                    .font(.footnote)
+                                    .foregroundStyle(Theme.textSecondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                Text("More pileup options in Settings.")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+
                         if model.learningMode.usesSessionLength {
                             card(title: "How long do you want to practice?", systemImage: "timer") {
                                 Picker("Duration", selection: durationBinding) {

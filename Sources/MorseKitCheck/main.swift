@@ -299,34 +299,6 @@ do {
     }
 }
 
-// QSO simulator (Phase 1: typed POTA, single station)
-print("\nQSO simulator:")
-do {
-    let qso = QSOSimulator(rng: SeededRNG(seed: 42))
-    let call = qso.station.call
-    let state = qso.station.state
-
-    let d0 = qso.nextDrill()
-    check("the first step copies the station's callsign", d0.correct == call)
-    check("each QSO step carries a question", !d0.question.isEmpty)
-    check("typed answer is graded case/space-insensitively",
-          qso.record(choice: " \(call.lowercased()) ", ttr: 0.5).correct == true)
-
-    let d1 = qso.nextDrill()
-    check("the second step copies the station's state", d1.correct == state)
-    check("the two steps ask different questions", d0.question != d1.question)
-
-    let out = qso.record(choice: state, ttr: 0.5)
-    check("finishing the exchange logs one QSO", qso.completedQSOs == 1)
-    check("completing a contact reports it as logged (unlocked)", out.unlocked == call)
-
-    check("a wrong copy scores incorrect",
-          QSOSimulator(rng: SeededRNG(seed: 7)).record(choice: "NOPE", ttr: 0.5).correct == false)
-
-    let d2 = qso.nextDrill()
-    check("a fresh QSO begins after the last step", !d2.correct.isEmpty)
-}
-
 // Word tiers (ham-weighted Top N words)
 print("\nWord tiers:")
 check("ranked word list has at least 500 entries", MorseData.rankedWords.count >= 500)
@@ -503,6 +475,92 @@ do {
           !MorseData.examSamples(for: .novice5).isEmpty
           && !MorseData.examSamples(for: .general13).isEmpty
           && !MorseData.examSamples(for: .extra20).isEmpty)
+}
+
+// MARK: - Pileup QSO engine
+
+print("\nPileup QSO engine:")
+do {
+    func playCount(_ a: PileupEngine.Action) -> Int {
+        if case .play(let v) = a { return v.count }
+        return 0
+    }
+
+    // Callsign generator shape.
+    var grng = SeededRNG(seed: 42)
+    var allGood = true
+    for _ in 0..<60 {
+        let c = CallsignGenerator.generate(formats: [.oneByTwo], usOnly: true, using: &grng)
+        let chars = Array(c)   // 1×2 US: prefix letter + digit + 2 letters
+        if chars.count != 4 || !chars[0].isLetter || !chars[1].isNumber
+            || !chars[2].isLetter || !chars[3].isLetter { allGood = false }
+    }
+    check("1×2 US callsigns have the shape L D L L", allGood)
+
+    // CQ produces a pileup whose voice count matches the active stations.
+    var cfg = PileupConfig()
+    cfg.mode = .pota
+    cfg.maxStations = 4
+    cfg.minWPM = 20; cfg.maxWPM = 20
+    let eng = PileupEngine(config: cfg, rng: SeededRNG(seed: 7))
+    let cq = eng.callCQ()
+    check("CQ raises a pileup", eng.activeCount >= 1)
+    check("every active station answers the CQ", playCount(cq) == eng.activeCount)
+
+    // Substring matching: a fragment repeats exactly the matching stations.
+    let calls = eng.stations.map { $0.call }
+    let frag = String(calls[0].prefix(1))
+    let expectedMatches = calls.filter { $0.contains(frag) }.count
+    if !calls.contains(frag) {     // only if the 1-char fragment isn't a full call
+        let r = eng.send(frag)
+        check("a fragment re-calls exactly the substring matches",
+              playCount(r) == expectedMatches)
+    }
+
+    // Total bust under the forgiving default -> whole pileup re-calls.
+    let before = eng.activeCount
+    let bust = eng.send("ZZ9QXJ")
+    check("a total bust re-calls the whole pileup (forgiving)", playCount(bust) == before)
+
+    // Exact full call -> exchange, then copy -> ready to log, then TU logs.
+    let target = eng.stations[0].call
+    let ex = eng.send(target)
+    check("an exact full call triggers an exchange", playCount(ex) == 1)
+    check("phase is now working that station", eng.workingStation?.call == target)
+    let answer = eng.expectedCopy ?? ""
+    check("a correct copy is accepted (silent, ready to log)", eng.send(answer) == .silence)
+    if case .logged = eng.logCurrent() { check("TU logs the QSO", true) }
+    else { check("TU logs the QSO", false) }
+    check("the log now has one QSO", eng.qsoCount == 1 && eng.log.count == 1)
+
+    // Cut numbers: the cut-letter form of a serial still grades correct.
+    var ccfg = PileupConfig()
+    ccfg.mode = .basicContest
+    ccfg.maxStations = 1
+    ccfg.cutNumbersEnabled = true
+    ccfg.cutDigits = ["0", "9"]
+    let ceng = PileupEngine(config: ccfg, rng: SeededRNG(seed: 11))
+    _ = ceng.callCQ()
+    _ = ceng.send(ceng.stations[0].call)
+    let serial = ceng.expectedCopy ?? ""
+    let cutForm = CutNumbers.encode(serial, enabled: ["0", "9"])
+    check("typing the cut-number form grades correct", ceng.send(cutForm) == .silence)
+
+    // Give-up: an impatient station QRTs after repeated misses; pileup remains.
+    var gcfg = PileupConfig()
+    gcfg.mode = .pota
+    gcfg.maxStations = 3
+    gcfg.giveUpEnabled = true
+    gcfg.giveUpMin = 1; gcfg.giveUpMax = 1     // patience 1 -> quits on the 2nd miss
+    let geng = PileupEngine(config: gcfg, rng: SeededRNG(seed: 5))
+    _ = geng.callCQ()
+    _ = geng.send(geng.stations[0].call)       // start exchange
+    let activeBefore = geng.activeCount
+    _ = geng.send("WRONG")                      // miss 1
+    _ = geng.send("WRONG")                      // miss 2 -> over patience, QRT
+    check("an impatient station gives up after enough misses",
+          geng.activeCount == activeBefore - 1)
+    check("busts were tallied", geng.bustCount >= 2)
 }
 
 print("\n────────────────────────────")

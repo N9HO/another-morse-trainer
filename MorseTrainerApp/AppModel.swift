@@ -174,7 +174,7 @@ final class AppModel: ObservableObject {
     private let typedQuiz: PhraseQuiz
     private let qrqQuiz: PhraseQuiz
     private let confusionQuiz: ConfusionQuiz
-    private let qsoSim = QSOSimulator()
+    private let pileup = PileupEngine()
     private var examSession: ExamSession?
     private var examSampleIndex = 0
 
@@ -236,7 +236,7 @@ final class AppModel: ObservableObject {
         case .typed:        return typedQuiz
         case .confusion:    return confusionQuiz
         case .listen:       return charLadder   // unused: Listen runs its own loop
-        case .qso:          return qsoSim
+        case .qso:          return charLadder   // unused: QSO runs its own pileup loop
         case .story:        return charLadder   // unused: Stories run their own playback
         case .exam:         return (examSession as QuizSource?) ?? charLadder   // exam runs its own flow
         case .qrq:          return qrqQuiz
@@ -326,6 +326,10 @@ final class AppModel: ObservableObject {
             stopListening()
             startStory(active: false)
             startExamMode()
+        } else if mode == .qso {
+            stopListening()
+            startStory(active: false)
+            startQSOMode()
         } else {
             stopListening()
             startStory(active: false)
@@ -605,6 +609,138 @@ final class AppModel: ObservableObject {
         }
     }
 
+    // MARK: - QSO Simulator (MorseWalker-style pileup)
+
+    @Published private(set) var qsoActive = false
+    @Published private(set) var qsoBusy = false          // a transmission is playing
+    @Published private(set) var qsoActiveCount = 0       // stations currently calling
+    @Published private(set) var qsoWorkingCall: String?  // station you're working
+    @Published private(set) var qsoReadyToLog = false    // exchange copied; send TU
+    @Published private(set) var qsoActionLabel = "CQ"    // CQ / Send / TU
+    @Published private(set) var qsoLog: [PileupEngine.LoggedQSO] = []
+    @Published private(set) var qsoCount = 0
+    @Published private(set) var qsoBusts = 0
+    @Published private(set) var qsoAccuracy = 1.0
+    @Published private(set) var qsoLastLogged: String?   // for a brief "logged!" flash
+    private(set) var qsoSessionRate = 0.0                 // frozen rate for the summary
+    private var qsoGeneration = 0
+    private var qsoStartDate: Date?
+
+    var qsoMode: QSOContestMode { settings.qso.mode }
+    /// Whether the "?" repeat affordance applies right now.
+    var qsoCanRepeat: Bool { qsoActive && qsoActiveCount > 0 }
+    /// Completed contacts per hour, for the live rate readout.
+    var qsoRate: Double {
+        guard let start = qsoStartDate else { return 0 }
+        let mins = Date().timeIntervalSince(start) / 60
+        return mins > 0.1 ? Double(qsoCount) / mins * 60 : 0
+    }
+
+    private func startQSOMode() {
+        qsoGeneration += 1
+        pileup.reset(config: qsoConfig())
+        qsoActive = true
+        qsoBusy = false
+        qsoStartDate = Date()
+        phase = .idle
+        refreshQSO()
+        summary = pileup.summary
+    }
+
+    /// Build the engine config from the saved QSO settings + the operator tone.
+    private func qsoConfig() -> PileupConfig {
+        let q = settings.qso
+        var c = PileupConfig()
+        c.mode = q.mode
+        c.maxStations = q.mode.isPileup ? max(1, q.maxStations) : 1
+        c.minWPM = q.minWPM; c.maxWPM = q.maxWPM
+        c.toneSpread = q.toneSpread
+        c.minVolume = Float(q.minVolume); c.maxVolume = Float(q.maxVolume)
+        c.minDelay = q.minDelay; c.maxDelay = q.maxDelay
+        c.qsbEnabled = q.qsbEnabled
+        c.qrnLevel = q.qrn.amplitude
+        c.cutNumbersEnabled = q.cutNumbersEnabled
+        c.cutDigits = Set(q.cutDigits.compactMap { $0.first })
+        c.rstRequired = q.rstRequired
+        c.bustBehavior = q.bustBehavior
+        c.giveUpEnabled = q.giveUpEnabled
+        c.formats = q.formats.isEmpty ? CallsignFormat.commonDefaults : Array(q.formats)
+        c.usOnly = q.usOnly
+        return c
+    }
+
+    // The single smart box: one action drives CQ / Send / TU by phase.
+    func qsoPrimaryAction(_ text: String) {
+        guard isQSO else { return }
+        if qsoReadyToLog {
+            handleQSO(pileup.logCurrent())
+        } else {
+            handleQSO(pileup.send(text))
+        }
+    }
+
+    func qsoCQ() { guard isQSO else { return }; handleQSO(pileup.callCQ()) }
+    func qsoRepeat() { guard isQSO else { return }; handleQSO(pileup.repeatRequest()) }
+
+    private func handleQSO(_ action: PileupEngine.Action) {
+        switch action {
+        case .play(let voices):
+            playPileup(voices)
+        case .silence:
+            qsoBusy = false
+        case .logged(let call):
+            qsoLastLogged = call
+            sessionAttempts += 1
+            sessionCorrect += 1
+            Haptics.success()
+            qsoBusy = false
+        }
+        refreshQSO()
+    }
+
+    private func playPileup(_ voices: [PileupEngine.Voice]) {
+        qsoGeneration += 1
+        let gen = qsoGeneration
+        let q = settings.qso
+        let mapped: [MorsePlayer.PileupVoice] = voices.map { v in
+            let timing = q.farnsworth
+                ? MorseTiming(characterWpm: v.wpm, effectiveWpm: min(v.wpm, settings.effectiveWpm))
+                : MorseTiming(wpm: v.wpm)
+            return MorsePlayer.PileupVoice(
+                text: v.text,
+                frequency: max(200, settings.toneFrequency + v.toneOffset),
+                timing: timing,
+                gain: v.volume,
+                startDelay: v.delay,
+                qsbRate: v.qsb ? 0.33 : nil)
+        }
+        qsoBusy = true
+        player.playPileup(mapped, qrn: q.qrn.amplitude) { [weak self] in
+            guard let self, self.qsoGeneration == gen else { return }
+            self.qsoBusy = false
+        }
+    }
+
+    /// Mirror the engine's state onto the published properties the UI watches.
+    private func refreshQSO() {
+        qsoActiveCount = pileup.activeCount
+        qsoLog = pileup.log.reversed()
+        qsoCount = pileup.qsoCount
+        qsoBusts = pileup.bustCount
+        qsoAccuracy = pileup.accuracy
+        switch pileup.phase {
+        case .idle:
+            qsoWorkingCall = nil; qsoReadyToLog = false; qsoActionLabel = "CQ"
+        case .pileup:
+            qsoWorkingCall = nil; qsoReadyToLog = false; qsoActionLabel = "Send"
+        case .working:
+            qsoWorkingCall = pileup.workingStation?.call; qsoReadyToLog = false; qsoActionLabel = "Send"
+        case .readyToLog:
+            qsoWorkingCall = pileup.workingStation?.call; qsoReadyToLog = true; qsoActionLabel = "TU"
+        }
+        summary = pileup.summary
+    }
+
     // MARK: - Listen & Learn (hands-free)
 
     private struct ListenItem {
@@ -827,6 +963,13 @@ final class AppModel: ObservableObject {
         examGeneration += 1      // cancel any exam playback
         if isExam { player.stop() }
         examPlaying = false
+        qsoGeneration += 1       // cancel any pileup playback
+        if isQSO {
+            qsoSessionRate = qsoRate   // freeze the rate for the summary
+            player.stop()
+        }
+        qsoBusy = false
+        qsoActive = false
         phase = .idle
         sessionEnded = true
     }
