@@ -50,6 +50,13 @@ final class VoiceRecognizer: NSObject, ObservableObject {
     /// Ask for speech-recognition and microphone permission. Safe to call more
     /// than once; the system only prompts the first time.
     func requestAuthorization(_ completion: ((Bool) -> Void)? = nil) {
+        // Reflect already-granted permission synchronously so a returning user
+        // can record on the very first drill, rather than sitting in `.unknown`
+        // (and falling back to tapping) until the async callback lands.
+        let speechGranted = SFSpeechRecognizer.authorizationStatus() == .authorized
+        let micGranted = AVAudioSession.sharedInstance().recordPermission == .granted
+        if speechGranted && micGranted { authorization = .authorized }
+
         SFSpeechRecognizer.requestAuthorization { status in
             AVAudioSession.sharedInstance().requestRecordPermission { micGranted in
                 Task { @MainActor in
@@ -114,6 +121,19 @@ final class VoiceRecognizer: NSObject, ObservableObject {
 
         guard let recognizer, recognizer.isAvailable else { deliver([]); return }
 
+        // Never touch the microphone until the user has actually granted
+        // permission. `requestAuthorization()` is kicked off when the session
+        // starts, but it's asynchronous — the first drill can finish playing
+        // (and call us) before the user has tapped "Allow". Accessing the input
+        // node with denied/undetermined permission yields an invalid (0 Hz)
+        // hardware format, and `installTap` then trips an AVAudioEngine
+        // assertion that crashes the app. Until we're authorized, fall back to
+        // tapping for this round; the next round records normally.
+        guard authorization == .authorized else {
+            if authorization == .unknown { requestAuthorization() }
+            deliver([]); return
+        }
+
         // The session must allow recording while the tone can still play.
         let session = AVAudioSession.sharedInstance()
         do {
@@ -138,6 +158,13 @@ final class VoiceRecognizer: NSObject, ObservableObject {
 
         let input = audioEngine.inputNode
         let format = input.outputFormat(forBus: 0)
+        // A zero sample-rate or channel-count format means there's no usable
+        // input route yet (permission race, no microphone, simulator). Passing
+        // it to `installTap` trips `IsFormatSampleRateAndChannelCountValid` and
+        // crashes, so bail to the tap-to-answer fallback instead.
+        guard format.sampleRate > 0, format.channelCount > 0 else {
+            deliver([]); return
+        }
         input.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self, request] buffer, _ in
             request.append(buffer)
             self?.detectOnset(in: buffer)
