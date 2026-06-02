@@ -1,0 +1,24 @@
+# Fly.io config for the Discord triage bot.
+# This is a long-running worker (a Discord gateway client) with NO inbound HTTP,
+# so there is intentionally no [http_service] block — the machine just stays up.
+#
+# Rename the app, then: fly launch --no-deploy  (or `fly apps create`), set
+# secrets (see README), and `fly deploy`.
+
+app = "morse-discord-triage"
+primary_region = "iad"  # pick the region closest to you: fly platform regions
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  TRIGGER_MODE = "react"
+  ANTHROPIC_MODEL = "claude-opus-4-8"
+  GITHUB_REPO = "n9ho/another-morse-trainer"
+  TRIAGE_LABEL = "from-discord"
+
+# One always-on machine. No autostop/autostart (those are HTTP-driven), so the
+# gateway connection stays alive 24/7.
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"
