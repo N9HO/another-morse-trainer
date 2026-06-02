@@ -1,22 +1,19 @@
 import SwiftUI
 
-/// Welcome / onboarding screen shown before practice begins. Explains the
-/// method at a glance and lets the user pick a starting level.
+/// Welcome / onboarding screen shown before practice begins. Leads with a grid
+/// of tappable training-mode tiles, then reveals the options that matter for
+/// the chosen mode, the starting level, and how long to practice.
 struct IntroView: View {
     @EnvironmentObject var model: AppModel
     var onStart: () -> Void
+
+    private let tileColumns = [GridItem(.flexible(), spacing: 14),
+                               GridItem(.flexible(), spacing: 14)]
 
     private var proficiency: Binding<Proficiency> {
         Binding(
             get: { model.settings.proficiency },
             set: { model.configureProficiency($0) }   // no audio on the intro
-        )
-    }
-
-    private var learningModeBinding: Binding<TrainingMode> {
-        Binding(
-            get: { model.learningMode },
-            set: { model.learningMode = $0 }
         )
     }
 
@@ -52,125 +49,195 @@ struct IntroView: View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(spacing: 28) {
-                    Spacer(minLength: 8)
+                    header
 
-                    VStack(spacing: 12) {
-                        logoMark
-                        Text("Another Morse Trainer")
-                            .font(.largeTitle).bold()
-                            .multilineTextAlignment(.center)
-                        Text("Learn Morse code by ear — the proven Koch method.")
-                            .font(.headline)
-                            .foregroundStyle(Theme.textSecondary)
-                            .multilineTextAlignment(.center)
+                    howItWorksCard
+
+                    modePicker
+
+                    modeOptions
+
+                    fieldCard(title: "Where are you starting?",
+                              systemImage: "figure.stairs") {
+                        Picker("Starting level", selection: proficiency) {
+                            ForEach(Proficiency.allCases) { level in
+                                Text(level.label).tag(level)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .tint(Theme.tealBright)
                     }
 
-            VStack(alignment: .leading, spacing: 18) {
-                howItWorks(icon: "ear",
-                           title: "Listen",
-                           detail: "Hear a character at full speed (33 WPM) — fast enough to learn the sound, not count beeps.")
-                howItWorks(icon: "hand.tap",
-                           title: "Choose",
-                           detail: "Tap what you heard from four close-sounding options.")
-                howItWorks(icon: "chart.line.uptrend.xyaxis",
-                           title: "Level up",
-                           detail: "Get quick and accurate, and new characters unlock automatically.")
-            }
-            .padding(.horizontal, 8)
+                    fieldCard(title: "How long do you want to practice?",
+                              systemImage: "timer") {
+                        Picker("Duration", selection: durationBinding) {
+                            ForEach(PracticeDuration.allCases) { d in
+                                Text(d.label).tag(d)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .tint(Theme.tealBright)
+                    }
 
-            VStack(alignment: .leading, spacing: 8) {
-                Text("How do you want to learn?")
-                    .font(.subheadline).foregroundStyle(.secondary)
-                Picker("Learning style", selection: learningModeBinding) {
-                    ForEach(TrainingMode.allCases) { m in
-                        Label(m.title, systemImage: m.icon).tag(m)
+                    Spacer(minLength: 8)
+                }
+                .padding(24)
+                .animation(.easeInOut(duration: 0.22), value: model.learningMode)
+            }
+
+            startBar
+        }
+    }
+
+    // MARK: - Header
+
+    private var header: some View {
+        VStack(spacing: 12) {
+            logoMark
+            Text("Another Morse Trainer")
+                .font(.largeTitle).bold()
+                .multilineTextAlignment(.center)
+            Text("Learn Morse code by ear — the proven Koch method.")
+                .font(.headline)
+                .foregroundStyle(Theme.textSecondary)
+                .multilineTextAlignment(.center)
+        }
+        .padding(.top, 8)
+    }
+
+    private var howItWorksCard: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            howItWorks(icon: "ear",
+                       title: "Listen",
+                       detail: "Hear a character at full speed (33 WPM) — fast enough to learn the sound, not count beeps.")
+            howItWorks(icon: "hand.tap",
+                       title: "Choose",
+                       detail: "Tap what you heard from four close-sounding options.")
+            howItWorks(icon: "chart.line.uptrend.xyaxis",
+                       title: "Level up",
+                       detail: "Get quick and accurate, and new characters unlock automatically.")
+        }
+        .padding(18)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .brandCard()
+    }
+
+    // MARK: - Mode picker (tiles)
+
+    private var modePicker: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            sectionTitle("Choose your practice", systemImage: "square.grid.2x2")
+            LazyVGrid(columns: tileColumns, spacing: 14) {
+                ForEach(TrainingMode.allCases) { mode in
+                    ModeTile(mode: mode,
+                             isSelected: model.learningMode == mode) {
+                        guard model.learningMode != mode else { return }
+                        Haptics.selection()
+                        withAnimation(.easeInOut(duration: 0.22)) {
+                            model.learningMode = mode
+                        }
                     }
                 }
-                .pickerStyle(.menu)
+            }
+        }
+    }
+
+    /// Options that only matter for the currently-selected mode, plus its blurb.
+    @ViewBuilder
+    private var modeOptions: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Label {
                 Text(model.learningMode.blurb)
                     .font(.footnote)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Theme.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
+            } icon: {
+                Image(systemName: "info.circle")
+                    .foregroundStyle(Theme.teal)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
 
             if model.learningMode == .listen {
-                VStack(alignment: .leading, spacing: 12) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("What should it announce?")
-                            .font(.subheadline).foregroundStyle(.secondary)
-                        Picker("Announce", selection: listenContentBinding) {
-                            ForEach(ListenContent.allCases) { c in
-                                Text(c.label).tag(c)
-                            }
-                        }
-                        .pickerStyle(.menu)
-                    }
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Gap before the spoken answer")
-                            .font(.subheadline).foregroundStyle(.secondary)
-                        Picker("Answer gap", selection: listenGapBinding) {
-                            ForEach(AnswerGap.allCases) { g in
-                                Text(g.label).tag(g)
-                            }
-                        }
-                        .pickerStyle(.menu)
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
+                inlinePicker(title: "What should it announce?",
+                             selection: listenContentBinding) { (c: ListenContent) in c.label }
+                inlinePicker(title: "Gap before the spoken answer",
+                             selection: listenGapBinding) { (g: AnswerGap) in g.label }
             }
 
             if model.learningMode == .words {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("How big a word pool?")
-                        .font(.subheadline).foregroundStyle(.secondary)
-                    Picker("Word pool", selection: wordTierBinding) {
-                        ForEach(WordTier.allCases) { t in
-                            Text(t.label).tag(t)
-                        }
-                    }
-                    .pickerStyle(.menu)
-                }
+                inlinePicker(title: "How big a word pool?",
+                             selection: wordTierBinding) { (t: WordTier) in t.label }
+            }
+        }
+        .padding(18)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .brandCard()
+        .transition(.opacity)
+    }
+
+    // MARK: - Start
+
+    private var startBar: some View {
+        Button {
+            Haptics.tap()
+            model.startSession()
+            onStart()
+        } label: {
+            Text("Start Training")
+                .font(.headline)
+                .frame(maxWidth: .infinity, minHeight: 54)
+        }
+        .buttonStyle(.borderedProminent)
+        .tint(Theme.teal)
+        .padding(.horizontal, 24)
+        .padding(.top, 12)
+        .padding(.bottom, 12)
+        .background(.ultraThinMaterial)
+        .accessibilityHint("Begins a \(model.settings.practiceDuration.label) session of \(model.learningMode.title).")
+    }
+
+    // MARK: - Building blocks
+
+    private func sectionTitle(_ text: String, systemImage: String) -> some View {
+        Label(text, systemImage: systemImage)
+            .font(.title3).bold()
+            .foregroundStyle(.primary)
+    }
+
+    /// A labelled container holding one control, in the brand card style.
+    private func fieldCard<Content: View>(title: String,
+                                          systemImage: String,
+                                          @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label(title, systemImage: systemImage)
+                .font(.subheadline).bold()
+                .foregroundStyle(Theme.textSecondary)
+            content()
                 .frame(maxWidth: .infinity, alignment: .leading)
-            }
+        }
+        .padding(18)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .brandCard()
+    }
 
-            VStack(spacing: 8) {
-                Text("Where are you starting?")
-                    .font(.subheadline).foregroundStyle(.secondary)
-                Picker("Starting level", selection: proficiency) {
-                    ForEach(Proficiency.allCases) { level in
-                        Text(level.label).tag(level)
-                    }
+    /// A row with a label and a trailing menu picker, sized for the option card.
+    private func inlinePicker<T: Hashable & Identifiable & CaseIterable>(
+        title: String,
+        selection: Binding<T>,
+        label: @escaping (T) -> String
+    ) -> some View where T.AllCases: RandomAccessCollection {
+        HStack {
+            Text(title)
+                .font(.subheadline)
+                .foregroundStyle(.primary)
+            Spacer(minLength: 12)
+            Picker(title, selection: selection) {
+                ForEach(Array(T.allCases)) { value in
+                    Text(label(value)).tag(value)
                 }
-                .pickerStyle(.menu)
             }
-
-            VStack(spacing: 8) {
-                Text("How long do you want to practice?")
-                    .font(.subheadline).foregroundStyle(.secondary)
-                Picker("Duration", selection: durationBinding) {
-                    ForEach(PracticeDuration.allCases) { d in
-                        Text(d.label).tag(d)
-                    }
-                }
-                .pickerStyle(.menu)
-            }
-
-                }
-                .padding(24)
-            }
-
-            Button {
-                model.startSession()
-                onStart()
-            } label: {
-                Text("Start Training")
-                    .font(.headline)
-                    .frame(maxWidth: .infinity, minHeight: 52)
-            }
-            .buttonStyle(.borderedProminent)
-            .padding(.horizontal, 24)
-            .padding(.bottom, 12)
+            .pickerStyle(.menu)
+            .tint(Theme.tealBright)
+            .labelsHidden()
         }
     }
 
@@ -183,9 +250,12 @@ struct IntroView: View {
                 .resizable()
                 .scaledToFit()
                 .frame(maxWidth: 220)
-                .clipShape(RoundedRectangle(cornerRadius: 28))
+                .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
         } else {
             ZStack {
+                Circle()
+                    .fill(Theme.teal.opacity(0.12))
+                    .frame(width: 132, height: 132)
                 Circle()
                     .strokeBorder(Theme.teal, lineWidth: 6)
                     .frame(width: 120, height: 120)
@@ -193,6 +263,7 @@ struct IntroView: View {
                     .font(.system(size: 52))
                     .foregroundStyle(.white)
             }
+            .accessibilityHidden(true)
         }
     }
 
@@ -207,9 +278,78 @@ struct IntroView: View {
                 Text(detail).font(.subheadline).foregroundStyle(Theme.textSecondary)
             }
         }
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// One selectable training-mode tile: icon, name, and a short tagline. The
+/// selected tile fills with the brand teal and shows a check.
+private struct ModeTile: View {
+    let mode: TrainingMode
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 8) {
+                ZStack {
+                    Circle()
+                        .fill(isSelected ? Color.white.opacity(0.18) : Theme.navyRaised)
+                        .frame(width: 46, height: 46)
+                    Image(systemName: mode.icon)
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundStyle(isSelected ? .white : Theme.teal)
+                }
+
+                Text(mode.title)
+                    .font(.subheadline).bold()
+                    .foregroundStyle(isSelected ? .white : .primary)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.85)
+
+                Text(mode.tagline)
+                    .font(.caption2)
+                    .foregroundStyle(isSelected ? Color.white.opacity(0.85) : Theme.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+            }
+            .frame(maxWidth: .infinity)
+            .frame(minHeight: 132)
+            .padding(.vertical, 14)
+            .padding(.horizontal, 8)
+            .background(
+                RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous)
+                    .fill(isSelected ? Theme.teal : Theme.navyElevated)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous)
+                    .strokeBorder(isSelected ? Theme.tealBright : Theme.hairline,
+                                  lineWidth: isSelected ? 2 : 1)
+            )
+            .overlay(alignment: .topTrailing) {
+                if isSelected {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 18))
+                        .foregroundStyle(.white)
+                        .padding(8)
+                        .transition(.scale.combined(with: .opacity))
+                }
+            }
+            .shadow(color: isSelected ? Theme.teal.opacity(0.35) : .clear,
+                    radius: 10, y: 4)
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(mode.title). \(mode.tagline)")
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
     }
 }
 
 #Preview {
-    IntroView(onStart: {}).environmentObject(AppModel())
+    ZStack {
+        Theme.Background()
+        IntroView(onStart: {}).environmentObject(AppModel())
+    }
+    .preferredColorScheme(.dark)
 }

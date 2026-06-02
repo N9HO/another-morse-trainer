@@ -17,12 +17,14 @@ struct StatsView: View {
                 } footer: {
                     Text("TTR = time from the end of the tone to your answer. Green means mastered (fast & accurate); the slowest/weakest characters are listed first.")
                 }
+                .listRowBackground(Theme.navyElevated)
 
                 Section("Characters") {
                     ForEach(model.characterStats) { stat in
                         row(stat)
                     }
                 }
+                .listRowBackground(Theme.navyElevated)
 
                 if !model.confusionPairs.isEmpty {
                     Section {
@@ -34,8 +36,11 @@ struct StatsView: View {
                     } footer: {
                         Text("Characters you've mixed up most often. Drill them head-to-head in the Confusion Drill mode — each one you get right eases the pair.")
                     }
+                    .listRowBackground(Theme.navyElevated)
                 }
             }
+            .scrollContentBackground(.hidden)
+            .background(Theme.Background())
             .navigationTitle("Your Stats")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

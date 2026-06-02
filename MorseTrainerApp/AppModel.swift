@@ -47,6 +47,23 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .story:              return "Copy the passage"
         }
     }
+    /// A very short descriptor shown on the mode-selection tiles (intro screen).
+    /// Kept to a few words so two tiles sit side by side cleanly.
+    var tagline: String {
+        switch self {
+        case .characters:    return "Core Koch drill"
+        case .words:         return "Whole ham words"
+        case .abbreviations: return "CW & Q-codes"
+        case .prosigns:      return "Run-together signals"
+        case .headCopy:      return "Copy in your head"
+        case .typed:         return "Free-recall typing"
+        case .confusion:     return "Drill your mix-ups"
+        case .listen:        return "Hands-free, eyes-free"
+        case .qso:           return "Simulated contact"
+        case .story:         return "Continuous copy"
+        }
+    }
+
     /// A one-line explanation shown on the setup screen so the learner can pick
     /// the teaching style that fits what they want to practice.
     var blurb: String {

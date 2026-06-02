@@ -11,20 +11,35 @@ enum Theme {
     static let navy          = Color(red: 0.043, green: 0.102, blue: 0.176)  // #0B1A2D
     /// Slightly lighter navy for cards / elevated surfaces.
     static let navyElevated  = Color(red: 0.078, green: 0.149, blue: 0.235)  // #14263C
+    /// A touch brighter again, for surfaces resting on an elevated card.
+    static let navyRaised    = Color(red: 0.110, green: 0.196, blue: 0.298)  // #1C324C
     /// Primary teal accent (the logo ring + "MORSE").
     static let teal          = Color(red: 0.173, green: 0.753, blue: 0.820)  // #2CC0D1
     /// Brighter teal for highlights.
     static let tealBright    = Color(red: 0.275, green: 0.839, blue: 0.890)  // #46D6E3
     /// Muted blue-grey for secondary text on navy.
     static let textSecondary = Color(red: 0.616, green: 0.698, blue: 0.776)  // #9DB2C6
+    /// Hairline stroke colour for card / tile borders on the navy field.
+    static let hairline      = Color.white.opacity(0.08)
 
-    /// Full-bleed brand background: a subtle top-to-bottom navy gradient.
+    /// Standard corner radius used across cards, tiles, and prominent buttons,
+    /// so curvature stays consistent everywhere.
+    static let cornerRadius: CGFloat = 16
+
+    /// Full-bleed brand background: a subtle top-to-bottom navy gradient with a
+    /// faint teal glow up top, echoing the logo's lit ring.
     struct Background: View {
         var body: some View {
-            LinearGradient(
-                colors: [Color(red: 0.020, green: 0.055, blue: 0.110), navy],
-                startPoint: .top, endPoint: .bottom
-            )
+            ZStack {
+                LinearGradient(
+                    colors: [Color(red: 0.020, green: 0.055, blue: 0.110), navy],
+                    startPoint: .top, endPoint: .bottom
+                )
+                RadialGradient(
+                    colors: [teal.opacity(0.16), .clear],
+                    center: .top, startRadius: 0, endRadius: 420
+                )
+            }
             .ignoresSafeArea()
         }
     }
@@ -37,7 +52,29 @@ enum Theme {
             content
                 .padding()
                 .frame(maxWidth: .infinity)
-                .background(navyElevated, in: RoundedRectangle(cornerRadius: 16))
+                .brandCard()
         }
+    }
+}
+
+// MARK: - Reusable surface modifier
+
+private struct BrandCard: ViewModifier {
+    var cornerRadius: CGFloat
+    func body(content: Content) -> some View {
+        content
+            .background(Theme.navyElevated,
+                        in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .strokeBorder(Theme.hairline, lineWidth: 1)
+            )
+    }
+}
+
+extension View {
+    /// Apply the standard brand card surface: elevated navy fill + hairline edge.
+    func brandCard(cornerRadius: CGFloat = Theme.cornerRadius) -> some View {
+        modifier(BrandCard(cornerRadius: cornerRadius))
     }
 }

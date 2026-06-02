@@ -64,11 +64,13 @@ struct ContentView: View {
                     Button { showStats = true } label: {
                         Image(systemName: "chart.bar")
                     }
+                    .accessibilityLabel("Your stats")
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { showSettings = true } label: {
                         Image(systemName: "gearshape")
                     }
+                    .accessibilityLabel("Settings")
                 }
             }
             .sheet(isPresented: $showSettings) {
@@ -76,6 +78,10 @@ struct ContentView: View {
             }
             .sheet(isPresented: $showStats) {
                 StatsView().environmentObject(model)
+            }
+            .onChange(of: model.lastCorrect) { correct in
+                guard let correct else { return }
+                correct ? Haptics.success() : Haptics.error()
             }
             .onAppear {
                 if model.drill == nil && !model.sessionEnded
@@ -115,12 +121,12 @@ struct ContentView: View {
             case .playing:
                 Image(systemName: "dot.radiowaves.left.and.right")
                     .font(.system(size: 60))
-                    .foregroundStyle(.blue)
+                    .foregroundStyle(Theme.teal)
                 Text("Listen…").font(.title3).foregroundStyle(.secondary)
             case .awaiting:
                 Image(systemName: model.isHeadCopy ? "brain.head.profile" : "ear")
                     .font(.system(size: 60))
-                    .foregroundStyle(.blue)
+                    .foregroundStyle(Theme.teal)
                 Text(awaitingPrompt)
                     .font(.title3).foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -131,7 +137,7 @@ struct ContentView: View {
             }
         }
         .multilineTextAlignment(.center)
-        .animation(.easeInOut(duration: 0.15), value: model.phase)
+        .animation(.spring(response: 0.35, dampingFraction: 0.62), value: model.phase)
     }
 
     /// During the answer phase, prefer a drill-specific question (the QSO
@@ -148,6 +154,7 @@ struct ContentView: View {
                 Image(systemName: correct ? "checkmark.circle.fill" : "xmark.circle.fill")
                     .font(.system(size: 56))
                     .foregroundStyle(correct ? .green : .red)
+                    .transition(.scale(scale: 0.4).combined(with: .opacity))
                 Text(correct ? "Correct" : "Not quite")
                     .font(.title3).bold()
                     .foregroundStyle(correct ? .green : .red)
@@ -196,6 +203,7 @@ struct ContentView: View {
         switch model.phase {
         case .awaiting:
             Button {
+                Haptics.tap()
                 model.revealHeadCopy()
             } label: {
                 Text("Reveal")
@@ -205,12 +213,18 @@ struct ContentView: View {
             .buttonStyle(.borderedProminent)
         case .revealed:
             HStack(spacing: 16) {
-                Button { model.gradeHeadCopy(false) } label: {
+                Button {
+                    Haptics.error()
+                    model.gradeHeadCopy(false)
+                } label: {
                     Label("Missed it", systemImage: "xmark")
                         .font(.headline).frame(maxWidth: .infinity, minHeight: 56)
                 }
                 .buttonStyle(.borderedProminent).tint(.red)
-                Button { model.gradeHeadCopy(true) } label: {
+                Button {
+                    Haptics.success()
+                    model.gradeHeadCopy(true)
+                } label: {
                     Label("Got it", systemImage: "checkmark")
                         .font(.headline).frame(maxWidth: .infinity, minHeight: 56)
                 }
@@ -247,7 +261,7 @@ struct ContentView: View {
                         Image(systemName: model.storyPlaying
                               ? "dot.radiowaves.left.and.right" : "book.closed")
                             .font(.system(size: 56))
-                            .foregroundStyle(.blue)
+                            .foregroundStyle(Theme.teal)
                         Text(model.storyPlaying
                              ? "Sending… copy along"
                              : "Press Play, then copy what you hear")
@@ -259,8 +273,7 @@ struct ContentView: View {
             }
             .frame(maxHeight: .infinity)
             .padding()
-            .background(Color(.secondarySystemBackground),
-                        in: RoundedRectangle(cornerRadius: 14))
+            .brandCard()
 
             storyControls
         }
@@ -320,7 +333,7 @@ struct ContentView: View {
             Image(systemName: model.phase == .playing
                   ? "dot.radiowaves.left.and.right" : "headphones")
                 .font(.system(size: 72))
-                .foregroundStyle(.blue)
+                .foregroundStyle(Theme.teal)
 
             if model.listenPaused {
                 Text("Paused").font(.title3).foregroundStyle(.secondary)
@@ -412,6 +425,7 @@ struct ContentView: View {
                 .disabled(model.phase == .answered)
             }
         }
+        .animation(.easeInOut(duration: 0.2), value: model.phase)
     }
 
     /// Big monospaced for short tokens, smaller for word-y meanings.
@@ -422,7 +436,7 @@ struct ContentView: View {
     }
 
     private func tint(for option: String) -> Color {
-        guard model.phase == .answered else { return .blue }
+        guard model.phase == .answered else { return Theme.teal }
         if option == model.drill?.correct, model.settings.showCorrectness { return .green }
         if option == model.lastSelected, model.lastCorrect == false { return .red }
         return .gray
@@ -495,7 +509,7 @@ struct ContentView: View {
             }
             .padding()
             .frame(maxWidth: .infinity)
-            .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 14))
+            .brandCard()
 
             VStack(spacing: 12) {
                 Button {
