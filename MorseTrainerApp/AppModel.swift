@@ -4,7 +4,7 @@ import MediaPlayer
 
 /// The ways to practice.
 enum TrainingMode: String, CaseIterable, Identifiable {
-    case characters, words, abbreviations, qCodes, prosigns, headCopy, typed, confusion, listen, qso, story, exam
+    case characters, words, abbreviations, qCodes, prosigns, headCopy, typed, confusion, listen, qso, story, exam, qrq
     var id: String { rawValue }
     var title: String {
         switch self {
@@ -20,6 +20,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .qso:          return "QSO Simulator"
         case .story:        return "Short Stories"
         case .exam:         return "Code Exam"
+        case .qrq:          return "QRQ Speed"
         }
     }
     var icon: String {
@@ -36,6 +37,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .qso:           return "person.wave.2"
         case .story:         return "book"
         case .exam:          return "checkmark.seal"
+        case .qrq:           return "hare"
         }
     }
     /// In meaning-based modes the question is "what are they saying?"
@@ -51,6 +53,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .qso:                return "Type what you copy"
         case .story:              return "Copy the passage"
         case .exam:               return "Copy the exam transmission"
+        case .qrq:                return "Type what you hear"
         }
     }
     /// A one-line explanation shown on the setup screen so the learner can pick
@@ -81,6 +84,8 @@ enum TrainingMode: String, CaseIterable, Identifiable {
             return "Continuous copy: hear a short story sent end to end. Copy it on paper or in your head, then reveal the text to check yourself."
         case .exam:
             return "Sit a recreation of the old ARRL/FCC code-proficiency exam: a 5-minute QSO-style transmission at 5, 13, or 20 WPM. Pass with one minute of solid copy (25 characters in a row) or by answering questions about what was sent."
+        case .qrq:
+            return "Push your speed: hear whole words and call signs at 35 or 40 WPM and type what you copy. Too fast to count dits — this trains instant, whole-word recognition (QRQ = “send faster”)."
         }
     }
 }
@@ -124,6 +129,7 @@ final class AppModel: ObservableObject {
     private let prosignQuiz: PhraseQuiz
     private let headCopyQuiz: PhraseQuiz
     private let typedQuiz: PhraseQuiz
+    private let qrqQuiz: PhraseQuiz
     private let confusionQuiz: ConfusionQuiz
     private let qsoSim = QSOSimulator()
     private var examSession: ExamSession?
@@ -167,6 +173,7 @@ final class AppModel: ObservableObject {
         self.prosignQuiz = PhraseQuiz(name: "Prosigns", items: MorseData.prosignItems)
         self.headCopyQuiz = PhraseQuiz(name: "Head Copy", items: MorseData.wordAndCallSignItems)
         self.typedQuiz = PhraseQuiz(name: "Type It", items: MorseData.wordAndCallSignItems)
+        self.qrqQuiz = PhraseQuiz(name: "QRQ", items: MorseData.wordAndCallSignItems)
         self.confusionQuiz = ConfusionQuiz(engine: engine)
         restoreProgress()
         reconcilePunctuation()
@@ -189,6 +196,7 @@ final class AppModel: ObservableObject {
         case .qso:          return qsoSim
         case .story:        return charLadder   // unused: Stories run their own playback
         case .exam:         return (examSession as QuizSource?) ?? charLadder   // exam runs its own flow
+        case .qrq:          return qrqQuiz
         }
     }
 
@@ -198,8 +206,9 @@ final class AppModel: ObservableObject {
     var isQSO: Bool { mode == .qso }
     var isStory: Bool { mode == .story }
     var isExam: Bool { mode == .exam }
+    var isQRQ: Bool { mode == .qrq }
     /// Modes that take a free-typed answer rather than tapping a choice.
-    var usesTypedEntry: Bool { mode == .typed || mode == .qso }
+    var usesTypedEntry: Bool { mode == .typed || mode == .qso || mode == .qrq }
     /// Whether the learner answers by voice this session (Characters & Words).
     var usesVoiceResponse: Bool {
         settings.voiceResponse && (mode == .characters || mode == .words)
@@ -226,7 +235,7 @@ final class AppModel: ObservableObject {
         if wordsQuiz.items.count != s.wordTier.count {
             wordsQuiz = PhraseQuiz(name: "Words", items: MorseData.topWordItems(s.wordTier.count))
         }
-        for quiz in [wordsQuiz, abbrevQuiz, qCodeQuiz, prosignQuiz, headCopyQuiz, typedQuiz] {
+        for quiz in [wordsQuiz, abbrevQuiz, qCodeQuiz, prosignQuiz, headCopyQuiz, typedQuiz, qrqQuiz] {
             quiz.config.ttrThreshold = s.ttrThreshold
             quiz.config.optionCount = s.maxAnswerChoices
         }
@@ -239,7 +248,9 @@ final class AppModel: ObservableObject {
     }
 
     var timing: MorseTiming {
-        settings.farnsworth
+        // QRQ overrides the global WPM with its high-speed (35/40) character rate.
+        if mode == .qrq { return MorseTiming(wpm: settings.qrqSpeed.wpm) }
+        return settings.farnsworth
             ? MorseTiming(characterWpm: settings.wpm, effectiveWpm: settings.effectiveWpm)
             : MorseTiming(wpm: settings.wpm)
     }

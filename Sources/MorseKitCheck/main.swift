@@ -402,6 +402,14 @@ do {
           matcher.interpret(["wotsit"], candidates: ["B", "D"]).token == "B")
 }
 
+// QRQ high-speed timing (35 / 40 WPM)
+print("\nQRQ high-speed timing:")
+check("35 WPM dit ≈ 34.29 ms", approxEqual(MorseTiming(wpm: 35).dit, 1.2 / 35))
+check("40 WPM dit ≈ 30.00 ms", approxEqual(MorseTiming(wpm: 40).dit, 0.030))
+check("40 WPM is faster than 35 WPM", MorseTiming(wpm: 40).dit < MorseTiming(wpm: 35).dit)
+check("QRQ uses standard spacing (no Farnsworth stretch)",
+      abs(MorseTiming(wpm: 40).spacingUnit - MorseTiming(wpm: 40).unit) < 1e-9)
+
 // Code proficiency exam (ARRL/FCC-style)
 print("\nExam speeds & timing:")
 check("'=' (BT) keys as -...-", MorseCode.pattern(for: "=") == "-...-")

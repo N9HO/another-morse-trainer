@@ -48,6 +48,13 @@ struct IntroView: View {
         )
     }
 
+    private var qrqSpeedBinding: Binding<QrqSpeed> {
+        Binding(
+            get: { model.settings.qrqSpeed },
+            set: { model.settings.qrqSpeed = $0 }
+        )
+    }
+
     private var voiceResponseBinding: Binding<Bool> {
         Binding(
             get: { model.settings.voiceResponse },
@@ -196,6 +203,20 @@ struct IntroView: View {
                         }
                     }
                     .pickerStyle(.menu)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
+            if model.learningMode == .qrq {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("QRQ speed")
+                        .font(.subheadline).foregroundStyle(.secondary)
+                    Picker("QRQ speed", selection: qrqSpeedBinding) {
+                        ForEach(QrqSpeed.allCases) { s in
+                            Text(s.label).tag(s)
+                        }
+                    }
+                    .pickerStyle(.segmented)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
