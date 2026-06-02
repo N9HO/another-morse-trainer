@@ -1,0 +1,58 @@
+name: iOS Build
+
+# Compiles the project remotely so changes made from the Claude phone app can be
+# verified without a laptop:
+#   * logic-job  - builds/runs the Foundation-only MorseKit package + MorseKitCheck
+#                  harness (fast feedback, no Xcode needed)
+#   * ios-build  - real `xcodebuild` of the MorseTrainer iOS app on a macOS runner
+on:
+  push:
+    branches:
+      - "**"
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  logic-job:
+    name: MorseKit logic checks
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Show Swift version
+        run: swift --version
+      - name: Build MorseKit package
+        run: swift build
+      - name: Run MorseKitCheck harness
+        run: swift run MorseKitCheck
+
+  ios-build:
+    name: Build MorseTrainer (iOS)
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -switch /Applications/Xcode.app
+
+      - name: Show build environment
+        run: |
+          xcodebuild -version
+          xcodebuild -list -project MorseTrainer.xcodeproj
+
+      - name: Build for iOS Simulator
+        run: |
+          # `generic/platform=iOS Simulator` builds against the simulator SDK
+          # without pinning a specific device/runtime that the runner image may
+          # have dropped.
+          xcodebuild build \
+            -project MorseTrainer.xcodeproj \
+            -scheme MorseTrainer \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination "generic/platform=iOS Simulator" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO
