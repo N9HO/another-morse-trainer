@@ -4,13 +4,14 @@ import MediaPlayer
 
 /// The ways to practice.
 enum TrainingMode: String, CaseIterable, Identifiable {
-    case characters, words, abbreviations, prosigns, headCopy, typed, confusion, listen, qso, story
+    case characters, words, abbreviations, qCodes, prosigns, headCopy, typed, confusion, listen, qso, story
     var id: String { rawValue }
     var title: String {
         switch self {
         case .characters:   return "Characters"
         case .words:        return "Words"
         case .abbreviations: return "Abbreviations"
+        case .qCodes:       return "Q-Codes"
         case .prosigns:     return "Prosigns"
         case .headCopy:     return "Head Copy"
         case .typed:        return "Type It"
@@ -25,6 +26,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .characters:    return "character"
         case .words:         return "textformat"
         case .abbreviations: return "text.bubble"
+        case .qCodes:        return "questionmark.bubble"
         case .prosigns:      return "antenna.radiowaves.left.and.right"
         case .headCopy:      return "brain.head.profile"
         case .typed:         return "keyboard"
@@ -39,6 +41,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         switch self {
         case .characters, .words, .confusion: return "What did you hear?"
         case .abbreviations:      return "What are they saying?"
+        case .qCodes:             return "What does it mean?"
         case .prosigns:           return "Which prosign?"
         case .headCopy:           return "Copy it in your head…"
         case .typed:              return "Type what you hear"
@@ -56,7 +59,9 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .words:
             return "Copy whole common ham-radio words and pick the right one from four look-alikes."
         case .abbreviations:
-            return "Hear a CW abbreviation or Q-code (like ES or QTH) and choose what it means."
+            return "Hear a CW abbreviation (like ES or FB) and choose what it means."
+        case .qCodes:
+            return "Hear a three-letter Q-code (like QTH or QRL) and choose what it means — the shorthand hams use to ask and answer on CW."
         case .prosigns:
             return "Recognize run-together prosigns such as <AR> and <SK> by their rhythm."
         case .headCopy:
@@ -110,6 +115,7 @@ final class AppModel: ObservableObject {
     private let charLadder: ProgressiveCharacters
     private var wordsQuiz: PhraseQuiz   // rebuilt when the word tier changes
     private let abbrevQuiz: PhraseQuiz
+    private let qCodeQuiz: PhraseQuiz
     private let prosignQuiz: PhraseQuiz
     private let headCopyQuiz: PhraseQuiz
     private let typedQuiz: PhraseQuiz
@@ -137,6 +143,7 @@ final class AppModel: ObservableObject {
         self.charLadder = ProgressiveCharacters(engine: engine)
         self.wordsQuiz = PhraseQuiz(name: "Words", items: MorseData.topWordItems(loaded.wordTier.count))
         self.abbrevQuiz = PhraseQuiz(name: "Abbreviations", items: MorseData.abbreviationItems)
+        self.qCodeQuiz = PhraseQuiz(name: "Q-Codes", items: MorseData.qCodeItems)
         self.prosignQuiz = PhraseQuiz(name: "Prosigns", items: MorseData.prosignItems)
         self.headCopyQuiz = PhraseQuiz(name: "Head Copy", items: MorseData.wordAndCallSignItems)
         self.typedQuiz = PhraseQuiz(name: "Type It", items: MorseData.wordAndCallSignItems)
@@ -152,6 +159,7 @@ final class AppModel: ObservableObject {
         case .characters:   return charLadder
         case .words:        return wordsQuiz
         case .abbreviations: return abbrevQuiz
+        case .qCodes:       return qCodeQuiz
         case .prosigns:     return prosignQuiz
         case .headCopy:     return headCopyQuiz
         case .typed:        return typedQuiz
@@ -189,7 +197,7 @@ final class AppModel: ObservableObject {
         if wordsQuiz.items.count != s.wordTier.count {
             wordsQuiz = PhraseQuiz(name: "Words", items: MorseData.topWordItems(s.wordTier.count))
         }
-        for quiz in [wordsQuiz, abbrevQuiz, prosignQuiz, headCopyQuiz, typedQuiz] {
+        for quiz in [wordsQuiz, abbrevQuiz, qCodeQuiz, prosignQuiz, headCopyQuiz, typedQuiz] {
             quiz.config.ttrThreshold = s.ttrThreshold
             quiz.config.optionCount = s.maxAnswerChoices
         }
@@ -209,10 +217,14 @@ final class AppModel: ObservableObject {
 
     // MARK: - Mode switching
 
+    /// Switching modes ends the current session and surfaces its summary — it
+    /// does not restart one. The chosen mode becomes the selection for the next
+    /// session, which only begins on an explicit start ("Practice again" or a
+    /// fresh start from setup).
     func setMode(_ newMode: TrainingMode) {
         guard newMode != mode else { return }
-        mode = newMode
-        start()
+        learningMode = newMode
+        endSession()
     }
 
     // MARK: - Game loop
@@ -410,7 +422,7 @@ final class AppModel: ObservableObject {
                 ?? MorseItem(id: "THE", playable: .text("THE"), answer: "THE", display: "THE")
             return ListenItem(playable: item.playable, display: item.display, spoken: item.answer)
         case .abbreviations:
-            let item = MorseData.abbreviationItems.randomElement()
+            let item = (MorseData.abbreviationItems + MorseData.qCodeItems).randomElement()
                 ?? MorseItem(id: "ES", playable: .text("ES"), answer: "and", display: "ES")
             // Spell the token in lowercase letters so TTS says "q t h", not
             // "capital Q…", then the meaning.
