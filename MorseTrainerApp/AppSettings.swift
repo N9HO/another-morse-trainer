@@ -161,6 +161,14 @@ struct AppSettings: Codable, Equatable {
     /// per-session choice made on the setup screen.
     var voiceResponse: Bool = false
 
+    // Code Exam (ARRL/FCC-style proficiency exam)
+    /// License-tied exam speed (5 / 13 / 20 WPM).
+    var examSpeed: ExamSpeed = .general13
+    /// How the exam is graded: solid copy or content questions.
+    var examGrading: ExamGrading = .questions
+    /// Use a bundled (ready-made) passage instead of a freshly generated one.
+    var examUseBundled: Bool = false
+
     // Feedback (defaults per spec: show right/wrong, reveal only on miss, no replay)
     var showCorrectness: Bool = true
     var reveal: RevealMode = .onWrong
@@ -202,6 +210,7 @@ extension AppSettings {
         case maxAnswerChoices, selectedPunctuation
         case learningMode, practiceDuration
         case listenContent, listenGap, wordTier, voiceResponse
+        case examSpeed, examGrading, examUseBundled
         case showCorrectness, reveal, allowReplay
     }
 
@@ -224,6 +233,9 @@ extension AppSettings {
         s.listenGap = try c.decodeIfPresent(AnswerGap.self, forKey: .listenGap) ?? s.listenGap
         s.wordTier = try c.decodeIfPresent(WordTier.self, forKey: .wordTier) ?? s.wordTier
         s.voiceResponse = try c.decodeIfPresent(Bool.self, forKey: .voiceResponse) ?? s.voiceResponse
+        s.examSpeed = try c.decodeIfPresent(ExamSpeed.self, forKey: .examSpeed) ?? s.examSpeed
+        s.examGrading = try c.decodeIfPresent(ExamGrading.self, forKey: .examGrading) ?? s.examGrading
+        s.examUseBundled = try c.decodeIfPresent(Bool.self, forKey: .examUseBundled) ?? s.examUseBundled
         s.showCorrectness = try c.decodeIfPresent(Bool.self, forKey: .showCorrectness) ?? s.showCorrectness
         s.reveal = try c.decodeIfPresent(RevealMode.self, forKey: .reveal) ?? s.reveal
         s.allowReplay = try c.decodeIfPresent(Bool.self, forKey: .allowReplay) ?? s.allowReplay

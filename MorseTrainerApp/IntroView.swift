@@ -55,6 +55,27 @@ struct IntroView: View {
         )
     }
 
+    private var examSpeedBinding: Binding<ExamSpeed> {
+        Binding(
+            get: { model.settings.examSpeed },
+            set: { model.settings.examSpeed = $0 }
+        )
+    }
+
+    private var examGradingBinding: Binding<ExamGrading> {
+        Binding(
+            get: { model.settings.examGrading },
+            set: { model.settings.examGrading = $0 }
+        )
+    }
+
+    private var examUseBundledBinding: Binding<Bool> {
+        Binding(
+            get: { model.settings.examUseBundled },
+            set: { model.settings.examUseBundled = $0 }
+        )
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             ScrollView {
@@ -101,6 +122,9 @@ struct IntroView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
+            // Mode-specific configuration (grouped so the surrounding builder
+            // stays well under SwiftUI's per-block child limit).
+            Group {
             if model.learningMode == .listen {
                 VStack(alignment: .leading, spacing: 12) {
                     VStack(alignment: .leading, spacing: 8) {
@@ -122,6 +146,41 @@ struct IntroView: View {
                             }
                         }
                         .pickerStyle(.menu)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
+            if model.learningMode == .exam {
+                VStack(alignment: .leading, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Exam speed")
+                            .font(.subheadline).foregroundStyle(.secondary)
+                        Picker("Exam speed", selection: examSpeedBinding) {
+                            ForEach(ExamSpeed.allCases) { s in
+                                Text(s.label).tag(s)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                    }
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("How to pass")
+                            .font(.subheadline).foregroundStyle(.secondary)
+                        Picker("Grading", selection: examGradingBinding) {
+                            ForEach(ExamGrading.allCases) { g in
+                                Text(g.label).tag(g)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                    }
+                    Toggle(isOn: examUseBundledBinding) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Use a built-in passage").font(.subheadline)
+                            Text("Practice a ready-made exam text instead of a freshly generated one.")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -153,6 +212,7 @@ struct IntroView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
+            }   // end mode-specific configuration Group
 
             VStack(spacing: 8) {
                 Text("Where are you starting?")
