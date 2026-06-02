@@ -538,7 +538,7 @@ final class AppModel: ObservableObject {
 
         // Voice response: get permission up front and warm up the custom
         // language model so the first drill doesn't stall.
-        if settings.voiceResponse && (mode == .characters || mode == .words) {
+        if usesVoiceResponse {
             voiceRecognizer.requestAuthorization()
             voiceRecognizer.prepareCustomLanguageModel(phrases: voiceUniversePhrases())
         }
