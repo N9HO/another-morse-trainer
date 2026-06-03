@@ -2,14 +2,17 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+    <!-- App Store distribution, uploaded straight to App Store Connect. -->
     <key>method</key>
     <string>app-store-connect</string>
     <key>destination</key>
-    <string>export</string>
+    <string>upload</string>
     <key>teamID</key>
     <string>F6ASU3CH5M</string>
+    <!-- Let Xcode manage the distribution cert + provisioning profile. -->
     <key>signingStyle</key>
     <string>automatic</string>
+    <!-- Strip bitcode/symbols handling left at defaults; upload dSYMs. -->
     <key>uploadSymbols</key>
     <true/>
     <key>manageAppVersionAndBuildNumber</key>
