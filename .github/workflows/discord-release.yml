@@ -1,0 +1,97 @@
+name: Discord release announcement
+
+# Fires when you push a version tag (e.g. `git tag v1.0.1 && git push amt v1.0.1`).
+# Builds a changelog from the commits since the previous tag and posts a formatted
+# embed to a Discord channel via an incoming webhook. No app build / code signing here —
+# you build & upload to TestFlight locally; this just announces the new build.
+on:
+  push:
+    tags:
+      - 'v*'
+  # Lets you test the post from the Actions tab without cutting a real tag.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to announce (defaults to latest)'
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  announce:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (full history for changelog)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Build release info
+        id: info
+        env:
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          # Resolve the tag we're announcing.
+          if [ -n "${{ github.event.inputs.tag }}" ]; then
+            TAG="${{ github.event.inputs.tag }}"
+          elif [ "${{ github.ref_type }}" = "tag" ]; then
+            TAG="${{ github.ref_name }}"
+          else
+            TAG="$(git describe --tags --abbrev=0)"
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+          # Previous tag (if any) to bound the changelog.
+          PREV="$(git describe --tags --abbrev=0 "${TAG}^" 2>/dev/null || true)"
+          if [ -n "$PREV" ]; then
+            RANGE="${PREV}..${TAG}"
+            COMPARE="https://github.com/${REPO}/compare/${PREV}...${TAG}"
+          else
+            RANGE="$TAG"
+            COMPARE="https://github.com/${REPO}/releases/tag/${TAG}"
+          fi
+          echo "compare=$COMPARE" >> "$GITHUB_OUTPUT"
+
+          # Changelog: one bullet per commit, capped so the embed stays under Discord's limit.
+          LOG="$(git log --no-merges --pretty=format:'• %s' "$RANGE" | head -25)"
+          [ -z "$LOG" ] && LOG="• (no commits found in range)"
+          # Escape for JSON embedding.
+          LOG="${LOG//\\/\\\\}"
+          LOG="${LOG//\"/\\\"}"
+          LOG="${LOG//$'\n'/\\n}"
+          echo "changelog=$LOG" >> "$GITHUB_OUTPUT"
+
+          # ISO-8601 timestamp for the embed footer.
+          echo "ts=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+
+      - name: Post to Discord
+        env:
+          WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "${WEBHOOK:-}" ]; then
+            echo "::error::DISCORD_WEBHOOK_URL secret is not set. Add it in Settings → Secrets and variables → Actions."
+            exit 1
+          fi
+
+          PAYLOAD=$(cat <<'JSON'
+          {
+            "username": "Another Morse Trainer",
+            "embeds": [{
+              "title": "📱 New build — ${{ steps.info.outputs.tag }}",
+              "url": "${{ steps.info.outputs.compare }}",
+              "description": "A new TestFlight build is on the way.\n\n**Changelog**\n${{ steps.info.outputs.changelog }}",
+              "color": 3447003,
+              "footer": { "text": "Another Morse Trainer • iOS" },
+              "timestamp": "${{ steps.info.outputs.ts }}"
+            }]
+          }
+          JSON
+          )
+
+          curl -fsS -X POST -H "Content-Type: application/json" \
+            -d "$PAYLOAD" "$WEBHOOK" \
+            && echo "Posted ${{ steps.info.outputs.tag }} to Discord."
