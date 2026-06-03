@@ -122,24 +122,47 @@ final class VoiceRecognizer: NSObject, ObservableObject {
         guard let recognizer, recognizer.isAvailable else { deliver([]); return }
 
         // Never touch the microphone until the user has actually granted
-        // permission. `requestAuthorization()` is kicked off when the session
-        // starts, but it's asynchronous — the first drill can finish playing
-        // (and call us) before the user has tapped "Allow". Accessing the input
-        // node with denied/undetermined permission yields an invalid (0 Hz)
-        // hardware format, and `installTap` then trips an AVAudioEngine
-        // assertion that crashes the app. Until we're authorized, fall back to
-        // tapping for this round; the next round records normally.
-        guard authorization == .authorized else {
-            if authorization == .unknown { requestAuthorization() }
-            deliver([]); return
+        // permission. Accessing the input node with denied/undetermined
+        // permission yields an invalid (0 Hz) hardware format, and `installTap`
+        // then trips an AVAudioEngine assertion that crashes the app.
+        switch authorization {
+        case .authorized:
+            beginRecording(with: recognizer, contextualStrings: contextualStrings)
+        case .denied:
+            deliver([])
+        case .unknown:
+            // `requestAuthorization()` is kicked off when the session starts,
+            // but it's asynchronous — the first drill can finish playing (and
+            // call us) before the user has tapped "Allow". Rather than silently
+            // dropping this round to tapping (the reported "voice never works"
+            // bug), ask now and start recording the instant permission lands.
+            requestAuthorization { [weak self] granted in
+                guard let self else { return }
+                // Bail if this listening round was torn down while we waited.
+                guard self.onResult != nil, !self.didFinish else { return }
+                if granted, let recognizer = self.recognizer, recognizer.isAvailable {
+                    self.beginRecording(with: recognizer, contextualStrings: contextualStrings)
+                } else {
+                    self.deliver([])
+                }
+            }
         }
+    }
 
+    /// Configure the audio session, install the mic tap, and start recognition.
+    /// The caller has already confirmed authorization and recognizer availability.
+    private func beginRecording(with recognizer: SFSpeechRecognizer,
+                                contextualStrings: [String]) {
         // The session must allow recording while the tone can still play.
+        // Note: no `.notifyOthersOnDeactivation` on setActive — the session is
+        // shared with the Morse tone player, and that option explicitly hands
+        // audio focus back to other apps when we deactivate, which was killing
+        // background/locked-screen playback in hands-free Listen mode.
         let session = AVAudioSession.sharedInstance()
         do {
             try session.setCategory(.playAndRecord, mode: .measurement,
                                     options: [.duckOthers, .defaultToSpeaker, .allowBluetooth])
-            try session.setActive(true, options: .notifyOthersOnDeactivation)
+            try session.setActive(true)
         } catch {
             deliver([]); return
         }
@@ -239,6 +262,15 @@ final class VoiceRecognizer: NSObject, ObservableObject {
         audioEngine.inputNode.removeTap(onBus: 0)
         task?.cancel()
         task = nil
+        // Hand the shared session back to plain playback. The mic needs the
+        // record-capable `.playAndRecord` category, but leaving the session
+        // there afterwards stops the Morse tone from continuing in the
+        // background / with the screen locked during hands-free Listen mode.
+        #if os(iOS)
+        let session = AVAudioSession.sharedInstance()
+        try? session.setCategory(.playback, mode: .default, options: [.duckOthers])
+        try? session.setActive(true)
+        #endif
     }
 
     private static func collect(_ result: SFSpeechRecognitionResult) -> [String] {
