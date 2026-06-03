@@ -191,7 +191,7 @@ public final class PileupEngine {
     public struct Station: Sendable, Equatable, Identifiable {
         public let id: Int
         public let call: String
-        public let wpm: Double
+        public var wpm: Double          // mutable so QRS/QRQ can change it
         public let toneOffset: Double
         public let volume: Float
         public let qsb: Bool
@@ -298,6 +298,9 @@ public final class PileupEngine {
 
     public func send(_ raw: String) -> Action {
         let text = raw.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        // Operating commands act in any phase and don't count as misses.
+        if Self.isQRS(text) { return adjustSpeed(by: -6) }
+        if Self.isQRQ(text) { return adjustSpeed(by: 6) }
         switch phase {
         case .idle:
             return callCQ()
@@ -341,8 +344,9 @@ public final class PileupEngine {
 
     private func handlePileupSend(_ text: String) -> Action {
         phase = .pileup
-        let frag = text.replacingOccurrences(of: " ", with: "")
+        let frag = Self.fragment(text)
         guard !frag.isEmpty else {
+            // A bare "?" / AGN / empty send asks the whole pileup to call again.
             guard !stations.isEmpty else { return .silence }
             return .play(stations.map { callVoice(for: $0) })
         }
@@ -350,20 +354,21 @@ public final class PileupEngine {
         if let i = stations.firstIndex(where: { $0.call == frag }) {
             return beginExchange(at: i)
         }
-        // Substring matches re-call; the impatient may quit first.
-        var matched = stations.indices.filter { stations[$0].call.contains(frag) }
+        // Only stations whose call STARTS WITH the fragment answer — sending
+        // "W1" brings back the W1s, not everyone. The impatient may quit first.
+        var matched = stations.indices.filter { stations[$0].call.hasPrefix(frag) }
         if config.giveUpEnabled && !matched.isEmpty {
             for idx in matched { bump(idx) }
             let quitters = matched.filter { quit($0) }
             if !quitters.isEmpty {
                 removeStations(ids: quitters.map { stations[$0].id })
-                matched = stations.indices.filter { stations[$0].call.contains(frag) }
+                matched = stations.indices.filter { stations[$0].call.hasPrefix(frag) }
             }
         }
         if !matched.isEmpty {
             return .play(matched.map { callVoice(for: stations[$0]) })
         }
-        // Total bust — never penalizes a specific station.
+        // No one matches the call you sent — handle per the busted-call setting.
         switch config.bustBehavior {
         case .forgiving:
             guard !stations.isEmpty else { return .silence }
@@ -391,7 +396,7 @@ public final class PileupEngine {
             return .play([exchangeVoice(for: stations[i])])
         }
         // Bailing to another station you can hear better.
-        let frag = text.replacingOccurrences(of: " ", with: "")
+        let frag = Self.fragment(text)
         if frag != stations[i].call, let j = stations.firstIndex(where: { $0.call == frag }) {
             return beginExchange(at: j)
         }
@@ -413,6 +418,25 @@ public final class PileupEngine {
         stations.remove(at: i)
         phase = stations.isEmpty ? .idle : .pileup
         return .logged(call: s.call)
+    }
+
+    /// QRS (slow down) / QRQ (speed up): change the speed of whoever you're
+    /// working — or the whole pileup — and have them send again at the new rate.
+    private func adjustSpeed(by delta: Double) -> Action {
+        func clamp(_ w: Double) -> Double { min(45, max(10, w)) }
+        switch phase {
+        case .working(let id), .readyToLog(let id):
+            guard let i = index(of: id) else { return .silence }
+            stations[i].wpm = clamp(stations[i].wpm + delta)
+            phase = .working(id: id)
+            return .play([exchangeVoice(for: stations[i])])
+        case .pileup:
+            guard !stations.isEmpty else { return .silence }
+            for i in stations.indices { stations[i].wpm = clamp(stations[i].wpm + delta) }
+            return .play(stations.map { callVoice(for: $0) })
+        case .idle:
+            return .silence
+        }
     }
 
     private func stationQuits(at i: Int) -> Action {
@@ -456,6 +480,21 @@ public final class PileupEngine {
     static func isRepeat(_ s: String) -> Bool {
         let t = s.uppercased()
         return t == "?" || t == "AGN" || t == "AGN?" || t == "QRZ"
+    }
+
+    static func isQRS(_ s: String) -> Bool {
+        let t = s.uppercased()
+        return t == "QRS" || t == "QRS PSE" || t == "PSE QRS" || t == "QRS QRS"
+    }
+
+    static func isQRQ(_ s: String) -> Bool { s.uppercased() == "QRQ" }
+
+    /// A callsign fragment from typed input: upper-cased, spaces removed, and the
+    /// trailing query mark(s) stripped (so "W1?" queries the W1 prefix).
+    static func fragment(_ text: String) -> String {
+        var f = text.uppercased().replacingOccurrences(of: " ", with: "")
+        while f.hasSuffix("?") { f.removeLast() }
+        return f
     }
 
     static func isSignOff(_ s: String) -> Bool {

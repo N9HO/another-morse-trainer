@@ -669,56 +669,132 @@ final class AppModel: ObservableObject {
         return c
     }
 
-    // The single smart box: one action drives CQ / Send / TU by phase.
+    // The single smart box: one action drives CQ / Send / TU by phase. Each turn
+    // plays YOUR transmission first (your tone & speed), then the stations reply.
     func qsoPrimaryAction(_ text: String) {
         guard isQSO else { return }
         if qsoReadyToLog {
-            handleQSO(pileup.logCurrent())
+            let action = pileup.logCurrent()
+            perform(selfText: "TU \(settings.qso.myCall)", action: action)
         } else {
-            handleQSO(pileup.send(text))
+            let pre = pileup.phase
+            let action = pileup.send(text)
+            perform(selfText: selfSendText(input: text, pre: pre, post: pileup.phase, action: action),
+                    action: action)
         }
     }
 
-    func qsoCQ() { guard isQSO else { return }; handleQSO(pileup.callCQ()) }
-    func qsoRepeat() { guard isQSO else { return }; handleQSO(pileup.repeatRequest()) }
+    func qsoCQ() {
+        guard isQSO else { return }
+        let action = pileup.callCQ()
+        perform(selfText: selfCQText(), action: action)
+    }
 
-    private func handleQSO(_ action: PileupEngine.Action) {
-        switch action {
-        case .play(let voices):
-            playPileup(voices)
-        case .silence:
-            qsoBusy = false
-        case .logged(let call):
+    func qsoRepeat() {
+        guard isQSO else { return }
+        perform(selfText: "AGN?", action: pileup.repeatRequest())
+    }
+
+    /// Apply an engine action's state effects, then play your side followed by
+    /// the stations' reply.
+    private func perform(selfText: String?, action: PileupEngine.Action) {
+        if case .logged(let call) = action {
             qsoLastLogged = call
             sessionAttempts += 1
             sessionCorrect += 1
             Haptics.success()
-            qsoBusy = false
         }
         refreshQSO()
-    }
 
-    private func playPileup(_ voices: [PileupEngine.Voice]) {
+        let response: [MorsePlayer.PileupVoice]
+        if case .play(let v) = action { response = v.map(mapVoice) } else { response = [] }
+        let mine = selfText.flatMap { $0.isEmpty ? nil : selfVoice($0) }
+
+        guard mine != nil || !response.isEmpty else { qsoBusy = false; return }
         qsoGeneration += 1
         let gen = qsoGeneration
-        let q = settings.qso
-        let mapped: [MorsePlayer.PileupVoice] = voices.map { v in
-            let timing = q.farnsworth
-                ? MorseTiming(characterWpm: v.wpm, effectiveWpm: min(v.wpm, settings.effectiveWpm))
-                : MorseTiming(wpm: v.wpm)
-            return MorsePlayer.PileupVoice(
-                text: v.text,
-                frequency: max(200, settings.toneFrequency + v.toneOffset),
-                timing: timing,
-                gain: v.volume,
-                startDelay: v.delay,
-                qsbRate: v.qsb ? 0.33 : nil)
-        }
         qsoBusy = true
-        player.playPileup(mapped, qrn: q.qrn.amplitude) { [weak self] in
+
+        let playReply: () -> Void = { [weak self] in
             guard let self, self.qsoGeneration == gen else { return }
-            self.qsoBusy = false
+            guard !response.isEmpty else { self.qsoBusy = false; return }
+            self.player.playPileup(response, qrn: self.settings.qso.qrn.amplitude) { [weak self] in
+                guard let self, self.qsoGeneration == gen else { return }
+                self.qsoBusy = false
+            }
         }
+        if let mine {
+            player.playPileup([mine], qrn: 0) { [weak self] in
+                guard let self, self.qsoGeneration == gen else { return }
+                playReply()
+            }
+        } else {
+            playReply()
+        }
+    }
+
+    private func mapVoice(_ v: PileupEngine.Voice) -> MorsePlayer.PileupVoice {
+        let q = settings.qso
+        let timing = q.farnsworth
+            ? MorseTiming(characterWpm: v.wpm, effectiveWpm: min(v.wpm, settings.effectiveWpm))
+            : MorseTiming(wpm: v.wpm)
+        return MorsePlayer.PileupVoice(
+            text: v.text,
+            frequency: max(200, settings.toneFrequency + v.toneOffset),
+            timing: timing,
+            gain: v.volume,
+            startDelay: v.delay,
+            qsbRate: v.qsb ? 0.33 : nil)
+    }
+
+    /// Your own transmission: your tone, your speed, full volume, no fading.
+    private func selfVoice(_ text: String) -> MorsePlayer.PileupVoice {
+        MorsePlayer.PileupVoice(
+            text: text,
+            frequency: settings.toneFrequency,
+            timing: MorseTiming(wpm: settings.wpm),
+            gain: 1.0,
+            startDelay: 0.05,
+            qsbRate: nil)
+    }
+
+    private func selfCQText() -> String {
+        let me = settings.qso.myCall
+        switch settings.qso.mode {
+        case .pota:         return "CQ POTA DE \(me) \(me) K"
+        case .basicContest: return "CQ TEST \(me) \(me)"
+        case .cwt:          return "CQ CWT \(me)"
+        case .sst:          return "CQ SST \(me)"
+        case .fieldDay:     return "CQ FD \(me) \(me)"
+        case .singleCaller: return "CQ CQ DE \(me) \(me) K"
+        }
+    }
+
+    /// What you put on the air for a given smart-box send.
+    private func selfSendText(input: String,
+                              pre: PileupEngine.Phase,
+                              post: PileupEngine.Phase,
+                              action: PileupEngine.Action) -> String? {
+        let t = input.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        if PileupEngine.isQRS(t) { return "QRS PSE" }
+        if PileupEngine.isQRQ(t) { return "QRQ" }
+        if t.isEmpty || PileupEngine.isRepeat(t) { return "AGN?" }
+        // You just nailed a full call -> you call them and send your report.
+        if case .working = post, !Self.isWorking(pre) {
+            return "\(pileup.workingStation?.call ?? PileupEngine.fragment(t)) 5NN"
+        }
+        // Still working (a miss) -> ask again.
+        if case .working = pre, case .working = post { return "AGN?" }
+        // Copied it -> a quick roger, no real on-air needed.
+        if case .readyToLog = post { return "R" }
+        // A partial query into the pileup -> send it with a query mark.
+        return t.hasSuffix("?") ? t : t + "?"
+    }
+
+    private static func isWorking(_ p: PileupEngine.Phase) -> Bool {
+        if case .working = p { return true }
+        if case .readyToLog = p { return true }
+        return false
     }
 
     /// Mirror the engine's state onto the published properties the UI watches.

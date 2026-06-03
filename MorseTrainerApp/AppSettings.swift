@@ -167,6 +167,8 @@ enum QRNLevel: String, Codable, CaseIterable, Identifiable {
 /// QSO / contest simulator preferences (MorseWalker-style). Persisted as part of
 /// AppSettings; every field has a default so older saves upgrade cleanly.
 struct QSOSettings: Codable, Equatable {
+    /// Your callsign — sent when you call CQ, work a station, and say TU.
+    var myCall: String = "W1AW"
     var mode: QSOContestMode = .pota
     var maxStations: Int = 4
     var minWPM: Double = 18
@@ -187,6 +189,43 @@ struct QSOSettings: Codable, Equatable {
     var giveUpEnabled: Bool = false
     var formats: Set<CallsignFormat> = Set(CallsignFormat.commonDefaults)
     var usOnly: Bool = true
+}
+
+// Resilient decoding so adding new QSO fields never wipes a user's saved
+// settings (each missing key falls back to its default).
+extension QSOSettings {
+    enum CodingKeys: String, CodingKey {
+        case myCall, mode, maxStations, minWPM, maxWPM, farnsworth, toneSpread
+        case minVolume, maxVolume, minDelay, maxDelay, qsbEnabled, qrn
+        case cutNumbersEnabled, cutDigits, rstRequired, bustBehavior, giveUpEnabled
+        case formats, usOnly
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        var s = QSOSettings()
+        s.myCall = try c.decodeIfPresent(String.self, forKey: .myCall) ?? s.myCall
+        s.mode = try c.decodeIfPresent(QSOContestMode.self, forKey: .mode) ?? s.mode
+        s.maxStations = try c.decodeIfPresent(Int.self, forKey: .maxStations) ?? s.maxStations
+        s.minWPM = try c.decodeIfPresent(Double.self, forKey: .minWPM) ?? s.minWPM
+        s.maxWPM = try c.decodeIfPresent(Double.self, forKey: .maxWPM) ?? s.maxWPM
+        s.farnsworth = try c.decodeIfPresent(Bool.self, forKey: .farnsworth) ?? s.farnsworth
+        s.toneSpread = try c.decodeIfPresent(Double.self, forKey: .toneSpread) ?? s.toneSpread
+        s.minVolume = try c.decodeIfPresent(Double.self, forKey: .minVolume) ?? s.minVolume
+        s.maxVolume = try c.decodeIfPresent(Double.self, forKey: .maxVolume) ?? s.maxVolume
+        s.minDelay = try c.decodeIfPresent(Double.self, forKey: .minDelay) ?? s.minDelay
+        s.maxDelay = try c.decodeIfPresent(Double.self, forKey: .maxDelay) ?? s.maxDelay
+        s.qsbEnabled = try c.decodeIfPresent(Bool.self, forKey: .qsbEnabled) ?? s.qsbEnabled
+        s.qrn = try c.decodeIfPresent(QRNLevel.self, forKey: .qrn) ?? s.qrn
+        s.cutNumbersEnabled = try c.decodeIfPresent(Bool.self, forKey: .cutNumbersEnabled) ?? s.cutNumbersEnabled
+        s.cutDigits = try c.decodeIfPresent(Set<String>.self, forKey: .cutDigits) ?? s.cutDigits
+        s.rstRequired = try c.decodeIfPresent(Bool.self, forKey: .rstRequired) ?? s.rstRequired
+        s.bustBehavior = try c.decodeIfPresent(BustBehavior.self, forKey: .bustBehavior) ?? s.bustBehavior
+        s.giveUpEnabled = try c.decodeIfPresent(Bool.self, forKey: .giveUpEnabled) ?? s.giveUpEnabled
+        s.formats = try c.decodeIfPresent(Set<CallsignFormat>.self, forKey: .formats) ?? s.formats
+        s.usOnly = try c.decodeIfPresent(Bool.self, forKey: .usOnly) ?? s.usOnly
+        self = s
+    }
 }
 
 /// All user-adjustable preferences. Persisted as JSON in UserDefaults.

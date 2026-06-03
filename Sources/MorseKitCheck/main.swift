@@ -561,6 +561,36 @@ do {
     check("an impatient station gives up after enough misses",
           geng.activeCount == activeBefore - 1)
     check("busts were tallied", geng.bustCount >= 2)
+
+    // Prefix matching: a query brings back only stations starting with it.
+    var pcfg = PileupConfig(); pcfg.mode = .pota; pcfg.maxStations = 4
+    let peng = PileupEngine(config: pcfg, rng: SeededRNG(seed: 321))
+    _ = peng.callCQ()
+    let pcalls = peng.stations.map { $0.call }
+    let pfx = String(pcalls[0].prefix(2))
+    if !pcalls.contains(pfx) {
+        let expected = pcalls.filter { $0.hasPrefix(pfx) }.count
+        check("a prefix query brings back only prefix matches",
+              playCount(peng.send(pfx + "?")) == expected)
+    }
+
+    // A trailing "?" is stripped: a full call + "?" still works the station.
+    let qmarkEng = PileupEngine(config: pcfg, rng: SeededRNG(seed: 654))
+    _ = qmarkEng.callCQ()
+    let fullCall = qmarkEng.stations[0].call
+    _ = qmarkEng.send(fullCall + "?")
+    check("a full call with a trailing ? still works the station",
+          qmarkEng.workingStation?.call == fullCall)
+
+    // QRS actually slows the worked station.
+    var scfg = PileupConfig(); scfg.mode = .pota; scfg.maxStations = 2
+    scfg.minWPM = 30; scfg.maxWPM = 30
+    let seng = PileupEngine(config: scfg, rng: SeededRNG(seed: 99))
+    _ = seng.callCQ()
+    _ = seng.send(seng.stations[0].call)
+    let beforeWPM = seng.workingStation?.wpm ?? 0
+    _ = seng.send("QRS")
+    check("QRS slows the worked station", (seng.workingStation?.wpm ?? 99) < beforeWPM)
 }
 
 print("\n────────────────────────────")
