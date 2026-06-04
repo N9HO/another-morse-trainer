@@ -16,3 +16,6 @@ xcuserdata/
 
 # Sim build output (xcodebuild -derivedDataPath)
 build-sim/
+
+# App Store Connect API credentials (local only)
+tools/asc-auth.sh

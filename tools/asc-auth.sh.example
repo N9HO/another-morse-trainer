@@ -1,0 +1,7 @@
+# Copy to tools/asc-auth.sh (gitignored) and fill in your values.
+# Find Issuer ID + Key ID at App Store Connect → Users and Access → Integrations.
+export ASC_KEY_ID="XXXXXXXXXX"
+export ASC_ISSUER_ID="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+export ASC_KEY_PATH="$HOME/.appstoreconnect/private_keys/AuthKey_XXXXXXXXXX.p8"
+export ASC_APP_ID="0000000000"
+export ASC_BUNDLE_ID="com.example.app"

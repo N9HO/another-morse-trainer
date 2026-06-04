@@ -9,9 +9,19 @@
     <string>upload</string>
     <key>teamID</key>
     <string>F6ASU3CH5M</string>
-    <!-- Let Xcode manage the distribution cert + provisioning profile. -->
+    <!-- Manual signing: this account/key can't do xcodebuild cloud signing, so we
+         supply an Apple Distribution cert (in the keychain) and an App Store
+         provisioning profile (in ~/Library/MobileDevice/Provisioning Profiles)
+         explicitly. Both were created via the App Store Connect API. -->
     <key>signingStyle</key>
-    <string>automatic</string>
+    <string>manual</string>
+    <key>signingCertificate</key>
+    <string>Apple Distribution</string>
+    <key>provisioningProfiles</key>
+    <dict>
+        <key>com.justinrogers.MorseTrainer</key>
+        <string>AMT App Store CLI</string>
+    </dict>
     <!-- Strip bitcode/symbols handling left at defaults; upload dSYMs. -->
     <key>uploadSymbols</key>
     <true/>
