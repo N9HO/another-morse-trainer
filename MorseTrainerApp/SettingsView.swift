@@ -144,6 +144,30 @@ struct SettingsView: View {
                 .listRowBackground(Theme.navyElevated)
 
                 Section {
+                    Stepper(value: $model.settings.headCopyRepeats,
+                            in: AppSettings.headCopyRepeatRange) {
+                        HStack {
+                            Text("Auto-repeats")
+                            Spacer()
+                            Text(model.settings.headCopyRepeats == 0
+                                 ? "Off"
+                                 : "\(model.settings.headCopyRepeats)×")
+                                .foregroundStyle(.secondary)
+                                .monospacedDigit()
+                        }
+                    }
+                    sliderRow(title: "Auto-reveal after",
+                              value: $model.settings.headCopyRevealSeconds,
+                              range: AppSettings.headCopyRevealRange, step: 1,
+                              format: { $0 < 1 ? "Manual only" : "\(Int($0)) s" })
+                } header: {
+                    Text("Head Copy")
+                } footer: {
+                    Text("After the prompt plays, Head Copy can replay it a few times so you can re-hear it without mentally replaying, then count down to the answer. A manual Repeat button is always available.")
+                }
+                .listRowBackground(Theme.navyElevated)
+
+                Section {
                     Picker("Mode", selection: $model.settings.qso.mode) {
                         ForEach(QSOContestMode.allCases) { Text($0.label).tag($0) }
                     }

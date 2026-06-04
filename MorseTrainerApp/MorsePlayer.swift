@@ -123,13 +123,17 @@ final class MorsePlayer {
 
     /// Replay the current sound without affecting the finished-timer (used by
     /// the optional replay button, which must not disturb the TTR clock).
+    /// Returns the sound's duration in seconds (0 if nothing to play), so callers
+    /// scheduling another replay can wait for this one to finish first.
+    @discardableResult
     func replaySound(playable: MorseItem.Playable,
                      frequency: Double,
-                     timing: MorseTiming) {
+                     timing: MorseTiming) -> TimeInterval {
         activate()
         let floats = render(playable: playable, timing: timing, frequency: frequency)
-        guard !floats.isEmpty else { return }
+        guard !floats.isEmpty else { return 0 }
         setSamples(floats)
+        return Double(floats.count) / sampleRate
     }
 
     // MARK: - Pileup (multiple simultaneous transmissions)
