@@ -546,6 +546,30 @@ do {
     let cutForm = CutNumbers.encode(serial, enabled: ["0", "9"])
     check("typing the cut-number form grades correct", ceng.send(cutForm) == .silence)
 
+    // Regression (issue #9): a faithful copy of what was *heard* — the exchange
+    // sent twice for copyability, with the RST — must grade, not just the
+    // de-duplicated expectedCopy. Previously "599 OH OH" was rejected and the
+    // station endlessly repeated.
+    var hcfg = PileupConfig()
+    hcfg.mode = .pota
+    hcfg.maxStations = 1
+    let heng = PileupEngine(config: hcfg, rng: SeededRNG(seed: 11))
+    _ = heng.callCQ()
+    _ = heng.send(heng.stations[0].call)
+    let potaCopy = heng.expectedCopy ?? ""              // e.g. "OH"
+    check("typing the heard (doubled, with RST) POTA copy grades correct",
+          heng.send("599 \(potaCopy) \(potaCopy)") == .silence)
+
+    var sccfg = PileupConfig()
+    sccfg.mode = .singleCaller
+    sccfg.maxStations = 1
+    let sceng = PileupEngine(config: sccfg, rng: SeededRNG(seed: 11))
+    _ = sceng.callCQ()
+    _ = sceng.send(sceng.stations[0].call)
+    let opName = sceng.expectedCopy ?? ""               // e.g. "BOB"
+    check("typing the heard 'OP BOB BOB' single-caller copy grades correct",
+          sceng.send("599 OP \(opName) \(opName)") == .silence)
+
     // Give-up: an impatient station QRTs after repeated misses; pileup remains.
     var gcfg = PileupConfig()
     gcfg.mode = .pota
