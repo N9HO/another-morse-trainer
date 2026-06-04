@@ -8,6 +8,7 @@ struct IntroView: View {
     var onStart: () -> Void
 
     @State private var showingSetup = false
+    @State private var showingSettings = false
 
     private let tileColumns = [GridItem(.flexible(), spacing: 14),
                                GridItem(.flexible(), spacing: 14)]
@@ -70,6 +71,8 @@ struct IntroView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            topBar
+
             ScrollView {
                 VStack(spacing: 28) {
                     header
@@ -90,6 +93,29 @@ struct IntroView: View {
             SessionSetupSheet(onStart: onStart)
                 .environmentObject(model)
         }
+        .sheet(isPresented: $showingSettings) {
+            SettingsView().environmentObject(model)
+        }
+    }
+
+    // MARK: - Top bar
+
+    /// A slim bar with the app-wide Settings entry, so shared preferences (your
+    /// callsign, side tone, …) are reachable before a session ever starts —
+    /// not buried inside a mode's setup sheet.
+    private var topBar: some View {
+        HStack {
+            Spacer()
+            Button { showingSettings = true } label: {
+                Image(systemName: "gearshape")
+                    .font(.title3)
+                    .foregroundStyle(Theme.teal)
+                    .padding(8)
+            }
+            .accessibilityLabel("Settings")
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
     }
 
     // MARK: - Header
