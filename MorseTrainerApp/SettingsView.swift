@@ -8,8 +8,25 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section {
+                    HStack {
+                        Text("Your callsign")
+                        Spacer()
+                        TextField("W1AW", text: $model.settings.qso.myCall)
+                            .multilineTextAlignment(.trailing)
+                            .textInputAutocapitalization(.characters)
+                            .autocorrectionDisabled()
+                            .font(.system(.body, design: .monospaced))
+                    }
+                } header: {
+                    Text("Your Station")
+                } footer: {
+                    Text("Used across the app — sent when you call CQ and work stations in the QSO Simulator.")
+                }
+                .listRowBackground(Theme.navyElevated)
+
                 Section("Sound") {
-                    sliderRow(title: "Tone pitch",
+                    sliderRow(title: "Side tone",
                               value: $model.settings.toneFrequency,
                               range: 300...1000, step: 10,
                               format: { "\(Int($0)) Hz" })
@@ -151,15 +168,6 @@ struct SettingsView: View {
                 .listRowBackground(Theme.navyElevated)
 
                 Section {
-                    HStack {
-                        Text("Your callsign")
-                        Spacer()
-                        TextField("W1AW", text: $model.settings.qso.myCall)
-                            .multilineTextAlignment(.trailing)
-                            .textInputAutocapitalization(.characters)
-                            .autocorrectionDisabled()
-                            .font(.system(.body, design: .monospaced))
-                    }
                     Picker("Mode", selection: $model.settings.qso.mode) {
                         ForEach(QSOContestMode.allCases) { Text($0.label).tag($0) }
                     }

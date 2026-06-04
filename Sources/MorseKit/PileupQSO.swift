@@ -453,6 +453,16 @@ public final class PileupEngine {
         if !config.rstRequired, let first = user.first, Self.isRSTLike(first) {
             user.removeFirst()
         }
+        // Stations send each exchange element twice for copyability ("OH OH")
+        // and prefix a name with the filler "OP" — so a faithful copy of what
+        // was *heard* carries more tokens than the exchange requires. Drop the
+        // filler and collapse immediately-repeated tokens before counting. No
+        // real exchange has two genuinely-identical adjacent tokens, so this is
+        // lossless for the de-duplicated form too.
+        user.removeAll { $0 == "OP" }
+        var collapsed: [String] = []
+        for tok in user where collapsed.last != tok { collapsed.append(tok) }
+        user = collapsed
         guard user.count == tokens.count else { return false }
         for (u, t) in zip(user, tokens) where !Self.tokenMatches(u, t) { return false }
         return true

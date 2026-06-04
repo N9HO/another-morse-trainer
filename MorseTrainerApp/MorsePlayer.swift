@@ -69,7 +69,12 @@ final class MorsePlayer {
         if !didActivate {
             #if os(iOS)
             let session = AVAudioSession.sharedInstance()
-            try? session.setCategory(.playback, mode: .default)
+            // `.playback` keeps the tone playing with the screen locked / app
+            // backgrounded (paired with UIBackgroundModes = audio) for
+            // hands-free Listen mode. `.duckOthers` matches the category the
+            // voice recogniser restores to, so switching between them doesn't
+            // thrash the session.
+            try? session.setCategory(.playback, mode: .default, options: [.duckOthers])
             try? session.setActive(true)
             #endif
             didActivate = true
