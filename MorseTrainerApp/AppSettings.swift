@@ -286,9 +286,22 @@ struct AppSettings: Codable, Equatable {
     var reveal: RevealMode = .onWrong
     var allowReplay: Bool = false
 
+    // Head Copy
+    /// How many times Head Copy automatically replays the prompt after the first
+    /// play, so you can re-hear it without mentally replaying. 0 = no auto-repeat
+    /// (a manual Repeat button is always available). Clamped to `headCopyRepeatRange`.
+    var headCopyRepeats: Int = 2
+    /// Seconds Head Copy waits, after the (auto-)repeats finish, before it reveals
+    /// the answer for you to self-check. 0 = manual reveal only (no countdown).
+    var headCopyRevealSeconds: Double = 5
+
     /// Allowed range for `maxAnswerChoices`. The upper bound is a hard stop so
     /// the choice grid stays usable on a phone.
     static let answerChoiceRange: ClosedRange<Int> = 4...6
+
+    /// Allowed range for Head Copy auto-repeats and the reveal countdown.
+    static let headCopyRepeatRange: ClosedRange<Int> = 0...3
+    static let headCopyRevealRange: ClosedRange<Double> = 0...10
 
     static let storageKey = "MorseTrainer.settings"
 
@@ -326,6 +339,7 @@ extension AppSettings {
         case examSpeed, examGrading, examUseBundled
         case qso
         case showCorrectness, reveal, allowReplay
+        case headCopyRepeats, headCopyRevealSeconds
     }
 
     init(from decoder: Decoder) throws {
@@ -355,6 +369,12 @@ extension AppSettings {
         s.showCorrectness = try c.decodeIfPresent(Bool.self, forKey: .showCorrectness) ?? s.showCorrectness
         s.reveal = try c.decodeIfPresent(RevealMode.self, forKey: .reveal) ?? s.reveal
         s.allowReplay = try c.decodeIfPresent(Bool.self, forKey: .allowReplay) ?? s.allowReplay
+        let hcr = try c.decodeIfPresent(Int.self, forKey: .headCopyRepeats) ?? s.headCopyRepeats
+        s.headCopyRepeats = min(max(hcr, AppSettings.headCopyRepeatRange.lowerBound),
+                                AppSettings.headCopyRepeatRange.upperBound)
+        let hcrs = try c.decodeIfPresent(Double.self, forKey: .headCopyRevealSeconds) ?? s.headCopyRevealSeconds
+        s.headCopyRevealSeconds = min(max(hcrs, AppSettings.headCopyRevealRange.lowerBound),
+                                      AppSettings.headCopyRevealRange.upperBound)
         self = s
     }
 }

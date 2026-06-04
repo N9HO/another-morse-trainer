@@ -183,6 +183,14 @@ final class AppModel: ObservableObject {
     private var toneEndDate: Date?
     private var advanceGeneration = 0
 
+    // Head Copy auto-repeat / timed reveal. `headCopyCountdown` drives the
+    // "Revealing in N…" label; `headCopyGeneration` cancels any in-flight
+    // repeat/countdown chain when the drill, mode, or session changes.
+    @Published private(set) var headCopyCountdown: Int?
+    private var headCopyGeneration = 0
+    /// Pause between Head Copy auto-replays (after each replay's audio finishes).
+    private let headCopyRepeatGap: TimeInterval = 1.5
+
     // Voice response (Characters & Words modes): answer by speaking.
     enum VoiceState: Equatable { case inactive, listening, confirming, fallback }
     @Published private(set) var voiceState: VoiceState = .inactive
@@ -1030,6 +1038,7 @@ final class AppModel: ObservableObject {
         sessionTimer = nil
         sessionEndDate = nil
         advanceGeneration += 1   // cancel any pending auto-advance
+        cancelHeadCopyAuto()     // cancel any pending head-copy repeat/reveal
         resetVoiceRound()
         stopListening()
         storyGeneration += 1     // cancel any story playback
@@ -1082,6 +1091,7 @@ final class AppModel: ObservableObject {
 
     private func newDrill() {
         advanceGeneration += 1   // cancel any pending auto-advance
+        cancelHeadCopyAuto()     // cancel any pending repeat/reveal from the last item
         resetVoiceRound()
         justUnlocked = nil
         lastCorrect = nil
@@ -1103,16 +1113,19 @@ final class AppModel: ObservableObject {
             if self.phase == .playing {
                 self.phase = .awaiting
                 if self.usesVoiceResponse { self.beginVoiceListening() }
+                else if self.isHeadCopy { self.startHeadCopyAuto() }
             }
         }
     }
 
-    /// Replay without disturbing the TTR clock (optional replay button).
-    func replay() {
-        guard let drill else { return }
-        player.replaySound(playable: drill.playable,
-                           frequency: settings.toneFrequency,
-                           timing: timing)
+    /// Replay without disturbing the TTR clock (optional replay button). Returns
+    /// the replayed sound's duration so callers can chain another replay after it.
+    @discardableResult
+    func replay() -> TimeInterval {
+        guard let drill else { return 0 }
+        return player.replaySound(playable: drill.playable,
+                                  frequency: settings.toneFrequency,
+                                  timing: timing)
     }
 
     func select(_ choice: String) {
@@ -1353,8 +1366,77 @@ final class AppModel: ObservableObject {
     /// answer to self-check. The TTR clock captures recall time.
     func revealHeadCopy() {
         guard isHeadCopy, phase == .awaiting, let end = toneEndDate else { return }
+        cancelHeadCopyAuto()
         lastTTR = Date().timeIntervalSince(end)
         phase = .revealed
+    }
+
+    /// Stop any pending auto-repeat or reveal countdown and clear the label.
+    private func cancelHeadCopyAuto() {
+        headCopyGeneration += 1
+        headCopyCountdown = nil
+    }
+
+    /// Kick off Head Copy's structured re-hearing once the first play finishes:
+    /// auto-replay the prompt `headCopyRepeats` times, then count down to the
+    /// reveal. Each step is guarded by a generation token so an early manual
+    /// reveal/repeat, the next drill, or ending the session cancels it cleanly.
+    private func startHeadCopyAuto() {
+        headCopyGeneration += 1
+        headCopyCountdown = nil
+        scheduleHeadCopyReplay(remaining: settings.headCopyRepeats, gen: headCopyGeneration)
+    }
+
+    private func scheduleHeadCopyReplay(remaining: Int, gen: Int) {
+        guard remaining >= 1 else { beginHeadCopyReveal(gen: gen); return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + headCopyRepeatGap) { [weak self] in
+            guard let self, self.headCopyIsLive(gen) else { return }
+            let duration = self.replay()
+            DispatchQueue.main.asyncAfter(deadline: .now() + duration) { [weak self] in
+                guard let self, self.headCopyIsLive(gen) else { return }
+                self.scheduleHeadCopyReplay(remaining: remaining - 1, gen: gen)
+            }
+        }
+    }
+
+    private func beginHeadCopyReveal(gen: Int) {
+        let seconds = Int(settings.headCopyRevealSeconds.rounded())
+        guard seconds > 0 else { headCopyCountdown = nil; return }   // manual reveal only
+        headCopyCountdown = seconds
+        countdownToReveal(gen: gen)
+    }
+
+    private func countdownToReveal(gen: Int) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
+            guard let self, self.headCopyIsLive(gen), let n = self.headCopyCountdown else { return }
+            if n <= 1 {
+                self.headCopyCountdown = nil
+                self.revealHeadCopy()
+            } else {
+                self.headCopyCountdown = n - 1
+                self.countdownToReveal(gen: gen)
+            }
+        }
+    }
+
+    /// Replay the prompt now (manual Repeat button): cancel the pending chain,
+    /// play it again, then restart the reveal countdown from the top.
+    func headCopyRepeatNow() {
+        guard isHeadCopy, phase == .awaiting else { return }
+        headCopyGeneration += 1
+        let gen = headCopyGeneration
+        headCopyCountdown = nil
+        let duration = replay()
+        DispatchQueue.main.asyncAfter(deadline: .now() + duration) { [weak self] in
+            guard let self, self.headCopyIsLive(gen) else { return }
+            self.beginHeadCopyReveal(gen: gen)
+        }
+    }
+
+    /// True while a given Head Copy auto chain is still the current one and the
+    /// user is still in the copying phase.
+    private func headCopyIsLive(_ gen: Int) -> Bool {
+        headCopyGeneration == gen && isHeadCopy && phase == .awaiting
     }
 
     /// Head copy: self-grade whether you got it, record it, and move on.

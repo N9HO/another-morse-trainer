@@ -36,7 +36,7 @@ struct ContentView: View {
                     statusArea
                         .frame(maxHeight: .infinity)
 
-                    if model.settings.allowReplay, model.drill != nil {
+                    if model.settings.allowReplay, model.drill != nil, !model.isHeadCopy {
                         Button {
                             model.replay()
                         } label: {
@@ -216,15 +216,35 @@ struct ContentView: View {
     private var headCopyControls: some View {
         switch model.phase {
         case .awaiting:
-            Button {
-                Haptics.tap()
-                model.revealHeadCopy()
-            } label: {
-                Text("Reveal")
-                    .font(.headline)
-                    .frame(maxWidth: .infinity, minHeight: 56)
+            VStack(spacing: 12) {
+                if let n = model.headCopyCountdown {
+                    Label("Revealing in \(n)…", systemImage: "timer")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .transition(.opacity)
+                }
+                HStack(spacing: 16) {
+                    Button {
+                        Haptics.tap()
+                        model.headCopyRepeatNow()
+                    } label: {
+                        Label("Repeat", systemImage: "arrow.clockwise")
+                            .font(.headline)
+                            .frame(maxWidth: .infinity, minHeight: 56)
+                    }
+                    .buttonStyle(.bordered)
+                    Button {
+                        Haptics.tap()
+                        model.revealHeadCopy()
+                    } label: {
+                        Text("Reveal")
+                            .font(.headline)
+                            .frame(maxWidth: .infinity, minHeight: 56)
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
             }
-            .buttonStyle(.borderedProminent)
+            .animation(.easeInOut(duration: 0.2), value: model.headCopyCountdown)
         case .revealed:
             HStack(spacing: 16) {
                 Button {
