@@ -1,0 +1,57 @@
+# Posts a message back to the originating Discord thread when an issue that the
+# triage bot filed is closed (e.g. a fix is merged). The bot stamps each issue
+# it opens with an HTML comment "<!-- discord-thread:<id> -->"; this reads that
+# id and posts to the thread via a Discord channel webhook.
+#
+# Requires a repository secret DISCORD_WEBHOOK_URL:
+#   In Discord: the channel the triage threads live in -> Edit Channel ->
+#   Integrations -> Webhooks -> New Webhook -> Copy Webhook URL.
+#   Then GitHub: Settings -> Secrets and variables -> Actions -> new secret
+#   named DISCORD_WEBHOOK_URL.
+#
+# NOTE: must be on the default branch (main) to fire on issue events.
+
+name: Notify Discord on issue close
+
+on:
+  issues:
+    types: [closed]
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Post resolution to the Discord thread
+        env:
+          WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_URL: ${{ github.event.issue.html_url }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          STATE_REASON: ${{ github.event.issue.state_reason }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${WEBHOOK:-}" ]; then
+            echo "DISCORD_WEBHOOK_URL not set; skipping."
+            exit 0
+          fi
+
+          # Pull the Discord thread id the bot embedded in the issue body.
+          THREAD_ID="$(printf '%s' "$ISSUE_BODY" \
+            | grep -oE 'discord-thread:[0-9]+' | head -n1 | cut -d: -f2 || true)"
+          if [ -z "${THREAD_ID:-}" ]; then
+            echo "No discord-thread marker on this issue; nothing to notify."
+            exit 0
+          fi
+
+          if [ "${STATE_REASON:-}" = "not_planned" ]; then
+            MSG="🗑️ Issue #${ISSUE_NUMBER} (\"${ISSUE_TITLE}\") was closed as not planned: ${ISSUE_URL}"
+          else
+            MSG="✅ Good news — this is fixed! Issue #${ISSUE_NUMBER} (\"${ISSUE_TITLE}\") has been closed: ${ISSUE_URL}"
+          fi
+
+          # jq builds correctly-escaped JSON; thread_id targets the specific thread.
+          jq -n --arg content "$MSG" '{content: $content}' \
+            | curl -sS -X POST -H "Content-Type: application/json" \
+                   --data @- "${WEBHOOK}?thread_id=${THREAD_ID}&wait=true"

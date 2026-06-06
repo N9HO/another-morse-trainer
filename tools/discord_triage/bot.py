@@ -171,8 +171,11 @@ async def _apply_verdict(thread: discord.Thread, verdict, key: int) -> None:
 
     # Enough detail and not yet filed -> open the issue.
     if verdict.should_file and p.issue_number is None:
+        # Stamp the Discord thread id into the issue (hidden HTML comment) so the
+        # "issue closed" GitHub Action can post the resolution back to this thread.
+        body = f"{verdict.body}\n\n<!-- discord-thread:{thread.id} -->"
         try:
-            issue = await create_issue(verdict.title, verdict.body, verdict.labels)
+            issue = await create_issue(verdict.title, body, verdict.labels)
         except Exception:
             log.exception("Failed to create issue")
             await _say(thread, "I tried to log that but hit an error filing the issue. 😬")
