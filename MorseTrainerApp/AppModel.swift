@@ -213,6 +213,19 @@ final class AppModel: ObservableObject {
 
     private static let progressKey = "MorseTrainer.progress"
 
+    // MARK: - Practice streak (issue #20)
+
+    /// Consecutive-days practice streak, persisted across launches. Read the
+    /// live value through `currentStreak` (it self-expires once a day lapses);
+    /// `streak.longest` is the all-time record.
+    @Published private(set) var streak = PracticeStreak() { didSet { saveStreak() } }
+    private static let streakKey = "MorseTrainer.streak"
+
+    /// The streak as it stands today (0 once the learner has let it lapse).
+    var currentStreak: Int { streak.display(on: Date()) }
+    /// Best streak ever reached — kept even after a lapse.
+    var longestStreak: Int { streak.longest }
+
     init() {
         let loaded = AppSettings.load()
         self.settings = loaded
@@ -230,6 +243,7 @@ final class AppModel: ObservableObject {
         reconcilePunctuation()
         applyPhraseConfig(from: loaded)
         restoreVoiceProfile()
+        streak = AppModel.loadStreak()   // assigning in init doesn't fire didSet
         summary = charLadder.summary
     }
 
@@ -1061,6 +1075,7 @@ final class AppModel: ObservableObject {
 
     /// Add one answered drill to the running session tally.
     private func noteSessionResult(correct: Bool, ttr: TimeInterval) {
+        markPracticedToday()   // any answered drill counts as practicing today
         sessionAttempts += 1
         if correct { sessionCorrect += 1 }
         if ttr > 0 {
@@ -1543,6 +1558,29 @@ final class AppModel: ObservableObject {
                   !old.activeCharacters.isEmpty {
             engine.restore(from: old)   // migrate older single-stage progress
         }
+    }
+
+    // MARK: - Persistence (practice streak)
+
+    private func saveStreak() {
+        if let data = try? JSONEncoder().encode(streak) {
+            UserDefaults.standard.set(data, forKey: Self.streakKey)
+        }
+    }
+
+    private static func loadStreak() -> PracticeStreak {
+        guard let data = UserDefaults.standard.data(forKey: streakKey),
+              let s = try? JSONDecoder().decode(PracticeStreak.self, from: data) else {
+            return PracticeStreak()
+        }
+        return s
+    }
+
+    /// Count today toward the practice streak. Idempotent within a day, so it's
+    /// cheap to call on every answered drill.
+    private func markPracticedToday() {
+        var s = streak
+        if s.record(on: Date()) { streak = s }   // only mutate (and persist) on the day's first practice
     }
 
     func resetProgress() {
