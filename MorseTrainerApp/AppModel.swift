@@ -226,6 +226,19 @@ final class AppModel: ObservableObject {
     /// Best streak ever reached — kept even after a lapse.
     var longestStreak: Int { streak.longest }
 
+    // MARK: - Session history (issue #19)
+
+    /// Completed sessions, newest first, persisted across launches.
+    @Published private(set) var history = SessionHistory() { didSet { saveHistory() } }
+    private static let historyKey = "MorseTrainer.history"
+    /// The session just completed, for the post-summary "Session detail" link.
+    @Published private(set) var lastSessionRecord: SessionRecord?
+
+    // Per-character tallies for the current session (single-character drills only).
+    private var sessionCharTotal: [Character: Int] = [:]
+    private var sessionCharCorrect: [Character: Int] = [:]
+    private var sessionCharTTRs: [Character: [TimeInterval]] = [:]
+
     init() {
         let loaded = AppSettings.load()
         self.settings = loaded
@@ -243,7 +256,8 @@ final class AppModel: ObservableObject {
         reconcilePunctuation()
         applyPhraseConfig(from: loaded)
         restoreVoiceProfile()
-        streak = AppModel.loadStreak()   // assigning in init doesn't fire didSet
+        streak = AppModel.loadStreak()    // assigning in init doesn't fire didSet
+        history = AppModel.loadHistory()
         summary = charLadder.summary
     }
 
@@ -1011,6 +1025,10 @@ final class AppModel: ObservableObject {
         sessionCorrect = 0
         sessionFastest = nil
         sessionTTRs = []
+        sessionCharTotal = [:]
+        sessionCharCorrect = [:]
+        sessionCharTTRs = [:]
+        lastSessionRecord = nil
         sessionTimer?.invalidate()
         sessionTimer = nil
 
@@ -1070,17 +1088,69 @@ final class AppModel: ObservableObject {
         qsoBusy = false
         qsoActive = false
         phase = .idle
+        if let record = buildSessionRecord() {
+            history.add(record)            // triggers saveHistory()
+            lastSessionRecord = record
+        }
         sessionEnded = true
     }
 
-    /// Add one answered drill to the running session tally.
-    private func noteSessionResult(correct: Bool, ttr: TimeInterval) {
+    /// Assemble a `SessionRecord` from the session just finished, or nil if
+    /// nothing was answered (don't log empty sessions).
+    private func buildSessionRecord() -> SessionRecord? {
+        guard sessionAttempts > 0 else { return nil }
+        let summary = sessionSummary
+        let chars: [SessionRecord.CharResult] = sessionCharTotal.keys.map { ch in
+            let ttrs = (sessionCharTTRs[ch] ?? []).sorted()
+            let median: TimeInterval?
+            if ttrs.isEmpty {
+                median = nil
+            } else {
+                let mid = ttrs.count / 2
+                median = ttrs.count % 2 == 0 ? (ttrs[mid - 1] + ttrs[mid]) / 2 : ttrs[mid]
+            }
+            return SessionRecord.CharResult(
+                character: String(ch),
+                attempts: sessionCharTotal[ch] ?? 0,
+                correct: sessionCharCorrect[ch] ?? 0,
+                medianTTR: median)
+        }
+        // Only attach the active set when we actually have per-character data, so
+        // word/QSO/etc. sessions don't render an all-blank chart.
+        let active = sessionCharTotal.isEmpty ? [] : engine.activeCharacters.map(String.init)
+        let t = timing
+        return SessionRecord(
+            id: UUID(),
+            date: Date(),
+            mode: mode.rawValue,
+            characterWPM: Int(t.wpm.rounded()),
+            effectiveWPM: Int((settings.farnsworth ? settings.effectiveWpm : t.wpm).rounded()),
+            attempts: summary.attempts,
+            correct: summary.correct,
+            fastestTTR: summary.fastest,
+            medianTTR: summary.medianTTR,
+            durationSeconds: settings.practiceDuration.seconds,
+            characters: chars,
+            activeCharacters: active)
+    }
+
+    /// Add one answered drill to the running session tally. `target` is the
+    /// correct answer; when it's a single character we also keep per-character
+    /// tallies for the session's recognition-time chart (#19).
+    private func noteSessionResult(correct: Bool, ttr: TimeInterval, target: String = "") {
         markPracticedToday()   // any answered drill counts as practicing today
         sessionAttempts += 1
         if correct { sessionCorrect += 1 }
         if ttr > 0 {
             sessionTTRs.append(ttr)
             if correct { sessionFastest = min(sessionFastest ?? .infinity, ttr) }
+        }
+        if target.count == 1, let ch = target.first {
+            sessionCharTotal[ch, default: 0] += 1
+            if correct {
+                sessionCharCorrect[ch, default: 0] += 1
+                if ttr > 0 { sessionCharTTRs[ch, default: []].append(ttr) }
+            }
         }
     }
 
@@ -1160,7 +1230,7 @@ final class AppModel: ObservableObject {
         justUnlocked = outcome.unlocked
         summary = source.summary
         phase = .answered
-        noteSessionResult(correct: outcome.correct, ttr: ttr)
+        noteSessionResult(correct: outcome.correct, ttr: ttr, target: drill?.correct ?? "")
         saveProgress()
 
         // Keep the rhythm going: correct answers auto-advance (unless a new
@@ -1581,6 +1651,22 @@ final class AppModel: ObservableObject {
     private func markPracticedToday() {
         var s = streak
         if s.record(on: Date()) { streak = s }   // only mutate (and persist) on the day's first practice
+    }
+
+    // MARK: - Persistence (session history)
+
+    private func saveHistory() {
+        if let data = try? JSONEncoder().encode(history) {
+            UserDefaults.standard.set(data, forKey: Self.historyKey)
+        }
+    }
+
+    private static func loadHistory() -> SessionHistory {
+        guard let data = UserDefaults.standard.data(forKey: historyKey),
+              let h = try? JSONDecoder().decode(SessionHistory.self, from: data) else {
+            return SessionHistory()
+        }
+        return h
     }
 
     func resetProgress() {

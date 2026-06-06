@@ -26,6 +26,23 @@ struct StatsView: View {
                 }
                 .listRowBackground(Theme.navyElevated)
 
+                if !model.history.sessions.isEmpty {
+                    Section {
+                        ForEach(model.history.sessions) { record in
+                            NavigationLink {
+                                SessionDetailView(record: record, idealMS: idealMS)
+                            } label: {
+                                sessionRow(record)
+                            }
+                        }
+                    } header: {
+                        Text("Recent sessions")
+                    } footer: {
+                        Text("Tap a session to see its per-character recognition-time chart.")
+                    }
+                    .listRowBackground(Theme.navyElevated)
+                }
+
                 if !model.confusionPairs.isEmpty {
                     Section {
                         ForEach(model.confusionPairs) { pair in
@@ -47,6 +64,30 @@ struct StatsView: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
                 }
+            }
+        }
+    }
+
+    /// The recognize-within goal as a millisecond value for the chart's ideal line.
+    private var idealMS: Int { Int((model.settings.ttrThreshold * 1000).rounded()) }
+
+    private func sessionRow(_ record: SessionRecord) -> some View {
+        let title = TrainingMode(rawValue: record.mode)?.title ?? record.mode
+        return HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(record.date.formatted(date: .abbreviated, time: .shortened))
+                    .font(.subheadline)
+                Text(title)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            VStack(alignment: .trailing, spacing: 2) {
+                Text(record.attempts == 0 ? "—" : "\(Int((record.accuracy * 100).rounded()))%")
+                    .font(.subheadline.monospacedDigit())
+                Text("\(record.attempts) drills")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
             }
         }
     }

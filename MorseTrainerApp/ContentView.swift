@@ -5,6 +5,7 @@ struct ContentView: View {
     var onExit: () -> Void = {}
     @State private var showSettings = false
     @State private var showStats = false
+    @State private var detailRecord: SessionRecord?
     @State private var typedAnswer = ""
     @State private var examCopy = ""
     @State private var qsoText = ""
@@ -96,6 +97,19 @@ struct ContentView: View {
             }
             .sheet(isPresented: $showStats) {
                 StatsView().environmentObject(model)
+            }
+            .sheet(item: $detailRecord) { record in
+                NavigationStack {
+                    SessionDetailView(
+                        record: record,
+                        idealMS: Int((model.settings.ttrThreshold * 1000).rounded())
+                    )
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("Done") { detailRecord = nil }
+                        }
+                    }
+                }
             }
             .onChange(of: model.lastCorrect) { correct in
                 guard let correct else { return }
@@ -979,6 +993,17 @@ struct ContentView: View {
             .brandCard()
 
             VStack(spacing: 12) {
+                if let record = model.lastSessionRecord {
+                    Button {
+                        detailRecord = record
+                    } label: {
+                        Label("Session detail", systemImage: "chart.bar.xaxis")
+                            .font(.headline)
+                            .frame(maxWidth: .infinity, minHeight: 52)
+                    }
+                    .buttonStyle(.bordered)
+                }
+
                 Button {
                     model.startSession()
                 } label: {
