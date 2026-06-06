@@ -114,6 +114,24 @@ Each triage is a single short request, and the instruction prompt is cached, so
 even on Opus the per-message cost is small — but Haiku is the economical default
 for a busy server.
 
+## Resolution notifications ("this is fixed")
+
+When an issue the bot filed is **closed** (e.g. a fix is merged), the bot posts a
+message back into the original Discord thread. This is handled by a GitHub Action
+(`.github/workflows/notify-discord-on-close.yml`), not the bot process itself —
+the bot stamps each issue it opens with a hidden `discord-thread:<id>` marker, and
+the Action reads it on close and posts via a Discord webhook.
+
+To enable it:
+1. **Create a Discord channel webhook**: in the channel your triage threads live
+   in → **Edit Channel → Integrations → Webhooks → New Webhook → Copy Webhook URL**.
+2. **Add it as a GitHub repo secret**: Settings → Secrets and variables → Actions →
+   new secret named **`DISCORD_WEBHOOK_URL`**.
+3. The workflow must be on the **default branch (`main`)** to fire on issue events.
+
+(Only issues filed *after* this is deployed carry the marker, and posting targets
+the thread, which Discord keeps for the thread's auto-archive window.)
+
 ## Files
 
 | File | Purpose |
