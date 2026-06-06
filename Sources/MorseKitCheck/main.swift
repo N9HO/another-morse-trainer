@@ -668,6 +668,68 @@ do {
     }
 }
 
+// Session history + recognition chart data (issue #19)
+print("\nSession history & recognition chart (issue #19):")
+do {
+    // CharResult derived values.
+    let b = SessionRecord.CharResult(character: "B", attempts: 5, correct: 5, medianTTR: 0.377)
+    check("medianMS rounds seconds to whole milliseconds", b.medianMS == 377)
+    check("accuracy is correct/attempts", abs(b.accuracy - 1.0) < 1e-9)
+    let o = SessionRecord.CharResult(character: "O", attempts: 5, correct: 2, medianTTR: 0.219)
+    check("a fast-but-inaccurate char reports low accuracy", abs(o.accuracy - 0.4) < 1e-9)
+    let never = SessionRecord.CharResult(character: "Z", attempts: 3, correct: 0, medianTTR: nil)
+    check("no correct answers ⇒ medianMS is nil", never.medianMS == nil)
+
+    // Chart row ordering: letters A–Z first, then digits.
+    check("character order puts letters before digits",
+          SessionRecord.characterOrder("Z", "0") == true)
+    check("character order is alphabetical within letters",
+          SessionRecord.characterOrder("A", "B") == true)
+
+    let rec = SessionRecord(
+        id: UUID(), date: Date(), mode: "characters",
+        characterWPM: 25, effectiveWPM: 7, attempts: 13, correct: 9,
+        fastestTTR: 0.219, medianTTR: 0.45, durationSeconds: 300,
+        characters: [b, o],
+        activeCharacters: ["O", "B", "5"])
+    let rows = rec.chartRows
+    check("chart rows cover every active + drilled character",
+          rows.map { $0.character } == ["B", "O", "5"])
+    check("chart rows attach results to drilled characters",
+          rows[0].result?.medianMS == 377)
+    check("an active-but-undrilled character is a blank row",
+          rows[2].character == "5" && rows[2].result == nil)
+
+    // Axis ceiling.
+    check("axis ceiling is at least 1000ms", SessionRecord.axisCeilingMS(300) == 1000)
+    check("axis ceiling rounds up to the next 250", SessionRecord.axisCeilingMS(1105) == 1250)
+    check("axis ceiling leaves an exact multiple alone", SessionRecord.axisCeilingMS(750) == 1000)
+
+    // History: newest-first + bounded.
+    var hist = SessionHistory()
+    let older = SessionRecord(id: UUID(), date: Date(), mode: "words",
+                              characterWPM: 20, effectiveWPM: 20, attempts: 1, correct: 1,
+                              fastestTTR: nil, medianTTR: nil, durationSeconds: nil,
+                              characters: [], activeCharacters: [])
+    hist.add(older)
+    hist.add(rec)
+    check("most recent session is first", hist.sessions.first?.id == rec.id)
+    check("history keeps prior sessions", hist.sessions.count == 2)
+
+    var capped = SessionHistory()
+    for _ in 0..<(SessionHistory.limit + 10) { capped.add(older) }
+    check("history is bounded to the cap", capped.sessions.count == SessionHistory.limit)
+
+    // Codable round-trip.
+    do {
+        let data = try JSONEncoder().encode(hist)
+        let restored = try JSONDecoder().decode(SessionHistory.self, from: data)
+        check("session history survives a save/load round-trip", restored == hist)
+    } catch {
+        check("session history encode/decode without throwing", false)
+    }
+}
+
 print("\n────────────────────────────")
 if failures == 0 {
     print("✅ All \(checks) checks passed.\n")
