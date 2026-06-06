@@ -67,9 +67,16 @@ struct ContentView: View {
             .toolbar {
                 ToolbarItem(placement: .principal) { modeMenu }
                 ToolbarItem(placement: .topBarLeading) {
+                    // Passive readout of the current session's scope (e.g.
+                    // "11 chars", "Story 1 of 5"). Not a control — scale the
+                    // text to fit rather than truncate to a cryptic "11 c…".
                     Text(model.summary)
                         .font(.footnote)
                         .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                        .allowsHitTesting(false)
+                        .accessibilityLabel("Current session: \(model.summary)")
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { showStats = true } label: {
