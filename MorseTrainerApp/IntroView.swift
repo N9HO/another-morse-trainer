@@ -130,8 +130,41 @@ struct IntroView: View {
                 .font(.subheadline)
                 .foregroundStyle(Theme.textSecondary)
                 .multilineTextAlignment(.center)
+            streakBadge
         }
         .padding(.top, 8)
+    }
+
+    /// Daily practice streak, shown only once the learner has an active streak
+    /// (issue #20). A gentle nudge to come back tomorrow without nagging an
+    /// absent or first-time user.
+    @ViewBuilder
+    private var streakBadge: some View {
+        let days = model.currentStreak
+        if days > 0 {
+            HStack(spacing: 6) {
+                Image(systemName: "flame.fill")
+                    .foregroundStyle(Theme.tealBright)
+                Text("\(days)-day streak")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.white)
+                if model.longestStreak > days {
+                    Text("· best \(model.longestStreak)")
+                        .font(.caption)
+                        .foregroundStyle(Theme.textSecondary)
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .background(Theme.navyElevated, in: Capsule())
+            .overlay(Capsule().strokeBorder(Theme.hairline, lineWidth: 1))
+            .padding(.top, 4)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(
+                model.longestStreak > days
+                    ? "\(days) day practice streak. Best ever \(model.longestStreak) days."
+                    : "\(days) day practice streak.")
+        }
     }
 
     // MARK: - Mode picker (tiles)

@@ -617,6 +617,57 @@ do {
     check("QRS slows the worked station", (seng.workingStation?.wpm ?? 99) < beforeWPM)
 }
 
+// Practice streak (consecutive-days motivation)
+print("\nPractice streak (issue #20):")
+do {
+    var cal = Calendar(identifier: .gregorian)
+    cal.timeZone = TimeZone(identifier: "UTC")!
+    func day(_ y: Int, _ m: Int, _ d: Int, _ h: Int = 12) -> Date {
+        cal.date(from: DateComponents(year: y, month: m, day: d, hour: h))!
+    }
+
+    var s = PracticeStreak()
+    check("a fresh streak reads zero", s.current == 0 && s.longest == 0)
+    check("display is zero before any practice", s.display(on: day(2026, 1, 1), calendar: cal) == 0)
+
+    check("first practice starts a 1-day streak",
+          s.record(on: day(2026, 1, 1), calendar: cal) == true && s.current == 1)
+    check("practicing again the same day is a no-op",
+          s.record(on: day(2026, 1, 1, 9), calendar: cal) == false && s.current == 1)
+    check("a late-evening same-day session still doesn't double-count",
+          s.record(on: day(2026, 1, 1, 23), calendar: cal) == false && s.current == 1)
+
+    check("the next day extends the streak",
+          s.record(on: day(2026, 1, 2), calendar: cal) == true && s.current == 2)
+    s.record(on: day(2026, 1, 3), calendar: cal)
+    check("a third consecutive day reaches 3", s.current == 3)
+    check("longest tracks the running best", s.longest == 3)
+
+    check("missing a full day resets the streak to 1",
+          s.record(on: day(2026, 1, 5), calendar: cal) == true && s.current == 1)
+    check("longest is preserved across a lapse", s.longest == 3)
+
+    // display() reflects the streak as it stands "today" without mutating it.
+    var d = PracticeStreak()
+    d.record(on: day(2026, 1, 10), calendar: cal)
+    d.record(on: day(2026, 1, 11), calendar: cal)   // current = 2
+    check("display shows the streak on the practice day",
+          d.display(on: day(2026, 1, 11), calendar: cal) == 2)
+    check("display keeps the streak alive the next day (still extendable)",
+          d.display(on: day(2026, 1, 12), calendar: cal) == 2)
+    check("display zeroes out once a full day is missed",
+          d.display(on: day(2026, 1, 13), calendar: cal) == 0)
+    check("display is read-only (current is unchanged)", d.current == 2)
+
+    do {
+        let data = try JSONEncoder().encode(d)
+        let restored = try JSONDecoder().decode(PracticeStreak.self, from: data)
+        check("streak survives a save/load round-trip", restored == d)
+    } catch {
+        check("streak encode/decode without throwing", false)
+    }
+}
+
 print("\n────────────────────────────")
 if failures == 0 {
     print("✅ All \(checks) checks passed.\n")
