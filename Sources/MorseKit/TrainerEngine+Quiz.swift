@@ -24,5 +24,8 @@ extension TrainerEngine: QuizSource {
                             unlocked: outcome.addedCharacter.map(String.init))
     }
 
-    public var summary: String { "\(activeCharacters.count) characters" }
+    public var summary: String {
+        let n = activeCharacters.count
+        return "\(n) char\(n == 1 ? "" : "s")"
+    }
 }
