@@ -1,23 +1,33 @@
 """Discord triage bot entry point.
 
-Watches the project's Discord and, when a bug report or feature request comes in,
-asks Claude to triage it and (if actionable) opens a clean GitHub issue, then
-replies in the thread with the result.
+When a bug report or feature request comes in, the bot triages it with Claude and
+opens a clean GitHub issue. If it needs more detail (repro steps, a screenshot), it
+opens a THREAD on the report, asks its question there, and watches that thread —
+re-reading the whole conversation (including any screenshots, which it views via
+Claude's vision) on every reply until it has enough to file, then files the issue or
+adds the new details as a comment.
 
-Two trigger modes (TRIGGER_MODE):
+Trigger modes (TRIGGER_MODE):
   - "react": a maintainer reacts to a message with TRIGGER_EMOJI (default 🐛).
-             Lowest noise / cheapest — recommended to start.
   - "auto":  every non-bot message in a watched channel is triaged.
+
+Thread follow-ups are watched in BOTH modes once a triage thread exists.
+
+Note: the thread -> issue mapping is kept in memory, so a bot restart forgets
+in-progress threads (the report can simply be re-triaged with a fresh 🐛).
 """
 
 from __future__ import annotations
 
+import base64
 import logging
+from dataclasses import dataclass
+from typing import Optional
 
 import discord
 
 from config import settings
-from github_client import create_issue, list_open_issues
+from github_client import comment_issue, create_issue, list_open_issues
 from triage import triage
 
 logging.basicConfig(
@@ -26,69 +36,255 @@ logging.basicConfig(
 )
 log = logging.getLogger("discord-triage")
 
+# Vision input limits.
+_ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/gif", "image/webp"}
+MAX_IMAGES = 4
+MAX_IMAGE_BYTES = 4_000_000
+THREAD_HISTORY = 50
+
 intents = discord.Intents.default()
-intents.message_content = True  # needed to read message text
+intents.message_content = True  # needed to read message text + attachments
 intents.reactions = True
 client = discord.Client(intents=intents)
 
 
+@dataclass
+class Pending:
+    """State for one in-progress triage thread."""
+
+    issue_number: Optional[int] = None
+
+
+# thread_id -> Pending
+pending: dict[int, Pending] = {}
+
+
 def _in_scope(channel_id: int) -> bool:
-    """True if we should act in this channel."""
     return not settings.watch_channel_ids or channel_id in settings.watch_channel_ids
 
 
-async def _process(message: discord.Message, explicit: bool = False) -> None:
-    """Triage one message and, if warranted, file an issue + reply.
-
-    `explicit` = a maintainer reacted with the trigger emoji. In that case we bias
-    toward filing and ALWAYS reply (silence on an explicit request is confusing).
-    """
-    author = message.author.display_name
-    content = (message.content or "").strip()
-    if not content:
-        if explicit:
-            await _reply(message, "I can't read any text on that message to triage. 🤔")
-        return
-
+async def _safe_open_issues() -> list[dict]:
     try:
-        open_issues = await list_open_issues()
+        return await list_open_issues()
     except Exception:
         log.exception("Failed to fetch open issues; proceeding without dedup")
-        open_issues = []
+        return []
 
-    verdict = await triage(author, content, open_issues, explicit=explicit)
-    log.info("Triaged message %s: kind=%s should_file=%s dup=%s (explicit=%s)",
-             message.id, verdict.kind, verdict.should_file, verdict.is_duplicate, explicit)
+
+# --- images -------------------------------------------------------------------
+
+
+async def _download_image(att: discord.Attachment) -> Optional[tuple[str, str]]:
+    """Return (media_type, base64) for an image attachment, or None if unusable."""
+    content_type = (att.content_type or "").split(";")[0].strip().lower()
+    if content_type not in _ALLOWED_IMAGE_TYPES:
+        return None
+    if att.size and att.size > MAX_IMAGE_BYTES:
+        log.info("Skipping oversized image %s (%d bytes)", att.filename, att.size)
+        return None
+    try:
+        data = await att.read()
+    except discord.HTTPException:
+        log.exception("Failed to download attachment %s", att.filename)
+        return None
+    return content_type, base64.standard_b64encode(data).decode("ascii")
+
+
+async def _images_from(messages: list[discord.Message]) -> list[tuple[str, str]]:
+    images: list[tuple[str, str]] = []
+    for message in messages:
+        for att in message.attachments:
+            if len(images) >= MAX_IMAGES:
+                return images
+            part = await _download_image(att)
+            if part:
+                images.append(part)
+    return images
+
+
+# --- thread gathering ---------------------------------------------------------
+
+
+async def _gather_thread(thread: discord.Thread) -> tuple[str, str, list[tuple[str, str]]]:
+    """Return (author, transcript, images) for the whole triage conversation."""
+    starter = thread.starter_message
+    if starter is None and thread.parent is not None:
+        try:
+            starter = await thread.parent.fetch_message(thread.id)
+        except discord.HTTPException:
+            starter = None
+
+    messages: list[discord.Message] = []
+    if starter is not None:
+        messages.append(starter)
+    try:
+        async for m in thread.history(limit=THREAD_HISTORY, oldest_first=True):
+            messages.append(m)
+    except discord.HTTPException:
+        log.exception("Failed to read thread history")
+
+    lines: list[str] = []
+    for m in messages:
+        who = m.author.display_name + (" [bot]" if m.author.bot else "")
+        text = (m.content or "").strip()
+        atts = " ".join(f"[image: {a.filename}]" for a in m.attachments)
+        body = " ".join(part for part in (text, atts) if part)
+        if body:
+            lines.append(f"{who}: {body}")
+
+    author = starter.author.display_name if starter else "unknown"
+    images = await _images_from(messages)
+    return author, "\n".join(lines), images
+
+
+async def _ensure_thread(message: discord.Message) -> Optional[discord.Thread]:
+    if isinstance(message.channel, discord.Thread):
+        return message.channel
+    name = (f"Triage: {(message.content or '').strip()}" or "Triage")[:90]
+    try:
+        return await message.create_thread(name=name, auto_archive_duration=1440)
+    except discord.HTTPException:
+        log.exception(
+            "Couldn't create a thread — the bot likely lacks the "
+            "'Create Public Threads' / 'Send Messages in Threads' permission."
+        )
+        return None
+
+
+# --- verdict application ------------------------------------------------------
+
+
+async def _say(channel: discord.abc.Messageable, text: str) -> None:
+    try:
+        await channel.send(text)
+    except discord.HTTPException:
+        log.exception("Failed to send message in Discord")
+
+
+async def _apply_verdict(thread: discord.Thread, verdict, key: int) -> None:
+    """Act on a verdict inside a triage thread (file, comment, or ask)."""
+    p = pending.setdefault(key, Pending())
 
     if verdict.is_duplicate and verdict.duplicate_of:
-        await _reply(message, f"Looks like a duplicate of #{verdict.duplicate_of}. 🔁")
+        await _say(thread, f"Looks like a duplicate of #{verdict.duplicate_of}. 🔁")
         return
 
-    if not verdict.should_file:
-        # On an explicit request, always explain why we're not filing.
-        # In auto mode, only nudge for borderline questions; stay silent on noise.
+    # Enough detail and not yet filed -> open the issue.
+    if verdict.should_file and p.issue_number is None:
+        try:
+            issue = await create_issue(verdict.title, verdict.body, verdict.labels)
+        except Exception:
+            log.exception("Failed to create issue")
+            await _say(thread, "I tried to log that but hit an error filing the issue. 😬")
+            return
+        p.issue_number = issue["number"]
+        await _say(
+            thread,
+            f"{verdict.reply or 'Logged it'} — opened #{issue['number']}: "
+            f"{issue['html_url']} ✅",
+        )
+        return
+
+    # Already filed -> record any new info as a comment.
+    if p.issue_number is not None:
+        if verdict.issue_update.strip():
+            try:
+                await comment_issue(
+                    p.issue_number, f"{verdict.issue_update}\n\n_Added via Discord._"
+                )
+                await _say(
+                    thread,
+                    f"{verdict.reply or 'Got it'} — updated #{p.issue_number}. ✅",
+                )
+                return
+            except Exception:
+                log.exception("Failed to comment on issue")
+        await _say(thread, verdict.reply or "👍")
+        return
+
+    # Not filed yet, not a duplicate -> asking for more info (or declining).
+    await _say(thread, verdict.reply or "Thanks — could you add a bit more detail?")
+
+
+# --- entry flows --------------------------------------------------------------
+
+
+async def _start_triage(message: discord.Message, explicit: bool) -> None:
+    author = message.author.display_name
+    content = (message.content or "").strip()
+    images = await _images_from([message])
+
+    if not content and not images:
         if explicit:
-            await _reply(message, verdict.reply or "I don't think this needs an issue. 👍")
-        elif verdict.kind == "question" and verdict.reply:
-            await _reply(message, verdict.reply)
+            await message.reply(
+                "I can't read any text or image on that message to triage. 🤔",
+                mention_author=False,
+            )
         return
 
-    try:
-        issue = await create_issue(verdict.title, verdict.body, verdict.labels)
-    except Exception:
-        log.exception("Failed to create issue")
-        await _reply(message, "I tried to log that but hit an error filing the issue. 😬")
+    open_issues = await _safe_open_issues()
+    verdict = await triage(author, content, open_issues, explicit=explicit, images=images)
+    log.info(
+        "Start triage msg=%s kind=%s should_file=%s needs_info=%s dup=%s explicit=%s",
+        message.id, verdict.kind, verdict.should_file,
+        verdict.needs_more_info, verdict.is_duplicate, explicit,
+    )
+
+    if verdict.is_duplicate and verdict.duplicate_of:
+        await message.reply(
+            f"Looks like a duplicate of #{verdict.duplicate_of}. 🔁", mention_author=False
+        )
         return
 
-    note = verdict.reply or "Logged it"
-    await _reply(message, f"{note} — opened #{issue['number']}: {issue['html_url']} ✅")
+    # Decide whether to engage at all. In auto mode we stay silent on noise.
+    engage = verdict.should_file or verdict.needs_more_info or verdict.kind == "question"
+    if not engage and not explicit:
+        return
+
+    thread = await _ensure_thread(message)
+    if thread is None:
+        # No thread permission: degrade to one-shot (can't watch follow-ups).
+        if verdict.should_file:
+            try:
+                issue = await create_issue(verdict.title, verdict.body, verdict.labels)
+                await message.reply(
+                    f"{verdict.reply or 'Logged it'} — opened #{issue['number']}: "
+                    f"{issue['html_url']} ✅",
+                    mention_author=False,
+                )
+            except Exception:
+                log.exception("Failed to create issue")
+                await message.reply("I hit an error filing the issue. 😬", mention_author=False)
+        else:
+            await message.reply(verdict.reply or "👍", mention_author=False)
+        return
+
+    pending[thread.id] = Pending()
+    await _apply_verdict(thread, verdict, thread.id)
 
 
-async def _reply(message: discord.Message, text: str) -> None:
-    try:
-        await message.reply(text, mention_author=False)
-    except discord.HTTPException:
-        log.exception("Failed to reply in Discord")
+async def _continue_triage(thread: discord.Thread) -> None:
+    p = pending.get(thread.id)
+    if p is None:
+        return
+    author, transcript, images = await _gather_thread(thread)
+    open_issues = await _safe_open_issues()
+    verdict = await triage(
+        author,
+        transcript,
+        open_issues,
+        explicit=True,
+        images=images,
+        has_issue=p.issue_number is not None,
+    )
+    log.info(
+        "Continue triage thread=%s kind=%s should_file=%s has_issue=%s",
+        thread.id, verdict.kind, verdict.should_file, p.issue_number is not None,
+    )
+    await _apply_verdict(thread, verdict, thread.id)
+
+
+# --- events -------------------------------------------------------------------
 
 
 @client.event
@@ -99,11 +295,15 @@ async def on_ready() -> None:
 
 @client.event
 async def on_message(message: discord.Message) -> None:
-    if settings.trigger_mode != "auto":
+    if message.author.bot:
         return
-    if message.author.bot or not _in_scope(message.channel.id):
+    # A reply inside a triage thread we're tracking — handle in any mode.
+    if isinstance(message.channel, discord.Thread) and message.channel.id in pending:
+        await _continue_triage(message.channel)
         return
-    await _process(message)
+    # A fresh message in a watched channel — only in auto mode.
+    if settings.trigger_mode == "auto" and _in_scope(message.channel.id):
+        await _start_triage(message, explicit=False)
 
 
 @client.event
@@ -125,7 +325,7 @@ async def on_raw_reaction_add(payload: discord.RawReactionActionEvent) -> None:
         return
     if message.author.bot:
         return
-    await _process(message, explicit=True)
+    await _start_triage(message, explicit=True)
 
 
 def main() -> None:

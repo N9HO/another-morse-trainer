@@ -55,6 +55,23 @@ class Verdict(BaseModel):
     reply: str = Field(
         description="A short, friendly one-line reply to post back in Discord."
     )
+    needs_more_info: bool = Field(
+        default=False,
+        description=(
+            "True if this is a real bug/feature but you don't yet have enough detail "
+            "to file a good issue and are asking the reporter for more (repro steps, "
+            "platform, a screenshot, etc.). In that case 'reply' should be the question."
+        ),
+    )
+    issue_update: str = Field(
+        default="",
+        description=(
+            "When an issue has ALREADY been filed for this thread and the latest reply "
+            "adds new information (details, a screenshot you can describe, clarification), "
+            "a concise Markdown note to post as a comment on that issue. Empty if there "
+            "is nothing new to record."
+        ),
+    )
 
 
 # Static instructions — kept stable so the prefix can be prompt-cached.
@@ -63,17 +80,29 @@ an iOS/macOS app (Swift) that teaches Morse code: it has practice drills, a QSO 
 simulator, a confusion matrix, timing/Farnsworth settings, and progressive character \
 training.
 
-Your job: read one message from the project's Discord and decide whether it should \
+Your job: read a report from the project's Discord and decide whether it should \
 become a GitHub issue, then produce a clean, well-structured issue if so.
 
+You may be given a SINGLE message or an ongoing CONVERSATION (the original report \
+plus follow-up replies and your own earlier questions). Screenshots may be attached \
+as images — look at them and fold the relevant details into the issue. When given a \
+conversation, base your verdict on ALL of it together, not just the last line.
+
 Guidelines:
-- Classify the message as exactly one of: bug, feature, question, noise.
+- Classify the report as exactly one of: bug, feature, question, noise.
   * bug      = something is broken or behaving wrong.
   * feature  = a request for new or changed functionality.
   * question = a support/usage question that should be answered, not filed.
   * noise    = chatter, greetings, off-topic, or empty content.
-- Set should_file = true ONLY for genuine, actionable bugs or feature requests.
-  Questions and noise are never filed.
+- Set should_file = true ONLY for genuine, actionable bugs or feature requests that \
+you have ENOUGH detail to write a useful issue for.
+- If it's a real bug/feature but too thin to file well, set should_file = false and \
+needs_more_info = true, and make 'reply' a specific question for the missing detail \
+(repro steps, platform/OS, a screenshot, expected vs actual). Once the follow-ups \
+give you enough, set should_file = true.
+- Questions and noise are never filed.
+- If a screenshot is attached, describe what it shows (error text, screen, UI state) \
+in the issue body — the maintainer can't see the image, only your description.
 - You are given the list of currently OPEN issues (number + title). If this report is \
 clearly already covered by one of them, set is_duplicate = true and duplicate_of to its \
 number, and should_file = false.
@@ -99,24 +128,46 @@ def _format_open_issues(open_issues: list[dict]) -> str:
 
 
 def _triage_sync(
-    author: str, content: str, open_issues: list[dict], explicit: bool = False
+    author: str,
+    content: str,
+    open_issues: list[dict],
+    explicit: bool = False,
+    images: Optional[list[tuple[str, str]]] = None,
+    has_issue: bool = False,
 ) -> Verdict:
     explicit_note = (
-        "\n\nNOTE: A maintainer explicitly flagged this message for triage. "
-        "Treat it as worth filing (should_file = true) unless it is a duplicate of an "
-        "open issue or clearly not a bug/feature request (e.g. pure chatter). If it is "
-        "a real but thin bug/feature, still file it and add the 'needs-info' label "
-        "rather than declining."
+        "\n\nNOTE: A maintainer explicitly flagged this for triage. Treat it as worth "
+        "pursuing unless it is a duplicate or clearly not a bug/feature (e.g. pure "
+        "chatter). If it's a real bug/feature with enough detail, file it; if it's real "
+        "but too thin, set needs_more_info and ask for the missing detail rather than "
+        "declining outright."
         if explicit
         else ""
     )
+    issue_note = (
+        "\n\nNOTE: An issue has ALREADY been filed for this thread. Do not try to file "
+        "again — instead, if the latest replies add new information, put a concise "
+        "comment in 'issue_update' (otherwise leave it empty)."
+        if has_issue
+        else ""
+    )
     user_text = (
-        f"Discord message from {author}:\n"
+        f"Discord report from {author}:\n"
         f"\"\"\"\n{content}\n\"\"\"\n\n"
         f"Currently open issues (for duplicate detection):\n"
         f"{_format_open_issues(open_issues)}"
         f"{explicit_note}"
+        f"{issue_note}"
     )
+
+    blocks: list[dict] = [{"type": "text", "text": user_text}]
+    for media_type, data in images or []:
+        blocks.append(
+            {
+                "type": "image",
+                "source": {"type": "base64", "media_type": media_type, "data": data},
+            }
+        )
 
     response = _client.messages.parse(
         model=settings.model,
@@ -129,7 +180,7 @@ def _triage_sync(
                 "cache_control": {"type": "ephemeral"},
             }
         ],
-        messages=[{"role": "user", "content": user_text}],
+        messages=[{"role": "user", "content": blocks}],
         output_format=Verdict,
     )
 
@@ -150,13 +201,21 @@ def _triage_sync(
 
 
 async def triage(
-    author: str, content: str, open_issues: list[dict], explicit: bool = False
+    author: str,
+    content: str,
+    open_issues: list[dict],
+    explicit: bool = False,
+    images: Optional[list[tuple[str, str]]] = None,
+    has_issue: bool = False,
 ) -> Verdict:
-    """Triage a single message without blocking the event loop.
+    """Triage a report (single message or full thread transcript) off the event loop.
 
-    `explicit` = a maintainer directly asked for this (e.g. reacted with the trigger
-    emoji), which biases toward filing and always produces a reply.
+    `explicit`  = a maintainer directly asked for this (e.g. reacted with the trigger
+                  emoji), which biases toward pursuing it.
+    `images`    = list of (media_type, base64_data) screenshots to look at.
+    `has_issue` = an issue was already filed for this thread, so produce issue_update
+                  comments instead of filing again.
     """
     return await asyncio.to_thread(
-        _triage_sync, author, content, open_issues, explicit
+        _triage_sync, author, content, open_issues, explicit, images, has_issue
     )

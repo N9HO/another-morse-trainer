@@ -21,10 +21,19 @@ Discord message ──▶ Claude triage ──▶ GitHub issue ──▶ reply i
 - **Dedupes** against currently open issues before filing.
 - **Triages**: suggests labels (`bug` / `enhancement` / `needs-info`) and a
   severity, and tags every issue with a `from-discord` label.
-- **Closes the loop**: replies in Discord with the issue link, a duplicate
-  pointer, or (for questions) a short answer nudge.
+- **Holds a conversation**: when a report is too thin, it opens a **thread**,
+  asks for the missing detail (repro steps, platform, a **screenshot**), and
+  watches that thread. On each reply it re-reads the whole conversation —
+  **viewing any attached screenshots via Claude's vision** — until it has enough
+  to file. Once filed, further details are added to the issue as comments.
+- **Closes the loop**: replies with the issue link, a duplicate pointer, or a
+  follow-up question.
 
 Structured outputs (a Pydantic schema) guarantee Claude's verdict always parses.
+
+> The thread → issue mapping is kept **in memory**, so a bot restart forgets
+> in-progress threads. That's fine in practice — just re-trigger the report with
+> a fresh 🐛 and dedup keeps it from filing twice.
 
 ## Trigger modes
 
@@ -44,8 +53,13 @@ Scope it to specific channels with `WATCH_CHANNEL_IDS` (comma-separated IDs).
 2. **Bot** → copy the **token** (→ `DISCORD_BOT_TOKEN`).
 3. Under **Privileged Gateway Intents**, enable **Message Content Intent**.
 4. **OAuth2 → URL Generator**: scope `bot`, permissions *Read Messages/View
-   Channels*, *Read Message History*, *Send Messages*, *Add Reactions*. Open the
-   URL to invite the bot to your server.
+   Channels*, *Read Message History*, *Send Messages*, *Add Reactions*, plus
+   **Create Public Threads** and **Send Messages in Threads** (required for the
+   follow-up conversation flow). Open the URL to invite the bot to your server.
+
+> If the bot lacks the thread permissions it falls back to a single-shot reply
+> in the channel and can't gather follow-up info — so make sure those two are
+> granted (re-run the invite URL to update permissions if needed).
 
 ### 2. Create a GitHub token
 A fine-grained PAT scoped to `n9ho/another-morse-trainer` with **Issues:

@@ -49,9 +49,23 @@ def _create_issue_sync(title: str, body: str, labels: list[str]) -> dict:
     return {"number": data["number"], "html_url": data["html_url"]}
 
 
+def _comment_issue_sync(number: int, body: str) -> dict:
+    """Add a comment to an existing issue. Returns {html_url}."""
+    url = f"{_API}/repos/{settings.github_repo}/issues/{number}/comments"
+    with httpx.Client(timeout=15.0) as client:
+        resp = client.post(url, headers=_HEADERS, json={"body": body})
+        resp.raise_for_status()
+        data = resp.json()
+    return {"html_url": data["html_url"]}
+
+
 async def list_open_issues(limit: int = 50) -> list[dict]:
     return await asyncio.to_thread(_list_open_issues_sync, limit)
 
 
 async def create_issue(title: str, body: str, labels: list[str]) -> dict:
     return await asyncio.to_thread(_create_issue_sync, title, body, labels)
+
+
+async def comment_issue(number: int, body: str) -> dict:
+    return await asyncio.to_thread(_comment_issue_sync, number, body)
