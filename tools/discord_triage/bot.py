@@ -289,8 +289,9 @@ async def _continue_triage(thread: discord.Thread) -> None:
 
 @client.event
 async def on_ready() -> None:
-    log.info("Logged in as %s (mode=%s, repo=%s)",
-             client.user, settings.trigger_mode, settings.github_repo)
+    log.info("Logged in as %s (mode=%s, emojis=%s, repo=%s)",
+             client.user, settings.trigger_mode,
+             " ".join(sorted(settings.trigger_emojis)), settings.github_repo)
 
 
 @client.event
@@ -310,7 +311,7 @@ async def on_message(message: discord.Message) -> None:
 async def on_raw_reaction_add(payload: discord.RawReactionActionEvent) -> None:
     if settings.trigger_mode != "react":
         return
-    if str(payload.emoji) != settings.trigger_emoji:
+    if str(payload.emoji) not in settings.trigger_emojis:
         return
     if not _in_scope(payload.channel_id):
         return

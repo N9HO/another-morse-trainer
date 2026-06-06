@@ -27,16 +27,26 @@ def _csv_ints(name: str) -> set[int]:
     return {int(part) for part in raw.split(",") if part.strip()}
 
 
+def _emoji_set(raw: str) -> frozenset[str]:
+    # Accept several emojis separated by commas and/or whitespace; any of them
+    # triggers a triage. Emojis contain neither commas nor spaces, so splitting
+    # on both is safe. Falls back to 🐛 if nothing valid is given.
+    parts = [p for p in raw.replace(",", " ").split() if p]
+    return frozenset(parts) or frozenset({"🐛"})
+
+
 @dataclass(frozen=True)
 class Settings:
     # --- Discord ---
     discord_token: str
     # Channel IDs the bot listens in. Empty = every channel it can see.
     watch_channel_ids: set[int]
-    # "react": only triage a message when someone reacts with TRIGGER_EMOJI.
+    # "react": only triage a message when someone reacts with one of the trigger
+    #          emojis (the bot ignores everything else).
     # "auto":  triage every (non-bot) message posted in a watched channel.
     trigger_mode: str
-    trigger_emoji: str
+    # One or more emojis; reacting with any of them triggers triage.
+    trigger_emojis: frozenset[str]
 
     # --- Anthropic ---
     anthropic_api_key: str
@@ -61,7 +71,7 @@ class Settings:
             discord_token=_required("DISCORD_BOT_TOKEN"),
             watch_channel_ids=_csv_ints("WATCH_CHANNEL_IDS"),
             trigger_mode=trigger_mode,
-            trigger_emoji=os.environ.get("TRIGGER_EMOJI", "🐛"),
+            trigger_emojis=_emoji_set(os.environ.get("TRIGGER_EMOJI", "🐛")),
             anthropic_api_key=_required("ANTHROPIC_API_KEY"),
             model=os.environ.get("ANTHROPIC_MODEL", "claude-opus-4-8"),
             github_token=_required("GITHUB_TOKEN"),
