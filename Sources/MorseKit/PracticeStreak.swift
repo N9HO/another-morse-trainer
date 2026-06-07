@@ -23,6 +23,19 @@ public struct PracticeStreak: Codable, Sendable, Equatable {
         self.lastPracticeDay = lastPracticeDay
     }
 
+    /// Streak lengths worth celebrating with a milestone badge.
+    public static let milestones = [3, 7, 14, 30, 60, 100, 365]
+
+    /// Whether `day` is exactly a celebrated milestone (use to fire a one-time
+    /// celebration the day it's reached).
+    public static func isMilestone(_ day: Int) -> Bool { milestones.contains(day) }
+
+    /// The highest milestone reached at `day`, or nil if none yet — gives the
+    /// streak badge its tier.
+    public static func milestone(forDay day: Int) -> Int? {
+        milestones.last { $0 <= day }
+    }
+
     /// Record that the learner practiced at `date`. Idempotent within a day:
     /// the first practice of a day advances the streak, later ones are no-ops.
     ///
