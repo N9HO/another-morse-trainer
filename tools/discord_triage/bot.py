@@ -17,8 +17,10 @@ Follow-ups in a triage thread: in "auto" mode each reply is folded in
 automatically; in "react" mode, react again with the trigger emoji in the thread
 to fold in the latest replies (the same gesture that starts a triage).
 
-Note: the thread -> issue mapping is kept in memory, so a bot restart forgets
-in-progress threads (the report can simply be re-triaged with a fresh 🐛).
+Note: the thread -> issue mapping is kept in memory. After a restart the bot
+rebuilds it on demand from GitHub via the hidden `discord-thread:<id>` marker it
+stamps into every issue, so follow-ups on already-filed threads still land. Only
+threads that hadn't filed anything yet are truly forgotten (re-triage with a 🐛).
 """
 
 from __future__ import annotations
@@ -31,7 +33,12 @@ from typing import Optional
 import discord
 
 from config import settings
-from github_client import comment_issue, create_issue, list_open_issues
+from github_client import (
+    comment_issue,
+    create_issue,
+    find_thread_issues,
+    list_open_issues,
+)
 from triage import triage
 
 logging.basicConfig(
@@ -66,6 +73,10 @@ class Pending:
 # thread_id -> Pending
 pending: dict[int, Pending] = {}
 
+# Threads we've checked GitHub for and found no filed issues, so we don't search
+# again on every reply. Cleared implicitly once a thread becomes tracked.
+_unrecoverable_threads: set[int] = set()
+
 
 def _in_scope(channel_id: int) -> bool:
     return not settings.watch_channel_ids or channel_id in settings.watch_channel_ids
@@ -77,6 +88,35 @@ async def _safe_open_issues() -> list[dict]:
     except Exception:
         log.exception("Failed to fetch open issues; proceeding without dedup")
         return []
+
+
+async def _recover_thread(thread: discord.Thread) -> bool:
+    """Rebuild a forgotten thread's issue list from GitHub (e.g. after a restart).
+
+    The in-memory `pending` map is lost on restart, so a follow-up in a thread we
+    already filed issues for would otherwise be dropped. We find those issues via
+    the hidden `discord-thread:<id>` marker stamped in their bodies and re-register
+    the thread. Returns True if the thread is (now) tracked. A miss is cached so we
+    don't re-query GitHub on every subsequent reply.
+    """
+    if thread.id in pending:
+        return True
+    if thread.id in _unrecoverable_threads:
+        return False
+    try:
+        issues = await find_thread_issues(thread.id)
+    except Exception:
+        log.exception("Failed to recover thread %s from GitHub", thread.id)
+        return False
+    if not issues:
+        _unrecoverable_threads.add(thread.id)
+        return False
+    pending[thread.id] = Pending(issues=issues)
+    log.info(
+        "Recovered thread=%s with issues=%s",
+        thread.id, [i["number"] for i in issues],
+    )
+    return True
 
 
 # --- images -------------------------------------------------------------------
@@ -279,6 +319,7 @@ async def _start_triage(message: discord.Message, explicit: bool) -> None:
         return
 
     pending[thread.id] = Pending()
+    _unrecoverable_threads.discard(thread.id)
     await _apply_verdict(thread, verdict, thread.id)
 
 
@@ -317,15 +358,19 @@ async def on_ready() -> None:
 async def on_message(message: discord.Message) -> None:
     if message.author.bot:
         return
-    # A reply inside a triage thread we're tracking.
-    if isinstance(message.channel, discord.Thread) and message.channel.id in pending:
-        # In "auto" mode, fold in every reply as it arrives. In "react" mode, wait
-        # for the trigger emoji before acting (handled in on_raw_reaction_add).
-        if settings.trigger_mode == "auto":
-            await _continue_triage(message.channel)
+    channel = message.channel
+    # A reply inside a triage thread. In "auto" mode, fold in every reply as it
+    # arrives; in "react" mode, wait for the trigger emoji (on_raw_reaction_add).
+    if isinstance(channel, discord.Thread):
+        if settings.trigger_mode != "auto":
+            return
+        if channel.id in pending or (
+            _in_scope(channel.parent_id) and await _recover_thread(channel)
+        ):
+            await _continue_triage(channel)
         return
     # A fresh message in a watched channel — only in auto mode.
-    if settings.trigger_mode == "auto" and _in_scope(message.channel.id):
+    if settings.trigger_mode == "auto" and _in_scope(channel.id):
         await _start_triage(message, explicit=False)
 
 
@@ -340,14 +385,19 @@ async def on_raw_reaction_add(payload: discord.RawReactionActionEvent) -> None:
     if channel is None:
         return
 
-    # A reaction inside a thread we're already tracking -> fold in the latest
-    # follow-ups (a refinement), rather than starting a brand-new triage.
-    if isinstance(channel, discord.Thread) and channel.id in pending:
-        await _continue_triage(channel)
+    if isinstance(channel, discord.Thread):
+        # Reacting in a triage thread folds in the latest follow-ups. Recover the
+        # thread's state from GitHub first if we've forgotten it (e.g. a restart).
+        if channel.id in pending or await _recover_thread(channel):
+            await _continue_triage(channel)
+            return
+        # Unknown thread: fall through and triage the reacted message itself,
+        # scoping against the thread's parent channel.
+        if not _in_scope(channel.parent_id):
+            return
+    elif not _in_scope(payload.channel_id):
         return
 
-    if not _in_scope(payload.channel_id):
-        return
     try:
         message = await channel.fetch_message(payload.message_id)
     except discord.HTTPException:

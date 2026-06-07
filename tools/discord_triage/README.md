@@ -37,9 +37,11 @@ Discord message ──▶ Claude triage ──▶ GitHub issue ──▶ reply i
 
 Structured outputs (a Pydantic schema) guarantee Claude's verdict always parses.
 
-> The thread → issue mapping is kept **in memory**, so a bot restart forgets
-> in-progress threads. That's fine in practice — just re-trigger the report with
-> a fresh 🐛 and dedup keeps it from filing twice.
+> The thread → issue mapping is kept **in memory**, but the bot rebuilds it from
+> GitHub after a restart by searching for the hidden `discord-thread:<id>` marker
+> it stamps into every issue — so follow-ups on already-filed threads keep landing
+> on the right issue. Only threads that hadn't filed anything yet are forgotten;
+> just re-trigger those with a fresh 🐛 (dedup keeps it from filing twice).
 
 ## Trigger modes
 

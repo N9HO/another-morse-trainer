@@ -59,6 +59,29 @@ def _comment_issue_sync(number: int, body: str) -> dict:
     return {"html_url": data["html_url"]}
 
 
+def _find_thread_issues_sync(thread_id: int) -> list[dict]:
+    """Find issues stamped with this Discord thread id, as [{number, title}].
+
+    Each issue the bot files embeds a hidden `<!-- discord-thread:<id> -->` marker.
+    This lets the bot rebuild a thread's issue list from GitHub after a restart
+    (the in-memory mapping is otherwise lost). Uses the search API, so there can be
+    a short indexing delay before a freshly filed issue is found. PRs are filtered
+    out; both open and closed issues are returned so a reopened thread still resolves.
+    """
+    marker = f"discord-thread:{thread_id}"
+    url = f"{_API}/search/issues"
+    params = {"q": f'repo:{settings.github_repo} in:body "{marker}"', "per_page": "100"}
+    with httpx.Client(timeout=15.0) as client:
+        resp = client.get(url, headers=_HEADERS, params=params)
+        resp.raise_for_status()
+        data = resp.json()
+    return [
+        {"number": item["number"], "title": item["title"]}
+        for item in data.get("items", [])
+        if "pull_request" not in item
+    ]
+
+
 async def list_open_issues(limit: int = 50) -> list[dict]:
     return await asyncio.to_thread(_list_open_issues_sync, limit)
 
@@ -69,3 +92,7 @@ async def create_issue(title: str, body: str, labels: list[str]) -> dict:
 
 async def comment_issue(number: int, body: str) -> dict:
     return await asyncio.to_thread(_comment_issue_sync, number, body)
+
+
+async def find_thread_issues(thread_id: int) -> list[dict]:
+    return await asyncio.to_thread(_find_thread_issues_sync, thread_id)
