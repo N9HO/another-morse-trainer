@@ -142,12 +142,17 @@ struct IntroView: View {
     private var streakBadge: some View {
         let days = model.currentStreak
         if days > 0 {
+            let milestone = AppModel.milestoneTier(forDay: days)
             HStack(spacing: 6) {
                 Image(systemName: "flame.fill")
-                    .foregroundStyle(Theme.tealBright)
+                    .foregroundStyle(milestone == nil ? Theme.tealBright : .orange)
                 Text("\(days)-day streak")
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.white)
+                if let milestone {
+                    Text(milestone.emoji)
+                        .font(.subheadline)
+                }
                 if model.longestStreak > days {
                     Text("· best \(model.longestStreak)")
                         .font(.caption)
@@ -157,14 +162,18 @@ struct IntroView: View {
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
             .background(Theme.navyElevated, in: Capsule())
-            .overlay(Capsule().strokeBorder(Theme.hairline, lineWidth: 1))
+            .overlay(Capsule().strokeBorder(milestone == nil ? Theme.hairline : Color.orange.opacity(0.5), lineWidth: 1))
             .padding(.top, 4)
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel(
-                model.longestStreak > days
-                    ? "\(days) day practice streak. Best ever \(model.longestStreak) days."
-                    : "\(days) day practice streak.")
+            .accessibilityLabel(streakAccessibilityLabel(days: days))
         }
+    }
+
+    private func streakAccessibilityLabel(days: Int) -> String {
+        var label = "\(days) day practice streak."
+        if let m = AppModel.milestoneTier(forDay: days) { label += " \(m.day)-day milestone reached." }
+        if model.longestStreak > days { label += " Best ever \(model.longestStreak) days." }
+        return label
     }
 
     // MARK: - Mode picker (tiles)

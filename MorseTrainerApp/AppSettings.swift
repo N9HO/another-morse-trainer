@@ -238,6 +238,12 @@ struct AppSettings: Codable, Equatable {
     var farnsworth: Bool = false
     var effectiveWpm: Double = 18
 
+    // Reminders
+    /// A daily local notification nudging the learner to keep their streak alive.
+    var dailyReminderEnabled: Bool = false
+    /// Local hour (0–23) the reminder fires.
+    var dailyReminderHour: Int = 19
+
     // Learning
     var proficiency: Proficiency = .none
     var ttrThreshold: Double = 1.0      // seconds; "fast enough" bar for mastery
@@ -332,6 +338,7 @@ struct AppSettings: Codable, Equatable {
 extension AppSettings {
     enum CodingKeys: String, CodingKey {
         case toneFrequency, wpm, farnsworth, effectiveWpm, proficiency, ttrThreshold
+        case dailyReminderEnabled, dailyReminderHour
         case maxAnswerChoices, selectedPunctuation
         case learningMode, practiceDuration
         case listenContent, listenGap, wordTier, voiceResponse
@@ -351,6 +358,9 @@ extension AppSettings {
         s.effectiveWpm = try c.decodeIfPresent(Double.self, forKey: .effectiveWpm) ?? s.effectiveWpm
         s.proficiency = try c.decodeIfPresent(Proficiency.self, forKey: .proficiency) ?? s.proficiency
         s.ttrThreshold = try c.decodeIfPresent(Double.self, forKey: .ttrThreshold) ?? s.ttrThreshold
+        s.dailyReminderEnabled = try c.decodeIfPresent(Bool.self, forKey: .dailyReminderEnabled) ?? s.dailyReminderEnabled
+        let drh = try c.decodeIfPresent(Int.self, forKey: .dailyReminderHour) ?? s.dailyReminderHour
+        s.dailyReminderHour = min(max(drh, 0), 23)
         let mac = try c.decodeIfPresent(Int.self, forKey: .maxAnswerChoices) ?? s.maxAnswerChoices
         s.maxAnswerChoices = min(max(mac, AppSettings.answerChoiceRange.lowerBound),
                                  AppSettings.answerChoiceRange.upperBound)

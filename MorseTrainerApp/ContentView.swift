@@ -974,6 +974,26 @@ struct ContentView: View {
                     .foregroundStyle(.secondary)
             }
 
+            if let milestone = model.newMilestone {
+                let tier = AppModel.milestoneTier(forDay: milestone)
+                VStack(spacing: 4) {
+                    Text(tier?.emoji ?? "🎉").font(.system(size: 40))
+                    Text("\(milestone)-day streak!")
+                        .font(.title3).bold()
+                        .foregroundStyle(.orange)
+                    Text("New milestone reached — keep it going.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity)
+                .padding()
+                .background(Color.orange.opacity(0.12),
+                            in: RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous)
+                    .strokeBorder(Color.orange.opacity(0.4), lineWidth: 1))
+                .accessibilityElement(children: .combine)
+            }
+
             VStack(spacing: 14) {
                 if s.mode == .qso {
                     summaryRow("QSOs logged", "\(model.qsoCount)")

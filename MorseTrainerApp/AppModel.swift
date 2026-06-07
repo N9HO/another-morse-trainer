@@ -225,6 +225,28 @@ final class AppModel: ObservableObject {
     var currentStreak: Int { streak.display(on: Date()) }
     /// Best streak ever reached — kept even after a lapse.
     var longestStreak: Int { streak.longest }
+    /// Set to the milestone day when one is freshly reached this session, for a
+    /// one-time celebration in the summary. Cleared when the next session starts.
+    @Published var newMilestone: Int?
+
+    /// A reached streak milestone and the emoji that celebrates it.
+    struct MilestoneTier { let day: Int; let emoji: String }
+
+    /// The highest milestone reached at `days`, with its badge emoji (nil if none).
+    static func milestoneTier(forDay days: Int) -> MilestoneTier? {
+        guard let m = PracticeStreak.milestone(forDay: days) else { return nil }
+        let emoji: String
+        switch m {
+        case 365: emoji = "👑"
+        case 100: emoji = "🏆"
+        case 60:  emoji = "💎"
+        case 30:  emoji = "🏅"
+        case 14:  emoji = "⚡️"
+        case 7:   emoji = "⭐️"
+        default:  emoji = "🔥"   // 3-day
+        }
+        return MilestoneTier(day: m, emoji: emoji)
+    }
 
     // MARK: - Session history (issue #19)
 
@@ -259,6 +281,10 @@ final class AppModel: ObservableObject {
         streak = AppModel.loadStreak()    // assigning in init doesn't fire didSet
         history = AppModel.loadHistory()
         summary = charLadder.summary
+        // Re-arm the daily reminder in case pending requests were cleared.
+        if settings.dailyReminderEnabled {
+            PracticeReminders.schedule(hour: settings.dailyReminderHour)
+        }
     }
 
     private var source: QuizSource {
@@ -1029,6 +1055,7 @@ final class AppModel: ObservableObject {
         sessionCharCorrect = [:]
         sessionCharTTRs = [:]
         lastSessionRecord = nil
+        newMilestone = nil
         sessionTimer?.invalidate()
         sessionTimer = nil
 
@@ -1650,7 +1677,37 @@ final class AppModel: ObservableObject {
     /// cheap to call on every answered drill.
     private func markPracticedToday() {
         var s = streak
-        if s.record(on: Date()) { streak = s }   // only mutate (and persist) on the day's first practice
+        let before = s.current
+        if s.record(on: Date()) {            // only mutate (and persist) on the day's first practice
+            streak = s
+            if s.current > before, PracticeStreak.isMilestone(s.current) {
+                newMilestone = s.current     // celebrated in the session summary
+                Haptics.success()
+            }
+        }
+    }
+
+    // MARK: - Daily reminder (issue #20 follow-up)
+
+    /// Turn the daily streak reminder on/off. Enabling asks for notification
+    /// permission first; if it's denied we leave the setting off.
+    func setDailyReminder(enabled: Bool) {
+        if enabled {
+            PracticeReminders.requestAuthorization { [weak self] granted in
+                guard let self else { return }
+                self.settings.dailyReminderEnabled = granted   // didSet persists
+                if granted { PracticeReminders.schedule(hour: self.settings.dailyReminderHour) }
+            }
+        } else {
+            settings.dailyReminderEnabled = false
+            PracticeReminders.cancel()
+        }
+    }
+
+    /// Change the hour the reminder fires, rescheduling if it's enabled.
+    func setDailyReminderHour(_ hour: Int) {
+        settings.dailyReminderHour = hour
+        if settings.dailyReminderEnabled { PracticeReminders.schedule(hour: hour) }
     }
 
     // MARK: - Persistence (session history)

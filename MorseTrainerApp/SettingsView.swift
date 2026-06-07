@@ -111,6 +111,28 @@ struct SettingsView: View {
                 .listRowBackground(Theme.navyElevated)
 
                 Section {
+                    Toggle("Daily reminder", isOn: Binding(
+                        get: { model.settings.dailyReminderEnabled },
+                        set: { model.setDailyReminder(enabled: $0) }
+                    ))
+                    if model.settings.dailyReminderEnabled {
+                        Picker("Remind me at", selection: Binding(
+                            get: { model.settings.dailyReminderHour },
+                            set: { model.setDailyReminderHour($0) }
+                        )) {
+                            ForEach(0..<24, id: \.self) { h in
+                                Text(hourLabel(h)).tag(h)
+                            }
+                        }
+                    }
+                } header: {
+                    Text("Reminders")
+                } footer: {
+                    Text("A gentle daily nudge to practice so your streak stays alive. You can change this anytime in iOS Settings → Notifications.")
+                }
+                .listRowBackground(Theme.navyElevated)
+
+                Section {
                     ForEach(AppSettings.availablePunctuation, id: \.symbol) { entry in
                         Toggle(isOn: punctuationBinding(entry.symbol)) {
                             HStack {
@@ -327,6 +349,14 @@ struct SettingsView: View {
                 else { model.settings.selectedPunctuation.remove(symbol) }
             }
         )
+    }
+
+    /// A localized clock label for a 24-hour value, e.g. 19 → "7:00 PM".
+    private func hourLabel(_ hour: Int) -> String {
+        var c = DateComponents()
+        c.hour = hour
+        let date = Calendar.current.date(from: c) ?? Date()
+        return date.formatted(date: .omitted, time: .shortened)
     }
 
     private func sliderRow(title: String,

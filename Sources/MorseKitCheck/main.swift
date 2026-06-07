@@ -666,6 +666,17 @@ do {
     } catch {
         check("streak encode/decode without throwing", false)
     }
+
+    // Milestones.
+    check("3, 7, 30, 100 are milestones",
+          PracticeStreak.isMilestone(3) && PracticeStreak.isMilestone(7)
+          && PracticeStreak.isMilestone(30) && PracticeStreak.isMilestone(100))
+    check("5 is not a milestone", !PracticeStreak.isMilestone(5))
+    check("no milestone before the first one", PracticeStreak.milestone(forDay: 2) == nil)
+    check("milestone(forDay:) reports the highest one reached",
+          PracticeStreak.milestone(forDay: 10) == 7)
+    check("exactly on a milestone reports that milestone",
+          PracticeStreak.milestone(forDay: 30) == 30)
 }
 
 // Session history + recognition chart data (issue #19)
