@@ -162,19 +162,26 @@ def _triage_sync(
         issue_note = (
             "\n\nNOTE: One or more issues have ALREADY been filed from THIS thread:\n"
             f"{filed}\n"
-            "If the latest replies add information to one of those issues, set "
-            "should_file = false, put a concise Markdown note in 'issue_update', and set "
-            "'update_issue_number' to that issue's number. If instead the latest replies "
-            "raise a NEW, distinct actionable bug/feature not covered by those (or by the "
-            "open issues above), file it as a new issue with should_file = true."
+            "These are NOT duplicates of the current report — do not set is_duplicate "
+            "against them. If the latest replies add information to one of them, set "
+            "should_file = false, is_duplicate = false, put a concise Markdown note in "
+            "'issue_update', and set 'update_issue_number' to that issue's number. If "
+            "instead the latest replies raise a NEW, distinct actionable bug/feature not "
+            "covered by those (or by the open issues above), file it as a new issue with "
+            "should_file = true."
         )
     else:
         issue_note = ""
+    # Issues already filed from this thread are handled via the update path above, so
+    # keep them out of the duplicate-detection list (otherwise a refinement of the
+    # thread's own issue gets flagged as a duplicate of it).
+    thread_nums = {i["number"] for i in (thread_issues or [])}
+    dedup_issues = [i for i in open_issues if i["number"] not in thread_nums]
     user_text = (
         f"Discord report from {author}:\n"
         f"\"\"\"\n{content}\n\"\"\"\n\n"
         f"Currently open issues (for duplicate detection):\n"
-        f"{_format_open_issues(open_issues)}"
+        f"{_format_open_issues(dedup_issues)}"
         f"{explicit_note}"
         f"{issue_note}"
     )

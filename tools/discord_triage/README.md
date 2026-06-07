@@ -23,9 +23,12 @@ Discord message ──▶ Claude triage ──▶ GitHub issue ──▶ reply i
   severity, and tags every issue with a `from-discord` label.
 - **Holds a conversation**: when a report is too thin, it opens a **thread**,
   asks for the missing detail (repro steps, platform, a **screenshot**), and
-  watches that thread. On each reply it re-reads the whole conversation —
+  follows that thread. On each prompt it re-reads the whole conversation —
   **viewing any attached screenshots via Claude's vision** — until it has enough
-  to file. Added detail on an already-filed topic becomes a comment on that issue.
+  to file. Added detail on an already-filed topic becomes a comment on that issue
+  (a refinement of the thread's own issue is treated as an update, not a duplicate).
+  In `react` mode it waits for the trigger emoji before folding in follow-ups; in
+  `auto` mode it folds in every reply as it arrives.
 - **Handles multiple topics per thread**: if a conversation later raises a
   separate bug or request, it files that as its own new issue rather than losing
   it or folding it into the wrong one.
@@ -44,8 +47,8 @@ Set via `TRIGGER_MODE`:
 
 | Mode | Behavior | When |
 |---|---|---|
-| `react` *(default)* | Only triages a message when a maintainer reacts with 🐛 (`TRIGGER_EMOJI`). | Lowest noise & cost — recommended to start. |
-| `auto` | Triages every non-bot message in the watched channels. | Fully hands-off intake, more API calls. |
+| `react` *(default)* | Only triages a message when a maintainer reacts with 🐛 (`TRIGGER_EMOJI`). Follow-ups in a triage thread are folded in only when you react with the emoji again. | Lowest noise & cost — recommended to start. |
+| `auto` | Triages every non-bot message in the watched channels, and folds in thread follow-ups automatically. | Fully hands-off intake, more API calls. |
 
 Scope it to specific channels with `WATCH_CHANNEL_IDS` (comma-separated IDs).
 

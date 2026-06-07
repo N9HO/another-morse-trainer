@@ -13,7 +13,9 @@ Trigger modes (TRIGGER_MODE):
   - "react": a maintainer reacts to a message with TRIGGER_EMOJI (default 🐛).
   - "auto":  every non-bot message in a watched channel is triaged.
 
-Thread follow-ups are watched in BOTH modes once a triage thread exists.
+Follow-ups in a triage thread: in "auto" mode each reply is folded in
+automatically; in "react" mode, react again with the trigger emoji in the thread
+to fold in the latest replies (the same gesture that starts a triage).
 
 Note: the thread -> issue mapping is kept in memory, so a bot restart forgets
 in-progress threads (the report can simply be re-triaged with a fresh 🐛).
@@ -176,7 +178,10 @@ async def _apply_verdict(thread: discord.Thread, verdict, key: int) -> None:
     """
     p = pending.setdefault(key, Pending())
 
-    if verdict.is_duplicate and verdict.duplicate_of:
+    # A "duplicate" of an issue this thread itself filed is really a refinement of
+    # that issue, not a dupe — fall through to the update path below.
+    own = {i["number"] for i in p.issues}
+    if verdict.is_duplicate and verdict.duplicate_of and verdict.duplicate_of not in own:
         await _say(thread, f"Looks like a duplicate of #{verdict.duplicate_of}. 🔁")
         return
 
@@ -312,9 +317,12 @@ async def on_ready() -> None:
 async def on_message(message: discord.Message) -> None:
     if message.author.bot:
         return
-    # A reply inside a triage thread we're tracking — handle in any mode.
+    # A reply inside a triage thread we're tracking.
     if isinstance(message.channel, discord.Thread) and message.channel.id in pending:
-        await _continue_triage(message.channel)
+        # In "auto" mode, fold in every reply as it arrives. In "react" mode, wait
+        # for the trigger emoji before acting (handled in on_raw_reaction_add).
+        if settings.trigger_mode == "auto":
+            await _continue_triage(message.channel)
         return
     # A fresh message in a watched channel — only in auto mode.
     if settings.trigger_mode == "auto" and _in_scope(message.channel.id):
@@ -327,11 +335,18 @@ async def on_raw_reaction_add(payload: discord.RawReactionActionEvent) -> None:
         return
     if str(payload.emoji) not in settings.trigger_emojis:
         return
-    if not _in_scope(payload.channel_id):
-        return
 
     channel = client.get_channel(payload.channel_id)
     if channel is None:
+        return
+
+    # A reaction inside a thread we're already tracking -> fold in the latest
+    # follow-ups (a refinement), rather than starting a brand-new triage.
+    if isinstance(channel, discord.Thread) and channel.id in pending:
+        await _continue_triage(channel)
+        return
+
+    if not _in_scope(payload.channel_id):
         return
     try:
         message = await channel.fetch_message(payload.message_id)
