@@ -67,9 +67,17 @@ class Verdict(BaseModel):
         default="",
         description=(
             "When an issue has ALREADY been filed for this thread and the latest reply "
-            "adds new information (details, a screenshot you can describe, clarification), "
-            "a concise Markdown note to post as a comment on that issue. Empty if there "
-            "is nothing new to record."
+            "adds new information to THAT SAME issue (details, a screenshot you can "
+            "describe, clarification), a concise Markdown note to post as a comment on "
+            "it. Empty if there is nothing new to record, or if the new content is a "
+            "distinct issue that should be filed separately (use should_file for that)."
+        ),
+    )
+    update_issue_number: Optional[int] = Field(
+        default=None,
+        description=(
+            "When issue_update is set, the number of the already-filed thread issue the "
+            "comment belongs to (pick from the list of issues filed from this thread)."
         ),
     )
 
@@ -87,6 +95,11 @@ You may be given a SINGLE message or an ongoing CONVERSATION (the original repor
 plus follow-up replies and your own earlier questions). Screenshots may be attached \
 as images — look at them and fold the relevant details into the issue. When given a \
 conversation, base your verdict on ALL of it together, not just the last line.
+
+A single thread may surface MORE THAN ONE distinct issue over time (e.g. a feature \
+request followed by an unrelated bug). Treat each distinct, actionable report on its \
+own merits: a new topic that isn't covered by an already-filed issue should become its \
+own new issue, even if you have already filed something else from the same thread.
 
 Guidelines:
 - Classify the report as exactly one of: bug, feature, question, noise.
@@ -133,7 +146,7 @@ def _triage_sync(
     open_issues: list[dict],
     explicit: bool = False,
     images: Optional[list[tuple[str, str]]] = None,
-    has_issue: bool = False,
+    thread_issues: Optional[list[dict]] = None,
 ) -> Verdict:
     explicit_note = (
         "\n\nNOTE: A maintainer explicitly flagged this for triage. Treat it as worth "
@@ -144,13 +157,19 @@ def _triage_sync(
         if explicit
         else ""
     )
-    issue_note = (
-        "\n\nNOTE: An issue has ALREADY been filed for this thread. Do not try to file "
-        "again — instead, if the latest replies add new information, put a concise "
-        "comment in 'issue_update' (otherwise leave it empty)."
-        if has_issue
-        else ""
-    )
+    if thread_issues:
+        filed = "\n".join(f"#{i['number']}: {i['title']}" for i in thread_issues)
+        issue_note = (
+            "\n\nNOTE: One or more issues have ALREADY been filed from THIS thread:\n"
+            f"{filed}\n"
+            "If the latest replies add information to one of those issues, set "
+            "should_file = false, put a concise Markdown note in 'issue_update', and set "
+            "'update_issue_number' to that issue's number. If instead the latest replies "
+            "raise a NEW, distinct actionable bug/feature not covered by those (or by the "
+            "open issues above), file it as a new issue with should_file = true."
+        )
+    else:
+        issue_note = ""
     user_text = (
         f"Discord report from {author}:\n"
         f"\"\"\"\n{content}\n\"\"\"\n\n"
@@ -206,16 +225,17 @@ async def triage(
     open_issues: list[dict],
     explicit: bool = False,
     images: Optional[list[tuple[str, str]]] = None,
-    has_issue: bool = False,
+    thread_issues: Optional[list[dict]] = None,
 ) -> Verdict:
     """Triage a report (single message or full thread transcript) off the event loop.
 
-    `explicit`  = a maintainer directly asked for this (e.g. reacted with the trigger
-                  emoji), which biases toward pursuing it.
-    `images`    = list of (media_type, base64_data) screenshots to look at.
-    `has_issue` = an issue was already filed for this thread, so produce issue_update
-                  comments instead of filing again.
+    `explicit`      = a maintainer directly asked for this (e.g. reacted with the trigger
+                      emoji), which biases toward pursuing it.
+    `images`        = list of (media_type, base64_data) screenshots to look at.
+    `thread_issues` = issues already filed from this thread, as [{number, title}], so a
+                      distinct new topic can be filed separately while updates to those
+                      existing issues become comments instead.
     """
     return await asyncio.to_thread(
-        _triage_sync, author, content, open_issues, explicit, images, has_issue
+        _triage_sync, author, content, open_issues, explicit, images, thread_issues
     )

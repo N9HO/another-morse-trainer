@@ -25,7 +25,10 @@ Discord message ──▶ Claude triage ──▶ GitHub issue ──▶ reply i
   asks for the missing detail (repro steps, platform, a **screenshot**), and
   watches that thread. On each reply it re-reads the whole conversation —
   **viewing any attached screenshots via Claude's vision** — until it has enough
-  to file. Once filed, further details are added to the issue as comments.
+  to file. Added detail on an already-filed topic becomes a comment on that issue.
+- **Handles multiple topics per thread**: if a conversation later raises a
+  separate bug or request, it files that as its own new issue rather than losing
+  it or folding it into the wrong one.
 - **Closes the loop**: replies with the issue link, a duplicate pointer, or a
   follow-up question.
 

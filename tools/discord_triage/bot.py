@@ -5,7 +5,9 @@ opens a clean GitHub issue. If it needs more detail (repro steps, a screenshot),
 opens a THREAD on the report, asks its question there, and watches that thread —
 re-reading the whole conversation (including any screenshots, which it views via
 Claude's vision) on every reply until it has enough to file, then files the issue or
-adds the new details as a comment.
+adds the new details as a comment. A single thread can raise several distinct topics
+over its lifetime, so it may file more than one issue and route later replies to the
+right one (new issue vs. comment on an existing one).
 
 Trigger modes (TRIGGER_MODE):
   - "react": a maintainer reacts to a message with TRIGGER_EMOJI (default 🐛).
@@ -21,7 +23,7 @@ from __future__ import annotations
 
 import base64
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional
 
 import discord
@@ -50,9 +52,13 @@ client = discord.Client(intents=intents)
 
 @dataclass
 class Pending:
-    """State for one in-progress triage thread."""
+    """State for one in-progress triage thread.
 
-    issue_number: Optional[int] = None
+    A single thread can spawn multiple issues over time (e.g. a feature request
+    followed by an unrelated bug), so we track every issue filed from it.
+    """
+
+    issues: list[dict] = field(default_factory=list)  # [{number, title}]
 
 
 # thread_id -> Pending
@@ -162,15 +168,21 @@ async def _say(channel: discord.abc.Messageable, text: str) -> None:
 
 
 async def _apply_verdict(thread: discord.Thread, verdict, key: int) -> None:
-    """Act on a verdict inside a triage thread (file, comment, or ask)."""
+    """Act on a verdict inside a triage thread (file, comment, or ask).
+
+    A thread may already have produced issues for earlier topics; a distinct new
+    report still gets its own issue, while added detail on an existing one becomes
+    a comment on that specific issue.
+    """
     p = pending.setdefault(key, Pending())
 
     if verdict.is_duplicate and verdict.duplicate_of:
         await _say(thread, f"Looks like a duplicate of #{verdict.duplicate_of}. 🔁")
         return
 
-    # Enough detail and not yet filed -> open the issue.
-    if verdict.should_file and p.issue_number is None:
+    # A distinct, actionable report with enough detail -> open a new issue, even if
+    # this thread already produced issues for other topics.
+    if verdict.should_file:
         # Stamp the Discord thread id into the issue (hidden HTML comment) so the
         # "issue closed" GitHub Action can post the resolution back to this thread.
         body = f"{verdict.body}\n\n<!-- discord-thread:{thread.id} -->"
@@ -180,7 +192,7 @@ async def _apply_verdict(thread: discord.Thread, verdict, key: int) -> None:
             log.exception("Failed to create issue")
             await _say(thread, "I tried to log that but hit an error filing the issue. 😬")
             return
-        p.issue_number = issue["number"]
+        p.issues.append({"number": issue["number"], "title": verdict.title})
         await _say(
             thread,
             f"{verdict.reply or 'Logged it'} — opened #{issue['number']}: "
@@ -188,25 +200,24 @@ async def _apply_verdict(thread: discord.Thread, verdict, key: int) -> None:
         )
         return
 
-    # Already filed -> record any new info as a comment.
-    if p.issue_number is not None:
-        if verdict.issue_update.strip():
+    # New detail on an issue already filed from this thread -> comment on it.
+    if verdict.issue_update.strip() and verdict.update_issue_number:
+        target = verdict.update_issue_number
+        if target in {i["number"] for i in p.issues}:
             try:
                 await comment_issue(
-                    p.issue_number, f"{verdict.issue_update}\n\n_Added via Discord._"
+                    target, f"{verdict.issue_update}\n\n_Added via Discord._"
                 )
-                await _say(
-                    thread,
-                    f"{verdict.reply or 'Got it'} — updated #{p.issue_number}. ✅",
-                )
+                await _say(thread, f"{verdict.reply or 'Got it'} — updated #{target}. ✅")
                 return
             except Exception:
                 log.exception("Failed to comment on issue")
-        await _say(thread, verdict.reply or "👍")
-        return
 
-    # Not filed yet, not a duplicate -> asking for more info (or declining).
-    await _say(thread, verdict.reply or "Thanks — could you add a bit more detail?")
+    # Nothing to file or update -> asking for more info, answering, or acknowledging.
+    if p.issues:
+        await _say(thread, verdict.reply or "👍")
+    else:
+        await _say(thread, verdict.reply or "Thanks — could you add a bit more detail?")
 
 
 # --- entry flows --------------------------------------------------------------
@@ -278,11 +289,11 @@ async def _continue_triage(thread: discord.Thread) -> None:
         open_issues,
         explicit=True,
         images=images,
-        has_issue=p.issue_number is not None,
+        thread_issues=p.issues,
     )
     log.info(
-        "Continue triage thread=%s kind=%s should_file=%s has_issue=%s",
-        thread.id, verdict.kind, verdict.should_file, p.issue_number is not None,
+        "Continue triage thread=%s kind=%s should_file=%s thread_issues=%s",
+        thread.id, verdict.kind, verdict.should_file, [i["number"] for i in p.issues],
     )
     await _apply_verdict(thread, verdict, thread.id)
 
