@@ -4,8 +4,11 @@
 
 Usage:
   source tools/asc-auth.sh
-  python3 tools/asc-api.py groups          # list beta groups
   python3 tools/asc-api.py builds          # recent builds + processing state
+  python3 tools/asc-api.py groups          # list beta groups
+  python3 tools/asc-api.py submit          # submit newest VALID build for beta review
+  python3 tools/asc-api.py dist            # assign newest VALID build to the same
+                                           # individual testers as the prior build
   python3 tools/asc-api.py notify <group>  # add newest VALID build to a group
 """
 import base64, json, os, sys, time, urllib.request, urllib.error
@@ -50,6 +53,28 @@ def call(method: str, path: str, body=None):
         return e.code, json.loads(e.read() or b"{}")
 
 
+def newest_valid_build(app):
+    """The newest non-expired build that's finished processing (VALID), or None."""
+    st, d = call("GET", f"/v1/builds?filter[app]={app}&sort=-version&limit=10"
+                        f"&fields[builds]=version,processingState,expired")
+    for b in d.get("data", []):
+        a = b["attributes"]
+        if a.get("processingState") == "VALID" and not a.get("expired"):
+            return b
+    return None
+
+
+def prior_build(app, exclude_id):
+    """The newest VALID build that isn't `exclude_id` (to copy its tester set)."""
+    st, d = call("GET", f"/v1/builds?filter[app]={app}&sort=-version&limit=10"
+                        f"&fields[builds]=version,processingState,expired")
+    for b in d.get("data", []):
+        a = b["attributes"]
+        if b["id"] != exclude_id and a.get("processingState") == "VALID" and not a.get("expired"):
+            return b
+    return None
+
+
 def main():
     app = os.environ["ASC_APP_ID"]
     cmd = sys.argv[1] if len(sys.argv) > 1 else "builds"
@@ -72,6 +97,43 @@ def main():
                   f'uploaded={a.get("uploadedDate")}  id={b["id"]}')
         if st != 200:
             print(d)
+
+    elif cmd == "submit":
+        b = newest_valid_build(app)
+        if not b:
+            print("No VALID build yet — still processing. Try again shortly.")
+            return
+        bid, ver = b["id"], b["attributes"]["version"]
+        st, d = call("GET", f"/v1/builds/{bid}/buildBetaDetail")
+        ext = (d.get("data") or {}).get("attributes", {}).get("externalBuildState")
+        if ext in ("IN_BETA_TESTING", "IN_EXPORT_COMPLIANCE_REVIEW", "WAITING_FOR_BETA_REVIEW"):
+            print(f"build {ver}: already {ext} — nothing to submit.")
+            return
+        st, d = call("POST", "/v1/betaAppReviewSubmissions",
+                     {"data": {"type": "betaAppReviewSubmissions",
+                               "relationships": {"build": {"data": {"type": "builds", "id": bid}}}}})
+        state = (d.get("data") or {}).get("attributes", {}).get("betaReviewState")
+        print(f"submit build {ver} for beta review: HTTP {st} -> {state or d}")
+
+    elif cmd == "dist":
+        b = newest_valid_build(app)
+        if not b:
+            print("No VALID build yet — still processing. Try again shortly.")
+            return
+        bid, ver = b["id"], b["attributes"]["version"]
+        prev = prior_build(app, bid)
+        if not prev:
+            print("No prior build to copy a tester set from; add testers in App Store Connect.")
+            return
+        st, d = call("GET", f"/v1/builds/{prev['id']}/individualTesters?limit=200&fields[betaTesters]=email")
+        testers = [t["id"] for t in d.get("data", [])]
+        if not testers:
+            print(f"Prior build {prev['attributes']['version']} had no individual testers.")
+            return
+        st, _ = call("POST", f"/v1/builds/{bid}/relationships/individualTesters",
+                     {"data": [{"type": "betaTesters", "id": tid} for tid in testers]})
+        print(f"assign build {ver} to {len(testers)} testers (from build "
+              f"{prev['attributes']['version']}): HTTP {st}")
 
     elif cmd == "notify":
         group = sys.argv[2]

@@ -37,4 +37,21 @@ xcodebuild -exportArchive \
   -authenticationKeyID "$ASC_KEY_ID" \
   -authenticationKeyIssuerID "$ASC_ISSUER_ID"
 
-echo "✅ Uploaded. It will appear in App Store Connect → TestFlight after processing."
+echo "✅ Uploaded. Waiting for processing, then submitting for beta review + notifying testers…"
+
+# The upload only puts the build in App Store Connect — external testers won't
+# see it until it's (a) finished processing, (b) submitted for Beta App Review,
+# and (c) assigned to them. Poll until the build is VALID, then do both. (Skip
+# by setting SKIP_DISTRIBUTE=1 if you want to handle it in the ASC UI.)
+if [ "${SKIP_DISTRIBUTE:-0}" != "1" ]; then
+  for _ in $(seq 1 40); do
+    if python3 tools/asc-api.py builds | grep -q "VALID"; then break; fi
+    echo "  …still processing; checking again in 30s"
+    sleep 30
+  done
+  python3 tools/asc-api.py dist      # assign the new build to the prior build's testers
+  python3 tools/asc-api.py submit    # submit for beta review (fast-tracked on an approved train)
+  echo "✅ Submitted for beta review and assigned to testers. They'll be emailed once approved."
+else
+  echo "ℹ️  SKIP_DISTRIBUTE=1 — submit for beta review + add testers in App Store Connect yourself."
+fi
