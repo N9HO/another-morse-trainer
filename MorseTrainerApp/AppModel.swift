@@ -760,16 +760,25 @@ final class AppModel: ObservableObject {
     /// Apply an engine action's state effects, then play your side followed by
     /// the stations' reply.
     private func perform(selfText: String?, action: PileupEngine.Action) {
+        var loggedContact = false
         if case .logged(let call) = action {
             qsoLastLogged = call
             sessionAttempts += 1
             sessionCorrect += 1
             Haptics.success()
+            loggedContact = true
         }
         refreshQSO()
 
-        let response: [MorsePlayer.PileupVoice]
+        var response: [MorsePlayer.PileupVoice]
         if case .play(let v) = action { response = v.map(mapVoice) } else { response = [] }
+        // After logging a contact, keep the run going: any stations still waiting
+        // in the pileup call again on their own, right after your TU, so you can
+        // work the next one without having to send AGN first (issue #35).
+        if loggedContact, pileup.activeCount > 0,
+           case .play(let v) = pileup.repeatRequest() {
+            response = v.map(mapVoice)
+        }
         let mine = selfText.flatMap { $0.isEmpty ? nil : selfVoice($0) }
 
         guard mine != nil || !response.isEmpty else { qsoBusy = false; return }
