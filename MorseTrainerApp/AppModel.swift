@@ -760,16 +760,25 @@ final class AppModel: ObservableObject {
     /// Apply an engine action's state effects, then play your side followed by
     /// the stations' reply.
     private func perform(selfText: String?, action: PileupEngine.Action) {
+        var loggedContact = false
         if case .logged(let call) = action {
             qsoLastLogged = call
             sessionAttempts += 1
             sessionCorrect += 1
             Haptics.success()
+            loggedContact = true
         }
         refreshQSO()
 
-        let response: [MorsePlayer.PileupVoice]
+        var response: [MorsePlayer.PileupVoice]
         if case .play(let v) = action { response = v.map(mapVoice) } else { response = [] }
+        // After logging a contact, keep the run going: any stations still waiting
+        // in the pileup call again on their own, right after your TU, so you can
+        // work the next one without having to send AGN first (issue #35).
+        if loggedContact, pileup.activeCount > 0,
+           case .play(let v) = pileup.repeatRequest() {
+            response = v.map(mapVoice)
+        }
         let mine = selfText.flatMap { $0.isEmpty ? nil : selfVoice($0) }
 
         guard mine != nil || !response.isEmpty else { qsoBusy = false; return }
@@ -915,12 +924,14 @@ final class AppModel: ObservableObject {
         listenGeneration += 1   // cancel the in-flight chain
         speech.stop()
         phase = .idle
+        pauseSessionTimer()     // freeze the countdown while paused (issue #37)
         updateNowPlaying()
     }
 
     func resumeListening() {
         guard isListening, listenPaused else { return }
         listenPaused = false
+        resumeSessionTimer()
         listenStep()
     }
 
@@ -1089,6 +1100,29 @@ final class AppModel: ObservableObject {
         } else {
             sessionRemaining = remaining
         }
+    }
+
+    /// Freeze the practice countdown (e.g. when Listen & Learn is paused) so the
+    /// remaining time doesn't bleed away while nothing is playing. No-op for an
+    /// untimed session. Resumed by `resumeSessionTimer()` (issue #37).
+    private func pauseSessionTimer() {
+        guard let end = sessionEndDate, sessionTimer != nil else { return }
+        sessionRemaining = max(0, end.timeIntervalSinceNow)
+        sessionTimer?.invalidate()
+        sessionTimer = nil
+        sessionEndDate = nil    // nil while paused; rebuilt on resume
+    }
+
+    /// Resume a frozen countdown from the time that was left when it paused.
+    private func resumeSessionTimer() {
+        guard !sessionEnded, sessionEndDate == nil, sessionTimer == nil,
+              settings.practiceDuration.seconds != nil,
+              let remaining = sessionRemaining, remaining > 0 else { return }
+        sessionEndDate = Date().addingTimeInterval(remaining)
+        let timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.sessionTick() }
+        }
+        sessionTimer = timer
     }
 
     /// Stop the session, cancel any pending auto-advance, and show the summary.

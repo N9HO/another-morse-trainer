@@ -1003,7 +1003,12 @@ struct ContentView: View {
                     summaryRow("Busts", "\(model.qsoBusts)")
                 } else {
                     summaryRow("Answered", "\(s.attempts)")
-                    summaryRow("Accuracy", s.attempts == 0 ? "—" : "\(Int((s.accuracy * 100).rounded()))%")
+                    // Listen & Learn and Short Stories play/announce without
+                    // grading an answer, so accuracy isn't applicable — show a
+                    // placeholder instead of a misleading 0% (issue #36).
+                    summaryRow("Accuracy",
+                               (s.mode == .listen || s.mode == .story || s.attempts == 0)
+                               ? "—" : "\(Int((s.accuracy * 100).rounded()))%")
                     summaryRow("Fastest", s.fastest.map { String(format: "%.2f s", $0) } ?? "—")
                     summaryRow("Median TTR", s.medianTTR.map { String(format: "%.2f s", $0) } ?? "—")
                 }

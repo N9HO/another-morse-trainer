@@ -9,9 +9,11 @@ adds the new details as a comment.
 
 Trigger modes (TRIGGER_MODE):
   - "react": a maintainer reacts to a message with TRIGGER_EMOJI (default 🐛).
-  - "auto":  every non-bot message in a watched channel is triaged.
-
-Thread follow-ups are watched in BOTH modes once a triage thread exists.
+             Follow-ups inside a triage thread are only folded in when the
+             trigger emoji is applied again — the bot waits for that prompt
+             instead of reacting to every reply.
+  - "auto":  every non-bot message in a watched channel is triaged, and every
+             follow-up inside a triage thread is read automatically.
 
 Note: the thread -> issue mapping is kept in memory, so a bot restart forgets
 in-progress threads (the report can simply be re-triaged with a fresh 🐛).
@@ -165,12 +167,33 @@ async def _apply_verdict(thread: discord.Thread, verdict, key: int) -> None:
     """Act on a verdict inside a triage thread (file, comment, or ask)."""
     p = pending.setdefault(key, Pending())
 
+    # Already filed for this thread -> any new detail is a refinement of THIS
+    # issue, never a fresh report. Handle this before the duplicate check: the
+    # thread's own issue is in the open-issue list, so the model frequently
+    # flags the follow-up as a "duplicate" of itself — which must not abort the
+    # update.
+    if p.issue_number is not None:
+        if verdict.issue_update.strip():
+            try:
+                await comment_issue(
+                    p.issue_number, f"{verdict.issue_update}\n\n_Added via Discord._"
+                )
+                await _say(
+                    thread,
+                    f"{verdict.reply or 'Got it'} — updated #{p.issue_number}. ✅",
+                )
+                return
+            except Exception:
+                log.exception("Failed to comment on issue")
+        await _say(thread, verdict.reply or "👍")
+        return
+
     if verdict.is_duplicate and verdict.duplicate_of:
         await _say(thread, f"Looks like a duplicate of #{verdict.duplicate_of}. 🔁")
         return
 
-    # Enough detail and not yet filed -> open the issue.
-    if verdict.should_file and p.issue_number is None:
+    # Enough detail and not yet filed (the filed case returned above) -> open it.
+    if verdict.should_file:
         # Stamp the Discord thread id into the issue (hidden HTML comment) so the
         # "issue closed" GitHub Action can post the resolution back to this thread.
         body = f"{verdict.body}\n\n<!-- discord-thread:{thread.id} -->"
@@ -186,23 +209,6 @@ async def _apply_verdict(thread: discord.Thread, verdict, key: int) -> None:
             f"{verdict.reply or 'Logged it'} — opened #{issue['number']}: "
             f"{issue['html_url']} ✅",
         )
-        return
-
-    # Already filed -> record any new info as a comment.
-    if p.issue_number is not None:
-        if verdict.issue_update.strip():
-            try:
-                await comment_issue(
-                    p.issue_number, f"{verdict.issue_update}\n\n_Added via Discord._"
-                )
-                await _say(
-                    thread,
-                    f"{verdict.reply or 'Got it'} — updated #{p.issue_number}. ✅",
-                )
-                return
-            except Exception:
-                log.exception("Failed to comment on issue")
-        await _say(thread, verdict.reply or "👍")
         return
 
     # Not filed yet, not a duplicate -> asking for more info (or declining).
@@ -271,7 +277,11 @@ async def _continue_triage(thread: discord.Thread) -> None:
     if p is None:
         return
     author, transcript, images = await _gather_thread(thread)
-    open_issues = await _safe_open_issues()
+    # Drop this thread's own issue from the dedup list so a refinement isn't
+    # judged a duplicate of the very issue it's refining.
+    open_issues = [
+        i for i in await _safe_open_issues() if i.get("number") != p.issue_number
+    ]
     verdict = await triage(
         author,
         transcript,
@@ -301,9 +311,12 @@ async def on_ready() -> None:
 async def on_message(message: discord.Message) -> None:
     if message.author.bot:
         return
-    # A reply inside a triage thread we're tracking — handle in any mode.
+    # A reply inside a triage thread we're tracking. In auto mode we read every
+    # follow-up; in react mode we wait for the trigger emoji (handled in
+    # on_raw_reaction_add) so the bot doesn't fold in every passing reply.
     if isinstance(message.channel, discord.Thread) and message.channel.id in pending:
-        await _continue_triage(message.channel)
+        if settings.trigger_mode == "auto":
+            await _continue_triage(message.channel)
         return
     # A fresh message in a watched channel — only in auto mode.
     if settings.trigger_mode == "auto" and _in_scope(message.channel.id):
@@ -316,6 +329,17 @@ async def on_raw_reaction_add(payload: discord.RawReactionActionEvent) -> None:
         return
     if str(payload.emoji) not in settings.trigger_emojis:
         return
+
+    # A trigger reaction inside a thread we're already tracking means "fold this
+    # new detail into the existing issue" — a refinement of the report, not a
+    # fresh one. (pending is keyed by thread id, which is the reaction's
+    # channel_id when the reaction is inside the thread.)
+    if payload.channel_id in pending:
+        thread = client.get_channel(payload.channel_id)
+        if isinstance(thread, discord.Thread):
+            await _continue_triage(thread)
+        return
+
     if not _in_scope(payload.channel_id):
         return
 
