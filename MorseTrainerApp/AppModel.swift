@@ -924,12 +924,14 @@ final class AppModel: ObservableObject {
         listenGeneration += 1   // cancel the in-flight chain
         speech.stop()
         phase = .idle
+        pauseSessionTimer()     // freeze the countdown while paused (issue #37)
         updateNowPlaying()
     }
 
     func resumeListening() {
         guard isListening, listenPaused else { return }
         listenPaused = false
+        resumeSessionTimer()
         listenStep()
     }
 
@@ -1098,6 +1100,29 @@ final class AppModel: ObservableObject {
         } else {
             sessionRemaining = remaining
         }
+    }
+
+    /// Freeze the practice countdown (e.g. when Listen & Learn is paused) so the
+    /// remaining time doesn't bleed away while nothing is playing. No-op for an
+    /// untimed session. Resumed by `resumeSessionTimer()` (issue #37).
+    private func pauseSessionTimer() {
+        guard let end = sessionEndDate, sessionTimer != nil else { return }
+        sessionRemaining = max(0, end.timeIntervalSinceNow)
+        sessionTimer?.invalidate()
+        sessionTimer = nil
+        sessionEndDate = nil    // nil while paused; rebuilt on resume
+    }
+
+    /// Resume a frozen countdown from the time that was left when it paused.
+    private func resumeSessionTimer() {
+        guard !sessionEnded, sessionEndDate == nil, sessionTimer == nil,
+              settings.practiceDuration.seconds != nil,
+              let remaining = sessionRemaining, remaining > 0 else { return }
+        sessionEndDate = Date().addingTimeInterval(remaining)
+        let timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.sessionTick() }
+        }
+        sessionTimer = timer
     }
 
     /// Stop the session, cancel any pending auto-advance, and show the summary.
