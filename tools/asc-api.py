@@ -98,6 +98,22 @@ def main():
         if st != 200:
             print(d)
 
+    elif cmd == "wait":
+        # Poll until the build with the given version (default: highest) is VALID.
+        want = sys.argv[2] if len(sys.argv) > 2 else None
+        for _ in range(60):
+            st, d = call("GET", f"/v1/builds?filter[app]={app}&sort=-version&limit=5"
+                                f"&fields[builds]=version,processingState")
+            rows = d.get("data", [])
+            target = (next((b for b in rows if b["attributes"].get("version") == want), None)
+                      if want else (rows[0] if rows else None))
+            state = target["attributes"].get("processingState") if target else "absent"
+            print(f"  build {want or '(newest)'}: {state}", flush=True)
+            if state == "VALID":
+                return
+            time.sleep(20)
+        print("  gave up waiting for the build to process")
+
     elif cmd == "submit":
         b = newest_valid_build(app)
         if not b:

@@ -44,11 +44,11 @@ echo "✅ Uploaded. Waiting for processing, then submitting for beta review + no
 # and (c) assigned to them. Poll until the build is VALID, then do both. (Skip
 # by setting SKIP_DISTRIBUTE=1 if you want to handle it in the ASC UI.)
 if [ "${SKIP_DISTRIBUTE:-0}" != "1" ]; then
-  for _ in $(seq 1 40); do
-    if python3 tools/asc-api.py builds | grep -q "VALID"; then break; fi
-    echo "  …still processing; checking again in 30s"
-    sleep 30
-  done
+  # Wait for THIS build (by version) to finish processing — not just any VALID
+  # build, or dist/submit would act on the previous one while this still bakes.
+  VER=$(grep -m1 'CURRENT_PROJECT_VERSION' MorseTrainer.xcodeproj/project.pbxproj | grep -oE '[0-9]+')
+  echo "  waiting for build $VER to finish processing…"
+  python3 tools/asc-api.py wait "$VER"
   python3 tools/asc-api.py dist      # assign the new build to the prior build's testers
   python3 tools/asc-api.py submit    # submit for beta review (fast-tracked on an approved train)
   echo "✅ Submitted for beta review and assigned to testers. They'll be emailed once approved."
