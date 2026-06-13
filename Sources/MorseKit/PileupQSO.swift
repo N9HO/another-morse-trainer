@@ -448,8 +448,14 @@ public final class PileupEngine {
 
     // MARK: Grading
 
+    /// Field separators an operator might type between exchange elements. Any
+    /// run of these breaks tokens, so "9B/EWA" and "9B-EWA" copy like "9B EWA".
+    static let fieldSeparators = Set<Character>(" /-,.")
+
     private func grade(_ input: String, against tokens: [ExchToken]) -> Bool {
-        var user = input.uppercased().split(whereSeparator: { $0 == " " }).map(String.init)
+        var user = input.uppercased()
+            .split(whereSeparator: { Self.fieldSeparators.contains($0) })
+            .map(String.init)
         if !config.rstRequired, let first = user.first, Self.isRSTLike(first) {
             user.removeFirst()
         }
@@ -463,9 +469,28 @@ public final class PileupEngine {
         var collapsed: [String] = []
         for tok in user where collapsed.last != tok { collapsed.append(tok) }
         user = collapsed
-        guard user.count == tokens.count else { return false }
-        for (u, t) in zip(user, tokens) where !Self.tokenMatches(u, t) { return false }
-        return true
+        if user.count == tokens.count,
+           zip(user, tokens).allSatisfy({ Self.tokenMatches($0, $1) }) {
+            return true
+        }
+        // Fallback: the operator ran the fields together with no separator at
+        // all ("9BEWA" for "9B EWA"). Peel each required token's width off the
+        // alphanumeric stream in order. Only reached once the separated parse
+        // above has failed, so it can't turn a real miss into a match.
+        return Self.gradeGlued(user.joined(), against: tokens)
+    }
+
+    /// Match run-together input by consuming each token's expected width in turn.
+    static func gradeGlued(_ input: String, against tokens: [ExchToken]) -> Bool {
+        let stream = Array(input.uppercased().filter { $0.isLetter || $0.isNumber })
+        var idx = 0
+        for t in tokens {
+            let n = t.value.count
+            guard n > 0, idx + n <= stream.count,
+                  tokenMatches(String(stream[idx..<idx + n]), t) else { return false }
+            idx += n
+        }
+        return idx == stream.count   // every character accounted for, nothing extra
     }
 
     static func tokenMatches(_ user: String, _ token: ExchToken) -> Bool {
