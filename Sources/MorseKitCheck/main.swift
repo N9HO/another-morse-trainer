@@ -570,6 +570,26 @@ do {
     check("typing the heard 'OP BOB BOB' single-caller copy grades correct",
           sceng.send("599 OP \(opName) \(opName)") == .silence)
 
+    // Field Day (issue #39): a correct exchange must grade however the operator
+    // separates the class and section — spaced, run together, or with a slash.
+    func fdWorked(_ seed: UInt64) -> (PileupEngine, String) {
+        var f = PileupConfig(); f.mode = .fieldDay; f.maxStations = 1
+        let e = PileupEngine(config: f, rng: SeededRNG(seed: seed))
+        _ = e.callCQ(); _ = e.send(e.stations[0].call)
+        return (e, e.expectedCopy ?? "")            // e.g. "9B KY"
+    }
+    do {
+        let (_, copy) = fdWorked(11)
+        let glued = copy.replacingOccurrences(of: " ", with: "")        // "9BKY"
+        let slashed = copy.replacingOccurrences(of: " ", with: "/")     // "9B/KY"
+        check("Field Day exchange grades when spaced", fdWorked(11).0.send(copy) == .silence)
+        check("Field Day exchange grades run together (no space)", fdWorked(11).0.send(glued) == .silence)
+        check("Field Day exchange grades with a slash separator", fdWorked(11).0.send(slashed) == .silence)
+        let section = copy.split(separator: " ").last.map(String.init) ?? ""
+        let wrong = "0Z" + section                                     // clearly wrong class, glued
+        check("a wrong run-together Field Day copy is still rejected", fdWorked(11).0.send(wrong) != .silence)
+    }
+
     // Give-up: an impatient station QRTs after repeated misses; pileup remains.
     var gcfg = PileupConfig()
     gcfg.mode = .pota
