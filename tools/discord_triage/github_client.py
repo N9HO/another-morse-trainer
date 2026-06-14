@@ -36,9 +36,11 @@ def _list_open_issues_sync(limit: int = 50) -> list[dict]:
     ]
 
 
-def _create_issue_sync(title: str, body: str, labels: list[str]) -> dict:
+def _create_issue_sync(
+    title: str, body: str, labels: list[str], repo: str | None = None
+) -> dict:
     """Create an issue and return {number, html_url}."""
-    url = f"{_API}/repos/{settings.github_repo}/issues"
+    url = f"{_API}/repos/{repo or settings.github_repo}/issues"
     # Always tag with the triage label so Discord-sourced issues are filterable.
     all_labels = sorted({*labels, settings.triage_label})
     payload = {"title": title, "body": body, "labels": all_labels}
@@ -49,9 +51,9 @@ def _create_issue_sync(title: str, body: str, labels: list[str]) -> dict:
     return {"number": data["number"], "html_url": data["html_url"]}
 
 
-def _comment_issue_sync(number: int, body: str) -> dict:
+def _comment_issue_sync(number: int, body: str, repo: str | None = None) -> dict:
     """Add a comment to an existing issue. Returns {html_url}."""
-    url = f"{_API}/repos/{settings.github_repo}/issues/{number}/comments"
+    url = f"{_API}/repos/{repo or settings.github_repo}/issues/{number}/comments"
     with httpx.Client(timeout=15.0) as client:
         resp = client.post(url, headers=_HEADERS, json={"body": body})
         resp.raise_for_status()
@@ -63,9 +65,11 @@ async def list_open_issues(limit: int = 50) -> list[dict]:
     return await asyncio.to_thread(_list_open_issues_sync, limit)
 
 
-async def create_issue(title: str, body: str, labels: list[str]) -> dict:
-    return await asyncio.to_thread(_create_issue_sync, title, body, labels)
+async def create_issue(
+    title: str, body: str, labels: list[str], repo: str | None = None
+) -> dict:
+    return await asyncio.to_thread(_create_issue_sync, title, body, labels, repo)
 
 
-async def comment_issue(number: int, body: str) -> dict:
-    return await asyncio.to_thread(_comment_issue_sync, number, body)
+async def comment_issue(number: int, body: str, repo: str | None = None) -> dict:
+    return await asyncio.to_thread(_comment_issue_sync, number, body, repo)
