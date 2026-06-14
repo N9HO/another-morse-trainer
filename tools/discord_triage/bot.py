@@ -55,6 +55,9 @@ class Pending:
     """State for one in-progress triage thread."""
 
     issue_number: Optional[int] = None
+    # Which repo the issue was filed in (platform-routed), so follow-up comments
+    # land in the right place. None until an issue is filed for this thread.
+    issue_repo: Optional[str] = None
 
 
 # thread_id -> Pending
@@ -66,6 +69,10 @@ def _in_scope(channel_id: int) -> bool:
 
 
 async def _safe_open_issues() -> list[dict]:
+    # Dedup runs before the platform is known, so we check the default repo only.
+    # Android issues live in a separate repo (settings.github_repo_android) and are
+    # not yet cross-checked here — acceptable while that repo is small; revisit if
+    # Android duplicate reports become common.
     try:
         return await list_open_issues()
     except Exception:
@@ -176,7 +183,9 @@ async def _apply_verdict(thread: discord.Thread, verdict, key: int) -> None:
         if verdict.issue_update.strip():
             try:
                 await comment_issue(
-                    p.issue_number, f"{verdict.issue_update}\n\n_Added via Discord._"
+                    p.issue_number,
+                    f"{verdict.issue_update}\n\n_Added via Discord._",
+                    repo=p.issue_repo,
                 )
                 await _say(
                     thread,
@@ -197,13 +206,15 @@ async def _apply_verdict(thread: discord.Thread, verdict, key: int) -> None:
         # Stamp the Discord thread id into the issue (hidden HTML comment) so the
         # "issue closed" GitHub Action can post the resolution back to this thread.
         body = f"{verdict.body}\n\n<!-- discord-thread:{thread.id} -->"
+        repo = settings.repo_for(verdict.platform)
         try:
-            issue = await create_issue(verdict.title, body, verdict.labels)
+            issue = await create_issue(verdict.title, body, verdict.labels, repo=repo)
         except Exception:
             log.exception("Failed to create issue")
             await _say(thread, "I tried to log that but hit an error filing the issue. 😬")
             return
         p.issue_number = issue["number"]
+        p.issue_repo = repo
         await _say(
             thread,
             f"{verdict.reply or 'Logged it'} — opened #{issue['number']}: "
@@ -255,7 +266,10 @@ async def _start_triage(message: discord.Message, explicit: bool) -> None:
         # No thread permission: degrade to one-shot (can't watch follow-ups).
         if verdict.should_file:
             try:
-                issue = await create_issue(verdict.title, verdict.body, verdict.labels)
+                issue = await create_issue(
+                    verdict.title, verdict.body, verdict.labels,
+                    repo=settings.repo_for(verdict.platform),
+                )
                 await message.reply(
                     f"{verdict.reply or 'Logged it'} — opened #{issue['number']}: "
                     f"{issue['html_url']} ✅",

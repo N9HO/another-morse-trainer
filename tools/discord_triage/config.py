@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
+from typing import Optional
 
 
 def _required(name: str) -> str:
@@ -57,9 +58,23 @@ class Settings:
 
     # --- GitHub ---
     github_token: str
-    github_repo: str  # "owner/name"
+    github_repo: str  # "owner/name" — default repo for all platforms…
+    # …except Android, which is routed here when set. Empty string = no separate
+    # Android repo, so Android bugs fall back to github_repo (the old behavior).
+    # The GITHUB_TOKEN must have Issues: read/write on this repo too.
+    github_repo_android: str
     # Apply this label to every issue the bot opens, so they're easy to find/filter.
     triage_label: str
+
+    def repo_for(self, platform: Optional[str]) -> str:
+        """Pick the destination repo for a verdict's platform.
+
+        Android reports go to the dedicated Android repo when one is configured;
+        everything else (iOS/iPadOS/macOS/multiple/unknown) goes to the default.
+        """
+        if platform == "android" and self.github_repo_android:
+            return self.github_repo_android
+        return self.github_repo
 
     @staticmethod
     def load() -> "Settings":
@@ -76,6 +91,7 @@ class Settings:
             model=os.environ.get("ANTHROPIC_MODEL", "claude-opus-4-8"),
             github_token=_required("GITHUB_TOKEN"),
             github_repo=_required("GITHUB_REPO"),
+            github_repo_android=os.environ.get("GITHUB_REPO_ANDROID", "").strip(),
             triage_label=os.environ.get("TRIAGE_LABEL", "from-discord"),
         )
 
