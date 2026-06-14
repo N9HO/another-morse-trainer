@@ -269,6 +269,11 @@ struct AppSettings: Codable, Equatable {
     /// How big a word pool Words mode (and Listen words) draws from.
     var wordTier: WordTier = .top100
 
+    /// An optional user-supplied word list for Words mode. When non-empty, Words
+    /// practice draws from this instead of the built-in "Top N" pool (issue #32).
+    /// Stored uppercased and de-duplicated.
+    var customWords: [String] = []
+
     /// Character speed for QRQ high-speed copy practice (35 or 40 WPM).
     var qrqSpeed: QrqSpeed = .wpm35
 
@@ -345,7 +350,7 @@ extension AppSettings {
         case dailyReminderEnabled, dailyReminderHour
         case maxAnswerChoices, selectedPunctuation
         case learningMode, practiceDuration
-        case listenContent, listenGap, wordTier, voiceResponse, keyingResponse
+        case listenContent, listenGap, wordTier, customWords, voiceResponse, keyingResponse
         case qrqSpeed
         case examSpeed, examGrading, examUseBundled
         case qso
@@ -374,6 +379,7 @@ extension AppSettings {
         s.listenContent = try c.decodeIfPresent(ListenContent.self, forKey: .listenContent) ?? s.listenContent
         s.listenGap = try c.decodeIfPresent(AnswerGap.self, forKey: .listenGap) ?? s.listenGap
         s.wordTier = try c.decodeIfPresent(WordTier.self, forKey: .wordTier) ?? s.wordTier
+        s.customWords = try c.decodeIfPresent([String].self, forKey: .customWords) ?? s.customWords
         s.qrqSpeed = try c.decodeIfPresent(QrqSpeed.self, forKey: .qrqSpeed) ?? s.qrqSpeed
         s.voiceResponse = try c.decodeIfPresent(Bool.self, forKey: .voiceResponse) ?? s.voiceResponse
         s.keyingResponse = try c.decodeIfPresent(Bool.self, forKey: .keyingResponse) ?? s.keyingResponse

@@ -165,6 +165,36 @@ public enum MorseData {
         return items
     }
 
+    /// Build quiz items from a user-supplied word list (issue #32). Words are
+    /// uppercased, trimmed, de-duplicated, and limited to characters the trainer
+    /// can actually sound out.
+    public static func customWordItems(_ words: [String]) -> [MorseItem] {
+        var seen = Set<String>()
+        var items: [MorseItem] = []
+        for raw in words {
+            let w = raw.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+            guard !w.isEmpty, seen.insert(w).inserted else { continue }
+            // Keep only words with at least one sendable character.
+            guard w.contains(where: { MorseCode.pattern(for: $0) != nil }) else { continue }
+            items.append(MorseItem(id: "custom-\(w)", playable: .text(w), answer: w, display: w))
+        }
+        return items
+    }
+
+    /// Parse a pasted blob (newline-, comma-, or whitespace-separated) into a
+    /// clean, de-duplicated, uppercased word list for `customWords` (issue #32).
+    public static func parseWordList(_ text: String) -> [String] {
+        let separators = CharacterSet(charactersIn: ",\n\r\t ")
+        var seen = Set<String>()
+        var out: [String] = []
+        for token in text.components(separatedBy: separators) {
+            let w = token.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+            guard !w.isEmpty, seen.insert(w).inserted else { continue }
+            out.append(w)
+        }
+        return out
+    }
+
     /// Abbreviations mode: hear the abbreviation, choose its meaning.
     public static var abbreviationItems: [MorseItem] {
         abbreviations.map {

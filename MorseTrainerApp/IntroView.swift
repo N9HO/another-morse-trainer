@@ -9,6 +9,8 @@ struct IntroView: View {
 
     @State private var showingSetup = false
     @State private var showingSettings = false
+    @State private var showingStats = false
+    @State private var showingCustomWords = false
     @State private var showingRepeater = false
     @StateObject private var repeater = RepeaterModel()
 
@@ -111,6 +113,12 @@ struct IntroView: View {
         .sheet(isPresented: $showingSettings) {
             SettingsView().environmentObject(model)
         }
+        .sheet(isPresented: $showingStats) {
+            StatsView().environmentObject(model)
+        }
+        .sheet(isPresented: $showingCustomWords) {
+            CustomWordsSheet().environmentObject(model)
+        }
         .fullScreenCover(isPresented: $showingRepeater) {
             RepeaterView().environmentObject(repeater)
         }
@@ -137,6 +145,13 @@ struct IntroView: View {
             }
             .accessibilityLabel("Live repeater — go on the air")
             Spacer()
+            Button { showingStats = true } label: {
+                Image(systemName: "chart.bar")
+                    .font(.title3)
+                    .foregroundStyle(Theme.teal)
+                    .padding(8)
+            }
+            .accessibilityLabel("Your stats")
             Button { showingSettings = true } label: {
                 Image(systemName: "gearshape")
                     .font(.title3)
@@ -287,8 +302,11 @@ struct IntroView: View {
             }
 
             if model.learningMode == .words {
-                inlinePicker(title: "How big a word pool?",
-                             selection: wordTierBinding) { (t: WordTier) in t.label }
+                if model.settings.customWords.isEmpty {
+                    inlinePicker(title: "How big a word pool?",
+                                 selection: wordTierBinding) { (t: WordTier) in t.label }
+                }
+                customWordsControl
             }
 
             if model.learningMode == .qrq {
@@ -364,6 +382,32 @@ struct IntroView: View {
         .accessibilityHint(model.learningMode.needsSetup
             ? "Opens session options for \(model.learningMode.title)."
             : "Begins a session of \(model.learningMode.title).")
+    }
+
+    // MARK: - Custom words (issue #32)
+
+    @ViewBuilder
+    private var customWordsControl: some View {
+        let count = model.settings.customWords.count
+        Button {
+            showingCustomWords = true
+        } label: {
+            HStack {
+                Label(count == 0 ? "Use a custom word list" : "Custom list: \(count) words",
+                      systemImage: "list.bullet.rectangle")
+                    .font(.subheadline)
+                    .foregroundStyle(.primary)
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.caption)
+                    .foregroundStyle(Theme.textSecondary)
+            }
+        }
+        if count > 0 {
+            Text("Words mode is drawing from your custom list.")
+                .font(.caption)
+                .foregroundStyle(Theme.textSecondary)
+        }
     }
 
     // MARK: - Building blocks
@@ -614,6 +658,70 @@ private struct SessionSetupSheet: View {
         .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
         .brandCard()
+    }
+}
+
+/// Paste-in editor for a custom Words list (issue #32). Accepts words separated
+/// by new lines, commas, or spaces; saving replaces the active custom list.
+private struct CustomWordsSheet: View {
+    @EnvironmentObject var model: AppModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var text = ""
+
+    private var parsedCount: Int { MorseData.parseWordList(text).count }
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                Theme.Background()
+                VStack(alignment: .leading, spacing: 14) {
+                    Text("Paste your own words — one per line, or separated by commas or spaces. Words mode will draw only from this list.")
+                        .font(.footnote)
+                        .foregroundStyle(Theme.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    TextEditor(text: $text)
+                        .font(.system(.body, design: .monospaced))
+                        .scrollContentBackground(.hidden)
+                        .padding(10)
+                        .frame(maxWidth: .infinity, minHeight: 220)
+                        .background(Theme.navyElevated, in: RoundedRectangle(cornerRadius: 12))
+                        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Theme.hairline))
+                        .autocorrectionDisabled()
+                        .textInputAutocapitalization(.characters)
+
+                    Text("\(parsedCount) word\(parsedCount == 1 ? "" : "s")")
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(Theme.textSecondary)
+
+                    Spacer()
+                }
+                .padding(20)
+            }
+            .navigationTitle("Custom Word List")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Clear", role: .destructive) {
+                        model.settings.customWords = []
+                        dismiss()
+                    }
+                    .disabled(model.settings.customWords.isEmpty && text.isEmpty)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        model.settings.customWords = MorseData.parseWordList(text)
+                        dismiss()
+                    }
+                    .disabled(parsedCount == 0)
+                }
+            }
+            .onAppear { text = model.settings.customWords.joined(separator: "\n") }
+        }
+        .presentationDetents([.large])
     }
 }
 

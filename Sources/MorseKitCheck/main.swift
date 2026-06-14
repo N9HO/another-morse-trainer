@@ -522,6 +522,25 @@ do {
     let bust = eng.send("ZZ9QXJ")
     check("a total bust re-calls the whole pileup (forgiving)", playCount(bust) == before)
 
+    check("a miscopied call counts as a bust (issue #30)", eng.bustCount >= 1)
+
+    // A miss-then-correct QSO must not report 100% accuracy (issue #30).
+    do {
+        var mcfg = PileupConfig()
+        mcfg.mode = .pota
+        mcfg.maxStations = 3
+        mcfg.minWPM = 20; mcfg.maxWPM = 20
+        let m = PileupEngine(config: mcfg, rng: SeededRNG(seed: 7))
+        _ = m.callCQ()
+        _ = m.send("ZZ9QXJ")                 // wrong call copy -> bust
+        let realCall = m.stations[0].call
+        _ = m.send(realCall)                 // work the right one
+        _ = m.send(m.expectedCopy ?? "")     // clean exchange copy
+        _ = m.logCurrent()                   // log it
+        check("a QSO logged after a miscopy is below 100% accuracy",
+              m.qsoCount == 1 && m.accuracy < 1.0)
+    }
+
     // Exact full call -> exchange, then copy -> ready to log, then TU logs.
     let target = eng.stations[0].call
     let ex = eng.send(target)
@@ -792,6 +811,20 @@ do {
                  + charTimings(".",  trailingGap: 0)     // E
     check("word gap yields a space (T E → 'T E')",
           MorseDecoder(wpm: 20).decodeTimings(twoWords) == "T E")
+}
+
+// Custom word list (issue #32)
+print("\nCustom word list:")
+do {
+    let parsed = MorseData.parseWordList("maine, ohio\ntexas  iowa,,\nMAINE")
+    check("parse splits on commas/newlines/spaces and uppercases",
+          parsed == ["MAINE", "OHIO", "TEXAS", "IOWA"])
+    check("parse de-duplicates", parsed.filter { $0 == "MAINE" }.count == 1)
+    check("empty input parses to no words", MorseData.parseWordList("  ,, \n ").isEmpty)
+
+    let items = MorseData.customWordItems(["ohio", "ohio", "  "])
+    check("custom items de-duplicate and drop blanks", items.count == 1)
+    check("custom item plays the word as text", items.first?.answer == "OHIO")
 }
 
 print("\n────────────────────────────")

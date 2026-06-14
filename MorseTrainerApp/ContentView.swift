@@ -942,8 +942,24 @@ struct ContentView: View {
     @ViewBuilder
     private var sessionBar: some View {
         HStack {
-            Label(sessionTimeText, systemImage: "timer")
-                .monospacedDigit()
+            if model.mode.usesSessionLength {
+                Menu {
+                    Button("Add 5 minutes") { model.addSessionTime(300) }
+                    Button("Add 1 minute") { model.addSessionTime(60) }
+                    if model.sessionIsTimed {
+                        Button("Subtract 1 minute") { model.reduceSessionTime(60) }
+                        Button("Remove time limit") { model.makeSessionOpenEnded() }
+                    }
+                } label: {
+                    Label(sessionTimeText, systemImage: "timer")
+                        .monospacedDigit()
+                    Image(systemName: "chevron.down").font(.caption2)
+                }
+                .accessibilityLabel("Adjust the session timer. \(sessionTimeText).")
+            } else {
+                Label(sessionTimeText, systemImage: "timer")
+                    .monospacedDigit()
+            }
             Spacer()
             Button(role: .destructive) {
                 model.endSession()

@@ -342,9 +342,13 @@ final class AppModel: ObservableObject {
     }
 
     private func applyPhraseConfig(from s: AppSettings) {
-        // Rebuild the Words quiz if the chosen "Top N" tier changed.
-        if wordsQuiz.items.count != s.wordTier.count {
-            wordsQuiz = PhraseQuiz(name: "Words", items: MorseData.topWordItems(s.wordTier.count))
+        // Rebuild the Words quiz when its source changes: a custom list (issue
+        // #32) takes precedence over the built-in "Top N" tier.
+        let desiredWordItems = s.customWords.isEmpty
+            ? MorseData.topWordItems(s.wordTier.count)
+            : MorseData.customWordItems(s.customWords)
+        if wordsQuiz.items.map(\.id) != desiredWordItems.map(\.id) {
+            wordsQuiz = PhraseQuiz(name: "Words", items: desiredWordItems)
         }
         for quiz in [wordsQuiz, abbrevQuiz, qCodeQuiz, prosignQuiz, headCopyQuiz, typedQuiz, qrqQuiz] {
             quiz.config.ttrThreshold = s.ttrThreshold
@@ -1130,6 +1134,56 @@ final class AppModel: ObservableObject {
         }
         sessionTimer = timer
     }
+
+    /// Start (or restart) the countdown with `seconds` left. Shared by
+    /// `startSession` and the in-session timer controls.
+    private func startCountdown(seconds: TimeInterval) {
+        sessionTimer?.invalidate()
+        sessionEndDate = Date().addingTimeInterval(seconds)
+        sessionRemaining = seconds
+        let timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.sessionTick() }
+        }
+        sessionTimer = timer
+    }
+
+    /// Mid-session timer control (issue #41): add time to the running countdown,
+    /// or start one if the session was open-ended.
+    func addSessionTime(_ seconds: TimeInterval) {
+        guard !sessionEnded, seconds > 0 else { return }
+        if let end = sessionEndDate {
+            let newEnd = end.addingTimeInterval(seconds)
+            sessionEndDate = newEnd
+            sessionRemaining = max(0, newEnd.timeIntervalSinceNow)
+        } else {
+            startCountdown(seconds: seconds)
+        }
+    }
+
+    /// Mid-session timer control (issue #41): shorten the running countdown.
+    /// Ends the session if that takes the remaining time to zero.
+    func reduceSessionTime(_ seconds: TimeInterval) {
+        guard !sessionEnded, seconds > 0, let end = sessionEndDate else { return }
+        let newEnd = end.addingTimeInterval(-seconds)
+        let remaining = newEnd.timeIntervalSinceNow
+        if remaining <= 0 { sessionRemaining = 0; endSession(); return }
+        sessionEndDate = newEnd
+        sessionRemaining = remaining
+    }
+
+    /// Mid-session timer control (issue #41): drop the time limit and keep
+    /// practicing open-ended.
+    func makeSessionOpenEnded() {
+        guard !sessionEnded else { return }
+        sessionTimer?.invalidate()
+        sessionTimer = nil
+        sessionEndDate = nil
+        sessionRemaining = nil
+    }
+
+    /// True when the running session has a countdown that can be shortened or
+    /// removed (vs. an open-ended one, which can only have time added).
+    var sessionIsTimed: Bool { sessionRemaining != nil }
 
     /// Stop the session, cancel any pending auto-advance, and show the summary.
     func endSession() {

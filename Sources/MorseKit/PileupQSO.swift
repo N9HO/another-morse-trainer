@@ -368,7 +368,12 @@ public final class PileupEngine {
         if !matched.isEmpty {
             return .play(matched.map { callVoice(for: stations[$0]) })
         }
-        // No one matches the call you sent — handle per the busted-call setting.
+        // No one matches the call you sent — you miscopied the call. Count it
+        // against clean-copy accuracy (issue #30: earlier missed attempts were
+        // being ignored, so a QSO logged after retries showed 100%), then
+        // respond per the busted-call setting. A non-empty fragment that DID
+        // prefix-match a station above is a legitimate partial call, not a bust.
+        if !stations.isEmpty { bustCount += 1 }
         switch config.bustBehavior {
         case .forgiving:
             guard !stations.isEmpty else { return .silence }
