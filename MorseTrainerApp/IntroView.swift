@@ -138,12 +138,20 @@ struct IntroView: View {
                 }
                 showingRepeater = true
             } label: {
-                Image(systemName: "antenna.radiowaves.left.and.right")
-                    .font(.title3)
-                    .foregroundStyle(Theme.teal)
-                    .padding(8)
+                HStack(spacing: 6) {
+                    Image(systemName: "antenna.radiowaves.left.and.right")
+                        .font(.subheadline.weight(.semibold))
+                    Text("Vail")
+                        .font(.subheadline.weight(.semibold))
+                }
+                .foregroundStyle(Theme.teal)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 7)
+                .overlay(
+                    Capsule().strokeBorder(Theme.teal.opacity(0.6), lineWidth: 1.5)
+                )
             }
-            .accessibilityLabel("Live repeater — go on the air")
+            .accessibilityLabel("Vail repeater — go on the air")
             Spacer()
             Button { showingStats = true } label: {
                 Image(systemName: "chart.bar")
