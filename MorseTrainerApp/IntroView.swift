@@ -11,6 +11,7 @@ struct IntroView: View {
     @State private var showingSettings = false
     @State private var showingStats = false
     @State private var showingCustomWords = false
+    @State private var showingJourneyMap = false
     @State private var showingRepeater = false
     @StateObject private var repeater = RepeaterModel()
 
@@ -86,6 +87,13 @@ struct IntroView: View {
         )
     }
 
+    private var journeyDrainBinding: Binding<Bool> {
+        Binding(
+            get: { model.settings.journeyDrainOnMiss },
+            set: { model.settings.journeyDrainOnMiss = $0 }
+        )
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             topBar
@@ -118,6 +126,9 @@ struct IntroView: View {
         }
         .sheet(isPresented: $showingCustomWords) {
             CustomWordsSheet().environmentObject(model)
+        }
+        .sheet(isPresented: $showingJourneyMap) {
+            JourneyMapView().environmentObject(model)
         }
         .fullScreenCover(isPresented: $showingRepeater) {
             RepeaterView().environmentObject(repeater)
@@ -327,6 +338,34 @@ struct IntroView: View {
                         }
                     }
                     .pickerStyle(.segmented)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
+            if model.learningMode == .journey {
+                VStack(alignment: .leading, spacing: 12) {
+                    Button {
+                        showingJourneyMap = true
+                    } label: {
+                        HStack {
+                            Label("Level \(model.journeyLevelNumber): \(model.journeyLevelTitle)",
+                                  systemImage: "map")
+                                .font(.subheadline.weight(.medium))
+                            Spacer()
+                            Text("Choose level").font(.footnote)
+                            Image(systemName: "chevron.right").font(.caption2)
+                        }
+                        .foregroundStyle(Theme.teal)
+                    }
+                    Toggle(isOn: journeyDrainBinding) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Misses drain the bar").font(.subheadline)
+                            Text("A wrong answer pushes the progress bar back, so you have to stay sharp to clear a level. Turn off for a gentler, fill-only bar.")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }

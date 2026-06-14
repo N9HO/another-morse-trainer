@@ -827,6 +827,68 @@ do {
     check("custom item plays the word as text", items.first?.answer == "OHIO")
 }
 
+// Journey mode (gamified level ladder)
+print("\nJourney:")
+do {
+    let levels = JourneyCurriculum.levels
+    check("curriculum has a healthy number of levels", levels.count >= 30)
+    check("levels are numbered 1...n in order",
+          levels.map { $0.number } == Array(1...levels.count))
+    check("first level introduces the first Koch letters (K, M)",
+          levels.first?.newItems.map { $0.answer } == ["K", "M"])
+    check("pool is cumulative (grows monotonically)",
+          zip(levels, levels.dropFirst()).allSatisfy { $0.pool.count <= $1.pool.count })
+    check("each level's new items are contained in its own pool",
+          levels.allSatisfy { lvl in lvl.newItems.allSatisfy { n in lvl.pool.contains { $0.id == n.id } } })
+    check("journey spans multiple sections",
+          Set(levels.map { $0.section }).count >= 4)
+
+    // Bar fills on correct, drains on miss, and clears the level at the target.
+    let quiz = JourneyQuiz(levels: levels, startIndex: 0,
+                           scoring: JourneyScoring(target: 100, fill: 12, newItemBonus: 4, drain: 9),
+                           rng: SeededRNG(seed: 7))
+    _ = quiz.nextDrill()
+    let startLevel = quiz.levelNumber
+    let wrong = quiz.record(choice: "##nonsense##", ttr: 1.0)
+    check("wrong answer is scored incorrect", wrong.correct == false)
+    check("bar stays at 0 / can't go negative on an early miss", quiz.points == 0)
+
+    // Feed correct answers until the level clears.
+    var cleared: DrillOutcome? = nil
+    for _ in 0..<50 {
+        let d = quiz.nextDrill()
+        let before = quiz.points
+        let outcome = quiz.record(choice: d.correct, ttr: 0.5)
+        check("correct answer never lowers the bar", quiz.points >= before || outcome.unlocked != nil)
+        if outcome.unlocked != nil { cleared = outcome; break }
+    }
+    check("level clears after enough correct answers", cleared?.unlocked?.contains("complete") == true)
+    check("clearing advances to the next level", quiz.levelNumber == startLevel + 1)
+    check("bar resets after clearing a level", quiz.points == 0)
+
+    // select() jumps and resets.
+    quiz.select(levelIndex: 5)
+    check("select jumps to the chosen level", quiz.levelNumber == levels[5].number)
+    check("select resets the bar", quiz.points == 0)
+
+    // Fill-only scoring: a miss costs nothing.
+    let gentle = JourneyQuiz(levels: levels, scoring: .fillOnly, rng: SeededRNG(seed: 3))
+    _ = gentle.nextDrill()
+    _ = gentle.record(choice: "##nope##", ttr: 1.0)
+    check("fill-only scoring never drains", gentle.points == 0)
+
+    // Progress persistence.
+    var prog = JourneyProgress()
+    check("level 1 starts unlocked", prog.isUnlocked(level: 1))
+    check("level 2 starts locked", !prog.isUnlocked(level: 2))
+    prog.clear(level: 1, totalLevels: levels.count)
+    check("clearing level 1 unlocks level 2", prog.isUnlocked(level: 2))
+    check("clearing records completion", prog.completed.contains(1))
+    let encoded = try! JSONEncoder().encode(prog)
+    let decoded = try! JSONDecoder().decode(JourneyProgress.self, from: encoded)
+    check("JourneyProgress round-trips through JSON", decoded == prog)
+}
+
 print("\n────────────────────────────")
 if failures == 0 {
     print("✅ All \(checks) checks passed.\n")

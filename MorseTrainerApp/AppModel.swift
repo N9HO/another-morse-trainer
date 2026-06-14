@@ -4,10 +4,11 @@ import MediaPlayer
 
 /// The ways to practice.
 enum TrainingMode: String, CaseIterable, Identifiable {
-    case characters, words, abbreviations, qCodes, prosigns, headCopy, typed, confusion, listen, qso, story, exam, qrq
+    case journey, characters, words, abbreviations, qCodes, prosigns, headCopy, typed, confusion, listen, qso, story, exam, qrq
     var id: String { rawValue }
     var title: String {
         switch self {
+        case .journey:      return "Journey"
         case .characters:   return "Characters"
         case .words:        return "Words"
         case .abbreviations: return "Abbreviations"
@@ -25,6 +26,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
     }
     var icon: String {
         switch self {
+        case .journey:       return "map"
         case .characters:    return "character"
         case .words:         return "textformat"
         case .abbreviations: return "text.bubble"
@@ -43,6 +45,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
     /// In meaning-based modes the question is "what are they saying?"
     var prompt: String {
         switch self {
+        case .journey:        return "What did you hear?"
         case .characters, .words, .confusion: return "What did you hear?"
         case .abbreviations:      return "What are they saying?"
         case .qCodes:             return "What does it mean?"
@@ -60,6 +63,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
     /// Kept to a few words so two tiles sit side by side cleanly.
     var tagline: String {
         switch self {
+        case .journey:       return "Leveled path"
         case .characters:    return "Core Koch drill"
         case .words:         return "Whole ham words"
         case .abbreviations: return "CW abbreviations"
@@ -80,6 +84,8 @@ enum TrainingMode: String, CaseIterable, Identifiable {
     /// the teaching style that fits what they want to practice.
     var blurb: String {
         switch self {
+        case .journey:
+            return "Climb a leveled path: each level adds two new symbols and mixes in everything before it. Fill the progress bar with correct answers to clear a level and unlock the next — but a miss drains the bar, so stay sharp. Runs letters → numbers → punctuation → prosigns → Q-codes → abbreviations → words → call signs."
         case .characters:
             return "The core Koch drill: hear one character at full speed and tap it from four sound-alikes. Grows into pairs, triples, then words as you improve."
         case .words:
@@ -154,6 +160,15 @@ final class AppModel: ObservableObject {
     @Published private(set) var justUnlocked: String?
     @Published private(set) var summary: String = ""
 
+    // Journey mode: the live level + progress-bar state the UI renders.
+    @Published private(set) var journeyLevelNumber: Int = 1
+    @Published private(set) var journeyLevelTitle: String = ""
+    @Published private(set) var journeyLevelSection: String = ""
+    @Published private(set) var journeyBarProgress: Double = 0   // 0...1
+    /// Set briefly when an answer clears a level, so the UI can celebrate.
+    @Published private(set) var journeyLevelCleared: Int?
+    var journeyTotalLevels: Int { journeyQuiz.levels.count }
+
     // Session timer & running tally (for the timed-practice feature).
     @Published private(set) var sessionRemaining: TimeInterval?   // nil = no limit
     @Published private(set) var sessionEnded = false
@@ -166,6 +181,9 @@ final class AppModel: ObservableObject {
 
     private let engine: TrainerEngine
     private let charLadder: ProgressiveCharacters
+    let journeyQuiz: JourneyQuiz
+    /// Persisted journey unlock/completion state (mirrored into `journeyQuiz`).
+    private(set) var journeyProgress = JourneyProgress()
     private var wordsQuiz: PhraseQuiz   // rebuilt when the word tier changes
     private let abbrevQuiz: PhraseQuiz
     private let qCodeQuiz: PhraseQuiz
@@ -212,6 +230,7 @@ final class AppModel: ObservableObject {
     private var remoteCommandsWired = false
 
     private static let progressKey = "MorseTrainer.progress"
+    private static let journeyKey = "MorseTrainer.journey"
 
     // MARK: - Practice streak (issue #20)
 
@@ -266,6 +285,9 @@ final class AppModel: ObservableObject {
         self.settings = loaded
         self.engine = TrainerEngine(config: AppModel.config(from: loaded), seedCount: 2)
         self.charLadder = ProgressiveCharacters(engine: engine)
+        self.journeyQuiz = JourneyQuiz(scoring: loaded.journeyDrainOnMiss ? .default : .fillOnly,
+                                       config: .init(ttrThreshold: loaded.ttrThreshold,
+                                                     optionCount: loaded.maxAnswerChoices))
         self.wordsQuiz = PhraseQuiz(name: "Words", items: MorseData.topWordItems(loaded.wordTier.count))
         self.abbrevQuiz = PhraseQuiz(name: "Abbreviations", items: MorseData.abbreviationItems)
         self.qCodeQuiz = PhraseQuiz(name: "Q-Codes", items: MorseData.qCodeItems)
@@ -289,6 +311,7 @@ final class AppModel: ObservableObject {
 
     private var source: QuizSource {
         switch mode {
+        case .journey:      return journeyQuiz
         case .characters:   return charLadder
         case .words:        return wordsQuiz
         case .abbreviations: return abbrevQuiz
@@ -305,6 +328,7 @@ final class AppModel: ObservableObject {
         }
     }
 
+    var isJourney: Bool { mode == .journey }
     var isHeadCopy: Bool { mode == .headCopy }
     var isTyped: Bool { mode == .typed }
     var isListen: Bool { mode == .listen }
@@ -354,6 +378,9 @@ final class AppModel: ObservableObject {
             quiz.config.ttrThreshold = s.ttrThreshold
             quiz.config.optionCount = s.maxAnswerChoices
         }
+        journeyQuiz.config.ttrThreshold = s.ttrThreshold
+        journeyQuiz.config.optionCount = s.maxAnswerChoices
+        journeyQuiz.scoring = s.journeyDrainOnMiss ? .default : .fillOnly
     }
 
     private func applySettings() {
@@ -1313,6 +1340,7 @@ final class AppModel: ObservableObject {
         lastCorrect = nil
         lastSelected = nil
         lastTTR = nil
+        if isJourney { journeyLevelCleared = nil; syncJourneyState() }
         summary = source.summary
         drill = source.nextDrill()
         playCurrentTone()
@@ -1353,6 +1381,7 @@ final class AppModel: ObservableObject {
     /// Shared by tap-to-choose, voice, and typed entry.
     private func commitAnswer(_ choice: String, ttr: TimeInterval) {
         guard drill != nil else { return }
+        let levelBefore = isJourney ? journeyQuiz.levelNumber : 0
         let outcome = source.record(choice: choice, ttr: ttr)
 
         lastSelected = choice
@@ -1360,6 +1389,15 @@ final class AppModel: ObservableObject {
         lastTTR = ttr
         justUnlocked = outcome.unlocked
         summary = source.summary
+        if isJourney {
+            // record() may have advanced to the next level; reflect the new bar/level.
+            syncJourneyState()
+            if outcome.unlocked != nil {
+                journeyLevelCleared = levelBefore
+                journeyProgress.clear(level: levelBefore, totalLevels: journeyTotalLevels)
+                journeyProgress.currentLevel = journeyQuiz.levelNumber
+            }
+        }
         phase = .answered
         noteSessionResult(correct: outcome.correct, ttr: ttr, target: drill?.correct ?? "")
         saveProgress()
@@ -1748,17 +1786,48 @@ final class AppModel: ObservableObject {
         if let data = try? JSONEncoder().encode(charLadder.snapshot) {
             UserDefaults.standard.set(data, forKey: Self.progressKey)
         }
+        if let data = try? JSONEncoder().encode(journeyProgress) {
+            UserDefaults.standard.set(data, forKey: Self.journeyKey)
+        }
+    }
+
+    /// Mirror the quiz's live level/bar into the published UI state.
+    private func syncJourneyState() {
+        journeyLevelNumber = journeyQuiz.levelNumber
+        journeyLevelTitle = journeyQuiz.level.title
+        journeyLevelSection = journeyQuiz.level.section
+        journeyBarProgress = journeyQuiz.progress
+    }
+
+    /// Start the journey on a specific (unlocked) level — used by the level map.
+    func selectJourneyLevel(_ number: Int) {
+        guard journeyProgress.isUnlocked(level: number),
+              let index = journeyQuiz.levels.firstIndex(where: { $0.number == number }) else { return }
+        journeyQuiz.select(levelIndex: index)
+        journeyProgress.currentLevel = number
+        journeyLevelCleared = nil
+        syncJourneyState()
+        saveProgress()
     }
 
     private func restoreProgress() {
-        guard let data = UserDefaults.standard.data(forKey: Self.progressKey) else { return }
-        if let snap = try? JSONDecoder().decode(ProgressiveCharacters.Snapshot.self, from: data),
-           !snap.engine.activeCharacters.isEmpty {
-            charLadder.restore(from: snap)
-        } else if let old = try? JSONDecoder().decode(TrainerEngine.Snapshot.self, from: data),
-                  !old.activeCharacters.isEmpty {
-            engine.restore(from: old)   // migrate older single-stage progress
+        if let data = UserDefaults.standard.data(forKey: Self.progressKey) {
+            if let snap = try? JSONDecoder().decode(ProgressiveCharacters.Snapshot.self, from: data),
+               !snap.engine.activeCharacters.isEmpty {
+                charLadder.restore(from: snap)
+            } else if let old = try? JSONDecoder().decode(TrainerEngine.Snapshot.self, from: data),
+                      !old.activeCharacters.isEmpty {
+                engine.restore(from: old)   // migrate older single-stage progress
+            }
         }
+        if let data = UserDefaults.standard.data(forKey: Self.journeyKey),
+           let prog = try? JSONDecoder().decode(JourneyProgress.self, from: data) {
+            journeyProgress = prog
+            if let index = journeyQuiz.levels.firstIndex(where: { $0.number == prog.currentLevel }) {
+                journeyQuiz.select(levelIndex: index)
+            }
+        }
+        syncJourneyState()
     }
 
     // MARK: - Persistence (practice streak)
@@ -1832,9 +1901,13 @@ final class AppModel: ObservableObject {
 
     func resetProgress() {
         UserDefaults.standard.removeObject(forKey: Self.progressKey)
+        UserDefaults.standard.removeObject(forKey: Self.journeyKey)
         let fresh = TrainerEngine.Snapshot(
             activeCharacters: Array(MorseCode.kochOrder.prefix(2)), stats: [])
         charLadder.restore(from: .init(engine: fresh, stage: .singles))
+        journeyProgress = JourneyProgress()
+        journeyQuiz.select(levelIndex: 0)
+        syncJourneyState()
         reconcilePunctuation()
         phase = .idle
         drill = nil

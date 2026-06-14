@@ -34,6 +34,8 @@ struct ContentView: View {
                 } else if model.isQSO {
                     qsoView
                 } else {
+                    if model.isJourney { journeyBanner }
+
                     statusArea
                         .frame(maxHeight: .infinity)
 
@@ -214,7 +216,9 @@ struct ContentView: View {
                     .font(.caption).foregroundStyle(.secondary)
             }
             if let unlocked = model.justUnlocked {
-                Label("New: \(unlocked)", systemImage: "star.fill")
+                // Journey surfaces a full sentence ("Level 3 complete!"); other
+                // modes unlock a single item, so prefix it with "New:".
+                Label(model.isJourney ? unlocked : "New: \(unlocked)", systemImage: "star.fill")
                     .font(.callout).bold()
                     .foregroundStyle(.orange)
                     .padding(.top, 4)
@@ -885,6 +889,54 @@ struct ContentView: View {
     }
 
     // MARK: - Choices
+
+    // MARK: - Journey
+
+    /// Level header + progress bar shown above the choice grid in Journey mode.
+    private var journeyBanner: some View {
+        VStack(spacing: 6) {
+            HStack {
+                Text("Level \(model.journeyLevelNumber)")
+                    .font(.headline)
+                Text(model.journeyLevelSection)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text("\(model.journeyLevelNumber) / \(model.journeyTotalLevels)")
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+            if !model.journeyLevelTitle.isEmpty {
+                HStack {
+                    Text(model.journeyLevelTitle)
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(Theme.teal)
+                    Spacer()
+                }
+            }
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Color.secondary.opacity(0.2))
+                    Capsule()
+                        .fill(model.lastCorrect == false ? Color.orange : Theme.teal)
+                        .frame(width: max(0, geo.size.width * model.journeyBarProgress))
+                }
+            }
+            .frame(height: 12)
+            .animation(.spring(response: 0.4, dampingFraction: 0.8), value: model.journeyBarProgress)
+            .accessibilityLabel("Level progress")
+            .accessibilityValue("\(Int(model.journeyBarProgress * 100)) percent")
+
+            if let cleared = model.journeyLevelCleared {
+                Label("Level \(cleared) cleared!", systemImage: "checkmark.seal.fill")
+                    .font(.callout.bold())
+                    .foregroundStyle(.green)
+                    .transition(.scale.combined(with: .opacity))
+            }
+        }
+        .padding(.horizontal, 4)
+        .animation(.spring(response: 0.4, dampingFraction: 0.7), value: model.journeyLevelCleared)
+    }
 
     private var choiceGrid: some View {
         LazyVGrid(columns: columns, spacing: 16) {

@@ -219,6 +219,11 @@ public enum MorseData {
         }
     }
 
+    /// Call signs as recognize-by-sound items (answer is the call sign itself).
+    public static var callSignItems: [MorseItem] {
+        callSigns.map { MorseItem(id: "call-\($0)", playable: .text($0), answer: $0, display: $0) }
+    }
+
     /// Words + call signs, where the answer is the text itself (used by the
     /// advanced "Words & Call Signs" stage of the character ladder).
     public static var wordAndCallSignItems: [MorseItem] {

@@ -258,6 +258,11 @@ struct AppSettings: Codable, Equatable {
     /// Optional punctuation the user has opted into studying (e.g. ",", "/", ".").
     var selectedPunctuation: Set<String> = []
 
+    /// Journey mode: when true, a wrong answer drains the level progress bar
+    /// (Morse-Mania-style tension). When false, the bar only fills on correct
+    /// answers and misses cost nothing.
+    var journeyDrainOnMiss: Bool = true
+
     // Session setup
     /// Chosen teaching style for the next session (a TrainingMode rawValue).
     var learningMode: String = "characters"
@@ -352,7 +357,7 @@ extension AppSettings {
     enum CodingKeys: String, CodingKey {
         case toneFrequency, wpm, farnsworth, effectiveWpm, proficiency, ttrThreshold
         case dailyReminderEnabled, dailyReminderHour
-        case maxAnswerChoices, selectedPunctuation
+        case maxAnswerChoices, selectedPunctuation, journeyDrainOnMiss
         case learningMode, practiceDuration
         case listenContent, listenGap, wordTier, customWords, voiceResponse, keyingResponse
         case qrqSpeed
@@ -378,6 +383,7 @@ extension AppSettings {
         s.maxAnswerChoices = min(max(mac, AppSettings.answerChoiceRange.lowerBound),
                                  AppSettings.answerChoiceRange.upperBound)
         s.selectedPunctuation = try c.decodeIfPresent(Set<String>.self, forKey: .selectedPunctuation) ?? s.selectedPunctuation
+        s.journeyDrainOnMiss = try c.decodeIfPresent(Bool.self, forKey: .journeyDrainOnMiss) ?? s.journeyDrainOnMiss
         s.learningMode = try c.decodeIfPresent(String.self, forKey: .learningMode) ?? s.learningMode
         s.practiceDuration = try c.decodeIfPresent(PracticeDuration.self, forKey: .practiceDuration) ?? s.practiceDuration
         s.listenContent = try c.decodeIfPresent(ListenContent.self, forKey: .listenContent) ?? s.listenContent
