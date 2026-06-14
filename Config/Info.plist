@@ -37,6 +37,8 @@
 	<false/>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>Used to connect a Bluetooth (BLE MIDI) Morse key or Vail Adapter for keying and the live repeater.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Used so you can answer drills by speaking instead of tapping.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>

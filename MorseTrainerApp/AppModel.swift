@@ -314,9 +314,15 @@ final class AppModel: ObservableObject {
     var isQRQ: Bool { mode == .qrq }
     /// Modes that take a free-typed answer rather than tapping a choice.
     var usesTypedEntry: Bool { mode == .typed || mode == .qso || mode == .qrq }
+    /// Whether the learner answers by *sending* (keying the answer on a physical
+    /// or on-screen Morse key) this session (Characters & Words). Takes
+    /// precedence over voice when both happen to be enabled.
+    var usesKeyingResponse: Bool {
+        settings.keyingResponse && (mode == .characters || mode == .words)
+    }
     /// Whether the learner answers by voice this session (Characters & Words).
     var usesVoiceResponse: Bool {
-        settings.voiceResponse && (mode == .characters || mode == .words)
+        settings.voiceResponse && !usesKeyingResponse && (mode == .characters || mode == .words)
     }
     /// True when mic/speech permission was refused, so the UI can fall back.
     var voicePermissionDenied: Bool { voiceRecognizer.authorization == .denied }

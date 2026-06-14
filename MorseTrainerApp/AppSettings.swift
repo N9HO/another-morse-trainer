@@ -276,6 +276,10 @@ struct AppSettings: Codable, Equatable {
     /// per-session choice made on the setup screen.
     var voiceResponse: Bool = false
 
+    /// Answer by *sending* — keying the answer on a physical (Vail Adapter / BLE
+    /// MIDI) or on-screen Morse key, decoded back to text (Characters & Words).
+    var keyingResponse: Bool = false
+
     // Code Exam (ARRL/FCC-style proficiency exam)
     /// License-tied exam speed (5 / 13 / 20 WPM).
     var examSpeed: ExamSpeed = .general13
@@ -341,7 +345,7 @@ extension AppSettings {
         case dailyReminderEnabled, dailyReminderHour
         case maxAnswerChoices, selectedPunctuation
         case learningMode, practiceDuration
-        case listenContent, listenGap, wordTier, voiceResponse
+        case listenContent, listenGap, wordTier, voiceResponse, keyingResponse
         case qrqSpeed
         case examSpeed, examGrading, examUseBundled
         case qso
@@ -372,6 +376,7 @@ extension AppSettings {
         s.wordTier = try c.decodeIfPresent(WordTier.self, forKey: .wordTier) ?? s.wordTier
         s.qrqSpeed = try c.decodeIfPresent(QrqSpeed.self, forKey: .qrqSpeed) ?? s.qrqSpeed
         s.voiceResponse = try c.decodeIfPresent(Bool.self, forKey: .voiceResponse) ?? s.voiceResponse
+        s.keyingResponse = try c.decodeIfPresent(Bool.self, forKey: .keyingResponse) ?? s.keyingResponse
         s.examSpeed = try c.decodeIfPresent(ExamSpeed.self, forKey: .examSpeed) ?? s.examSpeed
         s.examGrading = try c.decodeIfPresent(ExamGrading.self, forKey: .examGrading) ?? s.examGrading
         s.examUseBundled = try c.decodeIfPresent(Bool.self, forKey: .examUseBundled) ?? s.examUseBundled

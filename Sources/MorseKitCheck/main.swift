@@ -761,6 +761,39 @@ do {
     }
 }
 
+// CW decoder
+print("\nMorse decoder:")
+check("reverse lookup: -..- is X", MorseCode.character(forPattern: "-..-") == "X")
+check("reverse lookup of elements: .- is A", MorseCode.character(for: [.dit, .dah]) == "A")
+check("unknown pattern returns nil", MorseCode.character(forPattern: "........") == nil)
+
+// Build canned (tone, gap) timings for "PARIS" at 20 WPM (unit = 60 ms).
+// dit=60 dah=180, element gap=60, letter gap=180, word gap=420.
+do {
+    let u = 60.0, dit = u, dah = 3 * u, eg = u, lg = 3 * u
+    // Each character's elements, with element gaps between and a letter gap after.
+    func charTimings(_ pattern: String, trailingGap: Double) -> [(tone: Double, gap: Double)] {
+        let els = Array(pattern)
+        return els.enumerated().map { i, c in
+            (tone: c == "." ? dit : dah, gap: i == els.count - 1 ? trailingGap : eg)
+        }
+    }
+    var timings: [(tone: Double, gap: Double)] = []
+    timings += charTimings(".--.", trailingGap: lg) // P
+    timings += charTimings(".-",   trailingGap: lg) // A
+    timings += charTimings(".-.",  trailingGap: lg) // R
+    timings += charTimings("..",   trailingGap: lg) // I
+    timings += charTimings("...",  trailingGap: 0)  // S
+    let decoded = MorseDecoder(wpm: 20).decodeTimings(timings)
+    check("decodes PARIS at 20 WPM", decoded == "PARIS")
+
+    // Two words separated by a word gap → a space.
+    let twoWords = charTimings("-",  trailingGap: 7 * u) // T, then word gap
+                 + charTimings(".",  trailingGap: 0)     // E
+    check("word gap yields a space (T E → 'T E')",
+          MorseDecoder(wpm: 20).decodeTimings(twoWords) == "T E")
+}
+
 print("\n────────────────────────────")
 if failures == 0 {
     print("✅ All \(checks) checks passed.\n")

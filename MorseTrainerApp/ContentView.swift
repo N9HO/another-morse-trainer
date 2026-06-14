@@ -55,6 +55,10 @@ struct ContentView: View {
                     } else if model.usesVoiceResponse {
                         voiceResponseView
                         bottomBar
+                    } else if model.usesKeyingResponse {
+                        SendingKeyerView(wpm: model.settings.wpm,
+                                         toneHz: model.settings.toneFrequency)
+                        bottomBar
                     } else {
                         choiceGrid
                         bottomBar

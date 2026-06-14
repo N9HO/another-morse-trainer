@@ -42,6 +42,12 @@ public enum MorseCode {
     private static let allPatterns: [Character: String] =
         table.merging(optionalPunctuation) { base, _ in base }
 
+    /// Reverse map: dit/dah pattern string ("-..-") → character. Built once from
+    /// `allPatterns`. Used by `MorseDecoder` to turn keyed elements back into
+    /// text. Patterns are unique across the table so the inversion is lossless.
+    private static let patternToCharacter: [String: Character] =
+        Dictionary(allPatterns.map { ($0.value, $0.key) }) { first, _ in first }
+
     /// The classic Koch-method teaching order. New characters are introduced
     /// from the front of this list, one at a time, as the learner speeds up.
     public static let kochOrder: [Character] =
@@ -60,5 +66,18 @@ public enum MorseCode {
     public static func elements(for character: Character) -> [Element] {
         guard let pattern = pattern(for: character) else { return [] }
         return pattern.map { $0 == "." ? .dit : .dah }
+    }
+
+    /// The character for a dit/dah pattern string ("-..-" → "X"), or nil if the
+    /// pattern isn't a known character. The inverse of `pattern(for:)`.
+    public static func character(forPattern pattern: String) -> Character? {
+        patternToCharacter[pattern]
+    }
+
+    /// The character for a sequence of keyed elements, or nil if unknown.
+    public static func character(for elements: [Element]) -> Character? {
+        guard !elements.isEmpty else { return nil }
+        let pattern = String(elements.map { $0 == .dit ? "." : "-" })
+        return patternToCharacter[pattern]
     }
 }

@@ -9,6 +9,8 @@ struct IntroView: View {
 
     @State private var showingSetup = false
     @State private var showingSettings = false
+    @State private var showingRepeater = false
+    @StateObject private var repeater = RepeaterModel()
 
     private let tileColumns = [GridItem(.flexible(), spacing: 14),
                                GridItem(.flexible(), spacing: 14)]
@@ -44,7 +46,20 @@ struct IntroView: View {
     private var voiceResponseBinding: Binding<Bool> {
         Binding(
             get: { model.settings.voiceResponse },
-            set: { model.settings.voiceResponse = $0 }
+            set: {
+                model.settings.voiceResponse = $0
+                if $0 { model.settings.keyingResponse = false }  // mutually exclusive
+            }
+        )
+    }
+
+    private var keyingResponseBinding: Binding<Bool> {
+        Binding(
+            get: { model.settings.keyingResponse },
+            set: {
+                model.settings.keyingResponse = $0
+                if $0 { model.settings.voiceResponse = false }   // mutually exclusive
+            }
         )
     }
 
@@ -96,6 +111,9 @@ struct IntroView: View {
         .sheet(isPresented: $showingSettings) {
             SettingsView().environmentObject(model)
         }
+        .fullScreenCover(isPresented: $showingRepeater) {
+            RepeaterView().environmentObject(repeater)
+        }
     }
 
     // MARK: - Top bar
@@ -105,6 +123,19 @@ struct IntroView: View {
     /// not buried inside a mode's setup sheet.
     private var topBar: some View {
         HStack {
+            Button {
+                let myCall = model.settings.qso.myCall.trimmingCharacters(in: .whitespacesAndNewlines)
+                if repeater.callsign.hasPrefix("anon"), !myCall.isEmpty {
+                    repeater.setCallsign(myCall)
+                }
+                showingRepeater = true
+            } label: {
+                Image(systemName: "antenna.radiowaves.left.and.right")
+                    .font(.title3)
+                    .foregroundStyle(Theme.teal)
+                    .padding(8)
+            }
+            .accessibilityLabel("Live repeater — go on the air")
             Spacer()
             Button { showingSettings = true } label: {
                 Image(systemName: "gearshape")
@@ -281,6 +312,18 @@ struct IntroView: View {
                         Label("Answer with your voice", systemImage: "mic.fill")
                             .font(.subheadline).bold()
                         Text("Say your answer instead of tapping. Use phonetics for letters (“Bravo” for B); say words normally.")
+                            .font(.footnote)
+                            .foregroundStyle(Theme.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .tint(Theme.teal)
+
+                Toggle(isOn: keyingResponseBinding) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Label("Answer by keying", systemImage: "dot.radiowaves.left.and.right")
+                            .font(.subheadline).bold()
+                        Text("Send your answer on a Morse key — a hardware Vail/BLE MIDI key or the on-screen key — and it’s decoded back to letters.")
                             .font(.footnote)
                             .foregroundStyle(Theme.textSecondary)
                             .fixedSize(horizontal: false, vertical: true)
