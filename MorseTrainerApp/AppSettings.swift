@@ -189,6 +189,9 @@ struct QSOSettings: Codable, Equatable {
     var giveUpEnabled: Bool = false
     var formats: Set<CallsignFormat> = Set(CallsignFormat.commonDefaults)
     var usOnly: Bool = true
+    /// Keep a partially-typed call in the input box while still hunting in the
+    /// pileup (send "?" without retyping) instead of clearing on every send (#29).
+    var keepPartialCall: Bool = false
 }
 
 // Resilient decoding so adding new QSO fields never wipes a user's saved
@@ -198,7 +201,7 @@ extension QSOSettings {
         case myCall, mode, maxStations, minWPM, maxWPM, farnsworth, toneSpread
         case minVolume, maxVolume, minDelay, maxDelay, qsbEnabled, qrn
         case cutNumbersEnabled, cutDigits, rstRequired, bustBehavior, giveUpEnabled
-        case formats, usOnly
+        case formats, usOnly, keepPartialCall
     }
 
     init(from decoder: Decoder) throws {
@@ -224,6 +227,7 @@ extension QSOSettings {
         s.giveUpEnabled = try c.decodeIfPresent(Bool.self, forKey: .giveUpEnabled) ?? s.giveUpEnabled
         s.formats = try c.decodeIfPresent(Set<CallsignFormat>.self, forKey: .formats) ?? s.formats
         s.usOnly = try c.decodeIfPresent(Bool.self, forKey: .usOnly) ?? s.usOnly
+        s.keepPartialCall = try c.decodeIfPresent(Bool.self, forKey: .keepPartialCall) ?? s.keepPartialCall
         self = s
     }
 }

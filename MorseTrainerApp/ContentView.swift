@@ -764,10 +764,12 @@ struct ContentView: View {
     private func qsoPrimary() {
         if model.qsoActionLabel == "CQ" {
             model.qsoCQ()
-        } else {
-            model.qsoPrimaryAction(qsoText)
+            qsoText = ""
+        } else if model.qsoPrimaryAction(qsoText) {
+            // Cleared unless "keep partial call" kept a still-being-copied call
+            // in the box (issue #29).
+            qsoText = ""
         }
-        qsoText = ""
     }
 
     @ViewBuilder

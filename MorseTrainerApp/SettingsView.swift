@@ -1,9 +1,11 @@
 import SwiftUI
+import UIKit
 
 struct SettingsView: View {
     @EnvironmentObject var model: AppModel
     @Environment(\.dismiss) private var dismiss
     @State private var confirmReset = false
+    @State private var copiedDiagnostics = false
 
     var body: some View {
         NavigationStack {
@@ -227,6 +229,7 @@ struct SettingsView: View {
 
                 Section {
                     Toggle("Copy RST too", isOn: $model.settings.qso.rstRequired)
+                    Toggle("Keep partial call in box", isOn: $model.settings.qso.keepPartialCall)
                     Picker("On a busted call", selection: $model.settings.qso.bustBehavior) {
                         ForEach(BustBehavior.allCases) { Text($0.label).tag($0) }
                     }
@@ -241,7 +244,7 @@ struct SettingsView: View {
                 } header: {
                     Text("QSO · Realism")
                 } footer: {
-                    Text("Give-up: a station you keep busting drops out after a few misses, but the pileup continues. Cut numbers send numerals as letters (0→T, 9→N) — you can type either form.")
+                    Text("Keep partial call: a partly-copied call stays in the box so you can send “?” and add to it instead of retyping. Give-up: a station you keep busting drops out after a few misses, but the pileup continues. Cut numbers send numerals as letters (0→T, 9→N) — you can type either form.")
                 }
                 .listRowBackground(Theme.navyElevated)
 
@@ -274,6 +277,25 @@ struct SettingsView: View {
                     Text("Developer · Preview Stage")
                 } footer: {
                     Text("Jumps the Characters track to a stage for testing. Stages beyond Characters expand your active set to all letters & numbers.")
+                }
+                .listRowBackground(Theme.navyElevated)
+
+                Section {
+                    Button {
+                        UIPasteboard.general.string = diagnosticInfo()
+                        copiedDiagnostics = true
+                        Haptics.success()
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                            copiedDiagnostics = false
+                        }
+                    } label: {
+                        Label(copiedDiagnostics ? "Copied to clipboard" : "Copy diagnostic info",
+                              systemImage: copiedDiagnostics ? "checkmark.circle" : "doc.on.doc")
+                    }
+                } header: {
+                    Text("Bug reports")
+                } footer: {
+                    Text("Copies your app/iOS version, device, and current settings to the clipboard to paste into a bug report.")
                 }
                 .listRowBackground(Theme.navyElevated)
 
@@ -374,6 +396,60 @@ struct SettingsView: View {
             }
             Slider(value: value, in: range, step: step)
         }
+    }
+
+    // MARK: - Diagnostics (issue #31)
+
+    /// A compact, copy-pasteable snapshot for bug reports: build, OS, device,
+    /// and the settings most likely to matter when reproducing an issue.
+    private func diagnosticInfo() -> String {
+        let info = Bundle.main.infoDictionary
+        let version = info?["CFBundleShortVersionString"] as? String ?? "?"
+        let build = info?["CFBundleVersion"] as? String ?? "?"
+        let device = UIDevice.current
+        let s = model.settings
+
+        var lines = [
+            "AMT \(version) (build \(build))",
+            "\(device.systemName) \(device.systemVersion) · \(Self.deviceModelIdentifier())",
+            "Mode: \(model.learningMode.title)",
+            "WPM: \(Int(s.wpm))" + (s.farnsworth ? " · Farnsworth \(Int(s.effectiveWpm))" : ""),
+            "Tone: \(Int(s.toneFrequency)) Hz",
+        ]
+        switch model.learningMode {
+        case .words:
+            lines.append(s.customWords.isEmpty
+                ? "Word pool: \(s.wordTier.label)"
+                : "Word pool: custom (\(s.customWords.count) words)")
+        case .qrq:
+            lines.append("QRQ speed: \(s.qrqSpeed.label)")
+        case .exam:
+            lines.append("Exam: \(s.examSpeed.label) · \(s.examGrading.label)")
+        case .listen:
+            lines.append("Listen: \(s.listenContent.label) · \(s.listenGap.label)")
+        default:
+            break
+        }
+        if !s.selectedPunctuation.isEmpty {
+            lines.append("Punctuation: \(s.selectedPunctuation.sorted().joined())")
+        }
+        return lines.joined(separator: "\n")
+    }
+
+    /// Hardware identifier (e.g. "iPhone16,2"), falling back to the generic model.
+    /// In the simulator `uname` returns the host arch, so prefer the simulated
+    /// device the env exposes.
+    private static func deviceModelIdentifier() -> String {
+        if let simModel = ProcessInfo.processInfo.environment["SIMULATOR_MODEL_IDENTIFIER"] {
+            return simModel
+        }
+        var sys = utsname()
+        uname(&sys)
+        let id = withUnsafeBytes(of: &sys.machine) { raw -> String in
+            let bytes = raw.prefix { $0 != 0 }
+            return String(decoding: bytes, as: UTF8.self)
+        }
+        return id.isEmpty ? UIDevice.current.model : id
     }
 }
 

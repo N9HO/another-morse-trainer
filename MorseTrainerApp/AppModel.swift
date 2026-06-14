@@ -743,17 +743,27 @@ final class AppModel: ObservableObject {
 
     // The single smart box: one action drives CQ / Send / TU by phase. Each turn
     // plays YOUR transmission first (your tone & speed), then the stations reply.
-    func qsoPrimaryAction(_ text: String) {
-        guard isQSO else { return }
+    /// Send the QSO input. Returns whether the input box should be cleared:
+    /// normally yes, but with "keep partial call" on (issue #29) a still-hunting
+    /// send (no station worked yet) leaves the partial in place so the user can
+    /// send "?" and add to it.
+    @discardableResult
+    func qsoPrimaryAction(_ text: String) -> Bool {
+        guard isQSO else { return true }
         if qsoReadyToLog {
             let action = pileup.logCurrent()
             perform(selfText: "TU \(settings.qso.myCall)", action: action)
-        } else {
-            let pre = pileup.phase
-            let action = pileup.send(text)
-            perform(selfText: selfSendText(input: text, pre: pre, post: pileup.phase, action: action),
-                    action: action)
+            return true
         }
+        let pre = pileup.phase
+        let action = pileup.send(text)
+        perform(selfText: selfSendText(input: text, pre: pre, post: pileup.phase, action: action),
+                action: action)
+        // `perform` refreshes the published QSO state synchronously, so we can
+        // read it here. Still hunting = no station being worked and not ready to
+        // log → keep the partial if the user opted in.
+        let stillHunting = qsoWorkingCall == nil && !qsoReadyToLog
+        return !(settings.qso.keepPartialCall && stillHunting)
     }
 
     func qsoCQ() {
