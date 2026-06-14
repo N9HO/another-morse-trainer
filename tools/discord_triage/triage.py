@@ -52,6 +52,18 @@ class Verdict(BaseModel):
     severity: Literal["low", "medium", "high", "critical", "n/a"] = Field(
         description="Rough severity for a bug; 'n/a' for non-bugs."
     )
+    platform: Literal[
+        "ios", "ipados", "macos", "android", "multiple", "unknown", "n/a"
+    ] = Field(
+        default="unknown",
+        description=(
+            "Which OS the report is about, when stated or clearly implied: 'ios', "
+            "'ipados', 'macos', 'android', 'multiple' (affects more than one), or "
+            "'unknown' if the reporter hasn't said. Use 'n/a' for questions/noise. "
+            "AMT ships on all of these, so a BUG's platform must be pinned down "
+            "before it can be filed."
+        ),
+    )
     reply: str = Field(
         description="A short, friendly one-line reply to post back in Discord."
     )
@@ -75,10 +87,11 @@ class Verdict(BaseModel):
 
 
 # Static instructions — kept stable so the prefix can be prompt-cached.
-SYSTEM_PROMPT = """You are the issue-triage assistant for "Another Morse Trainer", \
-an iOS/macOS app (Swift) that teaches Morse code: it has practice drills, a QSO \
-simulator, a confusion matrix, timing/Farnsworth settings, and progressive character \
-training.
+SYSTEM_PROMPT = """You are the issue-triage assistant for "Another Morse Trainer" \
+(AMT), a cross-platform app that teaches Morse code. It ships on Apple platforms \
+(iOS, iPadOS, macOS — Swift) and on Android (a separate port), and has practice \
+drills, a QSO simulator, a confusion matrix, timing/Farnsworth settings, and \
+progressive character training.
 
 Your job: read a report from the project's Discord and decide whether it should \
 become a GitHub issue, then produce a clean, well-structured issue if so.
@@ -100,6 +113,15 @@ you have ENOUGH detail to write a useful issue for.
 needs_more_info = true, and make 'reply' a specific question for the missing detail \
 (repro steps, platform/OS, a screenshot, expected vs actual). Once the follow-ups \
 give you enough, set should_file = true.
+- PLATFORM IS REQUIRED FOR BUGS. AMT runs on iOS, iPadOS, macOS, and Android, and \
+bugs are frequently platform-specific, so you must know which OS a bug is on before \
+filing. Set the 'platform' field from what the reporter says (or clearly implies). \
+If a bug doesn't state the platform, do NOT file: set should_file = false, \
+needs_more_info = true, platform = 'unknown', and make 'reply' ask specifically \
+which OS they're reporting for — naming the options (iOS / iPadOS / macOS / Android) \
+and asking for the OS/app version too. Once you know it, set 'platform', put a \
+"**Platform:** <os> (version if known)" line near the TOP of the issue body, and add \
+the matching platform label.
 - Questions and noise are never filed.
 - If a screenshot is attached, describe what it shows (error text, screen, UI state) \
 in the issue body — the maintainer can't see the image, only your description.
@@ -114,7 +136,9 @@ doesn't, say what's missing and add a 'needs-info' label.
 Timing, Progressive Characters).
 - End the body with a line like: "_Reported via Discord by {author}._"
 - labels: use 'bug' for bugs and 'enhancement' for features, plus 'needs-info' if the \
-report is too thin to act on.
+report is too thin to act on. When you know the platform, also add a platform label: \
+'platform: ios', 'platform: ipados', 'platform: macos', 'platform: android', or \
+'platform: multiple'.
 - reply: ALWAYS write a friendly, concise one-liner suitable to post back in the \
 Discord thread — even when you are not filing. If you won't file, the reply should say \
 why in a helpful way (e.g. what extra detail would let you file it, or that it reads \
@@ -125,6 +149,48 @@ def _format_open_issues(open_issues: list[dict]) -> str:
     if not open_issues:
         return "(none)"
     return "\n".join(f"#{i['number']}: {i['title']}" for i in open_issues)
+
+
+# GitHub label per platform. Missing labels are created automatically when the
+# issue is filed via the REST API.
+_PLATFORM_LABELS = {
+    "ios": "platform: ios",
+    "ipados": "platform: ipados",
+    "macos": "platform: macos",
+    "android": "platform: android",
+    "multiple": "platform: multiple",
+}
+
+# Asked when a bug arrives without a platform. AMT is cross-platform, so we never
+# file a bug without knowing which OS it's on.
+PLATFORM_QUESTION = (
+    "Thanks for the report! Which platform are you seeing this on — "
+    "iOS, iPadOS, macOS, or Android? (Your OS and app version help too.)"
+)
+
+
+def _postprocess_platform(v: Verdict) -> Verdict:
+    """Enforce the platform policy regardless of the model's judgment:
+    a bug can't be filed without a known platform, and a known platform always
+    gets its label so issues stay filterable.
+    """
+    # A bug with no platform: hold off filing and ask which OS.
+    if v.kind == "bug" and v.platform in ("unknown", "n/a"):
+        if v.should_file:
+            v.should_file = False
+            v.needs_more_info = True
+        if "needs-info" not in v.labels:
+            v.labels.append("needs-info")
+        # Make sure the reply actually asks about the OS.
+        low = v.reply.lower()
+        if not any(p in low for p in ("ios", "ipados", "macos", "android", "platform")):
+            v.reply = PLATFORM_QUESTION
+
+    # Attach the platform label whenever we know it (rides along to create_issue).
+    label = _PLATFORM_LABELS.get(v.platform)
+    if label and label not in v.labels:
+        v.labels.append(label)
+    return v
 
 
 def _triage_sync(
@@ -197,7 +263,7 @@ def _triage_sync(
             severity="n/a",
             reply="",
         )
-    return verdict
+    return _postprocess_platform(verdict)
 
 
 async def triage(
