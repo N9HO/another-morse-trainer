@@ -171,6 +171,50 @@ def main():
         if d:
             print(json.dumps(d, indent=2))
 
+    elif cmd == "whatsnew":
+        # Set the TestFlight "What to Test" notes for a build.
+        #   python3 tools/asc-api.py whatsnew <version> <path-to-notes-file>
+        # Reads the notes from a file (so multi-line text survives the shell).
+        want = sys.argv[2] if len(sys.argv) > 2 else None
+        path = sys.argv[3] if len(sys.argv) > 3 else None
+        if not want or not path:
+            print("usage: whatsnew <version> <notes-file>")
+            return
+        with open(os.path.expanduser(path), "r") as f:
+            notes = f.read().strip()
+        if not notes:
+            print("notes file is empty")
+            return
+        st, d = call("GET", f"/v1/builds?filter[app]={app}&sort=-version&limit=10"
+                            f"&fields[builds]=version,processingState")
+        target = next((b for b in d.get("data", [])
+                       if b["attributes"].get("version") == want), None)
+        if not target:
+            print(f"build {want} not listed yet (still registering) — try again shortly.")
+            sys.exit(2)
+        bid = target["id"]
+        # A build gets a default localization once it exists; patch it if present,
+        # otherwise create an en-US one.
+        st, d = call("GET", f"/v1/builds/{bid}/betaBuildLocalizations"
+                            f"?limit=20&fields[betaBuildLocalizations]=locale,whatsNew")
+        locs = d.get("data", [])
+        loc = next((l for l in locs if l["attributes"].get("locale") == "en-US"),
+                   locs[0] if locs else None)
+        if loc:
+            st, d = call("PATCH", f"/v1/betaBuildLocalizations/{loc['id']}",
+                         {"data": {"type": "betaBuildLocalizations", "id": loc["id"],
+                                   "attributes": {"whatsNew": notes}}})
+            print(f"update what-to-test for build {want} ({loc['attributes'].get('locale')}): HTTP {st}")
+        else:
+            st, d = call("POST", "/v1/betaBuildLocalizations",
+                         {"data": {"type": "betaBuildLocalizations",
+                                   "attributes": {"locale": "en-US", "whatsNew": notes},
+                                   "relationships": {"build": {"data": {"type": "builds", "id": bid}}}}})
+            print(f"create what-to-test for build {want} (en-US): HTTP {st}")
+        if st >= 300:
+            print(json.dumps(d, indent=2))
+            sys.exit(1)
+
 
 if __name__ == "__main__":
     main()
