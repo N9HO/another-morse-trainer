@@ -1614,6 +1614,79 @@ final class AppModel: ObservableObject {
         }
     }
 
+    // MARK: - Brag sheet (lifetime highlights)
+
+    /// One day in the current week, for the streak strip on the Brag Sheet.
+    struct StreakDay: Identifiable {
+        let id: Int           // 0 = Monday … 6 = Sunday
+        let label: String     // "M", "T", …
+        let practiced: Bool
+        let isToday: Bool
+        let isFuture: Bool
+    }
+
+    /// Aggregated lifetime totals and personal bests for the Brag Sheet, derived
+    /// from the same persisted session history and per-character stats the rest
+    /// of the app uses so the numbers can never drift from reality.
+    struct BragStats {
+        var currentStreak: Int
+        var longestStreak: Int
+        var totalSessions: Int
+        var totalAnswered: Int
+        var accuracy: Double                 // 0…1 over all attempts ever
+        var practiceSeconds: TimeInterval
+        var fastestCopy: TimeInterval?       // best single recognition time
+        var bestSessionAccuracy: Double?     // best "real" session (≥10 drills)
+        var biggestSession: Int?             // most drills answered in one sitting
+        var charactersMastered: Int
+        var charactersTotal: Int
+    }
+
+    var bragStats: BragStats {
+        let sessions = history.sessions
+        let answered = sessions.reduce(0) { $0 + $1.attempts }
+        let correct  = sessions.reduce(0) { $0 + $1.correct }
+        let seconds  = sessions.reduce(0.0) { $0 + ($1.durationSeconds ?? 0) }
+        // A best-accuracy badge from a 3-question session is meaningless, so only
+        // count sessions with a meaningful number of drills behind them.
+        let realSessions = sessions.filter { $0.attempts >= 10 }
+        let mastered = MorseCode.kochOrder.filter {
+            engine.stats[$0]?.isMastered(ttrThreshold: settings.ttrThreshold) ?? false
+        }.count
+        return BragStats(
+            currentStreak: currentStreak,
+            longestStreak: longestStreak,
+            totalSessions: sessions.count,
+            totalAnswered: answered,
+            accuracy: answered == 0 ? 0 : Double(correct) / Double(answered),
+            practiceSeconds: seconds,
+            fastestCopy: sessions.compactMap(\.fastestTTR).min(),
+            bestSessionAccuracy: realSessions.map(\.accuracy).max(),
+            biggestSession: sessions.map(\.attempts).max(),
+            charactersMastered: mastered,
+            charactersTotal: MorseCode.kochOrder.count)
+    }
+
+    /// The current week's practice strip (Mon…Sun) for the streak card: which
+    /// days have at least one recorded session, plus today / future markers.
+    var streakWeek: [StreakDay] {
+        var cal = Calendar.current
+        cal.firstWeekday = 2                              // Monday
+        let today = cal.startOfDay(for: Date())
+        let weekday = cal.component(.weekday, from: today)  // 1=Sun…7=Sat
+        let daysFromMonday = (weekday + 5) % 7
+        guard let monday = cal.date(byAdding: .day, value: -daysFromMonday, to: today) else { return [] }
+        let practiced = Set(history.sessions.map { cal.startOfDay(for: $0.date) })
+        let labels = ["M", "T", "W", "T", "F", "S", "S"]
+        return (0..<7).compactMap { i in
+            guard let day = cal.date(byAdding: .day, value: i, to: monday) else { return nil }
+            return StreakDay(id: i, label: labels[i],
+                             practiced: practiced.contains(day),
+                             isToday: day == today,
+                             isFuture: day > today)
+        }
+    }
+
     // MARK: - Head copy flow
 
     /// Head copy: after hearing the word and copying it mentally, reveal the
