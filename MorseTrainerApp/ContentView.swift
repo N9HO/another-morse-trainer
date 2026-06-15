@@ -5,6 +5,7 @@ struct ContentView: View {
     var onExit: () -> Void = {}
     @State private var showSettings = false
     @State private var showStats = false
+    @State private var showBrag = false
     @State private var detailRecord: SessionRecord?
     @State private var typedAnswer = ""
     @State private var examCopy = ""
@@ -86,6 +87,12 @@ struct ContentView: View {
                         .accessibilityLabel("Current session: \(model.summary)")
                 }
                 ToolbarItem(placement: .topBarTrailing) {
+                    Button { showBrag = true } label: {
+                        Image(systemName: "rosette")
+                    }
+                    .accessibilityLabel("Brag sheet")
+                }
+                ToolbarItem(placement: .topBarTrailing) {
                     Button { showStats = true } label: {
                         Image(systemName: "chart.bar")
                     }
@@ -103,6 +110,9 @@ struct ContentView: View {
             }
             .sheet(isPresented: $showStats) {
                 StatsView().environmentObject(model)
+            }
+            .sheet(isPresented: $showBrag) {
+                BragSheetView().environmentObject(model)
             }
             .sheet(item: $detailRecord) { record in
                 NavigationStack {
@@ -472,6 +482,7 @@ struct ContentView: View {
                 .padding(8)
                 .background(Color(.secondarySystemBackground),
                             in: RoundedRectangle(cornerRadius: 12))
+                .morseKeyboardRow(text: $examCopy) { examCopyFocused = false }
             Button {
                 model.submitExamCopy(examCopy)
             } label: {
@@ -745,6 +756,7 @@ struct ContentView: View {
                     .submitLabel(.send)
                     .focused($qsoFocused)
                     .onSubmit(qsoPrimary)
+                    .morseKeyboardRow(text: $qsoText) { qsoFocused = false }
                 if model.qsoCanRepeat {
                     Button { model.qsoRepeat() } label: {
                         Image(systemName: "questionmark")
@@ -789,6 +801,7 @@ struct ContentView: View {
                 .focused($typedFocused)
                 .disabled(model.phase == .answered)
                 .onSubmit(submitTyped)
+                .morseKeyboardRow(text: $typedAnswer) { typedFocused = false }
             Button(action: submitTyped) {
                 Text("Submit")
                     .font(.headline)
