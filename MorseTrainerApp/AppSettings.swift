@@ -113,23 +113,26 @@ enum QrqSpeed: String, Codable, CaseIterable, Identifiable {
 
 /// How the learner copies a Rapid Fire stream.
 enum RapidFireResponse: String, Codable, CaseIterable, Identifiable {
-    case copy    // type each item as it lands (free-recall)
-    case key     // send each item back on a Morse key
-    case review  // just listen; review the transmitted list at the end
+    case type      // type into a live box while the code plays (like the QSO sim)
+    case headCopy  // hold each item in your head, then type it after it finishes
+    case key       // send each item back on a Morse key
+    case review    // just listen; review the transmitted list at the end
     var id: String { rawValue }
     var label: String {
         switch self {
-        case .copy:   return "Type each one"
-        case .key:    return "Key each one"
-        case .review: return "Just listen"
+        case .type:     return "Type as you hear it"
+        case .headCopy: return "Head copy, then type"
+        case .key:      return "Key each one"
+        case .review:   return "Just listen"
         }
     }
     /// One-line explanation shown under the picker.
     var blurb: String {
         switch self {
-        case .copy:   return "Type what you hear after each item; it auto-advances to the next."
-        case .key:    return "Send each item back on a hardware or on-screen key; it’s decoded and checked."
-        case .review: return "Copy on paper or in your head — then review the full list of what was sent when you finish."
+        case .type:     return "Type into the box as each item is sent — the field stays live while it plays, like the QSO simulator."
+        case .headCopy: return "Hold each item in your head, then type it once the code finishes — the box stays hidden until then. Builds true head copy."
+        case .key:      return "Send each item back on a hardware or on-screen key; it’s decoded and checked."
+        case .review:   return "Copy on paper or in your head — then review the full list of what was sent when you finish."
         }
     }
 }
@@ -169,7 +172,7 @@ struct RapidFireSettings: Codable, Equatable {
     var wordMaxLength: Int = 6
     /// Digits per group for `content == .numbers`.
     var numberCount: Int = 5
-    var response: RapidFireResponse = .copy
+    var response: RapidFireResponse = .type
     var pace: RapidFirePace = .steady
 
     /// Allowed ranges for the steppers.

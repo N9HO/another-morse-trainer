@@ -835,18 +835,30 @@ struct ContentView: View {
 
     @ViewBuilder
     private var typedEntry: some View {
+        // Head copy hides the box while the code plays so you can't type along —
+        // you hold the item in your head and type it once it finishes. The field
+        // stays mounted (just invisible) so focus lands cleanly on reveal.
+        let headHidden = model.isRapidFireHeadType && model.phase == .playing
         VStack(spacing: 12) {
-            TextField("Type what you heard", text: $typedAnswer)
-                .textFieldStyle(.roundedBorder)
-                .font(.system(.title2, design: .monospaced))
-                .multilineTextAlignment(.center)
-                .textInputAutocapitalization(.characters)
-                .autocorrectionDisabled()
-                .submitLabel(.send)
-                .focused($typedFocused)
-                .disabled(model.phase == .answered)
-                .onSubmit(submitTyped)
-                .morseKeyboardRow(text: $typedAnswer) { typedFocused = false }
+            ZStack {
+                TextField(typedPlaceholder, text: $typedAnswer)
+                    .textFieldStyle(.roundedBorder)
+                    .font(.system(.title2, design: .monospaced))
+                    .multilineTextAlignment(.center)
+                    .textInputAutocapitalization(.characters)
+                    .autocorrectionDisabled()
+                    .submitLabel(.send)
+                    .focused($typedFocused)
+                    .disabled(model.phase == .answered || headHidden)
+                    .opacity(headHidden ? 0 : 1)
+                    .onSubmit(submitTyped)
+                    .morseKeyboardRow(text: $typedAnswer) { typedFocused = false }
+                if headHidden {
+                    Label("Copy it in your head…", systemImage: "brain.head.profile")
+                        .font(.headline)
+                        .foregroundStyle(.secondary)
+                }
+            }
             Button(action: submitTyped) {
                 Text("Submit")
                     .font(.headline)
@@ -858,8 +870,19 @@ struct ContentView: View {
         }
         .onChange(of: model.drill) { _ in typedAnswer = "" }
         .onChange(of: model.phase) { newPhase in
-            if newPhase == .awaiting { typedFocused = true }
+            // Focus when it's time to answer; also focus during playback for
+            // "type as you hear it" so you can copy in real time.
+            if newPhase == .awaiting || (newPhase == .playing && model.isRapidFireLiveType) {
+                typedFocused = true
+            }
         }
+    }
+
+    /// Placeholder tuned to how the current mode wants you to type.
+    private var typedPlaceholder: String {
+        if model.isRapidFireLiveType { return "Type as you hear it" }
+        if model.isRapidFireHeadType { return "Type what you copied" }
+        return "Type what you heard"
     }
 
     private func submitTyped() {

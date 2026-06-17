@@ -350,10 +350,16 @@ final class AppModel: ObservableObject {
     /// Rapid Fire's hands-off "just listen, review the list at the end" variant,
     /// which streams items on its own loop instead of waiting for an answer.
     var isRapidFireReview: Bool { isRapidFire && settings.rapidFire.response == .review }
+    /// Rapid Fire's "type as you hear it" variant: the input box is live while the
+    /// code plays, like the QSO simulator.
+    var isRapidFireLiveType: Bool { isRapidFire && settings.rapidFire.response == .type }
+    /// Rapid Fire's "head copy" variant: the box is hidden while the code plays;
+    /// you type the item only after it finishes.
+    var isRapidFireHeadType: Bool { isRapidFire && settings.rapidFire.response == .headCopy }
     /// Modes that take a free-typed answer rather than tapping a choice.
     var usesTypedEntry: Bool {
         mode == .typed || mode == .qso || mode == .qrq
-            || (isRapidFire && settings.rapidFire.response == .copy)
+            || isRapidFireLiveType || isRapidFireHeadType
     }
     /// Whether the learner answers by *sending* (keying the answer on a physical
     /// or on-screen Morse key) this session (Characters & Words, or Rapid Fire's
