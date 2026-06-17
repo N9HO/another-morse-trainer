@@ -111,6 +111,100 @@ enum QrqSpeed: String, Codable, CaseIterable, Identifiable {
     }
 }
 
+/// How the learner copies a Rapid Fire stream.
+enum RapidFireResponse: String, Codable, CaseIterable, Identifiable {
+    case type      // type into a live box while the code plays (like the QSO sim)
+    case headCopy  // hold each item in your head, then type it after it finishes
+    case key       // send each item back on a Morse key
+    case review    // just listen; review the transmitted list at the end
+    var id: String { rawValue }
+    var label: String {
+        switch self {
+        case .type:     return "Type as you hear it"
+        case .headCopy: return "Head copy, then type"
+        case .key:      return "Key each one"
+        case .review:   return "Just listen"
+        }
+    }
+    /// One-line explanation shown under the picker.
+    var blurb: String {
+        switch self {
+        case .type:     return "Type into the box as each item is sent — the field stays live while it plays, like the QSO simulator."
+        case .headCopy: return "Hold each item in your head, then type it once the code finishes — the box stays hidden until then. Builds true head copy."
+        case .key:      return "Send each item back on a hardware or on-screen key; it’s decoded and checked."
+        case .review:   return "Copy on paper or in your head — then review the full list of what was sent when you finish."
+        }
+    }
+}
+
+/// How quickly Rapid Fire moves on to the next item.
+enum RapidFirePace: String, Codable, CaseIterable, Identifiable {
+    case relaxed, steady, brisk, blazing
+    var id: String { rawValue }
+    /// Gap after each item before the next one starts (or before auto-advance).
+    var seconds: TimeInterval {
+        switch self {
+        case .relaxed: return 2.0
+        case .steady:  return 1.2
+        case .brisk:   return 0.6
+        case .blazing: return 0.25
+        }
+    }
+    var label: String {
+        switch self {
+        case .relaxed: return "Relaxed (2.0 s)"
+        case .steady:  return "Steady (1.2 s)"
+        case .brisk:   return "Brisk (0.6 s)"
+        case .blazing: return "Blazing (0.25 s)"
+        }
+    }
+}
+
+/// Rapid Fire preferences. Persisted as part of AppSettings; every field has a
+/// default so older saves upgrade cleanly.
+struct RapidFireSettings: Codable, Equatable {
+    var content: RapidFireContent = .callsigns
+    /// Call-sign shapes drawn from when `content == .callsigns` (or `.mixed`).
+    var callsignFormats: Set<CallsignFormat> = Set(CallsignFormat.commonDefaults)
+    var callsignUSOnly: Bool = true
+    /// Inclusive word-length bounds for `content == .words`.
+    var wordMinLength: Int = 3
+    var wordMaxLength: Int = 6
+    /// Digits per group for `content == .numbers`.
+    var numberCount: Int = 5
+    var response: RapidFireResponse = .type
+    var pace: RapidFirePace = .steady
+
+    /// Allowed ranges for the steppers.
+    static let wordLengthRange: ClosedRange<Int> = 2...12
+    static let numberCountRange: ClosedRange<Int> = 1...10
+}
+
+// Resilient decoding so adding new Rapid Fire fields never wipes saved settings.
+extension RapidFireSettings {
+    enum CodingKeys: String, CodingKey {
+        case content, callsignFormats, callsignUSOnly
+        case wordMinLength, wordMaxLength, numberCount, response, pace
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        var s = RapidFireSettings()
+        s.content = try c.decodeIfPresent(RapidFireContent.self, forKey: .content) ?? s.content
+        s.callsignFormats = try c.decodeIfPresent(Set<CallsignFormat>.self, forKey: .callsignFormats) ?? s.callsignFormats
+        s.callsignUSOnly = try c.decodeIfPresent(Bool.self, forKey: .callsignUSOnly) ?? s.callsignUSOnly
+        let lo = try c.decodeIfPresent(Int.self, forKey: .wordMinLength) ?? s.wordMinLength
+        let hi = try c.decodeIfPresent(Int.self, forKey: .wordMaxLength) ?? s.wordMaxLength
+        s.wordMinLength = min(max(lo, RapidFireSettings.wordLengthRange.lowerBound), RapidFireSettings.wordLengthRange.upperBound)
+        s.wordMaxLength = min(max(hi, RapidFireSettings.wordLengthRange.lowerBound), RapidFireSettings.wordLengthRange.upperBound)
+        let n = try c.decodeIfPresent(Int.self, forKey: .numberCount) ?? s.numberCount
+        s.numberCount = min(max(n, RapidFireSettings.numberCountRange.lowerBound), RapidFireSettings.numberCountRange.upperBound)
+        s.response = try c.decodeIfPresent(RapidFireResponse.self, forKey: .response) ?? s.response
+        s.pace = try c.decodeIfPresent(RapidFirePace.self, forKey: .pace) ?? s.pace
+        self = s
+    }
+}
+
 /// What the hands-free "Listen & Learn" mode announces.
 enum ListenContent: String, Codable, CaseIterable, Identifiable {
     case characters, words, abbreviations
@@ -305,6 +399,9 @@ struct AppSettings: Codable, Equatable {
     /// QSO / contest pileup simulator settings.
     var qso = QSOSettings()
 
+    /// Rapid Fire (back-to-back copy) settings.
+    var rapidFire = RapidFireSettings()
+
     // Feedback (defaults per spec: show right/wrong, reveal only on miss, no replay)
     var showCorrectness: Bool = true
     var reveal: RevealMode = .onWrong
@@ -363,6 +460,7 @@ extension AppSettings {
         case qrqSpeed
         case examSpeed, examGrading, examUseBundled
         case qso
+        case rapidFire
         case showCorrectness, reveal, allowReplay
         case headCopyRepeats, headCopyRevealSeconds
     }
@@ -397,6 +495,7 @@ extension AppSettings {
         s.examGrading = try c.decodeIfPresent(ExamGrading.self, forKey: .examGrading) ?? s.examGrading
         s.examUseBundled = try c.decodeIfPresent(Bool.self, forKey: .examUseBundled) ?? s.examUseBundled
         s.qso = try c.decodeIfPresent(QSOSettings.self, forKey: .qso) ?? s.qso
+        s.rapidFire = try c.decodeIfPresent(RapidFireSettings.self, forKey: .rapidFire) ?? s.rapidFire
         s.showCorrectness = try c.decodeIfPresent(Bool.self, forKey: .showCorrectness) ?? s.showCorrectness
         s.reveal = try c.decodeIfPresent(RevealMode.self, forKey: .reveal) ?? s.reveal
         s.allowReplay = try c.decodeIfPresent(Bool.self, forKey: .allowReplay) ?? s.allowReplay

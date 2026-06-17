@@ -96,6 +96,41 @@ struct IntroView: View {
         )
     }
 
+    // MARK: Rapid Fire bindings
+
+    private var rapidFireContentBinding: Binding<RapidFireContent> {
+        Binding(get: { model.settings.rapidFire.content },
+                set: { model.settings.rapidFire.content = $0 })
+    }
+
+    private var rapidFireResponseBinding: Binding<RapidFireResponse> {
+        Binding(get: { model.settings.rapidFire.response },
+                set: { model.settings.rapidFire.response = $0 })
+    }
+
+    private var rapidFirePaceBinding: Binding<RapidFirePace> {
+        Binding(get: { model.settings.rapidFire.pace },
+                set: { model.settings.rapidFire.pace = $0 })
+    }
+
+    private var rapidFireUSOnlyBinding: Binding<Bool> {
+        Binding(get: { model.settings.rapidFire.callsignUSOnly },
+                set: { model.settings.rapidFire.callsignUSOnly = $0 })
+    }
+
+    /// A toggle binding for one Rapid Fire call-sign format (keeps at least one on).
+    private func rapidFireFormatBinding(_ format: CallsignFormat) -> Binding<Bool> {
+        Binding(
+            get: { model.settings.rapidFire.callsignFormats.contains(format) },
+            set: { isOn in
+                if isOn { model.settings.rapidFire.callsignFormats.insert(format) }
+                else if model.settings.rapidFire.callsignFormats.count > 1 {
+                    model.settings.rapidFire.callsignFormats.remove(format)
+                }
+            }
+        )
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             topBar
@@ -392,6 +427,10 @@ struct IntroView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
 
+            if model.learningMode == .rapidFire {
+                rapidFireOptions
+            }
+
             if model.learningMode == .characters || model.learningMode == .words {
                 Divider().overlay(Theme.hairline)
                 Toggle(isOn: voiceResponseBinding) {
@@ -451,6 +490,110 @@ struct IntroView: View {
         .accessibilityHint(model.learningMode.needsSetup
             ? "Opens session options for \(model.learningMode.title)."
             : "Begins a session of \(model.learningMode.title).")
+    }
+
+    // MARK: - Rapid Fire options
+
+    @ViewBuilder
+    private var rapidFireOptions: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            inlinePicker(title: "What to send",
+                         selection: rapidFireContentBinding) { (c: RapidFireContent) in c.label }
+
+            // Per-content parameters.
+            let content = model.settings.rapidFire.content
+            if content == .callsigns || content == .mixed {
+                Toggle("US call signs only", isOn: rapidFireUSOnlyBinding)
+                    .font(.subheadline)
+                    .tint(Theme.teal)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Call-sign shapes")
+                        .font(.subheadline).foregroundStyle(.secondary)
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 64), spacing: 8)], spacing: 8) {
+                        ForEach(CallsignFormat.allCases) { fmt in
+                            rapidFireFormatChip(fmt)
+                        }
+                    }
+                }
+            }
+            if content == .words {
+                Stepper(value: Binding(
+                    get: { model.settings.rapidFire.wordMinLength },
+                    set: {
+                        model.settings.rapidFire.wordMinLength = $0
+                        if model.settings.rapidFire.wordMaxLength < $0 {
+                            model.settings.rapidFire.wordMaxLength = $0
+                        }
+                    }),
+                    in: RapidFireSettings.wordLengthRange) {
+                    rapidFireStepperLabel("Min length", "\(model.settings.rapidFire.wordMinLength)")
+                }
+                Stepper(value: Binding(
+                    get: { model.settings.rapidFire.wordMaxLength },
+                    set: {
+                        model.settings.rapidFire.wordMaxLength = $0
+                        if model.settings.rapidFire.wordMinLength > $0 {
+                            model.settings.rapidFire.wordMinLength = $0
+                        }
+                    }),
+                    in: RapidFireSettings.wordLengthRange) {
+                    rapidFireStepperLabel("Max length", "\(model.settings.rapidFire.wordMaxLength)")
+                }
+            }
+            if content == .numbers {
+                Stepper(value: Binding(
+                    get: { model.settings.rapidFire.numberCount },
+                    set: { model.settings.rapidFire.numberCount = $0 }),
+                    in: RapidFireSettings.numberCountRange) {
+                    rapidFireStepperLabel("Digits per group", "\(model.settings.rapidFire.numberCount)")
+                }
+            }
+
+            Divider().overlay(Theme.hairline)
+
+            inlinePicker(title: "How to answer",
+                         selection: rapidFireResponseBinding) { (r: RapidFireResponse) in r.label }
+            Text(model.settings.rapidFire.response.blurb)
+                .font(.footnote)
+                .foregroundStyle(Theme.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            inlinePicker(title: "Pace between items",
+                         selection: rapidFirePaceBinding) { (p: RapidFirePace) in p.label }
+
+            Text("Speed, Farnsworth, and side tone are in Settings.")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func rapidFireFormatChip(_ format: CallsignFormat) -> some View {
+        let on = model.settings.rapidFire.callsignFormats.contains(format)
+        return Button {
+            Haptics.selection()
+            rapidFireFormatBinding(format).wrappedValue.toggle()
+        } label: {
+            Text(format.label)
+                .font(.subheadline.weight(.medium))
+                .frame(maxWidth: .infinity, minHeight: 36)
+                .background(on ? Theme.teal : Theme.navyElevated,
+                            in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .foregroundStyle(on ? .white : Theme.textSecondary)
+                .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .strokeBorder(on ? Theme.tealBright : Theme.hairline, lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(format.label) call signs")
+        .accessibilityAddTraits(on ? [.isButton, .isSelected] : .isButton)
+    }
+
+    private func rapidFireStepperLabel(_ title: String, _ value: String) -> some View {
+        HStack {
+            Text(title).font(.subheadline)
+            Spacer()
+            Text(value).foregroundStyle(.secondary).monospacedDigit()
+        }
     }
 
     // MARK: - Custom words (issue #32)

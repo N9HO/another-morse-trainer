@@ -20,6 +20,9 @@ struct SendingKeyerView: View {
         }
         .onAppear { sender.start() }
         .onDisappear { sender.stop() }
+        // Start each drill with a clean slate so a new answer is never appended
+        // to the previous one's decoded text.
+        .onChange(of: model.drill) { _ in sender.clear() }
         // Auto-submit once the decoded text reaches the expected answer length
         // and the operator has stopped keying.
         .onChange(of: sender.decodedText) { _ in maybeAutoSubmit() }
