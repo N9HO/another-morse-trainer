@@ -119,3 +119,71 @@ public struct SessionHistory: Codable, Sendable, Equatable {
         }
     }
 }
+
+// MARK: - Performance by speed band
+
+/// How you perform at a given character-speed range — accuracy and typical
+/// reaction time across every session sent near that speed. This surfaces the
+/// thing a recognition learner most wants to see: "I'm solid at 20 WPM but my
+/// reaction time falls apart at 30." Aggregated from the persisted session
+/// history, so it needs no extra storage. Mirrors cwsignals.com's per-WPM-band
+/// mastery readout.
+public struct WPMBandSummary: Identifiable, Sendable, Equatable {
+    /// Inclusive character-WPM range, e.g. 20...24.
+    public let band: ClosedRange<Int>
+    /// Number of sessions that fell in this band.
+    public let sessions: Int
+    /// Total answered questions across those sessions.
+    public let attempts: Int
+    /// Total correct answers.
+    public let correct: Int
+    /// Attempt-weighted mean of the sessions' median recognition times (nil if
+    /// no session in the band recorded one).
+    public let medianTTR: TimeInterval?
+
+    public init(band: ClosedRange<Int>, sessions: Int, attempts: Int,
+                correct: Int, medianTTR: TimeInterval?) {
+        self.band = band
+        self.sessions = sessions
+        self.attempts = attempts
+        self.correct = correct
+        self.medianTTR = medianTTR
+    }
+
+    public var id: Int { band.lowerBound }
+    public var label: String { "\(band.lowerBound)–\(band.upperBound)" }
+    public var accuracy: Double { attempts == 0 ? 0 : Double(correct) / Double(attempts) }
+    /// Typical recognition time in whole milliseconds (nil when unknown).
+    public var medianMS: Int? { medianTTR.map { Int(($0 * 1000).rounded()) } }
+}
+
+public extension SessionHistory {
+    /// The 5-WPM-wide band a speed falls into (22 → 20...24).
+    static func band(forWPM wpm: Int) -> ClosedRange<Int> {
+        let lower = (max(0, wpm) / 5) * 5
+        return lower...(lower + 4)
+    }
+
+    /// Performance grouped into 5-WPM speed bands, slowest band first. Only
+    /// sessions that actually answered something are counted.
+    func wpmBandSummaries() -> [WPMBandSummary] {
+        let answered = sessions.filter { $0.attempts > 0 }
+        let grouped = Dictionary(grouping: answered) { Self.band(forWPM: $0.characterWPM).lowerBound }
+        return grouped.keys.sorted().map { lower in
+            let records = grouped[lower] ?? []
+            let attempts = records.reduce(0) { $0 + $1.attempts }
+            let correct = records.reduce(0) { $0 + $1.correct }
+            // Attempt-weighted mean of the per-session medians we have.
+            let timed = records.compactMap { r in r.medianTTR.map { ($0, r.attempts) } }
+            let weight = timed.reduce(0) { $0 + $1.1 }
+            let median: TimeInterval? = weight == 0
+                ? nil
+                : timed.reduce(0.0) { $0 + $1.0 * Double($1.1) } / Double(weight)
+            return WPMBandSummary(band: lower...(lower + 4),
+                                  sessions: records.count,
+                                  attempts: attempts,
+                                  correct: correct,
+                                  medianTTR: median)
+        }
+    }
+}

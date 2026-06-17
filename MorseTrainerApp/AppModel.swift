@@ -1696,6 +1696,24 @@ final class AppModel: ObservableObject {
     var stageName: String { charLadder.stage.displayName }
     var activeCharacterCount: Int { engine.activeCharacters.count }
 
+    /// The characters the learner has studied so far (the active Koch ladder) —
+    /// the pool a sending-practice sheet should draw from.
+    var studiedCharacters: [Character] { engine.activeCharacters }
+
+    /// Per-character difficulty weights for a personalized sending drill: higher
+    /// means "drill this more." Weak (low accuracy) and slow (high TTR relative to
+    /// the goal) characters score higher; comfortable ones sit near the floor.
+    func sendingDrillWeights() -> [Character: Double] {
+        var weights: [Character: Double] = [:]
+        let goal = max(0.3, settings.ttrThreshold)
+        for stat in characterStats {
+            let missPenalty = (1.0 - stat.accuracy) * 4.0          // 0…4
+            let slowPenalty = stat.medianTTR.map { min($0 / goal, 3.0) } ?? 1.0
+            weights[stat.character] = max(0.5, 0.5 + missPenalty + slowPenalty)
+        }
+        return weights
+    }
+
     /// Per-character performance, weakest first (unmastered, then slowest).
     var characterStats: [CharStat] {
         let window = CharacterStats.historyLimit
