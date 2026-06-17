@@ -427,6 +427,8 @@ struct SettingsView: View {
             lines.append("Exam: \(s.examSpeed.label) · \(s.examGrading.label)")
         case .listen:
             lines.append("Listen: \(s.listenContent.label) · \(s.listenGap.label)")
+        case .rapidFire:
+            lines.append("Rapid Fire: \(s.rapidFire.content.label) · \(s.rapidFire.response.label) · \(s.rapidFire.pace.label)")
         default:
             break
         }
