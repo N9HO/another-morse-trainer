@@ -889,6 +889,83 @@ do {
     check("JourneyProgress round-trips through JSON", decoded == prog)
 }
 
+// Rapid Fire (back-to-back copy)
+print("\nRapid Fire:")
+do {
+    check("there are 51 state abbreviations (50 states + DC)", MorseData.usStates.count == 51)
+    check("state abbreviations are unique", Set(MorseData.usStates).count == MorseData.usStates.count)
+    check("state abbreviations are all two letters",
+          MorseData.usStates.allSatisfy { $0.count == 2 })
+
+    // Numbers: groups are exactly N digits.
+    let numQ = RapidFireQuiz(config: .init(content: .numbers, numberCount: 5),
+                             rng: SeededRNG(seed: 3))
+    var allFiveDigits = true
+    for _ in 0..<40 {
+        let d = numQ.nextDrill()
+        guard case .text(let s) = d.playable else { allFiveDigits = false; break }
+        if s.count != 5 || !s.allSatisfy({ $0.isNumber }) { allFiveDigits = false; break }
+    }
+    check("number groups are exactly N digits", allFiveDigits)
+    check("number summary reads '5-digit numbers'", numQ.summary == "5-digit numbers")
+
+    // States: every item is a real state abbreviation.
+    let stQ = RapidFireQuiz(config: .init(content: .states), rng: SeededRNG(seed: 4))
+    var allStates = true
+    for _ in 0..<40 { if !MorseData.usStates.contains(stQ.nextDrill().correct) { allStates = false; break } }
+    check("state content only sends real abbreviations", allStates)
+
+    // Words: respect the length bounds.
+    let wQ = RapidFireQuiz(config: .init(content: .words, wordMinLength: 4, wordMaxLength: 5),
+                           rng: SeededRNG(seed: 5))
+    var allInRange = true
+    for _ in 0..<60 {
+        let len = wQ.nextDrill().correct.count
+        if len < 4 || len > 5 { allInRange = false; break }
+    }
+    check("word content honors the length bounds", allInRange)
+    check("word summary reads 'Words 4–5 letters'", wQ.summary == "Words 4–5 letters")
+    check("single-length word summary reads 'N-letter words'",
+          RapidFireQuiz(config: .init(content: .words, wordMinLength: 5, wordMaxLength: 5)).summary == "5-letter words")
+
+    // Callsigns: 2×1 shape is L L D L.
+    let cQ = RapidFireQuiz(config: .init(content: .callsigns,
+                                         callsignFormats: [.twoByOne], callsignUSOnly: true),
+                           rng: SeededRNG(seed: 6))
+    let call = Array(cQ.nextDrill().correct)
+    check("2×1 US call sign has shape L L D L",
+          call.count == 4 && call[0].isLetter && call[1].isLetter && call[2].isNumber && call[3].isLetter)
+
+    // Grading is case- and space-insensitive.
+    let gQ = RapidFireQuiz(config: .init(content: .states), rng: SeededRNG(seed: 7))
+    let answer = gQ.nextDrill().correct
+    check("an exact copy grades correct", gQ.record(choice: answer, ttr: 0.5).correct == true)
+    let g2 = RapidFireQuiz(config: .init(content: .callsigns, callsignFormats: [.oneByTwo]),
+                           rng: SeededRNG(seed: 8))
+    let a2 = g2.nextDrill().correct
+    check("a spaced, lowercased copy still grades correct",
+          g2.record(choice: " " + a2.lowercased() + " ", ttr: 0.5).correct == true)
+    let g3 = RapidFireQuiz(config: .init(content: .numbers, numberCount: 4), rng: SeededRNG(seed: 9))
+    _ = g3.nextDrill()
+    check("a wrong copy grades incorrect", g3.record(choice: "ZZZZ", ttr: 0.5).correct == false)
+
+    // Mixed draws from more than one content type over a run.
+    let mQ = RapidFireQuiz(config: .init(content: .mixed), rng: SeededRNG(seed: 10))
+    var sawDigits = false, sawNonDigits = false
+    for _ in 0..<60 {
+        let t = mQ.nextDrill().correct
+        if t.allSatisfy({ $0.isNumber }) { sawDigits = true } else { sawNonDigits = true }
+    }
+    check("mixed content varies (both numeric and non-numeric items appear)",
+          sawDigits && sawNonDigits)
+
+    // Plugs into the shared QuizSource protocol.
+    let src: QuizSource = RapidFireQuiz(config: .init(content: .callsigns), rng: SeededRNG(seed: 11))
+    let sd = src.nextDrill()
+    check("Rapid Fire drill exposes its answer as the lone option",
+          sd.options == [sd.correct] && !src.summary.isEmpty)
+}
+
 print("\n────────────────────────────")
 if failures == 0 {
     print("✅ All \(checks) checks passed.\n")

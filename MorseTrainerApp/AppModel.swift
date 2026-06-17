@@ -4,7 +4,7 @@ import MediaPlayer
 
 /// The ways to practice.
 enum TrainingMode: String, CaseIterable, Identifiable {
-    case journey, characters, words, abbreviations, qCodes, prosigns, headCopy, typed, confusion, listen, qso, story, exam, qrq
+    case journey, characters, words, abbreviations, qCodes, prosigns, headCopy, typed, confusion, listen, qso, story, exam, qrq, rapidFire
     var id: String { rawValue }
     var title: String {
         switch self {
@@ -22,6 +22,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .story:        return "Short Stories"
         case .exam:         return "Code Exam"
         case .qrq:          return "QRQ Speed"
+        case .rapidFire:    return "Rapid Fire"
         }
     }
     var icon: String {
@@ -40,6 +41,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .story:         return "book"
         case .exam:          return "checkmark.seal"
         case .qrq:           return "hare"
+        case .rapidFire:     return "bolt.fill"
         }
     }
     /// In meaning-based modes the question is "what are they saying?"
@@ -57,6 +59,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .story:              return "Copy the passage"
         case .exam:               return "Copy the exam transmission"
         case .qrq:                return "Type what you hear"
+        case .rapidFire:          return "Copy what you hear"
         }
     }
     /// A very short descriptor shown on the mode-selection tiles (intro screen).
@@ -77,6 +80,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .story:         return "Continuous copy"
         case .exam:          return "ARRL/FCC code exam"
         case .qrq:           return "High-speed copy"
+        case .rapidFire:     return "Back-to-back copy"
         }
     }
 
@@ -112,6 +116,8 @@ enum TrainingMode: String, CaseIterable, Identifiable {
             return "Sit a recreation of the old ARRL/FCC code-proficiency exam: a 5-minute QSO-style transmission at 5, 13, or 20 WPM. Pass with one minute of solid copy (25 characters in a row) or by answering questions about what was sent."
         case .qrq:
             return "Push your speed: hear whole words and call signs at 35 or 40 WPM and type what you copy. Too fast to count dits — this trains instant, whole-word recognition (QRQ = “send faster”)."
+        case .rapidFire:
+            return "Real-world copy drill: a stream of call signs, words, number groups, or state abbreviations sent back to back at whatever pace you choose. Type each one as it lands, send it back on a key, or just copy along and review the full list of what was transmitted at the end."
         }
     }
 
@@ -191,6 +197,8 @@ final class AppModel: ObservableObject {
     private let headCopyQuiz: PhraseQuiz
     private let typedQuiz: PhraseQuiz
     private let qrqQuiz: PhraseQuiz
+    /// Rebuilt at the start of each Rapid Fire session from the saved config.
+    private var rapidFireQuiz: RapidFireQuiz
     private let confusionQuiz: ConfusionQuiz
     private let pileup = PileupEngine()
     private var examSession: ExamSession?
@@ -295,6 +303,7 @@ final class AppModel: ObservableObject {
         self.headCopyQuiz = PhraseQuiz(name: "Head Copy", items: MorseData.wordAndCallSignItems)
         self.typedQuiz = PhraseQuiz(name: "Type It", items: MorseData.wordAndCallSignItems)
         self.qrqQuiz = PhraseQuiz(name: "QRQ", items: MorseData.wordAndCallSignItems)
+        self.rapidFireQuiz = RapidFireQuiz(config: AppModel.rapidFireConfig(from: loaded))
         self.confusionQuiz = ConfusionQuiz(engine: engine)
         restoreProgress()
         reconcilePunctuation()
@@ -325,6 +334,7 @@ final class AppModel: ObservableObject {
         case .story:        return charLadder   // unused: Stories run their own playback
         case .exam:         return (examSession as QuizSource?) ?? charLadder   // exam runs its own flow
         case .qrq:          return qrqQuiz
+        case .rapidFire:    return rapidFireQuiz
         }
     }
 
@@ -336,13 +346,27 @@ final class AppModel: ObservableObject {
     var isStory: Bool { mode == .story }
     var isExam: Bool { mode == .exam }
     var isQRQ: Bool { mode == .qrq }
+    var isRapidFire: Bool { mode == .rapidFire }
+    /// Rapid Fire's hands-off "just listen, review the list at the end" variant,
+    /// which streams items on its own loop instead of waiting for an answer.
+    var isRapidFireReview: Bool { isRapidFire && settings.rapidFire.response == .review }
+    /// Rapid Fire's "type as you hear it" variant: the input box is live while the
+    /// code plays, like the QSO simulator.
+    var isRapidFireLiveType: Bool { isRapidFire && settings.rapidFire.response == .type }
+    /// Rapid Fire's "head copy" variant: the box is hidden while the code plays;
+    /// you type the item only after it finishes.
+    var isRapidFireHeadType: Bool { isRapidFire && settings.rapidFire.response == .headCopy }
     /// Modes that take a free-typed answer rather than tapping a choice.
-    var usesTypedEntry: Bool { mode == .typed || mode == .qso || mode == .qrq }
+    var usesTypedEntry: Bool {
+        mode == .typed || mode == .qso || mode == .qrq
+            || isRapidFireLiveType || isRapidFireHeadType
+    }
     /// Whether the learner answers by *sending* (keying the answer on a physical
-    /// or on-screen Morse key) this session (Characters & Words). Takes
-    /// precedence over voice when both happen to be enabled.
+    /// or on-screen Morse key) this session (Characters & Words, or Rapid Fire's
+    /// "key each one"). Takes precedence over voice when both happen to be enabled.
     var usesKeyingResponse: Bool {
-        settings.keyingResponse && (mode == .characters || mode == .words)
+        (settings.keyingResponse && (mode == .characters || mode == .words))
+            || (isRapidFire && settings.rapidFire.response == .key)
     }
     /// Whether the learner answers by voice this session (Characters & Words).
     var usesVoiceResponse: Bool {
@@ -429,6 +453,10 @@ final class AppModel: ObservableObject {
             stopListening()
             startStory(active: false)
             startQSOMode()
+        } else if mode == .rapidFire {
+            stopListening()
+            startStory(active: false)
+            startRapidFire()
         } else {
             stopListening()
             startStory(active: false)
@@ -935,6 +963,83 @@ final class AppModel: ObservableObject {
         summary = pileup.summary
     }
 
+    // MARK: - Rapid Fire (back-to-back copy)
+
+    /// One transmitted item in a Rapid Fire run, shown in the end-of-session
+    /// list. `typed`/`correct` are nil in "just listen" review runs.
+    struct RapidFireResult: Identifiable {
+        let id = UUID()
+        let text: String       // what was sent (and the answer)
+        let typed: String?     // what the learner entered (copy/key responses)
+        let correct: Bool?
+    }
+
+    /// The transmitted list for the current/just-finished Rapid Fire session,
+    /// surfaced in the session summary so the learner can check their copy.
+    @Published private(set) var rapidFireTranscript: [RapidFireResult] = []
+    private var rapidFireGeneration = 0
+
+    /// Build the engine config from the saved Rapid Fire settings.
+    private static func rapidFireConfig(from s: AppSettings) -> RapidFireQuiz.Config {
+        let r = s.rapidFire
+        return RapidFireQuiz.Config(
+            content: r.content,
+            callsignFormats: r.callsignFormats.isEmpty
+                ? CallsignFormat.commonDefaults : Array(r.callsignFormats),
+            callsignUSOnly: r.callsignUSOnly,
+            wordMinLength: r.wordMinLength,
+            wordMaxLength: r.wordMaxLength,
+            numberCount: r.numberCount)
+    }
+
+    /// Set up a Rapid Fire session: rebuild the generator from current settings,
+    /// clear the transcript, then either stream (review) or hand out the first
+    /// per-item drill (type / key).
+    private func startRapidFire() {
+        rapidFireGeneration += 1
+        rapidFireTranscript = []
+        rapidFireQuiz = RapidFireQuiz(config: AppModel.rapidFireConfig(from: settings))
+        if isRapidFireReview {
+            startRapidFireReviewLoop()
+        } else {
+            newDrill()
+        }
+    }
+
+    /// Hands-off review loop: play one item → reveal it → wait the pace gap →
+    /// repeat. Each hop re-checks the generation so ending the session (or
+    /// switching modes) cancels the chain cleanly.
+    private func startRapidFireReviewLoop() {
+        rapidFireGeneration += 1
+        rapidFireStep(gen: rapidFireGeneration)
+    }
+
+    private func rapidFireStep(gen: Int) {
+        guard isRapidFire, gen == rapidFireGeneration, !sessionEnded else { return }
+        let item = rapidFireQuiz.nextDrill()
+        drill = item
+        summary = rapidFireQuiz.summary
+        lastTTR = nil
+        phase = .playing
+        player.play(playable: item.playable,
+                    frequency: settings.toneFrequency,
+                    timing: timing) { [weak self] in
+            guard let self, gen == self.rapidFireGeneration,
+                  self.isRapidFire, !self.sessionEnded else { return }
+            self.rapidFireTranscript.append(
+                RapidFireResult(text: item.correct, typed: nil, correct: nil))
+            self.markPracticedToday()
+            self.sessionAttempts += 1
+            self.phase = .revealed
+            let gap = self.settings.rapidFire.pace.seconds
+            DispatchQueue.main.asyncAfter(deadline: .now() + gap) {
+                guard gen == self.rapidFireGeneration,
+                      self.isRapidFire, !self.sessionEnded else { return }
+                self.rapidFireStep(gen: gen)
+            }
+        }
+    }
+
     // MARK: - Listen & Learn (hands-free)
 
     private struct ListenItem {
@@ -1245,6 +1350,8 @@ final class AppModel: ObservableObject {
         }
         qsoBusy = false
         qsoActive = false
+        rapidFireGeneration += 1   // cancel any pending Rapid Fire stream
+        if isRapidFire { player.stop() }
         phase = .idle
         if let record = buildSessionRecord() {
             history.add(record)            // triggers saveHistory()
@@ -1401,6 +1508,23 @@ final class AppModel: ObservableObject {
         phase = .answered
         noteSessionResult(correct: outcome.correct, ttr: ttr, target: drill?.correct ?? "")
         saveProgress()
+
+        // Rapid Fire keeps streaming regardless of right/wrong: log the item and
+        // auto-advance at the chosen pace, so the rhythm never stalls. The miss
+        // is captured in the transcript for the end-of-session review.
+        if isRapidFire {
+            rapidFireTranscript.append(
+                RapidFireResult(text: drill?.correct ?? "", typed: choice, correct: outcome.correct))
+            advanceGeneration += 1
+            let token = advanceGeneration
+            let gap = settings.rapidFire.pace.seconds
+            DispatchQueue.main.asyncAfter(deadline: .now() + gap) { [weak self] in
+                guard let self, self.advanceGeneration == token,
+                      self.phase == .answered else { return }
+                self.next()
+            }
+            return
+        }
 
         // Keep the rhythm going: correct answers auto-advance (unless a new
         // item was just unlocked, so the celebration banner isn't missed).
@@ -1779,6 +1903,7 @@ final class AppModel: ObservableObject {
 
     var showsNextButton: Bool {
         guard phase == .answered else { return false }
+        if isRapidFire { return false }   // Rapid Fire auto-advances at its pace
         return lastCorrect == false || justUnlocked != nil
     }
 

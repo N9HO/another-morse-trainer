@@ -129,6 +129,16 @@ public enum MorseData {
         "599","579","559","569","589","539","449","459","558","578"
     ]
 
+    /// All 50 US state abbreviations plus DC — used by Rapid Fire's
+    /// state-abbreviation copy and anywhere a full state pool is wanted.
+    public static let usStates: [String] = [
+        "AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA",
+        "HI","ID","IL","IN","IA","KS","KY","LA","ME","MD",
+        "MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ",
+        "NM","NY","NC","ND","OH","OK","OR","PA","RI","SC",
+        "SD","TN","TX","UT","VT","VA","WA","WV","WI","WY","DC"
+    ]
+
     // MARK: Prosigns → (run-together pattern, meaning)
 
     public static let prosigns: [(name: String, pattern: String, meaning: String)] = [

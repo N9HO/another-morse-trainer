@@ -34,6 +34,8 @@ struct ContentView: View {
                     examView
                 } else if model.isQSO {
                     qsoView
+                } else if model.isRapidFireReview {
+                    rapidFireReviewView
                 } else {
                     if model.isJourney { journeyBanner }
 
@@ -648,6 +650,49 @@ struct ContentView: View {
         .animation(.easeInOut(duration: 0.2), value: model.phase)
     }
 
+    // MARK: - Rapid Fire (review / just listen)
+
+    private var rapidFireReviewView: some View {
+        VStack(spacing: 28) {
+            Spacer()
+
+            Image(systemName: model.phase == .playing
+                  ? "dot.radiowaves.left.and.right" : "bolt.fill")
+                .font(.system(size: 72))
+                .foregroundStyle(Theme.teal)
+
+            if model.phase == .playing {
+                Text("Listen…").font(.title3).foregroundStyle(.secondary)
+            } else if let sent = model.drill?.revealPrimary, !sent.isEmpty {
+                VStack(spacing: 6) {
+                    Text("Sent")
+                        .font(.subheadline).foregroundStyle(.secondary)
+                    Text(sent)
+                        .font(.system(size: 46, weight: .bold, design: .monospaced))
+                        .multilineTextAlignment(.center)
+                        .minimumScaleFactor(0.5)
+                        .transition(.opacity)
+                }
+            } else {
+                Text("Getting ready…").font(.title3).foregroundStyle(.secondary)
+            }
+
+            Text("\(model.rapidFireTranscript.count) sent")
+                .font(.caption.monospacedDigit())
+                .foregroundStyle(.secondary)
+
+            Spacer()
+
+            Text("Copy along on paper or in your head. Tap End to see the full list of what was transmitted.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxHeight: .infinity)
+        .animation(.easeInOut(duration: 0.2), value: model.drill)
+        .animation(.easeInOut(duration: 0.2), value: model.phase)
+    }
+
     // MARK: - Typed free-recall
 
     // MARK: - QSO Simulator (pileup)
@@ -790,18 +835,30 @@ struct ContentView: View {
 
     @ViewBuilder
     private var typedEntry: some View {
+        // Head copy hides the box while the code plays so you can't type along —
+        // you hold the item in your head and type it once it finishes. The field
+        // stays mounted (just invisible) so focus lands cleanly on reveal.
+        let headHidden = model.isRapidFireHeadType && model.phase == .playing
         VStack(spacing: 12) {
-            TextField("Type what you heard", text: $typedAnswer)
-                .textFieldStyle(.roundedBorder)
-                .font(.system(.title2, design: .monospaced))
-                .multilineTextAlignment(.center)
-                .textInputAutocapitalization(.characters)
-                .autocorrectionDisabled()
-                .submitLabel(.send)
-                .focused($typedFocused)
-                .disabled(model.phase == .answered)
-                .onSubmit(submitTyped)
-                .morseKeyboardRow(text: $typedAnswer) { typedFocused = false }
+            ZStack {
+                TextField(typedPlaceholder, text: $typedAnswer)
+                    .textFieldStyle(.roundedBorder)
+                    .font(.system(.title2, design: .monospaced))
+                    .multilineTextAlignment(.center)
+                    .textInputAutocapitalization(.characters)
+                    .autocorrectionDisabled()
+                    .submitLabel(.send)
+                    .focused($typedFocused)
+                    .disabled(model.phase == .answered || headHidden)
+                    .opacity(headHidden ? 0 : 1)
+                    .onSubmit(submitTyped)
+                    .morseKeyboardRow(text: $typedAnswer) { typedFocused = false }
+                if headHidden {
+                    Label("Copy it in your head…", systemImage: "brain.head.profile")
+                        .font(.headline)
+                        .foregroundStyle(.secondary)
+                }
+            }
             Button(action: submitTyped) {
                 Text("Submit")
                     .font(.headline)
@@ -813,8 +870,19 @@ struct ContentView: View {
         }
         .onChange(of: model.drill) { _ in typedAnswer = "" }
         .onChange(of: model.phase) { newPhase in
-            if newPhase == .awaiting { typedFocused = true }
+            // Focus when it's time to answer; also focus during playback for
+            // "type as you hear it" so you can copy in real time.
+            if newPhase == .awaiting || (newPhase == .playing && model.isRapidFireLiveType) {
+                typedFocused = true
+            }
         }
+    }
+
+    /// Placeholder tuned to how the current mode wants you to type.
+    private var typedPlaceholder: String {
+        if model.isRapidFireLiveType { return "Type as you hear it" }
+        if model.isRapidFireHeadType { return "Type what you copied" }
+        return "Type what you heard"
     }
 
     private func submitTyped() {
@@ -1049,7 +1117,9 @@ struct ContentView: View {
     private var sessionSummaryView: some View {
         let s = model.sessionSummary
         let timed = s.duration.seconds != nil
-        return VStack(spacing: 22) {
+        let rfReview = s.mode == .rapidFire && model.settings.rapidFire.response == .review
+        return ScrollView {
+        VStack(spacing: 22) {
             Image(systemName: "checkmark.seal.fill")
                 .font(.system(size: 64))
                 .foregroundStyle(.green)
@@ -1089,12 +1159,13 @@ struct ContentView: View {
                                ? "—" : "\(Int((model.qsoAccuracy * 100).rounded()))%")
                     summaryRow("Busts", "\(model.qsoBusts)")
                 } else {
-                    summaryRow("Answered", "\(s.attempts)")
-                    // Listen & Learn and Short Stories play/announce without
-                    // grading an answer, so accuracy isn't applicable — show a
-                    // placeholder instead of a misleading 0% (issue #36).
+                    summaryRow(rfReview ? "Sent" : "Answered", "\(s.attempts)")
+                    // Listen & Learn, Short Stories, and Rapid Fire's "just
+                    // listen" review play without grading an answer, so accuracy
+                    // isn't applicable — show a placeholder instead of a
+                    // misleading 0% (issue #36).
                     summaryRow("Accuracy",
-                               (s.mode == .listen || s.mode == .story || s.attempts == 0)
+                               (s.mode == .listen || s.mode == .story || rfReview || s.attempts == 0)
                                ? "—" : "\(Int((s.accuracy * 100).rounded()))%")
                     summaryRow("Fastest", s.fastest.map { String(format: "%.2f s", $0) } ?? "—")
                     summaryRow("Median TTR", s.medianTTR.map { String(format: "%.2f s", $0) } ?? "—")
@@ -1103,6 +1174,10 @@ struct ContentView: View {
             .padding()
             .frame(maxWidth: .infinity)
             .brandCard()
+
+            if s.mode == .rapidFire, !model.rapidFireTranscript.isEmpty {
+                rapidFireTranscriptCard
+            }
 
             VStack(spacing: 12) {
                 if let record = model.lastSessionRecord {
@@ -1136,6 +1211,44 @@ struct ContentView: View {
             }
         }
         .padding()
+        }
+    }
+
+    /// The full list of what Rapid Fire transmitted this session, with a
+    /// right/wrong mark and the learner's copy for type/key responses.
+    private var rapidFireTranscriptCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("What was transmitted")
+                .font(.subheadline).foregroundStyle(.secondary)
+            ScrollView {
+                LazyVStack(spacing: 0) {
+                    ForEach(model.rapidFireTranscript) { item in
+                        HStack(spacing: 10) {
+                            if let correct = item.correct {
+                                Image(systemName: correct ? "checkmark.circle.fill" : "xmark.circle.fill")
+                                    .foregroundStyle(correct ? .green : .red)
+                            }
+                            Text(item.text)
+                                .font(.system(.body, design: .monospaced)).bold()
+                            Spacer()
+                            if let typed = item.typed, item.correct == false {
+                                Text(typed.isEmpty ? "—" : typed)
+                                    .font(.system(.body, design: .monospaced))
+                                    .foregroundStyle(.red)
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.6)
+                            }
+                        }
+                        .padding(.vertical, 7)
+                        Divider().overlay(Theme.hairline)
+                    }
+                }
+            }
+            .frame(maxHeight: 220)
+        }
+        .padding()
+        .frame(maxWidth: .infinity)
+        .brandCard()
     }
 
     private func summaryRow(_ label: String, _ value: String) -> some View {
