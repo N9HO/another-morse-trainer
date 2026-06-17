@@ -166,9 +166,10 @@ struct ReferenceView: View {
         }
     }
 
-    /// Extra encyclopedic detail for the row, when we have it (prosigns today).
+    /// Extra encyclopedic detail for the row, when we have it (prosigns and cut
+    /// numbers today).
     private func detail(for item: MorseItem) -> MorseData.ReferenceDetail? {
-        MorseData.prosignDetail[item.display]
+        MorseData.detail(forDisplay: item.display)
     }
 
     /// Match the typed query against either the token (e.g. "QSB", "<AR>") or
@@ -310,6 +311,12 @@ private struct ReferenceDetailView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     header
+                    if let summary = detail?.summary, !summary.isEmpty {
+                        Text(summary)
+                            .font(.callout)
+                            .foregroundStyle(Theme.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                     if let detail, let itu = detail.ituName {
                         field("ITU / operational name", itu)
                     }
@@ -319,6 +326,9 @@ private struct ReferenceDetailView: View {
                     field("Meaning", item.answer)
                     if let detail, !detail.description.isEmpty {
                         field("About", detail.description)
+                    }
+                    if let detail, !detail.citations.isEmpty {
+                        citations(detail.citations)
                     }
                     Divider().overlay(Theme.hairline)
                     Text("Playback")
@@ -369,6 +379,34 @@ private struct ReferenceDetailView: View {
                 .font(.body)
                 .foregroundStyle(.white)
                 .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// The dated, sourced definitions — how this signal has been defined over
+    /// time, oldest first, so the reference is something you can trust and chase.
+    private func citations(_ items: [MorseData.Citation]) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("HISTORY & SOURCES")
+                .font(.caption2).bold()
+                .foregroundStyle(Theme.textSecondary)
+            ForEach(items) { c in
+                HStack(alignment: .top, spacing: 10) {
+                    Text(c.date)
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(Theme.teal)
+                        .frame(width: 64, alignment: .leading)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(c.label)
+                            .font(.callout)
+                            .foregroundStyle(.white)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Text(c.source)
+                            .font(.caption2)
+                            .foregroundStyle(Theme.textSecondary)
+                    }
+                }
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }

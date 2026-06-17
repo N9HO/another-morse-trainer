@@ -43,6 +43,20 @@ struct StatsView: View {
                     .listRowBackground(Theme.navyElevated)
                 }
 
+                let bands = model.history.wpmBandSummaries()
+                if !bands.isEmpty {
+                    Section {
+                        ForEach(bands) { band in
+                            bandRow(band)
+                        }
+                    } header: {
+                        Text("Performance by speed")
+                    } footer: {
+                        Text("How you do at each character-speed range, across every session. Watch where accuracy dips or reaction time climbs — that's your next speed to drill.")
+                    }
+                    .listRowBackground(Theme.navyElevated)
+                }
+
                 if !model.confusionPairs.isEmpty {
                     Section {
                         ForEach(model.confusionPairs) { pair in
@@ -88,6 +102,34 @@ struct StatsView: View {
                 Text("\(record.attempts) drills")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private func bandRow(_ band: WPMBandSummary) -> some View {
+        HStack(spacing: 14) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("\(band.label) WPM")
+                    .font(.body.monospacedDigit())
+                Text("\(band.sessions) session\(band.sessions == 1 ? "" : "s")")
+                    .font(.caption2).foregroundStyle(.secondary)
+            }
+            .frame(width: 110, alignment: .leading)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("\(Int((band.accuracy * 100).rounded()))%")
+                    .font(.body.monospacedDigit())
+                    .foregroundStyle(band.accuracy >= 0.9 ? .green : .primary)
+                Text("accuracy").font(.caption2).foregroundStyle(.secondary)
+            }
+            .frame(width: 80, alignment: .leading)
+
+            Spacer()
+
+            VStack(alignment: .trailing, spacing: 2) {
+                Text(band.medianMS.map { "\($0) ms" } ?? "—")
+                    .font(.body.monospacedDigit())
+                Text("reaction").font(.caption2).foregroundStyle(.secondary)
             }
         }
     }

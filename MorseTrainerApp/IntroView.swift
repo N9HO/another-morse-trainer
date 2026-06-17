@@ -13,6 +13,7 @@ struct IntroView: View {
     @State private var showingCustomWords = false
     @State private var showingJourneyMap = false
     @State private var showingReference = false
+    @State private var showingSendingDrill = false
     @State private var showingRepeater = false
     @StateObject private var repeater = RepeaterModel()
 
@@ -134,6 +135,9 @@ struct IntroView: View {
         .sheet(isPresented: $showingReference) {
             ReferenceView().environmentObject(model)
         }
+        .sheet(isPresented: $showingSendingDrill) {
+            SendingDrillView().environmentObject(model)
+        }
         .fullScreenCover(isPresented: $showingRepeater) {
             RepeaterView().environmentObject(repeater)
         }
@@ -175,6 +179,13 @@ struct IntroView: View {
                     .padding(8)
             }
             .accessibilityLabel("Reference — prosigns, Q-codes, and abbreviations")
+            Button { showingSendingDrill = true } label: {
+                Image(systemName: "square.and.pencil")
+                    .font(.title3)
+                    .foregroundStyle(Theme.teal)
+                    .padding(8)
+            }
+            .accessibilityLabel("Sending practice — printable drill sheets")
             Button { showingStats = true } label: {
                 Image(systemName: "chart.bar")
                     .font(.title3)

@@ -91,12 +91,43 @@ public extension MorseData {
         public let alsoWritten: [String]
         /// A sentence or two on what it means and when it's used.
         public let description: String
+        /// A short, one-line gist shown above the full description.
+        public let summary: String?
+        /// Dated, sourced definitions tracing how the signal has been defined
+        /// over time — the "where this comes from" trail, newest authorities
+        /// last. Empty when we haven't sourced it.
+        public let citations: [Citation]
 
-        public init(ituName: String?, alsoWritten: [String], description: String) {
+        public init(ituName: String?,
+                    alsoWritten: [String],
+                    description: String,
+                    summary: String? = nil,
+                    citations: [Citation] = []) {
             self.ituName = ituName
             self.alsoWritten = alsoWritten
             self.description = description
+            self.summary = summary
+            self.citations = citations
         }
+    }
+
+    /// One dated definition from a primary source — the apparatus that turns a
+    /// reference entry into something you can trust and chase down.
+    struct Citation: Sendable, Equatable, Identifiable {
+        /// Year (or year range) of the source, e.g. "1925" or "2010/2021".
+        public let date: String
+        /// The publication or standard, e.g. "ITU-R M.1677-1".
+        public let source: String
+        /// How that source defines or labels the signal.
+        public let label: String
+
+        public init(date: String, source: String, label: String) {
+            self.date = date
+            self.source = source
+            self.label = label
+        }
+
+        public var id: String { date + source }
     }
 
     /// Detail keyed by the prosign token exactly as it appears in `prosigns`.
@@ -107,7 +138,14 @@ public extension MorseData {
             description: "Ends a transmission when you are not handing over to a "
                 + "named station — sent at the end of a CQ call and on blind "
                 + "transmissions. Once a contact is established, K replaces it for "
-                + "handing over. Identical to the punctuation \"+\"."),
+                + "handing over. Identical to the punctuation \"+\".",
+            summary: "End of transmission, no specific reply expected.",
+            citations: [
+                Citation(date: "1925", source: "QST Apr 1925 (Wallace)", label: "Finish sign"),
+                Citation(date: "1955", source: "ARRL Learning the Code, 7th ed.", label: "End of transmission / end of message"),
+                Citation(date: "2009", source: "ITU-R M.1677-1", label: "End of message / cross or addition sign (+)"),
+                Citation(date: "2010/2021", source: "IARU Ethics & Operating Procedures", label: "End of a transmission (not end of contact)")
+            ]),
         "<K>": ReferenceDetail(
             ituName: "Invitation to transmit (any station)",
             alsoWritten: ["K"],
@@ -128,7 +166,12 @@ public extension MorseData {
             ituName: "End of work / end of contact",
             alsoWritten: ["SK", "VA"],
             description: "Closes out the whole contact, not just one transmission. "
-                + "Often sent as the last thing before you sign clear."),
+                + "Often sent as the last thing before you sign clear.",
+            summary: "End of contact — you're done working this station.",
+            citations: [
+                Citation(date: "1955", source: "ARRL Learning the Code, 7th ed.", label: "End of work (VA)"),
+                Citation(date: "2009", source: "ITU-R M.1677-1", label: "End of work …−·−·−")
+            ]),
         "<AS>": ReferenceDetail(
             ituName: "Wait / stand by",
             alsoWritten: ["AS"],
@@ -155,4 +198,51 @@ public extension MorseData {
             description: "\"Understood\" — acknowledges that what was sent was "
                 + "received and verified.")
     ]
+
+    /// Detail for the cut numbers, keyed by the letter you hear on the air. Cut
+    /// numbers are a modern amateur-contest convention, not part of the
+    /// historical ITU Morse standard — worth saying plainly, since the depth here
+    /// is knowing what *isn't* official.
+    static let cutNumberDetail: [String: ReferenceDetail] = [
+        "T": ReferenceDetail(
+            ituName: "Cut number for 0 (zero)",
+            alsoWritten: ["0", "T"],
+            description: "A long dah heard for 0 — the most common cut number, used "
+                + "in RST reports and serials (5NN TT = 599 00). The T=0 cut has no "
+                + "Paris 1865 precedent; it is a modern amateur contest convention, "
+                + "not part of the ITU Morse standard.",
+            summary: "Contest shorthand: 0 sent as the single letter T.",
+            citations: [
+                Citation(date: "2010/2021", source: "IARU Ethics & Operating Procedures", label: "599 RST courtesy context (implicit cut numbers)")
+            ]),
+        "N": ReferenceDetail(
+            ituName: "Cut number for 9 (nine)",
+            alsoWritten: ["9", "N"],
+            description: "A dah-dit heard for 9, most often inside RST reports "
+                + "(599 → 5NN). Like T=0, the N=9 cut has no Paris 1865 precedent — "
+                + "it is a modern amateur convention. Cut numbers must not be used "
+                + "in call signs.",
+            summary: "Contest shorthand: 9 sent as the single letter N.",
+            citations: [
+                Citation(date: "1865", source: "Paris Convention", label: "9 = ----. (no abbreviated/cut variant)"),
+                Citation(date: "2009", source: "ITU-R M.1677-1", label: "9 = ----. (cut form not in the standard)")
+            ]),
+        "A": ReferenceDetail(
+            ituName: "Cut number for 1 (one)",
+            alsoWritten: ["1", "A"],
+            description: "A di-dah heard for 1. A modern contest convention to save "
+                + "time in serial numbers and reports, not part of the ITU standard.",
+            summary: "Contest shorthand: 1 sent as the single letter A."),
+        "U": ReferenceDetail(
+            ituName: "Cut number for 2 (two)",
+            alsoWritten: ["2", "U"],
+            description: "Di-di-dah heard for 2, used in serials and exchanges. "
+                + "An amateur convention rather than an official Morse character.",
+            summary: "Contest shorthand: 2 sent as the single letter U.")
+    ]
+
+    /// Detail for any reference token, checking prosigns first, then cut numbers.
+    static func detail(forDisplay display: String) -> ReferenceDetail? {
+        prosignDetail[display] ?? cutNumberDetail[display]
+    }
 }
