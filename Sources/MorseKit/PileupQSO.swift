@@ -9,6 +9,7 @@ public enum QSOContestMode: String, Codable, CaseIterable, Identifiable, Sendabl
     case basicContest   // RST + serial number
     case cwt            // CWops: name + number (members) / name + state
     case sst            // K1USN SST: name + state
+    case mst            // ICWC MST: name + serial number
     case fieldDay       // ARRL Field Day: class + section
 
     public var id: String { rawValue }
@@ -20,6 +21,7 @@ public enum QSOContestMode: String, Codable, CaseIterable, Identifiable, Sendabl
         case .basicContest: return "Basic Contest"
         case .cwt:          return "CWT"
         case .sst:          return "K1USN SST"
+        case .mst:          return "ICWC MST"
         case .fieldDay:     return "Field Day"
         }
     }
@@ -31,6 +33,7 @@ public enum QSOContestMode: String, Codable, CaseIterable, Identifiable, Sendabl
         case .basicContest: return "A generic CW sprint — copy callsign and serial number."
         case .cwt:          return "CWops mini-test — copy name and member number (or state)."
         case .sst:          return "K1USN Slow Speed Test — copy name and state, taken easy."
+        case .mst:          return "ICWC Medium Speed Test — copy name and serial number."
         case .fieldDay:     return "ARRL Field Day — copy class and ARRL section (e.g. 2A OH)."
         }
     }
@@ -39,7 +42,7 @@ public enum QSOContestMode: String, Codable, CaseIterable, Identifiable, Sendabl
     var includesRST: Bool {
         switch self {
         case .pota, .basicContest, .singleCaller: return true
-        case .cwt, .sst, .fieldDay:               return false
+        case .cwt, .sst, .mst, .fieldDay:         return false
         }
     }
 
@@ -116,6 +119,15 @@ struct ExchangeSpec: Sendable, Equatable {
             info = [ExchToken(value: name, kind: .alpha), ExchToken(value: st, kind: .alpha)]
             sentInfo = "\(name) \(st)"
             dispInfo = "\(name) \(st)"
+
+        case .mst:
+            // ICWC MST: name + a running serial number (no RST). Each station
+            // sends its own QSO count, so a plausible serial varies per caller.
+            let name = ContestData.names.randomElement(using: &rng) ?? "BOB"
+            let n = String(Int.random(in: 1...999, using: &rng))
+            info = [ExchToken(value: name, kind: .alpha), ExchToken(value: n, kind: .numeric)]
+            sentInfo = "\(name) \(num(n))"
+            dispInfo = "\(name) \(n)"
 
         case .fieldDay:
             let cls = "\(Int.random(in: 1...12, using: &rng))\(ContestData.fieldDayCategories.randomElement(using: &rng) ?? "A")"

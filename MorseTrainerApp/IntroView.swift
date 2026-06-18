@@ -825,7 +825,7 @@ private struct SessionSetupSheet: View {
                                     set: { model.settings.contest.type = $0 }
                                 )) {
                                     ForEach(ContestType.allCases) { c in
-                                        Text(c.name).tag(c)
+                                        Text(c.shortName).tag(c)
                                     }
                                 }
                                 .pickerStyle(.segmented)

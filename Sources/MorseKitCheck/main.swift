@@ -662,17 +662,25 @@ print("\nContest practice mode:")
 do {
     // Each contest maps onto the right pileup exchange.
     check("SST runs the SST exchange", ContestType.sst.qsoMode == .sst)
+    check("MST runs the MST exchange", ContestType.mst.qsoMode == .mst)
     check("CWT runs the CWT exchange", ContestType.cwt.qsoMode == .cwt)
 
-    // Authentic speed bands: SST deliberately slow, CWT a brisk pace above it.
+    // Authentic speed bands: SST slow, MST medium, CWT brisk — each faster than
+    // the last, with no gaps or overlaps in the slow→fast progression.
     check("SST speed band is valid and slow",
           ContestType.sst.minWPM <= ContestType.sst.maxWPM && ContestType.sst.maxWPM <= 22)
+    check("MST sits between SST and CWT",
+          ContestType.mst.minWPM >= ContestType.sst.maxWPM
+          && ContestType.mst.maxWPM <= ContestType.cwt.minWPM
+          && ContestType.mst.minWPM <= ContestType.mst.maxWPM)
     check("CWT runs faster than SST", ContestType.cwt.minWPM > ContestType.sst.maxWPM)
 
-    // Scoring: SST is a straight QSO count; CWT is QSOs × distinct calls.
+    // Scoring: SST is a straight QSO count; MST and CWT are QSOs × distinct calls.
     check("SST has no multipliers", !ContestType.sst.usesMultipliers)
+    check("MST uses multipliers", ContestType.mst.usesMultipliers)
     check("CWT uses multipliers", ContestType.cwt.usesMultipliers)
     check("SST score is the QSO count", ContestType.sst.score(qsoCount: 7, multipliers: 3) == 7)
+    check("MST score is QSOs × multipliers", ContestType.mst.score(qsoCount: 4, multipliers: 3) == 12)
     check("CWT score is QSOs × multipliers", ContestType.cwt.score(qsoCount: 5, multipliers: 3) == 15)
     check("an empty contest scores zero",
           ContestType.cwt.score(qsoCount: 0, multipliers: 0) == 0
@@ -692,6 +700,24 @@ do {
         check("the SST QSO logs", eng.qsoCount == 1)
     } else {
         check("the SST QSO logs", false)
+    }
+
+    // The MST exchange (name + serial number) grades and logs the same way.
+    var mcfg = PileupConfig()
+    mcfg.mode = ContestType.mst.qsoMode
+    mcfg.minWPM = ContestType.mst.minWPM; mcfg.maxWPM = ContestType.mst.maxWPM
+    mcfg.maxStations = 1
+    let meng = PileupEngine(config: mcfg, rng: SeededRNG(seed: 21))
+    _ = meng.callCQ()
+    _ = meng.send(meng.stations[0].call)
+    let mstCopy = meng.expectedCopy ?? ""          // e.g. "JIM 142"
+    check("a clean MST exchange copy grades", meng.send(mstCopy) == .silence)
+    check("the MST copy carries a name and a number",
+          mstCopy.split(separator: " ").count == 2)
+    if case .logged = meng.logCurrent() {
+        check("the MST QSO logs", meng.qsoCount == 1)
+    } else {
+        check("the MST QSO logs", false)
     }
 }
 
