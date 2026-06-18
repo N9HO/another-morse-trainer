@@ -80,7 +80,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .confusion:     return "Drill your mix-ups"
         case .listen:        return "Hands-free, eyes-free"
         case .qso:           return "Simulated contact"
-        case .contest:       return "SST · MST · CWT"
+        case .contest:       return "Timed contest runs"
         case .story:         return "Continuous copy"
         case .exam:          return "ARRL/FCC code exam"
         case .qrq:           return "High-speed copy"
@@ -115,7 +115,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .qso:
             return "Work a simulated POTA contact: you call CQ, a station answers, and you type what you copy — their callsign, then their state. One contact at a time."
         case .contest:
-            return "Run a simulated contest against the clock. Pick the K1USN SST (slow, name + state), the ICWC MST (medium, name + serial number), or the CWops CWT (fast, name + member number), call CQ, and work the pileup that answers. Authentic speeds, a live score and rate, and an end-of-run scorecard — the closest thing to being in the chair on contest day."
+            return "Run a simulated contest against the clock. Pick from the weekly CW sprints — K1USN SST (slow, name + state), ICWC MST (medium, name + serial), CWops CWT (fast, name + number), the NCCC Sprint (serial + name + state) — or ARRL Field Day (class + section). Call CQ and work the pileup that answers, with authentic speeds, a live score and rate, and an end-of-run scorecard — the closest thing to being in the chair on contest day."
         case .story:
             return "Continuous copy: hear a short story sent end to end. Copy it on paper or in your head, then reveal the text to check yourself."
         case .exam:
@@ -777,10 +777,19 @@ final class AppModel: ObservableObject {
 
     /// The contest being emulated this session.
     var contestType: ContestType { settings.contest.type }
-    /// Distinct call signs in the log — the CWT multiplier.
-    var contestMultipliers: Int { Set(qsoLog.map { $0.call }).count }
-    /// Live contest score: QSOs for SST, QSOs × distinct calls for CWT.
+    /// This contest's multiplier total from the log — distinct calls (CWT/MST),
+    /// distinct SPCs (NS), or none.
+    var contestMultipliers: Int {
+        contestType.multiplierCount(calls: qsoLog.map { $0.call },
+                                    exchanges: qsoLog.map { $0.exchange })
+    }
+    /// Live contest score: QSO points × multipliers where the contest has them.
     var contestScore: Int { contestType.score(qsoCount: qsoCount, multipliers: contestMultipliers) }
+    /// Whether to show the raw QSO count alongside the score — only when they
+    /// differ (a multiplier applies, or QSOs aren't worth one point each).
+    var contestShowsQSOCount: Bool {
+        contestType.usesMultipliers || contestType.pointsPerQSO != 1
+    }
 
     /// Whether the "?" repeat affordance applies right now.
     var qsoCanRepeat: Bool { qsoActive && qsoActiveCount > 0 }
@@ -954,6 +963,7 @@ final class AppModel: ObservableObject {
         case .cwt:          return "CQ CWT \(me)"
         case .sst:          return "CQ SST \(me)"
         case .mst:          return "CQ MST \(me)"
+        case .sprint:       return "CQ NS \(me)"
         case .fieldDay:     return "CQ FD \(me) \(me)"
         case .singleCaller: return "CQ CQ DE \(me) \(me) K"
         }

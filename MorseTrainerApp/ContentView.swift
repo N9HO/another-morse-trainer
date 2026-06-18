@@ -720,16 +720,19 @@ struct ContentView: View {
                 .multilineTextAlignment(.center)
                 .animation(.easeInOut(duration: 0.2), value: qsoStatusLine)
             if model.isContest {
-                HStack(spacing: 24) {
+                HStack(spacing: 22) {
                     qsoStat("Score", "\(model.contestScore)")
-                    // For SST the score *is* the QSO count, so showing both would
-                    // be redundant — only break them out when a multiplier applies.
-                    if model.contestType.usesMultipliers {
+                    // QSOs only when the score isn't simply the QSO count (a
+                    // multiplier applies, or each QSO is worth more than a point).
+                    if model.contestShowsQSOCount {
                         qsoStat("QSOs", "\(model.qsoCount)")
-                        qsoStat(model.contestType.multiplierLabel ?? "Mult", "\(model.contestMultipliers)")
-                        qsoStat("Rate", "\(Int(model.qsoRate))/hr")
-                    } else {
-                        qsoStat("Rate", "\(Int(model.qsoRate))/hr")
+                    }
+                    if let mult = model.contestType.multiplierLabel {
+                        qsoStat(mult, "\(model.contestMultipliers)")
+                    }
+                    qsoStat("Rate", "\(Int(model.qsoRate))/hr")
+                    // Drop accuracy when a multiplier column already fills the row.
+                    if !model.contestType.usesMultipliers {
                         qsoStat("Acc", "\(Int((model.qsoAccuracy * 100).rounded()))%")
                     }
                 }
@@ -1176,10 +1179,11 @@ struct ContentView: View {
             VStack(spacing: 14) {
                 if s.mode == .contest {
                     summaryRow("Score", "\(model.contestScore)")
-                    if model.contestType.usesMultipliers {
+                    if model.contestShowsQSOCount {
                         summaryRow("QSOs", "\(model.qsoCount)")
-                        summaryRow(model.contestType.multiplierLabel ?? "Multipliers",
-                                   "\(model.contestMultipliers)")
+                    }
+                    if let mult = model.contestType.multiplierLabel {
+                        summaryRow(mult, "\(model.contestMultipliers)")
                     }
                     summaryRow("Rate", "\(Int(model.qsoSessionRate.rounded()))/hr")
                     summaryRow("Clean copy", model.qsoCount + model.qsoBusts == 0

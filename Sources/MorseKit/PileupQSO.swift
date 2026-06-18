@@ -10,6 +10,7 @@ public enum QSOContestMode: String, Codable, CaseIterable, Identifiable, Sendabl
     case cwt            // CWops: name + number (members) / name + state
     case sst            // K1USN SST: name + state
     case mst            // ICWC MST: name + serial number
+    case sprint         // NCCC/NA Sprint: serial + name + state
     case fieldDay       // ARRL Field Day: class + section
 
     public var id: String { rawValue }
@@ -22,6 +23,7 @@ public enum QSOContestMode: String, Codable, CaseIterable, Identifiable, Sendabl
         case .cwt:          return "CWT"
         case .sst:          return "K1USN SST"
         case .mst:          return "ICWC MST"
+        case .sprint:       return "NS Sprint"
         case .fieldDay:     return "Field Day"
         }
     }
@@ -34,6 +36,7 @@ public enum QSOContestMode: String, Codable, CaseIterable, Identifiable, Sendabl
         case .cwt:          return "CWops mini-test — copy name and member number (or state)."
         case .sst:          return "K1USN Slow Speed Test — copy name and state, taken easy."
         case .mst:          return "ICWC Medium Speed Test — copy name and serial number."
+        case .sprint:       return "NCCC/NA Sprint — copy serial number, name, and state."
         case .fieldDay:     return "ARRL Field Day — copy class and ARRL section (e.g. 2A OH)."
         }
     }
@@ -42,7 +45,7 @@ public enum QSOContestMode: String, Codable, CaseIterable, Identifiable, Sendabl
     var includesRST: Bool {
         switch self {
         case .pota, .basicContest, .singleCaller: return true
-        case .cwt, .sst, .mst, .fieldDay:         return false
+        case .cwt, .sst, .mst, .sprint, .fieldDay: return false
         }
     }
 
@@ -128,6 +131,17 @@ struct ExchangeSpec: Sendable, Equatable {
             info = [ExchToken(value: name, kind: .alpha), ExchToken(value: n, kind: .numeric)]
             sentInfo = "\(name) \(num(n))"
             dispInfo = "\(name) \(n)"
+
+        case .sprint:
+            // NCCC/NA Sprint: serial number + operator name + state (no RST).
+            let serial = String(Int.random(in: 1...999, using: &rng))
+            let name = ContestData.names.randomElement(using: &rng) ?? "BOB"
+            let st = states.randomElement(using: &rng) ?? "OH"
+            info = [ExchToken(value: serial, kind: .numeric),
+                    ExchToken(value: name, kind: .alpha),
+                    ExchToken(value: st, kind: .alpha)]
+            sentInfo = "\(num(serial)) \(name) \(st)"
+            dispInfo = "\(serial) \(name) \(st)"
 
         case .fieldDay:
             let cls = "\(Int.random(in: 1...12, using: &rng))\(ContestData.fieldDayCategories.randomElement(using: &rng) ?? "A")"
