@@ -766,6 +766,12 @@ private struct SessionSetupSheet: View {
         )
     }
 
+    /// The authentic speed band for the selected contest, shown under the picker.
+    private var contestSpeedNote: String {
+        let c = model.settings.contest.type
+        return "Stations run \(Int(c.minWPM))–\(Int(c.maxWPM)) WPM. More pileup realism (signals, callsign shapes) in Settings."
+    }
+
     var body: some View {
         NavigationStack {
             ZStack {
@@ -809,6 +815,39 @@ private struct SessionSetupSheet: View {
                                 Text("More pileup options in Settings.")
                                     .font(.caption2)
                                     .foregroundStyle(.secondary)
+                            }
+                        }
+
+                        if model.learningMode == .contest {
+                            card(title: "Which contest?", systemImage: "trophy") {
+                                Picker("Contest", selection: Binding(
+                                    get: { model.settings.contest.type },
+                                    set: { model.settings.contest.type = $0 }
+                                )) {
+                                    ForEach(ContestType.allCases) { c in
+                                        Text(c.name).tag(c)
+                                    }
+                                }
+                                .pickerStyle(.segmented)
+                                Text(model.settings.contest.type.blurb)
+                                    .font(.footnote)
+                                    .foregroundStyle(Theme.textSecondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                Text(contestSpeedNote)
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                            card(title: "How long do you want to run?", systemImage: "timer") {
+                                Picker("Length", selection: Binding(
+                                    get: { model.settings.contest.length },
+                                    set: { model.settings.contest.length = $0 }
+                                )) {
+                                    ForEach(ContestLength.allCases) { l in
+                                        Text(l.label).tag(l)
+                                    }
+                                }
+                                .pickerStyle(.menu)
+                                .tint(Theme.tealBright)
                             }
                         }
 

@@ -46,6 +46,31 @@ enum PracticeDuration: String, Codable, CaseIterable, Identifiable {
     }
 }
 
+/// How long a Contest practice run lasts. Includes the real one-hour event
+/// length alongside shorter sprints for a quick session.
+enum ContestLength: String, Codable, CaseIterable, Identifiable {
+    var id: String { rawValue }
+    case tenMin, thirtyMin, fullHour, untilStop
+
+    var seconds: TimeInterval? {
+        switch self {
+        case .tenMin:    return 600
+        case .thirtyMin: return 1800
+        case .fullHour:  return 3600
+        case .untilStop: return nil
+        }
+    }
+
+    var label: String {
+        switch self {
+        case .tenMin:    return "10-minute sprint"
+        case .thirtyMin: return "30 minutes"
+        case .fullHour:  return "Full hour"
+        case .untilStop: return "Until I stop"
+        }
+    }
+}
+
 /// Hands-free "Listen & Learn" delay between the Morse code and the spoken
 /// English answer. Mirrors Morse Code Ninja's tiers (Standard → ICR-Territory).
 enum AnswerGap: String, Codable, CaseIterable, Identifiable {
@@ -326,6 +351,15 @@ extension QSOSettings {
     }
 }
 
+/// Contest practice-mode preferences: which contest to emulate and how long to
+/// run. The contest pins its own authentic speeds and exchange; the rest of the
+/// realism knobs (signals, callsign shapes, cut numbers) are shared with the
+/// QSO simulator's settings.
+struct ContestSettings: Codable, Equatable {
+    var type: ContestType = .sst
+    var length: ContestLength = .tenMin
+}
+
 /// All user-adjustable preferences. Persisted as JSON in UserDefaults.
 struct AppSettings: Codable, Equatable {
     // Audio
@@ -399,6 +433,9 @@ struct AppSettings: Codable, Equatable {
     /// QSO / contest pileup simulator settings.
     var qso = QSOSettings()
 
+    /// Contest practice-mode settings (which contest, how long).
+    var contest = ContestSettings()
+
     /// Rapid Fire (back-to-back copy) settings.
     var rapidFire = RapidFireSettings()
 
@@ -460,6 +497,7 @@ extension AppSettings {
         case qrqSpeed
         case examSpeed, examGrading, examUseBundled
         case qso
+        case contest
         case rapidFire
         case showCorrectness, reveal, allowReplay
         case headCopyRepeats, headCopyRevealSeconds
@@ -495,6 +533,7 @@ extension AppSettings {
         s.examGrading = try c.decodeIfPresent(ExamGrading.self, forKey: .examGrading) ?? s.examGrading
         s.examUseBundled = try c.decodeIfPresent(Bool.self, forKey: .examUseBundled) ?? s.examUseBundled
         s.qso = try c.decodeIfPresent(QSOSettings.self, forKey: .qso) ?? s.qso
+        s.contest = try c.decodeIfPresent(ContestSettings.self, forKey: .contest) ?? s.contest
         s.rapidFire = try c.decodeIfPresent(RapidFireSettings.self, forKey: .rapidFire) ?? s.rapidFire
         s.showCorrectness = try c.decodeIfPresent(Bool.self, forKey: .showCorrectness) ?? s.showCorrectness
         s.reveal = try c.decodeIfPresent(RevealMode.self, forKey: .reveal) ?? s.reveal

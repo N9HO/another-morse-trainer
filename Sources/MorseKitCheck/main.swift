@@ -656,6 +656,45 @@ do {
     check("QRS slows the worked station", (seng.workingStation?.wpm ?? 99) < beforeWPM)
 }
 
+// MARK: - Contest practice mode
+
+print("\nContest practice mode:")
+do {
+    // Each contest maps onto the right pileup exchange.
+    check("SST runs the SST exchange", ContestType.sst.qsoMode == .sst)
+    check("CWT runs the CWT exchange", ContestType.cwt.qsoMode == .cwt)
+
+    // Authentic speed bands: SST deliberately slow, CWT a brisk pace above it.
+    check("SST speed band is valid and slow",
+          ContestType.sst.minWPM <= ContestType.sst.maxWPM && ContestType.sst.maxWPM <= 22)
+    check("CWT runs faster than SST", ContestType.cwt.minWPM > ContestType.sst.maxWPM)
+
+    // Scoring: SST is a straight QSO count; CWT is QSOs × distinct calls.
+    check("SST has no multipliers", !ContestType.sst.usesMultipliers)
+    check("CWT uses multipliers", ContestType.cwt.usesMultipliers)
+    check("SST score is the QSO count", ContestType.sst.score(qsoCount: 7, multipliers: 3) == 7)
+    check("CWT score is QSOs × multipliers", ContestType.cwt.score(qsoCount: 5, multipliers: 3) == 15)
+    check("an empty contest scores zero",
+          ContestType.cwt.score(qsoCount: 0, multipliers: 0) == 0
+          && ContestType.sst.score(qsoCount: 0, multipliers: 0) == 0)
+
+    // A contest config drives the engine like any pileup: a clean SST copy grades.
+    var cfg = PileupConfig()
+    cfg.mode = ContestType.sst.qsoMode
+    cfg.minWPM = ContestType.sst.minWPM; cfg.maxWPM = ContestType.sst.maxWPM
+    cfg.maxStations = 1
+    let eng = PileupEngine(config: cfg, rng: SeededRNG(seed: 13))
+    _ = eng.callCQ()
+    _ = eng.send(eng.stations[0].call)
+    check("a clean SST exchange copy grades and is ready to log",
+          eng.send(eng.expectedCopy ?? "") == .silence)
+    if case .logged = eng.logCurrent() {
+        check("the SST QSO logs", eng.qsoCount == 1)
+    } else {
+        check("the SST QSO logs", false)
+    }
+}
+
 // Practice streak (consecutive-days motivation)
 print("\nPractice streak (issue #20):")
 do {
