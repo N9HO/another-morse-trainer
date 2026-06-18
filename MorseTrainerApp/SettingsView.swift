@@ -228,7 +228,12 @@ struct SettingsView: View {
                 .listRowBackground(Theme.navyElevated)
 
                 Section {
-                    Toggle("Copy RST too", isOn: $model.settings.qso.rstRequired)
+                    // Only exchanges that actually carry a signal report (POTA,
+                    // Basic Contest, Single Caller) can be asked to copy it — the
+                    // contest sprints send no RST, so the toggle would be a no-op.
+                    if model.settings.qso.mode.includesRST {
+                        Toggle("Copy RST too", isOn: $model.settings.qso.rstRequired)
+                    }
                     Toggle("Keep partial call in box", isOn: $model.settings.qso.keepPartialCall)
                     Picker("On a busted call", selection: $model.settings.qso.bustBehavior) {
                         ForEach(BustBehavior.allCases) { Text($0.label).tag($0) }
