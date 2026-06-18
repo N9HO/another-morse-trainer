@@ -32,7 +32,7 @@ struct ContentView: View {
                     storyView
                 } else if model.isExam {
                     examView
-                } else if model.isQSO {
+                } else if model.isQSO || model.isContest {
                     qsoView
                 } else if model.isRapidFireReview {
                     rapidFireReviewView
@@ -712,17 +712,36 @@ struct ContentView: View {
 
     private var qsoStatusCard: some View {
         VStack(spacing: 10) {
-            Text(model.qsoMode.label)
+            Text(model.isContest ? model.contestType.name : model.qsoMode.label)
                 .font(.subheadline).foregroundStyle(Theme.textSecondary)
             Text(qsoStatusLine)
                 .font(.title2).bold()
                 .foregroundStyle(model.qsoReadyToLog ? .green : Theme.tealBright)
                 .multilineTextAlignment(.center)
                 .animation(.easeInOut(duration: 0.2), value: qsoStatusLine)
-            HStack(spacing: 28) {
-                qsoStat("Logged", "\(model.qsoCount)")
-                qsoStat("Rate", "\(Int(model.qsoRate))/hr")
-                qsoStat("Acc", "\(Int((model.qsoAccuracy * 100).rounded()))%")
+            if model.isContest {
+                HStack(spacing: 22) {
+                    qsoStat("Score", "\(model.contestScore)")
+                    // QSOs only when the score isn't simply the QSO count (a
+                    // multiplier applies, or each QSO is worth more than a point).
+                    if model.contestShowsQSOCount {
+                        qsoStat("QSOs", "\(model.qsoCount)")
+                    }
+                    if let mult = model.contestType.multiplierLabel {
+                        qsoStat(mult, "\(model.contestMultipliers)")
+                    }
+                    qsoStat("Rate", "\(Int(model.qsoRate))/hr")
+                    // Drop accuracy when a multiplier column already fills the row.
+                    if !model.contestType.usesMultipliers {
+                        qsoStat("Acc", "\(Int((model.qsoAccuracy * 100).rounded()))%")
+                    }
+                }
+            } else {
+                HStack(spacing: 28) {
+                    qsoStat("Logged", "\(model.qsoCount)")
+                    qsoStat("Rate", "\(Int(model.qsoRate))/hr")
+                    qsoStat("Acc", "\(Int((model.qsoAccuracy * 100).rounded()))%")
+                }
             }
             if model.qsoBusy {
                 Label("Receiving…", systemImage: "dot.radiowaves.left.and.right")
@@ -1116,7 +1135,13 @@ struct ContentView: View {
 
     private var sessionSummaryView: some View {
         let s = model.sessionSummary
-        let timed = s.duration.seconds != nil
+        // Contest runs its own clock (and names the event), so read its length
+        // and title rather than the generic practice-duration record.
+        let durationLabel = s.mode == .contest
+            ? model.settings.contest.length.label : s.duration.label
+        let timed = s.mode == .contest
+            ? model.settings.contest.length.seconds != nil : s.duration.seconds != nil
+        let titleLabel = s.mode == .contest ? model.contestType.name : s.mode.title
         let rfReview = s.mode == .rapidFire && model.settings.rapidFire.response == .review
         return ScrollView {
         VStack(spacing: 22) {
@@ -1126,7 +1151,7 @@ struct ContentView: View {
             VStack(spacing: 4) {
                 Text(timed ? "Time's up!" : "Session complete")
                     .font(.largeTitle).bold()
-                Text("\(s.duration.label) · \(s.mode.title)")
+                Text("\(durationLabel) · \(titleLabel)")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
@@ -1152,7 +1177,19 @@ struct ContentView: View {
             }
 
             VStack(spacing: 14) {
-                if s.mode == .qso {
+                if s.mode == .contest {
+                    summaryRow("Score", "\(model.contestScore)")
+                    if model.contestShowsQSOCount {
+                        summaryRow("QSOs", "\(model.qsoCount)")
+                    }
+                    if let mult = model.contestType.multiplierLabel {
+                        summaryRow(mult, "\(model.contestMultipliers)")
+                    }
+                    summaryRow("Rate", "\(Int(model.qsoSessionRate.rounded()))/hr")
+                    summaryRow("Clean copy", model.qsoCount + model.qsoBusts == 0
+                               ? "—" : "\(Int((model.qsoAccuracy * 100).rounded()))%")
+                    summaryRow("Busts", "\(model.qsoBusts)")
+                } else if s.mode == .qso {
                     summaryRow("QSOs logged", "\(model.qsoCount)")
                     summaryRow("Rate", "\(Int(model.qsoSessionRate.rounded()))/hr")
                     summaryRow("Clean copy", model.qsoCount + model.qsoBusts == 0

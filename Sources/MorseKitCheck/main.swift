@@ -656,6 +656,131 @@ do {
     check("QRS slows the worked station", (seng.workingStation?.wpm ?? 99) < beforeWPM)
 }
 
+// MARK: - Contest practice mode
+
+print("\nContest practice mode:")
+do {
+    // Each contest maps onto the right pileup exchange.
+    check("SST runs the SST exchange", ContestType.sst.qsoMode == .sst)
+    check("MST runs the MST exchange", ContestType.mst.qsoMode == .mst)
+    check("CWT runs the CWT exchange", ContestType.cwt.qsoMode == .cwt)
+    check("NS Sprint runs the sprint exchange", ContestType.nsSprint.qsoMode == .sprint)
+    check("Field Day runs the Field Day exchange", ContestType.fieldDay.qsoMode == .fieldDay)
+
+    // Authentic speed bands: SST slow, MST medium, CWT brisk — each faster than
+    // the last, with no gaps or overlaps in the slow→fast progression.
+    check("SST speed band is valid and slow",
+          ContestType.sst.minWPM <= ContestType.sst.maxWPM && ContestType.sst.maxWPM <= 22)
+    check("MST sits between SST and CWT",
+          ContestType.mst.minWPM >= ContestType.sst.maxWPM
+          && ContestType.mst.maxWPM <= ContestType.cwt.minWPM
+          && ContestType.mst.minWPM <= ContestType.mst.maxWPM)
+    check("CWT runs faster than SST", ContestType.cwt.minWPM > ContestType.sst.maxWPM)
+    check("NS Sprint is a fast sprint", ContestType.nsSprint.minWPM >= ContestType.cwt.minWPM)
+    for c in ContestType.allCases {
+        check("\(c.shortName) speed band is well-formed", c.minWPM <= c.maxWPM)
+    }
+
+    // Scoring: SST is a straight QSO count; MST/CWT/NS are QSOs × multipliers;
+    // Field Day pays 2 points per CW QSO with no multiplier.
+    check("SST has no multipliers", !ContestType.sst.usesMultipliers)
+    check("MST uses multipliers", ContestType.mst.usesMultipliers)
+    check("CWT uses multipliers", ContestType.cwt.usesMultipliers)
+    check("NS Sprint multiplier is the SPC", ContestType.nsSprint.multiplierKind == .spc)
+    check("Field Day has no multiplier", ContestType.fieldDay.multiplierKind == .none)
+    check("Field Day pays 2 points per QSO", ContestType.fieldDay.pointsPerQSO == 2)
+    check("the speed-test contests pay 1 point per QSO",
+          ContestType.sst.pointsPerQSO == 1 && ContestType.cwt.pointsPerQSO == 1)
+    check("SST score is the QSO count", ContestType.sst.score(qsoCount: 7, multipliers: 3) == 7)
+    check("MST score is QSOs × multipliers", ContestType.mst.score(qsoCount: 4, multipliers: 3) == 12)
+    check("CWT score is QSOs × multipliers", ContestType.cwt.score(qsoCount: 5, multipliers: 3) == 15)
+    check("NS Sprint score is QSOs × SPCs", ContestType.nsSprint.score(qsoCount: 6, multipliers: 4) == 24)
+    check("Field Day score is 2 points per QSO", ContestType.fieldDay.score(qsoCount: 9, multipliers: 0) == 18)
+    check("an empty contest scores zero",
+          ContestType.cwt.score(qsoCount: 0, multipliers: 0) == 0
+          && ContestType.sst.score(qsoCount: 0, multipliers: 0) == 0)
+
+    // Multiplier extraction from a worked log: distinct calls vs. distinct SPCs.
+    check("the calls multiplier counts distinct call signs",
+          ContestType.cwt.multiplierCount(calls: ["K1ABC", "W2XY", "K1ABC"],
+                                           exchanges: ["BOB 1", "JIM 2", "BOB 3"]) == 2)
+    check("the SPC multiplier counts distinct trailing tokens",
+          ContestType.nsSprint.multiplierCount(calls: ["K1ABC", "W2XY", "N3Z"],
+                                                exchanges: ["1 BOB CA", "2 JIM CA", "3 SUE NY"]) == 2)
+    check("a contest with no multiplier reports zero",
+          ContestType.sst.multiplierCount(calls: ["K1ABC"], exchanges: ["BOB OH"]) == 0)
+
+    // A contest config drives the engine like any pileup: a clean SST copy grades.
+    var cfg = PileupConfig()
+    cfg.mode = ContestType.sst.qsoMode
+    cfg.minWPM = ContestType.sst.minWPM; cfg.maxWPM = ContestType.sst.maxWPM
+    cfg.maxStations = 1
+    let eng = PileupEngine(config: cfg, rng: SeededRNG(seed: 13))
+    _ = eng.callCQ()
+    _ = eng.send(eng.stations[0].call)
+    check("a clean SST exchange copy grades and is ready to log",
+          eng.send(eng.expectedCopy ?? "") == .silence)
+    if case .logged = eng.logCurrent() {
+        check("the SST QSO logs", eng.qsoCount == 1)
+    } else {
+        check("the SST QSO logs", false)
+    }
+
+    // The MST exchange (name + serial number) grades and logs the same way.
+    var mcfg = PileupConfig()
+    mcfg.mode = ContestType.mst.qsoMode
+    mcfg.minWPM = ContestType.mst.minWPM; mcfg.maxWPM = ContestType.mst.maxWPM
+    mcfg.maxStations = 1
+    let meng = PileupEngine(config: mcfg, rng: SeededRNG(seed: 21))
+    _ = meng.callCQ()
+    _ = meng.send(meng.stations[0].call)
+    let mstCopy = meng.expectedCopy ?? ""          // e.g. "JIM 142"
+    check("a clean MST exchange copy grades", meng.send(mstCopy) == .silence)
+    check("the MST copy carries a name and a number",
+          mstCopy.split(separator: " ").count == 2)
+    if case .logged = meng.logCurrent() {
+        check("the MST QSO logs", meng.qsoCount == 1)
+    } else {
+        check("the MST QSO logs", false)
+    }
+
+    // The NS Sprint exchange (serial + name + state) grades and logs, and its
+    // logged display ends with the SPC the multiplier counts.
+    var ncfg = PileupConfig()
+    ncfg.mode = ContestType.nsSprint.qsoMode
+    ncfg.minWPM = ContestType.nsSprint.minWPM; ncfg.maxWPM = ContestType.nsSprint.maxWPM
+    ncfg.maxStations = 1
+    let neng = PileupEngine(config: ncfg, rng: SeededRNG(seed: 33))
+    _ = neng.callCQ()
+    _ = neng.send(neng.stations[0].call)
+    let nsCopy = neng.expectedCopy ?? ""           // e.g. "142 JIM CA"
+    check("a clean NS Sprint exchange copy grades", neng.send(nsCopy) == .silence)
+    check("the NS Sprint copy carries serial, name, and state",
+          nsCopy.split(separator: " ").count == 3)
+    if case .logged = neng.logCurrent() {
+        let spc = neng.log.first?.exchange.split(separator: " ").last.map(String.init)
+        check("the NS Sprint QSO logs with an SPC", neng.qsoCount == 1 && spc != nil)
+    } else {
+        check("the NS Sprint QSO logs with an SPC", false)
+    }
+
+    // Regression: a leading serial that looks like a signal report (e.g. 599)
+    // must not be mistaken for an RST and stripped. Exercise many seeds so a
+    // 500-range serial is hit for both the serial-leading exchanges.
+    func everyCopyGrades(_ mode: QSOContestMode) -> Bool {
+        for seed in UInt64(1)...80 {
+            var rc = PileupConfig(); rc.mode = mode; rc.maxStations = 1
+            let re = PileupEngine(config: rc, rng: SeededRNG(seed: seed))
+            _ = re.callCQ()
+            _ = re.send(re.stations[0].call)
+            if re.send(re.expectedCopy ?? "") != .silence { return false }
+        }
+        return true
+    }
+    check("every NS Sprint copy grades, incl. 5NN-style serials", everyCopyGrades(.sprint))
+    check("every basic-contest serial grades, incl. 5NN-style serials", everyCopyGrades(.basicContest))
+}
+
 // Practice streak (consecutive-days motivation)
 print("\nPractice streak (issue #20):")
 do {

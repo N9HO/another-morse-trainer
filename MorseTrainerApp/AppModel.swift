@@ -4,7 +4,7 @@ import MediaPlayer
 
 /// The ways to practice.
 enum TrainingMode: String, CaseIterable, Identifiable {
-    case journey, characters, words, abbreviations, qCodes, prosigns, headCopy, typed, confusion, listen, qso, story, exam, qrq, rapidFire
+    case journey, characters, words, abbreviations, qCodes, prosigns, headCopy, typed, confusion, listen, qso, contest, story, exam, qrq, rapidFire
     var id: String { rawValue }
     var title: String {
         switch self {
@@ -19,6 +19,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .confusion:    return "Confusion Drill"
         case .listen:       return "Listen & Learn"
         case .qso:          return "QSO Simulator"
+        case .contest:      return "Contest"
         case .story:        return "Short Stories"
         case .exam:         return "Code Exam"
         case .qrq:          return "QRQ Speed"
@@ -38,6 +39,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .confusion:     return "arrow.left.arrow.right"
         case .listen:        return "headphones"
         case .qso:           return "person.wave.2"
+        case .contest:       return "trophy"
         case .story:         return "book"
         case .exam:          return "checkmark.seal"
         case .qrq:           return "hare"
@@ -56,6 +58,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .typed:              return "Type what you hear"
         case .listen:             return "Listen…"
         case .qso:                return "Type what you copy"
+        case .contest:            return "Type what you copy"
         case .story:              return "Copy the passage"
         case .exam:               return "Copy the exam transmission"
         case .qrq:                return "Type what you hear"
@@ -77,6 +80,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .confusion:     return "Drill your mix-ups"
         case .listen:        return "Hands-free, eyes-free"
         case .qso:           return "Simulated contact"
+        case .contest:       return "Timed contest runs"
         case .story:         return "Continuous copy"
         case .exam:          return "ARRL/FCC code exam"
         case .qrq:           return "High-speed copy"
@@ -110,6 +114,8 @@ enum TrainingMode: String, CaseIterable, Identifiable {
             return "Hands-free: hear the code, then the answer spoken aloud — no tapping. Keeps playing with the screen locked, so you can learn while driving or walking."
         case .qso:
             return "Work a simulated POTA contact: you call CQ, a station answers, and you type what you copy — their callsign, then their state. One contact at a time."
+        case .contest:
+            return "Run a simulated contest against the clock. Pick from the weekly CW sprints — K1USN SST (slow, name + state), ICWC MST (medium, name + serial), CWops CWT (fast, name + number), the NCCC Sprint (serial + name + state) — or ARRL Field Day (class + section). Call CQ and work the pileup that answers, with authentic speeds, a live score and rate, and an end-of-run scorecard — the closest thing to being in the chair on contest day."
         case .story:
             return "Continuous copy: hear a short story sent end to end. Copy it on paper or in your head, then reveal the text to check yourself."
         case .exam:
@@ -136,13 +142,16 @@ enum TrainingMode: String, CaseIterable, Identifiable {
     /// "how long?" question is meaningless for them.
     var usesSessionLength: Bool {
         switch self {
-        case .exam, .story: return false
-        default:            return true
+        // Contest picks its own length (the real one-hour event or a sprint) in
+        // its setup card, so the generic duration picker would be redundant.
+        case .exam, .story, .contest: return false
+        default:                      return true
         }
     }
 
     /// True when starting this mode should prompt for any pre-session options.
-    var needsSetup: Bool { usesStartingLevel || usesSessionLength }
+    /// Contest always shows its setup card (which contest, how long).
+    var needsSetup: Bool { usesStartingLevel || usesSessionLength || self == .contest }
 }
 
 /// The app's single source of truth. Connects the tested MorseKit quiz engines
@@ -331,6 +340,7 @@ final class AppModel: ObservableObject {
         case .confusion:    return confusionQuiz
         case .listen:       return charLadder   // unused: Listen runs its own loop
         case .qso:          return charLadder   // unused: QSO runs its own pileup loop
+        case .contest:      return charLadder   // unused: Contest runs the same pileup loop
         case .story:        return charLadder   // unused: Stories run their own playback
         case .exam:         return (examSession as QuizSource?) ?? charLadder   // exam runs its own flow
         case .qrq:          return qrqQuiz
@@ -343,6 +353,11 @@ final class AppModel: ObservableObject {
     var isTyped: Bool { mode == .typed }
     var isListen: Bool { mode == .listen }
     var isQSO: Bool { mode == .qso }
+    /// Contest mode: the QSO simulator wired to a specific contest (SST/CWT) with
+    /// authentic speeds, a contest clock, and scoring.
+    var isContest: Bool { mode == .contest }
+    /// Both the free-form QSO simulator and Contest mode run the same pileup engine.
+    var usesPileup: Bool { isQSO || isContest }
     var isStory: Bool { mode == .story }
     var isExam: Bool { mode == .exam }
     var isQRQ: Bool { mode == .qrq }
@@ -449,7 +464,7 @@ final class AppModel: ObservableObject {
             stopListening()
             startStory(active: false)
             startExamMode()
-        } else if mode == .qso {
+        } else if usesPileup {
             stopListening()
             startStory(active: false)
             startQSOMode()
@@ -754,6 +769,28 @@ final class AppModel: ObservableObject {
     private var qsoStartDate: Date?
 
     var qsoMode: QSOContestMode { settings.qso.mode }
+    /// The exchange the pileup engine is actually running: the chosen contest's
+    /// exchange in Contest mode, otherwise the QSO simulator's mode.
+    var activePileupMode: QSOContestMode { isContest ? settings.contest.type.qsoMode : settings.qso.mode }
+
+    // MARK: Contest scoring
+
+    /// The contest being emulated this session.
+    var contestType: ContestType { settings.contest.type }
+    /// This contest's multiplier total from the log — distinct calls (CWT/MST),
+    /// distinct SPCs (NS), or none.
+    var contestMultipliers: Int {
+        contestType.multiplierCount(calls: qsoLog.map { $0.call },
+                                    exchanges: qsoLog.map { $0.exchange })
+    }
+    /// Live contest score: QSO points × multipliers where the contest has them.
+    var contestScore: Int { contestType.score(qsoCount: qsoCount, multipliers: contestMultipliers) }
+    /// Whether to show the raw QSO count alongside the score — only when they
+    /// differ (a multiplier applies, or QSOs aren't worth one point each).
+    var contestShowsQSOCount: Bool {
+        contestType.usesMultipliers || contestType.pointsPerQSO != 1
+    }
+
     /// Whether the "?" repeat affordance applies right now.
     var qsoCanRepeat: Bool { qsoActive && qsoActiveCount > 0 }
     /// Completed contacts per hour, for the live rate readout.
@@ -765,7 +802,7 @@ final class AppModel: ObservableObject {
 
     private func startQSOMode() {
         qsoGeneration += 1
-        pileup.reset(config: qsoConfig())
+        pileup.reset(config: isContest ? contestConfig() : qsoConfig())
         qsoActive = true
         qsoBusy = false
         qsoStartDate = Date()
@@ -796,6 +833,20 @@ final class AppModel: ObservableObject {
         return c
     }
 
+    /// Contest config: start from the shared realism preferences (signals,
+    /// callsign shapes, cut numbers) but pin the contest's own exchange and its
+    /// authentic speed band, and never require RST (SST/CWT carry none).
+    private func contestConfig() -> PileupConfig {
+        let contest = settings.contest.type
+        var c = qsoConfig()
+        c.mode = contest.qsoMode
+        c.minWPM = contest.minWPM
+        c.maxWPM = contest.maxWPM
+        c.maxStations = max(1, settings.qso.maxStations)
+        c.rstRequired = false
+        return c
+    }
+
     // The single smart box: one action drives CQ / Send / TU by phase. Each turn
     // plays YOUR transmission first (your tone & speed), then the stations reply.
     /// Send the QSO input. Returns whether the input box should be cleared:
@@ -804,7 +855,7 @@ final class AppModel: ObservableObject {
     /// send "?" and add to it.
     @discardableResult
     func qsoPrimaryAction(_ text: String) -> Bool {
-        guard isQSO else { return true }
+        guard usesPileup else { return true }
         if qsoReadyToLog {
             let action = pileup.logCurrent()
             perform(selfText: "TU \(settings.qso.myCall)", action: action)
@@ -822,13 +873,13 @@ final class AppModel: ObservableObject {
     }
 
     func qsoCQ() {
-        guard isQSO else { return }
+        guard usesPileup else { return }
         let action = pileup.callCQ()
         perform(selfText: selfCQText(), action: action)
     }
 
     func qsoRepeat() {
-        guard isQSO else { return }
+        guard usesPileup else { return }
         perform(selfText: "AGN?", action: pileup.repeatRequest())
     }
 
@@ -906,11 +957,13 @@ final class AppModel: ObservableObject {
 
     private func selfCQText() -> String {
         let me = settings.qso.myCall
-        switch settings.qso.mode {
+        switch activePileupMode {
         case .pota:         return "CQ POTA DE \(me) \(me) K"
         case .basicContest: return "CQ TEST \(me) \(me)"
         case .cwt:          return "CQ CWT \(me)"
         case .sst:          return "CQ SST \(me)"
+        case .mst:          return "CQ MST \(me)"
+        case .sprint:       return "CQ NS \(me)"
         case .fieldDay:     return "CQ FD \(me) \(me)"
         case .singleCaller: return "CQ CQ DE \(me) \(me) K"
         }
@@ -1222,7 +1275,12 @@ final class AppModel: ObservableObject {
         sessionTimer?.invalidate()
         sessionTimer = nil
 
-        if let secs = settings.practiceDuration.seconds {
+        // Contest mode runs its own clock (the real one-hour event or a sprint);
+        // every other mode uses the generic practice-duration picker.
+        let sessionSeconds = (learningMode == .contest)
+            ? settings.contest.length.seconds
+            : settings.practiceDuration.seconds
+        if let secs = sessionSeconds {
             sessionEndDate = Date().addingTimeInterval(secs)
             sessionRemaining = secs
             let timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
@@ -1344,7 +1402,7 @@ final class AppModel: ObservableObject {
         if isExam { player.stop() }
         examPlaying = false
         qsoGeneration += 1       // cancel any pileup playback
-        if isQSO {
+        if usesPileup {
             qsoSessionRate = qsoRate   // freeze the rate for the summary
             player.stop()
         }

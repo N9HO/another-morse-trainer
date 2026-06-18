@@ -9,6 +9,8 @@ public enum QSOContestMode: String, Codable, CaseIterable, Identifiable, Sendabl
     case basicContest   // RST + serial number
     case cwt            // CWops: name + number (members) / name + state
     case sst            // K1USN SST: name + state
+    case mst            // ICWC MST: name + serial number
+    case sprint         // NCCC/NA Sprint: serial + name + state
     case fieldDay       // ARRL Field Day: class + section
 
     public var id: String { rawValue }
@@ -20,6 +22,8 @@ public enum QSOContestMode: String, Codable, CaseIterable, Identifiable, Sendabl
         case .basicContest: return "Basic Contest"
         case .cwt:          return "CWT"
         case .sst:          return "K1USN SST"
+        case .mst:          return "ICWC MST"
+        case .sprint:       return "NS Sprint"
         case .fieldDay:     return "Field Day"
         }
     }
@@ -31,6 +35,8 @@ public enum QSOContestMode: String, Codable, CaseIterable, Identifiable, Sendabl
         case .basicContest: return "A generic CW sprint — copy callsign and serial number."
         case .cwt:          return "CWops mini-test — copy name and member number (or state)."
         case .sst:          return "K1USN Slow Speed Test — copy name and state, taken easy."
+        case .mst:          return "ICWC Medium Speed Test — copy name and serial number."
+        case .sprint:       return "NCCC/NA Sprint — copy serial number, name, and state."
         case .fieldDay:     return "ARRL Field Day — copy class and ARRL section (e.g. 2A OH)."
         }
     }
@@ -39,7 +45,7 @@ public enum QSOContestMode: String, Codable, CaseIterable, Identifiable, Sendabl
     var includesRST: Bool {
         switch self {
         case .pota, .basicContest, .singleCaller: return true
-        case .cwt, .sst, .fieldDay:               return false
+        case .cwt, .sst, .mst, .sprint, .fieldDay: return false
         }
     }
 
@@ -116,6 +122,26 @@ struct ExchangeSpec: Sendable, Equatable {
             info = [ExchToken(value: name, kind: .alpha), ExchToken(value: st, kind: .alpha)]
             sentInfo = "\(name) \(st)"
             dispInfo = "\(name) \(st)"
+
+        case .mst:
+            // ICWC MST: name + a running serial number (no RST). Each station
+            // sends its own QSO count, so a plausible serial varies per caller.
+            let name = ContestData.names.randomElement(using: &rng) ?? "BOB"
+            let n = String(Int.random(in: 1...999, using: &rng))
+            info = [ExchToken(value: name, kind: .alpha), ExchToken(value: n, kind: .numeric)]
+            sentInfo = "\(name) \(num(n))"
+            dispInfo = "\(name) \(n)"
+
+        case .sprint:
+            // NCCC/NA Sprint: serial number + operator name + state (no RST).
+            let serial = String(Int.random(in: 1...999, using: &rng))
+            let name = ContestData.names.randomElement(using: &rng) ?? "BOB"
+            let st = states.randomElement(using: &rng) ?? "OH"
+            info = [ExchToken(value: serial, kind: .numeric),
+                    ExchToken(value: name, kind: .alpha),
+                    ExchToken(value: st, kind: .alpha)]
+            sentInfo = "\(num(serial)) \(name) \(st)"
+            dispInfo = "\(serial) \(name) \(st)"
 
         case .fieldDay:
             let cls = "\(Int.random(in: 1...12, using: &rng))\(ContestData.fieldDayCategories.randomElement(using: &rng) ?? "A")"
@@ -461,7 +487,13 @@ public final class PileupEngine {
         var user = input.uppercased()
             .split(whereSeparator: { Self.fieldSeparators.contains($0) })
             .map(String.init)
-        if !config.rstRequired, let first = user.first, Self.isRSTLike(first) {
+        // Drop a leading signal report the operator typed but wasn't asked to
+        // copy ("599 OH" -> "OH"). Only for exchanges that actually send an RST,
+        // and only when there's a surplus token to drop — otherwise a serial
+        // that merely looks like a report (the NS Sprint's serial, or a basic
+        // contest serial in the 500s) would be mistaken for one and stripped.
+        if config.mode.includesRST, !config.rstRequired, user.count > tokens.count,
+           let first = user.first, Self.isRSTLike(first) {
             user.removeFirst()
         }
         // Stations send each exchange element twice for copyability ("OH OH")
