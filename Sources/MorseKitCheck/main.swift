@@ -763,6 +763,22 @@ do {
     } else {
         check("the NS Sprint QSO logs with an SPC", false)
     }
+
+    // Regression: a leading serial that looks like a signal report (e.g. 599)
+    // must not be mistaken for an RST and stripped. Exercise many seeds so a
+    // 500-range serial is hit for both the serial-leading exchanges.
+    func everyCopyGrades(_ mode: QSOContestMode) -> Bool {
+        for seed in UInt64(1)...80 {
+            var rc = PileupConfig(); rc.mode = mode; rc.maxStations = 1
+            let re = PileupEngine(config: rc, rng: SeededRNG(seed: seed))
+            _ = re.callCQ()
+            _ = re.send(re.stations[0].call)
+            if re.send(re.expectedCopy ?? "") != .silence { return false }
+        }
+        return true
+    }
+    check("every NS Sprint copy grades, incl. 5NN-style serials", everyCopyGrades(.sprint))
+    check("every basic-contest serial grades, incl. 5NN-style serials", everyCopyGrades(.basicContest))
 }
 
 // Practice streak (consecutive-days motivation)

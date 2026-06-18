@@ -487,7 +487,13 @@ public final class PileupEngine {
         var user = input.uppercased()
             .split(whereSeparator: { Self.fieldSeparators.contains($0) })
             .map(String.init)
-        if !config.rstRequired, let first = user.first, Self.isRSTLike(first) {
+        // Drop a leading signal report the operator typed but wasn't asked to
+        // copy ("599 OH" -> "OH"). Only for exchanges that actually send an RST,
+        // and only when there's a surplus token to drop — otherwise a serial
+        // that merely looks like a report (the NS Sprint's serial, or a basic
+        // contest serial in the 500s) would be mistaken for one and stripped.
+        if config.mode.includesRST, !config.rstRequired, user.count > tokens.count,
+           let first = user.first, Self.isRSTLike(first) {
             user.removeFirst()
         }
         // Stations send each exchange element twice for copyability ("OH OH")
