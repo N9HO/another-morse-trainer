@@ -773,7 +773,11 @@ final class AppModel: ObservableObject {
     /// Send the QSO input. Returns whether the input box should be cleared:
     /// normally yes, but with "keep partial call" on (issue #29) a still-hunting
     /// send (no station worked yet) leaves the partial in place so the user can
-    /// send "?" and add to it.
+    /// send "?" and add to it. A still-hunting send that is itself a repeat
+    /// request (a trailing "?", typed instead of using the "?" button) always
+    /// keeps the partial regardless of that setting — asking for a repeat must
+    /// not wipe the call you've copied so far (issue #49). The view strips the
+    /// trailing "?" from what it keeps.
     @discardableResult
     func qsoPrimaryAction(_ text: String) -> Bool {
         guard isQSO else { return true }
@@ -788,9 +792,12 @@ final class AppModel: ObservableObject {
                 action: action)
         // `perform` refreshes the published QSO state synchronously, so we can
         // read it here. Still hunting = no station being worked and not ready to
-        // log → keep the partial if the user opted in.
+        // log → keep the partial if the user opted in, or if this send was a
+        // typed "?" repeat request (issue #49).
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let typedRepeat = trimmed.hasSuffix("?") && PileupEngine.fragment(trimmed).isEmpty == false
         let stillHunting = qsoWorkingCall == nil && !qsoReadyToLog
-        return !(settings.qso.keepPartialCall && stillHunting)
+        return !(stillHunting && (settings.qso.keepPartialCall || typedRepeat))
     }
 
     func qsoCQ() {
