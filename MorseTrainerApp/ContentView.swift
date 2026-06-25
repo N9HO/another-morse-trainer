@@ -849,6 +849,13 @@ struct ContentView: View {
             // Cleared unless "keep partial call" kept a still-being-copied call
             // in the box (issue #29).
             qsoText = ""
+        } else {
+            // Kept a still-being-copied call. If the send was a typed "?" repeat
+            // request, drop the trailing "?" so it isn't baked into the call the
+            // user keeps building on (issue #49).
+            var kept = qsoText.trimmingCharacters(in: .whitespaces)
+            while kept.hasSuffix("?") { kept.removeLast() }
+            qsoText = kept.trimmingCharacters(in: .whitespaces)
         }
     }
 
