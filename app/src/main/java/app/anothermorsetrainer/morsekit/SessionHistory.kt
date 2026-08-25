@@ -140,3 +140,83 @@ class SessionHistory(sessions: List<SessionRecord> = emptyList()) {
 
     override fun hashCode(): Int = _sessions.hashCode()
 }
+
+// MARK: - Performance by speed band
+
+/**
+ * How you perform at a given character-speed range — accuracy and typical
+ * reaction time across every session sent near that speed. This surfaces the
+ * thing a recognition learner most wants to see: "I'm solid at 20 WPM but my
+ * reaction time falls apart at 30." Aggregated from the persisted session
+ * history, so it needs no extra storage. Mirrors cwsignals.com's per-WPM-band
+ * mastery readout.
+ *
+ * Translated from the iOS WPMBandSummary (SessionHistory.swift); times are in
+ * whole milliseconds to match the Android stats store.
+ */
+data class WPMBandSummary(
+    /** Inclusive band floor, e.g. 20 for the 20–24 WPM band. */
+    val bandLower: Int,
+    /** Number of sessions that fell in this band. */
+    val sessions: Int,
+    /** Total answered questions across those sessions. */
+    val attempts: Int,
+    /** Total correct answers. */
+    val correct: Int,
+    /**
+     * Attempt-weighted mean of the sessions' median recognition times, in ms
+     * (null if no session in the band recorded one).
+     */
+    val medianMs: Int?
+) {
+    val bandUpper: Int get() = bandLower + 4
+    val id: Int get() = bandLower
+    val label: String get() = "$bandLower–$bandUpper"
+    val accuracy: Double get() = if (attempts == 0) 0.0 else correct.toDouble() / attempts.toDouble()
+}
+
+/**
+ * Bucket per-session results into 5-WPM speed bands. The live Android session
+ * store ([app.anothermorsetrainer.Stats]) is lighter than the iOS
+ * SessionHistory, so the summaries take a minimal per-session [Entry] rather
+ * than full [SessionRecord]s.
+ */
+object WPMBands {
+    /** The 5-WPM-wide band floor a speed falls into (22 → 20). */
+    fun bandLower(wpm: Int): Int = (maxOf(0, wpm) / 5) * 5
+
+    /** One session's contribution: its character speed and aggregate results. */
+    data class Entry(
+        val wpm: Int,
+        val attempts: Int,
+        val correct: Int,
+        val medianTtrMs: Int?
+    )
+
+    /**
+     * Performance grouped into 5-WPM speed bands, slowest band first. Only
+     * sessions that actually answered something — and recorded their speed —
+     * are counted (older persisted sessions predate the speed field).
+     */
+    fun summarize(entries: List<Entry>): List<WPMBandSummary> {
+        val answered = entries.filter { it.attempts > 0 && it.wpm > 0 }
+        val grouped = answered.groupBy { bandLower(it.wpm) }
+        return grouped.keys.sorted().map { lower ->
+            val records = grouped[lower].orEmpty()
+            val attempts = records.sumOf { it.attempts }
+            val correct = records.sumOf { it.correct }
+            // Attempt-weighted mean of the per-session medians we have.
+            val timed = records.mapNotNull { r -> r.medianTtrMs?.let { it to r.attempts } }
+            val weight = timed.sumOf { it.second }
+            val median = if (weight == 0) null
+                else (timed.sumOf { it.first.toDouble() * it.second } / weight).roundToInt()
+            WPMBandSummary(
+                bandLower = lower,
+                sessions = records.size,
+                attempts = attempts,
+                correct = correct,
+                medianMs = median
+            )
+        }
+    }
+}

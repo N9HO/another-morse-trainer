@@ -33,6 +33,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlin.math.roundToInt
 import app.anothermorsetrainer.morsekit.MorseData
 import app.anothermorsetrainer.morsekit.PhraseQuiz
 
@@ -71,7 +72,11 @@ fun HeadCopyScreen(onBack: () -> Unit) {
     DisposableEffect(Unit) { onDispose { player.release() } }
 
     fun finish() {
-        Stats.record(mode = "Head Copy", attempts = tally.attempts, correct = tally.correct, bestTtrMs = tally.bestMs, durationSeconds = tally.elapsedSeconds())
+        Stats.record(
+            mode = "Head Copy", attempts = tally.attempts, correct = tally.correct,
+            bestTtrMs = tally.bestMs, durationSeconds = tally.elapsedSeconds(),
+            characterWpm = Settings.characterWpm.roundToInt(), medianTtrMs = tally.medianMs()
+        )
         onBack()
     }
     BackHandler { finish() }

@@ -110,7 +110,8 @@ fun ContestScreen(onBack: () -> Unit) {
             attempts = e.qsoCount + e.bustCount,
             correct = e.qsoCount,
             bestTtrMs = null,
-            durationSeconds = elapsedSeconds()
+            durationSeconds = elapsedSeconds(),
+            characterWpm = Settings.characterWpm.roundToInt()
         )
         phase = CtPhase.SUMMARY
     }

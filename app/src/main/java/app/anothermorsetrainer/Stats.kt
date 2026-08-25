@@ -16,7 +16,11 @@ data class SessionSummary(
     val epochDay: Long,        // LocalDate.toEpochDay() — day-granular is enough for the list
     val attempts: Int,
     val correct: Int,
-    val bestTtrMs: Int?        // fastest correct recognition this session, if any
+    val bestTtrMs: Int?,       // fastest correct recognition this session, if any
+    /** Character speed the session was sent at; 0 for records saved before this field. */
+    val characterWpm: Int = 0,
+    /** Median correct recognition time this session, if any — feeds speed bands. */
+    val medianTtrMs: Int? = null
 ) {
     val accuracy: Double get() = if (attempts == 0) 0.0 else correct.toDouble() / attempts
 }
@@ -92,7 +96,16 @@ object Stats {
     }
 
     /** Record a just-finished session and persist. No-op for empty sessions. */
-    fun record(mode: String, attempts: Int, correct: Int, bestTtrMs: Int?, durationSeconds: Int = 0, today: LocalDate = LocalDate.now()) {
+    fun record(
+        mode: String,
+        attempts: Int,
+        correct: Int,
+        bestTtrMs: Int?,
+        durationSeconds: Int = 0,
+        characterWpm: Int = 0,
+        medianTtrMs: Int? = null,
+        today: LocalDate = LocalDate.now()
+    ) {
         if (attempts <= 0) return
         streak.record(today)
         refreshStreak()
@@ -104,7 +117,9 @@ object Stats {
         if (bestTtrMs != null && (this.bestTtrMs == null || bestTtrMs < this.bestTtrMs!!)) {
             this.bestTtrMs = bestTtrMs
         }
-        recent = (listOf(SessionSummary(mode, today.toEpochDay(), attempts, correct, bestTtrMs)) + recent).take(50)
+        recent = (listOf(
+            SessionSummary(mode, today.toEpochDay(), attempts, correct, bestTtrMs, characterWpm, medianTtrMs)
+        ) + recent).take(50)
         persist()
     }
 
@@ -137,6 +152,8 @@ object Stats {
                     .put("att", s.attempts)
                     .put("cor", s.correct)
                     .put("ttr", s.bestTtrMs ?: -1)
+                    .put("wpm", s.characterWpm)
+                    .put("med", s.medianTtrMs ?: -1)
             )
         }
         return arr.toString()
@@ -153,7 +170,10 @@ object Stats {
                     epochDay = o.getLong("day"),
                     attempts = o.getInt("att"),
                     correct = o.getInt("cor"),
-                    bestTtrMs = o.getInt("ttr").takeIf { it >= 0 }
+                    bestTtrMs = o.getInt("ttr").takeIf { it >= 0 },
+                    // Absent on records saved before speed-band stats existed.
+                    characterWpm = o.optInt("wpm", 0),
+                    medianTtrMs = o.optInt("med", -1).takeIf { it >= 0 }
                 )
             )
         }
