@@ -21,6 +21,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         Settings.init(this)
         Stats.init(this)
+        JourneyStore.init(this)
         setContent {
             AmtTheme {
                 AppBackground {
@@ -66,6 +67,7 @@ val QUIZ_MODES: List<QuizMode> = listOf(
 private sealed interface Route {
     data object Onboarding : Route
     data object Home : Route
+    data object Journey : Route
     data class Quiz(val mode: QuizMode) : Route
     data object Pileup : Route
     data object Exam : Route
@@ -73,9 +75,11 @@ private sealed interface Route {
     data object HeadCopy : Route
     data object TypeIt : Route
     data object Qrq : Route
+    data object RapidFire : Route
     data object Story : Route
     data object Sending : Route
     data object Repeater : Route
+    data object Reference : Route
     data object Settings : Route
     data object Stats : Route
 }
@@ -87,7 +91,9 @@ private fun AppRoot() {
     }
     when (val r = route) {
         Route.Onboarding -> OnboardingScreen(onDone = { route = Route.Home })
+        Route.Journey -> JourneyScreen(onBack = { route = Route.Home })
         Route.Home -> HomeScreen(
+            onPickJourney = { route = Route.Journey },
             onPickQuiz = { route = Route.Quiz(it) },
             onPickPileup = { route = Route.Pileup },
             onPickExam = { route = Route.Exam },
@@ -95,9 +101,11 @@ private fun AppRoot() {
             onPickHeadCopy = { route = Route.HeadCopy },
             onPickTypeIt = { route = Route.TypeIt },
             onPickQrq = { route = Route.Qrq },
+            onPickRapidFire = { route = Route.RapidFire },
             onPickStory = { route = Route.Story },
             onPickSending = { route = Route.Sending },
             onPickRepeater = { route = Route.Repeater },
+            onPickReference = { route = Route.Reference },
             onPickSettings = { route = Route.Settings },
             onPickStats = { route = Route.Stats }
         )
@@ -116,9 +124,11 @@ private fun AppRoot() {
             makeSource = { PhraseQuiz("Type It", MorseData.wordAndCallSignItems) }
         )
         Route.Qrq -> QrqScreen(onBack = { route = Route.Home })
+        Route.RapidFire -> RapidFireScreen(onBack = { route = Route.Home })
         Route.Story -> StoryScreen(onBack = { route = Route.Home })
         Route.Sending -> SendingPracticeScreen(onBack = { route = Route.Home })
         Route.Repeater -> RepeaterScreen(onBack = { route = Route.Home })
+        Route.Reference -> ReferenceScreen(onBack = { route = Route.Home })
         Route.Settings -> SettingsScreen(onBack = { route = Route.Home })
         Route.Stats -> StatsScreen(onBack = { route = Route.Home })
     }

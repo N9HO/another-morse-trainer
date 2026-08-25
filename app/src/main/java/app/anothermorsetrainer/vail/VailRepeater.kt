@@ -7,6 +7,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import app.anothermorsetrainer.MidiKeyInput
+import app.anothermorsetrainer.MidiKeyOutput
 import app.anothermorsetrainer.SidetoneGenerator
 import kotlin.math.pow
 import kotlin.random.Random
@@ -17,9 +18,9 @@ import kotlin.random.Random
  * Wires key down/up → local sidetone + (when break-in is on) a network
  * transmission, and inbound tones → clock-synced playback. Holds Compose state.
  *
- * Port of MorseTrainerApp/RepeaterModel.swift, trimmed to the core repeater
- * (the adapter-piezo/MIDIOutput keyer-config path is hardware-specific and left
- * out). Keeps clock sync, break-in, the 10 s stuck-key cutoff, and reconnect.
+ * Port of MorseTrainerApp/RepeaterModel.swift. Keeps clock sync, break-in, the
+ * 10 s stuck-key cutoff, reconnect, and the adapter-piezo/[MidiKeyOutput]
+ * keyer-config path (keyer mode, RX buzz feedback, wake/identify).
  */
 class VailRepeater(context: Context) {
 
@@ -29,6 +30,7 @@ class VailRepeater(context: Context) {
     private val client = VailClient(callsign = "", txTone = 72)
     private val tonePlayer = RepeaterTonePlayer()
     private val midi = MidiKeyInput(context)
+    private val midiOut = MidiKeyOutput(context)
     private var sidetone: SidetoneGenerator? = null
 
     // ---- Compose state ----
@@ -43,6 +45,10 @@ class VailRepeater(context: Context) {
     var lagMs by mutableStateOf(0L); private set
     var isKeying by mutableStateOf(false); private set
     var midiDevice by mutableStateOf<String?>(null); private set
+    var keyerMode by mutableStateOf(MidiKeyOutput.KeyerMode.STRAIGHT_KEY); private set
+
+    /** True when the device exposes MIDI at all — gates the adapter keyer UI. */
+    val midiSupported: Boolean get() = midiOut.isSupported
 
     // Activity timeline + chat.
     var signalEvents by mutableStateOf<List<SignalEvent>>(emptyList()); private set
@@ -61,6 +67,7 @@ class VailRepeater(context: Context) {
         txTone = prefs.getInt("txTone", 72)
         rxDelayMs = prefs.getInt("rxDelay", 2000)
         breakInEnabled = prefs.getBoolean("breakIn", false)
+        keyerMode = MidiKeyOutput.KeyerMode.fromCode(prefs.getInt("keyerMode", MidiKeyOutput.KeyerMode.STRAIGHT_KEY.code))
         client.callsign = callsign
         client.txTone = txTone
     }
@@ -72,6 +79,10 @@ class VailRepeater(context: Context) {
             onKey = { down -> touchKey(down) },
             onConnected = { midiDevice = it }
         )
+        // Drive the adapter's piezo/keyer: wake it into MIDI mode, push the keyer
+        // mode + sidetone, and (via RX buzz) feed received tones to the piezo.
+        midiOut.configure(keyerMode = keyerMode, wpm = 20, sidetoneMidiNote = txTone)
+        midiOut.start { name -> if (midiDevice == null) midiDevice = name }
     }
 
     fun stop() {
@@ -79,6 +90,7 @@ class VailRepeater(context: Context) {
         client.disconnect()
         client.onEvent = null
         midi.stop()
+        midiOut.stop()
         sidetone?.stop(); sidetone = null
         tonePlayer.release()
     }
@@ -115,7 +127,18 @@ class VailRepeater(context: Context) {
         client.updateTxTone(n)
         // Sidetone pitch follows the TX tone.
         sidetone?.let { it.stop(); sidetone = SidetoneGenerator(midiToHz(n)).also { s -> s.start() } }
+        // The adapter's piezo sidetone note follows the TX tone too.
+        midiOut.setSidetone(n)
     }
+
+    /** Set the adapter's internal keyer mode (straight key, iambic A/B, …). */
+    fun updateKeyerMode(mode: MidiKeyOutput.KeyerMode) {
+        keyerMode = mode; prefs.edit().putInt("keyerMode", mode.code).apply()
+        midiOut.setKeyerMode(mode)
+    }
+
+    /** Re-run the adapter wake/identify sequence (e.g. after plugging it in). */
+    fun wakeAdapter() = midiOut.wakeAdapter()
 
     fun updateRxDelayMs(ms: Int) {
         rxDelayMs = ms.coerceIn(0, 5000); prefs.edit().putInt("rxDelay", rxDelayMs).apply()
@@ -188,6 +211,8 @@ class VailRepeater(context: Context) {
                 val note = event.txTone ?: 69
                 val playAt = event.atLocalMs + rxDelayMs
                 tonePlayer.scheduleTone(note, event.durationMs, playAt)
+                // Buzz the adapter's piezo in sync with the audio playback.
+                midiOut.scheduleBuzz(note, event.durationMs, playAt)
                 val lane = when (event.fromCandidates.size) {
                     0 -> "?"
                     1 -> event.fromCandidates[0]

@@ -10,10 +10,22 @@ the iOS app's navy/teal look.
 
 ## Features
 
+- **Journey** — gamified, level-based path (letters → numbers → punctuation →
+  prosigns → Q-codes → abbreviations → words → call signs) with a progress bar
+  that fills on a hit and drains on a miss, an unlock map, and saved progress
 - **Characters** — Koch-method ladder (A–Z, 0–9)
-- **Common Words**, **Abbreviations**, **Q-Codes** — phrase drills
+- **Common Words**, **Abbreviations**, **Q-Codes**, **Prosigns** — phrase drills
+- **Confusion Drill** — targeted review of the pairs you mix up
+- **Rapid Fire** — a stream of call signs / words / number groups / states sent
+  back to back at your chosen pace; type as you hear it, head-copy then type, or
+  just listen and review the transmitted list
 - **Pileup Runner** — call CQ and work a simulated CW pileup
 - **Code Exam** — FCC/ARRL-style copy test at 5 / 13 / 20 WPM
+- **Sending Practice** — key it back (touch or MIDI key)
+- **Repeater** — live CW over the Vail network, with Vail Adapter support: MIDI
+  key input *and* output (keyer-mode config, sidetone, RX piezo buzz)
+- **Reference** — browsable, tap-to-hear chart of prosigns, Q-codes,
+  abbreviations, cut numbers, and the full alphabet, with per-signal detail
 - **Listen & Learn** — hands-free: hear the code, then the spoken answer; keeps
   playing with the screen locked (foreground service)
 - **Voice answers** — speak your answer instead of tapping (microphone)

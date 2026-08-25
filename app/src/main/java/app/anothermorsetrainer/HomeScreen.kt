@@ -20,8 +20,11 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Abc
 import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.FlashOn
 import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material.icons.filled.Keyboard
+import androidx.compose.material.icons.filled.Map
+import androidx.compose.material.icons.automirrored.filled.ListAlt
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.Podcasts
 import androidx.compose.material.icons.filled.Psychology
@@ -62,6 +65,7 @@ private data class HomeItem(
 /** The app's landing menu: pick a training mode. Styled to match the iOS IntroView. */
 @Composable
 fun HomeScreen(
+    onPickJourney: () -> Unit,
     onPickQuiz: (QuizMode) -> Unit,
     onPickPileup: () -> Unit,
     onPickExam: () -> Unit,
@@ -69,9 +73,11 @@ fun HomeScreen(
     onPickHeadCopy: () -> Unit,
     onPickTypeIt: () -> Unit,
     onPickQrq: () -> Unit,
+    onPickRapidFire: () -> Unit,
     onPickStory: () -> Unit,
     onPickSending: () -> Unit,
     onPickRepeater: () -> Unit,
+    onPickReference: () -> Unit,
     onPickSettings: () -> Unit,
     onPickStats: () -> Unit
 ) {
@@ -91,7 +97,9 @@ fun HomeScreen(
         "Prosigns" to "Run-together signals",
         "Confusion Drill" to "Drill your mix-ups"
     )
-    val items = QUIZ_MODES.map { mode ->
+    val items = listOf(
+        HomeItem("Journey", "Leveled path", Icons.Filled.Map, onPickJourney)
+    ) + QUIZ_MODES.map { mode ->
         HomeItem(
             mode.title,
             modeTaglines[mode.title] ?: mode.subtitle,
@@ -100,12 +108,14 @@ fun HomeScreen(
     } + HomeItem("Head Copy", "Copy in your head", Icons.Filled.Psychology, onPickHeadCopy) +
         HomeItem("Type It", "Free-recall typing", Icons.Filled.Keyboard, onPickTypeIt) +
         HomeItem("QRQ Speed", "High-speed copy", Icons.Filled.Bolt, onPickQrq) +
+        HomeItem("Rapid Fire", "Back-to-back copy", Icons.Filled.FlashOn, onPickRapidFire) +
         HomeItem("Sending Practice", "Key it back", Icons.Filled.Vibration, onPickSending) +
         HomeItem("Repeater", "Live over the network", Icons.Filled.Wifi, onPickRepeater) +
         HomeItem("Short Stories", "Continuous copy", Icons.AutoMirrored.Filled.MenuBook, onPickStory) +
         HomeItem("Pileup Runner", "Work a CW pileup", Icons.Filled.RecordVoiceOver, onPickPileup) +
         HomeItem("Code Exam", "ARRL/FCC code exam", Icons.Filled.WorkspacePremium, onPickExam) +
-        HomeItem("Listen & Learn", "Hands-free, eyes-free", Icons.Filled.Headphones, onPickListen)
+        HomeItem("Listen & Learn", "Hands-free, eyes-free", Icons.Filled.Headphones, onPickListen) +
+        HomeItem("Reference", "Look it up", Icons.AutoMirrored.Filled.ListAlt, onPickReference)
 
     CenteredContent {
         Column(

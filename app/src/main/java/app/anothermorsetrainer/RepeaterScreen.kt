@@ -4,7 +4,9 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -217,6 +219,39 @@ fun RepeaterScreen(onBack: () -> Unit) {
                     Spacer(Modifier.height(8.dp))
                     SliderRow("RX delay", "${repeater.rxDelayMs} ms", repeater.rxDelayMs.toFloat(), 0f..5000f) {
                         repeater.updateRxDelayMs(it.toInt())
+                    }
+                }
+
+                // Vail Adapter keyer config (only when the device has MIDI).
+                if (repeater.midiSupported) {
+                    Spacer(Modifier.height(16.dp))
+                    Column(modifier = Modifier.fillMaxWidth().brandCard().padding(16.dp)) {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                            Text("ADAPTER KEYER", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Brand.textSecondary)
+                            TextButton(onClick = { repeater.wakeAdapter() }) { Text("Wake adapter", color = Brand.teal) }
+                        }
+                        Spacer(Modifier.height(8.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            MidiKeyOutput.KeyerMode.entries.forEach { mode ->
+                                val sel = mode == repeater.keyerMode
+                                Box(
+                                    modifier = Modifier
+                                        .background(if (sel) Brand.teal else Brand.navyRaised, RoundedCornerShape(8.dp))
+                                        .clickable { repeater.updateKeyerMode(mode) }
+                                        .padding(horizontal = 12.dp, vertical = 7.dp)
+                                ) {
+                                    Text(
+                                        mode.displayName,
+                                        color = if (sel) Brand.navy else Brand.textSecondary,
+                                        fontWeight = if (sel) FontWeight.Bold else FontWeight.Medium,
+                                        fontSize = 13.sp
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
 
