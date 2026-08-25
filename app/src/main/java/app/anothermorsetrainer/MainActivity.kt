@@ -70,6 +70,7 @@ private sealed interface Route {
     data object Journey : Route
     data class Quiz(val mode: QuizMode) : Route
     data object Pileup : Route
+    data object Contest : Route
     data object Exam : Route
     data object Listen : Route
     data object HeadCopy : Route
@@ -96,6 +97,7 @@ private fun AppRoot() {
             onPickJourney = { route = Route.Journey },
             onPickQuiz = { route = Route.Quiz(it) },
             onPickPileup = { route = Route.Pileup },
+            onPickContest = { route = Route.Contest },
             onPickExam = { route = Route.Exam },
             onPickListen = { route = Route.Listen },
             onPickHeadCopy = { route = Route.HeadCopy },
@@ -115,6 +117,7 @@ private fun AppRoot() {
             makeSource = r.mode.make
         )
         Route.Pileup -> PileupScreen(onBack = { route = Route.Home })
+        Route.Contest -> ContestScreen(onBack = { route = Route.Home })
         Route.Exam -> CodeExamScreen(onBack = { route = Route.Home })
         Route.Listen -> ListenScreen(onBack = { route = Route.Home })
         Route.HeadCopy -> HeadCopyScreen(onBack = { route = Route.Home })

@@ -24,6 +24,8 @@ enum class QSOContestMode(val code: String) {
     BasicContest("basicContest"),   // RST + serial number
     Cwt("cwt"),                     // CWops: name + number (members) / name + state
     Sst("sst"),                     // K1USN SST: name + state
+    Mst("mst"),                     // ICWC MST: name + serial number
+    Sprint("sprint"),               // NCCC/NA Sprint: serial + name + state
     FieldDay("fieldDay");           // ARRL Field Day: class + section
 
     val id: String get() = code
@@ -35,6 +37,8 @@ enum class QSOContestMode(val code: String) {
             BasicContest -> "Basic Contest"
             Cwt -> "CWT"
             Sst -> "K1USN SST"
+            Mst -> "ICWC MST"
+            Sprint -> "NS Sprint"
             FieldDay -> "Field Day"
         }
 
@@ -45,6 +49,8 @@ enum class QSOContestMode(val code: String) {
             BasicContest -> "A generic CW sprint — copy callsign and serial number."
             Cwt -> "CWops mini-test — copy name and member number (or state)."
             Sst -> "K1USN Slow Speed Test — copy name and state, taken easy."
+            Mst -> "ICWC Medium Speed Test — copy name and serial number."
+            Sprint -> "NCCC/NA Sprint — copy serial number, name, and state."
             FieldDay -> "ARRL Field Day — copy class and ARRL section (e.g. 2A OH)."
         }
 
@@ -52,7 +58,7 @@ enum class QSOContestMode(val code: String) {
     val includesRST: Boolean
         get() = when (this) {
             Pota, BasicContest, SingleCaller -> true
-            Cwt, Sst, FieldDay -> false
+            Cwt, Sst, Mst, Sprint, FieldDay -> false
         }
 
     /** A single caller never piles up. */
@@ -139,6 +145,30 @@ data class ExchangeSpec(
                     info = listOf(ExchToken(name, TokenKind.ALPHA), ExchToken(st, TokenKind.ALPHA))
                     sentInfo = "$name $st"
                     dispInfo = "$name $st"
+                }
+
+                QSOContestMode.Mst -> {
+                    // ICWC MST: name + a running serial number (no RST). Each station
+                    // sends its own QSO count, so a plausible serial varies per caller.
+                    val name = ContestData.names.randomOrNull(rng) ?: "BOB"
+                    val n = rng.nextInt(1, 1000).toString()
+                    info = listOf(ExchToken(name, TokenKind.ALPHA), ExchToken(n, TokenKind.NUMERIC))
+                    sentInfo = "$name ${num(n)}"
+                    dispInfo = "$name $n"
+                }
+
+                QSOContestMode.Sprint -> {
+                    // NCCC/NA Sprint: serial number + operator name + state (no RST).
+                    val serial = rng.nextInt(1, 1000).toString()
+                    val name = ContestData.names.randomOrNull(rng) ?: "BOB"
+                    val st = states.randomOrNull(rng) ?: "OH"
+                    info = listOf(
+                        ExchToken(serial, TokenKind.NUMERIC),
+                        ExchToken(name, TokenKind.ALPHA),
+                        ExchToken(st, TokenKind.ALPHA)
+                    )
+                    sentInfo = "${num(serial)} $name $st"
+                    dispInfo = "$serial $name $st"
                 }
 
                 QSOContestMode.FieldDay -> {

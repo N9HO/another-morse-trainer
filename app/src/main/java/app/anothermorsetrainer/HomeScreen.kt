@@ -20,6 +20,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Abc
 import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.FlashOn
 import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material.icons.filled.Keyboard
@@ -68,6 +69,7 @@ fun HomeScreen(
     onPickJourney: () -> Unit,
     onPickQuiz: (QuizMode) -> Unit,
     onPickPileup: () -> Unit,
+    onPickContest: () -> Unit,
     onPickExam: () -> Unit,
     onPickListen: () -> Unit,
     onPickHeadCopy: () -> Unit,
@@ -113,6 +115,7 @@ fun HomeScreen(
         HomeItem("Repeater", "Live over the network", Icons.Filled.Wifi, onPickRepeater) +
         HomeItem("Short Stories", "Continuous copy", Icons.AutoMirrored.Filled.MenuBook, onPickStory) +
         HomeItem("Pileup Runner", "Work a CW pileup", Icons.Filled.RecordVoiceOver, onPickPileup) +
+        HomeItem("Contest", "Timed contest runs", Icons.Filled.EmojiEvents, onPickContest) +
         HomeItem("Code Exam", "ARRL/FCC code exam", Icons.Filled.WorkspacePremium, onPickExam) +
         HomeItem("Listen & Learn", "Hands-free, eyes-free", Icons.Filled.Headphones, onPickListen) +
         HomeItem("Reference", "Look it up", Icons.AutoMirrored.Filled.ListAlt, onPickReference)
