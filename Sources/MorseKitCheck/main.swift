@@ -1190,6 +1190,28 @@ check("no passage is empty or a marathon (≤ 90 words)",
           return words > 0 && words <= 90
       })
 
+// Serials — longer tales sent part by part with a bookmark
+print("\nSerial library:")
+check("several long tales on the shelf (4+)", MorseData.serials.count >= 4)
+check("serial ids are unique and none collides with the fables bookmark",
+      Set(MorseData.serials.map(\.id)).count == MorseData.serials.count
+          && !MorseData.serials.contains { $0.id == "fables" })
+check("every part of every serial keys cleanly",
+      MorseData.serials.allSatisfy { serial in
+          serial.parts.allSatisfy { CWText.isFullySendable($0) }
+      })
+check("parts are short-session sized (25–110 words)",
+      MorseData.serials.allSatisfy { serial in
+          serial.parts.allSatisfy {
+              let words = $0.split(separator: " ").count
+              return words >= 25 && words <= 110
+          }
+      })
+check("every serial has a title, an author, and at least 5 parts",
+      MorseData.serials.allSatisfy {
+          !$0.title.isEmpty && !$0.author.isEmpty && $0.parts.count >= 5
+      })
+
 // CWText — real-world text → sendable Morse text
 print("\nCWText sanitizer:")
 check("clean text passes through uppercased",

@@ -117,7 +117,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .contest:
             return "Run a simulated contest against the clock. Pick from the weekly CW sprints — K1USN SST (slow, name + state), ICWC MST (medium, name + serial), CWops CWT (fast, name + number), the NCCC Sprint (serial + name + state) — or ARRL Field Day (class + section). Call CQ and work the pileup that answers, with authentic speeds, a live score and rate, and an end-of-run scorecard — the closest thing to being in the chair on contest day."
         case .story:
-            return "Continuous copy: hear a short story sent end to end. Copy it on paper or in your head, then reveal the text to check yourself. Or switch to todays news and decode real headlines, fetched fresh and hidden until you reveal — the only way to read them is to copy the code."
+            return "Continuous copy: hear a short story sent end to end. Copy it on paper or in your head, then reveal the text to check yourself. Pick a fable, a longer classic (Sherlock Holmes and friends) sent in parts with a bookmark that keeps your place, or todays news — real headlines hidden until you reveal, so the only way to read them is to copy the code."
         case .exam:
             return "Sit a recreation of the old ARRL/FCC code-proficiency exam: a 5-minute QSO-style transmission at 5, 13, or 20 WPM. Pass with one minute of solid copy (25 characters in a row) or by answering questions about what was sent."
         case .qrq:
@@ -503,16 +503,34 @@ final class AppModel: ObservableObject {
     private var storyGeneration = 0
     private var storyIndex = 0
 
+    /// The content source the Story mode is set to.
+    private var storyContent: StoryContent { settings.story.content }
+
     /// Whether this Story session sends news headlines rather than fables.
-    var isNewsStory: Bool { isStory && settings.story.content == .news }
+    var isNewsStory: Bool { isStory && storyContent == .news }
+    /// Whether this Story session sends a serialized long tale.
+    var isSerialStory: Bool { isStory && storyContent == .serials }
+    /// Serials read like a book — allow stepping back a part (fables and news
+    /// just cycle forward).
+    var storyCanGoBack: Bool { isSerialStory && storyIndex > 0 }
+
+    /// The long tale selected in setup (falls back to the first bundled one).
+    private var currentSerial: MorseData.Serial? {
+        MorseData.serials.first { $0.id == settings.story.serialId }
+            ?? MorseData.serials.first
+    }
 
     /// The line under the story title (what the passage is and where it came from).
     var storySubtitle: String {
-        guard settings.story.content == .news else {
+        switch storyContent {
+        case .fables:
             return "Public-domain fable · continuous copy"
+        case .serials:
+            return "\(currentSerial?.author ?? "Classic tale") · your bookmark keeps your place"
+        case .news:
+            let source = settings.story.newsSource.attribution
+            return newsIsFromCache ? "\(source) · saved headlines" : "\(source) · decode the news"
         }
-        let source = settings.story.newsSource.attribution
-        return newsIsFromCache ? "\(source) · saved headlines" : "\(source) · decode the news"
     }
 
     /// Set up story mode (pick a passage, wait for the Play tap).
@@ -522,10 +540,16 @@ final class AppModel: ObservableObject {
         storyPlaying = false
         storyRevealed = false
         newsError = nil
-        if settings.story.content == .news {
+        switch storyContent {
+        case .news:
             ensureNews()
-        } else {
+        case .fables:
             newsFetching = false   // a stale in-flight fetch must not gray out fables
+            storyIndex = bookmark(for: AppModel.fablesBookmarkKey)
+            pickStory()
+        case .serials:
+            newsFetching = false
+            storyIndex = currentSerial.map { bookmark(for: $0.id) } ?? 0
             pickStory()
         }
         phase = .idle
@@ -540,25 +564,89 @@ final class AppModel: ObservableObject {
         }
     }
 
-    /// The passage list this session draws from (bundled fables or fetched news).
-    private var activeStories: [MorseData.Story] {
-        settings.story.content == .news ? newsStories : MorseData.stories
+    private func pickStory() {
+        switch storyContent {
+        case .fables:
+            pick(from: MorseData.stories, noun: "Story",
+                 emptyLabel: "No stories", bookmarkKey: AppModel.fablesBookmarkKey)
+        case .news:
+            pick(from: newsStories, noun: "Headline",
+                 emptyLabel: "No headlines", bookmarkKey: nil)
+        case .serials:
+            pickSerialPart()
+        }
     }
 
-    private func pickStory() {
-        let stories = activeStories
-        let isNews = settings.story.content == .news
+    /// Land on `storyIndex` (wrapped) in a flat passage list; optionally
+    /// remember the spot so the next session resumes there.
+    private func pick(from stories: [MorseData.Story], noun: String,
+                      emptyLabel: String, bookmarkKey: String?) {
         guard !stories.isEmpty else {
             storyTitle = ""; storyText = ""
-            summary = isNews ? "No headlines" : "No stories"
+            summary = emptyLabel
             return
         }
         let n = stories.count
         let idx = ((storyIndex % n) + n) % n
+        storyIndex = idx
         let s = stories[idx]
         storyTitle = s.title
         storyText = s.text
-        summary = "\(isNews ? "Headline" : "Story") \(idx + 1) of \(n)"
+        summary = "\(noun) \(idx + 1) of \(n)"
+        if let key = bookmarkKey { setBookmark(idx, for: key) }
+    }
+
+    /// Land on the bookmarked part of the selected serial and move the
+    /// bookmark there — opening a part IS how far you have gotten.
+    private func pickSerialPart() {
+        guard let serial = currentSerial, !serial.parts.isEmpty else {
+            storyTitle = ""; storyText = ""
+            summary = "No stories"
+            return
+        }
+        let count = serial.parts.count
+        let idx = min(max(storyIndex, 0), count - 1)
+        storyIndex = idx
+        storyTitle = serial.title
+        storyText = serial.parts[idx]
+        summary = "Part \(idx + 1) of \(count)"
+        setBookmark(idx, for: serial.id)
+    }
+
+    // MARK: - Story bookmarks (how far you got, kept across launches)
+
+    private static let bookmarksKey = "MorseTrainer.storyBookmarks"
+    /// The fables shelf shares one bookmark under a reserved key; serials
+    /// each keep their own under their id.
+    private static let fablesBookmarkKey = "fables"
+
+    private var storyBookmarks: [String: Int] = AppModel.loadBookmarks()
+
+    /// Where the given shelf/serial was left off (0 when never opened).
+    func bookmark(for key: String) -> Int {
+        storyBookmarks[key] ?? 0
+    }
+
+    /// Part count and resume point for the setup screen's footnote.
+    func serialResume(for id: String) -> (part: Int, of: Int)? {
+        guard let serial = MorseData.serials.first(where: { $0.id == id }) else { return nil }
+        let idx = min(max(bookmark(for: id), 0), serial.parts.count - 1)
+        return (idx + 1, serial.parts.count)
+    }
+
+    private func setBookmark(_ index: Int, for key: String) {
+        guard storyBookmarks[key] != index else { return }
+        storyBookmarks[key] = index
+        if let data = try? JSONEncoder().encode(storyBookmarks) {
+            UserDefaults.standard.set(data, forKey: AppModel.bookmarksKey)
+        }
+    }
+
+    private static func loadBookmarks() -> [String: Int] {
+        guard let data = UserDefaults.standard.data(forKey: bookmarksKey),
+              let decoded = try? JSONDecoder().decode([String: Int].self, from: data)
+        else { return [:] }
+        return decoded
     }
 
     // MARK: - News headlines (Story mode's "decode the news" source)
@@ -692,11 +780,29 @@ final class AppModel: ObservableObject {
         storyRevealed = true
     }
 
-    /// Advance to the next passage (does not auto-play).
+    /// Advance to the next passage (does not auto-play). A serial wraps from
+    /// its final part back to part one — rereading from the top.
     func nextStory() {
         storyGeneration += 1
         player.stop()
-        storyIndex += 1
+        if isSerialStory, let serial = currentSerial, !serial.parts.isEmpty {
+            storyIndex = (storyIndex + 1) % serial.parts.count
+        } else {
+            storyIndex += 1
+        }
+        storyPlaying = false
+        storyRevealed = false
+        pickStory()
+        phase = .idle
+    }
+
+    /// Step back one part of a serial (re-copy what you missed). The bookmark
+    /// moves back with you.
+    func previousStory() {
+        guard storyCanGoBack else { return }
+        storyGeneration += 1
+        player.stop()
+        storyIndex -= 1
         storyPlaying = false
         storyRevealed = false
         pickStory()

@@ -230,16 +230,18 @@ extension RapidFireSettings {
     }
 }
 
-/// What the Short Stories (continuous copy) mode sends: bundled fables, or
-/// fresh news headlines fetched from a public feed and hidden until revealed —
-/// so the only way to read the day's news is to decode it.
+/// What the Short Stories (continuous copy) mode sends: bundled fables, a
+/// longer serialized tale with a bookmark, or fresh news headlines fetched
+/// from a public feed and hidden until revealed — so the only way to read
+/// the day's news is to decode it.
 enum StoryContent: String, Codable, CaseIterable, Identifiable {
-    case fables, news
+    case fables, serials, news
     var id: String { rawValue }
     var label: String {
         switch self {
-        case .fables: return "Short stories"
-        case .news:   return "Todays news"
+        case .fables:  return "Short stories"
+        case .serials: return "Longer stories"
+        case .news:    return "Todays news"
         }
     }
 }
@@ -248,6 +250,9 @@ enum StoryContent: String, Codable, CaseIterable, Identifiable {
 /// field has a default so older saves upgrade cleanly.
 struct StorySettings: Codable, Equatable {
     var content: StoryContent = .fables
+    /// Which long tale to serialize when `content == .serials` (a
+    /// `MorseData.Serial` id; empty means the first bundled serial).
+    var serialId: String = ""
     /// Which feed to pull headlines from when `content == .news`.
     var newsSource: NewsSource = .hamRadio
     /// Send the item's summary after the headline (separated by a BT break),
@@ -258,13 +263,14 @@ struct StorySettings: Codable, Equatable {
 // Resilient decoding so adding new Story fields never wipes saved settings.
 extension StorySettings {
     enum CodingKeys: String, CodingKey {
-        case content, newsSource, newsFullStory
+        case content, serialId, newsSource, newsFullStory
     }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         var s = StorySettings()
         s.content = try c.decodeIfPresent(StoryContent.self, forKey: .content) ?? s.content
+        s.serialId = try c.decodeIfPresent(String.self, forKey: .serialId) ?? s.serialId
         s.newsSource = try c.decodeIfPresent(NewsSource.self, forKey: .newsSource) ?? s.newsSource
         s.newsFullStory = try c.decodeIfPresent(Bool.self, forKey: .newsFullStory) ?? s.newsFullStory
         self = s

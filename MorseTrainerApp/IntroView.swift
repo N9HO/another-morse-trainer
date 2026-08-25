@@ -113,6 +113,19 @@ struct IntroView: View {
                 set: { model.settings.story.newsFullStory = $0 })
     }
 
+    /// Selected long tale, falling back to the first bundled serial when the
+    /// saved id is empty or no longer exists.
+    private var serialBinding: Binding<String> {
+        Binding(
+            get: {
+                let id = model.settings.story.serialId
+                return MorseData.serials.contains { $0.id == id }
+                    ? id : (MorseData.serials.first?.id ?? "")
+            },
+            set: { model.settings.story.serialId = $0 }
+        )
+    }
+
     // MARK: Rapid Fire bindings
 
     private var rapidFireContentBinding: Binding<RapidFireContent> {
@@ -397,6 +410,35 @@ struct IntroView: View {
             if model.learningMode == .story {
                 inlinePicker(title: "What to copy",
                              selection: storyContentBinding) { (c: StoryContent) in c.label }
+                if model.settings.story.content == .serials {
+                    HStack {
+                        Text("Which story")
+                            .font(.subheadline)
+                            .foregroundStyle(.primary)
+                        Spacer(minLength: 12)
+                        Picker("Which story", selection: serialBinding) {
+                            ForEach(MorseData.serials) { serial in
+                                Text(serial.title).tag(serial.id)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .tint(Theme.tealBright)
+                        .labelsHidden()
+                    }
+                    if let resume = model.serialResume(for: serialBinding.wrappedValue) {
+                        Label {
+                            Text(resume.part == 1
+                                 ? "A longer tale sent in short parts. Your bookmark moves as you go, so you can pick the story back up any day."
+                                 : "Your bookmark picks this story back up at part \(resume.part) of \(resume.of).")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        } icon: {
+                            Image(systemName: "bookmark")
+                                .foregroundStyle(Theme.teal)
+                        }
+                    }
+                }
                 if model.settings.story.content == .news {
                     inlinePicker(title: "News source",
                                  selection: newsSourceBinding) { (s: NewsSource) in s.label }

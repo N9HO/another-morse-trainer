@@ -391,6 +391,19 @@ struct ContentView: View {
     @ViewBuilder
     private var storyControls: some View {
         HStack(spacing: 12) {
+            if model.storyCanGoBack {
+                Button {
+                    model.previousStory()
+                } label: {
+                    Image(systemName: "backward.fill")
+                        .font(.headline)
+                        .frame(width: 52, height: 52)
+                }
+                .buttonStyle(.bordered)
+                .disabled(model.storyPlaying)
+                .accessibilityLabel("Previous part")
+            }
+
             if model.storyPlaying {
                 Button {
                     model.stopStory()
