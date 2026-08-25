@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.automirrored.filled.ListAlt
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.Podcasts
+import androidx.compose.material.icons.filled.Print
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.QuestionAnswer
 import androidx.compose.material.icons.filled.SwapHoriz
@@ -78,6 +79,7 @@ fun HomeScreen(
     onPickRapidFire: () -> Unit,
     onPickStory: () -> Unit,
     onPickSending: () -> Unit,
+    onPickSendingDrills: () -> Unit,
     onPickRepeater: () -> Unit,
     onPickReference: () -> Unit,
     onPickSettings: () -> Unit,
@@ -112,6 +114,7 @@ fun HomeScreen(
         HomeItem("QRQ Speed", "High-speed copy", Icons.Filled.Bolt, onPickQrq) +
         HomeItem("Rapid Fire", "Back-to-back copy", Icons.Filled.FlashOn, onPickRapidFire) +
         HomeItem("Sending Practice", "Key it back", Icons.Filled.Vibration, onPickSending) +
+        HomeItem("Sending Drills", "Printable sheets", Icons.Filled.Print, onPickSendingDrills) +
         HomeItem("Repeater", "Live over the network", Icons.Filled.Wifi, onPickRepeater) +
         HomeItem("Short Stories", "Continuous copy", Icons.AutoMirrored.Filled.MenuBook, onPickStory) +
         HomeItem("Pileup Runner", "Work a CW pileup", Icons.Filled.RecordVoiceOver, onPickPileup) +
