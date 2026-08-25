@@ -420,7 +420,12 @@ class PileupEngine(
         if (matched.isNotEmpty()) {
             return Action.Play(matched.map { callVoice(stations[it]) })
         }
-        // No one matches the call you sent — handle per the busted-call setting.
+        // No one matches the call you sent — you miscopied the call. Count it
+        // against clean-copy accuracy (issue #30: earlier missed attempts were
+        // being ignored, so a QSO logged after retries showed 100%), then
+        // respond per the busted-call setting. A non-empty fragment that DID
+        // prefix-match a station above is a legitimate partial call, not a bust.
+        if (stations.isNotEmpty()) bustCount += 1
         return when (config.bustBehavior) {
             BustBehavior.Forgiving -> {
                 if (stations.isEmpty()) Action.Silence
@@ -512,8 +517,16 @@ class PileupEngine(
     // MARK: Grading
 
     private fun grade(input: String, tokens: List<ExchToken>): Boolean {
-        var user = input.uppercase().split(" ").filter { it.isNotEmpty() }.toMutableList()
-        if (!config.rstRequired) {
+        var user = input.uppercase()
+            .split(*fieldSeparators)
+            .filter { it.isNotEmpty() }
+            .toMutableList()
+        // Drop a leading signal report the operator typed but wasn't asked to
+        // copy ("599 OH" -> "OH"). Only for exchanges that actually send an RST,
+        // and only when there's a surplus token to drop — otherwise a serial
+        // that merely looks like a report (the NS Sprint's serial, or a basic
+        // contest serial in the 500s) would be mistaken for one and stripped.
+        if (config.mode.includesRST && !config.rstRequired && user.size > tokens.size) {
             val first = user.firstOrNull()
             if (first != null && isRSTLike(first)) {
                 user.removeAt(0)
@@ -531,14 +544,36 @@ class PileupEngine(
             if (collapsed.lastOrNull() != tok) collapsed.add(tok)
         }
         user = collapsed
-        if (user.size != tokens.size) return false
-        for ((u, t) in user.zip(tokens)) {
-            if (!tokenMatches(u, t)) return false
+        if (user.size == tokens.size && user.zip(tokens).all { (u, t) -> tokenMatches(u, t) }) {
+            return true
         }
-        return true
+        // Fallback: the operator ran the fields together with no separator at
+        // all ("9BEWA" for "9B EWA"). Peel each required token's width off the
+        // alphanumeric stream in order. Only reached once the separated parse
+        // above has failed, so it can't turn a real miss into a match.
+        return gradeGlued(user.joinToString(""), tokens)
     }
 
     companion object {
+        /**
+         * Field separators an operator might type between exchange elements. Any
+         * run of these breaks tokens, so "9B/EWA" and "9B-EWA" copy like "9B EWA".
+         */
+        val fieldSeparators = charArrayOf(' ', '/', '-', ',', '.')
+
+        /** Match run-together input by consuming each token's expected width in turn. */
+        fun gradeGlued(input: String, tokens: List<ExchToken>): Boolean {
+            val stream = input.uppercase().filter { it.isLetterOrDigit() }
+            var idx = 0
+            for (t in tokens) {
+                val n = t.value.length
+                if (n <= 0 || idx + n > stream.length) return false
+                if (!tokenMatches(stream.substring(idx, idx + n), t)) return false
+                idx += n
+            }
+            return idx == stream.length   // every character accounted for, nothing extra
+        }
+
         fun tokenMatches(user: String, token: ExchToken): Boolean {
             return when (token.kind) {
                 TokenKind.ALPHA -> {

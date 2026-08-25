@@ -77,8 +77,13 @@ fun PileupScreen(onBack: () -> Unit) {
 
     fun submit() {
         if (input.isBlank()) return
-        val action = engine.send(input)
-        input = ""
+        val raw = input.trim()
+        val action = engine.send(raw)
+        // A typed repeat request ("W1?") while still hunting keeps the partial
+        // call in the box — minus the "?" — so the user builds on it instead of
+        // retyping (the iOS #49 fix). Anything that moved the QSO on clears.
+        val frag = PileupEngine.fragment(raw)
+        input = if (raw.endsWith("?") && frag.isNotEmpty() && engine.phase is PileupEngine.Phase.Pileup) frag else ""
         perform(action)
     }
 
