@@ -70,6 +70,7 @@ private sealed interface Route {
     data object Journey : Route
     data class Quiz(val mode: QuizMode) : Route
     data object Pileup : Route
+    data object Contest : Route
     data object Exam : Route
     data object Listen : Route
     data object HeadCopy : Route
@@ -78,6 +79,7 @@ private sealed interface Route {
     data object RapidFire : Route
     data object Story : Route
     data object Sending : Route
+    data object SendingDrills : Route
     data object Repeater : Route
     data object Reference : Route
     data object Settings : Route
@@ -96,6 +98,7 @@ private fun AppRoot() {
             onPickJourney = { route = Route.Journey },
             onPickQuiz = { route = Route.Quiz(it) },
             onPickPileup = { route = Route.Pileup },
+            onPickContest = { route = Route.Contest },
             onPickExam = { route = Route.Exam },
             onPickListen = { route = Route.Listen },
             onPickHeadCopy = { route = Route.HeadCopy },
@@ -104,6 +107,7 @@ private fun AppRoot() {
             onPickRapidFire = { route = Route.RapidFire },
             onPickStory = { route = Route.Story },
             onPickSending = { route = Route.Sending },
+            onPickSendingDrills = { route = Route.SendingDrills },
             onPickRepeater = { route = Route.Repeater },
             onPickReference = { route = Route.Reference },
             onPickSettings = { route = Route.Settings },
@@ -115,6 +119,7 @@ private fun AppRoot() {
             makeSource = r.mode.make
         )
         Route.Pileup -> PileupScreen(onBack = { route = Route.Home })
+        Route.Contest -> ContestScreen(onBack = { route = Route.Home })
         Route.Exam -> CodeExamScreen(onBack = { route = Route.Home })
         Route.Listen -> ListenScreen(onBack = { route = Route.Home })
         Route.HeadCopy -> HeadCopyScreen(onBack = { route = Route.Home })
@@ -127,6 +132,7 @@ private fun AppRoot() {
         Route.RapidFire -> RapidFireScreen(onBack = { route = Route.Home })
         Route.Story -> StoryScreen(onBack = { route = Route.Home })
         Route.Sending -> SendingPracticeScreen(onBack = { route = Route.Home })
+        Route.SendingDrills -> SendingDrillScreen(onBack = { route = Route.Home })
         Route.Repeater -> RepeaterScreen(onBack = { route = Route.Home })
         Route.Reference -> ReferenceScreen(onBack = { route = Route.Home })
         Route.Settings -> SettingsScreen(onBack = { route = Route.Home })

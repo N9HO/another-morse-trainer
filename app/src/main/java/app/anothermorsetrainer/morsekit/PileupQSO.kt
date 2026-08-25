@@ -24,6 +24,8 @@ enum class QSOContestMode(val code: String) {
     BasicContest("basicContest"),   // RST + serial number
     Cwt("cwt"),                     // CWops: name + number (members) / name + state
     Sst("sst"),                     // K1USN SST: name + state
+    Mst("mst"),                     // ICWC MST: name + serial number
+    Sprint("sprint"),               // NCCC/NA Sprint: serial + name + state
     FieldDay("fieldDay");           // ARRL Field Day: class + section
 
     val id: String get() = code
@@ -35,6 +37,8 @@ enum class QSOContestMode(val code: String) {
             BasicContest -> "Basic Contest"
             Cwt -> "CWT"
             Sst -> "K1USN SST"
+            Mst -> "ICWC MST"
+            Sprint -> "NS Sprint"
             FieldDay -> "Field Day"
         }
 
@@ -45,6 +49,8 @@ enum class QSOContestMode(val code: String) {
             BasicContest -> "A generic CW sprint — copy callsign and serial number."
             Cwt -> "CWops mini-test — copy name and member number (or state)."
             Sst -> "K1USN Slow Speed Test — copy name and state, taken easy."
+            Mst -> "ICWC Medium Speed Test — copy name and serial number."
+            Sprint -> "NCCC/NA Sprint — copy serial number, name, and state."
             FieldDay -> "ARRL Field Day — copy class and ARRL section (e.g. 2A OH)."
         }
 
@@ -52,7 +58,7 @@ enum class QSOContestMode(val code: String) {
     val includesRST: Boolean
         get() = when (this) {
             Pota, BasicContest, SingleCaller -> true
-            Cwt, Sst, FieldDay -> false
+            Cwt, Sst, Mst, Sprint, FieldDay -> false
         }
 
     /** A single caller never piles up. */
@@ -139,6 +145,30 @@ data class ExchangeSpec(
                     info = listOf(ExchToken(name, TokenKind.ALPHA), ExchToken(st, TokenKind.ALPHA))
                     sentInfo = "$name $st"
                     dispInfo = "$name $st"
+                }
+
+                QSOContestMode.Mst -> {
+                    // ICWC MST: name + a running serial number (no RST). Each station
+                    // sends its own QSO count, so a plausible serial varies per caller.
+                    val name = ContestData.names.randomOrNull(rng) ?: "BOB"
+                    val n = rng.nextInt(1, 1000).toString()
+                    info = listOf(ExchToken(name, TokenKind.ALPHA), ExchToken(n, TokenKind.NUMERIC))
+                    sentInfo = "$name ${num(n)}"
+                    dispInfo = "$name $n"
+                }
+
+                QSOContestMode.Sprint -> {
+                    // NCCC/NA Sprint: serial number + operator name + state (no RST).
+                    val serial = rng.nextInt(1, 1000).toString()
+                    val name = ContestData.names.randomOrNull(rng) ?: "BOB"
+                    val st = states.randomOrNull(rng) ?: "OH"
+                    info = listOf(
+                        ExchToken(serial, TokenKind.NUMERIC),
+                        ExchToken(name, TokenKind.ALPHA),
+                        ExchToken(st, TokenKind.ALPHA)
+                    )
+                    sentInfo = "${num(serial)} $name $st"
+                    dispInfo = "$serial $name $st"
                 }
 
                 QSOContestMode.FieldDay -> {
@@ -420,7 +450,12 @@ class PileupEngine(
         if (matched.isNotEmpty()) {
             return Action.Play(matched.map { callVoice(stations[it]) })
         }
-        // No one matches the call you sent — handle per the busted-call setting.
+        // No one matches the call you sent — you miscopied the call. Count it
+        // against clean-copy accuracy (issue #30: earlier missed attempts were
+        // being ignored, so a QSO logged after retries showed 100%), then
+        // respond per the busted-call setting. A non-empty fragment that DID
+        // prefix-match a station above is a legitimate partial call, not a bust.
+        if (stations.isNotEmpty()) bustCount += 1
         return when (config.bustBehavior) {
             BustBehavior.Forgiving -> {
                 if (stations.isEmpty()) Action.Silence
@@ -512,8 +547,16 @@ class PileupEngine(
     // MARK: Grading
 
     private fun grade(input: String, tokens: List<ExchToken>): Boolean {
-        var user = input.uppercase().split(" ").filter { it.isNotEmpty() }.toMutableList()
-        if (!config.rstRequired) {
+        var user = input.uppercase()
+            .split(*fieldSeparators)
+            .filter { it.isNotEmpty() }
+            .toMutableList()
+        // Drop a leading signal report the operator typed but wasn't asked to
+        // copy ("599 OH" -> "OH"). Only for exchanges that actually send an RST,
+        // and only when there's a surplus token to drop — otherwise a serial
+        // that merely looks like a report (the NS Sprint's serial, or a basic
+        // contest serial in the 500s) would be mistaken for one and stripped.
+        if (config.mode.includesRST && !config.rstRequired && user.size > tokens.size) {
             val first = user.firstOrNull()
             if (first != null && isRSTLike(first)) {
                 user.removeAt(0)
@@ -531,14 +574,36 @@ class PileupEngine(
             if (collapsed.lastOrNull() != tok) collapsed.add(tok)
         }
         user = collapsed
-        if (user.size != tokens.size) return false
-        for ((u, t) in user.zip(tokens)) {
-            if (!tokenMatches(u, t)) return false
+        if (user.size == tokens.size && user.zip(tokens).all { (u, t) -> tokenMatches(u, t) }) {
+            return true
         }
-        return true
+        // Fallback: the operator ran the fields together with no separator at
+        // all ("9BEWA" for "9B EWA"). Peel each required token's width off the
+        // alphanumeric stream in order. Only reached once the separated parse
+        // above has failed, so it can't turn a real miss into a match.
+        return gradeGlued(user.joinToString(""), tokens)
     }
 
     companion object {
+        /**
+         * Field separators an operator might type between exchange elements. Any
+         * run of these breaks tokens, so "9B/EWA" and "9B-EWA" copy like "9B EWA".
+         */
+        val fieldSeparators = charArrayOf(' ', '/', '-', ',', '.')
+
+        /** Match run-together input by consuming each token's expected width in turn. */
+        fun gradeGlued(input: String, tokens: List<ExchToken>): Boolean {
+            val stream = input.uppercase().filter { it.isLetterOrDigit() }
+            var idx = 0
+            for (t in tokens) {
+                val n = t.value.length
+                if (n <= 0 || idx + n > stream.length) return false
+                if (!tokenMatches(stream.substring(idx, idx + n), t)) return false
+                idx += n
+            }
+            return idx == stream.length   // every character accounted for, nothing extra
+        }
+
         fun tokenMatches(user: String, token: ExchToken): Boolean {
             return when (token.kind) {
                 TokenKind.ALPHA -> {

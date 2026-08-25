@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.sp
 import app.anothermorsetrainer.morsekit.ProgressiveCharacters
 import app.anothermorsetrainer.morsekit.TrainerEngine
 import kotlinx.coroutines.delay
+import kotlin.math.roundToInt
 
 private val OK_GREEN = Color(0xFF2E7D32)
 private val ERR_RED = Color(0xFFC62828)
@@ -144,7 +145,11 @@ fun SendingPracticeScreen(onBack: () -> Unit) {
     }
 
     fun finish() {
-        Stats.record(mode = "Sending", attempts = tally.attempts, correct = tally.correct, bestTtrMs = null, durationSeconds = tally.elapsedSeconds())
+        Stats.record(
+            mode = "Sending", attempts = tally.attempts, correct = tally.correct,
+            bestTtrMs = null, durationSeconds = tally.elapsedSeconds(),
+            characterWpm = Settings.characterWpm.roundToInt()
+        )
         onBack()
     }
     BackHandler { finish() }

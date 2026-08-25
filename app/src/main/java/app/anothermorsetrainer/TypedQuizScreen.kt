@@ -103,7 +103,12 @@ fun TypedQuizScreen(
     DisposableEffect(Unit) { onDispose { player.release() } }
 
     fun finish() {
-        Stats.record(mode = title, attempts = tally.attempts, correct = tally.correct, bestTtrMs = tally.bestMs, durationSeconds = tally.elapsedSeconds())
+        Stats.record(
+            mode = title, attempts = tally.attempts, correct = tally.correct,
+            bestTtrMs = tally.bestMs, durationSeconds = tally.elapsedSeconds(),
+            // The mode's own timing, so QRQ sessions band at 35/40 WPM.
+            characterWpm = timing().wpm.roundToInt(), medianTtrMs = tally.medianMs()
+        )
         onBack()
     }
     BackHandler { finish() }
@@ -124,7 +129,7 @@ fun TypedQuizScreen(
         val ms = (ttr * 1000).roundToInt()
         if (outcome.correct) {
             tally.correct += 1
-            if (ms > 0 && (tally.bestMs == null || ms < tally.bestMs!!)) tally.bestMs = ms
+            tally.noteCorrectMs(ms)
         }
         summary = source.summary
         if (Settings.hapticsEnabled) {

@@ -146,7 +146,11 @@ fun JourneyScreen(onBack: () -> Unit) {
     fun finish() {
         progress.currentLevel = quiz.levelNumber
         JourneyStore.save(progress)
-        Stats.record(mode = "Journey", attempts = tally.attempts, correct = tally.correct, bestTtrMs = tally.bestMs, durationSeconds = tally.elapsedSeconds())
+        Stats.record(
+            mode = "Journey", attempts = tally.attempts, correct = tally.correct,
+            bestTtrMs = tally.bestMs, durationSeconds = tally.elapsedSeconds(),
+            characterWpm = Settings.characterWpm.roundToInt(), medianTtrMs = tally.medianMs()
+        )
         onBack()
     }
 
@@ -170,7 +174,7 @@ fun JourneyScreen(onBack: () -> Unit) {
         val ms = (ttr * 1000).roundToInt()
         if (outcome.correct) {
             tally.correct += 1
-            if (ms > 0 && (tally.bestMs == null || ms < tally.bestMs!!)) tally.bestMs = ms
+            tally.noteCorrectMs(ms)
         }
         if (drill.correct.length == 1) {
             Stats.recordChar(drill.correct, outcome.correct, if (outcome.correct && ms > 0) ms else null)

@@ -137,7 +137,11 @@ fun RapidFireScreen(onBack: () -> Unit) {
         val correct = transcript.count { it.correct == true }
         val secs = ((System.currentTimeMillis() - startedAtMs) / 1000L).toInt()
         if (response != RapidFireResponse.REVIEW && attempts > 0) {
-            Stats.record(mode = "Rapid Fire", attempts = attempts, correct = correct, bestTtrMs = null, durationSeconds = secs)
+            Stats.record(
+                mode = "Rapid Fire", attempts = attempts, correct = correct,
+                bestTtrMs = null, durationSeconds = secs,
+                characterWpm = Settings.characterWpm.roundToInt()
+            )
         }
         phase = RfPhase.SUMMARY
     }

@@ -20,6 +20,9 @@ the iOS app's navy/teal look.
   back to back at your chosen pace; type as you hear it, head-copy then type, or
   just listen and review the transmitted list
 - **Pileup Runner** — call CQ and work a simulated CW pileup
+- **Contest** — timed runs of the weekly CW events (K1USN SST, ICWC MST, CWops
+  CWT, NCCC Sprint, ARRL Field Day) with authentic exchanges, speeds, live
+  score/rate, and an end-of-run scorecard
 - **Code Exam** — FCC/ARRL-style copy test at 5 / 13 / 20 WPM
 - **Sending Practice** — key it back (touch or MIDI key)
 - **Repeater** — live CW over the Vail network, with Vail Adapter support: MIDI
@@ -29,7 +32,11 @@ the iOS app's navy/teal look.
 - **Listen & Learn** — hands-free: hear the code, then the spoken answer; keeps
   playing with the screen locked (foreground service)
 - **Voice answers** — speak your answer instead of tapping (microphone)
-- **Progress** — daily streak, accuracy, best copy, per-character recognition chart
+- **Sending Drills** — printable practice sheets of random character groups
+  drawn from what you've studied (even, personalized, or numbers & punctuation),
+  ready to share or print
+- **Progress** — daily streak, accuracy, best copy, per-character recognition
+  chart, and performance by 5-WPM speed band
 - **Settings** — speed, Farnsworth, sidetone pitch, haptics, daily reminders
 - Dark navy/teal theme, adaptive icon, phone + tablet responsive layout
 

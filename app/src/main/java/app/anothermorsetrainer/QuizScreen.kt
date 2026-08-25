@@ -56,10 +56,27 @@ internal class Tally {
     var attempts = 0
     var correct = 0
     var bestMs: Int? = null
+    /** Correct recognition times this session — the median feeds speed-band stats. */
+    private val ttrsMs = mutableListOf<Int>()
     /** Wall-clock when this session began — Tally is remembered at screen entry. */
     val startedAtMs: Long = System.currentTimeMillis()
     /** Whole seconds of practice elapsed since the session began. */
     fun elapsedSeconds(): Int = ((System.currentTimeMillis() - startedAtMs) / 1000L).toInt()
+
+    /** Note one correct answer's recognition time (and keep the fastest). */
+    fun noteCorrectMs(ms: Int) {
+        if (ms <= 0) return
+        ttrsMs.add(ms)
+        if (bestMs == null || ms < bestMs!!) bestMs = ms
+    }
+
+    /** Median correct recognition time this session, or null if none recorded. */
+    fun medianMs(): Int? {
+        if (ttrsMs.isEmpty()) return null
+        val s = ttrsMs.sorted()
+        val n = s.size
+        return if (n % 2 == 1) s[n / 2] else (s[n / 2 - 1] + s[n / 2]) / 2
+    }
 }
 
 /**
@@ -126,7 +143,11 @@ fun QuizScreen(
     DisposableEffect(Unit) { onDispose { player.release(); recognizer.release() } }
 
     fun finish() {
-        Stats.record(mode = title, attempts = tally.attempts, correct = tally.correct, bestTtrMs = tally.bestMs, durationSeconds = tally.elapsedSeconds())
+        Stats.record(
+            mode = title, attempts = tally.attempts, correct = tally.correct,
+            bestTtrMs = tally.bestMs, durationSeconds = tally.elapsedSeconds(),
+            characterWpm = Settings.characterWpm.roundToInt(), medianTtrMs = tally.medianMs()
+        )
         onBack()
     }
 
@@ -145,7 +166,7 @@ fun QuizScreen(
         val ms = (ttr * 1000).roundToInt()
         if (outcome.correct) {
             tally.correct += 1
-            if (ms > 0 && (tally.bestMs == null || ms < tally.bestMs!!)) tally.bestMs = ms
+            tally.noteCorrectMs(ms)
         }
         // Single-character drills feed the per-character recognition chart.
         if (drill.correct.length == 1) {

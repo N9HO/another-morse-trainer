@@ -45,6 +45,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.anothermorsetrainer.morsekit.MorseCode
 import app.anothermorsetrainer.morsekit.SessionRecord
+import app.anothermorsetrainer.morsekit.WPMBandSummary
+import app.anothermorsetrainer.morsekit.WPMBands
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import kotlin.math.roundToInt
@@ -135,6 +137,25 @@ fun StatsScreen(onBack: () -> Unit) {
                     charRows.forEachIndexed { i, row ->
                         RecognitionBar(row = row, axisMaxMs = axisMax)
                         if (i < charRows.size - 1) Spacer(Modifier.height(8.dp))
+                    }
+                }
+            }
+
+            val bands = WPMBands.summarize(
+                Stats.recent.map { WPMBands.Entry(it.characterWpm, it.attempts, it.correct, it.medianTtrMs) }
+            )
+            if (bands.isNotEmpty()) {
+                SectionLabel("Performance by speed")
+                Text(
+                    "How you do at each character-speed range. Watch where accuracy dips or reaction time climbs — that's your next speed to drill.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Brand.textSecondary,
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
+                )
+                Column(modifier = Modifier.fillMaxWidth().brandCard(14.dp)) {
+                    bands.forEachIndexed { i, band ->
+                        SpeedBandRow(band)
+                        if (i < bands.size - 1) HairlineDivider()
                     }
                 }
             }
@@ -322,6 +343,36 @@ private fun SectionLabel(text: String) {
 @Composable
 private fun HairlineDivider() {
     Box(modifier = Modifier.fillMaxWidth().height(0.5.dp).background(Brand.hairline))
+}
+
+/** One 5-WPM speed band: range + session count, accuracy, typical reaction time. */
+@Composable
+private fun SpeedBandRow(band: WPMBandSummary) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 11.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text("${band.label} WPM", fontWeight = FontWeight.SemiBold, color = Brand.textPrimary)
+            Text(
+                "${band.sessions} session" + if (band.sessions == 1) "" else "s",
+                style = MaterialTheme.typography.labelSmall,
+                color = Brand.textSecondary
+            )
+        }
+        Column(horizontalAlignment = Alignment.End) {
+            Text(
+                "${(band.accuracy * 100).roundToInt()}%",
+                fontWeight = FontWeight.Medium,
+                color = if (band.accuracy >= 0.9) GOOD else MASTERED
+            )
+            Text(
+                band.medianMs?.let { "${fmtMs(it)} reaction" } ?: "—",
+                style = MaterialTheme.typography.labelSmall,
+                color = Brand.textSecondary
+            )
+        }
+    }
 }
 
 /** One row of the recognition chart: a character, its median copy time, and accuracy. */
