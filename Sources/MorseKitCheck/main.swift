@@ -1177,6 +1177,49 @@ do {
           sd.options == [sd.correct] && !src.summary.isEmpty)
 }
 
+// Short Stories library
+print("\nShort Stories library:")
+check("a healthy shelf of passages (30+)", MorseData.stories.count >= 30)
+check("story ids are unique",
+      Set(MorseData.stories.map(\.id)).count == MorseData.stories.count)
+check("every passage keys cleanly (no unsendable characters)",
+      MorseData.stories.allSatisfy { CWText.isFullySendable($0.text) })
+check("no passage is empty or a marathon (≤ 90 words)",
+      MorseData.stories.allSatisfy {
+          let words = $0.text.split(separator: " ").count
+          return words > 0 && words <= 90
+      })
+
+// CWText — real-world text → sendable Morse text
+print("\nCWText sanitizer:")
+check("clean text passes through uppercased",
+      CWText.sanitized("The fox jumped.") == "THE FOX JUMPED.")
+check("smart quotes and apostrophes drop out",
+      CWText.sanitized("It\u{2019}s a \u{201C}test\u{201D}") == "ITS A TEST")
+check("an em dash becomes a word break",
+      CWText.sanitized("On air\u{2014}and off") == "ON AIR AND OFF")
+check("accents fold to plain letters",
+      CWText.sanitized("café naïve Zürich") == "CAFE NAIVE ZURICH")
+check("ampersand and percent are spelled out",
+      CWText.sanitized("AT&T up 5%") == "AT AND T UP 5 PERCENT")
+check("thousands separators drop from numbers",
+      CWText.sanitized("1,234 people") == "1234 PEOPLE")
+check("colons become commas, bangs become periods",
+      CWText.sanitized("Breaking: launch works!") == "BREAKING, LAUNCH WORKS.")
+check("unknown symbols become word breaks",
+      CWText.sanitized("a*b (c) [d]") == "A B C D")
+check("HTML tags and entities strip away",
+      CWText.sanitized(CWText.strippedHTML("<p>Fees &amp; taxes rose &#8212; a lot</p>"))
+          == "FEES AND TAXES ROSE A LOT")
+check("sanitized output is always sendable",
+      CWText.isFullySendable(CWText.sanitized("Weird → ™ ©®…, input\u{00A0}#42 – ok?")))
+check("isSendable is safe on odd characters",
+      !CWText.isSendable("ß") && CWText.isSendable("k") && CWText.isSendable(" "))
+check("clipping prefers a sentence boundary",
+      CWText.clipped("ONE TWO THREE. FOUR FIVE SIX SEVEN", maxWords: 5) == "ONE TWO THREE.")
+check("hard clip still closes the sentence",
+      CWText.clipped("ONE TWO THREE FOUR FIVE SIX SEVEN", maxWords: 4) == "ONE TWO THREE FOUR.")
+
 print("\n────────────────────────────")
 if failures == 0 {
     print("✅ All \(checks) checks passed.\n")
