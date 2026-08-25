@@ -273,6 +273,11 @@ struct SettingsView: View {
                         } label: {
                             HStack {
                                 Text(stage.displayName)
+                                if model.characterStage == stage {
+                                    Image(systemName: "checkmark")
+                                        .font(.caption.weight(.semibold))
+                                        .foregroundStyle(Theme.tealBright)
+                                }
                                 Spacer()
                                 Image(systemName: "play.circle")
                             }
@@ -281,7 +286,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Developer · Preview Stage")
                 } footer: {
-                    Text("Jumps the Characters track to a stage for testing. Stages beyond Characters expand your active set to all letters & numbers.")
+                    Text("Jumps the Characters track to a stage for testing (✓ is where the track is now). Stages beyond Characters expand your active set to all letters & numbers. To hold the track at a stage during normal practice, use “Track stage” on the Characters setup screen instead.")
                 }
                 .listRowBackground(Theme.navyElevated)
 

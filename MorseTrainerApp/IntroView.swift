@@ -766,6 +766,24 @@ private struct SessionSetupSheet: View {
         )
     }
 
+    /// The Characters track's learner-chosen stage hold (nil = automatic).
+    private var stagePin: Binding<ProgressiveCharacters.Stage?> {
+        Binding(
+            get: { model.characterStagePin },
+            set: { model.setCharacterStagePin($0) }
+        )
+    }
+
+    private var stageNote: String {
+        if let pinned = model.characterStagePin {
+            return "Holding at \(pinned.displayName) — the track stays here until you switch back to Auto."
+        }
+        if model.characterStage != .singles {
+            return "You've grown past single characters — the track is at \(model.characterStage.displayName). Pick a stage to drill it specifically (Characters brings back singles), or leave on Auto to keep growing."
+        }
+        return "Starts with single characters and grows into pairs, triples, then words & call signs as you improve. Pick a stage to hold the track there instead."
+    }
+
     /// The authentic speed band for the selected contest, shown under the picker.
     private var contestSpeedNote: String {
         let c = model.settings.contest.type
@@ -793,6 +811,28 @@ private struct SessionSetupSheet: View {
                                 }
                                 .pickerStyle(.menu)
                                 .tint(Theme.tealBright)
+                            }
+                        }
+
+                        // The Characters track grows singles → pairs → triples →
+                        // words & call signs on its own. Surface that here and let
+                        // the learner hold it at a stage, so "Characters" serving
+                        // words is never a mystery with no way back (issue #51).
+                        if model.learningMode == .characters {
+                            card(title: "Track stage", systemImage: "square.stack.3d.up") {
+                                Picker("Track stage", selection: stagePin) {
+                                    Text("Auto — grow as you improve")
+                                        .tag(nil as ProgressiveCharacters.Stage?)
+                                    ForEach(ProgressiveCharacters.Stage.allCases, id: \.self) { stage in
+                                        Text(stage.displayName).tag(Optional(stage))
+                                    }
+                                }
+                                .pickerStyle(.menu)
+                                .tint(Theme.tealBright)
+                                Text(stageNote)
+                                    .font(.footnote)
+                                    .foregroundStyle(Theme.textSecondary)
+                                    .fixedSize(horizontal: false, vertical: true)
                             }
                         }
 

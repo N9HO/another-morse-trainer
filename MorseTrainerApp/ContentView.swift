@@ -145,18 +145,22 @@ struct ContentView: View {
 
     private var modeMenu: some View {
         Menu {
-            ForEach(TrainingMode.allCases) { m in
-                Button {
-                    // Changing modes ends the current session and shows its
-                    // summary; the next session begins only on an explicit start.
-                    model.setMode(m)
-                } label: {
-                    Label(m.title, systemImage: m.icon)
+            // A Picker (not plain buttons) so the chosen mode is checkmarked.
+            // Changing modes ends the current session and shows its summary;
+            // the next session begins only on an explicit start — so on the
+            // summary screen the label and checkmark moving to the picked mode
+            // are the visible effect (issue #42).
+            Picker("Mode", selection: Binding(
+                get: { model.learningMode },
+                set: { model.setMode($0) }
+            )) {
+                ForEach(TrainingMode.allCases) { m in
+                    Label(m.title, systemImage: m.icon).tag(m)
                 }
             }
         } label: {
             HStack(spacing: 4) {
-                Text(model.mode.title).font(.headline)
+                Text(model.learningMode.title).font(.headline)
                 Image(systemName: "chevron.down").font(.caption2)
             }
         }

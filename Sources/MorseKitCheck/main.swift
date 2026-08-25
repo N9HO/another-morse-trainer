@@ -236,6 +236,92 @@ do {
     check("ladder reaches Words & Call Signs", reachedPhrases)
 }
 
+// Stage pinning (issue #51): a learner-chosen stage must hold — "Characters"
+// keeps serving single characters even with the whole ladder mastered.
+print("\nStage pinning:")
+do {
+    let eng = TrainerEngine(seedCount: 2, rng: SeededRNG(seed: 11))
+    eng.setActiveCharacters(MorseCode.kochOrder)
+    let ladder = ProgressiveCharacters(engine: eng, rng: SeededRNG(seed: 11))
+    // Master the singles ladder so automatic progression wants to leave it.
+    for _ in 0..<3000 {
+        let d = ladder.nextDrill()
+        _ = ladder.record(choice: d.correct, ttr: 0.4)
+        if ladder.stage != .singles { break }
+    }
+    check("auto progression leaves singles once mastered", ladder.stage != .singles)
+
+    ladder.pin(.singles)
+    check("pin(.singles) returns the track to singles", ladder.stage == .singles)
+    var held = true
+    for _ in 0..<200 {
+        let d = ladder.nextDrill()
+        _ = ladder.record(choice: d.correct, ttr: 0.3)
+        if ladder.stage != .singles { held = false; break }
+    }
+    check("pinned singles hold with the whole ladder mastered", held)
+
+    ladder.pin(.pairs)
+    held = true
+    var optionsSane = true
+    for _ in 0..<100 {
+        let d = ladder.nextDrill()
+        if !d.options.contains(d.correct) { optionsSane = false }
+        _ = ladder.record(choice: d.correct, ttr: 0.3)
+        if ladder.stage != .pairs { held = false; break }
+    }
+    check("pinned pairs hold despite a mastered window", held)
+    check("pinned drills keep the answer among the options", optionsSane)
+
+    // Unlike the dev jump, a pin keeps the learner's studied set — even a
+    // two-character beginner pool must produce group drills (only four pairs
+    // exist, fewer than a cap of 6, so the option padding has to give up
+    // gracefully rather than spin forever).
+    let tinyEng = TrainerEngine(seedCount: 2, rng: SeededRNG(seed: 31))
+    tinyEng.config.optionCount = 6
+    let tinyLadder = ProgressiveCharacters(engine: tinyEng, rng: SeededRNG(seed: 31))
+    tinyLadder.pin(.pairs)
+    var tinySane = true
+    for _ in 0..<20 {
+        let d = tinyLadder.nextDrill()
+        if !d.options.contains(d.correct) || d.options.count > 6 { tinySane = false; break }
+        _ = tinyLadder.record(choice: d.correct, ttr: 0.3)
+    }
+    check("a pinned stage works on a tiny studied set (no pool expansion)", tinySane)
+    check("tiny-pool pin left the studied set alone", tinyEng.activeCharacters.count == 2)
+
+    // The pin survives a save/load; snapshots from before pinning decode as auto.
+    var roundtrip = false
+    var legacyAuto = false
+    if let data = try? JSONEncoder().encode(ladder.snapshot),
+       let decoded = try? JSONDecoder().decode(ProgressiveCharacters.Snapshot.self, from: data) {
+        roundtrip = decoded.pinnedStage == .pairs && decoded.stage == .pairs
+        if var obj = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] {
+            obj.removeValue(forKey: "pinnedStage")
+            if let legacy = try? JSONSerialization.data(withJSONObject: obj),
+               let dec2 = try? JSONDecoder().decode(ProgressiveCharacters.Snapshot.self, from: legacy) {
+                legacyAuto = dec2.pinnedStage == nil && dec2.stage == .pairs
+            }
+        }
+    }
+    check("snapshot roundtrips the pinned stage", roundtrip)
+    check("legacy snapshots (no pin key) decode as auto", legacyAuto)
+
+    ladder.unpin()
+    check("unpin returns to automatic progression", ladder.pinnedStage == nil)
+
+    // A dev jump previews auto progression, so it clears any pin — the stage
+    // readout must never claim one stage while the track serves another.
+    ladder.pin(.triples)
+    ladder.jumpToStage(.phrases)
+    check("jumpToStage clears a pin", ladder.pinnedStage == nil && ladder.stage == .phrases)
+
+    // A proficiency change restarts the ladder and also returns to auto.
+    ladder.pin(.phrases)
+    ladder.resetToSingles()
+    check("resetToSingles clears the pin", ladder.pinnedStage == nil && ladder.stage == .singles)
+}
+
 // Confusion-pair tracking & drill
 print("\nConfusion pairs:")
 do {
