@@ -117,7 +117,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .contest:
             return "Run a simulated contest against the clock. Pick from the weekly CW sprints — K1USN SST (slow, name + state), ICWC MST (medium, name + serial), CWops CWT (fast, name + number), the NCCC Sprint (serial + name + state) — or ARRL Field Day (class + section). Call CQ and work the pileup that answers, with authentic speeds, a live score and rate, and an end-of-run scorecard — the closest thing to being in the chair on contest day."
         case .story:
-            return "Continuous copy: hear a short story sent end to end. Copy it on paper or in your head, then reveal the text to check yourself."
+            return "Continuous copy: hear a short story sent end to end. Copy it on paper or in your head, then reveal the text to check yourself. Or switch to todays news and decode real headlines, fetched fresh and hidden until you reveal — the only way to read them is to copy the code."
         case .exam:
             return "Sit a recreation of the old ARRL/FCC code-proficiency exam: a 5-minute QSO-style transmission at 5, 13, or 20 WPM. Pass with one minute of solid copy (25 characters in a row) or by answering questions about what was sent."
         case .qrq:
@@ -488,8 +488,32 @@ final class AppModel: ObservableObject {
     @Published private(set) var storyRevealed = false
     @Published private(set) var storyTitle = ""
     @Published private(set) var storyText = ""
+    // News-in-Morse: headlines are fetched, sanitized to the sendable charset,
+    // and kept hidden until revealed — decoding is the only way to read them.
+    @Published private(set) var newsFetching = false
+    @Published private(set) var newsError: String?
+    private var newsStories: [MorseData.Story] = []
+    private var newsItems: [NewsFetcher.Item] = []
+    private var newsFetchedAt: Date?
+    private var newsFetchedSource: NewsSource?
+    private var newsIsFromCache = false
+    private let newsFetcher = NewsFetcher()
+    /// Reuse a fetch this recent (seconds) instead of hitting the feed again.
+    private let newsFreshWindow: TimeInterval = 30 * 60
     private var storyGeneration = 0
     private var storyIndex = 0
+
+    /// Whether this Story session sends news headlines rather than fables.
+    var isNewsStory: Bool { isStory && settings.story.content == .news }
+
+    /// The line under the story title (what the passage is and where it came from).
+    var storySubtitle: String {
+        guard settings.story.content == .news else {
+            return "Public-domain fable · continuous copy"
+        }
+        let source = settings.story.newsSource.attribution
+        return newsIsFromCache ? "\(source) · saved headlines" : "\(source) · decode the news"
+    }
 
     /// Set up story mode (pick a passage, wait for the Play tap).
     private func startStoryMode() {
@@ -497,7 +521,13 @@ final class AppModel: ObservableObject {
         storyActive = true
         storyPlaying = false
         storyRevealed = false
-        pickStory()
+        newsError = nil
+        if settings.story.content == .news {
+            ensureNews()
+        } else {
+            newsFetching = false   // a stale in-flight fetch must not gray out fables
+            pickStory()
+        }
         phase = .idle
     }
 
@@ -510,14 +540,123 @@ final class AppModel: ObservableObject {
         }
     }
 
+    /// The passage list this session draws from (bundled fables or fetched news).
+    private var activeStories: [MorseData.Story] {
+        settings.story.content == .news ? newsStories : MorseData.stories
+    }
+
     private func pickStory() {
-        let stories = MorseData.stories
-        guard !stories.isEmpty else { storyTitle = ""; storyText = ""; return }
+        let stories = activeStories
+        let isNews = settings.story.content == .news
+        guard !stories.isEmpty else {
+            storyTitle = ""; storyText = ""
+            summary = isNews ? "No headlines" : "No stories"
+            return
+        }
         let n = stories.count
-        let s = stories[((storyIndex % n) + n) % n]
+        let idx = ((storyIndex % n) + n) % n
+        let s = stories[idx]
         storyTitle = s.title
         storyText = s.text
-        summary = "Story \((((storyIndex % n) + n) % n) + 1) of \(n)"
+        summary = "\(isNews ? "Headline" : "Story") \(idx + 1) of \(n)"
+    }
+
+    // MARK: - News headlines (Story mode's "decode the news" source)
+
+    /// Make sure headlines are loaded: reuse a recent fetch, otherwise hit the
+    /// feed, otherwise fall back to the last successful fetch on disk.
+    private func ensureNews() {
+        let source = settings.story.newsSource
+        if newsFetchedSource == source, !newsItems.isEmpty,
+           let at = newsFetchedAt, Date().timeIntervalSince(at) < newsFreshWindow {
+            // Rebuild from the kept raw items so a changed "include the
+            // summary" toggle applies without another network trip.
+            rebuildNewsStories(source: source)
+            return
+        }
+        newsFetching = true
+        newsError = nil
+        summary = "Fetching…"
+        let generation = storyGeneration
+        newsFetcher.fetch(source) { [weak self] result in
+            guard let self else { return }
+            // Clear the spinner even for a stale fetch (mode switched away),
+            // so a later session never starts with the controls grayed out.
+            self.newsFetching = false
+            guard self.storyGeneration == generation else { return }
+            switch result {
+            case .success(let items):
+                self.adoptNews(items, source: source, fromCache: false, fetchedAt: Date())
+            case .failure(let error):
+                if let cached = self.newsFetcher.cached(source) {
+                    self.adoptNews(cached.items, source: source, fromCache: true,
+                                   fetchedAt: cached.fetchedAt)
+                } else {
+                    self.newsStories = []
+                    self.newsItems = []
+                    self.newsFetchedSource = nil
+                    self.newsError = error.message
+                    self.summary = "No headlines"
+                }
+            }
+        }
+    }
+
+    /// Keep a fetched batch and build the sendable passages from it.
+    private func adoptNews(_ items: [NewsFetcher.Item], source: NewsSource,
+                           fromCache: Bool, fetchedAt: Date) {
+        newsItems = items
+        newsFetchedSource = source
+        newsFetchedAt = fetchedAt
+        newsIsFromCache = fromCache
+        storyIndex = 0
+        rebuildNewsStories(source: source)
+    }
+
+    /// Sanitize the kept raw items down to what the key can send, then land on
+    /// the current passage (or the empty-feed message).
+    private func rebuildNewsStories(source: NewsSource) {
+        newsStories = decodableStories(from: newsItems, source: source)
+        if newsStories.isEmpty {
+            newsError = NewsFetcher.FetchError.emptyFeed.message
+            summary = "No headlines"
+        } else {
+            pickStory()
+        }
+    }
+
+    /// Headline (and optionally its summary, after a BT break) as a sendable
+    /// passage. The title stays generic so nothing is given away before reveal.
+    private func decodableStories(from items: [NewsFetcher.Item],
+                                  source: NewsSource) -> [MorseData.Story] {
+        items.enumerated().compactMap { index, item in
+            let headline = CWText.sanitized(CWText.strippedHTML(item.title))
+            guard !headline.isEmpty else { return nil }
+            var text = headline
+            if settings.story.newsFullStory {
+                let summary = CWText.clipped(
+                    CWText.sanitized(CWText.strippedHTML(item.summary)), maxWords: 45)
+                if !summary.isEmpty, summary != headline {
+                    text = headline + " = " + summary
+                }
+            }
+            return MorseData.Story(id: "news-\(index)",
+                                   title: source.attribution,
+                                   text: text)
+        }
+    }
+
+    /// Drop what we have and hit the feed again (Retry button / fresh headlines).
+    func refreshNews() {
+        guard isStory, settings.story.content == .news, !newsFetching else { return }
+        storyGeneration += 1
+        player.stop()
+        storyPlaying = false
+        storyRevealed = false
+        newsFetchedSource = nil
+        newsFetchedAt = nil
+        ensureNews()
+        phase = .idle
     }
 
     /// Send the whole passage as one continuous transmission.

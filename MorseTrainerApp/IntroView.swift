@@ -96,6 +96,23 @@ struct IntroView: View {
         )
     }
 
+    // MARK: Short Stories bindings
+
+    private var storyContentBinding: Binding<StoryContent> {
+        Binding(get: { model.settings.story.content },
+                set: { model.settings.story.content = $0 })
+    }
+
+    private var newsSourceBinding: Binding<NewsSource> {
+        Binding(get: { model.settings.story.newsSource },
+                set: { model.settings.story.newsSource = $0 })
+    }
+
+    private var newsFullStoryBinding: Binding<Bool> {
+        Binding(get: { model.settings.story.newsFullStory },
+                set: { model.settings.story.newsFullStory = $0 })
+    }
+
     // MARK: Rapid Fire bindings
 
     private var rapidFireContentBinding: Binding<RapidFireContent> {
@@ -375,6 +392,33 @@ struct IntroView: View {
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
+            if model.learningMode == .story {
+                inlinePicker(title: "What to copy",
+                             selection: storyContentBinding) { (c: StoryContent) in c.label }
+                if model.settings.story.content == .news {
+                    inlinePicker(title: "News source",
+                                 selection: newsSourceBinding) { (s: NewsSource) in s.label }
+                    Toggle(isOn: newsFullStoryBinding) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Include the summary").font(.subheadline)
+                            Text("Send each story summary after its headline, separated by a BT break. Turn off for quick headline-only copy.")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    Label {
+                        Text("Fresh headlines are fetched over the internet and stay hidden until you reveal — decoding is the only way to read the news.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    } icon: {
+                        Image(systemName: "newspaper")
+                            .foregroundStyle(Theme.teal)
+                    }
+                }
             }
 
             if model.learningMode == .words {

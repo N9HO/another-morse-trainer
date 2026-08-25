@@ -230,6 +230,47 @@ extension RapidFireSettings {
     }
 }
 
+/// What the Short Stories (continuous copy) mode sends: bundled fables, or
+/// fresh news headlines fetched from a public feed and hidden until revealed —
+/// so the only way to read the day's news is to decode it.
+enum StoryContent: String, Codable, CaseIterable, Identifiable {
+    case fables, news
+    var id: String { rawValue }
+    var label: String {
+        switch self {
+        case .fables: return "Short stories"
+        case .news:   return "Todays news"
+        }
+    }
+}
+
+/// Short Stories mode preferences. Persisted as part of AppSettings; every
+/// field has a default so older saves upgrade cleanly.
+struct StorySettings: Codable, Equatable {
+    var content: StoryContent = .fables
+    /// Which feed to pull headlines from when `content == .news`.
+    var newsSource: NewsSource = .hamRadio
+    /// Send the item's summary after the headline (separated by a BT break),
+    /// or just the headline for quick single-sentence copy.
+    var newsFullStory: Bool = true
+}
+
+// Resilient decoding so adding new Story fields never wipes saved settings.
+extension StorySettings {
+    enum CodingKeys: String, CodingKey {
+        case content, newsSource, newsFullStory
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        var s = StorySettings()
+        s.content = try c.decodeIfPresent(StoryContent.self, forKey: .content) ?? s.content
+        s.newsSource = try c.decodeIfPresent(NewsSource.self, forKey: .newsSource) ?? s.newsSource
+        s.newsFullStory = try c.decodeIfPresent(Bool.self, forKey: .newsFullStory) ?? s.newsFullStory
+        self = s
+    }
+}
+
 /// What the hands-free "Listen & Learn" mode announces.
 enum ListenContent: String, Codable, CaseIterable, Identifiable {
     case characters, words, abbreviations
@@ -439,6 +480,9 @@ struct AppSettings: Codable, Equatable {
     /// Rapid Fire (back-to-back copy) settings.
     var rapidFire = RapidFireSettings()
 
+    /// Short Stories mode settings (fables vs. fetched news headlines).
+    var story = StorySettings()
+
     // Feedback (defaults per spec: show right/wrong, reveal only on miss, no replay)
     var showCorrectness: Bool = true
     var reveal: RevealMode = .onWrong
@@ -499,6 +543,7 @@ extension AppSettings {
         case qso
         case contest
         case rapidFire
+        case story
         case showCorrectness, reveal, allowReplay
         case headCopyRepeats, headCopyRevealSeconds
     }
@@ -535,6 +580,7 @@ extension AppSettings {
         s.qso = try c.decodeIfPresent(QSOSettings.self, forKey: .qso) ?? s.qso
         s.contest = try c.decodeIfPresent(ContestSettings.self, forKey: .contest) ?? s.contest
         s.rapidFire = try c.decodeIfPresent(RapidFireSettings.self, forKey: .rapidFire) ?? s.rapidFire
+        s.story = try c.decodeIfPresent(StorySettings.self, forKey: .story) ?? s.story
         s.showCorrectness = try c.decodeIfPresent(Bool.self, forKey: .showCorrectness) ?? s.showCorrectness
         s.reveal = try c.decodeIfPresent(RevealMode.self, forKey: .reveal) ?? s.reveal
         s.allowReplay = try c.decodeIfPresent(Bool.self, forKey: .allowReplay) ?? s.allowReplay
