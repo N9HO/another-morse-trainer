@@ -98,7 +98,7 @@ private class TextPrintAdapter(
                     callback.onWriteCancelled()
                     return
                 }
-                val page = pdf.startPage(PdfDocument.PageInfo.Builder(width, height, pageIndex + 1).build())
+                val page = pdf.startPage(PdfDocument.PageInfo.Builder(width, height, pageIndex + 1).create())
                 var y = marginPts + lineHeightPts
                 val start = pageIndex * perPage
                 val end = minOf(start + perPage, lines.size)
