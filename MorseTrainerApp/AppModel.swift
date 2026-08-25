@@ -441,10 +441,12 @@ final class AppModel: ObservableObject {
     /// Switching modes ends the current session and surfaces its summary — it
     /// does not restart one. The chosen mode becomes the selection for the next
     /// session, which only begins on an explicit start ("Practice again" or a
-    /// fresh start from setup).
+    /// fresh start from setup). The selection is recorded even when re-picking
+    /// the session's own mode from the summary screen (issue #42), where the
+    /// guard below otherwise skips it.
     func setMode(_ newMode: TrainingMode) {
-        guard newMode != mode else { return }
         learningMode = newMode
+        guard newMode != mode else { return }   // same mode mid-session: nothing to end
         endSession()
     }
 
@@ -1394,6 +1396,9 @@ final class AppModel: ObservableObject {
 
     /// Stop the session, cancel any pending auto-advance, and show the summary.
     func endSession() {
+        // Re-entrant calls — e.g. picking a mode from the summary screen, whose
+        // session already ended — must not log the session a second time (#42).
+        guard !sessionEnded else { return }
         sessionTimer?.invalidate()
         sessionTimer = nil
         sessionEndDate = nil
@@ -2043,10 +2048,34 @@ final class AppModel: ObservableObject {
     /// Developer aid: jump the Characters track to a stage and start drilling it.
     func previewStage(_ stage: ProgressiveCharacters.Stage) {
         charLadder.jumpToStage(stage)
+        learningMode = .characters   // keep the selection in step with the forced mode
         mode = .characters
         reconcilePunctuation()
         saveProgress()
         start()
+    }
+
+    // MARK: - Characters track stage (issue #51)
+
+    /// Where the Characters track currently is (singles → pairs → triples → phrases).
+    var characterStage: ProgressiveCharacters.Stage { charLadder.stage }
+
+    /// The learner-chosen stage hold, or nil for automatic progression.
+    var characterStagePin: ProgressiveCharacters.Stage? { charLadder.pinnedStage }
+
+    /// Pin the Characters track to a stage (nil returns it to automatic
+    /// progression). Pinned, the track serves exactly that stage and never
+    /// auto-advances — so "Characters" keeps serving single characters even
+    /// with the whole ladder mastered. Persisted with the track's progress.
+    func setCharacterStagePin(_ stage: ProgressiveCharacters.Stage?) {
+        objectWillChange.send()   // stage lives outside @Published state
+        if let stage {
+            charLadder.pin(stage)
+        } else {
+            charLadder.unpin()
+        }
+        saveProgress()
+        if mode == .characters { summary = charLadder.summary }
     }
 
     private func reconcilePunctuation() {

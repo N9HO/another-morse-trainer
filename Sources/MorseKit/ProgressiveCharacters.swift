@@ -28,6 +28,12 @@ public final class ProgressiveCharacters: QuizSource {
     public let engine: TrainerEngine
     public private(set) var stage: Stage = .singles
 
+    /// A learner-chosen stage. While set, the track serves exactly this stage
+    /// and never auto-advances (or auto-leaves singles), so picking "Characters"
+    /// keeps serving characters even with the whole ladder mastered (issue #51).
+    /// `nil` = automatic progression, the default.
+    public private(set) var pinnedStage: Stage?
+
     private var rng: any RandomNumberGenerator
     private let prosignItems = MorseData.prosignTokenItems
     private let phraseItems = MorseData.wordAndCallSignItems
@@ -55,8 +61,9 @@ public final class ProgressiveCharacters: QuizSource {
     }
 
     public func nextDrill() -> Drill {
-        // Leave the singles stage automatically once the ladder is complete.
-        if stage == .singles, singlesComplete {
+        // Leave the singles stage automatically once the ladder is complete —
+        // unless the learner pinned a stage, which always holds.
+        if pinnedStage == nil, stage == .singles, singlesComplete {
             advance(to: .pairs)
         }
 
@@ -81,7 +88,7 @@ public final class ProgressiveCharacters: QuizSource {
         case .singles:
             let outcome = engine.record(choice: choice, ttr: ttr)
             // The very answer that completes the ladder unlocks the pairs stage.
-            if stage == .singles, singlesComplete {
+            if pinnedStage == nil, stage == .singles, singlesComplete {
                 advance(to: .pairs)
                 return DrillOutcome(correct: outcome.correct, unlocked: Stage.pairs.displayName)
             }
@@ -91,7 +98,7 @@ public final class ProgressiveCharacters: QuizSource {
             let correct = choice == answer
             stageResults.append((correct, ttr))
             if stageResults.count > stageWindow { stageResults.removeFirst() }
-            if let next = advanceIfStageMastered() {
+            if pinnedStage == nil, let next = advanceIfStageMastered() {
                 return DrillOutcome(correct: correct, unlocked: next.displayName)
             }
             return DrillOutcome(correct: correct, unlocked: nil)
@@ -137,20 +144,39 @@ public final class ProgressiveCharacters: QuizSource {
     }
 
     /// Restart the ladder at the single-character stage (e.g. after the user
-    /// changes their proficiency level).
+    /// changes their proficiency level). Also returns to automatic progression —
+    /// a declared restart supersedes any earlier stage choice.
     public func resetToSingles() {
+        pinnedStage = nil
         stage = .singles
         stageResults.removeAll()
     }
 
+    /// Hold the track at a learner-chosen stage. Unlike `jumpToStage` this does
+    /// not touch the active character set: group drills draw from whatever the
+    /// learner has studied, and the phrase stage uses its own fixed pool.
+    public func pin(_ newStage: Stage) {
+        pinnedStage = newStage
+        stage = newStage
+        stageResults.removeAll()
+    }
+
+    /// Return to automatic progression, continuing from the current stage.
+    public func unpin() {
+        pinnedStage = nil
+    }
+
     /// Developer/testing aid: jump directly to a stage. For the multi-character
     /// stages it makes sure there are enough learned characters to form varied
-    /// groups (expanding to the full letter+number set if needed).
+    /// groups (expanding to the full letter+number set if needed). A jump
+    /// previews automatic progression from that stage, so it clears any pin —
+    /// otherwise the pin would claim one stage while the track serves another.
     public func jumpToStage(_ newStage: Stage) {
         if newStage != .singles && engine.activeCharacters.count < 10 {
             engine.setActiveCharacters(MorseCode.kochOrder)
             engine.setExposedCharacters(MorseCode.kochOrder)   // dev jump: treat all as met
         }
+        pinnedStage = nil
         stage = newStage
         stageResults.removeAll()
     }
@@ -173,7 +199,13 @@ public final class ProgressiveCharacters: QuizSource {
             if candidate != group && !options.contains(candidate) { options.append(candidate) }
         }
         // Fallback: pad with fresh random groups if mutation didn't find enough.
-        while options.count < cap {
+        // A small studied set can have fewer possible groups than the option
+        // cap (two characters form only four pairs — reachable with a pinned
+        // stage), so give up after enough tries instead of spinning forever;
+        // a shorter option list still plays fine.
+        var padAttempts = 0
+        while options.count < cap && padAttempts < cap * 20 {
+            padAttempts += 1
             let g = String((0..<size).map { _ in pool.randomElement(using: &rng)! })
             if !options.contains(g) { options.append(g) }
         }
@@ -234,13 +266,18 @@ public final class ProgressiveCharacters: QuizSource {
     public struct Snapshot: Codable, Sendable {
         public var engine: TrainerEngine.Snapshot
         public var stage: Stage
+        /// Optional so snapshots saved before pinning existed decode as "auto".
+        public var pinnedStage: Stage? = nil
     }
 
-    public var snapshot: Snapshot { Snapshot(engine: engine.snapshot, stage: stage) }
+    public var snapshot: Snapshot {
+        Snapshot(engine: engine.snapshot, stage: stage, pinnedStage: pinnedStage)
+    }
 
     public func restore(from snapshot: Snapshot) {
         engine.restore(from: snapshot.engine)
         stage = snapshot.stage
+        pinnedStage = snapshot.pinnedStage
         stageResults.removeAll()
     }
 }
