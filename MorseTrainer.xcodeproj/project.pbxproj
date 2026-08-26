@@ -13,6 +13,7 @@
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		AAAA000000000000000000B6 /* MorseTrainerApp */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = MorseTrainerApp; sourceTree = "<group>"; };
 		AAAA000000000000000000B7 /* Sources/MorseKit */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = Sources/MorseKit; sourceTree = "<group>"; };
+		AAAA000000000000000000B8 /* Sources/CWDecoderCore */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = Sources/CWDecoderCore; sourceTree = "<group>"; };
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -31,6 +32,7 @@
 			children = (
 				AAAA000000000000000000B6 /* MorseTrainerApp */,
 				AAAA000000000000000000B7 /* Sources/MorseKit */,
+				AAAA000000000000000000B8 /* Sources/CWDecoderCore */,
 				AAAA000000000000000000A3 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -61,6 +63,7 @@
 			fileSystemSynchronizedGroups = (
 				AAAA000000000000000000B6 /* MorseTrainerApp */,
 				AAAA000000000000000000B7 /* Sources/MorseKit */,
+				AAAA000000000000000000B8 /* Sources/CWDecoderCore */,
 			);
 			name = MorseTrainer;
 			productName = MorseTrainer;
@@ -142,6 +145,7 @@
 				SDKROOT = iphoneos;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = "MorseTrainerApp/MorseTrainer-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 1;
 			};
@@ -165,6 +169,7 @@
 				SDKROOT = iphoneos;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = "MorseTrainerApp/MorseTrainer-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 1;
 			};
