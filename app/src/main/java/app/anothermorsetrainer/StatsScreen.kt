@@ -3,6 +3,7 @@ package app.anothermorsetrainer
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -33,6 +34,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -48,10 +53,13 @@ import app.anothermorsetrainer.morsekit.SessionRecord
 import app.anothermorsetrainer.morsekit.WPMBandSummary
 import app.anothermorsetrainer.morsekit.WPMBands
 import java.time.LocalDate
+import java.time.ZoneId
+import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import kotlin.math.roundToInt
 
 private val DATE_FMT: DateTimeFormatter = DateTimeFormatter.ofPattern("MMM d")
+private val DETAIL_FMT: DateTimeFormatter = DateTimeFormatter.ofPattern("MMM d, yyyy · h:mm a")
 private val MASTERED = Color(0xFFEF9F27)
 private val GOOD = Color(0xFF5DCAA5)
 
@@ -63,7 +71,14 @@ private val GOOD = Color(0xFF5DCAA5)
  */
 @Composable
 fun StatsScreen(onBack: () -> Unit) {
-    BackHandler { onBack() }
+    // A tapped session opens its full detail record in place of the sheet.
+    var selected by remember { mutableStateOf<SessionRecord?>(null) }
+    BackHandler { if (selected != null) selected = null else onBack() }
+    val detail = selected
+    if (detail != null) {
+        SessionDetail(record = detail, onBack = { selected = null })
+        return
+    }
     val context = LocalContext.current
     Column(modifier = Modifier.fillMaxSize()) {
         Row(
@@ -164,11 +179,15 @@ fun StatsScreen(onBack: () -> Unit) {
             Column(modifier = Modifier.fillMaxWidth().brandCard(14.dp)) {
                 val recent = Stats.recent.take(6)
                 recent.forEachIndexed { i, s ->
+                    // Rows with a stored detail record open it on tap; rows
+                    // saved before details existed stay plain.
+                    val record = Stats.sessionRecord(s.recordId)
                     SessionRow(
                         mode = s.mode,
                         date = LocalDate.ofEpochDay(s.epochDay).format(DATE_FMT),
                         attempts = s.attempts,
-                        accuracy = s.accuracy
+                        accuracy = s.accuracy,
+                        onOpen = record?.let { { selected = it } }
                     )
                     if (i < recent.size - 1) HairlineDivider()
                 }
@@ -312,9 +331,18 @@ private fun MetricTile(label: String, value: String, modifier: Modifier = Modifi
 }
 
 @Composable
-private fun SessionRow(mode: String, date: String, attempts: Int, accuracy: Double) {
+private fun SessionRow(
+    mode: String,
+    date: String,
+    attempts: Int,
+    accuracy: Double,
+    onOpen: (() -> Unit)? = null
+) {
     Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 11.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(if (onOpen != null) Modifier.clickable(onClick = onOpen) else Modifier)
+            .padding(horizontal = 14.dp, vertical = 11.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(modifier = Modifier.weight(1f)) {
@@ -325,6 +353,136 @@ private fun SessionRow(mode: String, date: String, attempts: Int, accuracy: Doub
             if (attempts == 0) "—" else "$attempts · ${(accuracy * 100).roundToInt()}%",
             fontWeight = FontWeight.Medium,
             color = if (accuracy >= 0.9) GOOD else MASTERED
+        )
+        if (onOpen != null) {
+            Spacer(Modifier.width(8.dp))
+            Text("›", fontSize = 18.sp, color = Brand.textSecondary)
+        }
+    }
+}
+
+// MARK: - Session detail
+
+/**
+ * One session in full: when and how long, the aggregate results, and the
+ * per-character recognition chart for single-character sessions. The Android
+ * face of the iOS per-session detail (SessionRecord.chartRows).
+ */
+@Composable
+private fun SessionDetail(record: SessionRecord, onBack: () -> Unit) {
+    Column(modifier = Modifier.fillMaxSize()) {
+        Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            TextButton(onClick = onBack) { Text("‹ Sessions") }
+        }
+      CenteredContent {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp)
+        ) {
+            Text(
+                record.mode,
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.fillMaxWidth(),
+                textAlign = TextAlign.Center
+            )
+            Text(
+                ZonedDateTime.ofInstant(record.date, ZoneId.systemDefault()).format(DETAIL_FMT),
+                style = MaterialTheme.typography.labelMedium,
+                color = Brand.textSecondary,
+                modifier = Modifier.fillMaxWidth().padding(top = 2.dp, bottom = 16.dp),
+                textAlign = TextAlign.Center
+            )
+
+            Column(modifier = Modifier.fillMaxWidth().brandCard(14.dp).padding(horizontal = 14.dp, vertical = 4.dp)) {
+                DetailRow("Answered", "${record.attempts}")
+                HairlineDivider()
+                DetailRow("Accuracy", "${(record.accuracy * 100).roundToInt()}%")
+                HairlineDivider()
+                DetailRow("Fastest", record.fastestTTR?.let { "%.2f s".format(it) } ?: "—")
+                HairlineDivider()
+                DetailRow("Median", record.medianTTR?.let { "%.2f s".format(it) } ?: "—")
+                HairlineDivider()
+                DetailRow("Duration", record.durationSeconds?.let { fmtDuration(it.roundToInt()) } ?: "—")
+                if (record.characterWPM > 0) {
+                    HairlineDivider()
+                    val eff = if (record.effectiveWPM in 1 until record.characterWPM) " (eff ${record.effectiveWPM})" else ""
+                    DetailRow("Speed", "${record.characterWPM} WPM$eff")
+                }
+            }
+
+            val rows = record.chartRows
+            if (rows.isNotEmpty()) {
+                SectionLabel("Characters this session")
+                Text(
+                    "Median copy time per character — hollow rows were in your active set but not drilled this time.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Brand.textSecondary,
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
+                )
+                val axisMax = SessionRecord.axisCeilingMS(rows.mapNotNull { it.result?.medianMS }.maxOrNull() ?: 1000)
+                Column(modifier = Modifier.fillMaxWidth().brandCard(14.dp).padding(14.dp)) {
+                    rows.forEachIndexed { i, row ->
+                        SessionCharRow(row = row, axisMaxMs = axisMax)
+                        if (i < rows.size - 1) Spacer(Modifier.height(8.dp))
+                    }
+                }
+            }
+            Spacer(Modifier.height(24.dp))
+        }
+      }
+    }
+}
+
+@Composable
+private fun DetailRow(label: String, value: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 11.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(label, style = MaterialTheme.typography.bodyMedium, color = Brand.textSecondary)
+        Spacer(Modifier.weight(1f))
+        Text(value, fontWeight = FontWeight.Medium, color = Brand.textPrimary)
+    }
+}
+
+/** One chart row: the character, its median-time bar, and accuracy this session. */
+@Composable
+private fun SessionCharRow(row: SessionRecord.ChartRow, axisMaxMs: Int) {
+    val res = row.result
+    val ms = res?.medianMS
+    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            row.character,
+            modifier = Modifier.width(28.dp),
+            fontWeight = FontWeight.Bold,
+            fontSize = 18.sp,
+            color = if (res == null) Brand.textSecondary.copy(alpha = 0.45f) else Brand.textPrimary
+        )
+        Box(
+            modifier = Modifier.weight(1f).height(22.dp).clip(RoundedCornerShape(11.dp)).background(Brand.navy)
+        ) {
+            if (res != null && ms != null) {
+                val fraction = (ms.toFloat() / axisMaxMs).coerceIn(0.04f, 1f)
+                val barColor = when {
+                    res.accuracy >= 0.9 -> Brand.teal
+                    res.accuracy >= 0.7 -> Brand.tealBright
+                    else -> MASTERED
+                }
+                Box(modifier = Modifier.fillMaxWidth(fraction).height(22.dp).clip(RoundedCornerShape(11.dp)).background(barColor))
+            }
+        }
+        Text(
+            when {
+                res == null -> "—"
+                ms != null -> fmtMs(ms)
+                else -> "${res.correct}/${res.attempts}"
+            },
+            modifier = Modifier.width(52.dp).padding(start = 8.dp),
+            style = MaterialTheme.typography.labelMedium,
+            color = Brand.textSecondary
         )
     }
 }

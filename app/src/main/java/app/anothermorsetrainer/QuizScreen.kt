@@ -51,6 +51,7 @@ import androidx.compose.ui.unit.sp
 import app.anothermorsetrainer.morsekit.Drill
 import app.anothermorsetrainer.morsekit.ProgressiveCharacters
 import app.anothermorsetrainer.morsekit.QuizSource
+import app.anothermorsetrainer.morsekit.SessionRecord
 import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
 
@@ -82,6 +83,30 @@ internal class Tally {
         val s = ttrsMs.sorted()
         val n = s.size
         return if (n % 2 == 1) s[n / 2] else (s[n / 2 - 1] + s[n / 2]) / 2
+    }
+
+    /** Per-character outcomes this session (single-character drills only). */
+    private val charOutcomes = LinkedHashMap<String, MutableList<Pair<Boolean, Int>>>()
+
+    /** Note one single-character answer for the session's recognition chart. */
+    fun noteChar(character: String, correct: Boolean, ms: Int) {
+        charOutcomes.getOrPut(character) { mutableListOf() }.add(correct to ms)
+    }
+
+    /** This session's per-character results, for the detail record. */
+    fun charResults(): List<SessionRecord.CharResult> = charOutcomes.map { (ch, results) ->
+        val times = results.filter { it.first && it.second > 0 }.map { it.second }.sorted()
+        val medianMs = when {
+            times.isEmpty() -> null
+            times.size % 2 == 1 -> times[times.size / 2]
+            else -> (times[times.size / 2 - 1] + times[times.size / 2]) / 2
+        }
+        SessionRecord.CharResult(
+            character = ch,
+            attempts = results.size,
+            correct = results.count { it.first },
+            medianTTR = medianMs?.let { it / 1000.0 }
+        )
     }
 }
 
@@ -165,7 +190,12 @@ fun QuizScreen(
         return Stats.record(
             mode = title, attempts = tally.attempts, correct = tally.correct,
             bestTtrMs = tally.bestMs, durationSeconds = tally.elapsedSeconds(),
-            characterWpm = Settings.characterWpm.roundToInt(), medianTtrMs = tally.medianMs()
+            characterWpm = Settings.characterWpm.roundToInt(), medianTtrMs = tally.medianMs(),
+            effectiveWpm = Settings.effectiveWpm.roundToInt(),
+            charResults = tally.charResults(),
+            // The Characters track supplies its active set so the session chart
+            // can show a row per learned character, drilled or not.
+            activeCharacters = progressive?.engine?.activeCharacters?.map { it.toString() } ?: emptyList()
         )
     }
 
@@ -252,9 +282,11 @@ fun QuizScreen(
             tally.correct += 1
             tally.noteCorrectMs(ms)
         }
-        // Single-character drills feed the per-character recognition chart.
+        // Single-character drills feed the per-character recognition charts —
+        // the lifetime one and this session's own.
         if (drill.correct.length == 1) {
             Stats.recordChar(drill.correct, outcome.correct, if (outcome.correct && ms > 0) ms else null)
+            tally.noteChar(drill.correct, outcome.correct, ms)
         }
         // Keep the Characters track durable — the ladder resumes next time.
         EngineStore.save()

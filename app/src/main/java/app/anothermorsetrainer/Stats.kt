@@ -6,9 +6,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import app.anothermorsetrainer.morsekit.PracticeStreak
+import app.anothermorsetrainer.morsekit.SessionHistory
+import app.anothermorsetrainer.morsekit.SessionRecord
 import org.json.JSONArray
 import org.json.JSONObject
+import java.time.Instant
 import java.time.LocalDate
+import java.util.UUID
+import kotlin.math.roundToInt
 
 /** One finished practice session, as shown on the Stats screen. */
 data class SessionSummary(
@@ -20,7 +25,9 @@ data class SessionSummary(
     /** Character speed the session was sent at; 0 for records saved before this field. */
     val characterWpm: Int = 0,
     /** Median correct recognition time this session, if any — feeds speed bands. */
-    val medianTtrMs: Int? = null
+    val medianTtrMs: Int? = null,
+    /** The full [SessionRecord]'s id in [Stats.history]; null before details existed. */
+    val recordId: String? = null
 ) {
     val accuracy: Double get() = if (attempts == 0) 0.0 else correct.toDouble() / attempts
 }
@@ -62,6 +69,12 @@ object Stats {
     var recent by mutableStateOf<List<SessionSummary>>(emptyList()); private set
     /** Lifetime per-character recognition data, keyed by the single character. */
     var charStats by mutableStateOf<Map<String, CharAgg>>(emptyMap()); private set
+    /**
+     * Full per-session detail records (timestamp, duration, speeds, and the
+     * per-character results behind the session recognition chart), newest
+     * first, bounded by [SessionHistory.limit]. The iOS SessionHistory twin.
+     */
+    var history by mutableStateOf<List<SessionRecord>>(emptyList()); private set
 
     val overallAccuracy: Double get() = if (totalAttempts == 0) 0.0 else totalCorrect.toDouble() / totalAttempts
 
@@ -81,7 +94,12 @@ object Stats {
 
         recent = parseRecent(prefs.getString("recent", "[]") ?: "[]")
         charStats = parseChars(prefs.getString("chars", "{}") ?: "{}")
+        history = parseHistory(prefs.getString("history", "[]") ?: "[]")
     }
+
+    /** The full detail record behind a session-list row, if it still exists. */
+    fun sessionRecord(id: String?): SessionRecord? =
+        id?.let { wanted -> history.firstOrNull { it.id.toString() == wanted } }
 
     /**
      * Record one single-character answer toward the recognition chart. Correct
@@ -110,6 +128,9 @@ object Stats {
         durationSeconds: Int = 0,
         characterWpm: Int = 0,
         medianTtrMs: Int? = null,
+        effectiveWpm: Int = 0,
+        charResults: List<SessionRecord.CharResult> = emptyList(),
+        activeCharacters: List<String> = emptyList(),
         today: LocalDate = LocalDate.now()
     ): Int? {
         if (attempts <= 0) return null
@@ -123,8 +144,28 @@ object Stats {
         if (bestTtrMs != null && (this.bestTtrMs == null || bestTtrMs < this.bestTtrMs!!)) {
             this.bestTtrMs = bestTtrMs
         }
+        // The full detail record (per-session screen); the summary row carries
+        // its id so the sessions list can open it.
+        val record = SessionRecord(
+            id = UUID.randomUUID(),
+            date = Instant.now(),
+            mode = mode,
+            characterWPM = characterWpm,
+            effectiveWPM = effectiveWpm,
+            attempts = attempts,
+            correct = correct,
+            fastestTTR = bestTtrMs?.let { it / 1000.0 },
+            medianTTR = medianTtrMs?.let { it / 1000.0 },
+            durationSeconds = durationSeconds.takeIf { it > 0 }?.toDouble(),
+            characters = charResults,
+            activeCharacters = activeCharacters
+        )
+        history = (listOf(record) + history).take(SessionHistory.limit)
         recent = (listOf(
-            SessionSummary(mode, today.toEpochDay(), attempts, correct, bestTtrMs, characterWpm, medianTtrMs)
+            SessionSummary(
+                mode, today.toEpochDay(), attempts, correct, bestTtrMs, characterWpm,
+                medianTtrMs, record.id.toString()
+            )
         ) + recent).take(50)
         persist()
         return if (firstToday && PracticeStreak.isMilestone(streak.current)) streak.current else null
@@ -142,6 +183,7 @@ object Stats {
         bestTtrMs = null
         recent = emptyList()
         charStats = emptyMap()
+        history = emptyList()
         prefs.edit().clear().apply()
     }
 
@@ -161,6 +203,7 @@ object Stats {
             .putInt("streakLongest", streak.longest)
             .putLong("streakDay", streak.lastPracticeDay?.toEpochDay() ?: -1L)
             .putString("recent", encodeRecent(recent))
+            .putString("history", encodeHistory(history))
             .apply()
     }
 
@@ -176,6 +219,7 @@ object Stats {
                     .put("ttr", s.bestTtrMs ?: -1)
                     .put("wpm", s.characterWpm)
                     .put("med", s.medianTtrMs ?: -1)
+                    .put("id", s.recordId ?: "")
             )
         }
         return arr.toString()
@@ -195,12 +239,83 @@ object Stats {
                     bestTtrMs = o.getInt("ttr").takeIf { it >= 0 },
                     // Absent on records saved before speed-band stats existed.
                     characterWpm = o.optInt("wpm", 0),
-                    medianTtrMs = o.optInt("med", -1).takeIf { it >= 0 }
+                    medianTtrMs = o.optInt("med", -1).takeIf { it >= 0 },
+                    recordId = o.optString("id", "").takeIf { it.isNotEmpty() }
                 )
             )
         }
         return out
     }
+
+    private fun encodeHistory(list: List<SessionRecord>): String {
+        val arr = JSONArray()
+        for (r in list) {
+            val chars = JSONArray()
+            for (c in r.characters) {
+                chars.put(
+                    JSONObject()
+                        .put("c", c.character)
+                        .put("att", c.attempts)
+                        .put("cor", c.correct)
+                        .put("med", c.medianMS ?: -1)
+                )
+            }
+            arr.put(
+                JSONObject()
+                    .put("id", r.id.toString())
+                    .put("ts", r.date.toEpochMilli())
+                    .put("mode", r.mode)
+                    .put("cw", r.characterWPM)
+                    .put("ew", r.effectiveWPM)
+                    .put("att", r.attempts)
+                    .put("cor", r.correct)
+                    .put("fast", r.fastestTTR?.let { (it * 1000).roundToInt() } ?: -1)
+                    .put("med", r.medianTTR?.let { (it * 1000).roundToInt() } ?: -1)
+                    .put("dur", r.durationSeconds?.roundToInt() ?: -1)
+                    .put("chars", chars)
+                    .put("active", r.activeCharacters.joinToString(""))
+            )
+        }
+        return arr.toString()
+    }
+
+    private fun parseHistory(json: String): List<SessionRecord> = runCatching {
+        val out = ArrayList<SessionRecord>()
+        val arr = JSONArray(json)
+        for (i in 0 until arr.length()) {
+            val o = arr.getJSONObject(i)
+            val charsArr = o.optJSONArray("chars") ?: JSONArray()
+            val chars = ArrayList<SessionRecord.CharResult>(charsArr.length())
+            for (j in 0 until charsArr.length()) {
+                val c = charsArr.getJSONObject(j)
+                chars.add(
+                    SessionRecord.CharResult(
+                        character = c.getString("c"),
+                        attempts = c.getInt("att"),
+                        correct = c.getInt("cor"),
+                        medianTTR = c.optInt("med", -1).takeIf { it >= 0 }?.let { it / 1000.0 }
+                    )
+                )
+            }
+            out.add(
+                SessionRecord(
+                    id = runCatching { UUID.fromString(o.getString("id")) }.getOrDefault(UUID.randomUUID()),
+                    date = Instant.ofEpochMilli(o.getLong("ts")),
+                    mode = o.getString("mode"),
+                    characterWPM = o.optInt("cw", 0),
+                    effectiveWPM = o.optInt("ew", 0),
+                    attempts = o.getInt("att"),
+                    correct = o.getInt("cor"),
+                    fastestTTR = o.optInt("fast", -1).takeIf { it >= 0 }?.let { it / 1000.0 },
+                    medianTTR = o.optInt("med", -1).takeIf { it >= 0 }?.let { it / 1000.0 },
+                    durationSeconds = o.optInt("dur", -1).takeIf { it >= 0 }?.toDouble(),
+                    characters = chars,
+                    activeCharacters = o.optString("active", "").map { it.toString() }
+                )
+            )
+        }
+        out
+    }.getOrDefault(emptyList())
 
     private fun encodeChars(map: Map<String, CharAgg>): String {
         val obj = JSONObject()
