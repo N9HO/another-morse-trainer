@@ -26,7 +26,14 @@ struct StatsView: View {
                 }
                 .listRowBackground(Theme.navyElevated)
 
-                if !model.history.sessions.isEmpty {
+                if model.history.sessions.isEmpty {
+                    Section("Recent sessions") {
+                        Text("No sessions yet. Finish a practice round and it will show up here.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                    .listRowBackground(Theme.navyElevated)
+                } else {
                     Section {
                         ForEach(model.history.sessions) { record in
                             NavigationLink {
@@ -71,6 +78,7 @@ struct StatsView: View {
                 }
             }
             .scrollContentBackground(.hidden)
+            .readableWidth()
             .background(Theme.Background())
             .navigationTitle("Your Stats")
             .navigationBarTitleDisplayMode(.inline)

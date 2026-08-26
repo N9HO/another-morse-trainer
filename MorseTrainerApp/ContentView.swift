@@ -6,10 +6,13 @@ struct ContentView: View {
     @State private var showSettings = false
     @State private var showStats = false
     @State private var showBrag = false
+    @State private var showJourneyMap = false
     @State private var detailRecord: SessionRecord?
     @State private var typedAnswer = ""
     @State private var examCopy = ""
     @State private var qsoText = ""
+    /// Learner aid: reveal who's calling / the expected copy (Android parity).
+    @State private var qsoHintShown = false
     @FocusState private var typedFocused: Bool
     @FocusState private var examCopyFocused: Bool
     @FocusState private var qsoFocused: Bool
@@ -42,7 +45,11 @@ struct ContentView: View {
                     statusArea
                         .frame(maxHeight: .infinity)
 
-                    if model.settings.allowReplay, model.drill != nil, !model.isHeadCopy {
+                    // Sending Practice always offers Replay — you can't key back
+                    // what you didn't catch (Android parity); elsewhere it's the
+                    // opt-in feedback setting.
+                    if model.settings.allowReplay || model.isSending,
+                       model.drill != nil, !model.isHeadCopy {
                         Button {
                             model.replay()
                         } label: {
@@ -71,6 +78,7 @@ struct ContentView: View {
                 }
             }
             .padding()
+            .readableWidth()
             }
             }
             .navigationBarTitleDisplayMode(.inline)
@@ -115,6 +123,9 @@ struct ContentView: View {
             }
             .sheet(isPresented: $showBrag) {
                 BragSheetView().environmentObject(model)
+            }
+            .sheet(isPresented: $showJourneyMap) {
+                JourneyMapView().environmentObject(model)
             }
             .sheet(item: $detailRecord) { record in
                 NavigationStack {
@@ -751,10 +762,35 @@ struct ContentView: View {
                 Label("Receiving…", systemImage: "dot.radiowaves.left.and.right")
                     .font(.caption).foregroundStyle(Theme.teal)
             }
+            if qsoHintShown, let hint = qsoHintLine {
+                Text(hint)
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundStyle(Theme.textSecondary)
+                    .multilineTextAlignment(.center)
+            }
+            if qsoHintLine != nil || qsoHintShown {
+                Button(qsoHintShown ? "Hide hint" : "Show hint") {
+                    qsoHintShown.toggle()
+                }
+                .font(.caption)
+                .tint(Theme.teal)
+            }
         }
         .frame(maxWidth: .infinity)
         .padding()
         .brandCard()
+    }
+
+    /// What the hint reveals for the current phase: the calls in the pileup, or
+    /// the exact exchange the engine expects from the station being worked.
+    private var qsoHintLine: String? {
+        if model.qsoWorkingCall != nil || model.qsoReadyToLog {
+            return model.qsoHintExpected.map { "expecting: \($0)" }
+        }
+        if model.qsoActiveCount > 0, !model.qsoHintCalling.isEmpty {
+            return "calling: " + model.qsoHintCalling.joined(separator: ", ")
+        }
+        return nil
     }
 
     private func qsoStat(_ label: String, _ value: String) -> some View {
@@ -934,7 +970,7 @@ struct ContentView: View {
                     .foregroundStyle(Theme.teal)
                     .symbolEffectPulseIfAvailable()
                 Text("Speak your answer").font(.headline)
-                if model.mode == .characters {
+                if model.mode == .characters || model.mode == .confusion {
                     Text("Tip: use phonetics for single letters — say “Bravo” for B, “Niner” for 9.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
@@ -1016,6 +1052,16 @@ struct ContentView: View {
                 Text("\(model.journeyLevelNumber) / \(model.journeyTotalLevels)")
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(.secondary)
+                // Mid-session hop to any unlocked level (Android's header has
+                // one; iOS used to reach the map only from the setup card).
+                Button {
+                    showJourneyMap = true
+                } label: {
+                    Image(systemName: "map")
+                        .font(.subheadline)
+                        .foregroundStyle(Theme.teal)
+                }
+                .accessibilityLabel("Journey map — choose a level")
             }
             if !model.journeyLevelTitle.isEmpty {
                 HStack {
@@ -1227,6 +1273,12 @@ struct ContentView: View {
                 rapidFireTranscriptCard
             }
 
+            // The run's worked log on the scorecard (Android parity): every
+            // contact with its exchange and speed, newest first.
+            if s.mode == .contest || s.mode == .qso, !model.qsoLog.isEmpty {
+                workedLogCard
+            }
+
             VStack(spacing: 12) {
                 if let record = model.lastSessionRecord {
                     Button {
@@ -1259,7 +1311,37 @@ struct ContentView: View {
             }
         }
         .padding()
+        .readableWidth()
         }
+    }
+
+    /// Every contact worked this run — call, exchange, speed — for the
+    /// contest/QSO scorecard. The summary already scrolls, so a plain stack.
+    private var workedLogCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Worked")
+                .font(.subheadline).foregroundStyle(.secondary)
+            LazyVStack(spacing: 0) {
+                ForEach(model.qsoLog) { q in
+                    HStack {
+                        Text(q.call)
+                            .font(.system(.body, design: .monospaced)).bold()
+                        Spacer()
+                        Text(q.exchange)
+                            .font(.system(.body, design: .monospaced))
+                            .foregroundStyle(Theme.textSecondary)
+                        Text("\(q.wpm)w")
+                            .font(.caption2).foregroundStyle(.secondary)
+                            .frame(width: 42, alignment: .trailing)
+                    }
+                    .padding(.vertical, 6)
+                    Divider().overlay(Theme.hairline)
+                }
+            }
+        }
+        .padding()
+        .frame(maxWidth: .infinity)
+        .brandCard()
     }
 
     /// The full list of what Rapid Fire transmitted this session, with a

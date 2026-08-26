@@ -15,19 +15,24 @@ enum PracticeReminders {
             }
     }
 
-    /// Schedule (replacing any existing) a daily reminder at `hour` local time.
-    static func schedule(hour: Int) {
+    /// Schedule (replacing any existing) a daily reminder at `hour:minute`
+    /// local time. `streak` personalizes the body ("Keep your 12-day streak
+    /// alive…"); the content is baked in at schedule time, so AppModel
+    /// re-schedules after each day's first practice to keep the count fresh.
+    static func schedule(hour: Int, minute: Int = 0, streak: Int = 0) {
         let center = UNUserNotificationCenter.current()
         center.removePendingNotificationRequests(withIdentifiers: [identifier])
 
         let content = UNMutableNotificationContent()
         content.title = "Keep your streak alive"
-        content.body = "A quick Morse session today keeps your practice streak going."
+        content.body = streak > 0
+            ? "Keep your \(streak)-day streak alive — a few minutes of CW is all it takes."
+            : "A quick Morse session today keeps your practice streak going."
         content.sound = .default
 
         var when = DateComponents()
         when.hour = hour
-        when.minute = 0
+        when.minute = minute
         let trigger = UNCalendarNotificationTrigger(dateMatching: when, repeats: true)
         center.add(UNNotificationRequest(identifier: identifier, content: content, trigger: trigger))
     }

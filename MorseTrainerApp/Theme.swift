@@ -26,6 +26,10 @@ enum Theme {
     /// so curvature stays consistent everywhere.
     static let cornerRadius: CGFloat = 16
 
+    /// Phone-first layouts stretch ugly on iPad; cap readable content to this
+    /// width (matches Android's Responsive.CONTENT_MAX_WIDTH).
+    static let contentMaxWidth: CGFloat = 640
+
     /// Full-bleed brand background: a subtle top-to-bottom navy gradient with a
     /// faint teal glow up top, echoing the logo's lit ring.
     struct Background: View {
@@ -76,6 +80,14 @@ extension View {
     /// Apply the standard brand card surface: elevated navy fill + hairline edge.
     func brandCard(cornerRadius: CGFloat = Theme.cornerRadius) -> some View {
         modifier(BrandCard(cornerRadius: cornerRadius))
+    }
+
+    /// Centre this view and cap it at a readable column width, so phone-first
+    /// screens don't stretch edge to edge on iPad / in landscape.
+    func readableWidth(_ maxWidth: CGFloat = Theme.contentMaxWidth) -> some View {
+        self
+            .frame(maxWidth: maxWidth)
+            .frame(maxWidth: .infinity)
     }
 
     /// A gentle repeating pulse on SF Symbols where supported (iOS 17+); a
