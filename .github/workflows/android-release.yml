@@ -59,10 +59,18 @@ jobs:
           KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           set -euo pipefail
-          # Strip whitespace/newlines before decoding: base64 pasted from
-          # Windows (CRLF) or wrapped by macOS/Linux `base64` would otherwise
-          # fail Linux's strict `base64 -d` with "invalid input".
-          echo "$KEYSTORE_B64" | tr -d ' \t\r\n' | base64 -d > "$RUNNER_TEMP/amt-upload.jks"
+          # Decode leniently: pasted base64 may carry CRLF/whitespace (Windows
+          # clipboards) or wrapper lines like certutil's -----BEGIN/END-----
+          # headers. --ignore-garbage skips every non-base64 character, so any
+          # paste style decodes as long as the base64 payload itself is intact.
+          echo "$KEYSTORE_B64" | base64 -d --ignore-garbage > "$RUNNER_TEMP/amt-upload.jks"
+          # Fail loudly (before a confusing Gradle signing error) if what we
+          # decoded is obviously not a keystore.
+          SIZE=$(stat -c%s "$RUNNER_TEMP/amt-upload.jks")
+          if [ "$SIZE" -lt 500 ]; then
+            echo "::error::Decoded keystore is only ${SIZE} bytes — the ANDROID_KEYSTORE_BASE64 secret does not contain a valid base64-encoded keystore. Re-create it (macOS: base64 -i amt-upload.jks | pbcopy; PowerShell: [Convert]::ToBase64String([IO.File]::ReadAllBytes('amt-upload.jks')) | Set-Clipboard) and paste the result as the secret value."
+            exit 1
+          fi
           cat > keystore.properties <<EOF
           storeFile=$RUNNER_TEMP/amt-upload.jks
           storePassword=$STORE_PASSWORD
