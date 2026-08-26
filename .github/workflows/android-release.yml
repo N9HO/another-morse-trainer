@@ -59,7 +59,10 @@ jobs:
           KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           set -euo pipefail
-          echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/amt-upload.jks"
+          # Strip whitespace/newlines before decoding: base64 pasted from
+          # Windows (CRLF) or wrapped by macOS/Linux `base64` would otherwise
+          # fail Linux's strict `base64 -d` with "invalid input".
+          echo "$KEYSTORE_B64" | tr -d ' \t\r\n' | base64 -d > "$RUNNER_TEMP/amt-upload.jks"
           cat > keystore.properties <<EOF
           storeFile=$RUNNER_TEMP/amt-upload.jks
           storePassword=$STORE_PASSWORD
