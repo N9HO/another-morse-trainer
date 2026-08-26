@@ -39,6 +39,7 @@ import app.anothermorsetrainer.morsekit.ExamGrading
 import app.anothermorsetrainer.morsekit.ExamSession
 import app.anothermorsetrainer.morsekit.ExamSpeed
 import app.anothermorsetrainer.morsekit.MorseItem
+import kotlin.math.roundToInt
 
 private val OK_GREEN = Color(0xFF2E7D32)
 private val ERR_RED = Color(0xFFC62828)
@@ -241,6 +242,14 @@ private fun SolidCopyExam(
                 onClick = {
                     val result = session.gradeSolidCopy(typed)
                     graded = true
+                    // One exam = one recorded attempt; a pass counts as correct.
+                    Stats.record(
+                        mode = "Code Exam",
+                        attempts = 1,
+                        correct = if (result.passed) 1 else 0,
+                        bestTtrMs = null,
+                        characterWpm = session.speed.characterWpm.roundToInt()
+                    )
                     if (Settings.hapticsEnabled) {
                         if (result.passed) haptics.success() else haptics.error()
                     }
@@ -383,7 +392,20 @@ private fun QuestionsExam(
                         onClick = {
                             chosen = null
                             revealed = false
-                            if (qIndex >= total - 1) finished = true else qIndex += 1
+                            if (qIndex >= total - 1) {
+                                finished = true
+                                // The finished exam lands in stats: one row per
+                                // question, correct answers counted.
+                                Stats.record(
+                                    mode = "Code Exam",
+                                    attempts = total,
+                                    correct = session.correctCount,
+                                    bestTtrMs = null,
+                                    characterWpm = session.speed.characterWpm.roundToInt()
+                                )
+                            } else {
+                                qIndex += 1
+                            }
                         },
                         modifier = Modifier.fillMaxWidth().height(48.dp)
                     ) {

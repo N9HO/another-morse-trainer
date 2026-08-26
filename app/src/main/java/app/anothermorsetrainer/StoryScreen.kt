@@ -51,11 +51,28 @@ fun StoryScreen(onBack: () -> Unit) {
     // Bumped on every stop/next so an in-flight completion callback from a
     // superseded transmission can't flip state for the wrong passage.
     var generation by remember { mutableStateOf(0) }
+    // Passages the learner copied through to the reveal — the session's "answers".
+    var passagesCopied by remember { mutableStateOf(0) }
+    val startedAtMs = remember { System.currentTimeMillis() }
 
     val story = stories[((index % stories.size) + stories.size) % stories.size]
 
     DisposableEffect(Unit) { onDispose { player.release() } }
-    BackHandler { onBack() }
+
+    // Continuous copy is self-checked, so each revealed passage counts as one
+    // completed copy — enough for the streak and practice-time totals.
+    fun finish() {
+        player.stop()
+        Stats.record(
+            mode = "Stories",
+            attempts = passagesCopied,
+            correct = passagesCopied,
+            bestTtrMs = null,
+            durationSeconds = ((System.currentTimeMillis() - startedAtMs) / 1000L).toInt()
+        )
+        onBack()
+    }
+    BackHandler { finish() }
 
     fun play() {
         revealed = false
@@ -82,7 +99,7 @@ fun StoryScreen(onBack: () -> Unit) {
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        TextButton(onClick = { onBack() }, modifier = Modifier.padding(8.dp)) { Text("‹ Back") }
+        TextButton(onClick = { finish() }, modifier = Modifier.padding(8.dp)) { Text("‹ Back") }
 
         Column(
             modifier = Modifier
@@ -136,7 +153,10 @@ fun StoryScreen(onBack: () -> Unit) {
 
             Spacer(Modifier.height(12.dp))
             OutlinedButton(
-                onClick = { revealed = true },
+                onClick = {
+                    revealed = true
+                    passagesCopied += 1
+                },
                 enabled = !revealed,
                 modifier = Modifier.fillMaxWidth()
             ) { Text("Reveal text") }

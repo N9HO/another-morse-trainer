@@ -62,9 +62,26 @@ fun PileupScreen(onBack: () -> Unit) {
     var reveal by remember { mutableStateOf(false) }
     // Engine state isn't Compose-observable, so bump this to force recomposition.
     var rev by remember { mutableStateOf(0) }
+    val startedAtMs = remember { System.currentTimeMillis() }
 
     DisposableEffect(Unit) { onDispose { player.release() } }
-    BackHandler { player.stop(); onBack() }
+
+    // Record the run so pileup practice counts toward stats and the streak: a
+    // pileup answer is a whole worked exchange — clean contacts are correct,
+    // busts are misses (same accounting as Contest). Mixed caller speeds, so no
+    // single WPM is recorded (keeps it out of the speed-band table).
+    fun finish() {
+        player.stop()
+        Stats.record(
+            mode = "Pileup",
+            attempts = engine.qsoCount + engine.bustCount,
+            correct = engine.qsoCount,
+            bestTtrMs = null,
+            durationSeconds = ((System.currentTimeMillis() - startedAtMs) / 1000L).toInt()
+        )
+        onBack()
+    }
+    BackHandler { finish() }
 
     fun perform(action: PileupEngine.Action) {
         when (action) {
@@ -88,7 +105,7 @@ fun PileupScreen(onBack: () -> Unit) {
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        TextButton(onClick = onBack, modifier = Modifier.padding(8.dp)) { Text("‹ Back") }
+        TextButton(onClick = { finish() }, modifier = Modifier.padding(8.dp)) { Text("‹ Back") }
 
       CenteredContent {
         Column(

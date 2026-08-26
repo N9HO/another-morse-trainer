@@ -61,12 +61,18 @@ fun HeadCopyScreen(onBack: () -> Unit) {
     var round by remember { mutableStateOf(0) }
     var revealed by remember { mutableStateOf(false) }
     var summary by remember { mutableStateOf(source.summary) }
+    // When the tone finished, so recall time (tone end → Reveal) feeds stats
+    // like every other mode instead of a flat zero.
+    var toneFinishedAt by remember { mutableStateOf(0L) }
+    var lastRecallSec by remember { mutableStateOf(0.0) }
 
     val tally = remember { Tally() }
 
     LaunchedEffect(round) {
         revealed = false
-        player.play(drill.playable, Settings.sidetoneHz, Settings.timing()) {}
+        toneFinishedAt = 0L
+        lastRecallSec = 0.0
+        player.play(drill.playable, Settings.sidetoneHz, Settings.timing()) { toneFinishedAt = System.nanoTime() }
     }
 
     DisposableEffect(Unit) { onDispose { player.release() } }
@@ -82,9 +88,12 @@ fun HeadCopyScreen(onBack: () -> Unit) {
     BackHandler { finish() }
 
     fun grade(gotIt: Boolean) {
-        val outcome = source.record(choice = if (gotIt) drill.correct else MISS_SENTINEL, ttr = 0.0)
+        val outcome = source.record(choice = if (gotIt) drill.correct else MISS_SENTINEL, ttr = lastRecallSec)
         tally.attempts += 1
-        if (outcome.correct) tally.correct += 1
+        if (outcome.correct) {
+            tally.correct += 1
+            tally.noteCorrectMs((lastRecallSec * 1000).roundToInt())
+        }
         if (Settings.hapticsEnabled) {
             if (outcome.correct) haptics.success() else haptics.error()
         }
@@ -140,7 +149,12 @@ fun HeadCopyScreen(onBack: () -> Unit) {
                 }
             } else {
                 Button(
-                    onClick = { revealed = true },
+                    onClick = {
+                        // Recall time runs from the end of the tone to the reveal.
+                        lastRecallSec = if (toneFinishedAt == 0L) 0.0
+                                        else (System.nanoTime() - toneFinishedAt) / 1_000_000_000.0
+                        revealed = true
+                    },
                     colors = ButtonDefaults.buttonColors(containerColor = Brand.teal, contentColor = Brand.navy),
                     modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)
                 ) { Text("Reveal", fontWeight = FontWeight.SemiBold) }
