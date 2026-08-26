@@ -37,14 +37,20 @@ class VailRepeater(context: Context) {
     var connectionState by mutableStateOf(ConnectionState.DISCONNECTED); private set
     var callsign by mutableStateOf(""); private set
     var channel by mutableStateOf("General"); private set
+    var serverUrl by mutableStateOf(DEFAULT_SERVER); private set
+    var privateChannel by mutableStateOf(true); private set
     var txTone by mutableStateOf(72); private set
     var rxDelayMs by mutableStateOf(2000); private set
     var breakInEnabled by mutableStateOf(false); private set
+    var rxBuzzEnabled by mutableStateOf(true); private set
+    var keyerWpm by mutableStateOf(20); private set
     var users by mutableStateOf<List<VailMessage.UserInfo>>(emptyList()); private set
     var notice by mutableStateOf<String?>(null); private set
     var lagMs by mutableStateOf(0L); private set
     var isKeying by mutableStateOf(false); private set
     var midiDevice by mutableStateOf<String?>(null); private set
+    /** The MIDI device the outbound (piezo/keyer-config) path is talking to. */
+    var adapterName by mutableStateOf<String?>(null); private set
     var keyerMode by mutableStateOf(MidiKeyOutput.KeyerMode.STRAIGHT_KEY); private set
 
     /** True when the device exposes MIDI at all — gates the adapter keyer UI. */
@@ -59,17 +65,31 @@ class VailRepeater(context: Context) {
     private var keyBeginMs = 0L
     private val stuckKey = Runnable { handleStuckKey() }
 
-    private companion object { const val MAX_SIGNALS = 2000; const val MAX_CHAT = 500 }
+    companion object {
+        /** The known public Vail servers for the picker; any wss:// URL works too. */
+        const val DEFAULT_SERVER = "wss://vailmorse.com/chat"
+        val KNOWN_SERVERS: List<Pair<String, String>> = listOf(
+            "Vailmorse" to DEFAULT_SERVER,
+            "Vail (woozle)" to "wss://vail.woozle.org/chat"
+        )
+        private const val MAX_SIGNALS = 2000
+        private const val MAX_CHAT = 500
+    }
 
     init {
         callsign = prefs.getString("callsign", null)?.takeIf { it.isNotBlank() } ?: anonCallsign()
         channel = prefs.getString("channel", null)?.takeIf { it.isNotBlank() } ?: "General"
+        serverUrl = prefs.getString("server", null)?.takeIf { it.isNotBlank() } ?: DEFAULT_SERVER
+        privateChannel = prefs.getBoolean("private", true)
         txTone = prefs.getInt("txTone", 72)
         rxDelayMs = prefs.getInt("rxDelay", 2000)
         breakInEnabled = prefs.getBoolean("breakIn", false)
+        rxBuzzEnabled = prefs.getBoolean("rxBuzz", true)
+        keyerWpm = prefs.getInt("keyerWpm", 20).coerceIn(5, 50)
         keyerMode = MidiKeyOutput.KeyerMode.fromCode(prefs.getInt("keyerMode", MidiKeyOutput.KeyerMode.STRAIGHT_KEY.code))
         client.callsign = callsign
         client.txTone = txTone
+        client.baseUrl = serverUrl
     }
 
     fun start() {
@@ -80,9 +100,12 @@ class VailRepeater(context: Context) {
             onConnected = { midiDevice = it }
         )
         // Drive the adapter's piezo/keyer: wake it into MIDI mode, push the keyer
-        // mode + sidetone, and (via RX buzz) feed received tones to the piezo.
-        midiOut.configure(keyerMode = keyerMode, wpm = 20, sidetoneMidiNote = txTone)
-        midiOut.start { name -> if (midiDevice == null) midiDevice = name }
+        // mode, speed, and sidetone, and (via RX buzz) feed received tones to it.
+        midiOut.configure(keyerMode = keyerMode, wpm = keyerWpm, sidetoneMidiNote = txTone)
+        midiOut.start { name ->
+            adapterName = name
+            if (midiDevice == null) midiDevice = name
+        }
     }
 
     fun stop() {
@@ -101,8 +124,9 @@ class VailRepeater(context: Context) {
         signalEvents = emptyList()
         chatMessages = emptyList()
         liveOwnKeyStarts = emptyList()
+        client.baseUrl = serverUrl
         val isDecoder = channel.equals("Decoder", ignoreCase = true)
-        client.connect(channel, isPrivate = !isDecoder, isDecoder = isDecoder)
+        client.connect(channel, isPrivate = privateChannel && !isDecoder, isDecoder = isDecoder)
     }
 
     fun disconnect() = client.disconnect()
@@ -121,6 +145,26 @@ class VailRepeater(context: Context) {
         channel = t; prefs.edit().putString("channel", t).apply()
     }
 
+    /** Point at a different Vail server (takes effect on the next connect). */
+    fun updateServer(url: String) {
+        val t = url.trim().ifEmpty { DEFAULT_SERVER }
+        serverUrl = t; prefs.edit().putString("server", t).apply()
+        val wasConnected = connectionState == ConnectionState.CONNECTED ||
+            connectionState == ConnectionState.CONNECTING
+        client.baseUrl = t
+        if (wasConnected) {
+            // Move over right away rather than leaving the socket on the old host.
+            disconnect()
+            connect()
+        }
+    }
+
+    /** Join channels privately (unlisted) or on the public roster. */
+    fun updatePrivateChannel(value: Boolean) {
+        privateChannel = value; prefs.edit().putBoolean("private", value).apply()
+        client.updatePrivate(value && !channel.equals("Decoder", ignoreCase = true))
+    }
+
     fun updateTxTone(note: Int) {
         val n = note.coerceIn(48, 96)
         txTone = n; prefs.edit().putInt("txTone", n).apply()
@@ -135,6 +179,17 @@ class VailRepeater(context: Context) {
     fun updateKeyerMode(mode: MidiKeyOutput.KeyerMode) {
         keyerMode = mode; prefs.edit().putInt("keyerMode", mode.code).apply()
         midiOut.setKeyerMode(mode)
+    }
+
+    /** Push the adapter's iambic keyer speed (dit duration) — was stuck at 20 WPM. */
+    fun updateKeyerWpm(wpm: Int) {
+        keyerWpm = wpm.coerceIn(5, 50); prefs.edit().putInt("keyerWpm", keyerWpm).apply()
+        midiOut.setSpeed(keyerWpm)
+    }
+
+    /** RX piezo feedback on the adapter, opt-outable. */
+    fun updateRxBuzzEnabled(value: Boolean) {
+        rxBuzzEnabled = value; prefs.edit().putBoolean("rxBuzz", value).apply()
     }
 
     /** Re-run the adapter wake/identify sequence (e.g. after plugging it in). */
@@ -212,7 +267,7 @@ class VailRepeater(context: Context) {
                 val playAt = event.atLocalMs + rxDelayMs
                 tonePlayer.scheduleTone(note, event.durationMs, playAt)
                 // Buzz the adapter's piezo in sync with the audio playback.
-                midiOut.scheduleBuzz(note, event.durationMs, playAt)
+                if (rxBuzzEnabled) midiOut.scheduleBuzz(note, event.durationMs, playAt)
                 val lane = when (event.fromCandidates.size) {
                     0 -> "?"
                     1 -> event.fromCandidates[0]
