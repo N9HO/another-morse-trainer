@@ -14,6 +14,7 @@ struct IntroView: View {
     @State private var showingJourneyMap = false
     @State private var showingReference = false
     @State private var showingSendingDrill = false
+    @State private var showingCWDecoder = false
     @State private var showingRepeater = false
     @StateObject private var repeater = RepeaterModel()
 
@@ -203,6 +204,9 @@ struct IntroView: View {
         .sheet(isPresented: $showingSendingDrill) {
             SendingDrillView().environmentObject(model)
         }
+        .sheet(isPresented: $showingCWDecoder) {
+            CWDecoderView()
+        }
         .fullScreenCover(isPresented: $showingRepeater) {
             RepeaterView().environmentObject(repeater)
         }
@@ -237,6 +241,13 @@ struct IntroView: View {
             }
             .accessibilityLabel("Vail repeater — go on the air")
             Spacer()
+            Button { showingCWDecoder = true } label: {
+                Image(systemName: "waveform")
+                    .font(.title3)
+                    .foregroundStyle(Theme.teal)
+                    .padding(8)
+            }
+            .accessibilityLabel("CW decoder — turn received Morse audio into text")
             Button { showingReference = true } label: {
                 Image(systemName: "book")
                     .font(.title3)
