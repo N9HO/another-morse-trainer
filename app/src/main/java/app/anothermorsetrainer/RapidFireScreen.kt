@@ -2,7 +2,9 @@ package app.anothermorsetrainer
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -42,10 +44,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -107,7 +112,27 @@ fun RapidFireScreen(onBack: () -> Unit) {
     val transcript = remember { mutableStateListOf<RfResult>() }
     var startedAtMs by remember { mutableStateOf(0L) }
 
+    // "Key each one": the straight key + decoder, live only during a keyed run.
+    val keyer = remember { SendingKeyer(wpm = Settings.characterWpm, toneHz = Settings.sidetoneHz) }
+    val midi = remember { MidiKeyInput(context) }
+    val scope = rememberCoroutineScope()
+    var keyPressed by remember { mutableStateOf(false) }
+    var midiDevice by remember { mutableStateOf<String?>(null) }
+
     DisposableEffect(Unit) { onDispose { player.release() } }
+
+    DisposableEffect(phase, response) {
+        if (phase == RfPhase.RUNNING && response == RapidFireResponse.KEY) {
+            keyer.scope = scope
+            keyer.start()
+            // A hardware key (Vail Adapter / BLE-MIDI) drives the same decoder.
+            midi.start(
+                onKey = { down -> keyer.touchKey(down) },
+                onConnected = { name -> midiDevice = name }
+            )
+        }
+        onDispose { midi.stop(); keyer.stop() }
+    }
 
     fun buildConfig() = RapidFireQuiz.Config(
         content = content,
@@ -146,19 +171,23 @@ fun RapidFireScreen(onBack: () -> Unit) {
         phase = RfPhase.SUMMARY
     }
 
-    // Grade the current item (type/head-copy) or just log it (review), then stream the next.
+    // Grade the current item (type/head-copy/keyed) or just log it (review),
+    // then stream the next.
     fun advance() {
         val q = quiz ?: return
         val d = drill ?: return
         if (response == RapidFireResponse.REVIEW) {
             transcript.add(RfResult(d.correct, null, null))
         } else {
+            // A keyed run's copy is whatever the decoder heard, not the text box.
+            if (response == RapidFireResponse.KEY) typed = keyer.submit().uppercase()
             val ok = q.record(typed, 0.0).correct
             if (Settings.hapticsEnabled) { if (ok) haptics.success() else haptics.error() }
             transcript.add(RfResult(d.correct, typed, ok))
         }
         drill = q.nextDrill()
         typed = ""
+        keyer.clear()
         revealBox = response == RapidFireResponse.TYPE
         step += 1
     }
@@ -171,12 +200,24 @@ fun RapidFireScreen(onBack: () -> Unit) {
         player.play(d.playable, Settings.sidetoneHz, Settings.timing()) { toneEndedStep = step }
     }
 
-    // After a tone ends, wait the pace gap, then advance (auto-stream).
+    // After a tone ends, wait the pace gap, then advance (auto-stream). A keyed
+    // run opens the key instead — keying, not the pace clock, moves it on.
     LaunchedEffect(toneEndedStep) {
         if (toneEndedStep <= 0 || phase != RfPhase.RUNNING || toneEndedStep != step) return@LaunchedEffect
-        if (response == RapidFireResponse.HEAD_COPY) revealBox = true
+        if (response == RapidFireResponse.HEAD_COPY || response == RapidFireResponse.KEY) revealBox = true
+        if (response == RapidFireResponse.KEY) return@LaunchedEffect
         delay((pace.seconds * 1000).toLong())
         if (toneEndedStep == step && phase == RfPhase.RUNNING) advance()
+    }
+
+    // Keyed runs auto-submit once the decoded copy reaches the item's length
+    // and the key has gone idle (the Sending Practice rhythm).
+    LaunchedEffect(keyer.decodedText, keyer.isKeying, step, phase) {
+        if (phase != RfPhase.RUNNING || response != RapidFireResponse.KEY || keyer.isKeying) return@LaunchedEffect
+        if (toneEndedStep != step) return@LaunchedEffect
+        val sent = keyer.decodedText.trim()
+        val d = drill ?: return@LaunchedEffect
+        if (sent.isNotEmpty() && sent.length >= d.correct.length) advance()
     }
 
     when (phase) {
@@ -205,6 +246,14 @@ fun RapidFireScreen(onBack: () -> Unit) {
                 revealBox = revealBox,
                 typed = typed,
                 onTyped = { typed = it },
+                decoded = keyer.decodedText,
+                keyPressed = keyPressed,
+                onKey = { down ->
+                    keyPressed = down
+                    keyer.touchKey(down)
+                },
+                onClearKey = { keyer.clear() },
+                midiDevice = midiDevice,
                 onNext = {
                     // Submit the current copy now and stream the next.
                     if (response != RapidFireResponse.REVIEW) advance() else { /* review: auto only */ }
@@ -295,6 +344,11 @@ private fun RapidFireRun(
     revealBox: Boolean,
     typed: String,
     onTyped: (String) -> Unit,
+    decoded: String,
+    keyPressed: Boolean,
+    onKey: (Boolean) -> Unit,
+    onClearKey: () -> Unit,
+    midiDevice: String?,
     onNext: () -> Unit,
     onDone: () -> Unit
 ) {
@@ -303,29 +357,93 @@ private fun RapidFireRun(
             Text(summary, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             Text("$count sent", style = MaterialTheme.typography.bodySmall, color = Brand.textSecondary)
         }
+        if (response == RapidFireResponse.KEY && midiDevice != null) {
+            Text("🎹 $midiDevice", style = MaterialTheme.typography.labelSmall, color = Brand.teal)
+        }
 
         Column(
             modifier = Modifier.weight(1f).fillMaxWidth(),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            Box(
-                modifier = Modifier.size(120.dp).background(Brand.navyRaised, RoundedCornerShape(60.dp)),
-                contentAlignment = Alignment.Center
-            ) {
-                Text("📡", fontSize = 44.sp)
+            if (response != RapidFireResponse.KEY) {
+                Box(
+                    modifier = Modifier.size(120.dp).background(Brand.navyRaised, RoundedCornerShape(60.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("📡", fontSize = 44.sp)
+                }
+                Spacer(Modifier.height(20.dp))
             }
-            Spacer(Modifier.height(20.dp))
 
             when (response) {
                 RapidFireResponse.REVIEW -> Text("Copy along — review the list when you're done.", color = Brand.textSecondary, textAlign = TextAlign.Center)
                 RapidFireResponse.HEAD_COPY -> if (!revealBox) {
                     Text("Copy it in your head…", color = Brand.textSecondary, textAlign = TextAlign.Center)
                 }
+                RapidFireResponse.KEY -> if (!revealBox) {
+                    Text("Listen — then key it back.", color = Brand.textSecondary, textAlign = TextAlign.Center)
+                }
                 else -> {}
             }
 
-            if (response != RapidFireResponse.REVIEW && revealBox) {
+            if (response == RapidFireResponse.KEY) {
+                Spacer(Modifier.height(12.dp))
+                // The decoded readout, live as you key.
+                Column(
+                    modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(Brand.cornerRadius)).brandCard()
+                        .padding(vertical = 12.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text("YOU SENT", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Brand.textSecondary)
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = decoded.ifEmpty { "—" },
+                        fontSize = 30.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        fontFamily = FontFamily.Monospace,
+                        color = if (decoded.isEmpty()) Brand.textSecondary else Brand.textPrimary,
+                        maxLines = 1
+                    )
+                }
+                Spacer(Modifier.height(14.dp))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(110.dp)
+                        .clip(RoundedCornerShape(Brand.cornerRadius))
+                        .background(if (keyPressed) Brand.teal else Brand.navyRaised)
+                        .border(
+                            width = if (keyPressed) 2.dp else 1.dp,
+                            color = if (keyPressed) Brand.tealBright else Brand.hairline,
+                            shape = RoundedCornerShape(Brand.cornerRadius)
+                        )
+                        .pointerInput(revealBox) {
+                            if (!revealBox) return@pointerInput
+                            detectTapGestures(
+                                onPress = {
+                                    onKey(true)
+                                    try {
+                                        tryAwaitRelease()
+                                    } finally {
+                                        onKey(false)
+                                    }
+                                }
+                            )
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("⠿", fontSize = 24.sp, color = if (keyPressed) Color.White else Brand.teal)
+                        Text(
+                            "HOLD TO KEY",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (keyPressed) Color.White else Brand.textSecondary
+                        )
+                    }
+                }
+            } else if (response != RapidFireResponse.REVIEW && revealBox) {
                 Spacer(Modifier.height(12.dp))
                 OutlinedTextField(
                     value = typed,
@@ -347,6 +465,9 @@ private fun RapidFireRun(
         }
 
         Row(modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            if (response == RapidFireResponse.KEY) {
+                OutlinedButton(onClick = onClearKey, modifier = Modifier.weight(1f)) { Text("Clear") }
+            }
             if (response != RapidFireResponse.REVIEW) {
                 OutlinedButton(onClick = onNext, modifier = Modifier.weight(1f)) { Text("Next ▸") }
             }

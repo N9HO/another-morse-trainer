@@ -66,6 +66,11 @@ object Settings {
     var voiceAnswersEnabled by mutableStateOf(false)
         private set
 
+    // Key your answer instead of tapping, in drills where the heard text is the
+    // answer (Characters, Common Words, Confusion). Toggled in the quiz itself.
+    var answerByKeying by mutableStateOf(false)
+        private set
+
     // ---- Practice (drill difficulty / presentation) ----
 
     /** Most answer choices to ever show (grows with what you've met, up to this). */
@@ -121,6 +126,7 @@ object Settings {
         sidetoneHz = prefs.getFloat("sidetone", 600f).toDouble()
         hapticsEnabled = prefs.getBoolean("haptics", true)
         voiceAnswersEnabled = prefs.getBoolean("voiceAnswers", false)
+        answerByKeying = prefs.getBoolean("answerByKeying", false)
         answerChoices = prefs.getInt("answerChoices", 4).coerceIn(4, 6)
         recognitionTargetSec = prefs.getFloat("recogTarget", 1.0f).toDouble()
         wordCount = prefs.getInt("wordCount", 100)
@@ -176,6 +182,11 @@ object Settings {
 
     fun updateVoiceAnswersEnabled(value: Boolean) {
         voiceAnswersEnabled = value
+        persist()
+    }
+
+    fun updateAnswerByKeying(value: Boolean) {
+        answerByKeying = value
         persist()
     }
 
@@ -298,6 +309,7 @@ object Settings {
             .putFloat("sidetone", sidetoneHz.toFloat())
             .putBoolean("haptics", hapticsEnabled)
             .putBoolean("voiceAnswers", voiceAnswersEnabled)
+            .putBoolean("answerByKeying", answerByKeying)
             .putInt("answerChoices", answerChoices)
             .putFloat("recogTarget", recognitionTargetSec.toFloat())
             .putInt("wordCount", wordCount)

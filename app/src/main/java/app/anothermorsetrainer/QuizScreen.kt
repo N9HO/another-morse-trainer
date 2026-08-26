@@ -6,7 +6,9 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -37,10 +39,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import androidx.compose.ui.text.font.FontFamily
@@ -113,6 +118,14 @@ internal class Tally {
 /** The quiz loop is either running drills or showing the end-of-session summary. */
 private enum class QuizPhase { RUNNING, SUMMARY }
 
+/**
+ * A drill can be answered by keying when the text you heard IS the answer —
+ * characters, groups, and words, but not meaning-answers (abbreviations,
+ * Q-codes) or prosign glyphs the decoder can't produce.
+ */
+private val Drill.isKeyable: Boolean
+    get() = correct == revealPrimary && correct.none { it == '<' }
+
 /** Streak-milestone badge tiers (mirrors the iOS emoji map). */
 internal fun milestoneEmoji(day: Int): String = when {
     day >= 365 -> "👑"
@@ -182,6 +195,27 @@ fun QuizScreen(
         if (granted) listenTick++ else voiceNote = "Microphone permission is needed for voice answers."
     }
 
+    // Optional keyed answers: the straight key + decoder, live while the toggle
+    // is on (the iOS "answer by keying" panel).
+    val keyer = remember { SendingKeyer(wpm = Settings.characterWpm, toneHz = Settings.sidetoneHz) }
+    val midi = remember { MidiKeyInput(context) }
+    val scope = rememberCoroutineScope()
+    var keyPressed by remember { mutableStateOf(false) }
+    var midiDevice by remember { mutableStateOf<String?>(null) }
+
+    DisposableEffect(Settings.answerByKeying) {
+        if (Settings.answerByKeying) {
+            keyer.scope = scope
+            keyer.start()
+            // A hardware key (Vail Adapter / BLE-MIDI) drives the same decoder.
+            midi.start(
+                onKey = { down -> keyer.touchKey(down) },
+                onConnected = { name -> midiDevice = name }
+            )
+        }
+        onDispose { midi.stop(); keyer.stop() }
+    }
+
     /** Persist the session once (summary entry or an early Back, whichever first). */
     fun recordSession(): Int? {
         if (recorded) return null
@@ -235,6 +269,7 @@ fun QuizScreen(
         listening = false
         voiceNote = null
         recognizer.cancel()
+        keyer.clear()
         player.play(drill.playable, Settings.sidetoneHz, Settings.timing()) { toneFinishedAt = System.nanoTime() }
     }
 
@@ -294,6 +329,15 @@ fun QuizScreen(
             if (outcome.correct) haptics.success() else haptics.error()
         }
         revealed = true
+    }
+
+    // Keyed answers auto-submit once the decoded copy reaches the answer's
+    // length and the key has gone idle (the Sending Practice rhythm).
+    LaunchedEffect(keyer.decodedText, keyer.isKeying, revealed, round) {
+        if (!Settings.answerByKeying || revealed || phase != QuizPhase.RUNNING || keyer.isKeying) return@LaunchedEffect
+        if (!drill.isKeyable) return@LaunchedEffect
+        val sent = keyer.decodedText.trim()
+        if (sent.isNotEmpty() && sent.length >= drill.correct.length) answer(sent.uppercase())
     }
 
     // Listen for a spoken answer when the mic is tapped (listenTick bumps).
@@ -370,6 +414,17 @@ fun QuizScreen(
                 }
             }
 
+            // Answer by keying, where the heard text is the answer (iOS parity).
+            if (drill.isKeyable) {
+                TextButton(onClick = { Settings.updateAnswerByKeying(!Settings.answerByKeying) }) {
+                    Text(
+                        if (Settings.answerByKeying) "⠿ Key answers · on" else "⠿ Key answers · off",
+                        fontSize = 13.sp,
+                        color = if (Settings.answerByKeying) Brand.teal else Brand.textSecondary
+                    )
+                }
+            }
+
             // Exam-style comprehension prompt (empty for plain recognition drills).
             if (drill.question.isNotEmpty()) {
                 Spacer(Modifier.height(16.dp))
@@ -427,10 +482,26 @@ fun QuizScreen(
             }
 
             Spacer(Modifier.height(28.dp))
-            OptionsGrid(drill = drill, revealed = revealed, chosen = chosen, onPick = ::answer)
+            val keyedMode = Settings.answerByKeying && drill.isKeyable
+            if (keyedMode) {
+                KeyedAnswerPanel(
+                    decoded = keyer.decodedText,
+                    keyPressed = keyPressed,
+                    enabled = !revealed,
+                    midiDevice = midiDevice,
+                    onKey = { down ->
+                        keyPressed = down
+                        keyer.touchKey(down)
+                    },
+                    onClear = { keyer.clear() },
+                    onSubmit = { answer(keyer.submit().uppercase()) }
+                )
+            } else {
+                OptionsGrid(drill = drill, revealed = revealed, chosen = chosen, onPick = ::answer)
+            }
 
             // Voice answers: a mic to speak instead of tap (options stay as fallback).
-            if (Settings.voiceAnswersEnabled && recognizer.isAvailable && !revealed) {
+            if (Settings.voiceAnswersEnabled && recognizer.isAvailable && !revealed && !keyedMode) {
                 Spacer(Modifier.height(20.dp))
                 OutlinedButton(
                     onClick = {
@@ -566,6 +637,100 @@ private fun StagePill(label: String, selected: Boolean, onClick: () -> Unit) {
             fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
             fontSize = 12.sp
         )
+    }
+}
+
+/**
+ * The keyed answer panel: a live "YOU SENT" decode readout, a hold-to-key
+ * straight key, and Clear/Submit — the quiz-loop twin of Sending Practice's
+ * pad (and of the iOS keyer answer panel). Auto-submit lives in the caller.
+ */
+@Composable
+private fun KeyedAnswerPanel(
+    decoded: String,
+    keyPressed: Boolean,
+    enabled: Boolean,
+    midiDevice: String?,
+    onKey: (Boolean) -> Unit,
+    onClear: () -> Unit,
+    onSubmit: () -> Unit
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        midiDevice?.let {
+            Text(
+                "🎹 $it",
+                style = MaterialTheme.typography.labelSmall,
+                color = Brand.teal,
+                modifier = Modifier.padding(bottom = 6.dp)
+            )
+        }
+        Column(
+            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(Brand.cornerRadius)).brandCard()
+                .padding(vertical = 10.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text("YOU SENT", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Brand.textSecondary)
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = decoded.ifEmpty { "—" },
+                fontSize = 28.sp,
+                fontWeight = FontWeight.SemiBold,
+                fontFamily = FontFamily.Monospace,
+                color = if (decoded.isEmpty()) Brand.textSecondary else Brand.textPrimary,
+                maxLines = 1
+            )
+        }
+        Spacer(Modifier.height(12.dp))
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(100.dp)
+                .clip(RoundedCornerShape(Brand.cornerRadius))
+                .background(if (keyPressed) Brand.teal else Brand.navyRaised)
+                .border(
+                    width = if (keyPressed) 2.dp else 1.dp,
+                    color = if (keyPressed) Brand.tealBright else Brand.hairline,
+                    shape = RoundedCornerShape(Brand.cornerRadius)
+                )
+                .pointerInput(enabled) {
+                    if (!enabled) return@pointerInput
+                    detectTapGestures(
+                        onPress = {
+                            onKey(true)
+                            try {
+                                tryAwaitRelease()
+                            } finally {
+                                onKey(false)
+                            }
+                        }
+                    )
+                },
+            contentAlignment = Alignment.Center
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("⠿", fontSize = 22.sp, color = if (keyPressed) Color.White else Brand.teal)
+                Text(
+                    "HOLD TO KEY",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (keyPressed) Color.White else Brand.textSecondary
+                )
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            OutlinedButton(
+                onClick = onClear,
+                enabled = enabled,
+                modifier = Modifier.weight(1f).heightIn(min = 44.dp)
+            ) { Text("Clear") }
+            Button(
+                onClick = onSubmit,
+                enabled = enabled && decoded.isNotBlank(),
+                colors = ButtonDefaults.buttonColors(containerColor = Brand.teal, contentColor = Brand.navy),
+                modifier = Modifier.weight(1f).heightIn(min = 44.dp)
+            ) { Text("Submit", fontWeight = FontWeight.SemiBold) }
+        }
     }
 }
 
