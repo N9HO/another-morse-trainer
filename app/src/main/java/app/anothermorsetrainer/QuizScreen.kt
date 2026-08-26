@@ -529,9 +529,10 @@ fun QuizScreen(
 /**
  * End-of-session summary: the tallies, a milestone celebration when this
  * session's first-practice-of-the-day landed on one, and the way onward.
+ * Internal so Head Copy and the typed quizzes end their sessions the same way.
  */
 @Composable
-private fun SessionSummaryContent(
+internal fun SessionSummaryContent(
     title: String,
     tally: Tally,
     milestone: Int?,

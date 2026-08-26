@@ -40,6 +40,14 @@ object ListenState {
     var paused by mutableStateOf(false)
     var playing by mutableStateOf(false)   // true while the code sounds, false while the answer shows
     var display by mutableStateOf("")
+
+    // Session accounting (the practice-length framework): items completed this
+    // session, seconds actually listened (pauses excluded), the configured
+    // limit, and a note shown once a timed session finishes itself.
+    var itemsHeard by mutableStateOf(0)
+    var activeSeconds by mutableStateOf(0)
+    var limitSeconds by mutableStateOf<Int?>(null)
+    var finishedNote by mutableStateOf<String?>(null)
 }
 
 /** Pick the next item for [content] (mirrors the iOS nextListenItem). */

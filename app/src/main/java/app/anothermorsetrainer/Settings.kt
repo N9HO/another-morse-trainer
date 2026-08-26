@@ -89,6 +89,13 @@ object Settings {
     var practiceDuration by mutableStateOf(PracticeDuration.UNTIL_STOP)
         private set
 
+    /** Head Copy: replay the item every few seconds until revealed. */
+    var headCopyAutoRepeat by mutableStateOf(false)
+        private set
+    /** Head Copy: reveal automatically this many seconds after the tone (0 = manual). */
+    var headCopyRevealSec by mutableStateOf(0)
+        private set
+
     /**
      * Punctuation opted into the study ladder (a subset of
      * [MorseCode.pickablePunctuation]). Joins the Koch order at the end, so
@@ -134,6 +141,8 @@ object Settings {
             .getOrDefault(RevealMode.ALWAYS)
         practiceDuration = runCatching { PracticeDuration.valueOf(prefs.getString("practiceDuration", null) ?: "UNTIL_STOP") }
             .getOrDefault(PracticeDuration.UNTIL_STOP)
+        headCopyAutoRepeat = prefs.getBoolean("hcAutoRepeat", false)
+        headCopyRevealSec = prefs.getInt("hcRevealSec", 0).coerceIn(0, 10)
         punctuationChars = (prefs.getString("punctuation", "") ?: "")
             .toSet().filter { it in MorseCode.pickablePunctuation }.toSet()
         customWordsText = prefs.getString("customWords", "") ?: ""
@@ -212,6 +221,16 @@ object Settings {
 
     fun updatePracticeDuration(value: PracticeDuration) {
         practiceDuration = value
+        persist()
+    }
+
+    fun updateHeadCopyAutoRepeat(value: Boolean) {
+        headCopyAutoRepeat = value
+        persist()
+    }
+
+    fun updateHeadCopyRevealSec(value: Int) {
+        headCopyRevealSec = value.coerceIn(0, 10)
         persist()
     }
 
@@ -315,6 +334,8 @@ object Settings {
             .putInt("wordCount", wordCount)
             .putString("revealMode", revealMode.name)
             .putString("practiceDuration", practiceDuration.name)
+            .putBoolean("hcAutoRepeat", headCopyAutoRepeat)
+            .putInt("hcRevealSec", headCopyRevealSec)
             .putString("punctuation", punctuationChars.joinToString(""))
             .putString("customWords", customWordsText)
             .putBoolean("useCustomWords", useCustomWords)

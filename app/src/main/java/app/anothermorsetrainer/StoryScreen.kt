@@ -4,6 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -30,14 +31,21 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.shape.RoundedCornerShape
 import app.anothermorsetrainer.morsekit.MorseItem
 import app.anothermorsetrainer.morsekit.MorseStories
+import kotlinx.coroutines.delay
+
+private enum class StPhase { RUNNING, SUMMARY }
 
 /**
  * **Short Stories** (continuous copy): hear a short passage sent end to end,
  * copy it on paper or in your head, then reveal the text to check yourself.
  * Mirrors the iOS story flow (play → reveal → next) without the per-character
- * scoring the recognition drills use.
+ * scoring the recognition drills use. Runs against the configured session
+ * length and ends with a summary of the passages copied.
  */
 @Composable
 fun StoryScreen(onBack: () -> Unit) {
@@ -53,26 +61,76 @@ fun StoryScreen(onBack: () -> Unit) {
     var generation by remember { mutableStateOf(0) }
     // Passages the learner copied through to the reveal — the session's "answers".
     var passagesCopied by remember { mutableStateOf(0) }
-    val startedAtMs = remember { System.currentTimeMillis() }
+    var startedAtMs by remember { mutableStateOf(System.currentTimeMillis()) }
+
+    // Session phase: passages, then a summary once the timer runs out or End is
+    // tapped. Back mid-session still records — it just skips the summary.
+    var phase by remember { mutableStateOf(StPhase.RUNNING) }
+    var remaining by remember { mutableStateOf(Settings.practiceDuration.seconds) }
+    var recorded by remember { mutableStateOf(false) }
+    var milestone by remember { mutableStateOf<Int?>(null) }
 
     val story = stories[((index % stories.size) + stories.size) % stories.size]
 
     DisposableEffect(Unit) { onDispose { player.release() } }
 
+    fun elapsedSeconds(): Int = ((System.currentTimeMillis() - startedAtMs) / 1000L).toInt()
+
     // Continuous copy is self-checked, so each revealed passage counts as one
     // completed copy — enough for the streak and practice-time totals.
-    fun finish() {
-        player.stop()
-        Stats.record(
+    fun recordSession(): Int? {
+        if (recorded) return null
+        recorded = true
+        return Stats.record(
             mode = "Stories",
             attempts = passagesCopied,
             correct = passagesCopied,
             bestTtrMs = null,
-            durationSeconds = ((System.currentTimeMillis() - startedAtMs) / 1000L).toInt()
+            durationSeconds = elapsedSeconds()
         )
+    }
+
+    fun endSession() {
+        if (phase == StPhase.SUMMARY) return
+        generation += 1
+        player.stop()
+        playing = false
+        milestone = recordSession()
+        phase = StPhase.SUMMARY
+    }
+
+    fun finish() {
+        generation += 1
+        player.stop()
+        recordSession()
         onBack()
     }
-    BackHandler { finish() }
+
+    fun practiceAgain() {
+        passagesCopied = 0
+        recorded = false
+        milestone = null
+        startedAtMs = System.currentTimeMillis()
+        remaining = Settings.practiceDuration.seconds
+        revealed = false
+        phase = StPhase.RUNNING
+    }
+
+    // Session countdown: ticks only while running and only when a length is set.
+    LaunchedEffect(phase) {
+        if (phase != StPhase.RUNNING) return@LaunchedEffect
+        while (true) {
+            val r = remaining ?: return@LaunchedEffect
+            if (r <= 0) {
+                endSession()
+                return@LaunchedEffect
+            }
+            delay(1000)
+            remaining = remaining?.minus(1)
+        }
+    }
+
+    BackHandler { if (phase == StPhase.SUMMARY) onBack() else finish() }
 
     fun play() {
         revealed = false
@@ -99,8 +157,35 @@ fun StoryScreen(onBack: () -> Unit) {
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        TextButton(onClick = { finish() }, modifier = Modifier.padding(8.dp)) { Text("‹ Back") }
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            TextButton(onClick = { if (phase == StPhase.SUMMARY) onBack() else finish() }) { Text("‹ Back") }
+            if (phase == StPhase.RUNNING) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    remaining?.let {
+                        Text(
+                            "%d:%02d".format(it / 60, it % 60),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = Brand.textSecondary
+                        )
+                    }
+                    TextButton(onClick = { endSession() }) { Text("End") }
+                }
+            }
+        }
 
+        if (phase == StPhase.SUMMARY) {
+            StorySummaryContent(
+                passages = passagesCopied,
+                elapsedSeconds = elapsedSeconds(),
+                milestone = milestone,
+                onPracticeAgain = { practiceAgain() },
+                onDone = onBack
+            )
+        } else {
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -166,6 +251,76 @@ fun StoryScreen(onBack: () -> Unit) {
                 onClick = { next() },
                 modifier = Modifier.fillMaxWidth()
             ) { Text("Next story ›") }
+        }
+        }
+    }
+}
+
+/**
+ * Story sessions are self-paced continuous copy, so the summary counts passages
+ * and time rather than the per-answer tallies the drill modes show.
+ */
+@Composable
+private fun StorySummaryContent(
+    passages: Int,
+    elapsedSeconds: Int,
+    milestone: Int?,
+    onPracticeAgain: () -> Unit,
+    onDone: () -> Unit
+) {
+    Column(
+        modifier = Modifier.fillMaxSize().padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text("Session complete", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(4.dp))
+        Text("Short Stories", style = MaterialTheme.typography.labelMedium, color = Brand.textSecondary)
+
+        Spacer(Modifier.height(24.dp))
+        Column(modifier = Modifier.fillMaxWidth().brandCard()) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text("Passages copied", color = Brand.textSecondary)
+                Text("$passages", color = Brand.textPrimary, fontWeight = FontWeight.SemiBold)
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text("Time", color = Brand.textSecondary)
+                Text(
+                    "%d:%02d".format(elapsedSeconds / 60, elapsedSeconds % 60),
+                    color = Brand.textPrimary,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+        }
+
+        milestone?.let { day ->
+            Spacer(Modifier.height(16.dp))
+            Column(
+                modifier = Modifier.fillMaxWidth().brandCard().padding(vertical = 14.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(milestoneEmoji(day), fontSize = 40.sp)
+                Text("$day-day streak!", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                Text("New milestone reached — keep it going.", color = Brand.textSecondary, fontSize = 13.sp)
+            }
+        }
+
+        Spacer(Modifier.height(28.dp))
+        Button(
+            onClick = onPracticeAgain,
+            colors = ButtonDefaults.buttonColors(containerColor = Brand.teal, contentColor = Brand.navy),
+            shape = RoundedCornerShape(Brand.cornerRadius),
+            modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)
+        ) { Text("Keep copying", fontWeight = FontWeight.SemiBold) }
+        Spacer(Modifier.height(10.dp))
+        OutlinedButton(onClick = onDone, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+            Text("Done")
         }
     }
 }
