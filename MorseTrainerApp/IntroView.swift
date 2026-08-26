@@ -14,6 +14,7 @@ struct IntroView: View {
     @State private var showingJourneyMap = false
     @State private var showingReference = false
     @State private var showingSendingDrill = false
+    @State private var showingCWDecoder = false
     @State private var showingRepeater = false
     @StateObject private var repeater = RepeaterModel()
 
@@ -96,6 +97,36 @@ struct IntroView: View {
         )
     }
 
+    // MARK: Short Stories bindings
+
+    private var storyContentBinding: Binding<StoryContent> {
+        Binding(get: { model.settings.story.content },
+                set: { model.settings.story.content = $0 })
+    }
+
+    private var newsSourceBinding: Binding<NewsSource> {
+        Binding(get: { model.settings.story.newsSource },
+                set: { model.settings.story.newsSource = $0 })
+    }
+
+    private var newsFullStoryBinding: Binding<Bool> {
+        Binding(get: { model.settings.story.newsFullStory },
+                set: { model.settings.story.newsFullStory = $0 })
+    }
+
+    /// Selected long tale, falling back to the first bundled serial when the
+    /// saved id is empty or no longer exists.
+    private var serialBinding: Binding<String> {
+        Binding(
+            get: {
+                let id = model.settings.story.serialId
+                return MorseData.serials.contains { $0.id == id }
+                    ? id : (MorseData.serials.first?.id ?? "")
+            },
+            set: { model.settings.story.serialId = $0 }
+        )
+    }
+
     // MARK: Rapid Fire bindings
 
     private var rapidFireContentBinding: Binding<RapidFireContent> {
@@ -174,6 +205,9 @@ struct IntroView: View {
         .sheet(isPresented: $showingSendingDrill) {
             SendingDrillView().environmentObject(model)
         }
+        .sheet(isPresented: $showingCWDecoder) {
+            CWDecoderView()
+        }
         .fullScreenCover(isPresented: $showingRepeater) {
             RepeaterView().environmentObject(repeater)
         }
@@ -208,6 +242,13 @@ struct IntroView: View {
             }
             .accessibilityLabel("Vail repeater — go on the air")
             Spacer()
+            Button { showingCWDecoder = true } label: {
+                Image(systemName: "waveform")
+                    .font(.title3)
+                    .foregroundStyle(Theme.teal)
+                    .padding(8)
+            }
+            .accessibilityLabel("CW decoder — turn received Morse audio into text")
             Button { showingReference = true } label: {
                 Image(systemName: "book")
                     .font(.title3)
@@ -376,6 +417,62 @@ struct IntroView: View {
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
+            if model.learningMode == .story {
+                inlinePicker(title: "What to copy",
+                             selection: storyContentBinding) { (c: StoryContent) in c.label }
+                if model.settings.story.content == .serials {
+                    HStack {
+                        Text("Which story")
+                            .font(.subheadline)
+                            .foregroundStyle(.primary)
+                        Spacer(minLength: 12)
+                        Picker("Which story", selection: serialBinding) {
+                            ForEach(MorseData.serials) { serial in
+                                Text(serial.title).tag(serial.id)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .tint(Theme.tealBright)
+                        .labelsHidden()
+                    }
+                    if let resume = model.serialResume(for: serialBinding.wrappedValue) {
+                        Label {
+                            Text(resume.part == 1
+                                 ? "A longer tale sent in short parts. Your bookmark moves as you go, so you can pick the story back up any day."
+                                 : "Your bookmark picks this story back up at part \(resume.part) of \(resume.of).")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        } icon: {
+                            Image(systemName: "bookmark")
+                                .foregroundStyle(Theme.teal)
+                        }
+                    }
+                }
+                if model.settings.story.content == .news {
+                    inlinePicker(title: "News source",
+                                 selection: newsSourceBinding) { (s: NewsSource) in s.label }
+                    Toggle(isOn: newsFullStoryBinding) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Include the summary").font(.subheadline)
+                            Text("Send each story summary after its headline, separated by a BT break. Turn off for quick headline-only copy.")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    Label {
+                        Text("Fresh headlines are fetched over the internet and stay hidden until you reveal — decoding is the only way to read the news.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    } icon: {
+                        Image(systemName: "newspaper")
+                            .foregroundStyle(Theme.teal)
+                    }
+                }
             }
 
             if model.learningMode == .words {

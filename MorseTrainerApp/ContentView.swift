@@ -333,7 +333,7 @@ struct ContentView: View {
                 Text(model.storyTitle)
                     .font(.title3).bold()
                     .multilineTextAlignment(.center)
-                Text("Public-domain fable · continuous copy")
+                Text(model.storySubtitle)
                     .font(.caption).foregroundStyle(.secondary)
             }
 
@@ -346,15 +346,42 @@ struct ContentView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .textSelection(.enabled)
                         .transition(.opacity)
+                } else if model.isNewsStory && model.newsFetching {
+                    VStack(spacing: 12) {
+                        ProgressView()
+                        Text("Fetching todays headlines…")
+                            .font(.callout).foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 160)
+                } else if model.isNewsStory, let error = model.newsError {
+                    VStack(spacing: 12) {
+                        Image(systemName: "wifi.exclamationmark")
+                            .font(.system(size: 44))
+                            .foregroundStyle(.secondary)
+                        Text(error)
+                            .font(.callout).foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                        Button {
+                            model.refreshNews()
+                        } label: {
+                            Label("Try Again", systemImage: "arrow.clockwise")
+                                .font(.headline)
+                        }
+                        .buttonStyle(.bordered)
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 160)
                 } else {
                     VStack(spacing: 12) {
                         Image(systemName: model.storyPlaying
-                              ? "dot.radiowaves.left.and.right" : "book.closed")
+                              ? "dot.radiowaves.left.and.right"
+                              : (model.isNewsStory ? "newspaper" : "book.closed"))
                             .font(.system(size: 56))
                             .foregroundStyle(Theme.teal)
                         Text(model.storyPlaying
                              ? "Sending… copy along"
-                             : "Press Play, then copy what you hear")
+                             : (model.isNewsStory
+                                ? "Press Play, then decode the headline"
+                                : "Press Play, then copy what you hear"))
                             .font(.callout).foregroundStyle(.secondary)
                             .multilineTextAlignment(.center)
                     }
@@ -369,11 +396,25 @@ struct ContentView: View {
         }
         .animation(.easeInOut(duration: 0.2), value: model.storyRevealed)
         .animation(.easeInOut(duration: 0.2), value: model.storyPlaying)
+        .animation(.easeInOut(duration: 0.2), value: model.newsFetching)
     }
 
     @ViewBuilder
     private var storyControls: some View {
         HStack(spacing: 12) {
+            if model.storyCanGoBack {
+                Button {
+                    model.previousStory()
+                } label: {
+                    Image(systemName: "backward.fill")
+                        .font(.headline)
+                        .frame(width: 52, height: 52)
+                }
+                .buttonStyle(.bordered)
+                .disabled(model.storyPlaying)
+                .accessibilityLabel("Previous part")
+            }
+
             if model.storyPlaying {
                 Button {
                     model.stopStory()
@@ -391,6 +432,7 @@ struct ContentView: View {
                         .font(.headline).frame(maxWidth: .infinity, minHeight: 52)
                 }
                 .buttonStyle(.borderedProminent)
+                .disabled(model.storyText.isEmpty || (model.isNewsStory && model.newsFetching))
             }
 
             if !model.storyRevealed {
@@ -401,7 +443,7 @@ struct ContentView: View {
                         .font(.headline).frame(maxWidth: .infinity, minHeight: 52)
                 }
                 .buttonStyle(.bordered)
-                .disabled(model.storyPlaying)
+                .disabled(model.storyPlaying || model.storyText.isEmpty)
             }
 
             Button {
@@ -411,6 +453,7 @@ struct ContentView: View {
                     .font(.headline).frame(maxWidth: .infinity, minHeight: 52)
             }
             .buttonStyle(.bordered)
+            .disabled(model.storyText.isEmpty || (model.isNewsStory && model.newsFetching))
         }
     }
 

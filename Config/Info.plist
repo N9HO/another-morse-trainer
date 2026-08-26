@@ -40,7 +40,7 @@
 	<key>NSBluetoothAlwaysUsageDescription</key>
 	<string>Used to connect a Bluetooth (BLE MIDI) Morse key or Vail Adapter for keying and the live repeater.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Used so you can answer drills by speaking instead of tapping.</string>
+	<string>Used so you can answer drills by speaking instead of tapping, and so the CW decoder can hear the Morse audio you want turned into text.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Used to recognize the answer you speak during voice-response training.</string>
 	<key>UIApplicationSceneManifest</key>

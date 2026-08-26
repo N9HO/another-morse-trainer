@@ -1,4 +1,5 @@
 import Foundation
+import CWDecoderCore
 import MorseKit
 
 // A tiny zero-dependency test harness so we can verify MorseKit with only the
@@ -1175,6 +1176,177 @@ do {
     let sd = src.nextDrill()
     check("Rapid Fire drill exposes its answer as the lone option",
           sd.options == [sd.correct] && !src.summary.isEmpty)
+}
+
+// Short Stories library
+print("\nShort Stories library:")
+check("a healthy shelf of passages (30+)", MorseData.stories.count >= 30)
+check("story ids are unique",
+      Set(MorseData.stories.map(\.id)).count == MorseData.stories.count)
+check("every passage keys cleanly (no unsendable characters)",
+      MorseData.stories.allSatisfy { CWText.isFullySendable($0.text) })
+check("no passage is empty or a marathon (≤ 90 words)",
+      MorseData.stories.allSatisfy {
+          let words = $0.text.split(separator: " ").count
+          return words > 0 && words <= 90
+      })
+
+// Serials — longer tales sent part by part with a bookmark
+print("\nSerial library:")
+check("several long tales on the shelf (4+)", MorseData.serials.count >= 4)
+check("serial ids are unique and none collides with the fables bookmark",
+      Set(MorseData.serials.map(\.id)).count == MorseData.serials.count
+          && !MorseData.serials.contains { $0.id == "fables" })
+check("every part of every serial keys cleanly",
+      MorseData.serials.allSatisfy { serial in
+          serial.parts.allSatisfy { CWText.isFullySendable($0) }
+      })
+check("parts are short-session sized (25–110 words)",
+      MorseData.serials.allSatisfy { serial in
+          serial.parts.allSatisfy {
+              let words = $0.split(separator: " ").count
+              return words >= 25 && words <= 110
+          }
+      })
+check("every serial has a title, an author, and at least 5 parts",
+      MorseData.serials.allSatisfy {
+          !$0.title.isEmpty && !$0.author.isEmpty && $0.parts.count >= 5
+      })
+
+// CWText — real-world text → sendable Morse text
+print("\nCWText sanitizer:")
+check("clean text passes through uppercased",
+      CWText.sanitized("The fox jumped.") == "THE FOX JUMPED.")
+check("smart quotes and apostrophes drop out",
+      CWText.sanitized("It\u{2019}s a \u{201C}test\u{201D}") == "ITS A TEST")
+check("an em dash becomes a word break",
+      CWText.sanitized("On air\u{2014}and off") == "ON AIR AND OFF")
+check("accents fold to plain letters",
+      CWText.sanitized("café naïve Zürich") == "CAFE NAIVE ZURICH")
+check("ampersand and percent are spelled out",
+      CWText.sanitized("AT&T up 5%") == "AT AND T UP 5 PERCENT")
+check("thousands separators drop from numbers",
+      CWText.sanitized("1,234 people") == "1234 PEOPLE")
+check("colons become commas, bangs become periods",
+      CWText.sanitized("Breaking: launch works!") == "BREAKING, LAUNCH WORKS.")
+check("unknown symbols become word breaks",
+      CWText.sanitized("a*b (c) [d]") == "A B C D")
+check("HTML tags and entities strip away",
+      CWText.sanitized(CWText.strippedHTML("<p>Fees &amp; taxes rose &#8212; a lot</p>"))
+          == "FEES AND TAXES ROSE A LOT")
+check("sanitized output is always sendable",
+      CWText.isFullySendable(CWText.sanitized("Weird → ™ ©®…, input\u{00A0}#42 – ok?")))
+check("isSendable is safe on odd characters",
+      !CWText.isSendable("ß") && CWText.isSendable("k") && CWText.isSendable(" "))
+check("clipping prefers a sentence boundary",
+      CWText.clipped("ONE TWO THREE. FOUR FIVE SIX SEVEN", maxWords: 5) == "ONE TWO THREE.")
+check("hard clip still closes the sentence",
+      CWText.clipped("ONE TWO THREE FOUR FIVE SIX SEVEN", maxWords: 4) == "ONE TWO THREE FOUR.")
+
+// Vendored CW decoder core — synthetic PCM through the real C audio engine.
+print("\nCW decoder core (vendored):")
+do {
+    final class AudioSink {
+        var text = ""
+    }
+
+    /// Render hard-keyed CW as 16-bit PCM: a calibration lead-in of silence,
+    /// the message at ITU timing, and enough tail to flush the last character.
+    /// Noise is seeded and uniform, so every run hears identical samples.
+    func renderCW(_ message: String, wpm: Double, toneHz: Double,
+                  sampleRate: Double, amplitude: Double,
+                  noiseAmplitude: Double = 0, noiseSeed: UInt64 = 0) -> [Int16] {
+        let unit = 1.2 / wpm
+        var segments: [(tone: Double, gap: Double)] = []
+        let words = message.split(separator: " ")
+        for (w, word) in words.enumerated() {
+            let chars = Array(word)
+            for (c, ch) in chars.enumerated() {
+                guard let pattern = MorseCode.pattern(for: ch) else { continue }
+                let elements = Array(pattern)
+                for (i, element) in elements.enumerated() {
+                    let tone = element == "." ? unit : 3 * unit
+                    let lastElement = i == elements.count - 1
+                    let lastChar = c == chars.count - 1
+                    let gap = !lastElement ? unit
+                        : !lastChar ? 3 * unit
+                        : w == words.count - 1 ? 10 * unit : 7 * unit
+                    segments.append((tone, gap))
+                }
+            }
+        }
+        var rng = SeededRNG(seed: noiseSeed == 0 ? 1 : noiseSeed)
+        func noise() -> Double {
+            noiseAmplitude == 0 ? 0
+                : (Double(rng.next() >> 40) / 8_388_608.0 - 1.0) * noiseAmplitude
+        }
+        var samples: [Int16] = []
+        func push(_ value: Double) {
+            samples.append(Int16(max(-32767, min(32767, value + noise()))))
+        }
+        for _ in 0..<Int(sampleRate * 0.7) { push(0) }   // noise-floor calibration
+        let omega = 2.0 * Double.pi * toneHz / sampleRate
+        for segment in segments {
+            for i in 0..<Int(segment.tone * sampleRate) { push(amplitude * sin(omega * Double(i))) }
+            for _ in 0..<Int(segment.gap * sampleRate) { push(0) }
+        }
+        for _ in 0..<Int(sampleRate * 0.5) { push(0) }   // let the tail flush
+        return samples
+    }
+
+    /// Run PCM through the vendored core; `passes: 2` replays the same audio
+    /// after a cw_decoder_reset() to prove the decoder rearms cleanly.
+    func decodeCW(_ samples: [Int16], inputRate: UInt32,
+                  passes: Int = 1) -> (text: String, wpm: Float, toneHz: Float) {
+        let sink = AudioSink()
+        var cfg = cw_config_t()
+        cw_config_default(&cfg)
+        cfg.input_rate_hz = inputRate
+        cfg.target_rate_hz = 8000
+        cfg.user = Unmanaged.passUnretained(sink).toOpaque()
+        cfg.on_symbol = { text, _, user in
+            guard let text, let user else { return }
+            Unmanaged<AudioSink>.fromOpaque(user).takeUnretainedValue()
+                .text += String(cString: text)
+        }
+        guard let decoder = cw_decoder_create(&cfg) else { return ("<create failed>", 0, 0) }
+        defer { cw_decoder_destroy(decoder) }
+        var texts: [String] = []
+        for pass in 0..<passes {
+            if pass > 0 { cw_decoder_reset(decoder); sink.text = "" }
+            samples.withUnsafeBufferPointer { cw_decoder_feed(decoder, $0.baseAddress, $0.count) }
+            texts.append(sink.text.trimmingCharacters(in: .whitespaces))
+        }
+        return (texts.joined(separator: "|"), cw_decoder_wpm(decoder), cw_decoder_tone_hz(decoder))
+    }
+
+    let message = "CQ CQ DE N9HO N9HO K"
+    let clean = decodeCW(renderCW(message, wpm: 25, toneHz: 700,
+                                  sampleRate: 8000, amplitude: 8000), inputRate: 8000)
+    check("decodes clean 25 WPM CW at 700 Hz (8 kHz PCM)", clean.text == message)
+    check("speed estimate lands near 25 WPM", clean.wpm > 20 && clean.wpm < 30)
+
+    let mistuned = decodeCW(renderCW(message, wpm: 25, toneHz: 620,
+                                     sampleRate: 8000, amplitude: 8000), inputRate: 8000)
+    check("pitch search recovers a 620 Hz signal against the 700 Hz default",
+          mistuned.text == message)
+    check("locked tone sits by the real 620 Hz, not the seed", abs(mistuned.toneHz - 620) < 25)
+
+    // ≈20 dB SNR — far inside the ~11 dB limit measured for this core, so the
+    // committed case stays deterministic across toolchains and math libraries.
+    let noisy = decodeCW(renderCW(message, wpm: 25, toneHz: 700,
+                                  sampleRate: 8000, amplitude: 8000,
+                                  noiseAmplitude: 1000, noiseSeed: 42), inputRate: 8000)
+    check("stays solid through seeded noise (≈20 dB SNR)", noisy.text == message)
+
+    let hires = decodeCW(renderCW("PARIS", wpm: 20, toneHz: 700,
+                                  sampleRate: 48000, amplitude: 8000), inputRate: 48000)
+    check("48 kHz input decimates down and still decodes", hires.text == "PARIS")
+
+    let twice = decodeCW(renderCW("PARIS", wpm: 20, toneHz: 700,
+                                  sampleRate: 8000, amplitude: 8000),
+                         inputRate: 8000, passes: 2)
+    check("reset() rearms the decoder for a second run", twice.text == "PARIS|PARIS")
 }
 
 print("\n────────────────────────────")

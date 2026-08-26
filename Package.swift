@@ -13,6 +13,13 @@ let package = Package(
     ],
     targets: [
         .target(name: "MorseKit"),
-        .executableTarget(name: "MorseKitCheck", dependencies: ["MorseKit"])
+        // The vendored Carrier Wave CW audio decoder (pure C99). Kept
+        // byte-identical to the firmware copy — see Sources/CWDecoderCore/PROVENANCE.md.
+        .target(
+            name: "CWDecoderCore",
+            exclude: ["PROVENANCE.md", "LICENSE"],
+            publicHeadersPath: "."
+        ),
+        .executableTarget(name: "MorseKitCheck", dependencies: ["MorseKit", "CWDecoderCore"])
     ]
 )

@@ -123,7 +123,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .contest:
             return "Run a simulated contest against the clock. Pick from the weekly CW sprints — K1USN SST (slow, name + state), ICWC MST (medium, name + serial), CWops CWT (fast, name + number), the NCCC Sprint (serial + name + state) — or ARRL Field Day (class + section). Call CQ and work the pileup that answers, with authentic speeds, a live score and rate, and an end-of-run scorecard — the closest thing to being in the chair on contest day."
         case .story:
-            return "Continuous copy: hear a short story sent end to end. Copy it on paper or in your head, then reveal the text to check yourself."
+            return "Continuous copy: hear a short story sent end to end. Copy it on paper or in your head, then reveal the text to check yourself. Pick a fable, a longer classic (Sherlock Holmes and friends) sent in parts with a bookmark that keeps your place, or todays news — real headlines hidden until you reveal, so the only way to read them is to copy the code."
         case .exam:
             return "Sit a recreation of the old ARRL/FCC code-proficiency exam: a 5-minute QSO-style transmission at 5, 13, or 20 WPM. Pass with one minute of solid copy (25 characters in a row) or by answering questions about what was sent."
         case .qrq:
@@ -517,8 +517,50 @@ final class AppModel: ObservableObject {
     @Published private(set) var storyRevealed = false
     @Published private(set) var storyTitle = ""
     @Published private(set) var storyText = ""
+    // News-in-Morse: headlines are fetched, sanitized to the sendable charset,
+    // and kept hidden until revealed — decoding is the only way to read them.
+    @Published private(set) var newsFetching = false
+    @Published private(set) var newsError: String?
+    private var newsStories: [MorseData.Story] = []
+    private var newsItems: [NewsFetcher.Item] = []
+    private var newsFetchedAt: Date?
+    private var newsFetchedSource: NewsSource?
+    private var newsIsFromCache = false
+    private let newsFetcher = NewsFetcher()
+    /// Reuse a fetch this recent (seconds) instead of hitting the feed again.
+    private let newsFreshWindow: TimeInterval = 30 * 60
     private var storyGeneration = 0
     private var storyIndex = 0
+
+    /// The content source the Story mode is set to.
+    private var storyContent: StoryContent { settings.story.content }
+
+    /// Whether this Story session sends news headlines rather than fables.
+    var isNewsStory: Bool { isStory && storyContent == .news }
+    /// Whether this Story session sends a serialized long tale.
+    var isSerialStory: Bool { isStory && storyContent == .serials }
+    /// Serials read like a book — allow stepping back a part (fables and news
+    /// just cycle forward).
+    var storyCanGoBack: Bool { isSerialStory && storyIndex > 0 }
+
+    /// The long tale selected in setup (falls back to the first bundled one).
+    private var currentSerial: MorseData.Serial? {
+        MorseData.serials.first { $0.id == settings.story.serialId }
+            ?? MorseData.serials.first
+    }
+
+    /// The line under the story title (what the passage is and where it came from).
+    var storySubtitle: String {
+        switch storyContent {
+        case .fables:
+            return "Public-domain fable · continuous copy"
+        case .serials:
+            return "\(currentSerial?.author ?? "Classic tale") · your bookmark keeps your place"
+        case .news:
+            let source = settings.story.newsSource.attribution
+            return newsIsFromCache ? "\(source) · saved headlines" : "\(source) · decode the news"
+        }
+    }
 
     /// Set up story mode (pick a passage, wait for the Play tap).
     private func startStoryMode() {
@@ -526,7 +568,19 @@ final class AppModel: ObservableObject {
         storyActive = true
         storyPlaying = false
         storyRevealed = false
-        pickStory()
+        newsError = nil
+        switch storyContent {
+        case .news:
+            ensureNews()
+        case .fables:
+            newsFetching = false   // a stale in-flight fetch must not gray out fables
+            storyIndex = bookmark(for: AppModel.fablesBookmarkKey)
+            pickStory()
+        case .serials:
+            newsFetching = false
+            storyIndex = currentSerial.map { bookmark(for: $0.id) } ?? 0
+            pickStory()
+        }
         phase = .idle
     }
 
@@ -540,13 +594,186 @@ final class AppModel: ObservableObject {
     }
 
     private func pickStory() {
-        let stories = MorseData.stories
-        guard !stories.isEmpty else { storyTitle = ""; storyText = ""; return }
+        switch storyContent {
+        case .fables:
+            pick(from: MorseData.stories, noun: "Story",
+                 emptyLabel: "No stories", bookmarkKey: AppModel.fablesBookmarkKey)
+        case .news:
+            pick(from: newsStories, noun: "Headline",
+                 emptyLabel: "No headlines", bookmarkKey: nil)
+        case .serials:
+            pickSerialPart()
+        }
+    }
+
+    /// Land on `storyIndex` (wrapped) in a flat passage list; optionally
+    /// remember the spot so the next session resumes there.
+    private func pick(from stories: [MorseData.Story], noun: String,
+                      emptyLabel: String, bookmarkKey: String?) {
+        guard !stories.isEmpty else {
+            storyTitle = ""; storyText = ""
+            summary = emptyLabel
+            return
+        }
         let n = stories.count
-        let s = stories[((storyIndex % n) + n) % n]
+        let idx = ((storyIndex % n) + n) % n
+        storyIndex = idx
+        let s = stories[idx]
         storyTitle = s.title
         storyText = s.text
-        summary = "Story \((((storyIndex % n) + n) % n) + 1) of \(n)"
+        summary = "\(noun) \(idx + 1) of \(n)"
+        if let key = bookmarkKey { setBookmark(idx, for: key) }
+    }
+
+    /// Land on the bookmarked part of the selected serial and move the
+    /// bookmark there — opening a part IS how far you have gotten.
+    private func pickSerialPart() {
+        guard let serial = currentSerial, !serial.parts.isEmpty else {
+            storyTitle = ""; storyText = ""
+            summary = "No stories"
+            return
+        }
+        let count = serial.parts.count
+        let idx = min(max(storyIndex, 0), count - 1)
+        storyIndex = idx
+        storyTitle = serial.title
+        storyText = serial.parts[idx]
+        summary = "Part \(idx + 1) of \(count)"
+        setBookmark(idx, for: serial.id)
+    }
+
+    // MARK: - Story bookmarks (how far you got, kept across launches)
+
+    private static let bookmarksKey = "MorseTrainer.storyBookmarks"
+    /// The fables shelf shares one bookmark under a reserved key; serials
+    /// each keep their own under their id.
+    private static let fablesBookmarkKey = "fables"
+
+    private var storyBookmarks: [String: Int] = AppModel.loadBookmarks()
+
+    /// Where the given shelf/serial was left off (0 when never opened).
+    func bookmark(for key: String) -> Int {
+        storyBookmarks[key] ?? 0
+    }
+
+    /// Part count and resume point for the setup screen's footnote.
+    func serialResume(for id: String) -> (part: Int, of: Int)? {
+        guard let serial = MorseData.serials.first(where: { $0.id == id }) else { return nil }
+        let idx = min(max(bookmark(for: id), 0), serial.parts.count - 1)
+        return (idx + 1, serial.parts.count)
+    }
+
+    private func setBookmark(_ index: Int, for key: String) {
+        guard storyBookmarks[key] != index else { return }
+        storyBookmarks[key] = index
+        if let data = try? JSONEncoder().encode(storyBookmarks) {
+            UserDefaults.standard.set(data, forKey: AppModel.bookmarksKey)
+        }
+    }
+
+    private static func loadBookmarks() -> [String: Int] {
+        guard let data = UserDefaults.standard.data(forKey: bookmarksKey),
+              let decoded = try? JSONDecoder().decode([String: Int].self, from: data)
+        else { return [:] }
+        return decoded
+    }
+
+    // MARK: - News headlines (Story mode's "decode the news" source)
+
+    /// Make sure headlines are loaded: reuse a recent fetch, otherwise hit the
+    /// feed, otherwise fall back to the last successful fetch on disk.
+    private func ensureNews() {
+        let source = settings.story.newsSource
+        if newsFetchedSource == source, !newsItems.isEmpty,
+           let at = newsFetchedAt, Date().timeIntervalSince(at) < newsFreshWindow {
+            // Rebuild from the kept raw items so a changed "include the
+            // summary" toggle applies without another network trip.
+            rebuildNewsStories(source: source)
+            return
+        }
+        newsFetching = true
+        newsError = nil
+        summary = "Fetching…"
+        let generation = storyGeneration
+        newsFetcher.fetch(source) { [weak self] result in
+            guard let self else { return }
+            // Clear the spinner even for a stale fetch (mode switched away),
+            // so a later session never starts with the controls grayed out.
+            self.newsFetching = false
+            guard self.storyGeneration == generation else { return }
+            switch result {
+            case .success(let items):
+                self.adoptNews(items, source: source, fromCache: false, fetchedAt: Date())
+            case .failure(let error):
+                if let cached = self.newsFetcher.cached(source) {
+                    self.adoptNews(cached.items, source: source, fromCache: true,
+                                   fetchedAt: cached.fetchedAt)
+                } else {
+                    self.newsStories = []
+                    self.newsItems = []
+                    self.newsFetchedSource = nil
+                    self.newsError = error.message
+                    self.summary = "No headlines"
+                }
+            }
+        }
+    }
+
+    /// Keep a fetched batch and build the sendable passages from it.
+    private func adoptNews(_ items: [NewsFetcher.Item], source: NewsSource,
+                           fromCache: Bool, fetchedAt: Date) {
+        newsItems = items
+        newsFetchedSource = source
+        newsFetchedAt = fetchedAt
+        newsIsFromCache = fromCache
+        storyIndex = 0
+        rebuildNewsStories(source: source)
+    }
+
+    /// Sanitize the kept raw items down to what the key can send, then land on
+    /// the current passage (or the empty-feed message).
+    private func rebuildNewsStories(source: NewsSource) {
+        newsStories = decodableStories(from: newsItems, source: source)
+        if newsStories.isEmpty {
+            newsError = NewsFetcher.FetchError.emptyFeed.message
+            summary = "No headlines"
+        } else {
+            pickStory()
+        }
+    }
+
+    /// Headline (and optionally its summary, after a BT break) as a sendable
+    /// passage. The title stays generic so nothing is given away before reveal.
+    private func decodableStories(from items: [NewsFetcher.Item],
+                                  source: NewsSource) -> [MorseData.Story] {
+        items.enumerated().compactMap { index, item in
+            let headline = CWText.sanitized(CWText.strippedHTML(item.title))
+            guard !headline.isEmpty else { return nil }
+            var text = headline
+            if settings.story.newsFullStory {
+                let summary = CWText.clipped(
+                    CWText.sanitized(CWText.strippedHTML(item.summary)), maxWords: 45)
+                if !summary.isEmpty, summary != headline {
+                    text = headline + " = " + summary
+                }
+            }
+            return MorseData.Story(id: "news-\(index)",
+                                   title: source.attribution,
+                                   text: text)
+        }
+    }
+
+    /// Drop what we have and hit the feed again (Retry button / fresh headlines).
+    func refreshNews() {
+        guard isStory, settings.story.content == .news, !newsFetching else { return }
+        storyGeneration += 1
+        player.stop()
+        storyPlaying = false
+        storyRevealed = false
+        newsFetchedSource = nil
+        newsFetchedAt = nil
+        ensureNews()
+        phase = .idle
     }
 
     /// Send the whole passage as one continuous transmission.
@@ -582,11 +809,29 @@ final class AppModel: ObservableObject {
         storyRevealed = true
     }
 
-    /// Advance to the next passage (does not auto-play).
+    /// Advance to the next passage (does not auto-play). A serial wraps from
+    /// its final part back to part one — rereading from the top.
     func nextStory() {
         storyGeneration += 1
         player.stop()
-        storyIndex += 1
+        if isSerialStory, let serial = currentSerial, !serial.parts.isEmpty {
+            storyIndex = (storyIndex + 1) % serial.parts.count
+        } else {
+            storyIndex += 1
+        }
+        storyPlaying = false
+        storyRevealed = false
+        pickStory()
+        phase = .idle
+    }
+
+    /// Step back one part of a serial (re-copy what you missed). The bookmark
+    /// moves back with you.
+    func previousStory() {
+        guard storyCanGoBack else { return }
+        storyGeneration += 1
+        player.stop()
+        storyIndex -= 1
         storyPlaying = false
         storyRevealed = false
         pickStory()
