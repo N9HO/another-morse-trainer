@@ -18,6 +18,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Settings.init(this)
+        PileupSettings.init(this)
         Stats.init(this)
         JourneyStore.init(this)
         EngineStore.init(this)
