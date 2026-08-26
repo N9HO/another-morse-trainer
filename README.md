@@ -17,27 +17,38 @@ the iOS app's navy/teal look.
 - **Common Words**, **Abbreviations**, **Q-Codes**, **Prosigns** — phrase drills
 - **Confusion Drill** — targeted review of the pairs you mix up
 - **Rapid Fire** — a stream of call signs / words / number groups / states sent
-  back to back at your chosen pace; type as you hear it, head-copy then type, or
-  just listen and review the transmitted list
-- **Pileup Runner** — call CQ and work a simulated CW pileup
+  back to back at your chosen pace; type as you hear it, head-copy then type,
+  key each one back, or just listen and review the transmitted list
+- **Pileup Runner** — a full QSO simulator: your callsign, eight exchange
+  flavours (single caller → POTA → contests), realism controls (caller count,
+  speed band, tone spread, QSB, QRN, cut numbers, bust behavior, callsign
+  shapes), your own side keyed in Morse, auto re-call after TU, and a live
+  log + rate readout
 - **Contest** — timed runs of the weekly CW events (K1USN SST, ICWC MST, CWops
   CWT, NCCC Sprint, ARRL Field Day) with authentic exchanges, speeds, live
   score/rate, and an end-of-run scorecard
 - **Code Exam** — FCC/ARRL-style copy test at 5 / 13 / 20 WPM
-- **Sending Practice** — key it back (touch or MIDI key)
-- **Repeater** — live CW over the Vail network, with Vail Adapter support: MIDI
-  key input *and* output (keyer-mode config, sidetone, RX piezo buzz)
+- **Sending Practice** — key it back (touch or MIDI key); quizzes can also be
+  answered by keying
+- **Repeater** — live CW over the Vail network with a server picker and
+  private-channel option, plus Vail Adapter support: MIDI key input *and*
+  output (keyer mode + speed, sidetone, opt-out RX piezo buzz), Bluetooth LE
+  MIDI keys, and unplug detection
 - **Reference** — browsable, tap-to-hear chart of prosigns, Q-codes,
   abbreviations, cut numbers, and the full alphabet, with per-signal detail
 - **Listen & Learn** — hands-free: hear the code, then the spoken answer; keeps
   playing with the screen locked (foreground service)
-- **Voice answers** — speak your answer instead of tapping (microphone)
+- **Voice answers** — speak your answer instead of tapping (microphone), with
+  NATO/letter-name/digit-word matching, a "did you say…?" confirm-and-correct
+  flow, and a learned per-user voice profile
 - **Sending Drills** — printable practice sheets of random character groups
   drawn from what you've studied (even, personalized, or numbers & punctuation),
   ready to share or print
 - **Progress** — daily streak, accuracy, best copy, per-character recognition
-  chart, and performance by 5-WPM speed band
-- **Settings** — speed, Farnsworth, sidetone pitch, haptics, daily reminders
+  chart, performance by 5-WPM speed band, and per-session detail screens with
+  each session's own recognition chart
+- **Settings** — speed, Farnsworth, sidetone pitch, haptics, daily reminders,
+  session length, custom word lists, and punctuation opt-ins
 - Dark navy/teal theme, adaptive icon, phone + tablet responsive layout
 
 ## Build
