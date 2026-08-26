@@ -33,8 +33,12 @@ struct SendingDrillView: View {
                     preview
                 }
                 .padding(.top, 8)
+                .readableWidth()
             }
-            .navigationTitle("Sending Practice")
+            // "Sending Drills" (was "Sending Practice"): the standalone key-it-
+            // back training mode now owns that name; this screen is the
+            // printable practice sheets (Android home tile parity).
+            .navigationTitle("Sending Drills")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -69,8 +73,11 @@ struct SendingDrillView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .fixedSize(horizontal: false, vertical: true)
 
-            slider("Lines", value: $groupCount, range: 10...100, step: 5,
-                   readout: "\(Int(groupCount) / Int(groupSize)) lines")
+            // The slider sets the number of groups; the old "Lines" readout
+            // divided by group *size* instead of groups-per-row, so it was only
+            // right when the group size happened to be 5. Say what it is.
+            slider("Groups", value: $groupCount, range: 10...100, step: 5,
+                   readout: "\(Int(groupCount)) groups")
             slider("Group size", value: $groupSize, range: 3...7, step: 1,
                    readout: "\(Int(groupSize)) chars")
         }

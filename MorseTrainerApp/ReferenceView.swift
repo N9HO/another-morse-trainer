@@ -74,6 +74,7 @@ struct ReferenceView: View {
 
                     list
                 }
+                .readableWidth()
             }
             .navigationTitle("Reference")
             .navigationBarTitleDisplayMode(.inline)

@@ -32,9 +32,24 @@ public final class MIDIInput {
     }
 
     public var onEvent: (@Sendable (Event) -> Void)?
+    /// Fired (from a CoreMIDI thread) whenever the set of connected sources
+    /// changes — hot-plug, unplug, or the initial scan. Carries the current
+    /// device names so the UI can show what hardware key is attached.
+    public var onSourcesChanged: (@Sendable ([String]) -> Void)?
 
     private var client: MIDIClientRef = 0
     private var port: MIDIPortRef = 0
+    /// Endpoints already connected to the input port, so hot-plug re-scans
+    /// don't connect (and double-deliver) the same source twice.
+    private var connectedRefs = Set<MIDIEndpointRef>()
+    private var sourceNames: [String] = []
+    private let stateLock = NSLock()
+
+    /// Names of the MIDI sources currently connected (e.g. "Vail Adapter").
+    public var connectedSourceNames: [String] {
+        stateLock.lock(); defer { stateLock.unlock() }
+        return sourceNames
+    }
 
     /// Timebase for mach_absolute_time → nanoseconds conversion. Cached.
     private static let timebase: mach_timebase_info_data_t = {
@@ -76,24 +91,37 @@ public final class MIDIInput {
     }
 
     private func connectAllSources() {
+        stateLock.lock()
+        var present = Set<MIDIEndpointRef>()
+        var names: [String] = []
         let count = MIDIGetNumberOfSources()
         for i in 0 ..< count {
             let src = MIDIGetSource(i)
-            let result = MIDIPortConnectSource(port, src, nil)
-            if result != noErr {
-                log.warning("Failed to connect MIDI source \(i): \(result)")
-            } else if let name = endpointName(src) {
-                log.info("Connected MIDI source: \(name)")
+            if !connectedRefs.contains(src) {
+                let result = MIDIPortConnectSource(port, src, nil)
+                if result != noErr {
+                    log.warning("Failed to connect MIDI source \(i): \(result)")
+                    continue   // left out of `present` so a later re-scan retries
+                }
+                log.info("Connected MIDI source: \(self.endpointName(src) ?? "(unnamed)")")
             }
+            present.insert(src)
+            if let name = endpointName(src) { names.append(name) }
         }
+        connectedRefs = present
+        let changed = names != sourceNames
+        sourceNames = names
+        stateLock.unlock()
+        if changed { onSourcesChanged?(names) }
     }
 
     private func handleNotification(_ notification: UnsafePointer<MIDINotification>) {
         let id = notification.pointee.messageID
         // A device appearing fires .msgObjectAdded, but a USB MIDI device being
         // plugged in can surface only as .msgSetupChanged on some iOS versions.
-        // Re-scan on either so a hot-plugged Vail Adapter always connects.
-        if id == .msgObjectAdded || id == .msgSetupChanged {
+        // Re-scan on any of these so a hot-plugged Vail Adapter always connects
+        // and an unplugged one drops off the connected-device readout.
+        if id == .msgObjectAdded || id == .msgObjectRemoved || id == .msgSetupChanged {
             connectAllSources()
         }
     }

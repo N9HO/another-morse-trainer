@@ -32,6 +32,7 @@ struct SessionDetailView: View {
                 }
             }
             .padding()
+            .readableWidth()
         }
         .scrollContentBackground(.hidden)
         .background(Theme.Background())

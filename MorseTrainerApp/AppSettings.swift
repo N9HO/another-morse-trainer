@@ -73,6 +73,11 @@ enum ContestLength: String, Codable, CaseIterable, Identifiable {
 
 /// Hands-free "Listen & Learn" delay between the Morse code and the spoken
 /// English answer. Mirrors Morse Code Ninja's tiers (Standard → ICR-Territory).
+///
+/// This four-tier set (1.3 / 1.0 / 0.5 / 0.2 s) is the canonical one for both
+/// platforms — the Android port currently ships 1.3 / 0.7 / 0.3 and should
+/// adopt these values in its next parity round rather than iOS changing
+/// (these rawValues are persisted in shipped user settings).
 enum AnswerGap: String, Codable, CaseIterable, Identifiable {
     case standard, rapidFire, warp, icr
     var id: String { rawValue }
@@ -422,6 +427,8 @@ struct AppSettings: Codable, Equatable {
     var dailyReminderEnabled: Bool = false
     /// Local hour (0–23) the reminder fires.
     var dailyReminderHour: Int = 19
+    /// Local minute (0–59) the reminder fires.
+    var dailyReminderMinute: Int = 0
 
     // Learning
     var proficiency: Proficiency = .none
@@ -493,6 +500,8 @@ struct AppSettings: Codable, Equatable {
     var showCorrectness: Bool = true
     var reveal: RevealMode = .onWrong
     var allowReplay: Bool = false
+    /// Buzz on answers, taps, and key-downs. Off silences every haptic.
+    var hapticsEnabled: Bool = true
 
     // Head Copy
     /// How many times Head Copy automatically replays the prompt after the first
@@ -540,7 +549,7 @@ struct AppSettings: Codable, Equatable {
 extension AppSettings {
     enum CodingKeys: String, CodingKey {
         case toneFrequency, wpm, farnsworth, effectiveWpm, proficiency, ttrThreshold
-        case dailyReminderEnabled, dailyReminderHour
+        case dailyReminderEnabled, dailyReminderHour, dailyReminderMinute
         case maxAnswerChoices, selectedPunctuation, journeyDrainOnMiss
         case learningMode, practiceDuration
         case listenContent, listenGap, wordTier, customWords, voiceResponse, keyingResponse
@@ -550,7 +559,7 @@ extension AppSettings {
         case contest
         case rapidFire
         case story
-        case showCorrectness, reveal, allowReplay
+        case showCorrectness, reveal, allowReplay, hapticsEnabled
         case headCopyRepeats, headCopyRevealSeconds
     }
 
@@ -566,6 +575,8 @@ extension AppSettings {
         s.dailyReminderEnabled = try c.decodeIfPresent(Bool.self, forKey: .dailyReminderEnabled) ?? s.dailyReminderEnabled
         let drh = try c.decodeIfPresent(Int.self, forKey: .dailyReminderHour) ?? s.dailyReminderHour
         s.dailyReminderHour = min(max(drh, 0), 23)
+        let drm = try c.decodeIfPresent(Int.self, forKey: .dailyReminderMinute) ?? s.dailyReminderMinute
+        s.dailyReminderMinute = min(max(drm, 0), 59)
         let mac = try c.decodeIfPresent(Int.self, forKey: .maxAnswerChoices) ?? s.maxAnswerChoices
         s.maxAnswerChoices = min(max(mac, AppSettings.answerChoiceRange.lowerBound),
                                  AppSettings.answerChoiceRange.upperBound)
@@ -590,6 +601,7 @@ extension AppSettings {
         s.showCorrectness = try c.decodeIfPresent(Bool.self, forKey: .showCorrectness) ?? s.showCorrectness
         s.reveal = try c.decodeIfPresent(RevealMode.self, forKey: .reveal) ?? s.reveal
         s.allowReplay = try c.decodeIfPresent(Bool.self, forKey: .allowReplay) ?? s.allowReplay
+        s.hapticsEnabled = try c.decodeIfPresent(Bool.self, forKey: .hapticsEnabled) ?? s.hapticsEnabled
         let hcr = try c.decodeIfPresent(Int.self, forKey: .headCopyRepeats) ?? s.headCopyRepeats
         s.headCopyRepeats = min(max(hcr, AppSettings.headCopyRepeatRange.lowerBound),
                                 AppSettings.headCopyRepeatRange.upperBound)

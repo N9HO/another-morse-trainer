@@ -177,6 +177,7 @@ struct IntroView: View {
                     Spacer(minLength: 8)
                 }
                 .padding(24)
+                .readableWidth()
                 .animation(.easeInOut(duration: 0.22), value: model.learningMode)
             }
 
@@ -261,7 +262,7 @@ struct IntroView: View {
                     .foregroundStyle(Theme.teal)
                     .padding(8)
             }
-            .accessibilityLabel("Sending practice — printable drill sheets")
+            .accessibilityLabel("Sending drills — printable practice sheets")
             Button { showingStats = true } label: {
                 Image(systemName: "chart.bar")
                     .font(.title3)
@@ -528,20 +529,25 @@ struct IntroView: View {
                 rapidFireOptions
             }
 
-            if model.learningMode == .characters || model.learningMode == .words {
+            // Voice answers apply to every choice quiz (all six — Android
+            // parity); answering by keying stays a Characters & Words option
+            // (the other quizzes' answers are meanings, not sendable tokens).
+            if model.learningMode.supportsVoiceAnswers {
                 Divider().overlay(Theme.hairline)
                 Toggle(isOn: voiceResponseBinding) {
                     VStack(alignment: .leading, spacing: 2) {
                         Label("Answer with your voice", systemImage: "mic.fill")
                             .font(.subheadline).bold()
-                        Text("Say your answer instead of tapping. Use phonetics for letters (“Bravo” for B); say words normally.")
+                        Text("Say your answer instead of tapping. Use phonetics for letters (“Bravo” for B); say words and meanings normally.")
                             .font(.footnote)
                             .foregroundStyle(Theme.textSecondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
                 .tint(Theme.teal)
+            }
 
+            if model.learningMode == .characters || model.learningMode == .words {
                 Toggle(isOn: keyingResponseBinding) {
                     VStack(alignment: .leading, spacing: 2) {
                         Label("Answer by keying", systemImage: "dot.radiowaves.left.and.right")
@@ -580,6 +586,7 @@ struct IntroView: View {
         }
         .buttonStyle(.borderedProminent)
         .tint(Theme.teal)
+        .readableWidth()
         .padding(.horizontal, 24)
         .padding(.top, 12)
         .padding(.bottom, 12)
@@ -915,7 +922,9 @@ private struct SessionSetupSheet: View {
                         // words & call signs on its own. Surface that here and let
                         // the learner hold it at a stage, so "Characters" serving
                         // words is never a mystery with no way back (issue #51).
-                        if model.learningMode == .characters {
+                        // Sending Practice drills the same track, so it gets the
+                        // same control — keying whole words is a big step up.
+                        if model.learningMode == .characters || model.learningMode == .sending {
                             card(title: "Track stage", systemImage: "square.stack.3d.up") {
                                 Picker("Track stage", selection: stagePin) {
                                     Text("Auto — grow as you improve")
@@ -1001,6 +1010,7 @@ private struct SessionSetupSheet: View {
                         }
                     }
                     .padding(24)
+                    .readableWidth()
                 }
             }
             .navigationTitle(model.learningMode.title)
@@ -1023,6 +1033,7 @@ private struct SessionSetupSheet: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(Theme.teal)
+                .readableWidth()
                 .padding(.horizontal, 24)
                 .padding(.vertical, 12)
                 .background(.ultraThinMaterial)
@@ -1085,6 +1096,7 @@ private struct CustomWordsSheet: View {
                     Spacer()
                 }
                 .padding(20)
+                .readableWidth()
             }
             .navigationTitle("Custom Word List")
             .navigationBarTitleDisplayMode(.inline)
