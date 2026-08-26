@@ -6,6 +6,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import app.anothermorsetrainer.morsekit.MorseCode
+import app.anothermorsetrainer.morsekit.MorseData
+import app.anothermorsetrainer.morsekit.MorseItem
 import app.anothermorsetrainer.morsekit.MorseTiming
 import app.anothermorsetrainer.morsekit.PhraseQuiz
 import app.anothermorsetrainer.morsekit.TrainerEngine
@@ -15,6 +17,19 @@ enum class RevealMode(val label: String, val shortLabel: String) {
     NEVER("Never", "Never"),
     ON_WRONG("Only when wrong", "Wrong"),
     ALWAYS("Always", "Always")
+}
+
+/**
+ * How long a practice session runs before it stops and shows a summary
+ * (mirrors iOS PracticeDuration). `seconds == null` means open-ended.
+ */
+enum class PracticeDuration(val seconds: Int?, val label: String, val shortLabel: String) {
+    ONE_MIN(60, "1 minute", "1m"),
+    FIVE_MIN(300, "5 minutes", "5m"),
+    TEN_MIN(600, "10 minutes", "10m"),
+    FIFTEEN_MIN(900, "15 minutes", "15m"),
+    THIRTY_MIN(1800, "30 minutes", "30m"),
+    UNTIL_STOP(null, "Until I stop", "∞")
 }
 
 /** How much Morse the learner already knows — seeds the Koch starting set. */
@@ -51,6 +66,11 @@ object Settings {
     var voiceAnswersEnabled by mutableStateOf(false)
         private set
 
+    // Key your answer instead of tapping, in drills where the heard text is the
+    // answer (Characters, Common Words, Confusion). Toggled in the quiz itself.
+    var answerByKeying by mutableStateOf(false)
+        private set
+
     // ---- Practice (drill difficulty / presentation) ----
 
     /** Most answer choices to ever show (grows with what you've met, up to this). */
@@ -64,6 +84,31 @@ object Settings {
         private set
     /** When to reveal the correct answer after a response. */
     var revealMode by mutableStateOf(RevealMode.ALWAYS)
+        private set
+    /** How long a practice session runs before it ends with a summary. */
+    var practiceDuration by mutableStateOf(PracticeDuration.UNTIL_STOP)
+        private set
+
+    /** Head Copy: replay the item every few seconds until revealed. */
+    var headCopyAutoRepeat by mutableStateOf(false)
+        private set
+    /** Head Copy: reveal automatically this many seconds after the tone (0 = manual). */
+    var headCopyRevealSec by mutableStateOf(0)
+        private set
+
+    /**
+     * Punctuation opted into the study ladder (a subset of
+     * [MorseCode.pickablePunctuation]). Joins the Koch order at the end, so
+     * it's introduced after the core letters and numbers.
+     */
+    var punctuationChars by mutableStateOf(emptySet<Char>())
+        private set
+
+    /** The learner's own word list, raw as typed (one word per line or space-separated). */
+    var customWordsText by mutableStateOf("")
+        private set
+    /** Whether Common Words drills draw from the custom list instead of the ranked pool. */
+    var useCustomWords by mutableStateOf(false)
         private set
 
     /** How much the learner already knows — seeds the Characters Koch ladder. */
@@ -88,11 +133,20 @@ object Settings {
         sidetoneHz = prefs.getFloat("sidetone", 600f).toDouble()
         hapticsEnabled = prefs.getBoolean("haptics", true)
         voiceAnswersEnabled = prefs.getBoolean("voiceAnswers", false)
+        answerByKeying = prefs.getBoolean("answerByKeying", false)
         answerChoices = prefs.getInt("answerChoices", 4).coerceIn(4, 6)
         recognitionTargetSec = prefs.getFloat("recogTarget", 1.0f).toDouble()
         wordCount = prefs.getInt("wordCount", 100)
         revealMode = runCatching { RevealMode.valueOf(prefs.getString("revealMode", null) ?: "ALWAYS") }
             .getOrDefault(RevealMode.ALWAYS)
+        practiceDuration = runCatching { PracticeDuration.valueOf(prefs.getString("practiceDuration", null) ?: "UNTIL_STOP") }
+            .getOrDefault(PracticeDuration.UNTIL_STOP)
+        headCopyAutoRepeat = prefs.getBoolean("hcAutoRepeat", false)
+        headCopyRevealSec = prefs.getInt("hcRevealSec", 0).coerceIn(0, 10)
+        punctuationChars = (prefs.getString("punctuation", "") ?: "")
+            .toSet().filter { it in MorseCode.pickablePunctuation }.toSet()
+        customWordsText = prefs.getString("customWords", "") ?: ""
+        useCustomWords = prefs.getBoolean("useCustomWords", false)
         proficiency = runCatching { Proficiency.valueOf(prefs.getString("proficiency", null) ?: "NONE") }
             .getOrDefault(Proficiency.NONE)
         onboardingDone = prefs.getBoolean("onboardingDone", false)
@@ -140,6 +194,11 @@ object Settings {
         persist()
     }
 
+    fun updateAnswerByKeying(value: Boolean) {
+        answerByKeying = value
+        persist()
+    }
+
     fun updateAnswerChoices(value: Int) {
         answerChoices = value.coerceIn(4, 6)
         persist()
@@ -160,9 +219,69 @@ object Settings {
         persist()
     }
 
+    fun updatePracticeDuration(value: PracticeDuration) {
+        practiceDuration = value
+        persist()
+    }
+
+    fun updateHeadCopyAutoRepeat(value: Boolean) {
+        headCopyAutoRepeat = value
+        persist()
+    }
+
+    fun updateHeadCopyRevealSec(value: Int) {
+        headCopyRevealSec = value.coerceIn(0, 10)
+        persist()
+    }
+
     fun updateProficiency(value: Proficiency) {
         proficiency = value
         persist()
+    }
+
+    /** Toggle one punctuation character in or out of the study ladder. */
+    fun togglePunctuation(ch: Char) {
+        if (ch !in MorseCode.pickablePunctuation) return
+        punctuationChars = if (ch in punctuationChars) punctuationChars - ch else punctuationChars + ch
+        persist()
+    }
+
+    /** The ladder's introduction order: the Koch core plus opted-in punctuation at the end. */
+    fun studyOrder(): List<Char> =
+        MorseCode.kochOrder + MorseCode.pickablePunctuation.filter { it in punctuationChars }
+
+    fun updateCustomWordsText(value: String) {
+        customWordsText = value.take(4000)
+        persist()
+    }
+
+    fun updateUseCustomWords(value: Boolean) {
+        useCustomWords = value
+        persist()
+    }
+
+    /**
+     * The parsed custom pool: split on whitespace/commas, uppercased, filtered
+     * to sendable characters, deduplicated, in entry order.
+     */
+    val customWords: List<String>
+        get() {
+            val seen = LinkedHashSet<String>()
+            for (raw in customWordsText.uppercase().split('\n', '\r', ' ', ',', ';', '\t')) {
+                val w = raw.filter { MorseCode.pattern(it) != null }.take(24)
+                if (w.isNotEmpty()) seen.add(w)
+            }
+            return seen.toList()
+        }
+
+    /**
+     * The Common Words pool: the learner's own list when enabled and big
+     * enough to offer a distractor, otherwise the ranked Top-N ham words.
+     */
+    fun wordPoolItems(): List<MorseItem> {
+        val custom = customWords
+        return if (useCustomWords && custom.size >= 2) MorseData.customWordItems(custom)
+        else MorseData.topWordItems(wordCount)
     }
 
     /** Mark first-run onboarding complete (also records the chosen level). */
@@ -209,10 +328,17 @@ object Settings {
             .putFloat("sidetone", sidetoneHz.toFloat())
             .putBoolean("haptics", hapticsEnabled)
             .putBoolean("voiceAnswers", voiceAnswersEnabled)
+            .putBoolean("answerByKeying", answerByKeying)
             .putInt("answerChoices", answerChoices)
             .putFloat("recogTarget", recognitionTargetSec.toFloat())
             .putInt("wordCount", wordCount)
             .putString("revealMode", revealMode.name)
+            .putString("practiceDuration", practiceDuration.name)
+            .putBoolean("hcAutoRepeat", headCopyAutoRepeat)
+            .putInt("hcRevealSec", headCopyRevealSec)
+            .putString("punctuation", punctuationChars.joinToString(""))
+            .putString("customWords", customWordsText)
+            .putBoolean("useCustomWords", useCustomWords)
             .putString("proficiency", proficiency.name)
             .putBoolean("onboardingDone", onboardingDone)
             .putBoolean("reminders", remindersEnabled)

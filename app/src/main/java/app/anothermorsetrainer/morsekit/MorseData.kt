@@ -217,6 +217,22 @@ object MorseData {
     val wordItems: List<MorseItem>
         get() = topWordItems(rankedWords.size)
 
+    /**
+     * A learner-supplied pool (the custom word list editor): the answer is the
+     * word itself. Deduplicated and uppercased; assumed pre-filtered to
+     * sendable characters by the editor.
+     */
+    fun customWordItems(words: List<String>): List<MorseItem> {
+        val seen = mutableSetOf<String>()
+        val items = mutableListOf<MorseItem>()
+        for (raw in words) {
+            val w = raw.trim().uppercase()
+            if (w.isEmpty() || !seen.add(w)) continue
+            items.add(MorseItem(id = "custom-$w", playable = MorseItem.Playable.Text(w), answer = w, display = w))
+        }
+        return items
+    }
+
     /** The most-useful [limit] words (the QRQ "Top N" tiers), deduplicated. */
     fun topWordItems(limit: Int): List<MorseItem> {
         val seen = mutableSetOf<String>()

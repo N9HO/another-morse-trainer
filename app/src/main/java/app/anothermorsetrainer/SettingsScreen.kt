@@ -19,13 +19,16 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Switch
@@ -34,7 +37,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -43,6 +49,7 @@ import androidx.core.content.ContextCompat
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.anothermorsetrainer.morsekit.MorseCode
 import app.anothermorsetrainer.morsekit.MorseItem
 import kotlin.math.roundToInt
 
@@ -60,6 +67,7 @@ fun SettingsScreen(onBack: () -> Unit) {
     BackHandler { onBack() }
 
     val farnsworthOn = Settings.effectiveWpm < Settings.characterWpm
+    var confirmReset by remember { mutableStateOf(false) }
 
     // Daily reminder: enabling may need the POST_NOTIFICATIONS runtime permission (API 33+).
     val notifPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -191,11 +199,80 @@ fun SettingsScreen(onBack: () -> Unit) {
                         selected = Settings.revealMode,
                         onSelect = { Settings.updateRevealMode(it) }
                     )
+                    GroupDivider()
+                    DurationSetting()
                 }
                 SectionFooter(
                     "How many options each drill shows, how fast you must answer to " +
-                        "count as “mastered”, how big the Common Words pool is, and when to " +
-                        "show the correct answer after you respond."
+                        "count as “mastered”, how big the Common Words pool is, when to " +
+                        "show the correct answer after you respond, and how long a session " +
+                        "runs before it ends with a summary."
+                )
+
+                SectionHeader("My words")
+                SettingsGroup {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("Use my word list", color = Brand.textPrimary, fontWeight = FontWeight.Medium)
+                        Switch(
+                            checked = Settings.useCustomWords,
+                            onCheckedChange = { Settings.updateUseCustomWords(it) },
+                            colors = switchColors()
+                        )
+                    }
+                    if (Settings.useCustomWords) {
+                        GroupDivider()
+                        OutlinedTextField(
+                            value = Settings.customWordsText,
+                            onValueChange = { Settings.updateCustomWordsText(it) },
+                            placeholder = { Text("CQ DX\nANTENNA\nMORSE …") },
+                            minLines = 3,
+                            maxLines = 8,
+                            modifier = Modifier.fillMaxWidth().padding(12.dp)
+                        )
+                    }
+                }
+                SectionFooter(
+                    if (Settings.useCustomWords) {
+                        val n = Settings.customWords.size
+                        "One word per line (spaces and commas split too). " + when {
+                            n >= 2 -> "$n words ready — Common Words drills your list."
+                            else -> "Add at least two words; until then the ranked pool is used."
+                        }
+                    } else {
+                        "Practice your own words — a callsign, your name, club abbreviations — " +
+                            "in Common Words instead of the ranked pool."
+                    }
+                )
+
+                SectionHeader("Punctuation")
+                SettingsGroup {
+                    MorseCode.pickablePunctuation.forEachIndexed { i, ch ->
+                        if (i > 0) GroupDivider()
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(punctuationLabel(ch), color = Brand.textPrimary, fontWeight = FontWeight.Medium)
+                            Switch(
+                                checked = ch in Settings.punctuationChars,
+                                onCheckedChange = {
+                                    Settings.togglePunctuation(ch)
+                                    // The live ladder picks the new order up immediately.
+                                    EngineStore.applyStudyOrder()
+                                },
+                                colors = switchColors()
+                            )
+                        }
+                    }
+                }
+                SectionFooter(
+                    "Study punctuation too. Opted-in marks join the Characters ladder " +
+                        "after the letters and numbers."
                 )
 
                 SectionHeader("Starting level")
@@ -205,11 +282,16 @@ fun SettingsScreen(onBack: () -> Unit) {
                         RadioRow(
                             label = level.label,
                             selected = Settings.proficiency == level,
-                            onClick = { Settings.updateProficiency(level) }
+                            onClick = {
+                                Settings.updateProficiency(level)
+                                // Restart the ladder from the new seed; per-character
+                                // stats and recorded confusions are kept.
+                                EngineStore.reseed()
+                            }
                         )
                     }
                 }
-                SectionFooter("How much Morse you already know — sets where the Characters drill begins.")
+                SectionFooter("How much Morse you already know — sets where the Characters drill begins. Changing this restarts your active set.")
 
                 SectionHeader("Feedback")
                 SettingsGroup {
@@ -271,7 +353,85 @@ fun SettingsScreen(onBack: () -> Unit) {
                 }
                 SectionFooter("A daily nudge to keep your streak alive.")
 
+                SectionHeader("Progress")
+                SettingsGroup {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().clickable { confirmReset = true }.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Reset all progress", color = Color(0xFFF2788F), fontWeight = FontWeight.Medium)
+                    }
+                }
+                SectionFooter(
+                    "Clears your learned characters, stats, streak, and Journey progress. " +
+                        "Settings are kept."
+                )
+
                 Spacer(Modifier.height(24.dp))
+            }
+        }
+    }
+
+    if (confirmReset) {
+        AlertDialog(
+            onDismissRequest = { confirmReset = false },
+            containerColor = Brand.navyElevated,
+            title = { Text("Reset all progress?", color = Brand.textPrimary) },
+            text = {
+                Text(
+                    "This clears your learned characters and stats. Settings are kept.",
+                    color = Brand.textSecondary
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    EngineStore.reset()
+                    Stats.reset()
+                    JourneyStore.reset()
+                    confirmReset = false
+                }) { Text("Reset", color = Color(0xFFF2788F), fontWeight = FontWeight.SemiBold) }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmReset = false }) { Text("Cancel", color = Brand.teal) }
+            }
+        )
+    }
+}
+
+/**
+ * Session-length picker: its six options need their own row, so it stacks the
+ * label above a scrollable pill row instead of using [SegmentedSetting].
+ */
+@Composable
+private fun DurationSetting() {
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp)) {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text("Session length", color = Brand.textPrimary, fontWeight = FontWeight.Medium)
+            Text(Settings.practiceDuration.label, color = Brand.teal, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+        }
+        Spacer(Modifier.height(8.dp))
+        Row(
+            modifier = Modifier.horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            PracticeDuration.entries.forEach { option ->
+                val isSel = option == Settings.practiceDuration
+                Box(
+                    modifier = Modifier
+                        .background(
+                            if (isSel) Brand.teal else Brand.navyRaised,
+                            shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp)
+                        )
+                        .clickable { Settings.updatePracticeDuration(option) }
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                ) {
+                    Text(
+                        option.shortLabel,
+                        color = if (isSel) Brand.navy else Brand.textSecondary,
+                        fontWeight = if (isSel) FontWeight.Bold else FontWeight.Medium,
+                        fontSize = 13.sp
+                    )
+                }
             }
         }
     }
@@ -284,6 +444,13 @@ private fun switchColors() = SwitchDefaults.colors(
     uncheckedThumbColor = Brand.textSecondary,
     uncheckedTrackColor = Brand.navyRaised
 )
+
+private fun punctuationLabel(ch: Char): String = when (ch) {
+    '.' -> "Period  ( . )"
+    ',' -> "Comma  ( , )"
+    '/' -> "Slash  ( / )"
+    else -> "$ch"
+}
 
 private fun formatTime(hour: Int, minute: Int): String {
     val ampm = if (hour < 12) "AM" else "PM"

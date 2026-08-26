@@ -35,6 +35,8 @@ class ListenService : Service() {
     private lateinit var player: MorsePlayer
     private lateinit var speech: SpeechPlayer
     private var loopJob: Job? = null
+    private var tickJob: Job? = null
+    private var sessionRecorded = false
     private val rng = Random(SystemClock.elapsedRealtimeNanos())
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -49,6 +51,16 @@ class ListenService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_START -> {
+                // A start while stopped begins a fresh session; a start while
+                // running is just a config change (content/gap chip) mid-session.
+                if (!ListenState.running) {
+                    ListenState.itemsHeard = 0
+                    ListenState.activeSeconds = 0
+                    ListenState.limitSeconds = Settings.practiceDuration.seconds
+                    ListenState.finishedNote = null
+                    sessionRecorded = false
+                    startTicker()
+                }
                 startInForeground()
                 startLoop()
             }
@@ -85,6 +97,7 @@ class ListenService : Service() {
                 ListenState.playing = false
                 updateNotification()
                 awaitSpeak(speech, item.spoken)
+                ListenState.itemsHeard += 1
                 delay(700)
             }
         } finally {
@@ -107,10 +120,51 @@ class ListenService : Service() {
         startLoop()
     }
 
+    /**
+     * The session clock: counts listened seconds (pauses excluded) and, when a
+     * session length is configured, ends the loop itself when time is up.
+     */
+    private fun startTicker() {
+        tickJob?.cancel()
+        tickJob = scope.launch {
+            while (true) {
+                delay(1000)
+                if (ListenState.paused) continue
+                ListenState.activeSeconds += 1
+                val limit = ListenState.limitSeconds ?: continue
+                if (ListenState.activeSeconds >= limit) {
+                    ListenState.finishedNote = "Session complete — ${ListenState.itemsHeard} heard"
+                    stopEverything()
+                    break
+                }
+            }
+        }
+    }
+
+    /**
+     * Hands-free listening still counts as practice: record the session once
+     * (streak + practice time) with each completed item as a heard "answer".
+     */
+    private fun recordSession() {
+        if (sessionRecorded) return
+        sessionRecorded = true
+        if (ListenState.itemsHeard > 0) {
+            Stats.record(
+                mode = "Listen",
+                attempts = ListenState.itemsHeard,
+                correct = ListenState.itemsHeard,
+                bestTtrMs = null,
+                durationSeconds = ListenState.activeSeconds
+            )
+        }
+    }
+
     private fun stopEverything() {
         loopJob?.cancel()
+        tickJob?.cancel()
         player.stop()
         speech.stop()
+        recordSession()
         ListenState.running = false
         ListenState.paused = false
         ListenState.playing = false

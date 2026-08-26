@@ -17,8 +17,10 @@ import android.os.Looper
  * The Vail Adapter sends MIDI note-on/off on channel 1: note 0 = straight key,
  * 1/20/61 = dit paddle, 2/21/62 = dah paddle; velocity > 0 = pressed. The adapter
  * does any iambic timing itself, so — exactly like the iOS `MIDIInput` →
- * `SendingKeyer` path — we collapse every key to a single down/up burst and let
- * [MorseDecoder] time it.
+ * `SendingKeyer` path — every keyer note maps to a single logical key and
+ * [MorseDecoder] times it. Each note's state is tracked separately, though, so
+ * overlapping paddle presses hold the key: it goes down on the first press and
+ * up only when the last paddle is released.
  *
  * Port of MorseTrainerApp/MIDIInput.swift (CoreMIDI → `android.media.midi`).
  * Callbacks are marshaled to the main thread so they can drive Compose state.
@@ -27,13 +29,19 @@ class MidiKeyInput(private val context: Context) {
 
     private val main = Handler(Looper.getMainLooper())
     private var manager: MidiManager? = null
-    private val openDevices = mutableListOf<MidiDevice>()
-    private val openPorts = mutableListOf<MidiOutputPort>()
+
+    private class Open(val id: Int, val name: String?, val device: MidiDevice, val port: MidiOutputPort)
+
+    private val open = mutableListOf<Open>()
     private var onKey: ((Boolean) -> Unit)? = null
     private var onConnected: ((String?) -> Unit)? = null
 
+    /** Per-paddle key state: the keyer notes currently held down. */
+    private val heldNotes = mutableSetOf<Int>()
+
     private val deviceCallback = object : MidiManager.DeviceCallback() {
         override fun onDeviceAdded(device: MidiDeviceInfo) = connect(device)
+        override fun onDeviceRemoved(device: MidiDeviceInfo) = disconnect(device)
     }
 
     /** True on devices that expose any MIDI support at all. */
@@ -42,8 +50,8 @@ class MidiKeyInput(private val context: Context) {
 
     /**
      * Begin listening. [onKey] fires (on the main thread) with `true` on key-down
-     * and `false` on key-up; [onConnected] reports the connected device's name
-     * (or null when none is attached yet).
+     * and `false` on key-up; [onConnected] reports the connected device's name —
+     * null when none is attached yet, and again when the last one unplugs.
      */
     // getDevices + the Handler-based registerDeviceCallback are deprecated in API
     // 33 in favor of transport/executor variants that need API 33 — the older
@@ -59,30 +67,59 @@ class MidiKeyInput(private val context: Context) {
         manager = mgr
         mgr.devices.forEach { connect(it) }
         mgr.registerDeviceCallback(deviceCallback, main)
-        if (openPorts.isEmpty()) onConnected(null)
+        if (open.isEmpty()) onConnected(null)
     }
 
     fun stop() {
         manager?.let { try { it.unregisterDeviceCallback(deviceCallback) } catch (_: Exception) {} }
-        openPorts.forEach { try { it.close() } catch (_: Exception) {} }
-        openDevices.forEach { try { it.close() } catch (_: Exception) {} }
-        openPorts.clear(); openDevices.clear()
+        open.forEach {
+            try { it.port.close() } catch (_: Exception) {}
+            try { it.device.close() } catch (_: Exception) {}
+        }
+        open.clear()
+        heldNotes.clear()
         manager = null
         onKey = null; onConnected = null
     }
 
     private fun connect(info: MidiDeviceInfo) {
         if (info.outputPortCount <= 0) return   // we read FROM the key's output port
+        if (open.any { it.id == info.id }) return
         val mgr = manager ?: return
         mgr.openDevice(info, { device ->
             if (device == null) return@openDevice
-            openDevices.add(device)
-            val port = device.openOutputPort(0) ?: return@openDevice
+            val port = device.openOutputPort(0) ?: run {
+                try { device.close() } catch (_: Exception) {}
+                return@openDevice
+            }
             port.connect(KeyReceiver())
-            openPorts.add(port)
             val name = info.properties.getString(MidiDeviceInfo.PROPERTY_NAME)
+            open.add(Open(info.id, name, device, port))
             main.post { onConnected?.invoke(name) }
         }, main)
+    }
+
+    /** Unplug detection: drop the device, release a stuck key, update the UI. */
+    private fun disconnect(info: MidiDeviceInfo) {
+        val idx = open.indexOfFirst { it.id == info.id }
+        if (idx < 0) return
+        val gone = open.removeAt(idx)
+        try { gone.port.close() } catch (_: Exception) {}
+        try { gone.device.close() } catch (_: Exception) {}
+        // The unplugged key can't send its note-offs any more.
+        if (heldNotes.isNotEmpty()) {
+            heldNotes.clear()
+            onKey?.invoke(false)
+        }
+        onConnected?.invoke(open.lastOrNull()?.name)
+    }
+
+    /** Aggregate per-note state into one logical key: down while ANY note is held. */
+    private fun updateHeld(note: Int, isDown: Boolean) {
+        val wasHeld = heldNotes.isNotEmpty()
+        if (isDown) heldNotes.add(note) else heldNotes.remove(note)
+        val nowHeld = heldNotes.isNotEmpty()
+        if (nowHeld != wasHeld) onKey?.invoke(nowHeld)
     }
 
     /** Parses raw MIDI bytes into Vail-style key down/up events. */
@@ -102,7 +139,7 @@ class MidiKeyInput(private val context: Context) {
             // Map only the adapter's keyer notes; ignore anything else so an
             // unrelated MIDI synth never registers as keying.
             when (note) {
-                0, 1, 20, 61, 2, 21, 62 -> main.post { onKey?.invoke(isDown) }
+                0, 1, 20, 61, 2, 21, 62 -> main.post { updateHeld(note, isDown) }
                 else -> return
             }
         }

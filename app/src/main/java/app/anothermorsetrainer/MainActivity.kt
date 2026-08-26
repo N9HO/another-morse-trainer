@@ -12,16 +12,17 @@ import androidx.compose.ui.Modifier
 import app.anothermorsetrainer.morsekit.ConfusionQuiz
 import app.anothermorsetrainer.morsekit.MorseData
 import app.anothermorsetrainer.morsekit.PhraseQuiz
-import app.anothermorsetrainer.morsekit.ProgressiveCharacters
 import app.anothermorsetrainer.morsekit.QuizSource
-import app.anothermorsetrainer.morsekit.TrainerEngine
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Settings.init(this)
+        PileupSettings.init(this)
         Stats.init(this)
         JourneyStore.init(this)
+        EngineStore.init(this)
+        VoiceProfileStore.init(this)
         setContent {
             AmtTheme {
                 AppBackground {
@@ -37,13 +38,15 @@ data class QuizMode(val title: String, val subtitle: String, val make: () -> Qui
 
 /** The menu of modes the home screen offers — every one drives the same QuizScreen. */
 val QUIZ_MODES: List<QuizMode> = listOf(
+    // The Characters track is restored from EngineStore so the Koch ladder
+    // resumes where it left off (and saves back after every answer).
     QuizMode("Characters", "Koch-method ladder, A–Z 0–9") {
-        val engine = TrainerEngine(Settings.engineConfig())
-        Settings.applyProficiency(engine)
-        ProgressiveCharacters(engine)
+        EngineStore.characters()
     },
+    // The pool is the ranked Top-N ham words, or the learner's own list when
+    // one is enabled in Settings.
     QuizMode("Common Words", "Hear the word, pick the word") {
-        PhraseQuiz("Words", MorseData.topWordItems(Settings.wordCount), Settings.phraseConfig())
+        PhraseQuiz("Words", Settings.wordPoolItems(), Settings.phraseConfig())
     },
     QuizMode("Abbreviations", "CW shorthand → meaning") {
         PhraseQuiz("Abbreviations", MorseData.abbreviationItems, Settings.phraseConfig())
@@ -54,13 +57,12 @@ val QUIZ_MODES: List<QuizMode> = listOf(
     QuizMode("Prosigns", "Run-together signals") {
         PhraseQuiz("Prosigns", MorseData.prosignItems, Settings.phraseConfig())
     },
-    // Targeted review of the character pairs you mix up. A standalone engine
-    // starts with no recorded confusions, so ConfusionQuiz falls back to your
-    // slowest active characters paired with their nearest sound-alikes.
+    // Targeted review of the character pairs you mix up. Shares the persisted
+    // Characters engine, so it drills the confusions actually recorded in past
+    // practice; with none recorded yet it falls back to your slowest active
+    // characters paired with their nearest sound-alikes.
     QuizMode("Confusion Drill", "Drill your mix-ups") {
-        val engine = TrainerEngine(Settings.engineConfig())
-        Settings.applyProficiency(engine)
-        ConfusionQuiz(engine)
+        ConfusionQuiz(EngineStore.characters().engine)
     }
 )
 

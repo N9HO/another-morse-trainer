@@ -91,15 +91,27 @@ fun ListenScreen(onBack: () -> Unit) {
                     }
                 )
 
-                Spacer(Modifier.height(28.dp))
+                Spacer(Modifier.height(16.dp))
+                // Session readout: items heard, and time left when a length is set.
+                if (running) {
+                    val left = ListenState.limitSeconds?.let { maxOf(0, it - ListenState.activeSeconds) }
+                    Text(
+                        "${ListenState.itemsHeard} heard" +
+                            (left?.let { " · %d:%02d left".format(it / 60, it % 60) } ?: ""),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = Brand.textSecondary
+                    )
+                }
+
+                Spacer(Modifier.height(12.dp))
                 Box(
                     modifier = Modifier.fillMaxWidth().height(170.dp).brandCard(),
                     contentAlignment = Alignment.Center
                 ) {
                     when {
                         !running -> Text(
-                            "Tap play to start a hands-free loop.",
-                            color = Brand.textSecondary,
+                            ListenState.finishedNote ?: "Tap play to start a hands-free loop.",
+                            color = if (ListenState.finishedNote != null) Brand.teal else Brand.textSecondary,
                             textAlign = TextAlign.Center,
                             modifier = Modifier.padding(24.dp)
                         )

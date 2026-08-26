@@ -52,8 +52,10 @@ class MidiKeyOutput(private val context: Context) {
 
     private val main = Handler(Looper.getMainLooper())
     private var manager: MidiManager? = null
-    private val openDevices = mutableListOf<MidiDevice>()
-    private val openPorts = mutableListOf<MidiInputPort>()
+
+    private class Open(val id: Int, val name: String?, val device: MidiDevice, val port: MidiInputPort)
+
+    private val open = mutableListOf<Open>()
     private var onConnected: ((String?) -> Unit)? = null
 
     // Mirrored config, (re)applied whenever the adapter (re)connects.
@@ -63,7 +65,20 @@ class MidiKeyOutput(private val context: Context) {
 
     private val deviceCallback = object : MidiManager.DeviceCallback() {
         override fun onDeviceAdded(device: MidiDeviceInfo) = connect(device)
+        override fun onDeviceRemoved(device: MidiDeviceInfo) = disconnect(device)
     }
+
+    /** Does this device look like the Vail Adapter (by advertised name)? */
+    private fun isVail(name: String?): Boolean =
+        name.orEmpty().lowercase().contains("vail")
+
+    /**
+     * The ports whose piezo we may buzz: any recognized Vail Adapter — or, when
+     * nothing identifies itself as one, a single connected device is assumed to
+     * be it. Never the whole port list, so an unrelated synth stays silent.
+     */
+    private fun buzzTargets(): List<Open> =
+        open.filter { isVail(it.name) }.ifEmpty { if (open.size == 1) open.toList() else emptyList() }
 
     /** True on devices that expose any MIDI support at all. */
     val isSupported: Boolean
@@ -85,14 +100,16 @@ class MidiKeyOutput(private val context: Context) {
         manager = mgr
         mgr.devices.forEach { connect(it) }
         mgr.registerDeviceCallback(deviceCallback, main)
-        if (openPorts.isEmpty()) onConnected(null)
+        if (open.isEmpty()) onConnected(null)
     }
 
     fun stop() {
         manager?.let { try { it.unregisterDeviceCallback(deviceCallback) } catch (_: Exception) {} }
-        openPorts.forEach { try { it.close() } catch (_: Exception) {} }
-        openDevices.forEach { try { it.close() } catch (_: Exception) {} }
-        openPorts.clear(); openDevices.clear()
+        open.forEach {
+            try { it.port.close() } catch (_: Exception) {}
+            try { it.device.close() } catch (_: Exception) {}
+        }
+        open.clear()
         manager = null
         onConnected = null
     }
@@ -116,7 +133,7 @@ class MidiKeyOutput(private val context: Context) {
 
     /** User-triggered retry of the wake/identify sequence. */
     fun wakeAdapter() {
-        openPorts.forEach { sendInitSequence(it) }
+        open.forEach { sendInitSequence(it.port) }
     }
 
     /**
@@ -126,17 +143,19 @@ class MidiKeyOutput(private val context: Context) {
      * [System.nanoTime] base CoreMIDI/`android.media.midi` use for scheduling.
      */
     fun scheduleBuzz(note: Int, durationMs: Int, playAtLocalMs: Long) {
-        if (openPorts.isEmpty() || durationMs <= 0) return
+        if (durationMs <= 0) return
+        val targets = buzzTargets()
+        if (targets.isEmpty()) return
         val clamped = note.coerceIn(0, 127)
         val leadMs = (playAtLocalMs - System.currentTimeMillis()).coerceAtLeast(0)
         val onTs = System.nanoTime() + leadMs * 1_000_000L
         val offTs = onTs + durationMs.toLong() * 1_000_000L
         val on = byteArrayOf(0x90.toByte(), clamped.toByte(), 0x7F)
         val off = byteArrayOf(0x80.toByte(), clamped.toByte(), 0x00)
-        openPorts.forEach { port ->
+        targets.forEach { out ->
             try {
-                port.send(on, 0, on.size, onTs)
-                port.send(off, 0, off.size, offTs)
+                out.port.send(on, 0, on.size, onTs)
+                out.port.send(off, 0, off.size, offTs)
             } catch (_: Exception) {}
         }
     }
@@ -145,19 +164,32 @@ class MidiKeyOutput(private val context: Context) {
 
     private fun connect(info: MidiDeviceInfo) {
         if (info.inputPortCount <= 0) return   // we write TO the adapter's input port
+        if (open.any { it.id == info.id }) return
         val name = info.properties.getString(MidiDeviceInfo.PROPERTY_NAME).orEmpty().lowercase()
         // Skip CoreMIDI-style network sessions (no analogue on Android, but be safe).
         if (name.contains("network") && name.contains("session")) return
         val mgr = manager ?: return
         mgr.openDevice(info, { device ->
             if (device == null) return@openDevice
-            openDevices.add(device)
-            val port = device.openInputPort(0) ?: return@openDevice
-            openPorts.add(port)
-            sendInitSequence(port)
+            val port = device.openInputPort(0) ?: run {
+                try { device.close() } catch (_: Exception) {}
+                return@openDevice
+            }
             val displayName = info.properties.getString(MidiDeviceInfo.PROPERTY_NAME)
+            open.add(Open(info.id, displayName, device, port))
+            sendInitSequence(port)
             main.post { onConnected?.invoke(displayName) }
         }, main)
+    }
+
+    /** Unplug detection: drop the device and report what (if anything) remains. */
+    private fun disconnect(info: MidiDeviceInfo) {
+        val idx = open.indexOfFirst { it.id == info.id }
+        if (idx < 0) return
+        val gone = open.removeAt(idx)
+        try { gone.port.close() } catch (_: Exception) {}
+        try { gone.device.close() } catch (_: Exception) {}
+        onConnected?.invoke(open.lastOrNull()?.name)
     }
 
     // ---- Sending ----
@@ -171,7 +203,7 @@ class MidiKeyOutput(private val context: Context) {
     }
 
     private fun broadcast(message: ByteArray) {
-        openPorts.forEach { sendNow(it, message) }
+        open.forEach { sendNow(it.port, message) }
     }
 
     private fun sendNow(port: MidiInputPort, message: ByteArray) {

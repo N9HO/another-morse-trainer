@@ -49,12 +49,15 @@ import kotlin.math.roundToInt
 private val OK_GREEN = Color(0xFF2E7D32)
 private val ERR_RED = Color(0xFFC62828)
 
+private enum class TqPhase { RUNNING, SUMMARY }
+
 /**
  * Free-recall typing loop: play an item in Morse, the learner types exactly what
  * they heard, and we grade the (case/space-normalized) text against the answer.
  * Drives both **Type It** (global speed) and **QRQ Speed** (a faster timing
  * provided by the caller). Mirrors the iOS `submitTyped` path: trim + uppercase,
- * then compare through the same [QuizSource.record].
+ * then compare through the same [QuizSource.record]. Runs against the configured
+ * session length and ends with the standard summary.
  */
 @Composable
 fun TypedQuizScreen(
@@ -79,8 +82,15 @@ fun TypedQuizScreen(
     var summary by remember { mutableStateOf(source.summary) }
     var toneFinishedAt by remember { mutableStateOf(0L) }
 
-    val tally = remember { Tally() }
+    var tally by remember { mutableStateOf(Tally()) }
     val focus = remember { FocusRequester() }
+
+    // Session phase: drills, then a summary once the timer runs out or End is
+    // tapped. Back mid-session still records — it just skips the summary.
+    var phase by remember { mutableStateOf(TqPhase.RUNNING) }
+    var remaining by remember { mutableStateOf(Settings.practiceDuration.seconds) }
+    var recorded by remember { mutableStateOf(false) }
+    var milestone by remember { mutableStateOf<Int?>(null) }
 
     LaunchedEffect(round) {
         revealed = false
@@ -93,7 +103,7 @@ fun TypedQuizScreen(
     // Correct answers keep the rhythm going; a miss waits for the Next tap so the
     // learner can compare what they typed against the answer.
     LaunchedEffect(revealed) {
-        if (revealed && lastCorrect) {
+        if (revealed && lastCorrect && phase == TqPhase.RUNNING) {
             delay(900)
             drill = source.nextDrill()
             round++
@@ -102,16 +112,55 @@ fun TypedQuizScreen(
 
     DisposableEffect(Unit) { onDispose { player.release() } }
 
-    fun finish() {
-        Stats.record(
+    /** Persist the session once (summary entry or an early Back, whichever first). */
+    fun recordSession(): Int? {
+        if (recorded) return null
+        recorded = true
+        return Stats.record(
             mode = title, attempts = tally.attempts, correct = tally.correct,
             bestTtrMs = tally.bestMs, durationSeconds = tally.elapsedSeconds(),
             // The mode's own timing, so QRQ sessions band at 35/40 WPM.
             characterWpm = timing().wpm.roundToInt(), medianTtrMs = tally.medianMs()
         )
+    }
+
+    fun endSession() {
+        if (phase == TqPhase.SUMMARY) return
+        player.stop()
+        milestone = recordSession()
+        phase = TqPhase.SUMMARY
+    }
+
+    fun finish() {
+        recordSession()
         onBack()
     }
-    BackHandler { finish() }
+
+    fun practiceAgain() {
+        tally = Tally()
+        recorded = false
+        milestone = null
+        remaining = Settings.practiceDuration.seconds
+        phase = TqPhase.RUNNING
+        drill = source.nextDrill()
+        round++
+    }
+
+    // Session countdown: ticks only while running and only when a length is set.
+    LaunchedEffect(phase) {
+        if (phase != TqPhase.RUNNING) return@LaunchedEffect
+        while (true) {
+            val r = remaining ?: return@LaunchedEffect
+            if (r <= 0) {
+                endSession()
+                return@LaunchedEffect
+            }
+            delay(1000)
+            remaining = remaining?.minus(1)
+        }
+    }
+
+    BackHandler { if (phase == TqPhase.SUMMARY) onBack() else finish() }
 
     fun advance() {
         drill = source.nextDrill()
@@ -119,7 +168,7 @@ fun TypedQuizScreen(
     }
 
     fun submit() {
-        if (revealed) return
+        if (revealed || phase != TqPhase.RUNNING) return
         val normalized = input.trim().uppercase()
         if (normalized.isEmpty()) return
         val ttr = if (toneFinishedAt == 0L) 0.0 else (System.nanoTime() - toneFinishedAt) / 1_000_000_000.0
@@ -139,8 +188,35 @@ fun TypedQuizScreen(
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        TextButton(onClick = { finish() }, modifier = Modifier.padding(8.dp)) { Text("‹ Back") }
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            TextButton(onClick = { if (phase == TqPhase.SUMMARY) onBack() else finish() }) { Text("‹ Back") }
+            if (phase == TqPhase.RUNNING) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    remaining?.let {
+                        Text(
+                            "%d:%02d".format(it / 60, it % 60),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = Brand.textSecondary
+                        )
+                    }
+                    TextButton(onClick = { endSession() }) { Text("End") }
+                }
+            }
+        }
 
+        if (phase == TqPhase.SUMMARY) {
+            SessionSummaryContent(
+                title = title,
+                tally = tally,
+                milestone = milestone,
+                onPracticeAgain = { practiceAgain() },
+                onDone = onBack
+            )
+        } else {
         Column(
             modifier = Modifier.fillMaxSize().padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -221,6 +297,7 @@ fun TypedQuizScreen(
                     modifier = Modifier.fillMaxWidth()
                 ) { Text("▶ Replay") }
             }
+        }
         }
     }
 }

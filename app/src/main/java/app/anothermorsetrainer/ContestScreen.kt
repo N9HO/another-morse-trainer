@@ -48,14 +48,15 @@ import app.anothermorsetrainer.morsekit.PileupEngine
 import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
 
-private const val CONTEST_BASE_HZ = 600.0
-
 private enum class CtPhase { SETUP, RUNNING, SUMMARY }
 
-/** Map an engine [PileupEngine.Voice] to a renderable [MorsePlayer.PileupVoice]. */
+/**
+ * Map an engine [PileupEngine.Voice] to a renderable [MorsePlayer.PileupVoice].
+ * The contest band sits around your sidetone pitch, like the Pileup Runner.
+ */
 private fun PileupEngine.Voice.toMix() = MorsePlayer.PileupVoice(
     text = text,
-    frequency = CONTEST_BASE_HZ + toneOffset,
+    frequency = Settings.sidetoneHz + toneOffset,
     timing = MorseTiming(wpm),
     gain = volume,
     startDelay = delay,

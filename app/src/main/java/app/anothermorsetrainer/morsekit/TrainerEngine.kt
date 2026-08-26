@@ -56,6 +56,14 @@ class TrainerEngine(
         private set
 
     /**
+     * The introduction order for new characters: the Koch order by default,
+     * with any opted-in punctuation appended by the app so it's introduced
+     * after the core set. Not part of the snapshot — it's derived from the
+     * learner's settings on every launch.
+     */
+    var studyOrder: List<Char> = MorseCode.kochOrder
+
+    /**
      * Characters the learner has actually *met* — either presented at least
      * once as a question, or granted up front by a declared proficiency level.
      * Answer choices are drawn only from this set, and early on the number of
@@ -172,12 +180,12 @@ class TrainerEngine(
     }
 
     /**
-     * Once every active character is mastered, introduce the next Koch
-     * character (one at a time). Returns the character added, if any.
+     * Once every active character is mastered, introduce the next character
+     * from the [studyOrder] (one at a time). Returns the character added, if any.
      */
     fun advanceIfReady(): Char? {
         if (!allActiveMastered) return null
-        val next = MorseCode.kochOrder.firstOrNull { it !in activeCharacters }
+        val next = studyOrder.firstOrNull { it !in activeCharacters }
             ?: return null   // whole alphabet learned 🎉
         activeCharacters = activeCharacters + next
         stats[next] = CharacterStats(next)

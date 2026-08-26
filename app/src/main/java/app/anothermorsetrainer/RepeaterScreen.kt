@@ -1,6 +1,10 @@
 package app.anothermorsetrainer
 
+import android.content.pm.PackageManager
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -69,14 +73,33 @@ import app.anothermorsetrainer.vail.VailRepeater
 fun RepeaterScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     val repeater = remember { VailRepeater(context) }
+    val bleMidi = remember { BleMidi(context) }
 
     var callsignField by remember { mutableStateOf(repeater.callsign) }
     var channelField by remember { mutableStateOf(repeater.channel) }
+    var serverField by remember { mutableStateOf(repeater.serverUrl) }
     var keyPressed by remember { mutableStateOf(false) }
+    var bleStatus by remember { mutableStateOf<String?>(null) }
+    val blePermissions = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { grants ->
+        if (grants.values.all { it }) bleMidi.scanAndOpen { bleStatus = it }
+        else bleStatus = "Bluetooth permission is needed to find a key."
+    }
+    fun findBleKey() {
+        val missing = bleMidi.requiredPermissions().filter {
+            ContextCompat.checkSelfPermission(context, it) != PackageManager.PERMISSION_GRANTED
+        }
+        if (missing.isEmpty()) bleMidi.scanAndOpen { bleStatus = it }
+        else blePermissions.launch(missing.toTypedArray())
+    }
 
     DisposableEffect(Unit) {
         repeater.start()
-        onDispose { repeater.stop() }
+        onDispose {
+            bleMidi.release()
+            repeater.stop()
+        }
     }
     BackHandler { onBack() }
 
@@ -127,6 +150,47 @@ fun RepeaterScreen(onBack: () -> Unit) {
                 }
 
                 Spacer(Modifier.height(12.dp))
+                // Which Vail server to use: the known public ones, or any wss:// URL.
+                Row(
+                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Server", color = Brand.textSecondary, fontSize = 12.sp)
+                    VailRepeater.KNOWN_SERVERS.forEach { (label, url) ->
+                        val sel = serverField == url
+                        Box(
+                            modifier = Modifier
+                                .background(if (sel) Brand.teal else Brand.navyRaised, RoundedCornerShape(8.dp))
+                                .clickable {
+                                    serverField = url
+                                    repeater.updateServer(url)
+                                }
+                                .padding(horizontal = 10.dp, vertical = 6.dp)
+                        ) {
+                            Text(
+                                label,
+                                color = if (sel) Brand.navy else Brand.textSecondary,
+                                fontWeight = if (sel) FontWeight.Bold else FontWeight.Medium,
+                                fontSize = 12.sp
+                            )
+                        }
+                    }
+                }
+                if (VailRepeater.KNOWN_SERVERS.none { it.second == serverField }) {
+                    Spacer(Modifier.height(6.dp))
+                }
+                // Free-typed URLs apply on Connect (a pill press applies at once).
+                OutlinedTextField(
+                    value = serverField,
+                    onValueChange = { serverField = it },
+                    label = { Text("Server URL") },
+                    singleLine = true,
+                    textStyle = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Spacer(Modifier.height(12.dp))
                 Button(
                     onClick = {
                         if (connected || repeater.connectionState == ConnectionState.CONNECTING) {
@@ -134,6 +198,7 @@ fun RepeaterScreen(onBack: () -> Unit) {
                         } else {
                             repeater.updateCallsign(callsignField)
                             repeater.updateChannel(channelField)
+                            repeater.updateServer(serverField)
                             repeater.connect()
                         }
                     },
@@ -163,6 +228,28 @@ fun RepeaterScreen(onBack: () -> Unit) {
                     Switch(
                         checked = repeater.breakInEnabled,
                         onCheckedChange = { repeater.setBreakIn(it) },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Brand.navy,
+                            checkedTrackColor = Brand.teal,
+                            uncheckedThumbColor = Brand.textSecondary,
+                            uncheckedTrackColor = Brand.navyRaised
+                        )
+                    )
+                }
+
+                Spacer(Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column {
+                        Text("Private channel", color = Brand.textPrimary, fontWeight = FontWeight.Medium)
+                        Text("Stay off the public room list", color = Brand.textSecondary, fontSize = 12.sp)
+                    }
+                    Switch(
+                        checked = repeater.privateChannel,
+                        onCheckedChange = { repeater.updatePrivateChannel(it) },
                         colors = SwitchDefaults.colors(
                             checkedThumbColor = Brand.navy,
                             checkedTrackColor = Brand.teal,
@@ -230,6 +317,12 @@ fun RepeaterScreen(onBack: () -> Unit) {
                             Text("ADAPTER KEYER", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Brand.textSecondary)
                             TextButton(onClick = { repeater.wakeAdapter() }) { Text("Wake adapter", color = Brand.teal) }
                         }
+                        // Live connected-state for the adapter itself.
+                        Text(
+                            repeater.adapterName?.let { "Connected: $it" } ?: "No adapter connected",
+                            color = if (repeater.adapterName != null) Color(0xFF2E7D32) else Brand.textSecondary,
+                            fontSize = 12.sp
+                        )
                         Spacer(Modifier.height(8.dp))
                         Row(
                             modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
@@ -250,6 +343,40 @@ fun RepeaterScreen(onBack: () -> Unit) {
                                         fontSize = 13.sp
                                     )
                                 }
+                            }
+                        }
+                        Spacer(Modifier.height(10.dp))
+                        SliderRow("Keyer speed", "${repeater.keyerWpm} WPM", repeater.keyerWpm.toFloat(), 5f..50f) {
+                            repeater.updateKeyerWpm(it.toInt())
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column {
+                                Text("RX buzz", color = Brand.textPrimary, fontWeight = FontWeight.Medium)
+                                Text("Buzz the adapter's piezo for received tones", color = Brand.textSecondary, fontSize = 12.sp)
+                            }
+                            Switch(
+                                checked = repeater.rxBuzzEnabled,
+                                onCheckedChange = { repeater.updateRxBuzzEnabled(it) },
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = Brand.navy,
+                                    checkedTrackColor = Brand.teal,
+                                    uncheckedThumbColor = Brand.textSecondary,
+                                    uncheckedTrackColor = Brand.navyRaised
+                                )
+                            )
+                        }
+                        if (bleMidi.isSupported) {
+                            Spacer(Modifier.height(8.dp))
+                            OutlinedButton(onClick = { findBleKey() }, modifier = Modifier.fillMaxWidth()) {
+                                Text("Find Bluetooth key")
+                            }
+                            bleStatus?.let {
+                                Spacer(Modifier.height(4.dp))
+                                Text(it, color = Brand.textSecondary, fontSize = 12.sp)
                             }
                         }
                     }

@@ -48,6 +48,12 @@ object MorseCode {
     )
 
     /**
+     * The punctuation offered by the settings opt-in picker, in teaching order.
+     * ('=' stays out — it's sendable for exam passages but not studied.)
+     */
+    val pickablePunctuation: List<Char> = listOf('.', ',', '/')
+
+    /**
      * Pattern lookup across both the base table and optional punctuation.
      * (`optionalPunctuation + table` so a base entry wins on any key clash,
      * matching the Swift `merging { base, _ in base }`.)

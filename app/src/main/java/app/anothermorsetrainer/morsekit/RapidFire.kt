@@ -20,6 +20,7 @@ enum class RapidFireContent(val label: String) {
 enum class RapidFireResponse(val label: String, val blurb: String) {
     TYPE("Type as you hear it", "Type into the box as each item is sent — the field stays live while it plays."),
     HEAD_COPY("Head copy, then type", "Hold each item in your head, then type it once the code finishes. Builds true head copy."),
+    KEY("Key each one", "Send each item back on the key — your keying is decoded and graded as you go."),
     REVIEW("Just listen", "Copy on paper or in your head — then review the full list of what was sent when you finish.")
 }
 
