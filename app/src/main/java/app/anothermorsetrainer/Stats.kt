@@ -95,7 +95,13 @@ object Stats {
         prefs.edit().putString("chars", encodeChars(charStats)).apply()
     }
 
-    /** Record a just-finished session and persist. No-op for empty sessions. */
+    /**
+     * Record a just-finished session and persist. No-op for empty sessions.
+     *
+     * @return the streak day when this record was the day's first practice AND
+     *   it landed exactly on a celebrated milestone (3, 7, 14, …) — so the
+     *   session summary can fire a one-time celebration — otherwise null.
+     */
     fun record(
         mode: String,
         attempts: Int,
@@ -105,9 +111,9 @@ object Stats {
         characterWpm: Int = 0,
         medianTtrMs: Int? = null,
         today: LocalDate = LocalDate.now()
-    ) {
-        if (attempts <= 0) return
-        streak.record(today)
+    ): Int? {
+        if (attempts <= 0) return null
+        val firstToday = streak.record(today)
         refreshStreak()
 
         totalSessions += 1
@@ -121,6 +127,22 @@ object Stats {
             SessionSummary(mode, today.toEpochDay(), attempts, correct, bestTtrMs, characterWpm, medianTtrMs)
         ) + recent).take(50)
         persist()
+        return if (firstToday && PracticeStreak.isMilestone(streak.current)) streak.current else null
+    }
+
+    /** Wipe all recorded progress (streak, totals, sessions, per-character data). */
+    fun reset() {
+        streak = PracticeStreak()
+        currentStreak = 0
+        longestStreak = 0
+        totalSessions = 0
+        totalAttempts = 0
+        totalCorrect = 0
+        totalPracticeSeconds = 0
+        bestTtrMs = null
+        recent = emptyList()
+        charStats = emptyMap()
+        prefs.edit().clear().apply()
     }
 
     private fun refreshStreak() {

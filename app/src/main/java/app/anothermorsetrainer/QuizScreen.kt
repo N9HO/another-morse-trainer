@@ -5,6 +5,9 @@ import android.content.pm.PackageManager
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,6 +19,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Mic
@@ -30,6 +34,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -44,6 +49,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.anothermorsetrainer.morsekit.Drill
+import app.anothermorsetrainer.morsekit.ProgressiveCharacters
 import app.anothermorsetrainer.morsekit.QuizSource
 import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
@@ -79,12 +85,31 @@ internal class Tally {
     }
 }
 
+/** The quiz loop is either running drills or showing the end-of-session summary. */
+private enum class QuizPhase { RUNNING, SUMMARY }
+
+/** Streak-milestone badge tiers (mirrors the iOS emoji map). */
+internal fun milestoneEmoji(day: Int): String = when {
+    day >= 365 -> "👑"
+    day >= 100 -> "🏆"
+    day >= 60 -> "💎"
+    day >= 30 -> "🏅"
+    day >= 14 -> "⚡️"
+    day >= 7 -> "⭐️"
+    else -> "🔥"
+}
+
 /**
  * One reusable quiz loop that drives ANY [QuizSource] — character practice
  * (ProgressiveCharacters), word/abbreviation/Q-code drills (PhraseQuiz), the
  * confusion-pair drill, or the code exam (ExamSession) all flow through here.
  * Plays the drill in Morse via [MorsePlayer], scores the tap, gives haptic +
  * colour feedback, then advances.
+ *
+ * Sessions run against the configured [PracticeDuration]: a countdown (or the
+ * End button) closes the session with a summary — answered, accuracy, fastest
+ * and median recognition — plus a streak-milestone celebration when one lands.
+ * The Characters track also gets a "Track stage" pin row (issue #51 parity).
  */
 @Composable
 fun QuizScreen(
@@ -96,6 +121,8 @@ fun QuizScreen(
     val player = remember { MorsePlayer() }
     val haptics = remember { Haptics(context) }
     val source = remember { makeSource() }
+    // The Characters track exposes its learner-pinnable stage; other sources don't.
+    val progressive = source as? ProgressiveCharacters
 
     var drill by remember { mutableStateOf(source.nextDrill()) }
     // Monotonic round counter drives the play/reset effect. We must NOT key that
@@ -109,9 +136,17 @@ fun QuizScreen(
     var lastTtr by remember { mutableStateOf(0.0) }
     var summary by remember { mutableStateOf(source.summary) }
     var toneFinishedAt by remember { mutableStateOf(0L) }
+    /** A newly unlocked character/stage from the last answer (shown with a ★). */
+    var unlockedNote by remember { mutableStateOf<String?>(null) }
+    var stageRev by remember { mutableStateOf(0) }
 
-    // Session tallies, persisted to Stats when the learner leaves.
-    val tally = remember { Tally() }
+    // Session phase: drills, then a summary once the timer runs out or End is
+    // tapped. Back mid-session still records — it just skips the summary.
+    var phase by remember { mutableStateOf(QuizPhase.RUNNING) }
+    var tally by remember { mutableStateOf(Tally()) }
+    var remaining by remember { mutableStateOf(Settings.practiceDuration.seconds) }
+    var recorded by remember { mutableStateOf(false) }
+    var milestone by remember { mutableStateOf<Int?>(null) }
 
     // Optional spoken answers (microphone).
     val recognizer = remember { VoiceRecognizer(context) }
@@ -122,10 +157,51 @@ fun QuizScreen(
         if (granted) listenTick++ else voiceNote = "Microphone permission is needed for voice answers."
     }
 
+    /** Persist the session once (summary entry or an early Back, whichever first). */
+    fun recordSession(): Int? {
+        if (recorded) return null
+        recorded = true
+        EngineStore.save()
+        return Stats.record(
+            mode = title, attempts = tally.attempts, correct = tally.correct,
+            bestTtrMs = tally.bestMs, durationSeconds = tally.elapsedSeconds(),
+            characterWpm = Settings.characterWpm.roundToInt(), medianTtrMs = tally.medianMs()
+        )
+    }
+
+    /** Close the running session and show the summary (timer expiry or End). */
+    fun endSession() {
+        if (phase == QuizPhase.SUMMARY) return
+        player.stop()
+        recognizer.cancel()
+        listening = false
+        milestone = recordSession()
+        phase = QuizPhase.SUMMARY
+    }
+
+    /** Leave the screen, recording the session if the summary never showed. */
+    fun finish() {
+        recordSession()
+        onBack()
+    }
+
+    /** Start a fresh session from the summary screen. */
+    fun practiceAgain() {
+        tally = Tally()
+        recorded = false
+        milestone = null
+        remaining = Settings.practiceDuration.seconds
+        unlockedNote = null
+        phase = QuizPhase.RUNNING
+        drill = source.nextDrill()
+        round++
+    }
+
     LaunchedEffect(round) {
         revealed = false
         chosen = null
         toneFinishedAt = 0L
+        unlockedNote = null
         listening = false
         voiceNote = null
         recognizer.cancel()
@@ -135,33 +211,41 @@ fun QuizScreen(
     LaunchedEffect(revealed) {
         if (revealed) {
             delay(1100)
-            drill = source.nextDrill()
-            round++
+            if (phase == QuizPhase.RUNNING) {
+                drill = source.nextDrill()
+                round++
+            }
+        }
+    }
+
+    // Session countdown: ticks only while running and only when a length is set.
+    LaunchedEffect(phase) {
+        if (phase != QuizPhase.RUNNING) return@LaunchedEffect
+        while (true) {
+            val r = remaining ?: return@LaunchedEffect
+            if (r <= 0) {
+                endSession()
+                return@LaunchedEffect
+            }
+            delay(1000)
+            remaining = remaining?.minus(1)
         }
     }
 
     DisposableEffect(Unit) { onDispose { player.release(); recognizer.release() } }
 
-    fun finish() {
-        Stats.record(
-            mode = title, attempts = tally.attempts, correct = tally.correct,
-            bestTtrMs = tally.bestMs, durationSeconds = tally.elapsedSeconds(),
-            characterWpm = Settings.characterWpm.roundToInt(), medianTtrMs = tally.medianMs()
-        )
-        onBack()
-    }
-
     // Hardware/gesture back records the session too, then leaves.
-    BackHandler { finish() }
+    BackHandler { if (phase == QuizPhase.SUMMARY) onBack() else finish() }
 
     fun answer(choice: String) {
-        if (revealed) return
+        if (revealed || phase != QuizPhase.RUNNING) return
         val ttr = if (toneFinishedAt == 0L) 0.0
                   else (System.nanoTime() - toneFinishedAt) / 1_000_000_000.0
         lastTtr = ttr
         chosen = choice
         val outcome = source.record(choice = choice, ttr = ttr)
         summary = source.summary
+        unlockedNote = outcome.unlocked
         tally.attempts += 1
         val ms = (ttr * 1000).roundToInt()
         if (outcome.correct) {
@@ -172,6 +256,8 @@ fun QuizScreen(
         if (drill.correct.length == 1) {
             Stats.recordChar(drill.correct, outcome.correct, if (outcome.correct && ms > 0) ms else null)
         }
+        // Keep the Characters track durable — the ladder resumes next time.
+        EngineStore.save()
         if (Settings.hapticsEnabled) {
             if (outcome.correct) haptics.success() else haptics.error()
         }
@@ -180,7 +266,7 @@ fun QuizScreen(
 
     // Listen for a spoken answer when the mic is tapped (listenTick bumps).
     LaunchedEffect(listenTick) {
-        if (listenTick == 0 || revealed) return@LaunchedEffect
+        if (listenTick == 0 || revealed || phase != QuizPhase.RUNNING) return@LaunchedEffect
         listening = true
         voiceNote = null
         recognizer.start(
@@ -199,8 +285,35 @@ fun QuizScreen(
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        TextButton(onClick = { finish() }, modifier = Modifier.padding(8.dp)) { Text("‹ Back") }
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            TextButton(onClick = { if (phase == QuizPhase.SUMMARY) onBack() else finish() }) { Text("‹ Back") }
+            if (phase == QuizPhase.RUNNING) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    remaining?.let {
+                        Text(
+                            "%d:%02d".format(it / 60, it % 60),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = Brand.textSecondary
+                        )
+                    }
+                    TextButton(onClick = { endSession() }) { Text("End") }
+                }
+            }
+        }
 
+        if (phase == QuizPhase.SUMMARY) {
+            SessionSummaryContent(
+                title = title,
+                tally = tally,
+                milestone = milestone,
+                onPracticeAgain = { practiceAgain() },
+                onDone = onBack
+            )
+        } else {
         Column(
             modifier = Modifier.fillMaxSize().padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -209,6 +322,21 @@ fun QuizScreen(
             Text(text = title, style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center)
             Spacer(Modifier.height(4.dp))
             Text(text = summary, style = MaterialTheme.typography.labelMedium)
+
+            // Characters only: hold the track at a learner-chosen stage (#51).
+            if (progressive != null) {
+                Spacer(Modifier.height(10.dp))
+                key(stageRev) {
+                    StagePinRow(pinned = progressive.pinnedStage) { pick ->
+                        if (pick == null) progressive.unpin() else progressive.pin(pick)
+                        EngineStore.save()
+                        summary = source.summary
+                        stageRev++
+                        drill = source.nextDrill()
+                        round++
+                    }
+                }
+            }
 
             // Exam-style comprehension prompt (empty for plain recognition drills).
             if (drill.question.isNotEmpty()) {
@@ -221,7 +349,7 @@ fun QuizScreen(
                 )
             }
 
-            Spacer(Modifier.height(36.dp))
+            Spacer(Modifier.height(28.dp))
 
             if (revealed) {
                 val ok = chosen == drill.correct
@@ -254,6 +382,10 @@ fun QuizScreen(
                     color = if (ok) OK_GREEN else ERR_RED,
                     fontWeight = FontWeight.Medium
                 )
+                unlockedNote?.let {
+                    Spacer(Modifier.height(4.dp))
+                    Text("★ New: $it", color = Brand.teal, fontWeight = FontWeight.SemiBold)
+                }
             } else {
                 Text(text = "?", fontSize = 52.sp, fontWeight = FontWeight.Bold, color = Brand.teal)
                 Spacer(Modifier.height(4.dp))
@@ -262,7 +394,7 @@ fun QuizScreen(
                 }
             }
 
-            Spacer(Modifier.height(36.dp))
+            Spacer(Modifier.height(28.dp))
             OptionsGrid(drill = drill, revealed = revealed, chosen = chosen, onPick = ::answer)
 
             // Voice answers: a mic to speak instead of tap (options stay as fallback).
@@ -287,6 +419,121 @@ fun QuizScreen(
                 }
             }
         }
+        }
+    }
+}
+
+/**
+ * End-of-session summary: the tallies, a milestone celebration when this
+ * session's first-practice-of-the-day landed on one, and the way onward.
+ */
+@Composable
+private fun SessionSummaryContent(
+    title: String,
+    tally: Tally,
+    milestone: Int?,
+    onPracticeAgain: () -> Unit,
+    onDone: () -> Unit
+) {
+    Column(
+        modifier = Modifier.fillMaxSize().padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text("Session complete", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(4.dp))
+        Text(title, style = MaterialTheme.typography.labelMedium, color = Brand.textSecondary)
+
+        Spacer(Modifier.height(24.dp))
+        Column(modifier = Modifier.fillMaxWidth().brandCard()) {
+            SummaryRow("Answered", "${tally.attempts}")
+            val pct = if (tally.attempts == 0) 0 else (tally.correct * 100.0 / tally.attempts).roundToInt()
+            SummaryRow("Accuracy", "$pct%")
+            SummaryRow("Fastest", tally.bestMs?.let { "%.2f s".format(it / 1000.0) } ?: "—")
+            SummaryRow("Median", tally.medianMs()?.let { "%.2f s".format(it / 1000.0) } ?: "—")
+        }
+
+        milestone?.let { day ->
+            Spacer(Modifier.height(16.dp))
+            Column(
+                modifier = Modifier.fillMaxWidth().brandCard().padding(vertical = 14.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(milestoneEmoji(day), fontSize = 40.sp)
+                Text("$day-day streak!", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                Text("New milestone reached — keep it going.", color = Brand.textSecondary, fontSize = 13.sp)
+            }
+        }
+
+        Spacer(Modifier.height(28.dp))
+        Button(
+            onClick = onPracticeAgain,
+            colors = ButtonDefaults.buttonColors(containerColor = Brand.teal, contentColor = Brand.navy),
+            shape = RoundedCornerShape(Brand.cornerRadius),
+            modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)
+        ) { Text("Practice again", fontWeight = FontWeight.SemiBold) }
+        Spacer(Modifier.height(10.dp))
+        OutlinedButton(onClick = onDone, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+            Text("Done")
+        }
+    }
+}
+
+@Composable
+private fun SummaryRow(label: String, value: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(label, color = Brand.textSecondary)
+        Text(value, color = Brand.textPrimary, fontWeight = FontWeight.SemiBold, fontFamily = FontFamily.Monospace)
+    }
+}
+
+/**
+ * "Track stage" pills for the Characters track: Auto (the default ladder) or a
+ * held stage that never auto-advances. Mirrors the iOS setup-card picker (#51).
+ */
+@Composable
+private fun StagePinRow(
+    pinned: ProgressiveCharacters.Stage?,
+    onPick: (ProgressiveCharacters.Stage?) -> Unit
+) {
+    Row(
+        modifier = Modifier.horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text("Stage", style = MaterialTheme.typography.labelMedium, color = Brand.textSecondary)
+        StagePill("Auto", selected = pinned == null) { onPick(null) }
+        ProgressiveCharacters.Stage.entries.forEach { stage ->
+            val label = when (stage) {
+                ProgressiveCharacters.Stage.Singles -> "Chars"
+                ProgressiveCharacters.Stage.Phrases -> "Words"
+                else -> stage.displayName
+            }
+            StagePill(label, selected = pinned == stage) { onPick(stage) }
+        }
+    }
+}
+
+@Composable
+private fun StagePill(label: String, selected: Boolean, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .background(
+                if (selected) Brand.teal else Brand.navyRaised,
+                shape = RoundedCornerShape(8.dp)
+            )
+            .clickable(onClick = onClick)
+            .padding(horizontal = 10.dp, vertical = 5.dp)
+    ) {
+        Text(
+            label,
+            color = if (selected) Brand.navy else Brand.textSecondary,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+            fontSize = 12.sp
+        )
     }
 }
 

@@ -17,6 +17,19 @@ enum class RevealMode(val label: String, val shortLabel: String) {
     ALWAYS("Always", "Always")
 }
 
+/**
+ * How long a practice session runs before it stops and shows a summary
+ * (mirrors iOS PracticeDuration). `seconds == null` means open-ended.
+ */
+enum class PracticeDuration(val seconds: Int?, val label: String, val shortLabel: String) {
+    ONE_MIN(60, "1 minute", "1m"),
+    FIVE_MIN(300, "5 minutes", "5m"),
+    TEN_MIN(600, "10 minutes", "10m"),
+    FIFTEEN_MIN(900, "15 minutes", "15m"),
+    THIRTY_MIN(1800, "30 minutes", "30m"),
+    UNTIL_STOP(null, "Until I stop", "∞")
+}
+
 /** How much Morse the learner already knows — seeds the Koch starting set. */
 enum class Proficiency(val label: String) {
     NONE("I know nothing"),
@@ -65,6 +78,9 @@ object Settings {
     /** When to reveal the correct answer after a response. */
     var revealMode by mutableStateOf(RevealMode.ALWAYS)
         private set
+    /** How long a practice session runs before it ends with a summary. */
+    var practiceDuration by mutableStateOf(PracticeDuration.UNTIL_STOP)
+        private set
 
     /** How much the learner already knows — seeds the Characters Koch ladder. */
     var proficiency by mutableStateOf(Proficiency.NONE)
@@ -93,6 +109,8 @@ object Settings {
         wordCount = prefs.getInt("wordCount", 100)
         revealMode = runCatching { RevealMode.valueOf(prefs.getString("revealMode", null) ?: "ALWAYS") }
             .getOrDefault(RevealMode.ALWAYS)
+        practiceDuration = runCatching { PracticeDuration.valueOf(prefs.getString("practiceDuration", null) ?: "UNTIL_STOP") }
+            .getOrDefault(PracticeDuration.UNTIL_STOP)
         proficiency = runCatching { Proficiency.valueOf(prefs.getString("proficiency", null) ?: "NONE") }
             .getOrDefault(Proficiency.NONE)
         onboardingDone = prefs.getBoolean("onboardingDone", false)
@@ -160,6 +178,11 @@ object Settings {
         persist()
     }
 
+    fun updatePracticeDuration(value: PracticeDuration) {
+        practiceDuration = value
+        persist()
+    }
+
     fun updateProficiency(value: Proficiency) {
         proficiency = value
         persist()
@@ -213,6 +236,7 @@ object Settings {
             .putFloat("recogTarget", recognitionTargetSec.toFloat())
             .putInt("wordCount", wordCount)
             .putString("revealMode", revealMode.name)
+            .putString("practiceDuration", practiceDuration.name)
             .putString("proficiency", proficiency.name)
             .putBoolean("onboardingDone", onboardingDone)
             .putBoolean("reminders", remindersEnabled)
