@@ -10,6 +10,8 @@ struct ContentView: View {
     @State private var typedAnswer = ""
     @State private var examCopy = ""
     @State private var qsoText = ""
+    /// Learner aid: reveal who's calling / the expected copy (Android parity).
+    @State private var qsoHintShown = false
     @FocusState private var typedFocused: Bool
     @FocusState private var examCopyFocused: Bool
     @FocusState private var qsoFocused: Bool
@@ -751,10 +753,35 @@ struct ContentView: View {
                 Label("Receiving…", systemImage: "dot.radiowaves.left.and.right")
                     .font(.caption).foregroundStyle(Theme.teal)
             }
+            if qsoHintShown, let hint = qsoHintLine {
+                Text(hint)
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundStyle(Theme.textSecondary)
+                    .multilineTextAlignment(.center)
+            }
+            if qsoHintLine != nil || qsoHintShown {
+                Button(qsoHintShown ? "Hide hint" : "Show hint") {
+                    qsoHintShown.toggle()
+                }
+                .font(.caption)
+                .tint(Theme.teal)
+            }
         }
         .frame(maxWidth: .infinity)
         .padding()
         .brandCard()
+    }
+
+    /// What the hint reveals for the current phase: the calls in the pileup, or
+    /// the exact exchange the engine expects from the station being worked.
+    private var qsoHintLine: String? {
+        if model.qsoWorkingCall != nil || model.qsoReadyToLog {
+            return model.qsoHintExpected.map { "expecting: \($0)" }
+        }
+        if model.qsoActiveCount > 0, !model.qsoHintCalling.isEmpty {
+            return "calling: " + model.qsoHintCalling.joined(separator: ", ")
+        }
+        return nil
     }
 
     private func qsoStat(_ label: String, _ value: String) -> some View {
@@ -1227,6 +1254,12 @@ struct ContentView: View {
                 rapidFireTranscriptCard
             }
 
+            // The run's worked log on the scorecard (Android parity): every
+            // contact with its exchange and speed, newest first.
+            if s.mode == .contest || s.mode == .qso, !model.qsoLog.isEmpty {
+                workedLogCard
+            }
+
             VStack(spacing: 12) {
                 if let record = model.lastSessionRecord {
                     Button {
@@ -1260,6 +1293,35 @@ struct ContentView: View {
         }
         .padding()
         }
+    }
+
+    /// Every contact worked this run — call, exchange, speed — for the
+    /// contest/QSO scorecard. The summary already scrolls, so a plain stack.
+    private var workedLogCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Worked")
+                .font(.subheadline).foregroundStyle(.secondary)
+            LazyVStack(spacing: 0) {
+                ForEach(model.qsoLog) { q in
+                    HStack {
+                        Text(q.call)
+                            .font(.system(.body, design: .monospaced)).bold()
+                        Spacer()
+                        Text(q.exchange)
+                            .font(.system(.body, design: .monospaced))
+                            .foregroundStyle(Theme.textSecondary)
+                        Text("\(q.wpm)w")
+                            .font(.caption2).foregroundStyle(.secondary)
+                            .frame(width: 42, alignment: .trailing)
+                    }
+                    .padding(.vertical, 6)
+                    Divider().overlay(Theme.hairline)
+                }
+            }
+        }
+        .padding()
+        .frame(maxWidth: .infinity)
+        .brandCard()
     }
 
     /// The full list of what Rapid Fire transmitted this session, with a

@@ -188,6 +188,9 @@ final class AppModel: ObservableObject {
     @Published private(set) var sessionRemaining: TimeInterval?   // nil = no limit
     @Published private(set) var sessionEnded = false
     private var sessionEndDate: Date?
+    /// When the session actually began, so records carry real elapsed time
+    /// (the configured duration under-counted: "Until I stop" logged zero).
+    private var sessionStartDate: Date?
     private var sessionTimer: Timer?
     private var sessionAttempts = 0
     private var sessionCorrect = 0
@@ -321,9 +324,12 @@ final class AppModel: ObservableObject {
         streak = AppModel.loadStreak()    // assigning in init doesn't fire didSet
         history = AppModel.loadHistory()
         summary = charLadder.summary
+        Haptics.enabled = loaded.hapticsEnabled   // didSet doesn't fire in init
         // Re-arm the daily reminder in case pending requests were cleared.
         if settings.dailyReminderEnabled {
-            PracticeReminders.schedule(hour: settings.dailyReminderHour)
+            PracticeReminders.schedule(hour: settings.dailyReminderHour,
+                                       minute: settings.dailyReminderMinute,
+                                       streak: streak.display(on: Date()))
         }
     }
 
@@ -426,6 +432,7 @@ final class AppModel: ObservableObject {
         engine.config = AppModel.config(from: settings)
         applyPhraseConfig(from: settings)
         reconcilePunctuation()
+        Haptics.enabled = settings.hapticsEnabled
     }
 
     var timing: MorseTiming {
@@ -900,6 +907,7 @@ final class AppModel: ObservableObject {
             qsoLastLogged = call
             sessionAttempts += 1
             sessionCorrect += 1
+            markPracticedToday()   // a worked contact is practice — feed the streak
             Haptics.success()
             loggedContact = true
         }
@@ -1010,6 +1018,11 @@ final class AppModel: ObservableObject {
         qsoActiveCount = pileup.activeCount
         qsoLog = pileup.log.reversed()
         qsoCount = pileup.qsoCount
+        // A busted call is a session attempt that wasn't clean — count it, so
+        // QSO/contest sessions stop landing in history at a flat 100%. (The
+        // delta guard skips the reset-to-zero at the start of a new run.)
+        let newBusts = pileup.bustCount - qsoBusts
+        if newBusts > 0 { sessionAttempts += newBusts }
         qsoBusts = pileup.bustCount
         qsoAccuracy = pileup.accuracy
         switch pileup.phase {
@@ -1024,6 +1037,13 @@ final class AppModel: ObservableObject {
         }
         summary = pileup.summary
     }
+
+    // Learner hints (Android parity): an optional reveal of who's calling and
+    // the exact copy the engine expects, for when a pileup is still too fast.
+    /// The calls of every station in the pileup right now.
+    var qsoHintCalling: [String] { pileup.stations.map(\.call) }
+    /// The expected copy for the current phase (call or exchange), if any.
+    var qsoHintExpected: String? { pileup.expectedCopy }
 
     // MARK: - Rapid Fire (back-to-back copy)
 
@@ -1272,6 +1292,7 @@ final class AppModel: ObservableObject {
     func startSession() {
         mode = learningMode
         sessionEnded = false
+        sessionStartDate = Date()
         sessionAttempts = 0
         sessionCorrect = 0
         sessionFastest = nil
@@ -1464,7 +1485,10 @@ final class AppModel: ObservableObject {
             correct: summary.correct,
             fastestTTR: summary.fastest,
             medianTTR: summary.medianTTR,
-            durationSeconds: settings.practiceDuration.seconds,
+            // Real elapsed time, not the configured length — an "Until I stop"
+            // session used to log nil and count zero toward lifetime practice.
+            durationSeconds: sessionStartDate.map { Date().timeIntervalSince($0) }
+                ?? settings.practiceDuration.seconds,
             characters: chars,
             activeCharacters: active)
     }
@@ -2167,6 +2191,13 @@ final class AppModel: ObservableObject {
                 newMilestone = s.current     // celebrated in the session summary
                 Haptics.success()
             }
+            // The reminder body carries the streak count, baked in at schedule
+            // time — refresh it so tomorrow's nudge names today's number.
+            if settings.dailyReminderEnabled {
+                PracticeReminders.schedule(hour: settings.dailyReminderHour,
+                                           minute: settings.dailyReminderMinute,
+                                           streak: s.display(on: Date()))
+            }
         }
     }
 
@@ -2179,7 +2210,7 @@ final class AppModel: ObservableObject {
             PracticeReminders.requestAuthorization { [weak self] granted in
                 guard let self else { return }
                 self.settings.dailyReminderEnabled = granted   // didSet persists
-                if granted { PracticeReminders.schedule(hour: self.settings.dailyReminderHour) }
+                if granted { self.rescheduleReminder() }
             }
         } else {
             settings.dailyReminderEnabled = false
@@ -2187,10 +2218,17 @@ final class AppModel: ObservableObject {
         }
     }
 
-    /// Change the hour the reminder fires, rescheduling if it's enabled.
-    func setDailyReminderHour(_ hour: Int) {
+    /// Change the time the reminder fires, rescheduling if it's enabled.
+    func setDailyReminderTime(hour: Int, minute: Int) {
         settings.dailyReminderHour = hour
-        if settings.dailyReminderEnabled { PracticeReminders.schedule(hour: hour) }
+        settings.dailyReminderMinute = minute
+        if settings.dailyReminderEnabled { rescheduleReminder() }
+    }
+
+    private func rescheduleReminder() {
+        PracticeReminders.schedule(hour: settings.dailyReminderHour,
+                                   minute: settings.dailyReminderMinute,
+                                   streak: streak.display(on: Date()))
     }
 
     // MARK: - Persistence (session history)

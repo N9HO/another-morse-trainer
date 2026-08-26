@@ -118,14 +118,9 @@ struct SettingsView: View {
                         set: { model.setDailyReminder(enabled: $0) }
                     ))
                     if model.settings.dailyReminderEnabled {
-                        Picker("Remind me at", selection: Binding(
-                            get: { model.settings.dailyReminderHour },
-                            set: { model.setDailyReminderHour($0) }
-                        )) {
-                            ForEach(0..<24, id: \.self) { h in
-                                Text(hourLabel(h)).tag(h)
-                            }
-                        }
+                        DatePicker("Remind me at",
+                                   selection: reminderTimeBinding,
+                                   displayedComponents: .hourAndMinute)
                     }
                 } header: {
                     Text("Reminders")
@@ -164,6 +159,7 @@ struct SettingsView: View {
                         }
                     }
                     Toggle("Show replay button", isOn: $model.settings.allowReplay)
+                    Toggle("Haptic feedback", isOn: $model.settings.hapticsEnabled)
                 }
                 .listRowBackground(Theme.navyElevated)
 
@@ -383,12 +379,21 @@ struct SettingsView: View {
         )
     }
 
-    /// A localized clock label for a 24-hour value, e.g. 19 → "7:00 PM".
-    private func hourLabel(_ hour: Int) -> String {
-        var c = DateComponents()
-        c.hour = hour
-        let date = Calendar.current.date(from: c) ?? Date()
-        return date.formatted(date: .omitted, time: .shortened)
+    /// The reminder time as a Date for the hour-and-minute picker, routed
+    /// through the model so a change reschedules the pending notification.
+    private var reminderTimeBinding: Binding<Date> {
+        Binding(
+            get: {
+                var c = DateComponents()
+                c.hour = model.settings.dailyReminderHour
+                c.minute = model.settings.dailyReminderMinute
+                return Calendar.current.date(from: c) ?? Date()
+            },
+            set: { date in
+                let c = Calendar.current.dateComponents([.hour, .minute], from: date)
+                model.setDailyReminderTime(hour: c.hour ?? 19, minute: c.minute ?? 0)
+            }
+        )
     }
 
     private func sliderRow(title: String,
