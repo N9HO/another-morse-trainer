@@ -29,6 +29,7 @@ struct JourneyMapView: View {
                     }
                 }
             }
+            .readableWidth()
             .navigationTitle("Journey Map")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

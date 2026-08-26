@@ -17,6 +17,7 @@ struct SendingKeyerView: View {
             decodedDisplay
             keyButton
             controls
+            midiStatus
         }
         .onAppear { sender.start() }
         .onDisappear { sender.stop() }
@@ -96,6 +97,24 @@ struct SendingKeyerView: View {
             .buttonStyle(.borderedProminent)
             .tint(Theme.teal)
             .disabled(sender.decodedText.trimmingCharacters(in: .whitespaces).isEmpty)
+        }
+    }
+
+    /// What hardware key (if any) is feeding this panel. Silence used to be the
+    /// only signal — now a connected Vail/BLE-MIDI key is named, and a MIDI
+    /// setup failure says so instead of leaving a hardware key dead.
+    @ViewBuilder
+    private var midiStatus: some View {
+        if sender.midiUnavailable {
+            Label("MIDI unavailable — on-screen key only", systemImage: "exclamationmark.triangle")
+                .font(.caption)
+                .foregroundStyle(.orange)
+        } else if !sender.midiDeviceNames.isEmpty {
+            Label(sender.midiDeviceNames.joined(separator: ", "), systemImage: "pianokeys")
+                .font(.caption)
+                .foregroundStyle(Theme.teal)
+                .lineLimit(1)
+                .accessibilityLabel("Hardware key connected: \(sender.midiDeviceNames.joined(separator: ", "))")
         }
     }
 

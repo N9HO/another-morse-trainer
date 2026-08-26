@@ -4,7 +4,7 @@ import MediaPlayer
 
 /// The ways to practice.
 enum TrainingMode: String, CaseIterable, Identifiable {
-    case journey, characters, words, abbreviations, qCodes, prosigns, headCopy, typed, confusion, listen, qso, contest, story, exam, qrq, rapidFire
+    case journey, characters, words, abbreviations, qCodes, prosigns, headCopy, typed, sending, confusion, listen, qso, contest, story, exam, qrq, rapidFire
     var id: String { rawValue }
     var title: String {
         switch self {
@@ -16,6 +16,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .prosigns:     return "Prosigns"
         case .headCopy:     return "Head Copy"
         case .typed:        return "Type It"
+        case .sending:      return "Sending Practice"
         case .confusion:    return "Confusion Drill"
         case .listen:       return "Listen & Learn"
         case .qso:          return "QSO Simulator"
@@ -36,6 +37,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .prosigns:      return "antenna.radiowaves.left.and.right"
         case .headCopy:      return "brain.head.profile"
         case .typed:         return "keyboard"
+        case .sending:       return "hand.tap.fill"
         case .confusion:     return "arrow.left.arrow.right"
         case .listen:        return "headphones"
         case .qso:           return "person.wave.2"
@@ -56,6 +58,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .prosigns:           return "Which prosign?"
         case .headCopy:           return "Copy it in your head…"
         case .typed:              return "Type what you hear"
+        case .sending:            return "Listen, then key it back"
         case .listen:             return "Listen…"
         case .qso:                return "Type what you copy"
         case .contest:            return "Type what you copy"
@@ -77,6 +80,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .prosigns:      return "Run-together signals"
         case .headCopy:      return "Copy in your head"
         case .typed:         return "Free-recall typing"
+        case .sending:       return "Key it back"
         case .confusion:     return "Drill your mix-ups"
         case .listen:        return "Hands-free, eyes-free"
         case .qso:           return "Simulated contact"
@@ -108,6 +112,8 @@ enum TrainingMode: String, CaseIterable, Identifiable {
             return "Listen to a word, copy it in your head, then reveal and self-grade — no buttons. Builds true head-copy."
         case .typed:
             return "Hear a word or call sign and type exactly what you heard. Free recall — the closest thing to real copying."
+        case .sending:
+            return "Hear it, then send it back on a Morse key — the on-screen key or a hardware Vail/BLE-MIDI key. Your keying is decoded live and checked, and the drill draws from the same adaptive ladder as Characters practice, so you send what you're learning to copy."
         case .confusion:
             return "Targeted review of the exact character pairs you mix up most, drilled head-to-head until they stick."
         case .listen:
@@ -132,8 +138,19 @@ enum TrainingMode: String, CaseIterable, Identifiable {
     /// ladder care — the rest use fixed content pools, so asking would be noise.
     var usesStartingLevel: Bool {
         switch self {
-        case .characters, .confusion: return true
-        default:                      return false
+        case .characters, .sending, .confusion: return true
+        default:                                return false
+        }
+    }
+
+    /// Modes where the learner can answer by speaking instead of tapping: every
+    /// choice quiz with a bounded answer pool (Android offers voice in all six).
+    var supportsVoiceAnswers: Bool {
+        switch self {
+        case .characters, .words, .abbreviations, .qCodes, .prosigns, .confusion:
+            return true
+        default:
+            return false
         }
     }
 
@@ -343,6 +360,7 @@ final class AppModel: ObservableObject {
         case .prosigns:     return prosignQuiz
         case .headCopy:     return headCopyQuiz
         case .typed:        return typedQuiz
+        case .sending:      return charLadder   // send what you're learning to copy
         case .confusion:    return confusionQuiz
         case .listen:       return charLadder   // unused: Listen runs its own loop
         case .qso:          return charLadder   // unused: QSO runs its own pileup loop
@@ -357,6 +375,8 @@ final class AppModel: ObservableObject {
     var isJourney: Bool { mode == .journey }
     var isHeadCopy: Bool { mode == .headCopy }
     var isTyped: Bool { mode == .typed }
+    /// Standalone sending practice: hear it, key it back (Android parity).
+    var isSending: Bool { mode == .sending }
     var isListen: Bool { mode == .listen }
     var isQSO: Bool { mode == .qso }
     /// Contest mode: the QSO simulator wired to a specific contest (SST/CWT) with
@@ -383,15 +403,17 @@ final class AppModel: ObservableObject {
             || isRapidFireLiveType || isRapidFireHeadType
     }
     /// Whether the learner answers by *sending* (keying the answer on a physical
-    /// or on-screen Morse key) this session (Characters & Words, or Rapid Fire's
-    /// "key each one"). Takes precedence over voice when both happen to be enabled.
+    /// or on-screen Morse key) this session: the standalone Sending Practice
+    /// mode, the Characters & Words option, or Rapid Fire's "key each one".
+    /// Takes precedence over voice when both happen to be enabled.
     var usesKeyingResponse: Bool {
-        (settings.keyingResponse && (mode == .characters || mode == .words))
+        isSending
+            || (settings.keyingResponse && (mode == .characters || mode == .words))
             || (isRapidFire && settings.rapidFire.response == .key)
     }
-    /// Whether the learner answers by voice this session (Characters & Words).
+    /// Whether the learner answers by voice this session (all six choice quizzes).
     var usesVoiceResponse: Bool {
-        settings.voiceResponse && !usesKeyingResponse && (mode == .characters || mode == .words)
+        settings.voiceResponse && !usesKeyingResponse && mode.supportsVoiceAnswers
     }
     /// True when mic/speech permission was refused, so the UI can fall back.
     var voicePermissionDenied: Bool { voiceRecognizer.authorization == .denied }
@@ -1261,6 +1283,16 @@ final class AppModel: ObservableObject {
             Task { @MainActor in self?.toggleListening() }
             return .success
         }
+        // An explicit "I'm done" from the lock screen / remote accessories
+        // (Android's foreground notification has Pause/Resume + Stop): pause
+        // keeps your place, Stop ends the session and shows its summary.
+        center.stopCommand.addTarget { [weak self] _ in
+            Task { @MainActor in
+                guard let self, self.isListening else { return }
+                self.endSession()
+            }
+            return .success
+        }
     }
 
     private func updateNowPlaying() {
@@ -1728,9 +1760,13 @@ final class AppModel: ObservableObject {
     /// The universe of valid answers for the current voice-enabled mode.
     private func voiceAnswerPool() -> [String] {
         switch mode {
-        case .characters: return engine.activeCharacters.map { String($0) }
-        case .words:      return wordsQuiz.items.map { $0.answer }
-        default:          return drill?.options ?? []
+        case .characters:    return engine.activeCharacters.map { String($0) }
+        case .words:         return wordsQuiz.items.map { $0.answer }
+        case .abbreviations: return abbrevQuiz.items.map { $0.answer }
+        case .qCodes:        return qCodeQuiz.items.map { $0.answer }
+        case .prosigns:      return prosignQuiz.items.map { $0.answer }
+        case .confusion:     return engine.activeCharacters.map { String($0) }
+        default:             return drill?.options ?? []
         }
     }
 
@@ -2142,6 +2178,9 @@ final class AppModel: ObservableObject {
         journeyLevelCleared = nil
         syncJourneyState()
         saveProgress()
+        // Picked from the in-session Map button: serve the next drill from the
+        // newly chosen level right away instead of finishing the old one.
+        if mode == .journey, drill != nil, !sessionEnded { next() }
     }
 
     private func restoreProgress() {

@@ -13,6 +13,12 @@ final class SendingKeyer: ObservableObject {
     @Published private(set) var decodedText = ""
     /// True while a key is held down (drives the on-screen key's pressed look).
     @Published private(set) var isKeying = false
+    /// Names of the connected hardware keys (Vail Adapter / BLE-MIDI), live
+    /// through hot-plug and unplug, for the connected-device readout.
+    @Published private(set) var midiDeviceNames: [String] = []
+    /// True when MIDI setup itself failed, so the UI can say a hardware key
+    /// won't work instead of silently ignoring it (the on-screen key still does).
+    @Published private(set) var midiUnavailable = false
 
     private let keyer = KeyerEngine()
     private var midi: MIDIInput?
@@ -40,9 +46,17 @@ final class SendingKeyer: ObservableObject {
                     self?.handle(isDown: event.isDown, atMs: event.timestampMs)
                 }
             }
+            input.onSourcesChanged = { [weak self] names in
+                Task { @MainActor in self?.midiDeviceNames = names }
+            }
             midi = input
+            midiDeviceNames = input.connectedSourceNames
+            midiUnavailable = false
         } catch {
-            // No MIDI is fine — the on-screen key still works.
+            // The on-screen key still works, but surface the failure so a
+            // hardware-key user isn't left keying into the void.
+            midiDeviceNames = []
+            midiUnavailable = true
         }
     }
 

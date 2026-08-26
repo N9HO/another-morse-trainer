@@ -6,6 +6,7 @@ struct ContentView: View {
     @State private var showSettings = false
     @State private var showStats = false
     @State private var showBrag = false
+    @State private var showJourneyMap = false
     @State private var detailRecord: SessionRecord?
     @State private var typedAnswer = ""
     @State private var examCopy = ""
@@ -44,7 +45,11 @@ struct ContentView: View {
                     statusArea
                         .frame(maxHeight: .infinity)
 
-                    if model.settings.allowReplay, model.drill != nil, !model.isHeadCopy {
+                    // Sending Practice always offers Replay — you can't key back
+                    // what you didn't catch (Android parity); elsewhere it's the
+                    // opt-in feedback setting.
+                    if model.settings.allowReplay || model.isSending,
+                       model.drill != nil, !model.isHeadCopy {
                         Button {
                             model.replay()
                         } label: {
@@ -73,6 +78,7 @@ struct ContentView: View {
                 }
             }
             .padding()
+            .readableWidth()
             }
             }
             .navigationBarTitleDisplayMode(.inline)
@@ -117,6 +123,9 @@ struct ContentView: View {
             }
             .sheet(isPresented: $showBrag) {
                 BragSheetView().environmentObject(model)
+            }
+            .sheet(isPresented: $showJourneyMap) {
+                JourneyMapView().environmentObject(model)
             }
             .sheet(item: $detailRecord) { record in
                 NavigationStack {
@@ -961,7 +970,7 @@ struct ContentView: View {
                     .foregroundStyle(Theme.teal)
                     .symbolEffectPulseIfAvailable()
                 Text("Speak your answer").font(.headline)
-                if model.mode == .characters {
+                if model.mode == .characters || model.mode == .confusion {
                     Text("Tip: use phonetics for single letters — say “Bravo” for B, “Niner” for 9.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
@@ -1043,6 +1052,16 @@ struct ContentView: View {
                 Text("\(model.journeyLevelNumber) / \(model.journeyTotalLevels)")
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(.secondary)
+                // Mid-session hop to any unlocked level (Android's header has
+                // one; iOS used to reach the map only from the setup card).
+                Button {
+                    showJourneyMap = true
+                } label: {
+                    Image(systemName: "map")
+                        .font(.subheadline)
+                        .foregroundStyle(Theme.teal)
+                }
+                .accessibilityLabel("Journey map — choose a level")
             }
             if !model.journeyLevelTitle.isEmpty {
                 HStack {
@@ -1292,6 +1311,7 @@ struct ContentView: View {
             }
         }
         .padding()
+        .readableWidth()
         }
     }
 

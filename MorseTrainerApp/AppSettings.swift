@@ -73,6 +73,11 @@ enum ContestLength: String, Codable, CaseIterable, Identifiable {
 
 /// Hands-free "Listen & Learn" delay between the Morse code and the spoken
 /// English answer. Mirrors Morse Code Ninja's tiers (Standard → ICR-Territory).
+///
+/// This four-tier set (1.3 / 1.0 / 0.5 / 0.2 s) is the canonical one for both
+/// platforms — the Android port currently ships 1.3 / 0.7 / 0.3 and should
+/// adopt these values in its next parity round rather than iOS changing
+/// (these rawValues are persisted in shipped user settings).
 enum AnswerGap: String, Codable, CaseIterable, Identifiable {
     case standard, rapidFire, warp, icr
     var id: String { rawValue }

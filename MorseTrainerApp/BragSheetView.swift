@@ -24,6 +24,7 @@ struct BragSheetView: View {
                     }
                 }
                 .padding()
+                .readableWidth()
             }
             .scrollContentBackground(.hidden)
             .background(Theme.Background())
@@ -32,7 +33,11 @@ struct BragSheetView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     if let url = shareURL {
-                        ShareLink(item: url, preview: SharePreview("My Morse progress", image: Image(systemName: "antenna.radiowaves.left.and.right"))) {
+                        // The caption travels with the image wherever the share
+                        // lands (Android attaches the same EXTRA_TEXT).
+                        ShareLink(item: url,
+                                  message: Text(shareCaption),
+                                  preview: SharePreview("My Morse progress", image: Image(systemName: "antenna.radiowaves.left.and.right"))) {
                             Image(systemName: "square.and.arrow.up")
                         }
                         .accessibilityLabel("Share your brag sheet")
@@ -272,6 +277,12 @@ struct BragSheetView: View {
 
     // MARK: - Share image
 
+    /// Text attached alongside the shared card (same wording as Android).
+    private var shareCaption: String {
+        "\(stats.currentStreak)-day Morse streak — \(stats.totalAnswered) copied at "
+            + "\(Int((stats.accuracy * 100).rounded()))%. anothermorsetrainer.app"
+    }
+
     @MainActor private func renderShareImage() {
         let card = BragShareCard(stats: stats,
                                  week: model.streakWeek,
@@ -307,8 +318,12 @@ private struct BragShareCard: View {
                 Text("\(stats.currentStreak)")
                     .font(.system(size: 46, weight: .bold, design: .rounded))
                     .foregroundStyle(.white)
-                Text("day streak")
-                    .font(.subheadline).foregroundStyle(Theme.textSecondary)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("day streak")
+                        .font(.subheadline).foregroundStyle(Theme.textSecondary)
+                    Text("longest \(stats.longestStreak)")
+                        .font(.caption).foregroundStyle(Theme.teal)
+                }
                 Spacer()
                 Text(stage)
                     .font(.caption).foregroundStyle(Theme.teal)

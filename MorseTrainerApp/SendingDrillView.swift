@@ -33,8 +33,12 @@ struct SendingDrillView: View {
                     preview
                 }
                 .padding(.top, 8)
+                .readableWidth()
             }
-            .navigationTitle("Sending Practice")
+            // "Sending Drills" (was "Sending Practice"): the standalone key-it-
+            // back training mode now owns that name; this screen is the
+            // printable practice sheets (Android home tile parity).
+            .navigationTitle("Sending Drills")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

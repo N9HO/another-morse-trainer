@@ -78,6 +78,7 @@ struct StatsView: View {
                 }
             }
             .scrollContentBackground(.hidden)
+            .readableWidth()
             .background(Theme.Background())
             .navigationTitle("Your Stats")
             .navigationBarTitleDisplayMode(.inline)

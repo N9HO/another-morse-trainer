@@ -31,11 +31,13 @@ port lives at [N9HO/another-morse-trainer-android](https://github.com/N9HO/anoth
 - **Short Stories** — continuous copy of public-domain fables
 - **Listen & Learn** — hands-free: hear the code, then the spoken answer;
   keeps playing with the screen locked
-- **Voice answers** — speak your answer instead of tapping, with a
-  confirm/closest-match fallback that learns your corrections
+- **Voice answers** — speak your answer instead of tapping in any of the six
+  choice quizzes, with a confirm/closest-match fallback that learns your
+  corrections
 - **Answer by keying** — key the answer on a touch or hardware Morse key
-- **Sending practice & printable drills** — key it back, or print practice
-  sheets built from what you've studied
+- **Sending Practice** — a dedicated hear-it, key-it-back mode on the adaptive
+  ladder, with live decode, always-on replay, and a connected-MIDI-key
+  readout; plus printable drill sheets built from what you've studied
 - **Vail repeater** — live CW over the [Vail](https://vail.woozle.org) network
   with Vail Adapter support: MIDI key input *and* output (keyer modes,
   speed, sidetone, RX piezo buzz), chat, and a signal timeline
