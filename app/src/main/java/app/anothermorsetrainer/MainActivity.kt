@@ -22,6 +22,7 @@ class MainActivity : ComponentActivity() {
         Stats.init(this)
         JourneyStore.init(this)
         EngineStore.init(this)
+        VoiceProfileStore.init(this)
         setContent {
             AmtTheme {
                 AppBackground {

@@ -57,6 +57,7 @@ import app.anothermorsetrainer.morsekit.Drill
 import app.anothermorsetrainer.morsekit.ProgressiveCharacters
 import app.anothermorsetrainer.morsekit.QuizSource
 import app.anothermorsetrainer.morsekit.SessionRecord
+import app.anothermorsetrainer.morsekit.VoiceMatcher
 import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
 
@@ -186,13 +187,26 @@ fun QuizScreen(
     var recorded by remember { mutableStateOf(false) }
     var milestone by remember { mutableStateOf<Int?>(null) }
 
-    // Optional spoken answers (microphone).
+    // Optional spoken answers (microphone). The full iOS flow: fuzzy-match the
+    // transcripts against every spoken form of the options, auto-grade when
+    // confident, otherwise confirm ("Did you say X?") with a pick-the-closest
+    // fallback — confirmations teach the persisted VoiceProfile.
     val recognizer = remember { VoiceRecognizer(context) }
+    val voiceMatcher = remember { VoiceMatcher(VoiceProfileStore.load()) }
     var listening by remember { mutableStateOf(false) }
     var voiceNote by remember { mutableStateOf<String?>(null) }
+    var voiceHeard by remember { mutableStateOf<List<String>>(emptyList()) }
+    var voiceGuess by remember { mutableStateOf<String?>(null) }
+    var voiceChoices by remember { mutableStateOf<List<String>>(emptyList()) }
     var listenTick by remember { mutableStateOf(0) }
     val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) listenTick++ else voiceNote = "Microphone permission is needed for voice answers."
+    }
+
+    fun clearVoicePrompts() {
+        voiceGuess = null
+        voiceChoices = emptyList()
+        voiceNote = null
     }
 
     // Optional keyed answers: the straight key + decoder, live while the toggle
@@ -268,6 +282,9 @@ fun QuizScreen(
         unlockedNote = null
         listening = false
         voiceNote = null
+        voiceGuess = null
+        voiceChoices = emptyList()
+        voiceHeard = emptyList()
         recognizer.cancel()
         keyer.clear()
         player.play(drill.playable, Settings.sidetoneHz, Settings.timing()) { toneFinishedAt = System.nanoTime() }
@@ -331,6 +348,16 @@ fun QuizScreen(
         revealed = true
     }
 
+    /** A confirmed/corrected voice answer: teach the profile, then grade. */
+    fun acceptVoice(token: String) {
+        voiceHeard.firstOrNull()?.let { heard ->
+            voiceMatcher.profile.record(heard, token)
+            VoiceProfileStore.save(voiceMatcher.profile)
+        }
+        clearVoicePrompts()
+        answer(token)
+    }
+
     // Keyed answers auto-submit once the decoded copy reaches the answer's
     // length and the key has gone idle (the Sending Practice rhythm).
     LaunchedEffect(keyer.decodedText, keyer.isKeying, revealed, round) {
@@ -344,14 +371,21 @@ fun QuizScreen(
     LaunchedEffect(listenTick) {
         if (listenTick == 0 || revealed || phase != QuizPhase.RUNNING) return@LaunchedEffect
         listening = true
-        voiceNote = null
+        clearVoicePrompts()
         recognizer.start(
-            hints = drill.options,
+            // Bias the recognizer toward every spoken form of every option
+            // (NATO words, letter names, digit words, spelled variants).
+            hints = voiceMatcher.contextualStrings(drill.options),
             onResult = { candidates ->
                 listening = false
-                val matched = AnswerMatch.match(candidates, drill.options)
-                if (matched != null) answer(matched)
-                else voiceNote = "Didn't catch that — tap an option or try again."
+                voiceHeard = candidates
+                val res = voiceMatcher.interpret(candidates, drill.options)
+                val token = res.token
+                when {
+                    token != null && res.isConfident -> answer(token)
+                    token != null -> voiceGuess = token
+                    else -> voiceNote = "Didn't catch that — tap an option or try again."
+                }
             },
             onError = {
                 listening = false
@@ -516,6 +550,44 @@ fun QuizScreen(
                     Icon(Icons.Filled.Mic, contentDescription = null, modifier = Modifier.size(18.dp))
                     Text(if (listening) "  Listening…" else "  Speak answer")
                 }
+
+                // Not sure what was said: confirm the best guess…
+                voiceGuess?.let { guess ->
+                    Spacer(Modifier.height(8.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            "Did you say “$guess”?",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = Brand.textPrimary
+                        )
+                        TextButton(onClick = { acceptVoice(guess) }) { Text("Yes") }
+                        TextButton(onClick = {
+                            // …or fall back to picking the closest-sounding answers.
+                            voiceGuess = null
+                            voiceChoices = voiceMatcher
+                                .rankedCandidates(voiceHeard, drill.options)
+                                .filter { it != guess }
+                                .take(3)
+                        }) { Text("No") }
+                    }
+                }
+                if (voiceChoices.isNotEmpty()) {
+                    Spacer(Modifier.height(4.dp))
+                    Text("I said:", style = MaterialTheme.typography.labelMedium, color = Brand.textSecondary)
+                    Row(
+                        modifier = Modifier.horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        voiceChoices.forEach { choice ->
+                            OutlinedButton(onClick = { acceptVoice(choice) }) { Text(choice, maxLines = 1) }
+                        }
+                        TextButton(onClick = { clearVoicePrompts() }) { Text("None") }
+                    }
+                }
+
                 voiceNote?.let {
                     Spacer(Modifier.height(6.dp))
                     Text(it, style = MaterialTheme.typography.labelMedium, color = Brand.textSecondary, textAlign = TextAlign.Center)
