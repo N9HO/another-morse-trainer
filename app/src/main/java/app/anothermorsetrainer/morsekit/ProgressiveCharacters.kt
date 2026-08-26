@@ -41,6 +41,15 @@ class ProgressiveCharacters(
     var stage: Stage = Stage.Singles
         private set
 
+    /**
+     * A learner-chosen stage. While set, the track serves exactly this stage
+     * and never auto-advances (or auto-leaves singles), so picking "Characters"
+     * keeps serving characters even with the whole ladder mastered (issue #51).
+     * `null` = automatic progression, the default.
+     */
+    var pinnedStage: Stage? = null
+        private set
+
     private val prosignItems = MorseData.prosignTokenItems
     private val phraseItems = MorseData.wordAndCallSignItems
 
@@ -68,8 +77,9 @@ class ProgressiveCharacters(
         get() = if (stage == Stage.Singles) engine.summary else stage.displayName
 
     override fun nextDrill(): Drill {
-        // Leave the singles stage automatically once the ladder is complete.
-        if (stage == Stage.Singles && singlesComplete) {
+        // Leave the singles stage automatically once the ladder is complete —
+        // unless the learner pinned a stage, which always holds.
+        if (pinnedStage == null && stage == Stage.Singles && singlesComplete) {
             advance(Stage.Pairs)
         }
 
@@ -93,7 +103,7 @@ class ProgressiveCharacters(
             is LastKind.Singles -> {
                 val outcome = engine.record(choice = choice, ttr = ttr)
                 // The very answer that completes the ladder unlocks the pairs stage.
-                if (stage == Stage.Singles && singlesComplete) {
+                if (pinnedStage == null && stage == Stage.Singles && singlesComplete) {
                     advance(Stage.Pairs)
                     DrillOutcome(outcome.correct, Stage.Pairs.displayName)
                 } else {
@@ -109,7 +119,7 @@ class ProgressiveCharacters(
         val correct = choice == answer
         stageResults.add(StageResult(correct, ttr))
         if (stageResults.size > stageWindow) stageResults.removeAt(0)
-        val next = advanceIfStageMastered()
+        val next = if (pinnedStage == null) advanceIfStageMastered() else null
         return DrillOutcome(correct, next?.displayName)
     }
 
@@ -151,23 +161,44 @@ class ProgressiveCharacters(
 
     /**
      * Restart the ladder at the single-character stage (e.g. after the user
-     * changes their proficiency level).
+     * changes their proficiency level). Also returns to automatic progression —
+     * a declared restart supersedes any earlier stage choice.
      */
     fun resetToSingles() {
+        pinnedStage = null
         stage = Stage.Singles
         stageResults.clear()
     }
 
     /**
+     * Hold the track at a learner-chosen stage. Unlike [jumpToStage] this does
+     * not touch the active character set: group drills draw from whatever the
+     * learner has studied, and the phrase stage uses its own fixed pool.
+     */
+    fun pin(newStage: Stage) {
+        pinnedStage = newStage
+        stage = newStage
+        stageResults.clear()
+    }
+
+    /** Return to automatic progression, continuing from the current stage. */
+    fun unpin() {
+        pinnedStage = null
+    }
+
+    /**
      * Developer/testing aid: jump directly to a stage. For the multi-character
      * stages it makes sure there are enough learned characters to form varied
-     * groups (expanding to the full letter+number set if needed).
+     * groups (expanding to the full letter+number set if needed). A jump
+     * previews automatic progression from that stage, so it clears any pin —
+     * otherwise the pin would claim one stage while the track serves another.
      */
     fun jumpToStage(newStage: Stage) {
         if (newStage != Stage.Singles && engine.activeCharacters.size < 10) {
             engine.setActiveCharacters(MorseCode.kochOrder)
             engine.setExposedCharacters(MorseCode.kochOrder)   // dev jump: treat all as met
         }
+        pinnedStage = null
         stage = newStage
         stageResults.clear()
     }
@@ -188,7 +219,13 @@ class ProgressiveCharacters(
             if (candidate != group && candidate !in options) options.add(candidate)
         }
         // Fallback: pad with fresh random groups if mutation didn't find enough.
-        while (options.size < cap) {
+        // A small studied set can have fewer possible groups than the option
+        // cap (two characters form only four pairs — reachable with a pinned
+        // stage), so give up after enough tries instead of spinning forever;
+        // a shorter option list still plays fine.
+        var padAttempts = 0
+        while (options.size < cap && padAttempts < cap * 20) {
+            padAttempts++
             val g = (0 until size).map { pool.random(rng) }.joinToString("")
             if (g !in options) options.add(g)
         }
@@ -253,14 +290,18 @@ class ProgressiveCharacters(
 
     data class Snapshot(
         val engine: TrainerEngine.Snapshot,
-        val stage: Stage
+        val stage: Stage,
+        /** A held stage choice survives restarts (absent on older saves). */
+        val pinnedStage: Stage? = null
     )
 
-    val snapshot: Snapshot get() = Snapshot(engine = engine.snapshot, stage = stage)
+    val snapshot: Snapshot
+        get() = Snapshot(engine = engine.snapshot, stage = stage, pinnedStage = pinnedStage)
 
     fun restore(snapshot: Snapshot) {
         engine.restore(snapshot.engine)
         stage = snapshot.stage
+        pinnedStage = snapshot.pinnedStage
         stageResults.clear()
     }
 }
