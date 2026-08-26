@@ -127,7 +127,7 @@ class ProgressiveCharacters(
 
     private val singlesComplete: Boolean
         get() = engine.allActiveMastered &&
-            MorseCode.kochOrder.all { it in engine.activeCharacters }
+            engine.studyOrder.all { it in engine.activeCharacters }
 
     /** Time allowed to recognize, in seconds, scaled to the current stage. */
     private val stageAllowedTTR: Double

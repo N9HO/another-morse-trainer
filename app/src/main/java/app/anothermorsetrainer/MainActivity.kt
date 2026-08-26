@@ -42,8 +42,10 @@ val QUIZ_MODES: List<QuizMode> = listOf(
     QuizMode("Characters", "Koch-method ladder, A–Z 0–9") {
         EngineStore.characters()
     },
+    // The pool is the ranked Top-N ham words, or the learner's own list when
+    // one is enabled in Settings.
     QuizMode("Common Words", "Hear the word, pick the word") {
-        PhraseQuiz("Words", MorseData.topWordItems(Settings.wordCount), Settings.phraseConfig())
+        PhraseQuiz("Words", Settings.wordPoolItems(), Settings.phraseConfig())
     },
     QuizMode("Abbreviations", "CW shorthand → meaning") {
         PhraseQuiz("Abbreviations", MorseData.abbreviationItems, Settings.phraseConfig())

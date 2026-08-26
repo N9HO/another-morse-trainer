@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Switch
@@ -48,6 +49,7 @@ import androidx.core.content.ContextCompat
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.anothermorsetrainer.morsekit.MorseCode
 import app.anothermorsetrainer.morsekit.MorseItem
 import kotlin.math.roundToInt
 
@@ -205,6 +207,72 @@ fun SettingsScreen(onBack: () -> Unit) {
                         "count as “mastered”, how big the Common Words pool is, when to " +
                         "show the correct answer after you respond, and how long a session " +
                         "runs before it ends with a summary."
+                )
+
+                SectionHeader("My words")
+                SettingsGroup {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("Use my word list", color = Brand.textPrimary, fontWeight = FontWeight.Medium)
+                        Switch(
+                            checked = Settings.useCustomWords,
+                            onCheckedChange = { Settings.updateUseCustomWords(it) },
+                            colors = switchColors()
+                        )
+                    }
+                    if (Settings.useCustomWords) {
+                        GroupDivider()
+                        OutlinedTextField(
+                            value = Settings.customWordsText,
+                            onValueChange = { Settings.updateCustomWordsText(it) },
+                            placeholder = { Text("CQ DX\nANTENNA\nMORSE …") },
+                            minLines = 3,
+                            maxLines = 8,
+                            modifier = Modifier.fillMaxWidth().padding(12.dp)
+                        )
+                    }
+                }
+                SectionFooter(
+                    if (Settings.useCustomWords) {
+                        val n = Settings.customWords.size
+                        "One word per line (spaces and commas split too). " + when {
+                            n >= 2 -> "$n words ready — Common Words drills your list."
+                            else -> "Add at least two words; until then the ranked pool is used."
+                        }
+                    } else {
+                        "Practice your own words — a callsign, your name, club abbreviations — " +
+                            "in Common Words instead of the ranked pool."
+                    }
+                )
+
+                SectionHeader("Punctuation")
+                SettingsGroup {
+                    MorseCode.pickablePunctuation.forEachIndexed { i, ch ->
+                        if (i > 0) GroupDivider()
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(punctuationLabel(ch), color = Brand.textPrimary, fontWeight = FontWeight.Medium)
+                            Switch(
+                                checked = ch in Settings.punctuationChars,
+                                onCheckedChange = {
+                                    Settings.togglePunctuation(ch)
+                                    // The live ladder picks the new order up immediately.
+                                    EngineStore.applyStudyOrder()
+                                },
+                                colors = switchColors()
+                            )
+                        }
+                    }
+                }
+                SectionFooter(
+                    "Study punctuation too. Opted-in marks join the Characters ladder " +
+                        "after the letters and numbers."
                 )
 
                 SectionHeader("Starting level")
@@ -376,6 +444,13 @@ private fun switchColors() = SwitchDefaults.colors(
     uncheckedThumbColor = Brand.textSecondary,
     uncheckedTrackColor = Brand.navyRaised
 )
+
+private fun punctuationLabel(ch: Char): String = when (ch) {
+    '.' -> "Period  ( . )"
+    ',' -> "Comma  ( , )"
+    '/' -> "Slash  ( / )"
+    else -> "$ch"
+}
 
 private fun formatTime(hour: Int, minute: Int): String {
     val ampm = if (hour < 12) "AM" else "PM"

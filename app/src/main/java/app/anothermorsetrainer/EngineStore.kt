@@ -39,8 +39,17 @@ object EngineStore {
         val chars = ProgressiveCharacters(engine)
         val saved = load()
         if (saved != null) chars.restore(saved) else Settings.applyProficiency(engine)
+        engine.studyOrder = Settings.studyOrder()
         tracked = chars
         return chars
+    }
+
+    /**
+     * Re-derive the introduction order (Koch core + opted-in punctuation) on
+     * the live engine after a settings change. Derived state, so nothing to save.
+     */
+    fun applyStudyOrder() {
+        tracked?.engine?.studyOrder = Settings.studyOrder()
     }
 
     /** Persist the tracked track's current snapshot (no-op when none is live). */
