@@ -49,7 +49,7 @@ Requires JDK 17 (Android Studio's bundled JBR works) and the Android SDK.
 ./gradlew bundleRelease      # signed release AAB (needs keystore.properties — see RELEASE.md)
 ```
 
-`compileSdk`/`targetSdk` 35, `minSdk` 24.
+`compileSdk`/`targetSdk` 36, `minSdk` 24.
 
 ## Release
 

@@ -14,12 +14,12 @@ val keystoreProps = Properties().apply {
 
 android {
     namespace = "app.anothermorsetrainer"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "app.anothermorsetrainer"
         minSdk = 24
-        targetSdk = 35
+        targetSdk = 36
         versionCode = 3
         versionName = "1.2"
     }
