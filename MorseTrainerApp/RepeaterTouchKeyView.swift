@@ -18,11 +18,11 @@ struct RepeaterTouchKeyView: View {
             VStack(spacing: 6) {
                 Image(systemName: "dot.radiowaves.left.and.right")
                     .font(.system(size: 30, weight: .semibold))
-                    .foregroundStyle(isPressed ? .white : Theme.teal)
+                    .foregroundStyle(isPressed ? Theme.navy : Theme.teal)
                 Text(isPressed ? "TRANSMITTING" : "HOLD TO KEY")
                     .font(.system(size: 13, weight: .bold))
                     .tracking(1.5)
-                    .foregroundStyle(isPressed ? .white : Theme.textSecondary)
+                    .foregroundStyle(isPressed ? Theme.navy : Theme.textSecondary)
                 Text(model.breakInEnabled ? "Break-in LIVE · TX \(midiNoteName(model.txTone))"
                                           : "Break-in OFF · sidetone only")
                     .font(.caption2)

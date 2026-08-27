@@ -84,18 +84,11 @@ struct ContentView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .principal) { modeMenu }
-                ToolbarItem(placement: .topBarLeading) {
-                    // Passive readout of the current session's scope (e.g.
-                    // "11 chars", "Story 1 of 5"). Not a control — scale the
-                    // text to fit rather than truncate to a cryptic "11 c…".
-                    Text(model.summary)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
-                        .allowsHitTesting(false)
-                        .accessibilityLabel("Current session: \(model.summary)")
-                }
+                // NOTE: the session-scope readout ("11 chars", "Story 1 of 5")
+                // used to sit here as a topBarLeading item, where the toolbar
+                // dressed it up as a cryptic truncated button ("155 h…" —
+                // issue #61). It now lives in the session bar below, where it
+                // renders in full and doesn't masquerade as a control.
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { showBrag = true } label: {
                         Image(systemName: "rosette")
@@ -230,7 +223,8 @@ struct ContentView: View {
             if model.shouldReveal, let drill = model.drill {
                 VStack(spacing: 2) {
                     Text(drill.revealPrimary)
-                        .font(.system(size: 40, weight: .bold, design: .monospaced))
+                        .font(Theme.copyFont(size: 40, weight: .bold, monospaced: true,
+                                             slashedZero: model.settings.slashedZero))
                     if !drill.revealSecondary.isEmpty {
                         Text(drill.revealSecondary)
                             .font(.title3)
@@ -260,7 +254,8 @@ struct ContentView: View {
         VStack(spacing: 8) {
             Text("You heard:").font(.subheadline).foregroundStyle(.secondary)
             Text(model.drill?.revealPrimary ?? "")
-                .font(.system(size: 44, weight: .bold, design: .monospaced))
+                .font(Theme.copyFont(size: 44, weight: .bold, monospaced: true,
+                                     slashedZero: model.settings.slashedZero))
             if let ttr = model.lastTTR {
                 Text(String(format: "recalled in %.1f s", ttr))
                     .font(.caption).foregroundStyle(.secondary)
@@ -295,6 +290,7 @@ struct ContentView: View {
                     } label: {
                         Text("Reveal")
                             .font(.headline)
+                            .foregroundStyle(Theme.navy)
                             .frame(maxWidth: .infinity, minHeight: 56)
                     }
                     .buttonStyle(.borderedProminent)
@@ -341,7 +337,8 @@ struct ContentView: View {
             ScrollView {
                 if model.storyRevealed {
                     Text(model.storyText)
-                        .font(.system(.title3, design: .monospaced))
+                        .font(Theme.copyFont(style: .title3, monospaced: true,
+                                             slashedZero: model.settings.slashedZero))
                         .lineSpacing(6)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .textSelection(.enabled)
@@ -429,7 +426,8 @@ struct ContentView: View {
                 } label: {
                     Label(model.storyRevealed ? "Replay" : "Play",
                           systemImage: "play.fill")
-                        .font(.headline).frame(maxWidth: .infinity, minHeight: 52)
+                        .font(.headline).foregroundStyle(Theme.navy)
+                        .frame(maxWidth: .infinity, minHeight: 52)
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(model.storyText.isEmpty || (model.isNewsStory && model.newsFetching))
@@ -499,7 +497,8 @@ struct ContentView: View {
                 model.playExam()
             } label: {
                 Label("Start Sending", systemImage: "play.fill")
-                    .font(.headline).frame(maxWidth: .infinity, minHeight: 56)
+                    .font(.headline).foregroundStyle(Theme.navy)
+                    .frame(maxWidth: .infinity, minHeight: 56)
             }
             .buttonStyle(.borderedProminent)
         }
@@ -547,7 +546,8 @@ struct ContentView: View {
                 model.submitExamCopy(examCopy)
             } label: {
                 Text("Grade my copy")
-                    .font(.headline).frame(maxWidth: .infinity, minHeight: 52)
+                    .font(.headline).foregroundStyle(Theme.navy)
+                    .frame(maxWidth: .infinity, minHeight: 52)
             }
             .buttonStyle(.borderedProminent)
             .disabled(examCopy.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
@@ -576,6 +576,7 @@ struct ContentView: View {
                     } label: {
                         Text(option)
                             .font(optionFont(option))
+                            .foregroundStyle(Theme.prominentLabel(on: examTint(for: option)))
                             .multilineTextAlignment(.center)
                             .minimumScaleFactor(0.6)
                             .frame(maxWidth: .infinity, minHeight: 72)
@@ -600,7 +601,8 @@ struct ContentView: View {
                     model.nextExamQuestion()
                 } label: {
                     Text("Next")
-                        .font(.headline).frame(maxWidth: .infinity, minHeight: 50)
+                        .font(.headline).foregroundStyle(Theme.navy)
+                        .frame(maxWidth: .infinity, minHeight: 50)
                 }
                 .buttonStyle(.borderedProminent)
             } else {
@@ -640,7 +642,8 @@ struct ContentView: View {
                     Text("What was sent:")
                         .font(.subheadline).foregroundStyle(.secondary)
                     Text(model.examPassageText)
-                        .font(.system(.body, design: .monospaced))
+                        .font(Theme.copyFont(style: .body, monospaced: true,
+                                             slashedZero: model.settings.slashedZero))
                         .lineSpacing(5)
                         .textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -654,7 +657,8 @@ struct ContentView: View {
                     model.newExam()
                 } label: {
                     Label("New exam", systemImage: "arrow.clockwise")
-                        .font(.headline).frame(maxWidth: .infinity, minHeight: 52)
+                        .font(.headline).foregroundStyle(Theme.navy)
+                        .frame(maxWidth: .infinity, minHeight: 52)
                 }
                 .buttonStyle(.borderedProminent)
             }
@@ -678,7 +682,8 @@ struct ContentView: View {
                 Text("Listen…").font(.title3).foregroundStyle(.secondary)
             } else if !model.listenDisplay.isEmpty {
                 Text(model.listenDisplay)
-                    .font(.system(size: 44, weight: .bold, design: .monospaced))
+                    .font(Theme.copyFont(size: 44, weight: .bold, monospaced: true,
+                                         slashedZero: model.settings.slashedZero))
                     .multilineTextAlignment(.center)
                     .minimumScaleFactor(0.5)
                     .transition(.opacity)
@@ -694,6 +699,7 @@ struct ContentView: View {
                 Label(model.listenPaused ? "Resume" : "Pause",
                       systemImage: model.listenPaused ? "play.fill" : "pause.fill")
                     .font(.headline)
+                    .foregroundStyle(Theme.navy)
                     .frame(maxWidth: .infinity, minHeight: 56)
             }
             .buttonStyle(.borderedProminent)
@@ -726,7 +732,8 @@ struct ContentView: View {
                     Text("Sent")
                         .font(.subheadline).foregroundStyle(.secondary)
                     Text(sent)
-                        .font(.system(size: 46, weight: .bold, design: .monospaced))
+                        .font(Theme.copyFont(size: 46, weight: .bold, monospaced: true,
+                                             slashedZero: model.settings.slashedZero))
                         .multilineTextAlignment(.center)
                         .minimumScaleFactor(0.5)
                         .transition(.opacity)
@@ -807,7 +814,8 @@ struct ContentView: View {
             }
             if qsoHintShown, let hint = qsoHintLine {
                 Text(hint)
-                    .font(.system(.caption, design: .monospaced))
+                    .font(Theme.copyFont(style: .caption1, monospaced: true,
+                                         slashedZero: model.settings.slashedZero))
                     .foregroundStyle(Theme.textSecondary)
                     .multilineTextAlignment(.center)
             }
@@ -873,10 +881,12 @@ struct ContentView: View {
                     ForEach(model.qsoLog) { q in
                         HStack {
                             Text(q.call)
-                                .font(.system(.body, design: .monospaced)).bold()
+                                .font(Theme.copyFont(style: .body, weight: .bold, monospaced: true,
+                                                     slashedZero: model.settings.slashedZero))
                             Spacer()
                             Text(q.exchange)
-                                .font(.system(.body, design: .monospaced))
+                                .font(Theme.copyFont(style: .body, monospaced: true,
+                                                     slashedZero: model.settings.slashedZero))
                                 .foregroundStyle(Theme.textSecondary)
                             Text("\(q.wpm)w")
                                 .font(.caption2).foregroundStyle(.secondary)
@@ -971,6 +981,7 @@ struct ContentView: View {
             Button(action: submitTyped) {
                 Text("Submit")
                     .font(.headline)
+                    .foregroundStyle(Theme.navy)
                     .frame(maxWidth: .infinity, minHeight: 50)
             }
             .buttonStyle(.borderedProminent)
@@ -1039,7 +1050,8 @@ struct ContentView: View {
                     .buttonStyle(.bordered)
                     Button { model.confirmVoiceGuess(true) } label: {
                         Label("Yes", systemImage: "checkmark")
-                            .font(.headline).frame(maxWidth: .infinity, minHeight: 52)
+                            .font(.headline).foregroundStyle(Theme.navy)
+                            .frame(maxWidth: .infinity, minHeight: 52)
                     }
                     .buttonStyle(.borderedProminent)
                 }
@@ -1068,6 +1080,7 @@ struct ContentView: View {
                 } label: {
                     Text(option)
                         .font(optionFont(option))
+                        .foregroundStyle(Theme.navy)
                         .multilineTextAlignment(.center)
                         .minimumScaleFactor(0.6)
                         .frame(maxWidth: .infinity, minHeight: 80)
@@ -1146,6 +1159,7 @@ struct ContentView: View {
                 } label: {
                     Text(option)
                         .font(optionFont(option))
+                        .foregroundStyle(Theme.prominentLabel(on: tint(for: option)))
                         .multilineTextAlignment(.center)
                         .minimumScaleFactor(0.6)
                         .frame(maxWidth: .infinity, minHeight: 80)
@@ -1159,11 +1173,14 @@ struct ContentView: View {
         .animation(.easeInOut(duration: 0.2), value: model.phase)
     }
 
-    /// Big monospaced for short tokens, smaller for word-y meanings.
+    /// Big monospaced for short tokens, smaller for word-y meanings. Digits
+    /// carry the slashed zero so 0 and O options can't be confused (#62).
     private func optionFont(_ option: String) -> Font {
         option.count <= 3
-            ? .system(size: 38, weight: .semibold, design: .monospaced)
-            : .system(size: 18, weight: .semibold)
+            ? Theme.copyFont(size: 38, weight: .semibold, monospaced: true,
+                             slashedZero: model.settings.slashedZero)
+            : Theme.copyFont(size: 18, weight: .semibold,
+                             slashedZero: model.settings.slashedZero)
     }
 
     private func tint(for option: String) -> Color {
@@ -1183,6 +1200,7 @@ struct ContentView: View {
             } label: {
                 Text("Next")
                     .font(.headline)
+                    .foregroundStyle(Theme.navy)
                     .frame(maxWidth: .infinity, minHeight: 50)
             }
             .buttonStyle(.borderedProminent)
@@ -1214,6 +1232,15 @@ struct ContentView: View {
                 Label(sessionTimeText, systemImage: "timer")
                     .monospacedDigit()
             }
+            Spacer()
+            // Passive readout of the current session's scope (e.g. "11 chars",
+            // "Story 1 of 5") — a plain label with room to breathe, not a
+            // toolbar chip that truncates into a phantom button (issue #61).
+            Text(model.summary)
+                .font(.footnote)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .accessibilityLabel("Current session: \(model.summary)")
             Spacer()
             Button(role: .destructive) {
                 model.endSession()
@@ -1339,6 +1366,7 @@ struct ContentView: View {
                 } label: {
                     Label("Practice again", systemImage: "arrow.clockwise")
                         .font(.headline)
+                        .foregroundStyle(Theme.navy)
                         .frame(maxWidth: .infinity, minHeight: 52)
                 }
                 .buttonStyle(.borderedProminent)

@@ -137,7 +137,7 @@ struct SendingDrillView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
                         .background(Theme.teal, in: Capsule())
-                        .foregroundStyle(.white)
+                        .foregroundStyle(Theme.navy)
                 }
                 .buttonStyle(.plain)
             }

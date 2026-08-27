@@ -502,6 +502,9 @@ struct AppSettings: Codable, Equatable {
     var allowReplay: Bool = false
     /// Buzz on answers, taps, and key-downs. Off silences every haptic.
     var hapticsEnabled: Bool = true
+    /// Show the digit 0 with a slash through it wherever copy text is
+    /// displayed (the operator's handwriting convention — issue #62).
+    var slashedZero: Bool = true
 
     // Head Copy
     /// How many times Head Copy automatically replays the prompt after the first
@@ -559,7 +562,7 @@ extension AppSettings {
         case contest
         case rapidFire
         case story
-        case showCorrectness, reveal, allowReplay, hapticsEnabled
+        case showCorrectness, reveal, allowReplay, hapticsEnabled, slashedZero
         case headCopyRepeats, headCopyRevealSeconds
     }
 
@@ -602,6 +605,7 @@ extension AppSettings {
         s.reveal = try c.decodeIfPresent(RevealMode.self, forKey: .reveal) ?? s.reveal
         s.allowReplay = try c.decodeIfPresent(Bool.self, forKey: .allowReplay) ?? s.allowReplay
         s.hapticsEnabled = try c.decodeIfPresent(Bool.self, forKey: .hapticsEnabled) ?? s.hapticsEnabled
+        s.slashedZero = try c.decodeIfPresent(Bool.self, forKey: .slashedZero) ?? s.slashedZero
         let hcr = try c.decodeIfPresent(Int.self, forKey: .headCopyRepeats) ?? s.headCopyRepeats
         s.headCopyRepeats = min(max(hcr, AppSettings.headCopyRepeatRange.lowerBound),
                                 AppSettings.headCopyRepeatRange.upperBound)

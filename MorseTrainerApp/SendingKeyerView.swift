@@ -38,7 +38,8 @@ struct SendingKeyerView: View {
                 .font(.system(size: 10, weight: .bold)).tracking(1.5)
                 .foregroundStyle(Theme.textSecondary)
             Text(sender.decodedText.isEmpty ? "—" : sender.decodedText)
-                .font(.system(size: 34, weight: .semibold, design: .monospaced))
+                .font(Theme.copyFont(size: 34, weight: .semibold, monospaced: true,
+                                     slashedZero: model.settings.slashedZero))
                 .foregroundStyle(sender.decodedText.isEmpty ? Theme.textSecondary : .white)
                 .lineLimit(1).minimumScaleFactor(0.5)
                 .frame(maxWidth: .infinity, minHeight: 50)
@@ -58,10 +59,10 @@ struct SendingKeyerView: View {
             VStack(spacing: 4) {
                 Image(systemName: "dot.radiowaves.left.and.right")
                     .font(.system(size: 26, weight: .semibold))
-                    .foregroundStyle(keyPressed ? .white : Theme.teal)
+                    .foregroundStyle(keyPressed ? Theme.navy : Theme.teal)
                 Text("HOLD TO KEY")
                     .font(.system(size: 12, weight: .bold)).tracking(1.5)
-                    .foregroundStyle(keyPressed ? .white : Theme.textSecondary)
+                    .foregroundStyle(keyPressed ? Theme.navy : Theme.textSecondary)
             }
         }
         .frame(height: 120)
@@ -92,6 +93,7 @@ struct SendingKeyerView: View {
 
             Button { submit() } label: {
                 Label("Submit", systemImage: "checkmark")
+                    .foregroundStyle(Theme.navy)
                     .frame(maxWidth: .infinity, minHeight: 44)
             }
             .buttonStyle(.borderedProminent)

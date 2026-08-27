@@ -120,6 +120,7 @@ struct RepeaterView: View {
             } label: {
                 Text(connected ? "Disconnect" : "Connect")
                     .font(.headline)
+                    .foregroundStyle(connected ? .white : Theme.navy)
                     .frame(maxWidth: .infinity, minHeight: 46)
             }
             .buttonStyle(.borderedProminent)

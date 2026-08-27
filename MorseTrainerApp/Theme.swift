@@ -1,4 +1,5 @@
 import SwiftUI
+import CoreText
 
 /// Brand palette + reusable styling, derived from the "Another Morse Trainer"
 /// logo: a deep navy field, a bright teal accent, and white marks.
@@ -25,6 +26,49 @@ enum Theme {
     /// Standard corner radius used across cards, tiles, and prominent buttons,
     /// so curvature stays consistent everywhere.
     static let cornerRadius: CGFloat = 16
+
+    /// Label color for a filled (prominent) control with the given tint. The
+    /// brand teal is light enough that the default white label fails WCAG
+    /// contrast (issue #59) — the deep navy reads on it at ~7:1. Darker fills
+    /// (stop-red, correct-green, disabled gray) keep the conventional white.
+    static func prominentLabel(on tint: Color) -> Color {
+        tint == teal || tint == tealBright ? navy : .white
+    }
+
+    // MARK: - Slashed zero (issue #62)
+
+    /// A system font for displayed copy text, rendering the digit 0 with a
+    /// slash — the operator's handwriting convention for telling 0 from O —
+    /// when `slashedZero` is on. SF Pro and SF Mono both carry the alternate
+    /// glyph (Typographic Extras ▸ Slashed Zero); a face without it silently
+    /// keeps its plain zero, so this can never break rendering.
+    static func copyFont(size: CGFloat, weight: UIFont.Weight = .regular,
+                         monospaced: Bool = false, slashedZero: Bool) -> Font {
+        let base = monospaced
+            ? UIFont.monospacedSystemFont(ofSize: size, weight: weight)
+            : UIFont.systemFont(ofSize: size, weight: weight)
+        return Font(slashedZero ? slashed(base) : base)
+    }
+
+    /// Dynamic-Type–scaled variant for text-style-based copy displays.
+    static func copyFont(style: UIFont.TextStyle, weight: UIFont.Weight = .regular,
+                         monospaced: Bool = false, slashedZero: Bool) -> Font {
+        let size = UIFont.preferredFont(forTextStyle: style).pointSize
+        let base = monospaced
+            ? UIFont.monospacedSystemFont(ofSize: size, weight: weight)
+            : UIFont.systemFont(ofSize: size, weight: weight)
+        let font = slashedZero ? slashed(base) : base
+        return Font(UIFontMetrics(forTextStyle: style).scaledFont(for: font))
+    }
+
+    private static func slashed(_ base: UIFont) -> UIFont {
+        let feature: [UIFontDescriptor.FeatureKey: Int] = [
+            .type: kTypographicExtrasType,
+            .selector: kSlashedZeroOnSelector
+        ]
+        let descriptor = base.fontDescriptor.addingAttributes([.featureSettings: [feature]])
+        return UIFont(descriptor: descriptor, size: base.pointSize)
+    }
 
     /// Phone-first layouts stretch ugly on iPad; cap readable content to this
     /// width (matches Android's Responsive.CONTENT_MAX_WIDTH).
