@@ -4,16 +4,27 @@ name: Discord release announcement
 # Builds a changelog from the commits since the previous tag and posts a formatted
 # embed to a Discord channel via an incoming webhook. No app build / code signing here —
 # you build & upload to TestFlight locally; this just announces the new build.
+#
+# Manual runs (Actions tab or API) take extra inputs:
+#   tag             — tag to announce; defaults to the nearest tag from the run's ref
+#   testflight_link — public TestFlight join URL to include (verified before posting)
+#   dry_run         — "true" builds and prints the payload but posts nothing
 on:
   push:
     tags:
       - 'v*'
-  # Lets you test the post from the Actions tab without cutting a real tag.
   workflow_dispatch:
     inputs:
       tag:
         description: 'Tag to announce (defaults to latest)'
         required: false
+      testflight_link:
+        description: 'Public TestFlight join link to include (https://testflight.apple.com/join/…)'
+        required: false
+      dry_run:
+        description: 'Set to "true" to print the payload without posting'
+        required: false
+        default: 'false'
 
 permissions:
   contents: read
@@ -31,67 +42,134 @@ jobs:
         id: info
         env:
           REPO: ${{ github.repository }}
+          TAG_INPUT: ${{ github.event.inputs.tag }}
         run: |
           set -euo pipefail
 
           # Resolve the tag we're announcing.
-          if [ -n "${{ github.event.inputs.tag }}" ]; then
-            TAG="${{ github.event.inputs.tag }}"
+          if [ -n "${TAG_INPUT:-}" ]; then
+            TAG="$TAG_INPUT"
           elif [ "${{ github.ref_type }}" = "tag" ]; then
             TAG="${{ github.ref_name }}"
           else
-            TAG="$(git describe --tags --abbrev=0)"
+            TAG="$(git describe --tags --abbrev=0 2>/dev/null || true)"
+          fi
+          if [ -z "$TAG" ]; then
+            echo "::error::No tag to announce — the repository has no tag reachable from this ref."
+            exit 1
           fi
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
-          # Previous tag (if any) to bound the changelog.
-          PREV="$(git describe --tags --abbrev=0 "${TAG}^" 2>/dev/null || true)"
+          # The changelog always ends at the commit this run checked out (HEAD).
+          # On a tag push HEAD is the tagged commit, so this matches the old
+          # behavior; on a manual run from a branch it means "everything shipped
+          # since the last tag", even when the tag itself sits a few commits back.
+          HEAD_SHA="$(git rev-parse HEAD)"
+          PREV="$(git describe --tags --abbrev=0 "${HEAD_SHA}^" 2>/dev/null || true)"
           if [ -n "$PREV" ]; then
-            RANGE="${PREV}..${TAG}"
-            COMPARE="https://github.com/${REPO}/compare/${PREV}...${TAG}"
+            RANGE="${PREV}..HEAD"
           else
-            RANGE="$TAG"
+            RANGE="HEAD"
+          fi
+
+          # Compare link: use the tag name when it points at HEAD, the sha otherwise.
+          if [ "$(git rev-parse "refs/tags/${TAG}^{commit}" 2>/dev/null || true)" = "$HEAD_SHA" ]; then
+            END="$TAG"
+          else
+            END="${HEAD_SHA:0:12}"
+          fi
+          if [ -n "$PREV" ]; then
+            COMPARE="https://github.com/${REPO}/compare/${PREV}...${END}"
+          else
             COMPARE="https://github.com/${REPO}/releases/tag/${TAG}"
           fi
           echo "compare=$COMPARE" >> "$GITHUB_OUTPUT"
 
-          # Changelog: one bullet per commit, capped so the embed stays under Discord's limit.
-          LOG="$(git log --no-merges --pretty=format:'• %s' "$RANGE" | head -25)"
+          # Changelog: one bullet per commit, newest first. -25 caps it inside git
+          # (piping through `head` dies of SIGPIPE under pipefail once the range
+          # outgrows the cap — that's what broke the first two runs of this job).
+          # CI/tooling-only commits and the TestFlight handoff notes aren't release
+          # content, so commits touching only those paths are excluded.
+          LOG="$(git log --no-merges -25 --pretty=format:'• %s' "$RANGE" -- \
+                 . ':(exclude).github' ':(exclude)tools' ':(exclude)HANDOFF.md')"
           [ -z "$LOG" ] && LOG="• (no commits found in range)"
-          # Escape for JSON embedding.
-          LOG="${LOG//\\/\\\\}"
-          LOG="${LOG//\"/\\\"}"
-          LOG="${LOG//$'\n'/\\n}"
-          echo "changelog=$LOG" >> "$GITHUB_OUTPUT"
+          {
+            echo 'changelog<<CHANGELOG_EOF'
+            echo "$LOG"
+            echo 'CHANGELOG_EOF'
+          } >> "$GITHUB_OUTPUT"
 
           # ISO-8601 timestamp for the embed footer.
           echo "ts=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
 
+      - name: Verify the TestFlight link resolves
+        if: ${{ github.event.inputs.testflight_link != '' }}
+        env:
+          LINK: ${{ github.event.inputs.testflight_link }}
+          DRY_RUN: ${{ github.event.inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          CODE="$(curl -s -o /dev/null -w '%{http_code}' -L --max-time 30 "$LINK" || echo 000)"
+          echo "GET $LINK -> HTTP $CODE"
+          if [ "$CODE" != "200" ]; then
+            if [ "${DRY_RUN:-}" = "true" ]; then
+              echo "::warning::TestFlight link did not return 200 (got $CODE) — a real run would stop here."
+            else
+              echo "::error::TestFlight link did not return 200 (got $CODE); refusing to announce a dead link."
+              exit 1
+            fi
+          fi
+
       - name: Post to Discord
         env:
           WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          TAG: ${{ steps.info.outputs.tag }}
+          COMPARE: ${{ steps.info.outputs.compare }}
+          CHANGELOG: ${{ steps.info.outputs.changelog }}
+          TS: ${{ steps.info.outputs.ts }}
+          LINK: ${{ github.event.inputs.testflight_link }}
+          DRY_RUN: ${{ github.event.inputs.dry_run }}
         run: |
           set -euo pipefail
+
+          # jq builds correctly-escaped JSON from the raw values.
+          PAYLOAD="$(jq -n \
+            --arg tag "$TAG" \
+            --arg compare "$COMPARE" \
+            --arg log "$CHANGELOG" \
+            --arg ts "$TS" \
+            --arg link "${LINK:-}" \
+            '{
+              username: "Another Morse Trainer",
+              embeds: [{
+                title: "📱 New build — \($tag)",
+                url: $compare,
+                description: ((if $link != ""
+                               then "A new TestFlight build is out.\n\n🔗 **Join the beta:** \($link)\n\n"
+                               else "A new TestFlight build is on the way.\n\n" end)
+                              + "**Changelog**\n\($log)"),
+                color: 3447003,
+                footer: { text: "Another Morse Trainer • iOS" },
+                timestamp: $ts
+              }]
+            }')"
+
+          if [ "${DRY_RUN:-}" = "true" ]; then
+            echo "── dry run: payload that would be posted ──"
+            printf '%s\n' "$PAYLOAD"
+            if [ -n "${WEBHOOK:-}" ]; then
+              echo "── dry run: DISCORD_WEBHOOK_URL secret is present ──"
+            else
+              echo "── dry run: DISCORD_WEBHOOK_URL secret is MISSING ──"
+            fi
+            exit 0
+          fi
+
           if [ -z "${WEBHOOK:-}" ]; then
             echo "::error::DISCORD_WEBHOOK_URL secret is not set. Add it in Settings → Secrets and variables → Actions."
             exit 1
           fi
 
-          PAYLOAD=$(cat <<'JSON'
-          {
-            "username": "Another Morse Trainer",
-            "embeds": [{
-              "title": "📱 New build — ${{ steps.info.outputs.tag }}",
-              "url": "${{ steps.info.outputs.compare }}",
-              "description": "A new TestFlight build is on the way.\n\n**Changelog**\n${{ steps.info.outputs.changelog }}",
-              "color": 3447003,
-              "footer": { "text": "Another Morse Trainer • iOS" },
-              "timestamp": "${{ steps.info.outputs.ts }}"
-            }]
-          }
-          JSON
-          )
-
           curl -fsS -X POST -H "Content-Type: application/json" \
             -d "$PAYLOAD" "$WEBHOOK" \
-            && echo "Posted ${{ steps.info.outputs.tag }} to Discord."
+            && echo "Posted $TAG to Discord."
