@@ -10,8 +10,6 @@ struct IntroView: View {
     @State private var showingSetup = false
     @State private var showingSettings = false
     @State private var showingStats = false
-    @State private var showingCustomWords = false
-    @State private var showingJourneyMap = false
     @State private var showingReference = false
     @State private var showingSendingDrill = false
     @State private var showingCWDecoder = false
@@ -20,6 +18,241 @@ struct IntroView: View {
 
     private let tileColumns = [GridItem(.flexible(), spacing: 14),
                                GridItem(.flexible(), spacing: 14)]
+
+    var body: some View {
+        VStack(spacing: 0) {
+            topBar
+
+            ScrollView {
+                VStack(spacing: 28) {
+                    header
+
+                    modePicker
+
+                    Spacer(minLength: 8)
+                }
+                .padding(24)
+                .readableWidth()
+                .animation(.easeInOut(duration: 0.22), value: model.learningMode)
+            }
+        }
+        .sheet(isPresented: $showingSetup) {
+            SessionSetupSheet(onStart: onStart)
+                .environmentObject(model)
+        }
+        .sheet(isPresented: $showingSettings) {
+            SettingsView().environmentObject(model)
+        }
+        .sheet(isPresented: $showingStats) {
+            StatsView().environmentObject(model)
+        }
+        .sheet(isPresented: $showingReference) {
+            ReferenceView().environmentObject(model)
+        }
+        .sheet(isPresented: $showingSendingDrill) {
+            SendingDrillView().environmentObject(model)
+        }
+        .sheet(isPresented: $showingCWDecoder) {
+            CWDecoderView().environmentObject(model)
+        }
+        .fullScreenCover(isPresented: $showingRepeater) {
+            RepeaterView().environmentObject(repeater)
+        }
+    }
+
+    // MARK: - Top bar
+
+    /// A slim bar with the app-wide Settings entry, so shared preferences (your
+    /// callsign, side tone, …) are reachable before a session ever starts —
+    /// not buried inside a mode's setup sheet.
+    private var topBar: some View {
+        HStack {
+            Button {
+                let myCall = model.settings.qso.myCall.trimmingCharacters(in: .whitespacesAndNewlines)
+                if repeater.callsign.hasPrefix("anon"), !myCall.isEmpty {
+                    repeater.setCallsign(myCall)
+                }
+                showingRepeater = true
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "antenna.radiowaves.left.and.right")
+                        .font(.subheadline.weight(.semibold))
+                    Text("Vail")
+                        .font(.subheadline.weight(.semibold))
+                }
+                .foregroundStyle(Theme.teal)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 7)
+                .overlay(
+                    Capsule().strokeBorder(Theme.teal.opacity(0.6), lineWidth: 1.5)
+                )
+            }
+            .accessibilityLabel("Vail repeater — go on the air")
+            Spacer()
+            Button { showingCWDecoder = true } label: {
+                Image(systemName: "waveform")
+                    .font(.title3)
+                    .foregroundStyle(Theme.teal)
+                    .padding(8)
+            }
+            .accessibilityLabel("CW decoder — turn received Morse audio into text")
+            Button { showingReference = true } label: {
+                Image(systemName: "book")
+                    .font(.title3)
+                    .foregroundStyle(Theme.teal)
+                    .padding(8)
+            }
+            .accessibilityLabel("Reference — prosigns, Q-codes, and abbreviations")
+            Button { showingSendingDrill = true } label: {
+                Image(systemName: "square.and.pencil")
+                    .font(.title3)
+                    .foregroundStyle(Theme.teal)
+                    .padding(8)
+            }
+            .accessibilityLabel("Sending drills — printable practice sheets")
+            Button { showingStats = true } label: {
+                Image(systemName: "chart.bar")
+                    .font(.title3)
+                    .foregroundStyle(Theme.teal)
+                    .padding(8)
+            }
+            .accessibilityLabel("Your stats")
+            Button { showingSettings = true } label: {
+                Image(systemName: "gearshape")
+                    .font(.title3)
+                    .foregroundStyle(Theme.teal)
+                    .padding(8)
+            }
+            .accessibilityLabel("Settings")
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
+    }
+
+    // MARK: - Header
+
+    private var header: some View {
+        VStack(spacing: 12) {
+            logoMark
+            Text("Another Morse Trainer")
+                .font(.largeTitle).bold()
+                .multilineTextAlignment(.center)
+            Text("A proud part of the Carrier Wave ecosystem.")
+                .font(.subheadline)
+                .foregroundStyle(Theme.textSecondary)
+                .multilineTextAlignment(.center)
+            streakBadge
+        }
+        .padding(.top, 8)
+    }
+
+    /// Daily practice streak, shown only once the learner has an active streak
+    /// (issue #20). A gentle nudge to come back tomorrow without nagging an
+    /// absent or first-time user.
+    @ViewBuilder
+    private var streakBadge: some View {
+        let days = model.currentStreak
+        if days > 0 {
+            let milestone = AppModel.milestoneTier(forDay: days)
+            HStack(spacing: 6) {
+                Image(systemName: "flame.fill")
+                    .foregroundStyle(milestone == nil ? Theme.tealBright : .orange)
+                Text("\(days)-day streak")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.white)
+                if let milestone {
+                    Text(milestone.emoji)
+                        .font(.subheadline)
+                }
+                if model.longestStreak > days {
+                    Text("· best \(model.longestStreak)")
+                        .font(.caption)
+                        .foregroundStyle(Theme.textSecondary)
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .background(Theme.navyElevated, in: Capsule())
+            .overlay(Capsule().strokeBorder(milestone == nil ? Theme.hairline : Color.orange.opacity(0.5), lineWidth: 1))
+            .padding(.top, 4)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(streakAccessibilityLabel(days: days))
+        }
+    }
+
+    private func streakAccessibilityLabel(days: Int) -> String {
+        var label = "\(days) day practice streak."
+        if let m = AppModel.milestoneTier(forDay: days) { label += " \(m.day)-day milestone reached." }
+        if model.longestStreak > days { label += " Best ever \(model.longestStreak) days." }
+        return label
+    }
+
+    // MARK: - Mode picker (tiles)
+
+    private var modePicker: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            sectionTitle("Choose your practice", systemImage: "square.grid.2x2")
+            LazyVGrid(columns: tileColumns, spacing: 14) {
+                ForEach(TrainingMode.allCases) { mode in
+                    // Every tile is a real button: one tap opens that mode's
+                    // pre-flight options with Start right there — no separate
+                    // Continue press (issue #60).
+                    ModeTile(mode: mode,
+                             isSelected: model.learningMode == mode) {
+                        Haptics.selection()
+                        model.learningMode = mode
+                        showingSetup = true
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - Building blocks
+
+    private func sectionTitle(_ text: String, systemImage: String) -> some View {
+        Label(text, systemImage: systemImage)
+            .font(.title3).bold()
+            .foregroundStyle(.primary)
+    }
+
+    /// Brand mark for the welcome screen: the real logo if it's been added to
+    /// the asset catalog, otherwise a styled placeholder in the brand colors.
+    @ViewBuilder
+    private var logoMark: some View {
+        if let ui = UIImage(named: "AMTLogo") {
+            Image(uiImage: ui)
+                .resizable()
+                .scaledToFit()
+                .frame(maxWidth: 220)
+                .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+        } else {
+            ZStack {
+                Circle()
+                    .fill(Theme.teal.opacity(0.12))
+                    .frame(width: 132, height: 132)
+                Circle()
+                    .strokeBorder(Theme.teal, lineWidth: 6)
+                    .frame(width: 120, height: 120)
+                Image(systemName: "antenna.radiowaves.left.and.right")
+                    .font(.system(size: 52))
+                    .foregroundStyle(.white)
+            }
+            .accessibilityHidden(true)
+        }
+    }
+
+}
+
+
+/// The options that only matter for the currently-selected mode. They lived
+/// inline on the intro screen back when a tile only *selected* a mode and a
+/// pinned Continue button launched it; tiles now launch directly (issue #60),
+/// so the choices ride along on the pre-flight sheet instead.
+private struct ModeOptionsCard: View {
+    @EnvironmentObject var model: AppModel
+    @State private var showingCustomWords = false
+    @State private var showingJourneyMap = false
 
     private var listenContentBinding: Binding<ListenContent> {
         Binding(
@@ -162,220 +395,20 @@ struct IntroView: View {
         )
     }
 
+    /// Modes whose every knob already has a card on the sheet (duration,
+    /// stage, contest…) render no extra options card.
+    private var hasOptions: Bool {
+        switch model.learningMode {
+        case .listen, .exam, .story, .words, .qrq, .journey, .rapidFire:
+            return true
+        default:
+            return model.learningMode.supportsVoiceAnswers
+        }
+    }
+
     var body: some View {
-        VStack(spacing: 0) {
-            topBar
-
-            ScrollView {
-                VStack(spacing: 28) {
-                    header
-
-                    modePicker
-
-                    modeOptions
-
-                    Spacer(minLength: 8)
-                }
-                .padding(24)
-                .readableWidth()
-                .animation(.easeInOut(duration: 0.22), value: model.learningMode)
-            }
-
-            startBar
-        }
-        .sheet(isPresented: $showingSetup) {
-            SessionSetupSheet(onStart: onStart)
-                .environmentObject(model)
-        }
-        .sheet(isPresented: $showingSettings) {
-            SettingsView().environmentObject(model)
-        }
-        .sheet(isPresented: $showingStats) {
-            StatsView().environmentObject(model)
-        }
-        .sheet(isPresented: $showingCustomWords) {
-            CustomWordsSheet().environmentObject(model)
-        }
-        .sheet(isPresented: $showingJourneyMap) {
-            JourneyMapView().environmentObject(model)
-        }
-        .sheet(isPresented: $showingReference) {
-            ReferenceView().environmentObject(model)
-        }
-        .sheet(isPresented: $showingSendingDrill) {
-            SendingDrillView().environmentObject(model)
-        }
-        .sheet(isPresented: $showingCWDecoder) {
-            CWDecoderView()
-        }
-        .fullScreenCover(isPresented: $showingRepeater) {
-            RepeaterView().environmentObject(repeater)
-        }
-    }
-
-    // MARK: - Top bar
-
-    /// A slim bar with the app-wide Settings entry, so shared preferences (your
-    /// callsign, side tone, …) are reachable before a session ever starts —
-    /// not buried inside a mode's setup sheet.
-    private var topBar: some View {
-        HStack {
-            Button {
-                let myCall = model.settings.qso.myCall.trimmingCharacters(in: .whitespacesAndNewlines)
-                if repeater.callsign.hasPrefix("anon"), !myCall.isEmpty {
-                    repeater.setCallsign(myCall)
-                }
-                showingRepeater = true
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "antenna.radiowaves.left.and.right")
-                        .font(.subheadline.weight(.semibold))
-                    Text("Vail")
-                        .font(.subheadline.weight(.semibold))
-                }
-                .foregroundStyle(Theme.teal)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 7)
-                .overlay(
-                    Capsule().strokeBorder(Theme.teal.opacity(0.6), lineWidth: 1.5)
-                )
-            }
-            .accessibilityLabel("Vail repeater — go on the air")
-            Spacer()
-            Button { showingCWDecoder = true } label: {
-                Image(systemName: "waveform")
-                    .font(.title3)
-                    .foregroundStyle(Theme.teal)
-                    .padding(8)
-            }
-            .accessibilityLabel("CW decoder — turn received Morse audio into text")
-            Button { showingReference = true } label: {
-                Image(systemName: "book")
-                    .font(.title3)
-                    .foregroundStyle(Theme.teal)
-                    .padding(8)
-            }
-            .accessibilityLabel("Reference — prosigns, Q-codes, and abbreviations")
-            Button { showingSendingDrill = true } label: {
-                Image(systemName: "square.and.pencil")
-                    .font(.title3)
-                    .foregroundStyle(Theme.teal)
-                    .padding(8)
-            }
-            .accessibilityLabel("Sending drills — printable practice sheets")
-            Button { showingStats = true } label: {
-                Image(systemName: "chart.bar")
-                    .font(.title3)
-                    .foregroundStyle(Theme.teal)
-                    .padding(8)
-            }
-            .accessibilityLabel("Your stats")
-            Button { showingSettings = true } label: {
-                Image(systemName: "gearshape")
-                    .font(.title3)
-                    .foregroundStyle(Theme.teal)
-                    .padding(8)
-            }
-            .accessibilityLabel("Settings")
-        }
-        .padding(.horizontal, 16)
-        .padding(.top, 8)
-    }
-
-    // MARK: - Header
-
-    private var header: some View {
-        VStack(spacing: 12) {
-            logoMark
-            Text("Another Morse Trainer")
-                .font(.largeTitle).bold()
-                .multilineTextAlignment(.center)
-            Text("A proud part of the Carrier Wave ecosystem.")
-                .font(.subheadline)
-                .foregroundStyle(Theme.textSecondary)
-                .multilineTextAlignment(.center)
-            streakBadge
-        }
-        .padding(.top, 8)
-    }
-
-    /// Daily practice streak, shown only once the learner has an active streak
-    /// (issue #20). A gentle nudge to come back tomorrow without nagging an
-    /// absent or first-time user.
-    @ViewBuilder
-    private var streakBadge: some View {
-        let days = model.currentStreak
-        if days > 0 {
-            let milestone = AppModel.milestoneTier(forDay: days)
-            HStack(spacing: 6) {
-                Image(systemName: "flame.fill")
-                    .foregroundStyle(milestone == nil ? Theme.tealBright : .orange)
-                Text("\(days)-day streak")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.white)
-                if let milestone {
-                    Text(milestone.emoji)
-                        .font(.subheadline)
-                }
-                if model.longestStreak > days {
-                    Text("· best \(model.longestStreak)")
-                        .font(.caption)
-                        .foregroundStyle(Theme.textSecondary)
-                }
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
-            .background(Theme.navyElevated, in: Capsule())
-            .overlay(Capsule().strokeBorder(milestone == nil ? Theme.hairline : Color.orange.opacity(0.5), lineWidth: 1))
-            .padding(.top, 4)
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(streakAccessibilityLabel(days: days))
-        }
-    }
-
-    private func streakAccessibilityLabel(days: Int) -> String {
-        var label = "\(days) day practice streak."
-        if let m = AppModel.milestoneTier(forDay: days) { label += " \(m.day)-day milestone reached." }
-        if model.longestStreak > days { label += " Best ever \(model.longestStreak) days." }
-        return label
-    }
-
-    // MARK: - Mode picker (tiles)
-
-    private var modePicker: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            sectionTitle("Choose your practice", systemImage: "square.grid.2x2")
-            LazyVGrid(columns: tileColumns, spacing: 14) {
-                ForEach(TrainingMode.allCases) { mode in
-                    ModeTile(mode: mode,
-                             isSelected: model.learningMode == mode) {
-                        guard model.learningMode != mode else { return }
-                        Haptics.selection()
-                        withAnimation(.easeInOut(duration: 0.22)) {
-                            model.learningMode = mode
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    /// Options that only matter for the currently-selected mode, plus its blurb.
-    @ViewBuilder
-    private var modeOptions: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Label {
-                Text(model.learningMode.blurb)
-                    .font(.footnote)
-                    .foregroundStyle(Theme.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            } icon: {
-                Image(systemName: "info.circle")
-                    .foregroundStyle(Theme.teal)
-            }
-
-            // Mode-specific configuration (grouped so the surrounding builder
-            // stays well under SwiftUI's per-block child limit).
+        if hasOptions {
+            VStack(alignment: .leading, spacing: 16) {
             Group {
             if model.learningMode == .listen {
                 inlinePicker(title: "What should it announce?",
@@ -561,39 +594,17 @@ struct IntroView: View {
                 .tint(Theme.teal)
             }
         }
-        }
-        .padding(18)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .brandCard()
-        .transition(.opacity)
-    }
-
-    // MARK: - Start
-
-    private var startBar: some View {
-        Button {
-            Haptics.tap()
-            if model.learningMode.needsSetup {
-                showingSetup = true
-            } else {
-                model.startSession()
-                onStart()
             }
-        } label: {
-            Text(model.learningMode.needsSetup ? "Continue" : "Start Training")
-                .font(.headline)
-                .frame(maxWidth: .infinity, minHeight: 54)
+            .padding(18)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .brandCard()
+            .sheet(isPresented: $showingCustomWords) {
+                CustomWordsSheet().environmentObject(model)
+            }
+            .sheet(isPresented: $showingJourneyMap) {
+                JourneyMapView().environmentObject(model)
+            }
         }
-        .buttonStyle(.borderedProminent)
-        .tint(Theme.teal)
-        .readableWidth()
-        .padding(.horizontal, 24)
-        .padding(.top, 12)
-        .padding(.bottom, 12)
-        .background(.ultraThinMaterial)
-        .accessibilityHint(model.learningMode.needsSetup
-            ? "Opens session options for \(model.learningMode.title)."
-            : "Begins a session of \(model.learningMode.title).")
     }
 
     // MARK: - Rapid Fire options
@@ -683,7 +694,7 @@ struct IntroView: View {
                 .frame(maxWidth: .infinity, minHeight: 36)
                 .background(on ? Theme.teal : Theme.navyElevated,
                             in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                .foregroundStyle(on ? .white : Theme.textSecondary)
+                .foregroundStyle(on ? Theme.navy : Theme.textSecondary)
                 .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
                     .strokeBorder(on ? Theme.tealBright : Theme.hairline, lineWidth: 1))
         }
@@ -726,14 +737,6 @@ struct IntroView: View {
         }
     }
 
-    // MARK: - Building blocks
-
-    private func sectionTitle(_ text: String, systemImage: String) -> some View {
-        Label(text, systemImage: systemImage)
-            .font(.title3).bold()
-            .foregroundStyle(.primary)
-    }
-
     /// A row with a label and a trailing menu picker, sized for the option card.
     private func inlinePicker<T: Hashable & Identifiable & CaseIterable>(
         title: String,
@@ -755,33 +758,6 @@ struct IntroView: View {
             .labelsHidden()
         }
     }
-
-    /// Brand mark for the welcome screen: the real logo if it's been added to
-    /// the asset catalog, otherwise a styled placeholder in the brand colors.
-    @ViewBuilder
-    private var logoMark: some View {
-        if let ui = UIImage(named: "AMTLogo") {
-            Image(uiImage: ui)
-                .resizable()
-                .scaledToFit()
-                .frame(maxWidth: 220)
-                .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
-        } else {
-            ZStack {
-                Circle()
-                    .fill(Theme.teal.opacity(0.12))
-                    .frame(width: 132, height: 132)
-                Circle()
-                    .strokeBorder(Theme.teal, lineWidth: 6)
-                    .frame(width: 120, height: 120)
-                Image(systemName: "antenna.radiowaves.left.and.right")
-                    .font(.system(size: 52))
-                    .foregroundStyle(.white)
-            }
-            .accessibilityHidden(true)
-        }
-    }
-
 }
 
 /// One selectable training-mode tile: icon, name, and a short tagline. The
@@ -793,26 +769,29 @@ private struct ModeTile: View {
 
     var body: some View {
         Button(action: action) {
+            // The selected tile fills with the brand teal; its text and icon
+            // are the deep navy, not white — white on the teal fails WCAG
+            // contrast (issue #59).
             VStack(spacing: 8) {
                 ZStack {
                     Circle()
-                        .fill(isSelected ? Color.white.opacity(0.18) : Theme.navyRaised)
+                        .fill(isSelected ? Theme.navy.opacity(0.15) : Theme.navyRaised)
                         .frame(width: 46, height: 46)
                     Image(systemName: mode.icon)
                         .font(.system(size: 20, weight: .semibold))
-                        .foregroundStyle(isSelected ? .white : Theme.teal)
+                        .foregroundStyle(isSelected ? Theme.navy : Theme.teal)
                 }
 
                 Text(mode.title)
                     .font(.subheadline).bold()
-                    .foregroundStyle(isSelected ? .white : .primary)
+                    .foregroundStyle(isSelected ? Theme.navy : .primary)
                     .multilineTextAlignment(.center)
                     .lineLimit(2)
                     .minimumScaleFactor(0.85)
 
                 Text(mode.tagline)
                     .font(.caption2)
-                    .foregroundStyle(isSelected ? Color.white.opacity(0.85) : Theme.textSecondary)
+                    .foregroundStyle(isSelected ? Theme.navy.opacity(0.8) : Theme.textSecondary)
                     .multilineTextAlignment(.center)
                     .lineLimit(2)
             }
@@ -833,7 +812,7 @@ private struct ModeTile: View {
                 if isSelected {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.system(size: 18))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(Theme.navy)
                         .padding(8)
                         .transition(.scale.combined(with: .opacity))
                 }
@@ -905,6 +884,8 @@ private struct SessionSetupSheet: View {
                             .foregroundStyle(Theme.textSecondary)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .fixedSize(horizontal: false, vertical: true)
+
+                        ModeOptionsCard()
 
                         if model.learningMode.usesStartingLevel {
                             card(title: "Where are you starting?", systemImage: "figure.stairs") {
@@ -1029,6 +1010,7 @@ private struct SessionSetupSheet: View {
                 } label: {
                     Text("Start Training")
                         .font(.headline)
+                        .foregroundStyle(Theme.navy)
                         .frame(maxWidth: .infinity, minHeight: 54)
                 }
                 .buttonStyle(.borderedProminent)
