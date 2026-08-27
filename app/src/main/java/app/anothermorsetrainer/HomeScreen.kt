@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.Abc
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.FlashOn
+import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.Map
@@ -81,6 +82,7 @@ fun HomeScreen(
     onPickSending: () -> Unit,
     onPickSendingDrills: () -> Unit,
     onPickRepeater: () -> Unit,
+    onPickCwDecoder: () -> Unit,
     onPickReference: () -> Unit,
     onPickSettings: () -> Unit,
     onPickStats: () -> Unit
@@ -131,8 +133,15 @@ fun HomeScreen(
                 .padding(horizontal = 20.dp)
                 .padding(top = 12.dp, bottom = 32.dp)
         ) {
-            // Top bar: Stats + Settings, like the iOS toolbar.
+            // Top bar: CW decoder + Stats + Settings, like the iOS toolbar.
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                IconButton(onClick = onPickCwDecoder) {
+                    Icon(
+                        Icons.Filled.GraphicEq,
+                        contentDescription = "CW decoder — turn received Morse audio into text",
+                        tint = Brand.teal
+                    )
+                }
                 IconButton(onClick = onPickStats) {
                     Icon(Icons.Filled.BarChart, contentDescription = "Progress", tint = Brand.teal)
                 }

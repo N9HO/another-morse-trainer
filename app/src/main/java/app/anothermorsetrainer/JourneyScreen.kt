@@ -136,7 +136,13 @@ fun JourneyScreen(onBack: () -> Unit) {
     LaunchedEffect(revealed) {
         if (revealed) {
             delay(1100)
+            // Clear the reveal state in the same recomposition as the new
+            // drill — LaunchedEffect(round) resets it a frame later, and that
+            // stale frame flashed the new answer in red (issue #63).
             drill = quiz.nextDrill()
+            revealed = false
+            chosen = null
+            clearedLabel = null
             round++
         }
     }
@@ -190,7 +196,10 @@ fun JourneyScreen(onBack: () -> Unit) {
         revealed = true
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    // A Column, not a Box: the Back/Map row and the level banner used to be
+    // stacked on top of each other, so "Level N" overlapped Back and the
+    // "N / total" count overlapped Map (issue #58).
+    Column(modifier = Modifier.fillMaxSize()) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(4.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -205,10 +214,10 @@ fun JourneyScreen(onBack: () -> Unit) {
         }
 
         Column(
-            modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp),
+            modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(4.dp))
             // Journey banner: level header + progress bar.
             Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -248,7 +257,7 @@ fun JourneyScreen(onBack: () -> Unit) {
                         RevealMode.NEVER -> false
                     }
                     if (showAnswer) {
-                        Text(drill.revealPrimary, fontSize = 44.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace, textAlign = TextAlign.Center)
+                        SlashableText(drill.revealPrimary, fontSize = 44.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace, textAlign = TextAlign.Center)
                         if (drill.revealSecondary.isNotEmpty()) {
                             Text(drill.revealSecondary, fontSize = 18.sp, color = Brand.textSecondary, textAlign = TextAlign.Center)
                         }
@@ -302,13 +311,12 @@ private fun JourneyOptionsGrid(
                         shape = RoundedCornerShape(Brand.cornerRadius),
                         modifier = Modifier.weight(1f).heightIn(min = 76.dp)
                     ) {
-                        Text(
+                        SlashableText(
                             option,
                             fontSize = if (short) 32.sp else 16.sp,
                             fontWeight = FontWeight.SemiBold,
                             fontFamily = if (short) FontFamily.Monospace else null,
-                            textAlign = TextAlign.Center,
-                            maxLines = 2
+                            textAlign = TextAlign.Center
                         )
                     }
                 }

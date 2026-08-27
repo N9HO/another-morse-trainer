@@ -32,6 +32,17 @@ enum class PracticeDuration(val seconds: Int?, val label: String, val shortLabel
     UNTIL_STOP(null, "Until I stop", "∞")
 }
 
+/**
+ * What the Short Stories (continuous copy) mode sends: bundled fables, a
+ * longer serialized tale with a bookmark, or fresh news headlines fetched from
+ * a public feed and hidden until revealed (mirrors iOS StoryContent).
+ */
+enum class StoryContent(val label: String) {
+    FABLES("Short stories"),
+    SERIALS("Longer stories"),
+    NEWS("Todays news")
+}
+
 /** How much Morse the learner already knows — seeds the Koch starting set. */
 enum class Proficiency(val label: String) {
     NONE("I know nothing"),
@@ -89,6 +100,28 @@ object Settings {
     var practiceDuration by mutableStateOf(PracticeDuration.UNTIL_STOP)
         private set
 
+    /** Show the digit 0 with a slash through it wherever copy text is displayed
+     *  (the operator's handwriting convention — issue #62). */
+    var slashedZero by mutableStateOf(true)
+        private set
+
+    // ---- Short Stories (fables / serials / news) ----
+
+    /** What the Short Stories mode sends. */
+    var storyContent by mutableStateOf(StoryContent.FABLES)
+        private set
+    /** Which long tale to serialize (a MorseSerials id; empty = the first). */
+    var storySerialId by mutableStateOf("")
+        private set
+    /** Which feed to pull headlines from when the content is NEWS. */
+    var newsSource by mutableStateOf(NewsSource.HAM_RADIO)
+        private set
+    /** Send the item's summary after the headline (separated by a BT break). */
+    var newsFullStory by mutableStateOf(true)
+        private set
+    /** Story bookmarks: how far you got, per shelf ("fables") or serial id. */
+    private var storyBookmarks by mutableStateOf(mapOf<String, Int>())
+
     /** Head Copy: replay the item every few seconds until revealed. */
     var headCopyAutoRepeat by mutableStateOf(false)
         private set
@@ -141,6 +174,14 @@ object Settings {
             .getOrDefault(RevealMode.ALWAYS)
         practiceDuration = runCatching { PracticeDuration.valueOf(prefs.getString("practiceDuration", null) ?: "UNTIL_STOP") }
             .getOrDefault(PracticeDuration.UNTIL_STOP)
+        slashedZero = prefs.getBoolean("slashedZero", true)
+        storyContent = runCatching { StoryContent.valueOf(prefs.getString("storyContent", null) ?: "FABLES") }
+            .getOrDefault(StoryContent.FABLES)
+        storySerialId = prefs.getString("storySerialId", "") ?: ""
+        newsSource = runCatching { NewsSource.valueOf(prefs.getString("newsSource", null) ?: "HAM_RADIO") }
+            .getOrDefault(NewsSource.HAM_RADIO)
+        newsFullStory = prefs.getBoolean("newsFullStory", true)
+        storyBookmarks = decodeBookmarks(prefs.getString("storyBookmarks", "") ?: "")
         headCopyAutoRepeat = prefs.getBoolean("hcAutoRepeat", false)
         headCopyRevealSec = prefs.getInt("hcRevealSec", 0).coerceIn(0, 10)
         punctuationChars = (prefs.getString("punctuation", "") ?: "")
@@ -223,6 +264,54 @@ object Settings {
         practiceDuration = value
         persist()
     }
+
+    fun updateSlashedZero(value: Boolean) {
+        slashedZero = value
+        persist()
+    }
+
+    fun updateStoryContent(value: StoryContent) {
+        storyContent = value
+        persist()
+    }
+
+    fun updateStorySerialId(value: String) {
+        storySerialId = value
+        persist()
+    }
+
+    fun updateNewsSource(value: NewsSource) {
+        newsSource = value
+        persist()
+    }
+
+    fun updateNewsFullStory(value: Boolean) {
+        newsFullStory = value
+        persist()
+    }
+
+    /** Where the given story shelf/serial was left off (0 when never opened). */
+    fun storyBookmark(key: String): Int = storyBookmarks[key] ?: 0
+
+    /** Remember how far the listener got on a shelf/serial. */
+    fun setStoryBookmark(key: String, index: Int) {
+        if (storyBookmarks[key] == index) return
+        storyBookmarks = storyBookmarks + (key to index)
+        persist()
+    }
+
+    // Bookmarks persist as "key=index" pairs joined with '|' — ids are slugs
+    // ("fables", "speckled-band"), so neither separator can occur in a key.
+    private fun decodeBookmarks(raw: String): Map<String, Int> =
+        raw.split('|').mapNotNull { entry ->
+            val eq = entry.lastIndexOf('=')
+            if (eq <= 0) return@mapNotNull null
+            val idx = entry.substring(eq + 1).toIntOrNull() ?: return@mapNotNull null
+            entry.substring(0, eq) to idx
+        }.toMap()
+
+    private fun encodeBookmarks(map: Map<String, Int>): String =
+        map.entries.joinToString("|") { "${it.key}=${it.value}" }
 
     fun updateHeadCopyAutoRepeat(value: Boolean) {
         headCopyAutoRepeat = value
@@ -334,6 +423,12 @@ object Settings {
             .putInt("wordCount", wordCount)
             .putString("revealMode", revealMode.name)
             .putString("practiceDuration", practiceDuration.name)
+            .putBoolean("slashedZero", slashedZero)
+            .putString("storyContent", storyContent.name)
+            .putString("storySerialId", storySerialId)
+            .putString("newsSource", newsSource.name)
+            .putBoolean("newsFullStory", newsFullStory)
+            .putString("storyBookmarks", encodeBookmarks(storyBookmarks))
             .putBoolean("hcAutoRepeat", headCopyAutoRepeat)
             .putInt("hcRevealSec", headCopyRevealSec)
             .putString("punctuation", punctuationChars.joinToString(""))

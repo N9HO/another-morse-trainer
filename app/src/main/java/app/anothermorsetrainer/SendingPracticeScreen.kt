@@ -139,7 +139,12 @@ fun SendingPracticeScreen(onBack: () -> Unit) {
     LaunchedEffect(revealed) {
         if (revealed) {
             delay(1200)
+            // Clear the reveal state in the same recomposition as the new
+            // drill — LaunchedEffect(round) resets it a frame later, and that
+            // stale frame flashed the next item's answer (issue #63).
             drill = source.nextDrill()
+            revealed = false
+            sentAnswer = ""
             round++
         }
     }
@@ -173,7 +178,7 @@ fun SendingPracticeScreen(onBack: () -> Unit) {
             Spacer(Modifier.height(20.dp))
 
             if (revealed) {
-                Text(
+                SlashableText(
                     text = drill.revealPrimary,
                     fontSize = 40.sp,
                     fontWeight = FontWeight.Bold,
@@ -247,12 +252,12 @@ fun SendingPracticeScreen(onBack: () -> Unit) {
                 contentAlignment = Alignment.Center
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("⠿", fontSize = 26.sp, color = if (keyPressed) Color.White else Brand.teal)
+                    Text("⠿", fontSize = 26.sp, color = if (keyPressed) Brand.navy else Brand.teal)
                     Text(
                         "HOLD TO KEY",
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
-                        color = if (keyPressed) Color.White else Brand.textSecondary
+                        color = if (keyPressed) Brand.navy else Brand.textSecondary
                     )
                 }
             }

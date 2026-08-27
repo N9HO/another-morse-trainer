@@ -61,7 +61,7 @@ fun HeadCopyScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     val player = remember { MorsePlayer() }
     val haptics = remember { Haptics(context) }
-    val source = remember { PhraseQuiz("Head Copy", MorseData.wordAndCallSignItems) }
+    val source = remember { PhraseQuiz("Head Copy", MorseData.wordAndCallSignItems, summaryNoun = "words & calls") }
 
     var drill by remember { mutableStateOf(source.nextDrill()) }
     // Monotonic counter drives play/reset — never key on the Drill value. See #43.
@@ -148,6 +148,7 @@ fun HeadCopyScreen(onBack: () -> Unit) {
         remaining = Settings.practiceDuration.seconds
         phase = HcPhase.RUNNING
         drill = source.nextDrill()
+        revealed = false
         round++
     }
 
@@ -179,7 +180,11 @@ fun HeadCopyScreen(onBack: () -> Unit) {
             if (outcome.correct) haptics.success() else haptics.error()
         }
         summary = source.summary
+        // Hide the reveal in the same recomposition as the new drill —
+        // LaunchedEffect(round) resets it a frame later, and that stale frame
+        // flashed the next item's answer (issue #63).
         drill = source.nextDrill()
+        revealed = false
         round++
     }
 
@@ -248,7 +253,7 @@ fun HeadCopyScreen(onBack: () -> Unit) {
             Spacer(Modifier.height(36.dp))
 
             if (revealed) {
-                Text(
+                SlashableText(
                     text = drill.revealPrimary,
                     fontSize = 44.sp,
                     fontWeight = FontWeight.Bold,

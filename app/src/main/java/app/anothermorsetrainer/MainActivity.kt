@@ -83,6 +83,7 @@ private sealed interface Route {
     data object Sending : Route
     data object SendingDrills : Route
     data object Repeater : Route
+    data object CwDecoder : Route
     data object Reference : Route
     data object Settings : Route
     data object Stats : Route
@@ -111,6 +112,7 @@ private fun AppRoot() {
             onPickSending = { route = Route.Sending },
             onPickSendingDrills = { route = Route.SendingDrills },
             onPickRepeater = { route = Route.Repeater },
+            onPickCwDecoder = { route = Route.CwDecoder },
             onPickReference = { route = Route.Reference },
             onPickSettings = { route = Route.Settings },
             onPickStats = { route = Route.Stats }
@@ -128,7 +130,7 @@ private fun AppRoot() {
         Route.TypeIt -> TypedQuizScreen(
             title = "Type It",
             onBack = { route = Route.Home },
-            makeSource = { PhraseQuiz("Type It", MorseData.wordAndCallSignItems) }
+            makeSource = { PhraseQuiz("Type It", MorseData.wordAndCallSignItems, summaryNoun = "words & calls") }
         )
         Route.Qrq -> QrqScreen(onBack = { route = Route.Home })
         Route.RapidFire -> RapidFireScreen(onBack = { route = Route.Home })
@@ -136,6 +138,7 @@ private fun AppRoot() {
         Route.Sending -> SendingPracticeScreen(onBack = { route = Route.Home })
         Route.SendingDrills -> SendingDrillScreen(onBack = { route = Route.Home })
         Route.Repeater -> RepeaterScreen(onBack = { route = Route.Home })
+        Route.CwDecoder -> CwDecoderScreen(onBack = { route = Route.Home })
         Route.Reference -> ReferenceScreen(onBack = { route = Route.Home })
         Route.Settings -> SettingsScreen(onBack = { route = Route.Home })
         Route.Stats -> StatsScreen(onBack = { route = Route.Home })

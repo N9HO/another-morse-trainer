@@ -263,16 +263,29 @@ fun QuizScreen(
         onBack()
     }
 
+    /**
+     * Move to the next drill. The reveal state MUST be cleared in the same
+     * recomposition as the new drill: LaunchedEffect(round) also resets it,
+     * but that runs a frame later, and the stale frame in between rendered
+     * the *revealed* branch with the *new* drill — a flash of red "✗ it was …"
+     * where the replay button sits, leaking the upcoming answer (issue #63).
+     */
+    fun advance() {
+        drill = source.nextDrill()
+        revealed = false
+        chosen = null
+        unlockedNote = null
+        round++
+    }
+
     /** Start a fresh session from the summary screen. */
     fun practiceAgain() {
         tally = Tally()
         recorded = false
         milestone = null
         remaining = Settings.practiceDuration.seconds
-        unlockedNote = null
         phase = QuizPhase.RUNNING
-        drill = source.nextDrill()
-        round++
+        advance()
     }
 
     LaunchedEffect(round) {
@@ -293,10 +306,7 @@ fun QuizScreen(
     LaunchedEffect(revealed) {
         if (revealed) {
             delay(1100)
-            if (phase == QuizPhase.RUNNING) {
-                drill = source.nextDrill()
-                round++
-            }
+            if (phase == QuizPhase.RUNNING) advance()
         }
     }
 
@@ -442,8 +452,7 @@ fun QuizScreen(
                         EngineStore.save()
                         summary = source.summary
                         stageRev++
-                        drill = source.nextDrill()
-                        round++
+                        advance()
                     }
                 }
             }
@@ -482,7 +491,7 @@ fun QuizScreen(
                     RevealMode.NEVER -> false
                 }
                 if (showAnswer) {
-                    Text(
+                    SlashableText(
                         text = drill.revealPrimary,
                         fontSize = 44.sp,
                         fontWeight = FontWeight.Bold,
@@ -781,12 +790,12 @@ private fun KeyedAnswerPanel(
             contentAlignment = Alignment.Center
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("⠿", fontSize = 22.sp, color = if (keyPressed) Color.White else Brand.teal)
+                Text("⠿", fontSize = 22.sp, color = if (keyPressed) Brand.navy else Brand.teal)
                 Text(
                     "HOLD TO KEY",
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
-                    color = if (keyPressed) Color.White else Brand.textSecondary
+                    color = if (keyPressed) Brand.navy else Brand.textSecondary
                 )
             }
         }
@@ -831,13 +840,14 @@ private fun OptionsGrid(drill: Drill, revealed: Boolean, chosen: String?, onPick
                         shape = RoundedCornerShape(Brand.cornerRadius),
                         modifier = Modifier.weight(1f).heightIn(min = 80.dp)
                     ) {
-                        Text(
+                        // SlashableText: a slashed zero on the answer buttons is
+                        // exactly where 0-vs-O confusion bites (issue #62).
+                        SlashableText(
                             text = option,
                             fontSize = if (short) 34.sp else 17.sp,
                             fontWeight = FontWeight.SemiBold,
                             fontFamily = if (short) FontFamily.Monospace else null,
-                            textAlign = TextAlign.Center,
-                            maxLines = 2
+                            textAlign = TextAlign.Center
                         )
                     }
                 }
