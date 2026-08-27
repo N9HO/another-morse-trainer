@@ -19,3 +19,6 @@ build-sim/
 
 # App Store Connect API credentials (local only)
 tools/asc-auth.sh
+
+# Python bytecode (tools/*.py)
+__pycache__/
