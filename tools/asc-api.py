@@ -10,8 +10,10 @@ Usage:
   python3 tools/asc-api.py dist            # assign newest VALID build to the same
                                            # individual testers as the prior build
   python3 tools/asc-api.py notify <group>  # add newest VALID build to a group
+  python3 tools/asc-api.py extgroup <name>   # find-or-create an external beta group
+  python3 tools/asc-api.py publiclink <name> # enable + print its public TestFlight link
 """
-import base64, json, os, sys, time, urllib.request, urllib.error
+import base64, json, os, sys, time, urllib.parse, urllib.request, urllib.error
 
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec, utils
@@ -170,6 +172,61 @@ def main():
         print(f"add build {ver} -> group {group}: HTTP {st}")
         if d:
             print(json.dumps(d, indent=2))
+
+    elif cmd == "extgroup":
+        # Find-or-create an external beta group (groups created via the API are
+        # external by default; public links only live on external groups).
+        #   python3 tools/asc-api.py extgroup Discord
+        name = sys.argv[2]
+        st, d = call("GET", f"/v1/betaGroups?filter[app]={app}"
+                            f"&filter[name]={urllib.parse.quote(name)}")
+        g = next((x for x in d.get("data", [])
+                  if x["attributes"].get("name") == name), None)
+        if g:
+            a = g["attributes"]
+            print(f'exists {g["id"]}  "{name}"  internal={a.get("isInternalGroup")}  '
+                  f'publicLink={a.get("publicLinkEnabled")}')
+            return
+        st, d = call("POST", "/v1/betaGroups",
+                     {"data": {"type": "betaGroups",
+                               "attributes": {"name": name},
+                               "relationships": {"app": {"data": {"type": "apps", "id": app}}}}})
+        g = d.get("data")
+        if st >= 300 or not g:
+            print(f"create group \"{name}\": HTTP {st}")
+            print(json.dumps(d, indent=2))
+            sys.exit(1)
+        print(f'created {g["id"]}  "{name}"  internal={g["attributes"].get("isInternalGroup")}')
+
+    elif cmd == "publiclink":
+        # Enable (idempotently) and print the group's public TestFlight link.
+        #   python3 tools/asc-api.py publiclink Discord
+        name = sys.argv[2]
+        st, d = call("GET", f"/v1/betaGroups?filter[app]={app}"
+                            f"&filter[name]={urllib.parse.quote(name)}")
+        g = next((x for x in d.get("data", [])
+                  if x["attributes"].get("name") == name), None)
+        if not g:
+            print(f'no beta group named "{name}" — create it first: asc-api.py extgroup {name}')
+            sys.exit(1)
+        if g["attributes"].get("isInternalGroup"):
+            print(f'"{name}" is an internal group; public links only exist on external groups.')
+            sys.exit(1)
+        if not g["attributes"].get("publicLinkEnabled"):
+            st, d = call("PATCH", f"/v1/betaGroups/{g['id']}",
+                         {"data": {"type": "betaGroups", "id": g["id"],
+                                   "attributes": {"publicLinkEnabled": True}}})
+            if st >= 300:
+                print(f"enable public link on \"{name}\": HTTP {st}")
+                print(json.dumps(d, indent=2))
+                sys.exit(1)
+            g = d.get("data") or g
+        link = g["attributes"].get("publicLink")
+        if link:
+            print(link)
+        else:
+            print("(public link not in the response yet — re-run in a moment)")
+            sys.exit(2)
 
     elif cmd == "whatsnew":
         # Set the TestFlight "What to Test" notes for a build.
