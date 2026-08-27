@@ -164,6 +164,15 @@ struct SettingsView: View {
                 .listRowBackground(Theme.navyElevated)
 
                 Section {
+                    Toggle("Slashed zero", isOn: $model.settings.slashedZero)
+                } header: {
+                    Text("Display")
+                } footer: {
+                    Text("Show the digit 0 with a line through it — the operator's convention for telling 0 from O.")
+                }
+                .listRowBackground(Theme.navyElevated)
+
+                Section {
                     Stepper(value: $model.settings.headCopyRepeats,
                             in: AppSettings.headCopyRepeatRange) {
                         HStack {

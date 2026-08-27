@@ -5,6 +5,7 @@ import SwiftUI
 /// decoding itself is the vendored Carrier Wave firmware core; this view just
 /// runs the mic and shows what the core hears.
 struct CWDecoderView: View {
+    @EnvironmentObject var model: AppModel
     @Environment(\.dismiss) private var dismiss
     @StateObject private var engine = CWDecoderEngine()
 
@@ -79,7 +80,8 @@ struct CWDecoderView: View {
                             .foregroundStyle(Theme.textSecondary)
                     } else {
                         Text(engine.decodedText)
-                            .font(.system(.title3, design: .monospaced).weight(.medium))
+                            .font(Theme.copyFont(style: .title3, weight: .medium, monospaced: true,
+                                                 slashedZero: model.settings.slashedZero))
                             .foregroundStyle(.primary)
                             .textSelection(.enabled)
                     }
@@ -124,6 +126,7 @@ struct CWDecoderView: View {
                 Label(engine.isListening ? "Stop" : "Start",
                       systemImage: engine.isListening ? "stop.fill" : "mic.fill")
                     .font(.headline)
+                    .foregroundStyle(engine.isListening ? .white : Theme.navy)
                     .frame(maxWidth: .infinity, minHeight: 50)
             }
             .buttonStyle(.borderedProminent)
@@ -145,5 +148,6 @@ struct CWDecoderView: View {
 
 #Preview {
     CWDecoderView()
+        .environmentObject(AppModel())
         .preferredColorScheme(.dark)
 }

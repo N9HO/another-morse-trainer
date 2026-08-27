@@ -166,9 +166,6 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         }
     }
 
-    /// True when starting this mode should prompt for any pre-session options.
-    /// Contest always shows its setup card (which contest, how long).
-    var needsSetup: Bool { usesStartingLevel || usesSessionLength || self == .contest }
 }
 
 /// The app's single source of truth. Connects the tested MorseKit quiz engines
@@ -329,9 +326,9 @@ final class AppModel: ObservableObject {
         self.abbrevQuiz = PhraseQuiz(name: "Abbreviations", items: MorseData.abbreviationItems)
         self.qCodeQuiz = PhraseQuiz(name: "Q-Codes", items: MorseData.qCodeItems)
         self.prosignQuiz = PhraseQuiz(name: "Prosigns", items: MorseData.prosignItems)
-        self.headCopyQuiz = PhraseQuiz(name: "Head Copy", items: MorseData.wordAndCallSignItems)
-        self.typedQuiz = PhraseQuiz(name: "Type It", items: MorseData.wordAndCallSignItems)
-        self.qrqQuiz = PhraseQuiz(name: "QRQ", items: MorseData.wordAndCallSignItems)
+        self.headCopyQuiz = PhraseQuiz(name: "Head Copy", items: MorseData.wordAndCallSignItems, summaryNoun: "words & calls")
+        self.typedQuiz = PhraseQuiz(name: "Type It", items: MorseData.wordAndCallSignItems, summaryNoun: "words & calls")
+        self.qrqQuiz = PhraseQuiz(name: "QRQ", items: MorseData.wordAndCallSignItems, summaryNoun: "words & calls")
         self.rapidFireQuiz = RapidFireQuiz(config: AppModel.rapidFireConfig(from: loaded))
         self.confusionQuiz = ConfusionQuiz(engine: engine)
         restoreProgress()

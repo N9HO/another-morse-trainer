@@ -19,6 +19,10 @@ public final class PhraseQuiz: QuizSource {
     public let name: String
     public let items: [MorseItem]
     public var config: Config
+    /// What the pool holds, for the "N …" session readout. Defaults to the
+    /// quiz name, which reads fine for "words"/"abbreviations" but turned
+    /// mode-named quizzes into gibberish ("155 head copy" — issue #61).
+    public let summaryNoun: String
 
     private var attemptsById: [String: [CharacterStats.Attempt]] = [:]
     /// Items the learner has actually heard at least once. Choices are drawn
@@ -31,16 +35,18 @@ public final class PhraseQuiz: QuizSource {
     public init(name: String,
                 items: [MorseItem],
                 config: Config = Config(),
+                summaryNoun: String? = nil,
                 rng: any RandomNumberGenerator = SystemRandomNumberGenerator()) {
         self.name = name
         self.items = items
         self.config = config
+        self.summaryNoun = summaryNoun ?? name.lowercased()
         self.rng = rng
     }
 
     // MARK: QuizSource
 
-    public var summary: String { "\(items.count) \(name.lowercased())" }
+    public var summary: String { "\(items.count) \(summaryNoun)" }
 
     public func nextDrill() -> Drill {
         let target = pickTarget()
