@@ -88,10 +88,11 @@ jobs:
           # Changelog: one bullet per commit, newest first. -25 caps it inside git
           # (piping through `head` dies of SIGPIPE under pipefail once the range
           # outgrows the cap — that's what broke the first two runs of this job).
-          # CI/tooling-only commits and the TestFlight handoff notes aren't release
-          # content, so commits touching only those paths are excluded.
+          # CI, tooling, and repo-housekeeping commits aren't release content,
+          # so commits touching only those paths are excluded.
           LOG="$(git log --no-merges -25 --pretty=format:'• %s' "$RANGE" -- \
-                 . ':(exclude).github' ':(exclude)tools' ':(exclude)HANDOFF.md')"
+                 . ':(exclude).github' ':(exclude)tools' \
+                 ':(exclude)HANDOFF.md' ':(exclude).gitignore')"
           [ -z "$LOG" ] && LOG="• (no commits found in range)"
           {
             echo 'changelog<<CHANGELOG_EOF'
