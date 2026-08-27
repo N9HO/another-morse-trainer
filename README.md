@@ -36,6 +36,13 @@ the iOS app's navy/teal look.
   MIDI keys, and unplug detection
 - **Reference** — browsable, tap-to-hear chart of prosigns, Q-codes,
   abbreviations, cut numbers, and the full alphabet, with per-signal detail
+- **Short Stories** — continuous copy of a fable (32 bundled), a longer classic
+  (Sherlock Holmes and friends) sent in parts with a bookmark that keeps your
+  place, or todays news: real RSS headlines sanitized to sendable Morse and
+  hidden until you reveal — decoding is the only way to read them
+- **CW Decoder** — point the microphone at received Morse (a rig's speaker, a
+  WebSDR) and read it as text; a faithful Kotlin port of the Carrier Wave
+  decoder core with live WPM/pitch telemetry and a two-core pitch-lock rescue
 - **Listen & Learn** — hands-free: hear the code, then the spoken answer; keeps
   playing with the screen locked (foreground service)
 - **Voice answers** — speak your answer instead of tapping (microphone), with
@@ -48,7 +55,8 @@ the iOS app's navy/teal look.
   chart, performance by 5-WPM speed band, and per-session detail screens with
   each session's own recognition chart
 - **Settings** — speed, Farnsworth, sidetone pitch, haptics, daily reminders,
-  session length, custom word lists, and punctuation opt-ins
+  session length, custom word lists, punctuation opt-ins, and a slashed-zero
+  display option
 - Dark navy/teal theme, adaptive icon, phone + tablet responsive layout
 
 ## Build

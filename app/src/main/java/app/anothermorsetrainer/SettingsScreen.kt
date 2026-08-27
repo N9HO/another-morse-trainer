@@ -323,6 +323,23 @@ fun SettingsScreen(onBack: () -> Unit) {
                 }
                 SectionFooter("Buzz on right and wrong answers. Voice answers let you speak instead of tap (uses the microphone).")
 
+                SectionHeader("Display")
+                SettingsGroup {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("Slashed zero", color = Brand.textPrimary, fontWeight = FontWeight.Medium)
+                        Switch(
+                            checked = Settings.slashedZero,
+                            onCheckedChange = { Settings.updateSlashedZero(it) },
+                            colors = switchColors()
+                        )
+                    }
+                }
+                SectionFooter("Show the digit 0 with a line through it — the operator's convention for telling 0 from O.")
+
                 SectionHeader("Reminders")
                 SettingsGroup {
                     Row(

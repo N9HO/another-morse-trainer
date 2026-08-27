@@ -65,6 +65,10 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.compose.ui:ui-tooling-preview")
     debugImplementation("androidx.compose.ui:ui-tooling")
-    // WebSocket transport for the Vail repeater client.
+    // WebSocket transport for the Vail repeater client (and the Short
+    // Stories news-feed fetch).
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    // JVM unit tests: the ported CW decoder core is held to the firmware
+    // bench's synthetic-audio checks.
+    testImplementation("junit:junit:4.13.2")
 }
