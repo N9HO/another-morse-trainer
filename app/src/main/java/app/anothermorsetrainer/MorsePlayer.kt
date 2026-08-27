@@ -152,7 +152,16 @@ class MorsePlayer {
     fun release() = stop()
 
     private fun playFloats(floats: FloatArray) {
-        releaseCurrent()
+        // A new sound can arrive while the previous one is still playing —
+        // answers are accepted mid-audio, so the auto-advance often lands
+        // before the old word finishes. Stopping that track outright cuts it
+        // mid-sine, an audible click/crackle on every such transition
+        // (issue #63). Mute it first (the mixer ramps volume changes), let the
+        // blocking write of the new buffer give that ramp a beat to land, and
+        // only then release it.
+        val previous = current
+        current = null
+        previous?.let { runCatching { it.setVolume(0f) } }
         val track = AudioTrack.Builder()
             .setAudioAttributes(
                 AudioAttributes.Builder()
@@ -171,6 +180,10 @@ class MorsePlayer {
             .setTransferMode(AudioTrack.MODE_STATIC)
             .build()
         track.write(floats, 0, floats.size, AudioTrack.WRITE_BLOCKING)
+        previous?.let {
+            try { it.stop() } catch (_: IllegalStateException) {}
+            it.release()
+        }
         track.play()
         current = track
     }

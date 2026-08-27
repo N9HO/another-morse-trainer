@@ -285,12 +285,12 @@ fun RepeaterScreen(onBack: () -> Unit) {
                     contentAlignment = Alignment.Center
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("⠿", fontSize = 24.sp, color = if (keyPressed) Color.White else Brand.teal)
+                        Text("⠿", fontSize = 24.sp, color = if (keyPressed) Brand.navy else Brand.teal)
                         Text(
                             "HOLD TO KEY",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
-                            color = if (keyPressed) Color.White else Brand.textSecondary
+                            color = if (keyPressed) Brand.navy else Brand.textSecondary
                         )
                     }
                 }

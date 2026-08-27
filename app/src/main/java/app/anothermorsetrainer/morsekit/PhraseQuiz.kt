@@ -17,8 +17,14 @@ class PhraseQuiz(
     val name: String,
     val items: List<MorseItem>,
     var config: Config = Config(),
+    /** What the pool holds, for the "N …" session readout. Defaults to the
+     *  quiz name, which reads fine for "words"/"abbreviations" but turned
+     *  mode-named quizzes into gibberish ("155 head copy" — issue #61). */
+    summaryNoun: String? = null,
     private val rng: Random = Random.Default
 ) : QuizSource {
+
+    private val summaryNoun: String = summaryNoun ?: name.lowercase()
 
     data class Config(
         var ttrThreshold: Double = 1.5,
@@ -38,7 +44,7 @@ class PhraseQuiz(
     // MARK: QuizSource
 
     override val summary: String
-        get() = "${items.size} ${name.lowercase()}"
+        get() = "${items.size} $summaryNoun"
 
     override fun nextDrill(): Drill {
         val target = pickTarget()

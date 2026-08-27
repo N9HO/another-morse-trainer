@@ -102,11 +102,21 @@ fun TypedQuizScreen(
 
     // Correct answers keep the rhythm going; a miss waits for the Next tap so the
     // learner can compare what they typed against the answer.
+    // Clear the reveal state in the same recomposition as the new drill —
+    // LaunchedEffect(round) also resets it, but a frame later, and that stale
+    // frame flashed the next answer's comparison view (issue #63).
+    fun advance() {
+        drill = source.nextDrill()
+        revealed = false
+        input = ""
+        lastCorrect = false
+        round++
+    }
+
     LaunchedEffect(revealed) {
         if (revealed && lastCorrect && phase == TqPhase.RUNNING) {
             delay(900)
-            drill = source.nextDrill()
-            round++
+            advance()
         }
     }
 
@@ -142,8 +152,7 @@ fun TypedQuizScreen(
         milestone = null
         remaining = Settings.practiceDuration.seconds
         phase = TqPhase.RUNNING
-        drill = source.nextDrill()
-        round++
+        advance()
     }
 
     // Session countdown: ticks only while running and only when a length is set.
@@ -161,11 +170,6 @@ fun TypedQuizScreen(
     }
 
     BackHandler { if (phase == TqPhase.SUMMARY) onBack() else finish() }
-
-    fun advance() {
-        drill = source.nextDrill()
-        round++
-    }
 
     fun submit() {
         if (revealed || phase != TqPhase.RUNNING) return
@@ -234,7 +238,7 @@ fun TypedQuizScreen(
             Spacer(Modifier.height(36.dp))
 
             if (revealed) {
-                Text(
+                SlashableText(
                     text = drill.revealPrimary,
                     fontSize = 44.sp,
                     fontWeight = FontWeight.Bold,
@@ -314,7 +318,7 @@ fun QrqScreen(onBack: () -> Unit) {
     TypedQuizScreen(
         title = "QRQ Speed",
         onBack = onBack,
-        makeSource = { PhraseQuiz("QRQ", MorseData.wordAndCallSignItems) },
+        makeSource = { PhraseQuiz("QRQ", MorseData.wordAndCallSignItems, summaryNoun = "words & calls") },
         timing = { MorseTiming(wpm) },
         speedControl = {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
