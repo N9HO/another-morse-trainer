@@ -23,9 +23,12 @@ Discord message ──▶ Claude triage ──▶ GitHub issue ──▶ reply i
   severity, and tags every issue with a `from-discord` label.
 - **Holds a conversation**: when a report is too thin, it opens a **thread**,
   asks for the missing detail (repro steps, platform, a **screenshot**), and
-  watches that thread. On each reply it re-reads the whole conversation —
-  **viewing any attached screenshots via Claude's vision** — until it has enough
-  to file. Once filed, further details are added to the issue as comments.
+  watches that thread. If the reporter already opened a thread on their
+  message, the bot adopts it — every reply (including "duplicate of #N") lands
+  in that thread, where the reporter is looking, never as a channel-level
+  reply. On each reply it re-reads the whole conversation — **viewing any
+  attached screenshots via Claude's vision** — until it has enough to file.
+  Once filed, further details are added to the issue as comments.
 - **Closes the loop**: replies with the issue link, a duplicate pointer, or a
   follow-up question.
 
