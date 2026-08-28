@@ -123,9 +123,16 @@ async def _images_from(messages: list[discord.Message]) -> list[tuple[str, str]]
 async def _gather_thread(thread: discord.Thread) -> tuple[str, str, list[tuple[str, str]]]:
     """Return (author, transcript, images) for the whole triage conversation."""
     starter = thread.starter_message
-    if starter is None and thread.parent is not None:
+    if starter is None:
         try:
-            starter = await thread.parent.fetch_message(thread.id)
+            if isinstance(thread.parent, discord.TextChannel):
+                # A thread hanging off a channel message: the starter message
+                # lives in the parent channel and shares the thread's id.
+                starter = await thread.parent.fetch_message(thread.id)
+            else:
+                # A forum/media post: the parent channel holds no messages —
+                # the starter message lives inside the thread itself.
+                starter = await thread.fetch_message(thread.id)
         except discord.HTTPException:
             starter = None
 
@@ -134,6 +141,10 @@ async def _gather_thread(thread: discord.Thread) -> tuple[str, str, list[tuple[s
         messages.append(starter)
     try:
         async for m in thread.history(limit=THREAD_HISTORY, oldest_first=True):
+            # In forum posts the starter is part of the thread history — skip
+            # it so it doesn't appear in the transcript twice.
+            if starter is not None and m.id == starter.id:
+                continue
             messages.append(m)
     except discord.HTTPException:
         log.exception("Failed to read thread history")
