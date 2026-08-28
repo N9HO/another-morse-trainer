@@ -70,8 +70,14 @@ class Pending:
 pending: dict[int, Pending] = {}
 
 
-def _in_scope(channel_id: int) -> bool:
-    return not settings.watch_channel_ids or channel_id in settings.watch_channel_ids
+def _in_scope(channel_id: int, parent_id: Optional[int] = None) -> bool:
+    if not settings.watch_channel_ids:
+        return True
+    if channel_id in settings.watch_channel_ids:
+        return True
+    # Threads (and forum posts) carry their own channel ids; WATCH_CHANNEL_IDS
+    # names the parent channel, so a thread inherits its parent's scope.
+    return parent_id is not None and parent_id in settings.watch_channel_ids
 
 
 async def _safe_open_issues() -> list[dict]:
@@ -163,13 +169,38 @@ async def _gather_thread(thread: discord.Thread) -> tuple[str, str, list[tuple[s
     return author, "\n".join(lines), images
 
 
-async def _ensure_thread(message: discord.Message) -> Optional[discord.Thread]:
+def _existing_thread(message: discord.Message) -> Optional[discord.Thread]:
+    """The thread this message lives in or already carries, if any.
+
+    A reaction on a thread's STARTER message arrives on the parent channel (the
+    starter belongs to it), yet the conversation the reporter is watching is the
+    thread — which shares the message's id. Replies must go there: a
+    channel-level reply is invisible in the thread view.
+    """
     if isinstance(message.channel, discord.Thread):
         return message.channel
+    if message.guild is not None:
+        return message.guild.get_thread(message.id)
+    return None
+
+
+async def _ensure_thread(message: discord.Message) -> Optional[discord.Thread]:
+    existing = _existing_thread(message)
+    if existing is not None:
+        return existing
     name = (f"Triage: {(message.content or '').strip()}" or "Triage")[:90]
     try:
         return await message.create_thread(name=name, auto_archive_duration=1440)
-    except discord.HTTPException:
+    except discord.HTTPException as err:
+        # 160004: the message already has a thread — it just wasn't in the
+        # cache (archived, or created before the bot's last restart). Adopt it.
+        if err.code == 160004 and message.guild is not None:
+            try:
+                channel = await message.guild.fetch_channel(message.id)
+            except discord.HTTPException:
+                channel = None
+            if isinstance(channel, discord.Thread):
+                return channel
         log.exception(
             "Couldn't create a thread — the bot likely lacks the "
             "'Create Public Threads' / 'Send Messages in Threads' permission."
@@ -296,16 +327,26 @@ async def _apply_verdict(thread: discord.Thread, verdict, key: int) -> None:
 
 
 async def _start_triage(message: discord.Message, explicit: bool) -> None:
+    # Where the conversation already lives, when the reporter opened a thread on
+    # their own message. Every reply below must land there, not in the channel.
+    home = _existing_thread(message)
+    if home is not None and home.id in pending:
+        # Re-triggering the starter of a tracked thread folds the new detail
+        # into the existing triage, same as re-reacting inside the thread.
+        await _continue_triage(home)
+        return
+
     author = message.author.display_name
     content = (message.content or "").strip()
     images = await _images_from([message])
 
     if not content and not images:
         if explicit:
-            await message.reply(
-                "I can't read any text or image on that message to triage. 🤔",
-                mention_author=False,
-            )
+            note = "I can't read any text or image on that message to triage. 🤔"
+            if home is not None:
+                await _say(home, note)
+            else:
+                await message.reply(note, mention_author=False)
         return
 
     open_issues = await _safe_open_issues()
@@ -317,9 +358,11 @@ async def _start_triage(message: discord.Message, explicit: bool) -> None:
     )
 
     if verdict.is_duplicate and verdict.duplicate_of:
-        await message.reply(
-            f"Looks like a duplicate of #{verdict.duplicate_of}. 🔁", mention_author=False
-        )
+        dup = f"Looks like a duplicate of #{verdict.duplicate_of}. 🔁"
+        if home is not None:
+            await _say(home, dup)
+        else:
+            await message.reply(dup, mention_author=False)
         return
 
     # Decide whether to engage at all. In auto mode we stay silent on noise.
@@ -346,7 +389,7 @@ async def _start_triage(message: discord.Message, explicit: bool) -> None:
             await message.reply(verdict.reply or "👍", mention_author=False)
         return
 
-    pending[thread.id] = Pending()
+    pending.setdefault(thread.id, Pending())
     await _apply_verdict(thread, verdict, thread.id)
 
 
@@ -414,7 +457,10 @@ async def on_message(message: discord.Message) -> None:
             await _continue_triage(message.channel)
         return
     # A fresh message in a watched channel — only in auto mode.
-    if settings.trigger_mode == "auto" and _in_scope(message.channel.id):
+    parent_id = (
+        message.channel.parent_id if isinstance(message.channel, discord.Thread) else None
+    )
+    if settings.trigger_mode == "auto" and _in_scope(message.channel.id, parent_id):
         await _start_triage(message, explicit=False)
 
 
@@ -435,11 +481,11 @@ async def on_raw_reaction_add(payload: discord.RawReactionActionEvent) -> None:
             await _continue_triage(thread)
         return
 
-    if not _in_scope(payload.channel_id):
-        return
-
     channel = client.get_channel(payload.channel_id)
     if channel is None:
+        return
+    parent_id = channel.parent_id if isinstance(channel, discord.Thread) else None
+    if not _in_scope(payload.channel_id, parent_id):
         return
     try:
         message = await channel.fetch_message(payload.message_id)
