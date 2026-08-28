@@ -95,6 +95,24 @@ async def _safe_open_issues() -> list[dict]:
 # --- images -------------------------------------------------------------------
 
 
+def _sniff_image_type(data: bytes) -> Optional[str]:
+    """The image's real media type, read from its magic bytes.
+
+    Discord's attachment content_type follows the upload's file extension and
+    can lie (a PNG saved as .jpg is reported as image/jpeg); the vision API
+    checks the actual bytes and rejects the mismatch, so the bytes decide.
+    """
+    if data.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "image/png"
+    if data.startswith(b"\xff\xd8\xff"):
+        return "image/jpeg"
+    if data.startswith((b"GIF87a", b"GIF89a")):
+        return "image/gif"
+    if len(data) >= 12 and data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return "image/webp"
+    return None
+
+
 async def _download_image(att: discord.Attachment) -> Optional[tuple[str, str]]:
     """Return (media_type, base64) for an image attachment, or None if unusable."""
     content_type = (att.content_type or "").split(";")[0].strip().lower()
@@ -108,7 +126,14 @@ async def _download_image(att: discord.Attachment) -> Optional[tuple[str, str]]:
     except discord.HTTPException:
         log.exception("Failed to download attachment %s", att.filename)
         return None
-    return content_type, base64.standard_b64encode(data).decode("ascii")
+    media_type = _sniff_image_type(data)
+    if media_type is None:
+        log.info(
+            "Skipping %s — declared %s but content is not a supported image",
+            att.filename, content_type,
+        )
+        return None
+    return media_type, base64.standard_b64encode(data).decode("ascii")
 
 
 async def _images_from(messages: list[discord.Message]) -> list[tuple[str, str]]:
@@ -367,7 +392,18 @@ async def _start_triage(message: discord.Message, explicit: bool) -> None:
         return
 
     open_issues = await _safe_open_issues()
-    verdict = await triage(author, content, open_issues, explicit=explicit, images=images)
+    try:
+        verdict = await triage(author, content, open_issues, explicit=explicit, images=images)
+    except Exception:
+        # Never leave a 👀 hanging: an analysis failure gets said out loud.
+        log.exception("Triage failed for msg=%s", message.id)
+        if explicit:
+            note = "I hit an error analyzing that report — details are in the bot logs. 😬"
+            if home is not None:
+                await _say(home, note)
+            else:
+                await message.reply(note, mention_author=False)
+        return
     log.info(
         "Start triage msg=%s kind=%s should_file=%s needs_info=%s dup=%s explicit=%s",
         message.id, verdict.kind, verdict.should_file,
@@ -420,14 +456,19 @@ async def _continue_triage(thread: discord.Thread) -> None:
     open_issues = [
         i for i in await _safe_open_issues() if i.get("number") != p.issue_number
     ]
-    verdict = await triage(
-        author,
-        transcript,
-        open_issues,
-        explicit=True,
-        images=images,
-        has_issue=p.issue_number is not None,
-    )
+    try:
+        verdict = await triage(
+            author,
+            transcript,
+            open_issues,
+            explicit=True,
+            images=images,
+            has_issue=p.issue_number is not None,
+        )
+    except Exception:
+        log.exception("Triage failed for thread=%s", thread.id)
+        await _say(thread, "I hit an error analyzing that — details are in the bot logs. 😬")
+        return
     log.info(
         "Continue triage thread=%s kind=%s should_file=%s has_issue=%s",
         thread.id, verdict.kind, verdict.should_file, p.issue_number is not None,
