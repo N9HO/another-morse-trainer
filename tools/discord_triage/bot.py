@@ -29,7 +29,13 @@ from typing import Optional
 import discord
 
 from config import settings
-from github_client import comment_issue, create_issue, list_open_issues
+from github_client import (
+    GitHubError,
+    check_repo_access,
+    comment_issue,
+    create_issue,
+    list_open_issues,
+)
 from triage import triage
 
 logging.basicConfig(
@@ -170,6 +176,46 @@ async def _say(channel: discord.abc.Messageable, text: str) -> None:
         log.exception("Failed to send message in Discord")
 
 
+async def _file_issue(verdict, body: str) -> tuple[Optional[dict], Optional[str], str]:
+    """Create the issue in the platform-routed repo, with a safety net.
+
+    If the routed repo rejects the token (403/404 — the PAT doesn't cover it),
+    fall back to the default repo so the report is never dropped; the platform
+    label still marks where it belongs.
+
+    Returns (issue, repo, note): the created issue and the repo it landed in
+    (None, None when every attempt failed), plus a short note for the Discord
+    reply explaining any fallback or failure ("" when there's nothing to say).
+    """
+    repo = settings.repo_for(verdict.platform)
+    try:
+        issue = await create_issue(verdict.title, body, verdict.labels, repo=repo)
+        return issue, repo, ""
+    except GitHubError as err:
+        log.error("Failed to create issue in %s: %s", repo, err)
+        if repo != settings.github_repo and err.status in (403, 404):
+            log.warning(
+                "Falling back to %s — grant the bot's GITHUB_TOKEN 'Issues: Read "
+                "and write' on %s to file this platform's reports there.",
+                settings.github_repo, repo,
+            )
+            try:
+                issue = await create_issue(
+                    verdict.title, body, verdict.labels, repo=settings.github_repo
+                )
+                note = (
+                    f" ⚠️ Filed in {settings.github_repo} because the bot's token "
+                    f"can't reach {repo} (GitHub {err.status})."
+                )
+                return issue, settings.github_repo, note
+            except Exception:
+                log.exception("Fallback create_issue in %s also failed", settings.github_repo)
+        return None, None, f" (GitHub {err.status} on {repo}: {err.detail})"
+    except Exception:
+        log.exception("Failed to create issue in %s", repo)
+        return None, None, ""
+
+
 async def _apply_verdict(thread: discord.Thread, verdict, key: int) -> None:
     """Act on a verdict inside a triage thread (file, comment, or ask)."""
     p = pending.setdefault(key, Pending())
@@ -193,7 +239,16 @@ async def _apply_verdict(thread: discord.Thread, verdict, key: int) -> None:
                 )
                 return
             except Exception:
-                log.exception("Failed to comment on issue")
+                log.exception(
+                    "Failed to comment on issue #%s in %s",
+                    p.issue_number, p.issue_repo or settings.github_repo,
+                )
+                await _say(
+                    thread,
+                    f"I couldn't add that to #{p.issue_number} — hit a GitHub "
+                    f"error (details in the bot logs). 😬",
+                )
+                return
         await _say(thread, verdict.reply or "👍")
         return
 
@@ -206,19 +261,19 @@ async def _apply_verdict(thread: discord.Thread, verdict, key: int) -> None:
         # Stamp the Discord thread id into the issue (hidden HTML comment) so the
         # "issue closed" GitHub Action can post the resolution back to this thread.
         body = f"{verdict.body}\n\n<!-- discord-thread:{thread.id} -->"
-        repo = settings.repo_for(verdict.platform)
-        try:
-            issue = await create_issue(verdict.title, body, verdict.labels, repo=repo)
-        except Exception:
-            log.exception("Failed to create issue")
-            await _say(thread, "I tried to log that but hit an error filing the issue. 😬")
+        issue, repo, note = await _file_issue(verdict, body)
+        if issue is None:
+            await _say(
+                thread,
+                f"I tried to log that but hit an error filing the issue.{note} 😬",
+            )
             return
         p.issue_number = issue["number"]
         p.issue_repo = repo
         await _say(
             thread,
             f"{verdict.reply or 'Logged it'} — opened #{issue['number']}: "
-            f"{issue['html_url']} ✅",
+            f"{issue['html_url']} ✅{note}",
         )
         return
 
@@ -265,19 +320,17 @@ async def _start_triage(message: discord.Message, explicit: bool) -> None:
     if thread is None:
         # No thread permission: degrade to one-shot (can't watch follow-ups).
         if verdict.should_file:
-            try:
-                issue = await create_issue(
-                    verdict.title, verdict.body, verdict.labels,
-                    repo=settings.repo_for(verdict.platform),
+            issue, _, note = await _file_issue(verdict, verdict.body)
+            if issue is None:
+                await message.reply(
+                    f"I hit an error filing the issue.{note} 😬", mention_author=False
                 )
+            else:
                 await message.reply(
                     f"{verdict.reply or 'Logged it'} — opened #{issue['number']}: "
-                    f"{issue['html_url']} ✅",
+                    f"{issue['html_url']} ✅{note}",
                     mention_author=False,
                 )
-            except Exception:
-                log.exception("Failed to create issue")
-                await message.reply("I hit an error filing the issue. 😬", mention_author=False)
         else:
             await message.reply(verdict.reply or "👍", mention_author=False)
         return
@@ -319,6 +372,23 @@ async def on_ready() -> None:
     log.info("Logged in as %s (mode=%s, emojis=%s, repo=%s)",
              client.user, settings.trigger_mode,
              " ".join(sorted(settings.trigger_emojis)), settings.github_repo)
+    # Probe GitHub access up front so a bad token is one obvious log line at
+    # startup instead of a mystery when the first report tries to file.
+    repos = [settings.github_repo]
+    if settings.github_repo_android:
+        repos.append(settings.github_repo_android)
+    for repo in repos:
+        problem = await check_repo_access(repo)
+        if problem:
+            log.error(
+                "GITHUB_TOKEN cannot access %s (%s) — filing issues there WILL "
+                "fail. 401 = the PAT expired or was revoked; 404 = the PAT "
+                "doesn't cover this repo; 403 = missing the 'Issues: Read and "
+                "write' permission. Fix the token and `fly secrets set "
+                "GITHUB_TOKEN=...`.", repo, problem,
+            )
+        else:
+            log.info("GitHub access OK: %s", repo)
 
 
 @client.event

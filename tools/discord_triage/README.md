@@ -62,8 +62,13 @@ Scope it to specific channels with `WATCH_CHANNEL_IDS` (comma-separated IDs).
 > granted (re-run the invite URL to update permissions if needed).
 
 ### 2. Create a GitHub token
-A fine-grained PAT scoped to `n9ho/another-morse-trainer` with **Issues:
-Read and write** (→ `GITHUB_TOKEN`).
+A fine-grained PAT with **Issues: Read and write** on **every repo the bot
+files into** (→ `GITHUB_TOKEN`): `n9ho/another-morse-trainer`, plus
+`n9ho/another-morse-trainer-android` if `GITHUB_REPO_ANDROID` is set — a token
+scoped to the iOS repo alone gets a 404 filing Android reports. Note the
+expiration you pick: fine-grained PATs expire silently, and an expired token
+turns every filing into a 401. The bot verifies access to each configured repo
+at startup and logs exactly what's wrong.
 
 ### 3. Get an Anthropic API key
 From https://console.anthropic.com → **API Keys** (→ `ANTHROPIC_API_KEY`).
@@ -113,6 +118,28 @@ high-volume, low-complexity task, so if you want to cut cost set:
 Each triage is a single short request, and the instruction prompt is cached, so
 even on Opus the per-message cost is small — but Haiku is the economical default
 for a busy server.
+
+## Troubleshooting: "hit an error filing the issue"
+
+That reply means triage itself worked (Claude classified the report and wrote
+the issue) and the **GitHub** create-issue call failed — so it's the
+`GITHUB_TOKEN`, not the Anthropic key or credits. The reply now includes the
+GitHub status, and `fly logs` has the full story, including a startup probe of
+every configured repo. The usual suspects:
+
+- **401 Bad credentials** — the PAT expired or was revoked. Generate a new one
+  (covering both repos) and `fly secrets set GITHUB_TOKEN=...`.
+- **404 Not Found** — the repo isn't granted to the PAT. Classic case: routing
+  was enabled via `GITHUB_REPO_ANDROID` but the token from the original setup
+  only covers the iOS repo. Edit the PAT's repository access to add the
+  Android repo.
+- **403 Resource not accessible** — the repo is granted but the token lacks
+  the **Issues: Read and write** permission on it.
+
+When the *routed* (Android) repo rejects the token with 403/404, the bot falls
+back to filing in `GITHUB_REPO` — with the `platform: android` label and a ⚠️
+note in the Discord reply — so the report isn't lost while the token gets
+fixed.
 
 ## Resolution notifications ("this is fixed")
 
