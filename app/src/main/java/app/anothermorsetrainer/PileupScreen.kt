@@ -32,7 +32,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -209,21 +208,23 @@ fun PileupScreen(onBack: () -> Unit) {
             onBack = { player.stop(); onBack() }
         )
         PuPhase.RUNNING -> engine?.let { e ->
-            key(rev) {
-                PileupRun(
-                    engine = e,
-                    elapsedSeconds = elapsedSeconds(),
-                    input = input,
-                    onInput = { input = it.uppercase() },
-                    onSend = ::submit,
-                    reveal = reveal,
-                    onToggleReveal = { reveal = !reveal },
-                    onCQ = { perform(e.callCQ(), selfText = cqText(PileupSettings.mode, PileupSettings.effectiveCall)) },
-                    onRepeat = { perform(e.repeatRequest()) },
-                    onLog = { perform(e.logCurrent()) },
-                    onEnd = ::endRun
-                )
-            }
+            // rev rides in as a plain parameter, NOT a key(): keying the subtree
+            // on it rebuilt the run UI every clock tick, which yanked focus from
+            // the Send box and closed the keyboard as soon as it opened (#24).
+            PileupRun(
+                engine = e,
+                tick = rev,
+                elapsedSeconds = elapsedSeconds(),
+                input = input,
+                onInput = { input = it.uppercase() },
+                onSend = ::submit,
+                reveal = reveal,
+                onToggleReveal = { reveal = !reveal },
+                onCQ = { perform(e.callCQ(), selfText = cqText(PileupSettings.mode, PileupSettings.effectiveCall)) },
+                onRepeat = { perform(e.repeatRequest()) },
+                onLog = { perform(e.logCurrent()) },
+                onEnd = ::endRun
+            )
         }
         PuPhase.SUMMARY -> engine?.let { e ->
             PileupSummary(
@@ -376,6 +377,10 @@ private fun PileupSetup(onStart: () -> Unit, onBack: () -> Unit) {
 @Composable
 private fun PileupRun(
     engine: PileupEngine,
+    // Deliberately unread: the engine mutates outside Compose, so this bumped
+    // counter is what makes each tick/action recompose the run (strong
+    // skipping would otherwise see identical parameters and skip).
+    tick: Int,
     elapsedSeconds: Int,
     input: String,
     onInput: (String) -> Unit,
