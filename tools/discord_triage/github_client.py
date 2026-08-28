@@ -7,6 +7,7 @@ so the Discord event loop is never blocked.
 from __future__ import annotations
 
 import asyncio
+from typing import Optional
 
 import httpx
 
@@ -20,13 +21,38 @@ _HEADERS = {
 }
 
 
+class GitHubError(RuntimeError):
+    """A GitHub API call failed, carrying enough context to say why.
+
+    The status + GitHub's own error message distinguish the common operational
+    faults: 401 = bad/expired token, 404 = repo not granted to the token,
+    403 = repo granted but missing the Issues permission.
+    """
+
+    def __init__(self, status: int, repo: str, detail: str):
+        super().__init__(f"GitHub returned {status} for {repo}: {detail}")
+        self.status = status
+        self.repo = repo
+        self.detail = detail
+
+
+def _raise_for_status(resp: httpx.Response, repo: str) -> None:
+    if resp.status_code < 400:
+        return
+    try:
+        detail = resp.json().get("message") or resp.text[:200]
+    except Exception:
+        detail = resp.text[:200]
+    raise GitHubError(resp.status_code, repo, detail)
+
+
 def _list_open_issues_sync(limit: int = 50) -> list[dict]:
     """Return open issues as [{number, title}], excluding pull requests."""
     url = f"{_API}/repos/{settings.github_repo}/issues"
     params = {"state": "open", "per_page": str(min(limit, 100)), "sort": "created"}
     with httpx.Client(timeout=15.0) as client:
         resp = client.get(url, headers=_HEADERS, params=params)
-        resp.raise_for_status()
+        _raise_for_status(resp, settings.github_repo)
         data = resp.json()
     # The issues endpoint also returns PRs; filter them out.
     return [
@@ -40,25 +66,48 @@ def _create_issue_sync(
     title: str, body: str, labels: list[str], repo: str | None = None
 ) -> dict:
     """Create an issue and return {number, html_url}."""
-    url = f"{_API}/repos/{repo or settings.github_repo}/issues"
+    target = repo or settings.github_repo
+    url = f"{_API}/repos/{target}/issues"
     # Always tag with the triage label so Discord-sourced issues are filterable.
     all_labels = sorted({*labels, settings.triage_label})
     payload = {"title": title, "body": body, "labels": all_labels}
     with httpx.Client(timeout=15.0) as client:
         resp = client.post(url, headers=_HEADERS, json=payload)
-        resp.raise_for_status()
+        _raise_for_status(resp, target)
         data = resp.json()
     return {"number": data["number"], "html_url": data["html_url"]}
 
 
 def _comment_issue_sync(number: int, body: str, repo: str | None = None) -> dict:
     """Add a comment to an existing issue. Returns {html_url}."""
-    url = f"{_API}/repos/{repo or settings.github_repo}/issues/{number}/comments"
+    target = repo or settings.github_repo
+    url = f"{_API}/repos/{target}/issues/{number}/comments"
     with httpx.Client(timeout=15.0) as client:
         resp = client.post(url, headers=_HEADERS, json={"body": body})
-        resp.raise_for_status()
+        _raise_for_status(resp, target)
         data = resp.json()
     return {"html_url": data["html_url"]}
+
+
+def _check_repo_access_sync(repo: str) -> Optional[str]:
+    """Probe whether the token can read `repo`'s issues.
+
+    Returns None when access looks fine, else a short "status message" string
+    describing the problem (e.g. "401 Bad credentials", "404 Not Found").
+    """
+    url = f"{_API}/repos/{repo}/issues"
+    try:
+        with httpx.Client(timeout=15.0) as client:
+            resp = client.get(url, headers=_HEADERS, params={"per_page": "1"})
+    except httpx.HTTPError as err:
+        return f"network error: {err}"
+    if resp.status_code < 400:
+        return None
+    try:
+        detail = resp.json().get("message") or resp.text[:200]
+    except Exception:
+        detail = resp.text[:200]
+    return f"{resp.status_code} {detail}"
 
 
 async def list_open_issues(limit: int = 50) -> list[dict]:
@@ -73,3 +122,7 @@ async def create_issue(
 
 async def comment_issue(number: int, body: str, repo: str | None = None) -> dict:
     return await asyncio.to_thread(_comment_issue_sync, number, body, repo)
+
+
+async def check_repo_access(repo: str) -> Optional[str]:
+    return await asyncio.to_thread(_check_repo_access_sync, repo)
