@@ -1,49 +1,55 @@
-# Handoff: upload build 16 to TestFlight (Mac, any clone)
+# Handoff: redeploy the Discord triage bot (Mac, any clone)
 
-Delete this file (its own commit) once build 16 is distributed.
+Delete this file (its own commit) once the bot is redeployed and a 🐛
+re-react on the stuck report draws a 👀.
 
-## What build 16 is
+## What changed (2026-08-28, remote session)
 
-The 2026-08-27 Discord-issues round, merged to main:
+Justin's "Unneeded info in training screen" thread exposed why the bot
+ignored 🐛 on a report the reporter had already threaded: the reaction
+arrives on the parent channel, and every reply path went there —
+invisible from inside the thread — or died on Discord's
+thread-already-exists error. Two merged rounds fix it (PR #68, PR #70):
 
-- Menu tiles launch their mode directly — the pinned Continue button is
-  gone; each mode's options moved onto its pre-flight sheet (#60)
-- Navy-on-teal labels everywhere a control fills with the brand teal —
-  the white-on-cyan contrast failure (#59)
-- The truncated "155 h…" toolbar bubble is now a full-width session
-  readout in the session bar, and word-pool modes read "155 words &
-  calls" (#61)
-- Slashed zeros across every copy display, toggleable in Settings ▸
-  Display (#62)
-
-`CURRENT_PROJECT_VERSION` is already bumped to 16 (marketing version
-stays 1.1). Nothing to edit — just build and ship.
+- The bot adopts a reporter-created thread and replies **in it** —
+  including "duplicate of #N" — instead of `message.reply` in the channel.
+- Archived threads are fetched and **un-archived** before speaking
+  (sends into archived threads fail silently otherwise), and reactions
+  inside archived threads resolve instead of bailing.
+- `WATCH_CHANNEL_IDS` scoping is thread-aware (threads/forum posts
+  inherit the watched parent's scope).
+- The bot reacts **👀 the moment it accepts a 🐛** — no 👀 means the
+  event never reached the running code.
 
 ## Ship it
 
     git checkout main && git pull
-    source tools/asc-auth.sh
-    ./tools/upload-testflight.sh
+    cd tools/discord_triage
+    fly deploy
 
-The script archives Release, uploads, waits for processing, assigns the
-same testers as build 15, and submits for beta review (fast on the
-already-approved 1.1 train).
+## Verify
 
-## Add it to the Discord group
+Re-react 🐛 on the "Unneeded info in training screen" starter message:
 
-The external group + public link exist from build 15; the new build just
-needs adding:
+- **👀 then a reply in the thread** — done. Expect "duplicate of #61":
+  the report is really feedback on #61's own fix (build 16's full-width
+  "155 words & calls" readout), so either reply in-thread that the
+  readout itself feels extraneous and re-react to file it fresh, or let
+  the dup verdict stand.
+- **👀 but no reply** — triage-side error: `fly logs` shows a
+  `Start triage …` line or a traceback right after.
+- **No 👀** — the image is stale:
+  `fly ssh console -C "grep -c _message_thread /app/bot.py"` returning 0
+  means the deploy went out from an un-pulled checkout.
 
-    python3 tools/asc-api.py groups          # note the "Discord" group id
-    python3 tools/asc-api.py notify <id>     # add build 16 to it
+Old replies from the broken path (e.g. "Looks like a duplicate of #61 🔁")
+may be sitting in #bugs-and-feature-requests under the original message —
+channel-level, outside the thread.
 
-The public join link doesn't change, so no new Discord announcement is
-required — testers get TestFlight's own update notice. If an announcement
-is wanted anyway, dispatch `.github/workflows/discord-release.yml` with
-the existing `testflight_link`.
+## Companion release (done, no Mac action)
 
-## Companion release
-
-Android 1.4 (versionCode 5) ships the same round plus the CW decoder +
-Short Stories port via `android-release.yml` on the Android repo — the
-remote session handles that; nothing to do from the Mac.
+Android 1.4.1 (versionCode 6) is on the Play closed-testing track —
+run 13 of `android-release.yml` — carrying the QSO/Contest send-box
+keyboard fix (Android #24, from ellybean's report; the `key(rev)`
+tick rebuilt the run UI every second and killed the field's focus).
+Her existing testing link still works; the update arrives via Play.
