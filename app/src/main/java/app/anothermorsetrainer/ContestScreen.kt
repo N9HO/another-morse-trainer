@@ -28,7 +28,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -184,23 +183,25 @@ fun ContestScreen(onBack: () -> Unit) {
             onBack = { player.stop(); onBack() }
         )
         CtPhase.RUNNING -> engine?.let { e ->
-            key(rev) {
-                ContestRun(
-                    engine = e,
-                    contest = contest,
-                    clockText = contestClock(length, elapsedSeconds()),
-                    elapsedSeconds = elapsedSeconds(),
-                    input = input,
-                    onInput = { input = it.uppercase() },
-                    onSend = ::submit,
-                    reveal = reveal,
-                    onToggleReveal = { reveal = !reveal },
-                    onCQ = { perform(e.callCQ()) },
-                    onRepeat = { perform(e.repeatRequest()) },
-                    onLog = { perform(e.logCurrent()) },
-                    onEnd = ::endRun
-                )
-            }
+            // rev rides in as a plain parameter, NOT a key(): keying the subtree
+            // on it rebuilt the run UI every clock tick, which yanked focus from
+            // the Send box and closed the keyboard as soon as it opened (#24).
+            ContestRun(
+                engine = e,
+                tick = rev,
+                contest = contest,
+                clockText = contestClock(length, elapsedSeconds()),
+                elapsedSeconds = elapsedSeconds(),
+                input = input,
+                onInput = { input = it.uppercase() },
+                onSend = ::submit,
+                reveal = reveal,
+                onToggleReveal = { reveal = !reveal },
+                onCQ = { perform(e.callCQ()) },
+                onRepeat = { perform(e.repeatRequest()) },
+                onLog = { perform(e.logCurrent()) },
+                onEnd = ::endRun
+            )
         }
         CtPhase.SUMMARY -> engine?.let { e ->
             ContestSummary(
@@ -274,6 +275,10 @@ private fun ContestSetup(
 @Composable
 private fun ContestRun(
     engine: PileupEngine,
+    // Deliberately unread: the engine mutates outside Compose, so this bumped
+    // counter is what makes each tick/action recompose the run (strong
+    // skipping would otherwise see identical parameters and skip).
+    tick: Int,
     contest: ContestType,
     clockText: String,
     elapsedSeconds: Int,
