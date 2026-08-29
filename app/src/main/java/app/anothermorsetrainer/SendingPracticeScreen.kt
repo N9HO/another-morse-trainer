@@ -159,8 +159,18 @@ fun SendingPracticeScreen(onBack: () -> Unit) {
     }
     BackHandler { finish() }
 
+    // Mid-session Settings, drawn over the session so its state lives on.
+    var showSettings by remember { mutableStateOf(false) }
+
     Box(modifier = Modifier.fillMaxSize()) {
-        TextButton(onClick = { finish() }, modifier = Modifier.padding(8.dp)) { Text("‹ Back") }
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            TextButton(onClick = { finish() }) { Text("‹ Back") }
+            SessionSettingsButton { showSettings = true }
+        }
 
         Column(
             modifier = Modifier.fillMaxSize().padding(24.dp),
@@ -277,6 +287,10 @@ fun SendingPracticeScreen(onBack: () -> Unit) {
                     modifier = Modifier.weight(1f).heightIn(min = 48.dp)
                 ) { Text("Submit", fontWeight = FontWeight.SemiBold) }
             }
+        }
+
+        if (showSettings) {
+            SessionSettingsOverlay(scope = SettingsMode.SENDING, onClose = { showSettings = false })
         }
     }
 }

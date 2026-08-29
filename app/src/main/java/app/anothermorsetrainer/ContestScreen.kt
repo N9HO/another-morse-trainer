@@ -175,6 +175,10 @@ fun ContestScreen(onBack: () -> Unit) {
         }
     }
 
+    // Mid-session Settings, drawn over the run so the contest lives on.
+    var showSettings by remember { mutableStateOf(false) }
+
+    Box(modifier = Modifier.fillMaxSize()) {
     when (phase) {
         CtPhase.SETUP -> ContestSetup(
             contest = contest, onContest = { contest = it },
@@ -200,6 +204,7 @@ fun ContestScreen(onBack: () -> Unit) {
                 onCQ = { perform(e.callCQ()) },
                 onRepeat = { perform(e.repeatRequest()) },
                 onLog = { perform(e.logCurrent()) },
+                onSettings = { showSettings = true },
                 onEnd = ::endRun
             )
         }
@@ -213,6 +218,11 @@ fun ContestScreen(onBack: () -> Unit) {
                 onBack = onBack
             )
         }
+    }
+
+    if (showSettings) {
+        SessionSettingsOverlay(scope = SettingsMode.CONTEST, onClose = { showSettings = false })
+    }
     }
 }
 
@@ -290,6 +300,7 @@ private fun ContestRun(
     onCQ: () -> Unit,
     onRepeat: () -> Unit,
     onLog: () -> Unit,
+    onSettings: () -> Unit,
     onEnd: () -> Unit
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
@@ -302,9 +313,9 @@ private fun ContestRun(
             Text(
                 "${contest.eventName} · $clockText",
                 style = MaterialTheme.typography.labelMedium,
-                color = Brand.textSecondary,
-                modifier = Modifier.padding(end = 12.dp)
+                color = Brand.textSecondary
             )
+            SessionSettingsButton(onOpen = onSettings)
         }
 
       CenteredContent {

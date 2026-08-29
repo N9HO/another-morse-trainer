@@ -161,7 +161,8 @@ internal fun milestoneEmoji(day: Int): String = when {
 fun QuizScreen(
     title: String,
     onBack: () -> Unit,
-    makeSource: () -> QuizSource
+    makeSource: () -> QuizSource,
+    settingsMode: SettingsMode = SettingsMode.CHARACTERS
 ) {
     val context = LocalContext.current
     val player = remember { MorsePlayer() }
@@ -185,6 +186,9 @@ fun QuizScreen(
     /** A newly unlocked character/stage from the last answer (shown with a ★). */
     var unlockedNote by remember { mutableStateOf<String?>(null) }
     var stageRev by remember { mutableStateOf(0) }
+
+    // Mid-session Settings, drawn over the session so its state lives on.
+    var showSettings by remember { mutableStateOf(false) }
 
     // Session phase: drills, then a summary once the timer runs out or End is
     // tapped. Back mid-session still records — it just skips the summary.
@@ -418,6 +422,7 @@ fun QuizScreen(
     val hwFocus = remember { FocusRequester() }
     fun handleHardwareKey(event: androidx.compose.ui.input.key.KeyEvent): Boolean {
         if (event.type != KeyEventType.KeyDown) return false
+        if (showSettings) return false
         if (phase != QuizPhase.RUNNING || revealed) return false
         if (Settings.answerByKeying && drill.isKeyable) return false
         val ch = event.utf16CodePoint.takeIf { it > 0 }?.toChar()?.uppercaseChar() ?: return false
@@ -437,8 +442,8 @@ fun QuizScreen(
         }
         return false
     }
-    LaunchedEffect(phase, round) {
-        if (phase == QuizPhase.RUNNING) hwFocus.requestFocus()
+    LaunchedEffect(phase, round, showSettings) {
+        if (phase == QuizPhase.RUNNING && !showSettings) hwFocus.requestFocus()
     }
 
     Box(
@@ -463,6 +468,7 @@ fun QuizScreen(
                             color = Brand.textSecondary
                         )
                     }
+                    SessionSettingsButton { showSettings = true }
                     TextButton(onClick = { endSession() }) { Text("End") }
                 }
             }
@@ -646,6 +652,10 @@ fun QuizScreen(
                 }
             }
         }
+        }
+
+        if (showSettings) {
+            SessionSettingsOverlay(scope = settingsMode, onClose = { showSettings = false })
         }
     }
 }

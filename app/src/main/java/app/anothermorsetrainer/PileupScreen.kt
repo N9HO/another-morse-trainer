@@ -202,6 +202,10 @@ fun PileupScreen(onBack: () -> Unit) {
         }
     }
 
+    // Mid-session Settings, drawn over the run so the pileup lives on.
+    var showSettings by remember { mutableStateOf(false) }
+
+    Box(modifier = Modifier.fillMaxSize()) {
     when (phase) {
         PuPhase.SETUP -> PileupSetup(
             onStart = ::startRun,
@@ -223,6 +227,7 @@ fun PileupScreen(onBack: () -> Unit) {
                 onCQ = { perform(e.callCQ(), selfText = cqText(PileupSettings.mode, PileupSettings.effectiveCall)) },
                 onRepeat = { perform(e.repeatRequest()) },
                 onLog = { perform(e.logCurrent()) },
+                onSettings = { showSettings = true },
                 onEnd = ::endRun
             )
         }
@@ -234,6 +239,11 @@ fun PileupScreen(onBack: () -> Unit) {
                 onBack = onBack
             )
         }
+    }
+
+    if (showSettings) {
+        SessionSettingsOverlay(scope = SettingsMode.PILEUP, onClose = { showSettings = false })
+    }
     }
 }
 
@@ -390,6 +400,7 @@ private fun PileupRun(
     onCQ: () -> Unit,
     onRepeat: () -> Unit,
     onLog: () -> Unit,
+    onSettings: () -> Unit,
     onEnd: () -> Unit
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
@@ -402,9 +413,9 @@ private fun PileupRun(
             Text(
                 "${PileupSettings.mode.label} · %d:%02d".format(elapsedSeconds / 60, elapsedSeconds % 60),
                 style = MaterialTheme.typography.labelMedium,
-                color = Brand.textSecondary,
-                modifier = Modifier.padding(end = 12.dp)
+                color = Brand.textSecondary
             )
+            SessionSettingsButton(onOpen = onSettings)
         }
 
       CenteredContent {

@@ -34,34 +34,40 @@ class MainActivity : ComponentActivity() {
 }
 
 /** A selectable training mode, each backed by a ported [QuizSource]. */
-data class QuizMode(val title: String, val subtitle: String, val make: () -> QuizSource)
+data class QuizMode(
+    val title: String,
+    val subtitle: String,
+    /** Scopes the mid-session Settings overlay to this mode's sections. */
+    val settingsMode: SettingsMode,
+    val make: () -> QuizSource
+)
 
 /** The menu of modes the home screen offers — every one drives the same QuizScreen. */
 val QUIZ_MODES: List<QuizMode> = listOf(
     // The Characters track is restored from EngineStore so the Koch ladder
     // resumes where it left off (and saves back after every answer).
-    QuizMode("Characters", "Koch-method ladder, A–Z 0–9") {
+    QuizMode("Characters", "Koch-method ladder, A–Z 0–9", SettingsMode.CHARACTERS) {
         EngineStore.characters()
     },
     // The pool is the ranked Top-N ham words, or the learner's own list when
     // one is enabled in Settings.
-    QuizMode("Common Words", "Hear the word, pick the word") {
+    QuizMode("Common Words", "Hear the word, pick the word", SettingsMode.WORDS) {
         PhraseQuiz("Words", Settings.wordPoolItems(), Settings.phraseConfig())
     },
-    QuizMode("Abbreviations", "CW shorthand → meaning") {
+    QuizMode("Abbreviations", "CW shorthand → meaning", SettingsMode.ABBREVIATIONS) {
         PhraseQuiz("Abbreviations", MorseData.abbreviationItems, Settings.phraseConfig())
     },
-    QuizMode("Q-Codes", "QRZ, QSY, QTH …") {
+    QuizMode("Q-Codes", "QRZ, QSY, QTH …", SettingsMode.QCODES) {
         PhraseQuiz("Q-Codes", MorseData.qCodeItems, Settings.phraseConfig())
     },
-    QuizMode("Prosigns", "Run-together signals") {
+    QuizMode("Prosigns", "Run-together signals", SettingsMode.PROSIGNS) {
         PhraseQuiz("Prosigns", MorseData.prosignItems, Settings.phraseConfig())
     },
     // Targeted review of the character pairs you mix up. Shares the persisted
     // Characters engine, so it drills the confusions actually recorded in past
     // practice; with none recorded yet it falls back to your slowest active
     // characters paired with their nearest sound-alikes.
-    QuizMode("Confusion Drill", "Drill your mix-ups") {
+    QuizMode("Confusion Drill", "Drill your mix-ups", SettingsMode.CONFUSION) {
         ConfusionQuiz(EngineStore.characters().engine)
     }
 )
@@ -120,7 +126,8 @@ private fun AppRoot() {
         is Route.Quiz -> QuizScreen(
             title = r.mode.title,
             onBack = { route = Route.Home },
-            makeSource = r.mode.make
+            makeSource = r.mode.make,
+            settingsMode = r.mode.settingsMode
         )
         Route.Pileup -> PileupScreen(onBack = { route = Route.Home })
         Route.Contest -> ContestScreen(onBack = { route = Route.Home })
@@ -130,7 +137,8 @@ private fun AppRoot() {
         Route.TypeIt -> TypedQuizScreen(
             title = "Type It",
             onBack = { route = Route.Home },
-            makeSource = { PhraseQuiz("Type It", MorseData.wordAndCallSignItems, summaryNoun = "words & calls") }
+            makeSource = { PhraseQuiz("Type It", MorseData.wordAndCallSignItems, summaryNoun = "words & calls") },
+            settingsMode = SettingsMode.TYPE_IT
         )
         Route.Qrq -> QrqScreen(onBack = { route = Route.Home })
         Route.RapidFire -> RapidFireScreen(onBack = { route = Route.Home })

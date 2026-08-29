@@ -68,6 +68,8 @@ fun HeadCopyScreen(onBack: () -> Unit) {
     var round by remember { mutableStateOf(0) }
     var revealed by remember { mutableStateOf(false) }
     var summary by remember { mutableStateOf(source.summary) }
+    // Mid-session Settings, drawn over the session so its state lives on.
+    var showSettings by remember { mutableStateOf(false) }
     // When the tone finished, so recall time (tone end → Reveal) feeds stats
     // like every other mode instead of a flat zero.
     var toneFinishedAt by remember { mutableStateOf(0L) }
@@ -204,6 +206,7 @@ fun HeadCopyScreen(onBack: () -> Unit) {
                             color = Brand.textSecondary
                         )
                     }
+                    SessionSettingsButton { showSettings = true }
                     TextButton(onClick = { endSession() }) { Text("End") }
                 }
             }
@@ -296,6 +299,10 @@ fun HeadCopyScreen(onBack: () -> Unit) {
                 ) { Text("▶ Replay") }
             }
         }
+        }
+
+        if (showSettings) {
+            SessionSettingsOverlay(scope = SettingsMode.HEAD_COPY, onClose = { showSettings = false })
         }
     }
 }

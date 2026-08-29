@@ -203,13 +203,16 @@ fun JourneyScreen(onBack: () -> Unit) {
         revealed = true
     }
 
+    // Mid-session Settings, drawn over the session so its state lives on.
+    var showSettings by remember { mutableStateOf(false) }
+
     // Hardware-keyboard answering (issue #69), same scheme as QuizScreen:
     // type the character you heard when every option is one character, or
     // 1–9 for the Nth option in meaning drills.
     val hwFocus = remember { FocusRequester() }
     fun handleHardwareKey(event: androidx.compose.ui.input.key.KeyEvent): Boolean {
         if (event.type != KeyEventType.KeyDown) return false
-        if (revealed || showMap) return false
+        if (revealed || showMap || showSettings) return false
         val ch = event.utf16CodePoint.takeIf { it > 0 }?.toChar()?.uppercaseChar() ?: return false
         val options = drill.options
         if (options.isNotEmpty() && options.all { it.length == 1 }) {
@@ -224,10 +227,13 @@ fun JourneyScreen(onBack: () -> Unit) {
         }
         return false
     }
-    LaunchedEffect(round, showMap) {
-        if (!showMap) hwFocus.requestFocus()
+    LaunchedEffect(round, showMap, showSettings) {
+        if (!showMap && !showSettings) hwFocus.requestFocus()
     }
 
+    // The Box lets the mid-session Settings draw over the running level
+    // without unmounting it; the session Column keeps the key-event focus.
+    Box(modifier = Modifier.fillMaxSize()) {
     // A Column, not a Box: the Back/Map row and the level banner used to be
     // stacked on top of each other, so "Level N" overlapped Back and the
     // "N / total" count overlapped Map (issue #58).
@@ -244,10 +250,13 @@ fun JourneyScreen(onBack: () -> Unit) {
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             TextButton(onClick = { finish() }) { Text("‹ Back", color = Brand.teal) }
-            OutlinedButton(onClick = { player.stop(); showMap = true }) {
-                Icon(Icons.Filled.Map, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(6.dp))
-                Text("Map")
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                SessionSettingsButton { showSettings = true }
+                OutlinedButton(onClick = { player.stop(); showMap = true }) {
+                    Icon(Icons.Filled.Map, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Map")
+                }
             }
         }
 
@@ -322,6 +331,11 @@ fun JourneyScreen(onBack: () -> Unit) {
             JourneyOptionsGrid(drill = drill, revealed = revealed, chosen = chosen, onPick = ::answer)
             Spacer(Modifier.height(24.dp))
         }
+    }
+
+    if (showSettings) {
+        SessionSettingsOverlay(scope = SettingsMode.JOURNEY, onClose = { showSettings = false })
+    }
     }
 }
 
