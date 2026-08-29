@@ -634,11 +634,14 @@ public final class PileupEngine {
             .split(whereSeparator: { Self.fieldSeparators.contains($0) })
             .map(String.init)
         // Drop a leading signal report the operator typed but wasn't asked to
-        // copy ("599 OH" -> "OH"). Only for exchanges that actually send an RST,
-        // and only when there's a surplus token to drop — otherwise a serial
-        // that merely looks like a report (the NS Sprint's serial, or a basic
-        // contest serial in the 500s) would be mistaken for one and stripped.
-        if config.mode.includesRST, !config.rstRequired, user.count > tokens.count,
+        // copy ("599 OH" -> "OH"). An operator sends 5NN out of habit even in
+        // the exchanges that don't carry one — SST, CWT, MST, Sprint and Field
+        // Day all take a bare name/serial — so the report is surplus in every
+        // mode, not just the ones that send an RST (#38). Only dropped when
+        // there's a surplus token to drop, so a serial that merely looks like a
+        // report (the NS Sprint's serial, or a basic contest serial in the
+        // 500s) is never mistaken for one and stripped.
+        if !reportIsRequired, user.count > tokens.count,
            let first = user.first, Self.isRSTLike(first) {
             user.removeFirst()
         }
@@ -660,12 +663,30 @@ public final class PileupEngine {
         // all ("9BEWA" for "9B EWA"). Peel each required token's width off the
         // alphanumeric stream in order. Only reached once the separated parse
         // above has failed, so it can't turn a real miss into a match.
-        return Self.gradeGlued(user.joined(), against: tokens)
+        let glued = user.joined()
+        if Self.gradeGlued(glued, against: tokens) { return true }
+        // The same run-together copy with a report typed in front of it
+        // ("5NNOH"): nothing separates the report from the exchange, so the
+        // token split above never saw it as its own field to drop.
+        return !reportIsRequired
+            && Self.gradeGlued(glued, against: tokens, droppingLeadingReport: true)
     }
 
+    /// Whether a signal report is one of the tokens the operator has to copy.
+    /// The `rstRequired` setting only bites in a mode that sends one.
+    private var reportIsRequired: Bool { config.mode.includesRST && config.rstRequired }
+
     /// Match run-together input by consuming each token's expected width in turn.
-    static func gradeGlued(_ input: String, against tokens: [ExchToken]) -> Bool {
-        let stream = Array(input.uppercased().filter { $0.isLetter || $0.isNumber })
+    /// With `droppingLeadingReport`, a three-character signal report at the head
+    /// of the stream is peeled off first — the glued twin of the surplus-report
+    /// drop in `grade`.
+    static func gradeGlued(_ input: String, against tokens: [ExchToken],
+                           droppingLeadingReport: Bool = false) -> Bool {
+        var stream = Array(input.uppercased().filter { $0.isLetter || $0.isNumber })
+        if droppingLeadingReport {
+            guard stream.count > 3, isRSTLike(String(stream.prefix(3))) else { return false }
+            stream.removeFirst(3)
+        }
         var idx = 0
         for t in tokens {
             let n = t.value.count
@@ -686,7 +707,24 @@ public final class PileupEngine {
             if let a = Int(u), let b = Int(token.value) { return a == b }
             return u == token.value
         case .raw:
-            return user.uppercased().filter { !$0.isWhitespace } == token.value.uppercased()
+            let u = user.uppercased().filter { !$0.isWhitespace }
+            let value = token.value.uppercased()
+            if u == value { return true }
+            // A mixed field carries digits too: Field Day's class is a number
+            // and a category letter ("2A"), so an operator copying cut numbers
+            // writes "UA". Line the copy up against the token — a digit
+            // position takes its cut letter, a letter position must match
+            // outright — so cut input works wherever a digit is expected (#38).
+            return Self.matchesWithCutDigits(u, value)
+        }
+    }
+
+    /// Compare a copy against a mixed letter/digit field, accepting a cut letter
+    /// wherever the field has a digit.
+    static func matchesWithCutDigits(_ user: String, _ value: String) -> Bool {
+        guard user.count == value.count else { return false }
+        return zip(user, value).allSatisfy { u, v in
+            u == v || (v.isNumber && CutNumbers.reverse[u] == v)
         }
     }
 

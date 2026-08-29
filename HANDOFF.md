@@ -1,13 +1,29 @@
-# Handoff: upload build 21 to TestFlight (Mac, any clone)
+# Handoff: upload build 22 to TestFlight (Mac, any clone)
 
-Delete this file (its own commit) once build 21 is distributed.
+Delete this file (its own commit) once build 22 is distributed.
 
-Build 21 supersedes build 20, which was never uploaded — everything in
+Build 22 supersedes build 21, which was never uploaded — everything in
 that handoff ships here too, and is repeated below.
 
-## What build 21 is
+## What build 22 is
 
-The QSO simulator's pileup stops behaving like a machine.
+The QSO simulator's exchange takes what operators actually send.
+
+- **A signal report in front of the exchange is not a miscopy (#38).**
+  Type "5NN OH" and the copy grades, in every contest mode — SST, CWT,
+  MST, Sprint and Field Day send a bare name, serial or class, but an
+  operator sends 5NN out of muscle memory anyway, and the pileup used to
+  charge that as a bust and repeat itself forever. Write it 5NN or 599,
+  spaced or run together ("5NNOH"); it reads the same. A serial that
+  merely looks like a report is still graded, and if you opted into
+  copying the report it is still required
+- **Cut numbers count wherever a digit is expected (#38).** Field Day's
+  class mixes a number and a category letter, so a cut copy of 9B is
+  "NB" — which the class comparison rejected outright. A digit position
+  now takes its cut letter; a letter position still has to match, so
+  "9U" remains wrong
+
+...and what build 21 carried:
 
 - **A near miss keeps the caller correcting you.** Copy a call almost
   right — "N9HS" for N9HO — and the pileup used to treat it as a total
@@ -34,9 +50,6 @@ The QSO simulator's pileup stops behaving like a machine.
   A new QSO realism setting — shown only when callers can give up —
   picks when you hear it: "At the end" (default) in the run summary,
   "As it happens" also raises a dismissible card, "Off" stays quiet
-
-...and what build 20 carried:
-
 - **A partial call gets an answer again (#85).** A partial query only
   matched calls that *started* with the fragment, so a trailing "B?" —
   what two stations on top of each other leave you — matched nobody, fell
@@ -44,7 +57,7 @@ The QSO simulator's pileup stops behaving like a machine.
   all while charging a bust against clean-copy accuracy. Any station
   whose call contains the fragment now answers
 
-`CURRENT_PROJECT_VERSION` is already bumped to 21 (marketing version
+`CURRENT_PROJECT_VERSION` is already bumped to 22 (marketing version
 stays 1.1). Nothing to edit — just build and ship.
 
 CI built this commit with `xcodebuild` on a macOS runner and ran the
