@@ -1099,6 +1099,36 @@ do {
     let encoded = try! JSONEncoder().encode(prog)
     let decoded = try! JSONDecoder().decode(JourneyProgress.self, from: encoded)
     check("JourneyProgress round-trips through JSON", decoded == prog)
+
+    // Issue #75: the prosign <K> is a lone -.- — audibly identical to the
+    // letter K, and both live in the pool at the prosign levels. The two must
+    // never compete in one drill's options, and hearing -.- either answer is
+    // accepted.
+    let goAhead = MorseData.prosigns.first { $0.name == "<K>" }!.meaning
+    let kLevelIndex = levels.firstIndex { lvl in lvl.newItems.contains { $0.id == "<K>" } }
+    check("curriculum has a level introducing the <K> prosign", kLevelIndex != nil)
+    if let kLevelIndex {
+        let pquiz = JourneyQuiz(levels: levels, startIndex: kLevelIndex, rng: SeededRNG(seed: 11))
+        var sawProsignK = false, sawLetterK = false
+        var offeredTwin = false, twinAccepted = true
+        for _ in 0..<400 {
+            pquiz.select(levelIndex: kLevelIndex)   // pin the level; drills never clear it
+            let d = pquiz.nextDrill()
+            if d.correct == goAhead {
+                sawProsignK = true
+                if d.options.contains("K") { offeredTwin = true }
+                // A learner hearing a lone -.- may well answer "K" — accepted.
+                if !pquiz.record(choice: "K", ttr: 0.5).correct { twinAccepted = false }
+            } else {
+                if d.correct == "K", d.options.contains(goAhead) { offeredTwin = true }
+                if d.correct == "K" { sawLetterK = true }
+                _ = pquiz.record(choice: d.correct, ttr: 0.5)
+            }
+        }
+        check("both the letter K and the prosign <K> get drilled", sawProsignK && sawLetterK)
+        check("K and <K> never appear together as options", !offeredTwin)
+        check("answering K for a heard <K> counts as correct", twinAccepted)
+    }
 }
 
 // Rapid Fire (back-to-back copy)

@@ -33,6 +33,20 @@ public struct MorseItem: Identifiable, Sendable, Equatable {
             return s.compactMap { MorseCode.pattern(for: $0) }.joined()
         }
     }
+
+    /// The dot-dash stream as actually heard: prosign patterns run together,
+    /// text characters separated by an inter-character gap. Unlike `soundKey`
+    /// this keeps the abbreviation BK (-... -.-) apart from the prosign <BK>
+    /// (-...-.-), while the letter K and the prosign <K> compare equal — both
+    /// are a lone -.- on the air.
+    public var audibleKey: String {
+        switch playable {
+        case .pattern(let p):
+            return p
+        case .text(let s):
+            return s.compactMap { MorseCode.pattern(for: $0) }.joined(separator: " ")
+        }
+    }
 }
 
 /// Curated ham-radio reference data (high-frequency words, abbreviations,
