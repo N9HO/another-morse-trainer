@@ -5,8 +5,13 @@ built with **SwiftUI**, with its training logic in a Foundation-only Swift
 package (`Sources/MorseKit`) so it can be unit-tested and ported. The Android
 port lives at [N9HO/another-morse-trainer-android](https://github.com/N9HO/another-morse-trainer-android).
 
+**The beta is open** — join on
+[TestFlight](https://testflight.apple.com/join/ZwXF88Gh).
+
 The user guide — every mode, setting and hardware option — lives at
-[anothermorsetrainer.app/guide](https://anothermorsetrainer.app/guide/).
+[anothermorsetrainer.app/guide](https://anothermorsetrainer.app/guide/), and
+testers, bug reports and feature chat live on
+[Discord](https://discord.gg/qgyk3TPUd9).
 
 ## Features
 
