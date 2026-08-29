@@ -1233,15 +1233,10 @@ struct ContentView: View {
                     .monospacedDigit()
             }
             Spacer()
-            // Passive readout of the current session's scope (e.g. "11 chars",
-            // "Story 1 of 5") — a plain label with room to breathe, not a
-            // toolbar chip that truncates into a phantom button (issue #61).
-            Text(model.summary)
-                .font(.footnote)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-                .accessibilityLabel("Current session: \(model.summary)")
-            Spacer()
+            // No passive session readout here: the pool-size counts ("155
+            // words & calls") were reported as clutter twice (issues #61, #74),
+            // and every meaningful figure already lives on the mode's own
+            // surface (exam question count, journey banner, QSO log).
             Button(role: .destructive) {
                 model.endSession()
             } label: {
