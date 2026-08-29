@@ -25,7 +25,8 @@ testers, bug reports and feature chat live on
   drills, with custom word lists and optional punctuation extras
 - **Confusion Drill**: targeted review of the pairs you actually mix up
 - **Head Copy**: copy in your head with auto-repeats and a timed reveal
-- **Type It / QRQ Speed**: free-recall typing, up to 35/40 WPM high-speed copy
+- **Type It / QRQ Speed**: free-recall typing, plus high-speed copy at
+  35 / 40 / 50 / 60 WPM on its own speed setting
 - **Rapid Fire**: call signs / words / number groups / states sent back to
   back at your pace; type, head-copy, key each one back, or just listen
 - **QSO Simulator**: call CQ and work a simulated pileup, with your own side
@@ -57,9 +58,15 @@ testers, bug reports and feature chat live on
 - **Vail repeater**: live CW over the [Vail](https://vail.woozle.org) network
   with Vail Adapter support: MIDI key input *and* output (keyer modes,
   speed, sidetone, RX piezo buzz), chat, and a signal timeline
+- **Bluetooth LE MIDI keys**: paired from inside the app via the system MIDI
+  sheet, which is the only thing on iOS that makes a BLE key visible to apps
+- **Background noise**: an optional low noise floor under everything (Whisper by
+  default) that stops Bluetooth earbuds sleeping through the first character,
+  and doubles as band noise to copy through
 - **Progress**: daily streak with milestone celebrations, session history
   with per-session recognition charts, per-character stats, most-confused
   pairs, performance by 5-WPM speed band, and a shareable Brag Sheet
+- Character speed adjustable to 60 WPM, with Farnsworth spacing tracking it
 - Timed practice sessions (1-30 min or open-ended) with mid-session timer
   controls and an end-of-session summary
 - Daily practice reminders (minute precision, streak-aware)
