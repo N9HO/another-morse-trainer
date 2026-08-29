@@ -8,6 +8,11 @@
 // MIDIPacket.timeStamp is in mach_absolute_time units — use this for accurate
 // key event timing (sub-millisecond), not the host's Date().
 // See CLAUDE.md §4.
+//
+// The wire format itself — the note map and walking a packet that holds more
+// than one message — lives in MorseKit's MIDIKeyParser, where it can be
+// checked without a device. A BLE-MIDI key must first be connected through
+// BluetoothMIDISheet before CoreMIDI will enumerate it at all.
 
 import CoreMIDI
 import Foundation
@@ -16,11 +21,9 @@ import OSLog
 private let log = Logger(subsystem: "com.justinrogers.MorseTrainer", category: "midi")
 
 public final class MIDIInput {
-    public enum Key: Sendable {
-        case straight
-        case dit
-        case dah
-    }
+    /// Which contact fired. Shared with the wire-format parser so the app and
+    /// the MorseKitCheck harness talk about keys in the same terms.
+    public typealias Key = MIDIKeyPaddle
 
     public struct Event: Sendable {
         public let key: Key
@@ -49,6 +52,15 @@ public final class MIDIInput {
     public var connectedSourceNames: [String] {
         stateLock.lock(); defer { stateLock.unlock() }
         return sourceNames
+    }
+
+    /// Re-enumerate and connect any source that appeared since the last scan.
+    ///
+    /// CoreMIDI does notify us, but a BLE-MIDI key connected through the
+    /// Bluetooth browser (see BluetoothMIDISheet) is worth confirming on demand
+    /// rather than trusting a notification we may have raced.
+    public func rescan() {
+        connectAllSources()
     }
 
     /// Timebase for mach_absolute_time → nanoseconds conversion. Cached.
@@ -138,9 +150,11 @@ public final class MIDIInput {
     }
 
     private func handle(packet: MIDIPacket) {
-        // packet.data is a 256-byte tuple. We need the first `length` bytes.
+        // packet.data is a 256-byte tuple. We need the first `length` bytes —
+        // all of them: one packet can carry several messages, and a BLE-MIDI
+        // key regularly sends a key-down and its key-up in the same burst.
         let length = Int(packet.length)
-        guard length >= 3 else { return }
+        guard length >= 2 else { return }
 
         var bytes = [UInt8](repeating: 0, count: length)
         withUnsafeBytes(of: packet.data) { rawPtr in
@@ -149,49 +163,21 @@ public final class MIDIInput {
             }
         }
 
-        let status = bytes[0] & 0xF0
-        let note = bytes[1]
-        let velocity = bytes[2]
-        log.debug("MIDI in: status=0x\(String(status, radix: 16)) note=\(note) vel=\(velocity)")
-
-        let isDown: Bool
-        switch status {
-        case 0x90 where velocity > 0:
-            isDown = true
-        case 0x80:
-            isDown = false
-        case 0x90:
-            // Note On with velocity 0 = Note Off (standard MIDI running status)
-            isDown = false
-        default:
-            return
-        }
-
-        // The adapter sends different note numbers per firmware/keyer mode:
-        //   straight key = 0
-        //   dit paddle   = 1, 20, or (passthrough) 61 (C#4)
-        //   dah paddle   = 2, 21, or (passthrough) 62 (D4)
-        // Match the Vail web repeater's full set so paddle input works
-        // regardless of mode. Unknown notes are ignored (we connect to all
-        // sources, so an unrelated synth must not register as keying).
-        let key: Key
-        switch note {
-        case 0: key = .straight
-        case 1, 20, 61: key = .dit
-        case 2, 21, 62: key = .dah
-        default:
-            log.debug("Ignoring unmapped MIDI note \(note)")
+        let messages = MIDIKeyParser.messages(in: bytes)
+        guard !messages.isEmpty else {
+            log.debug("MIDI in: \(length) byte(s), no key events")
             return
         }
 
         let timestampMs = Self.machTimeToWallClockMs(packet.timeStamp)
-        let event = Event(
-            key: key,
-            isDown: isDown,
-            machTimestamp: packet.timeStamp,
-            timestampMs: timestampMs
-        )
-        onEvent?(event)
+        for message in messages {
+            onEvent?(Event(
+                key: message.paddle,
+                isDown: message.isDown,
+                machTimestamp: packet.timeStamp,
+                timestampMs: timestampMs
+            ))
+        }
     }
 
     // MARK: - Helpers

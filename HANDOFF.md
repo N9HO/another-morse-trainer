@@ -1,12 +1,39 @@
-# Handoff: upload build 18 to TestFlight (Mac, any clone)
+# Handoff: upload build 19 to TestFlight (Mac, any clone)
 
-Delete this file (its own commit) once build 18 is distributed.
+Delete this file (its own commit) once build 19 is distributed.
 
-Build 18 supersedes build 17 — `CURRENT_PROJECT_VERSION` went straight
-from 17 to 18 without 17 being uploaded, so everything in the build-17
-handoff ships here too. That list is repeated below.
+Build 19 supersedes build 18, which supersedes build 17 — neither was
+uploaded, so everything in both handoffs ships here too. Those lists are
+repeated below.
 
-## What build 18 is
+## What build 19 is
+
+A BLE MIDI key can reach the app at all (#81):
+
+- iOS will not hand a Bluetooth MIDI key to *any* app until something
+  connects it as a MIDI device, and pairing it in Settings > Bluetooth
+  does not do that — CoreMIDI keeps reporting zero sources. The app had
+  no way to do it, so a key that read "Connected" in Settings was
+  invisible in both the Vail panel and Sending Practice. Both now offer
+  iOS's own Bluetooth MIDI browser (`CABTMIDICentralViewController`), and
+  re-scan when it closes. The Android port has always done the
+  equivalent in `BleMidi.kt`
+- The Vail panel's adapter row reported only *output* destinations whose
+  name matched a Vail Adapter. A BLE MIDI key has no such destination, so
+  it read "No MIDI adapter" even when it was keying fine. The row now
+  names whatever source is actually attached, and Wake re-scans inputs
+  as well as re-broadcasting the adapter wake
+- Sending Practice separates "MIDI unavailable" (setup failed — a fault)
+  from "no hardware key" (nothing connected yet — not one), instead of
+  showing the fault message for both
+- One CoreMIDI packet can hold several messages, and a BLE MIDI key
+  batches them into one radio burst. Only the first three bytes were
+  read, so a key-up sharing a burst with its key-down was dropped and
+  the key stuck down. The whole packet is now walked, running status and
+  interleaved real-time bytes included, in MorseKit's `MIDIKeyParser`
+  where MorseKitCheck covers it. The Android repo carries the twin fix
+
+...and everything build 18 carried:
 
 The 2026-08-29 Discord-issues round (second pass), merged to main:
 
@@ -45,7 +72,7 @@ The 2026-08-29 Discord-issues round (second pass), merged to main:
 - Q-codes: QRL is the busy statement, QRL? the question (Android
   repo #27)
 
-`CURRENT_PROJECT_VERSION` is already bumped to 18 (marketing version
+`CURRENT_PROJECT_VERSION` is already bumped to 19 (marketing version
 stays 1.1). Nothing to edit — just build and ship.
 
 CI (`.github/workflows/ios.yml`) already built this commit with

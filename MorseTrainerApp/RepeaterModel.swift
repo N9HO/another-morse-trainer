@@ -100,6 +100,19 @@ public final class RepeaterModel: ObservableObject {
     /// Whether a Vail Adapter is connected for MIDI output (config + RX piezo).
     @Published public var midiAdapterConnected: Bool = false
 
+    /// Names of the MIDI *sources* now feeding key events — a Vail Adapter, a
+    /// BLE-MIDI key, anything else CoreMIDI is showing us. Kept separate from
+    /// `midiAdapterConnected`, which only ever means "an output destination we
+    /// recognized as a Vail Adapter": a BLE-MIDI key such as the N6ARA TinyMIDI
+    /// has no destination to recognize, so keying worked while the panel still
+    /// read "No MIDI adapter".
+    @Published public var midiSourceNames: [String] = []
+
+    /// True when any hardware key can reach us, by either route.
+    public var hardwareKeyConnected: Bool {
+        midiAdapterConnected || !midiSourceNames.isEmpty
+    }
+
     /// Keyer mode pushed to the adapter (raw value of MIDIOutput.KeyerMode).
     @Published public var keyerMode: Int = MIDIOutput.KeyerMode.straightKey.rawValue {
         didSet {
@@ -260,7 +273,11 @@ public final class RepeaterModel: ObservableObject {
                     self.handleMIDIEvent(event)
                 }
             }
+            m.onSourcesChanged = { [weak self] names in
+                Task { @MainActor in self?.midiSourceNames = names }
+            }
             midi = m
+            midiSourceNames = m.connectedSourceNames
         } catch {
             log.error("MIDIInput init failed: \(error.localizedDescription)")
         }
@@ -427,9 +444,14 @@ public final class RepeaterModel: ObservableObject {
         }
     }
 
-    /// Re-broadcast the adapter wake/config sequence. Use when the adapter is
-    /// plugged in but not responding (it may have powered up in keyboard mode).
+    /// Re-broadcast the adapter wake/config sequence, and re-enumerate inputs.
+    ///
+    /// Use when a key is attached but not responding: a Vail Adapter may have
+    /// powered up in keyboard mode and need the wake, while a BLE-MIDI key just
+    /// needs CoreMIDI re-read now that it is connected.
     public func wakeMidiAdapter() {
+        midi?.rescan()
+        midiSourceNames = midi?.connectedSourceNames ?? []
         Task { await midiOutput?.wakeAdapter() }
     }
 

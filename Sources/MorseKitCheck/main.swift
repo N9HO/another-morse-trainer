@@ -1487,6 +1487,54 @@ do {
           AnswerKeys.assign(many).filter { $0 != nil }.count == 9)
 }
 
+
+// MARK: - MIDI key wire format
+
+print("\nMIDI key wire format:")
+
+do {
+    // A BLE-MIDI key batches events into one packet, so a packet holding a
+    // key-down and its key-up must yield both — reading only the first message
+    // left the key stuck down (iOS issue #81).
+    let burst: [UInt8] = [0x90, 0x00, 0x7F, 0x80, 0x00, 0x00]
+    let pair = MIDIKeyParser.messages(in: burst)
+    check("both events in one packet are decoded",
+          pair == [MIDIKeyMessage(paddle: .straight, isDown: true),
+                   MIDIKeyMessage(paddle: .straight, isDown: false)])
+
+    // Running status: the second message drops its repeated 0x90 status byte.
+    let running: [UInt8] = [0x90, 0x01, 0x7F, 0x01, 0x00]
+    check("running status continues the previous message",
+          MIDIKeyParser.messages(in: running) == [MIDIKeyMessage(paddle: .dit, isDown: true),
+                                                  MIDIKeyMessage(paddle: .dit, isDown: false)])
+
+    check("note on with velocity 0 is a release",
+          MIDIKeyParser.messages(in: [0x90, 0x02, 0x00]) == [MIDIKeyMessage(paddle: .dah, isDown: false)])
+
+    // Real-time bytes may land between the bytes of another message.
+    let interleaved: [UInt8] = [0x90, 0xF8, 0x02, 0x7F]
+    check("an interleaved clock byte doesn't break the message",
+          MIDIKeyParser.messages(in: interleaved) == [MIDIKeyMessage(paddle: .dah, isDown: true)])
+
+    // We connect to every source, so an unrelated instrument must stay silent.
+    check("an unmapped note is ignored", MIDIKeyParser.messages(in: [0x90, 0x40, 0x7F]).isEmpty)
+    check("a control change is ignored", MIDIKeyParser.messages(in: [0xB0, 0x00, 0x00]).isEmpty)
+
+    // A one-byte Program Change ahead of a key event must not eat its bytes.
+    check("a program change doesn't swallow the next message",
+          MIDIKeyParser.messages(in: [0xC0, 0x01, 0x90, 0x00, 0x7F])
+            == [MIDIKeyMessage(paddle: .straight, isDown: true)])
+
+    check("a truncated trailing message is dropped, not guessed",
+          MIDIKeyParser.messages(in: [0x90, 0x00, 0x7F, 0x90, 0x01])
+            == [MIDIKeyMessage(paddle: .straight, isDown: true)])
+
+    check("passthrough paddle notes map to dit and dah",
+          MIDIKeyParser.paddle(forNote: 61) == .dit && MIDIKeyParser.paddle(forNote: 62) == .dah)
+    check("keyer-mode paddle notes map to dit and dah",
+          MIDIKeyParser.paddle(forNote: 20) == .dit && MIDIKeyParser.paddle(forNote: 21) == .dah)
+}
+
 print("\n────────────────────────────")
 if failures == 0 {
     print("✅ All \(checks) checks passed.\n")

@@ -7,6 +7,7 @@ struct SendingKeyerView: View {
     @EnvironmentObject var model: AppModel
     @StateObject private var sender: SendingKeyer
     @State private var keyPressed = false
+    @State private var showingBluetoothMIDI = false
 
     init(wpm: Double, toneHz: Double) {
         _sender = StateObject(wrappedValue: SendingKeyer(wpm: wpm, toneHz: toneHz))
@@ -102,21 +103,45 @@ struct SendingKeyerView: View {
         }
     }
 
-    /// What hardware key (if any) is feeding this panel. Silence used to be the
-    /// only signal — now a connected Vail/BLE-MIDI key is named, and a MIDI
-    /// setup failure says so instead of leaving a hardware key dead.
+    /// What hardware key (if any) is feeding this panel: a connected
+    /// Vail/BLE-MIDI key is named, and when none is there the panel says which
+    /// of the two reasons applies and offers the way out of the fixable one.
     @ViewBuilder
     private var midiStatus: some View {
-        if sender.midiUnavailable {
-            Label("MIDI unavailable — on-screen key only", systemImage: "exclamationmark.triangle")
-                .font(.caption)
-                .foregroundStyle(.orange)
-        } else if !sender.midiDeviceNames.isEmpty {
+        if !sender.midiDeviceNames.isEmpty {
             Label(sender.midiDeviceNames.joined(separator: ", "), systemImage: "pianokeys")
                 .font(.caption)
                 .foregroundStyle(Theme.teal)
                 .lineLimit(1)
                 .accessibilityLabel("Hardware key connected: \(sender.midiDeviceNames.joined(separator: ", "))")
+        } else {
+            VStack(spacing: 6) {
+                // "MIDI unavailable" used to cover both the setup failing and
+                // nothing being plugged in, which read as a dead end. Only the
+                // first is a fault; the second just needs a key connected —
+                // and a BLE-MIDI key paired in iOS Settings still has to be
+                // connected here before CoreMIDI will show it to any app.
+                Label(sender.midiUnavailable
+                        ? "MIDI unavailable — on-screen key only"
+                        : "No hardware key — on-screen key only",
+                      systemImage: sender.midiUnavailable
+                        ? "exclamationmark.triangle" : "pianokeys")
+                    .font(.caption)
+                    .foregroundStyle(sender.midiUnavailable ? .orange : Theme.textSecondary)
+                    .multilineTextAlignment(.center)
+
+                Button {
+                    showingBluetoothMIDI = true
+                } label: {
+                    Label("Connect a Bluetooth key…", systemImage: "dot.radiowaves.right")
+                        .font(.caption)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            }
+            .bluetoothMIDISheet(isPresented: $showingBluetoothMIDI) {
+                sender.rescanMIDI()
+            }
         }
     }
 

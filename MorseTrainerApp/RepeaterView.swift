@@ -10,6 +10,7 @@ struct RepeaterView: View {
 
     @State private var showingSettings = false
     @State private var showingChat = false
+    @State private var showingBluetoothMIDI = false
 
     var body: some View {
         NavigationStack {
@@ -197,23 +198,55 @@ struct RepeaterView: View {
     // MARK: - Adapter
 
     private var adapterCard: some View {
-        HStack(spacing: 12) {
-            Image(systemName: model.midiAdapterConnected ? "cable.connector" : "cable.connector.slash")
-                .foregroundStyle(model.midiAdapterConnected ? .green : Theme.textSecondary)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(model.midiAdapterConnected ? "MIDI adapter connected" : "No MIDI adapter")
-                    .font(.subheadline)
-                Text("Plug in a Vail Adapter or pair a BLE MIDI key, then Wake.")
-                    .font(.caption).foregroundStyle(Theme.textSecondary)
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 12) {
+                Image(systemName: model.hardwareKeyConnected ? "cable.connector" : "cable.connector.slash")
+                    .foregroundStyle(model.hardwareKeyConnected ? .green : Theme.textSecondary)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(adapterHeadline).font(.subheadline)
+                    Text(adapterDetail)
+                        .font(.caption).foregroundStyle(Theme.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 8)
+                Button("Wake") { model.wakeMidiAdapter() }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
             }
-            Spacer()
-            Button("Wake") { model.wakeMidiAdapter() }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
+            Button {
+                showingBluetoothMIDI = true
+            } label: {
+                Label("Bluetooth key…", systemImage: "dot.radiowaves.right")
+                    .font(.caption)
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
         }
         .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
         .brandCard()
+        .bluetoothMIDISheet(isPresented: $showingBluetoothMIDI) {
+            model.wakeMidiAdapter()
+        }
+    }
+
+    /// Name the key that's actually attached — a BLE-MIDI key reports as a
+    /// source with no matching output destination, which used to read as
+    /// "No MIDI adapter" even while it keyed fine.
+    private var adapterHeadline: String {
+        if !model.midiSourceNames.isEmpty {
+            return model.midiSourceNames.joined(separator: ", ")
+        }
+        return model.midiAdapterConnected ? "MIDI adapter connected" : "No MIDI key"
+    }
+
+    private var adapterDetail: String {
+        if model.hardwareKeyConnected {
+            return model.midiAdapterConnected
+                ? "Vail Adapter ready — keyer mode, speed, and sidetone are set from Settings."
+                : "Keying straight through. Wake re-scans if it stops responding."
+        }
+        return "Plug in a Vail Adapter, or connect a BLE MIDI key below — pairing one in iOS Settings isn't enough for apps to see it."
     }
 
     // MARK: - Roster
