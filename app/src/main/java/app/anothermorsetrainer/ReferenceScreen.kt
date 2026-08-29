@@ -75,6 +75,7 @@ private enum class RefCategory(val label: String, val blurb: String) {
     PROSIGNS("Prosigns", "Procedural signals, sent run-together as one character."),
     QCODES("Q-Codes", "Q-signal shorthand for common questions and answers."),
     ABBR("Abbr", "Everyday CW abbreviations heard in every QSO."),
+    LINGO("Lingo", "The spoken culture of ham radio — from ragchew to zero beat."),
     CUTNUMBERS("Cut #", "Contest shorthand: a digit sent as a single letter to save time."),
     CHART("Chart", "The full alphabet, numbers, and punctuation with their rhythm.");
 
@@ -83,6 +84,7 @@ private enum class RefCategory(val label: String, val blurb: String) {
             PROSIGNS -> MorseData.prosignItems
             QCODES -> MorseData.qCodeItems
             ABBR -> MorseData.abbreviationItems
+            LINGO -> MorseReference.lingoItems
             CUTNUMBERS -> MorseReference.cutNumberItems
             CHART -> MorseReference.chartItems
         }
@@ -188,7 +190,7 @@ fun ReferenceScreen(onBack: () -> Unit) {
                 value = query,
                 onValueChange = { query = it },
                 singleLine = true,
-                placeholder = { Text("Search", color = Brand.textSecondary) },
+                placeholder = { Text("Search all tables", color = Brand.textSecondary) },
                 leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null, tint = Brand.textSecondary) },
                 trailingIcon = {
                     if (query.isNotEmpty()) {
@@ -210,11 +212,14 @@ fun ReferenceScreen(onBack: () -> Unit) {
 
             Spacer(Modifier.height(10.dp))
 
+            // A live query spans the whole reference — "ragchew" is findable
+            // from any tab, with the open tab's matches listed first (#76).
             val q = query.trim()
             val rows = if (q.isEmpty()) category.items
-            else category.items.filter {
-                it.display.contains(q, ignoreCase = true) || it.answer.contains(q, ignoreCase = true)
-            }
+            else (category.items + RefCategory.entries.filterNot { it == category }.flatMap { it.items })
+                .filter {
+                    it.display.contains(q, ignoreCase = true) || it.answer.contains(q, ignoreCase = true)
+                }
 
             if (rows.isEmpty()) {
                 Column(
