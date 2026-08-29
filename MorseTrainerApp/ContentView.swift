@@ -51,8 +51,12 @@ struct ContentView: View {
 
                     // Sending Practice always offers Replay — you can't key back
                     // what you didn't catch (Android parity); elsewhere it's the
-                    // opt-in feedback setting.
-                    if model.settings.allowReplay || model.isSending,
+                    // opt-in feedback setting. A miss offers it regardless:
+                    // re-hearing what was actually sent while the answer shows
+                    // is the point of the correction (issue #77), and the wrong-
+                    // answer pause already waits for Next.
+                    if model.settings.allowReplay || model.isSending
+                        || (model.phase == .answered && model.lastCorrect == false),
                        model.drill != nil, !model.isHeadCopy {
                         Button {
                             model.replay()
