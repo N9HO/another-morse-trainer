@@ -614,6 +614,58 @@ do {
               playCount(r) == expectedMatches)
     }
 
+    // #85: a partial is whatever you managed to copy, and it is not always the
+    // front of the call — a trailing letter is what two stations on top of each
+    // other leave you, and "9H?" for N9HO queries the middle. Prefix-only
+    // matching sent those to the busted-call path, which on the silence setting
+    // meant no reply at all. Every substring of a live call must draw one.
+    do {
+        var pcfg = PileupConfig()
+        pcfg.mode = .pota
+        pcfg.maxStations = 4
+        pcfg.minWPM = 20; pcfg.maxWPM = 20
+        pcfg.giveUpEnabled = false      // nobody walks off mid-check
+        pcfg.bustBehavior = .silence    // an unmatched partial is unmistakable
+        let probe = PileupEngine(config: pcfg, rng: SeededRNG(seed: 7))
+        _ = probe.callCQ()
+        let live = probe.stations.map { $0.call }
+
+        var unanswered: [String] = []
+        var interiorTested = false
+        for call in live {
+            let chars = Array(call)
+            for len in 1 ... chars.count {
+                for start in 0 ... (chars.count - len) {
+                    let frag = String(chars[start ..< (start + len)])
+                    // An exact call is a full copy, not a partial: it opens the
+                    // exchange rather than re-calling, and is checked elsewhere.
+                    if live.contains(frag) { continue }
+                    if start > 0 { interiorTested = true }
+                    // A fresh engine per probe so bumps can't bleed across.
+                    let e = PileupEngine(config: pcfg, rng: SeededRNG(seed: 7))
+                    _ = e.callCQ()
+                    if playCount(e.send(frag + "?")) < 1 { unanswered.append(frag) }
+                }
+            }
+        }
+        check("every partial of a live call draws a reply (#85)", unanswered.isEmpty)
+        check("the sweep actually covered non-leading fragments", interiorTested)
+
+        // The reporter's exact shape: one trailing letter, silence setting.
+        if let tail = live.first.map({ String(Array($0).suffix(1)) }), !live.contains(tail) {
+            let e = PileupEngine(config: pcfg, rng: SeededRNG(seed: 7))
+            _ = e.callCQ()
+            check("a trailing-letter partial is answered, not silence (#85)",
+                  playCount(e.send(tail + "?")) >= 1)
+        }
+
+        // A fragment no station contains is still a bust, not a free re-call.
+        let e = PileupEngine(config: pcfg, rng: SeededRNG(seed: 7))
+        _ = e.callCQ()
+        check("a partial matching nobody is still a bust",
+              playCount(e.send("QXJZ?")) == 0 && e.bustCount >= 1)
+    }
+
     // Total bust under the forgiving default -> whole pileup re-calls.
     let before = eng.activeCount
     let bust = eng.send("ZZ9QXJ")

@@ -380,15 +380,15 @@ public final class PileupEngine {
         if let i = stations.firstIndex(where: { $0.call == frag }) {
             return beginExchange(at: i)
         }
-        // Only stations whose call STARTS WITH the fragment answer — sending
-        // "W1" brings back the W1s, not everyone. The impatient may quit first.
-        var matched = stations.indices.filter { stations[$0].call.hasPrefix(frag) }
+        // Stations the partial could be addressing answer — sending "W1"
+        // brings back the W1s, not everyone. The impatient may quit first.
+        var matched = stationsMatching(frag)
         if config.giveUpEnabled && !matched.isEmpty {
             for idx in matched { bump(idx) }
             let quitters = matched.filter { quit($0) }
             if !quitters.isEmpty {
                 removeStations(ids: quitters.map { stations[$0].id })
-                matched = stations.indices.filter { stations[$0].call.hasPrefix(frag) }
+                matched = stationsMatching(frag)
             }
         }
         if !matched.isEmpty {
@@ -410,6 +410,22 @@ public final class PileupEngine {
             guard let n = nearestStation(to: frag) else { return .silence }
             return .play([callVoice(for: stations[n])])
         }
+    }
+
+    /// Stations a partial call could be addressing.
+    ///
+    /// A partial is whatever fragment you managed to copy, and it is not always
+    /// the front of the call. Two stations landing on top of each other often
+    /// leave you one letter from the end, and querying the middle is ordinary
+    /// contest practice — "9H?" is how you ask N9HO to come back. Matching only
+    /// a prefix left every one of those unanswered (#85): the fragment fell
+    /// through to the busted-call path, which on the default silence setting
+    /// meant the pileup simply ignored you.
+    ///
+    /// Callers guarantee a non-empty fragment; an empty one matches every call
+    /// and is handled earlier as a bare "?" to the whole pileup.
+    private func stationsMatching(_ frag: String) -> [Int] {
+        stations.indices.filter { stations[$0].call.contains(frag) }
     }
 
     private func beginExchange(at i: Int) -> Action {
