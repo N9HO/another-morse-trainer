@@ -89,8 +89,17 @@ private val DURATION_MODES = setOf(
     SettingsMode.LISTEN, SettingsMode.STORY
 )
 
-/** Modes that fix their own speed (QRQ's 35/40, the exam's 5/13/20 WPM). */
+/** Modes that fix their own speed (QRQ's presets, the exam's 5/13/20 WPM). */
 private val OWN_SPEED_MODES = setOf(SettingsMode.QRQ, SettingsMode.EXAM)
+
+/**
+ * Compose counts a slider's `steps` as the stops *between* the two ends, so a
+ * range walked in whole WPM has one fewer stop than it spans. Derived rather
+ * than hardcoded, since the Farnsworth slider's top moves with the character
+ * speed (issue #79).
+ */
+private fun wholeWpmSteps(min: Float, max: Float): Int =
+    maxOf(0, (max - min).roundToInt() - 1)
 
 /** Modes with no answer to buzz about — Feedback would be noise. */
 private val NO_FEEDBACK_MODES = setOf(
@@ -185,26 +194,37 @@ fun SettingsScreen(onBack: () -> Unit, scope: SettingsMode? = null) {
                 if (scope == null || scope !in OWN_SPEED_MODES) {
                     SectionHeader("Speed")
                     SettingsGroup {
+                        val minWpm = Settings.MIN_CHARACTER_WPM.toFloat()
+                        val maxWpm = Settings.MAX_CHARACTER_WPM.toFloat()
                         SliderSetting(
                             label = "Character speed",
                             value = "${Settings.characterWpm.roundToInt()} WPM",
                             position = Settings.characterWpm.toFloat(),
-                            range = 5f..40f, steps = 34,
+                            range = minWpm..maxWpm, steps = wholeWpmSteps(minWpm, maxWpm),
                             onChange = { Settings.updateCharacterWpm(it.toDouble()) }
                         )
                         GroupDivider()
+                        // Farnsworth only ever *slows* the spacing, so its top is
+                        // the character speed itself — and it has to follow that
+                        // speed up, or a 60 WPM session couldn't be spaced at 45
+                        // (issue #79).
+                        val maxFarnsworth = maxOf(minWpm + 1f, Settings.characterWpm.toFloat())
                         SliderSetting(
                             label = "Farnsworth speed",
                             value = if (farnsworthOn) "${Settings.effectiveWpm.roundToInt()} WPM" else "Off",
                             position = Settings.effectiveWpm.toFloat(),
-                            range = 5f..40f, steps = 34,
+                            range = minWpm..maxFarnsworth, steps = wholeWpmSteps(minWpm, maxFarnsworth),
                             onChange = { Settings.updateEffectiveWpm(it.toDouble()) }
                         )
                     }
+                    val qrqNote = if (Settings.characterWpm >= 40) {
+                        "\n\nQRQ territory — ${Settings.characterWpm.roundToInt()} WPM. " +
+                            "Great for pushing instant recognition once 30+ feels comfortable."
+                    } else ""
                     SectionFooter(
                         "Character speed is how fast the dits and dahs are sent. Farnsworth " +
                             "stretches the gaps between characters (set it below the character " +
-                            "speed) to give you more time to recognise each one."
+                            "speed) to give you more time to recognise each one." + qrqNote
                     )
                 }
 
@@ -231,8 +251,18 @@ fun SettingsScreen(onBack: () -> Unit, scope: SettingsMode? = null) {
                             Text(" Play")
                         }
                     }
+                    GroupDivider()
+                    BackgroundNoiseSetting()
                 }
-                SectionFooter("The frequency of the practice tone you hear.")
+                SectionFooter(
+                    "The frequency of the practice tone you hear.\n\n" +
+                        "Background noise plays a faint hiss under everything. On Bluetooth " +
+                        "earbuds the silence between transmissions lets the link idle, so it " +
+                        "wakes a moment late and clips the first character — costing you the " +
+                        "answer. A faint floor keeps the link up, which is why Whisper is the " +
+                        "default. Turn it up for band noise (QRN) to copy through, or off if " +
+                        "you'd rather have silence."
+                )
 
                 val showChoiceRows = shown(CHOICE_QUIZ_MODES)
                 val showWordPool = shown(setOf(SettingsMode.WORDS))
@@ -596,6 +626,49 @@ private fun DurationSetting() {
                 ) {
                     Text(
                         option.shortLabel,
+                        color = if (isSel) Brand.navy else Brand.textSecondary,
+                        fontWeight = if (isSel) FontWeight.Bold else FontWeight.Medium,
+                        fontSize = 13.sp
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Background-noise picker (issue #29): five options with word labels, so it
+ * stacks the label above a scrollable pill row like [DurationSetting] rather
+ * than crowding them beside the label as [SegmentedSetting] does.
+ */
+@Composable
+private fun BackgroundNoiseSetting() {
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp)) {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text("Background noise", color = Brand.textPrimary, fontWeight = FontWeight.Medium)
+            Text(
+                Settings.backgroundNoise.label,
+                color = Brand.teal, fontWeight = FontWeight.SemiBold, fontSize = 13.sp
+            )
+        }
+        Spacer(Modifier.height(8.dp))
+        Row(
+            modifier = Modifier.horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            BackgroundNoiseLevel.entries.forEach { option ->
+                val isSel = option == Settings.backgroundNoise
+                Box(
+                    modifier = Modifier
+                        .background(
+                            if (isSel) Brand.teal else Brand.navyRaised,
+                            shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp)
+                        )
+                        .clickable { Settings.updateBackgroundNoise(option) }
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                ) {
+                    Text(
+                        option.label,
                         color = if (isSel) Brand.navy else Brand.textSecondary,
                         fontWeight = if (isSel) FontWeight.Bold else FontWeight.Medium,
                         fontSize = 13.sp

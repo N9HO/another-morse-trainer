@@ -62,6 +62,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.anothermorsetrainer.morsekit.AnswerKeys
 import app.anothermorsetrainer.morsekit.Drill
 import app.anothermorsetrainer.morsekit.ProgressiveCharacters
 import app.anothermorsetrainer.morsekit.QuizSource
@@ -443,22 +444,14 @@ fun QuizScreen(
             return false
         }
         if (Settings.answerByKeying && drill.isKeyable) return false
-        val ch = event.utf16CodePoint.takeIf { it > 0 }?.toChar()?.uppercaseChar() ?: return false
-        val options = drill.options
-        if (options.isNotEmpty() && options.all { it.length == 1 }) {
-            // Every option is one character: its own key answers directly.
-            val match = options.firstOrNull { it.uppercase() == ch.toString() } ?: return false
-            answer(match)
-            return true
-        }
-        // Mixed/meaning drills: 1–9 picks the Nth option, so a digit option
-        // and an index can never collide.
-        val index = ch - '1'
-        if (index in 0..8 && index in options.indices) {
-            answer(options[index])
-            return true
-        }
-        return false
+        val ch = event.utf16CodePoint.takeIf { it > 0 }?.toChar() ?: return false
+        // Value beats position: a single-character option is answered by its own
+        // key, and only the longer options fall back to a 1–9 position. Numbering
+        // the whole grid whenever one option was multi-character made a digit you
+        // heard select the Nth option instead (issue #30).
+        val index = AnswerKeys.optionFor(ch, drill.options) ?: return false
+        answer(drill.options[index])
+        return true
     }
     LaunchedEffect(phase, round, showSettings) {
         if (phase == QuizPhase.RUNNING && !showSettings) hwFocus.requestFocus()

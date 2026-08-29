@@ -57,6 +57,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.anothermorsetrainer.morsekit.AnswerKeys
 import app.anothermorsetrainer.morsekit.JourneyCurriculum
 import app.anothermorsetrainer.morsekit.JourneyLevel
 import app.anothermorsetrainer.morsekit.JourneyProgress
@@ -237,19 +238,12 @@ fun JourneyScreen(onBack: () -> Unit) {
             }
             return false
         }
-        val ch = event.utf16CodePoint.takeIf { it > 0 }?.toChar()?.uppercaseChar() ?: return false
-        val options = drill.options
-        if (options.isNotEmpty() && options.all { it.length == 1 }) {
-            val match = options.firstOrNull { it.uppercase() == ch.toString() } ?: return false
-            answer(match)
-            return true
-        }
-        val index = ch - '1'
-        if (index in 0..8 && index in options.indices) {
-            answer(options[index])
-            return true
-        }
-        return false
+        val ch = event.utf16CodePoint.takeIf { it > 0 }?.toChar() ?: return false
+        // Same rule as QuizScreen: the option's own character wins over its
+        // position, so a heard digit is never read as an index (issue #30).
+        val index = AnswerKeys.optionFor(ch, drill.options) ?: return false
+        answer(drill.options[index])
+        return true
     }
     LaunchedEffect(round, showMap, showSettings) {
         if (!showMap && !showSettings) hwFocus.requestFocus()

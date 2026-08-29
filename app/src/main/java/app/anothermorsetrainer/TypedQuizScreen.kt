@@ -1,6 +1,8 @@
 package app.anothermorsetrainer
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -330,9 +332,10 @@ fun TypedQuizScreen(
 
 /**
  * **QRQ Speed**: the same typed free-recall loop as [TypedQuizScreen], but words
- * and call signs are sent at 35 or 40 WPM — too fast to count dits, training
+ * and call signs are sent at 35–60 WPM — too fast to count dits, training
  * instant whole-word recognition. The speed override is local to this mode and
- * does not touch the global WPM setting.
+ * does not touch the global WPM setting. 50 and 60 are there for operators who
+ * already work QRQ (issue #79); the same presets are offered on Apple platforms.
  */
 @Composable
 fun QrqScreen(onBack: () -> Unit) {
@@ -344,8 +347,13 @@ fun QrqScreen(onBack: () -> Unit) {
         timing = { MorseTiming(wpm) },
         settingsMode = SettingsMode.QRQ,
         speedControl = {
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                listOf(35.0, 40.0).forEach { speed ->
+            // Four presets no longer fit a narrow phone side by side, so the row
+            // scrolls rather than clipping the fastest one off the edge.
+            Row(
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                listOf(35.0, 40.0, 50.0, 60.0).forEach { speed ->
                     val selected = wpm == speed
                     if (selected) {
                         Button(

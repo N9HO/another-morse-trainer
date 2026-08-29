@@ -293,14 +293,16 @@ private fun PileupSetup(onStart: () -> Unit, onBack: () -> Unit) {
                 label = "Slowest caller",
                 value = "${PileupSettings.minWpm.roundToInt()} WPM",
                 position = PileupSettings.minWpm.toFloat(),
-                range = 10f..40f, steps = 29,
+                range = PileupSettings.MIN_CALLER_WPM.toFloat()..PileupSettings.MAX_CALLER_WPM.toFloat(),
+                steps = 49,
                 onChange = { PileupSettings.updateMinWpm(it.toDouble()) }
             )
             PuSlider(
                 label = "Fastest caller",
                 value = "${PileupSettings.maxWpm.roundToInt()} WPM",
                 position = PileupSettings.maxWpm.toFloat(),
-                range = 10f..40f, steps = 29,
+                range = PileupSettings.MIN_CALLER_WPM.toFloat()..PileupSettings.MAX_CALLER_WPM.toFloat(),
+                steps = 49,
                 onChange = { PileupSettings.updateMaxWpm(it.toDouble()) }
             )
             PuSlider(

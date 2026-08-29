@@ -378,7 +378,10 @@ fun ReferenceAudioControls(modifier: Modifier = Modifier) {
         RefSlider("Side tone", "${Settings.sidetoneHz.toInt()} Hz", Settings.sidetoneHz.toFloat(), 300f..1000f) {
             Settings.updateSidetoneHz(it.toDouble())
         }
-        RefSlider("Speed", "${Settings.characterWpm.toInt()} WPM", Settings.characterWpm.toFloat(), 15f..40f) {
+        RefSlider(
+            "Speed", "${Settings.characterWpm.toInt()} WPM", Settings.characterWpm.toFloat(),
+            15f..Settings.MAX_CHARACTER_WPM.toFloat()
+        ) {
             Settings.updateCharacterWpm(it.toDouble())
         }
         val farnsworth = Settings.effectiveWpm < Settings.characterWpm
