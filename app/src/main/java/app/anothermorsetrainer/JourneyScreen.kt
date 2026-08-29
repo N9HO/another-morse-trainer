@@ -4,6 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -41,7 +42,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.utf16CodePoint
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -196,10 +203,41 @@ fun JourneyScreen(onBack: () -> Unit) {
         revealed = true
     }
 
+    // Hardware-keyboard answering (issue #69), same scheme as QuizScreen:
+    // type the character you heard when every option is one character, or
+    // 1–9 for the Nth option in meaning drills.
+    val hwFocus = remember { FocusRequester() }
+    fun handleHardwareKey(event: androidx.compose.ui.input.key.KeyEvent): Boolean {
+        if (event.type != KeyEventType.KeyDown) return false
+        if (revealed || showMap) return false
+        val ch = event.utf16CodePoint.takeIf { it > 0 }?.toChar()?.uppercaseChar() ?: return false
+        val options = drill.options
+        if (options.isNotEmpty() && options.all { it.length == 1 }) {
+            val match = options.firstOrNull { it.uppercase() == ch.toString() } ?: return false
+            answer(match)
+            return true
+        }
+        val index = ch - '1'
+        if (index in 0..8 && index in options.indices) {
+            answer(options[index])
+            return true
+        }
+        return false
+    }
+    LaunchedEffect(round, showMap) {
+        if (!showMap) hwFocus.requestFocus()
+    }
+
     // A Column, not a Box: the Back/Map row and the level banner used to be
     // stacked on top of each other, so "Level N" overlapped Back and the
     // "N / total" count overlapped Map (issue #58).
-    Column(modifier = Modifier.fillMaxSize()) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .focusRequester(hwFocus)
+            .onKeyEvent(::handleHardwareKey)
+            .focusable()
+    ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(4.dp),
             verticalAlignment = Alignment.CenterVertically,

@@ -8,6 +8,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -44,7 +45,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.utf16CodePoint
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
@@ -404,7 +411,43 @@ fun QuizScreen(
         )
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    // Hardware-keyboard answering (issue #69): with a Bluetooth/USB keyboard
+    // attached, type the character you heard in single-character drills, or
+    // press 1–9 for the Nth option in meaning drills. The root stays focused
+    // so key events land here — no text field competes on this screen.
+    val hwFocus = remember { FocusRequester() }
+    fun handleHardwareKey(event: androidx.compose.ui.input.key.KeyEvent): Boolean {
+        if (event.type != KeyEventType.KeyDown) return false
+        if (phase != QuizPhase.RUNNING || revealed) return false
+        if (Settings.answerByKeying && drill.isKeyable) return false
+        val ch = event.utf16CodePoint.takeIf { it > 0 }?.toChar()?.uppercaseChar() ?: return false
+        val options = drill.options
+        if (options.isNotEmpty() && options.all { it.length == 1 }) {
+            // Every option is one character: its own key answers directly.
+            val match = options.firstOrNull { it.uppercase() == ch.toString() } ?: return false
+            answer(match)
+            return true
+        }
+        // Mixed/meaning drills: 1–9 picks the Nth option, so a digit option
+        // and an index can never collide.
+        val index = ch - '1'
+        if (index in 0..8 && index in options.indices) {
+            answer(options[index])
+            return true
+        }
+        return false
+    }
+    LaunchedEffect(phase, round) {
+        if (phase == QuizPhase.RUNNING) hwFocus.requestFocus()
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .focusRequester(hwFocus)
+            .onKeyEvent(::handleHardwareKey)
+            .focusable()
+    ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(8.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
