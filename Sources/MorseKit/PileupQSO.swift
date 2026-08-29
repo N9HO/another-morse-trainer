@@ -239,6 +239,12 @@ public final class PileupEngine {
         public let qsb: Bool
         let exchange: ExchangeSpec
         let patience: Int
+        /// How quickly this operator tends to come back, across the delay
+        /// window: 0 leaps straight in, 1 hangs back. Drawn once, so a given
+        /// op reads as consistently quick or consistently hesitant all run —
+        /// which is what makes a pileup sound like people rather than a random
+        /// number generator picking a new order every time.
+        let reaction: Double
         var attempts: Int = 0
         /// The nearest call you actually sent for this station, if you have
         /// sent one that was close but wrong. Kept so that a caller who walks
@@ -477,12 +483,28 @@ public final class PileupEngine {
         // still a miscopy, so it counts as a bust and spends their patience: a
         // caller you never resolve eventually walks, and takes with them a
         // record of what you had them as.
-        if let i = nearMissStation(for: frag) {
+        var near = nearMissStations(for: frag)
+        if !near.isEmpty {
             bustCount += 1
-            stations[i].miscopiedAs = frag
-            bump(i)
-            if quit(i) { return stationQuits(at: i) }
-            return .play([callVoice(for: stations[i])])
+            for idx in near { stations[idx].miscopiedAs = frag; bump(idx) }
+            let quitters = near.filter { quit($0) }
+            if !quitters.isEmpty {
+                for idx in quitters { recordMiss(at: idx) }
+                let ids = quitters.map { stations[$0].id }
+                removeStations(ids: ids)
+                near = nearMissStations(for: frag)
+                if near.isEmpty {
+                    phase = stations.isEmpty ? .idle : .pileup
+                    guard !stations.isEmpty else { return .silence }
+                    return .play(stations.map { callVoice(for: $0) })
+                }
+            }
+            // One station knows you mean them and simply corrects you. Two or
+            // more are all plausibly the call you sent, so none of them is sure
+            // it was theirs: they each come back, hanging off the beat while
+            // they work out whether you were answering them.
+            let hesitation = near.count > 1 ? 1.0 : 0.0
+            return .play(near.map { callVoice(for: stations[$0], hesitation: hesitation) })
         }
         return nil
     }
@@ -492,23 +514,22 @@ public final class PileupEngine {
     /// added. Substitutions cost 1 and indels 1.5, so 1.5 is exactly that.
     static let nearMissTolerance = 1.5
 
-    /// The one station a near miss is plainly aimed at.
+    /// Every station a near miss could plausibly be aimed at, nearest first.
     ///
-    /// Nil unless exactly one station is that close: if two are equally near,
-    /// you have not identified either of them, and guessing one would put you
-    /// into an exchange with a station you never actually copied.
-    private func nearMissStation(for frag: String) -> Int? {
+    /// More than one is not a failure to resolve — it is what a real pileup
+    /// does when your copy fits two of them. Both come back (the caller keeps
+    /// their exchange to themselves until you actually name them), so you get
+    /// another pass at the difference instead of silence.
+    private func nearMissStations(for frag: String) -> [Int] {
         // Below three characters everything is near everything; that range is
         // the partial's business, and it has already had its turn above.
-        guard frag.count >= 3 else { return nil }
-        let scored = stations.indices
+        guard frag.count >= 3 else { return [] }
+        return stations.indices
             .filter { abs(stations[$0].call.count - frag.count) <= 1 }
             .map { (i: $0, d: MorseDistance.distance(frag, stations[$0].call)) }
             .filter { $0.d <= Self.nearMissTolerance }
             .sorted { $0.d < $1.d }
-        guard let best = scored.first else { return nil }
-        if scored.count > 1, scored[1].d == best.d { return nil }
-        return best.i
+            .map(\.i)
     }
 
     /// Note a caller who left before being logged, for the feedback readouts.
@@ -727,18 +748,46 @@ public final class PileupEngine {
         let qsb = config.qsbEnabled && Double.random(in: 0..<1, using: &rng) < 0.5
         let patience = Int.random(in: min(config.giveUpMin, config.giveUpMax)...max(config.giveUpMin, config.giveUpMax), using: &rng)
         defer { nextID += 1 }
+        let reaction = Double.random(in: 0...1, using: &rng)
         return Station(id: nextID, call: call, wpm: wpm, toneOffset: offset,
-                       volume: vol, qsb: qsb, exchange: exch, patience: patience)
+                       volume: vol, qsb: qsb, exchange: exch, patience: patience,
+                       reaction: reaction)
     }
 
-    private func callVoice(for s: Station) -> Voice {
+    /// When a station comes back, in seconds after your send.
+    ///
+    /// Each operator's own `reaction` sets where in the window they usually
+    /// land, and fresh jitter on top means no two rounds are identical even
+    /// from the same op. `hesitation` (0...1) pushes the whole thing later and
+    /// spreads it wider — a station that isn't sure the call you sent was
+    /// theirs waits to see whether anyone else answers first.
+    private func replyDelay(for s: Station, hesitation: Double = 0) -> TimeInterval {
+        let lo = config.minDelay
+        let hi = max(config.minDelay, config.maxDelay)
+        let span = hi - lo
+        let base = lo + span * s.reaction
+        // Jitter is a slice of the window, so a deliberately tight window stays
+        // tight and a wide one breathes.
+        let jitter = Double.random(in: -0.2 ... 0.2, using: &rng) * span
+        // Thinking time is never a fixed beat either, or the hesitation itself
+        // would become the metronome.
+        let thinking = hesitation * span * Double.random(in: 0.35 ... 1.0, using: &rng)
+        return max(0, base + jitter + thinking)
+    }
+
+    private func callVoice(for s: Station, hesitation: Double = 0) -> Voice {
         Voice(text: s.call, wpm: s.wpm, toneOffset: s.toneOffset, volume: s.volume,
-              qsb: s.qsb, delay: Double.random(in: config.minDelay...max(config.minDelay, config.maxDelay), using: &rng))
+              qsb: s.qsb, delay: replyDelay(for: s, hesitation: hesitation))
     }
 
+    /// The exchange comes back faster than a call — you have already picked
+    /// this operator out and they know it — but not on a fixed beat, which is
+    /// what a hard-coded delay made every single exchange sound like.
     private func exchangeVoice(for s: Station) -> Voice {
-        Voice(text: s.exchange.sentText, wpm: s.wpm, toneOffset: s.toneOffset,
-              volume: s.volume, qsb: s.qsb, delay: 0.2)
+        let base = 0.15 + 0.25 * s.reaction
+        let jitter = Double.random(in: -0.05 ... 0.10, using: &rng)
+        return Voice(text: s.exchange.sentText, wpm: s.wpm, toneOffset: s.toneOffset,
+                     volume: s.volume, qsb: s.qsb, delay: max(0.05, base + jitter))
     }
 
     private func index(of id: Int) -> Int? { stations.firstIndex { $0.id == id } }

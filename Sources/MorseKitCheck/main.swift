@@ -748,6 +748,82 @@ do {
         }
     }
 
+    // Two callers your copy could fit both come back, hanging off the beat
+    // while they work out whether you were answering them.
+    do {
+        var acfg = nearMissConfig(giveUp: false)
+        acfg.maxStations = 4
+        // A miscopy that fits two stations needs two calls within a couple of
+        // characters of each other, which random callsigns rarely are — so walk
+        // seeds until such a pileup turns up.
+        var found = false
+        for seed in UInt64(1) ... 400 {
+            let a = PileupEngine(config: acfg, rng: SeededRNG(seed: seed))
+            _ = a.callCQ()
+            let calls = a.stations.map { $0.call }
+            guard calls.count >= 2 else { continue }
+            var probe: String?
+            outer: for call in calls {
+                for c in "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789" {
+                    var chars = Array(call)
+                    guard let last = chars.indices.last, chars[last] != c else { continue }
+                    chars[last] = c
+                    let cand = String(chars)
+                    if calls.contains(cand) { continue }
+                    let hits = calls.filter {
+                        abs($0.count - cand.count) <= 1 && MorseDistance.distance(cand, $0) <= 1.5
+                    }
+                    if hits.count >= 2 { probe = cand; break outer }
+                }
+            }
+            guard let miscopy = probe else { continue }
+            found = true
+            let before = a.activeCount
+            if case .play(let voices) = a.send(miscopy) {
+                check("a miscopy that fits two callers brings both back", voices.count >= 2)
+                check("neither of them opens an exchange", a.workingStation == nil)
+                check("an unsure caller waits rather than answering instantly",
+                      voices.allSatisfy { $0.delay > acfg.minDelay })
+                check("unsure callers do not answer in lockstep",
+                      Set(voices.map { $0.delay }).count == voices.count)
+            } else {
+                check("a miscopy that fits two callers brings both back", false)
+            }
+            check("nobody is dropped for an ambiguous miscopy", a.activeCount == before)
+            break
+        }
+        check("an ambiguous-miscopy pileup could be found", found)
+    }
+
+    // A pileup is people, not a metronome: the same "?" twice must not come
+    // back on the same beat, and the exchange used to be a hard-coded 0.2 for
+    // every station on every contact.
+    do {
+        var tcfg = PileupConfig()
+        tcfg.mode = .pota
+        tcfg.maxStations = 4
+        tcfg.minWPM = 20; tcfg.maxWPM = 20
+        tcfg.minDelay = 0.2; tcfg.maxDelay = 1.5
+        let t = PileupEngine(config: tcfg, rng: SeededRNG(seed: 7))
+        _ = t.callCQ()
+        func delays(_ a: PileupEngine.Action) -> [TimeInterval] {
+            if case .play(let v) = a { return v.map { $0.delay } }
+            return []
+        }
+        let first = delays(t.repeatRequest())
+        let second = delays(t.repeatRequest())
+        check("the pileup answers more than one voice", first.count > 1)
+        check("the same request twice does not come back on the same beat",
+              first.count == second.count && first != second)
+        check("stations do not all answer together", Set(first).count == first.count)
+        check("reply delays stay near the configured window",
+              first.allSatisfy { $0 >= 0 && $0 <= tcfg.maxDelay + 0.5 })
+
+        let exchange = delays(t.send(t.stations[0].call))
+        check("the exchange no longer lands on a fixed beat",
+              exchange.first.map { $0 != 0.2 && $0 > 0 && $0 < 0.6 } == true)
+    }
+
     // Total bust under the forgiving default -> whole pileup re-calls.
     let before = eng.activeCount
     let bust = eng.send("ZZ9QXJ")
