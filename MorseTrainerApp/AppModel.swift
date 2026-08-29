@@ -1056,6 +1056,11 @@ final class AppModel: ObservableObject {
     @Published private(set) var qsoBusts = 0
     @Published private(set) var qsoAccuracy = 1.0
     @Published private(set) var qsoLastLogged: String?   // for a brief "logged!" flash
+    /// Callers who gave up before you logged them, for the run summary.
+    @Published private(set) var qsoMissedCallers: [PileupEngine.MissedCaller] = []
+    /// The newest walk-off, shown once as it happens when the setting asks for
+    /// it. Cleared by the banner's dismiss so it doesn't linger over the pileup.
+    @Published private(set) var qsoLastMissed: PileupEngine.MissedCaller?
     private(set) var qsoSessionRate = 0.0                 // frozen rate for the summary
     private var qsoGeneration = 0
     private var qsoStartDate: Date?
@@ -1296,6 +1301,12 @@ final class AppModel: ObservableObject {
         return false
     }
 
+    /// Acknowledge the walk-off banner so it shows once and gets out of the way.
+    func dismissMissedCaller() {
+        pileup.clearLastMissedCaller()
+        qsoLastMissed = nil
+    }
+
     /// Mirror the engine's state onto the published properties the UI watches.
     private func refreshQSO() {
         qsoActiveCount = pileup.activeCount
@@ -1308,6 +1319,11 @@ final class AppModel: ObservableObject {
         if newBusts > 0 { sessionAttempts += newBusts }
         qsoBusts = pileup.bustCount
         qsoAccuracy = pileup.accuracy
+        qsoMissedCallers = pileup.missedCallers
+        // Only surface a walk-off live when asked to; the summary shows them
+        // either way, so the engine keeps recording regardless of this setting.
+        qsoLastMissed = settings.qso.missedCallerFeedback == .immediate
+            ? pileup.lastMissedCaller : nil
         switch pileup.phase {
         case .idle:
             qsoWorkingCall = nil; qsoReadyToLog = false; qsoActionLabel = "CQ"

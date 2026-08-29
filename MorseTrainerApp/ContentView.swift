@@ -782,6 +782,7 @@ struct ContentView: View {
     private var qsoView: some View {
         VStack(spacing: 16) {
             qsoStatusCard
+            if let missed = model.qsoLastMissed { missedCallerBanner(missed) }
             qsoLogList
                 .frame(maxHeight: .infinity)
             qsoInputBar
@@ -789,6 +790,45 @@ struct ContentView: View {
         .onChange(of: model.qsoReadyToLog) { ready in
             if ready { Haptics.success() }
         }
+    }
+
+    /// A caller just walked off. Says which call you lost and what you had it
+    /// as, so the miss is a lesson rather than a station that quietly vanished.
+    private func missedCallerBanner(_ missed: PileupEngine.MissedCaller) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "person.fill.xmark")
+                .foregroundStyle(.orange)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("\(missed.call) gave up").font(.subheadline).bold()
+                Text(missedCallerDetail(missed))
+                    .font(.caption).foregroundStyle(Theme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 8)
+            Button {
+                model.dismissMissedCaller()
+            } label: {
+                Image(systemName: "xmark.circle.fill").foregroundStyle(Theme.textSecondary)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Dismiss")
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .brandCard()
+        .transition(.opacity)
+        .animation(.easeOut(duration: 0.2), value: missed.id)
+    }
+
+    /// "you had them as N9HS" when you got close, otherwise just the count —
+    /// there is nothing to compare against if you never got near the call.
+    private func missedCallerDetail(_ missed: PileupEngine.MissedCaller) -> String {
+        if let had = missed.miscopiedAs {
+            return "You had them as \(had) — they came back \(missed.attempts) "
+                 + (missed.attempts == 1 ? "time" : "times") + " before moving on."
+        }
+        return "They came back \(missed.attempts) "
+             + (missed.attempts == 1 ? "time" : "times") + " and you never got the call."
     }
 
     private var qsoStatusCard: some View {
@@ -1375,6 +1415,12 @@ struct ContentView: View {
             .frame(maxWidth: .infinity)
             .brandCard()
 
+            if s.mode == .contest || s.mode == .qso,
+               model.settings.qso.missedCallerFeedback != .off,
+               !model.qsoMissedCallers.isEmpty {
+                missedCallersCard
+            }
+
             if s.mode == .rapidFire, !model.rapidFireTranscript.isEmpty {
                 rapidFireTranscriptCard
             }
@@ -1430,6 +1476,38 @@ struct ContentView: View {
     }
 
     /// Every contact worked this run — call, exchange, speed — for the
+    /// Who walked off, and what you had them as — the end-of-run half of the
+    /// give-up feedback. A caller that vanishes mid-run teaches nothing unless
+    /// you can see which call you lost and how close you were to it.
+    private var missedCallersCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("GOT AWAY (\(model.qsoMissedCallers.count))")
+                .font(.system(size: 10, weight: .bold)).tracking(1)
+                .foregroundStyle(Theme.textSecondary)
+            ForEach(model.qsoMissedCallers) { missed in
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(missed.call)
+                        .font(Theme.copyFont(size: 15, weight: .semibold, monospaced: true,
+                                             slashedZero: model.settings.slashedZero))
+                        .foregroundStyle(.white)
+                    if let had = missed.miscopiedAs {
+                        Text("you had \(had)")
+                            .font(.caption).foregroundStyle(.orange)
+                    } else {
+                        Text("never copied")
+                            .font(.caption).foregroundStyle(Theme.textSecondary)
+                    }
+                    Spacer()
+                    Text("\(missed.attempts)×")
+                        .font(.caption.monospaced()).foregroundStyle(Theme.textSecondary)
+                }
+            }
+        }
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .brandCard()
+    }
+
     /// contest/QSO scorecard. The summary already scrolls, so a plain stack.
     private var workedLogCard: some View {
         VStack(alignment: .leading, spacing: 8) {

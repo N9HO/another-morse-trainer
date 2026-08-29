@@ -666,6 +666,164 @@ do {
               playCount(e.send("QXJZ?")) == 0 && e.bustCount >= 1)
     }
 
+    // A near miss — a call you have all but copied — is answered by the one
+    // station it names, over and over, until you get it right. It never opens
+    // an exchange on a call that isn't theirs, and it never goes quiet.
+    func unambiguousMiscopy(of real: String, among calls: [String]) -> String? {
+        for c in "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789" {
+            var chars = Array(real)
+            guard let last = chars.indices.last, chars[last] != c else { continue }
+            chars[last] = c
+            let cand = String(chars)
+            if calls.contains(cand) { continue }
+            // Only a miscopy that names exactly one station proves anything.
+            let near = calls.filter {
+                abs($0.count - cand.count) <= 1 && MorseDistance.distance(cand, $0) <= 1.5
+            }
+            if near == [real] { return cand }
+        }
+        return nil
+    }
+
+    func nearMissConfig(giveUp: Bool) -> PileupConfig {
+        var c = PileupConfig()
+        c.mode = .pota
+        c.maxStations = 3
+        c.minWPM = 20; c.maxWPM = 20
+        c.bustBehavior = .silence      // no forgiving re-call to hide behind
+        c.giveUpEnabled = giveUp
+        c.giveUpMin = 1; c.giveUpMax = 1
+        return c
+    }
+
+    do {
+        let n = PileupEngine(config: nearMissConfig(giveUp: false), rng: SeededRNG(seed: 7))
+        _ = n.callCQ()
+        let calls = n.stations.map { $0.call }
+        let real = calls[0]
+        if let miscopy = unambiguousMiscopy(of: real, among: calls) {
+            check("a near-miss call is answered by the station it names",
+                  playCount(n.send(miscopy)) == 1)
+            check("a near miss does not open an exchange", n.workingStation == nil)
+            check("a near miss still counts as a bust", n.bustCount >= 1)
+            check("the station keeps correcting a repeated near miss",
+                  playCount(n.send(miscopy)) == 1)
+            // The correction is the station's own call, not the miscopy.
+            if case .play(let voices) = n.send(miscopy) {
+                check("the correction sends the real call", voices.first?.text.contains(real) == true)
+            } else {
+                check("the correction sends the real call", false)
+            }
+            // A call with your exchange behind it is still a call.
+            check("a near miss with an exchange behind it is still a near miss",
+                  playCount(n.send("\(miscopy) 5NN AL")) == 1 && n.workingStation == nil)
+            check("the real call with an exchange behind it opens the exchange",
+                  playCount(n.send("\(real) 5NN AL")) == 1 && n.workingStation?.call == real)
+        } else {
+            check("a near-miss probe could be built for this pileup", false)
+        }
+    }
+
+    // Give up: a caller you never resolve walks, and reports what you had them
+    // as, both for immediate feedback and for the end-of-run list.
+    do {
+        let g = PileupEngine(config: nearMissConfig(giveUp: true), rng: SeededRNG(seed: 7))
+        _ = g.callCQ()
+        let calls = g.stations.map { $0.call }
+        let real = calls[0]
+        if let miscopy = unambiguousMiscopy(of: real, among: calls) {
+            check("nobody has walked off yet", g.missedCallers.isEmpty && g.lastMissedCaller == nil)
+            _ = g.send(miscopy)          // patience 1: attempts 1, still there
+            _ = g.send(miscopy)          // attempts 2 > 1, gives up
+            check("a caller you never resolve gives up", g.missedCallers.count == 1)
+            check("the walk-off names the real call and what you had",
+                  g.missedCallers.first?.call == real && g.missedCallers.first?.miscopiedAs == miscopy)
+            check("the newest walk-off is offered for immediate feedback",
+                  g.lastMissedCaller?.call == real)
+            g.clearLastMissedCaller()
+            check("a walk-off is shown only once", g.lastMissedCaller == nil)
+            check("the end-of-run list keeps it", g.missedCallers.count == 1)
+        } else {
+            check("a give-up probe could be built for this pileup", false)
+        }
+    }
+
+    // Two callers your copy could fit both come back, hanging off the beat
+    // while they work out whether you were answering them.
+    do {
+        var acfg = nearMissConfig(giveUp: false)
+        acfg.maxStations = 4
+        // A miscopy that fits two stations needs two calls within a couple of
+        // characters of each other, which random callsigns rarely are — so walk
+        // seeds until such a pileup turns up.
+        var found = false
+        for seed in UInt64(1) ... 400 {
+            let a = PileupEngine(config: acfg, rng: SeededRNG(seed: seed))
+            _ = a.callCQ()
+            let calls = a.stations.map { $0.call }
+            guard calls.count >= 2 else { continue }
+            var probe: String?
+            outer: for call in calls {
+                for c in "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789" {
+                    var chars = Array(call)
+                    guard let last = chars.indices.last, chars[last] != c else { continue }
+                    chars[last] = c
+                    let cand = String(chars)
+                    if calls.contains(cand) { continue }
+                    let hits = calls.filter {
+                        abs($0.count - cand.count) <= 1 && MorseDistance.distance(cand, $0) <= 1.5
+                    }
+                    if hits.count >= 2 { probe = cand; break outer }
+                }
+            }
+            guard let miscopy = probe else { continue }
+            found = true
+            let before = a.activeCount
+            if case .play(let voices) = a.send(miscopy) {
+                check("a miscopy that fits two callers brings both back", voices.count >= 2)
+                check("neither of them opens an exchange", a.workingStation == nil)
+                check("an unsure caller waits rather than answering instantly",
+                      voices.allSatisfy { $0.delay > acfg.minDelay })
+                check("unsure callers do not answer in lockstep",
+                      Set(voices.map { $0.delay }).count == voices.count)
+            } else {
+                check("a miscopy that fits two callers brings both back", false)
+            }
+            check("nobody is dropped for an ambiguous miscopy", a.activeCount == before)
+            break
+        }
+        check("an ambiguous-miscopy pileup could be found", found)
+    }
+
+    // A pileup is people, not a metronome: the same "?" twice must not come
+    // back on the same beat, and the exchange used to be a hard-coded 0.2 for
+    // every station on every contact.
+    do {
+        var tcfg = PileupConfig()
+        tcfg.mode = .pota
+        tcfg.maxStations = 4
+        tcfg.minWPM = 20; tcfg.maxWPM = 20
+        tcfg.minDelay = 0.2; tcfg.maxDelay = 1.5
+        let t = PileupEngine(config: tcfg, rng: SeededRNG(seed: 7))
+        _ = t.callCQ()
+        func delays(_ a: PileupEngine.Action) -> [TimeInterval] {
+            if case .play(let v) = a { return v.map { $0.delay } }
+            return []
+        }
+        let first = delays(t.repeatRequest())
+        let second = delays(t.repeatRequest())
+        check("the pileup answers more than one voice", first.count > 1)
+        check("the same request twice does not come back on the same beat",
+              first.count == second.count && first != second)
+        check("stations do not all answer together", Set(first).count == first.count)
+        check("reply delays stay near the configured window",
+              first.allSatisfy { $0 >= 0 && $0 <= tcfg.maxDelay + 0.5 })
+
+        let exchange = delays(t.send(t.stations[0].call))
+        check("the exchange no longer lands on a fixed beat",
+              exchange.first.map { $0 != 0.2 && $0 > 0 && $0 < 0.6 } == true)
+    }
+
     // Total bust under the forgiving default -> whole pileup re-calls.
     let before = eng.activeCount
     let bust = eng.send("ZZ9QXJ")
