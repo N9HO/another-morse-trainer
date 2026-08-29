@@ -436,15 +436,15 @@ class PileupEngine(
         if (exact >= 0) {
             return beginExchange(exact)
         }
-        // Only stations whose call STARTS WITH the fragment answer — sending
-        // "W1" brings back the W1s, not everyone. The impatient may quit first.
-        var matched = stations.indices.filter { stations[it].call.startsWith(frag) }
+        // Stations the partial could be addressing answer — sending "W1"
+        // brings back the W1s, not everyone. The impatient may quit first.
+        var matched = stationsMatching(frag)
         if (config.giveUpEnabled && matched.isNotEmpty()) {
             for (idx in matched) bump(idx)
             val quitters = matched.filter { quit(it) }
             if (quitters.isNotEmpty()) {
                 removeStations(quitters.map { stations[it].id })
-                matched = stations.indices.filter { stations[it].call.startsWith(frag) }
+                matched = stationsMatching(frag)
             }
         }
         if (matched.isNotEmpty()) {
@@ -468,6 +468,23 @@ class PileupEngine(
             }
         }
     }
+
+    /**
+     * Stations a partial call could be addressing.
+     *
+     * A partial is whatever fragment you managed to copy, and it is not always
+     * the front of the call. Two stations landing on top of each other often
+     * leave you one letter from the end, and querying the middle is ordinary
+     * contest practice — "9H?" is how you ask N9HO to come back. Matching only
+     * a prefix left every one of those unanswered (Apple repo #85): the
+     * fragment fell through to the busted-call path, which on the default
+     * silence setting meant the pileup simply ignored you.
+     *
+     * Callers guarantee a non-empty fragment; an empty one matches every call
+     * and is handled earlier as a bare "?" to the whole pileup.
+     */
+    private fun stationsMatching(frag: String): List<Int> =
+        stations.indices.filter { stations[it].call.contains(frag) }
 
     private fun beginExchange(i: Int): Action {
         phase = Phase.Working(stations[i].id)
