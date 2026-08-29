@@ -122,8 +122,12 @@ object MorseData {
 
     // ---- Q-codes → meaning ----
 
+    // Bare QRL is the *statement* (the frequency is busy); the familiar
+    // channel-check question is QRL? — sent with the ordinary question mark.
+    // Both are taught so the two forms never get conflated (#27).
     val qCodes: List<TokenMeaning> = listOf(
-        TokenMeaning("QRG", "your exact frequency is"), TokenMeaning("QRL", "is this frequency in use?"),
+        TokenMeaning("QRG", "your exact frequency is"), TokenMeaning("QRL", "this frequency is busy / in use"),
+        TokenMeaning("QRL?", "is this frequency in use?"),
         TokenMeaning("QRM", "man-made interference"), TokenMeaning("QRN", "atmospheric noise / static"),
         TokenMeaning("QRO", "increase power"), TokenMeaning("QRP", "low power"),
         TokenMeaning("QRQ", "send faster"), TokenMeaning("QRS", "send slower"),
