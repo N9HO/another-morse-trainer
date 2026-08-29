@@ -101,12 +101,14 @@ object Settings {
         private set
 
     /**
-     * Continuous background noise under everything (issue #29). Off by default —
-     * it is audible, and nobody should start hearing hiss because they updated —
-     * but turning it up is what stops Bluetooth earbuds clipping the first
-     * character.
+     * Continuous background noise under everything (issue #29). Defaults to
+     * [BackgroundNoiseLevel.WHISPER]: the Bluetooth clipping it prevents is a
+     * silent accuracy tax nobody would think to go looking for a setting about,
+     * and at ~56 dB under the tone the floor does that job without anyone
+     * noticing hiss. Louder levels are there for people who want band noise to
+     * copy through.
      */
-    var backgroundNoise by mutableStateOf(BackgroundNoiseLevel.OFF)
+    var backgroundNoise by mutableStateOf(BackgroundNoiseLevel.WHISPER)
         private set
     var hapticsEnabled by mutableStateOf(true)
         private set
@@ -203,8 +205,8 @@ object Settings {
         effectiveWpm = prefs.getFloat("effWpm", 18f).toDouble()
         sidetoneHz = prefs.getFloat("sidetone", 600f).toDouble()
         backgroundNoise = runCatching {
-            BackgroundNoiseLevel.valueOf(prefs.getString("backgroundNoise", null) ?: "OFF")
-        }.getOrDefault(BackgroundNoiseLevel.OFF)
+            BackgroundNoiseLevel.valueOf(prefs.getString("backgroundNoise", null) ?: "WHISPER")
+        }.getOrDefault(BackgroundNoiseLevel.WHISPER)
         hapticsEnabled = prefs.getBoolean("haptics", true)
         voiceAnswersEnabled = prefs.getBoolean("voiceAnswers", false)
         answerByKeying = prefs.getBoolean("answerByKeying", false)
