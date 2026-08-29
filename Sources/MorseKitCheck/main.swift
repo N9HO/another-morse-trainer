@@ -666,6 +666,88 @@ do {
               playCount(e.send("QXJZ?")) == 0 && e.bustCount >= 1)
     }
 
+    // A near miss — a call you have all but copied — is answered by the one
+    // station it names, over and over, until you get it right. It never opens
+    // an exchange on a call that isn't theirs, and it never goes quiet.
+    func unambiguousMiscopy(of real: String, among calls: [String]) -> String? {
+        for c in "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789" {
+            var chars = Array(real)
+            guard let last = chars.indices.last, chars[last] != c else { continue }
+            chars[last] = c
+            let cand = String(chars)
+            if calls.contains(cand) { continue }
+            // Only a miscopy that names exactly one station proves anything.
+            let near = calls.filter {
+                abs($0.count - cand.count) <= 1 && MorseDistance.distance(cand, $0) <= 1.5
+            }
+            if near == [real] { return cand }
+        }
+        return nil
+    }
+
+    func nearMissConfig(giveUp: Bool) -> PileupConfig {
+        var c = PileupConfig()
+        c.mode = .pota
+        c.maxStations = 3
+        c.minWPM = 20; c.maxWPM = 20
+        c.bustBehavior = .silence      // no forgiving re-call to hide behind
+        c.giveUpEnabled = giveUp
+        c.giveUpMin = 1; c.giveUpMax = 1
+        return c
+    }
+
+    do {
+        let n = PileupEngine(config: nearMissConfig(giveUp: false), rng: SeededRNG(seed: 7))
+        _ = n.callCQ()
+        let calls = n.stations.map { $0.call }
+        let real = calls[0]
+        if let miscopy = unambiguousMiscopy(of: real, among: calls) {
+            check("a near-miss call is answered by the station it names",
+                  playCount(n.send(miscopy)) == 1)
+            check("a near miss does not open an exchange", n.workingStation == nil)
+            check("a near miss still counts as a bust", n.bustCount >= 1)
+            check("the station keeps correcting a repeated near miss",
+                  playCount(n.send(miscopy)) == 1)
+            // The correction is the station's own call, not the miscopy.
+            if case .play(let voices) = n.send(miscopy) {
+                check("the correction sends the real call", voices.first?.text.contains(real) == true)
+            } else {
+                check("the correction sends the real call", false)
+            }
+            // A call with your exchange behind it is still a call.
+            check("a near miss with an exchange behind it is still a near miss",
+                  playCount(n.send("\(miscopy) 5NN AL")) == 1 && n.workingStation == nil)
+            check("the real call with an exchange behind it opens the exchange",
+                  playCount(n.send("\(real) 5NN AL")) == 1 && n.workingStation?.call == real)
+        } else {
+            check("a near-miss probe could be built for this pileup", false)
+        }
+    }
+
+    // Give up: a caller you never resolve walks, and reports what you had them
+    // as, both for immediate feedback and for the end-of-run list.
+    do {
+        let g = PileupEngine(config: nearMissConfig(giveUp: true), rng: SeededRNG(seed: 7))
+        _ = g.callCQ()
+        let calls = g.stations.map { $0.call }
+        let real = calls[0]
+        if let miscopy = unambiguousMiscopy(of: real, among: calls) {
+            check("nobody has walked off yet", g.missedCallers.isEmpty && g.lastMissedCaller == nil)
+            _ = g.send(miscopy)          // patience 1: attempts 1, still there
+            _ = g.send(miscopy)          // attempts 2 > 1, gives up
+            check("a caller you never resolve gives up", g.missedCallers.count == 1)
+            check("the walk-off names the real call and what you had",
+                  g.missedCallers.first?.call == real && g.missedCallers.first?.miscopiedAs == miscopy)
+            check("the newest walk-off is offered for immediate feedback",
+                  g.lastMissedCaller?.call == real)
+            g.clearLastMissedCaller()
+            check("a walk-off is shown only once", g.lastMissedCaller == nil)
+            check("the end-of-run list keeps it", g.missedCallers.count == 1)
+        } else {
+            check("a give-up probe could be built for this pileup", false)
+        }
+    }
+
     // Total bust under the forgiving default -> whole pileup re-calls.
     let before = eng.activeCount
     let bust = eng.send("ZZ9QXJ")

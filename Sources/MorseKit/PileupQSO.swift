@@ -224,6 +224,22 @@ public final class PileupEngine {
         let exchange: ExchangeSpec
         let patience: Int
         var attempts: Int = 0
+        /// The nearest call you actually sent for this station, if you have
+        /// sent one that was close but wrong. Kept so that a caller who walks
+        /// off can tell you what you had them as.
+        var miscopiedAs: String? = nil
+    }
+
+    /// A caller who left before you logged them, and the call you had for them.
+    public struct MissedCaller: Sendable, Equatable, Identifiable {
+        public let id: Int
+        /// What the station was actually sending.
+        public let call: String
+        /// The closest call you sent for them, when you got close enough that
+        /// they kept correcting you. Nil when you never got near it.
+        public let miscopiedAs: String?
+        /// How many times they came back before giving up.
+        public let attempts: Int
     }
 
     /// One transmission to mix into the pileup audio.
@@ -262,6 +278,12 @@ public final class PileupEngine {
     public private(set) var log: [LoggedQSO] = []
     public private(set) var qsoCount = 0
     public private(set) var bustCount = 0
+    /// Callers who gave up before being logged, oldest first — the end-of-run
+    /// "who got away, and what did I have them as" list.
+    public private(set) var missedCallers: [MissedCaller] = []
+    /// The most recent walk-off, for feedback shown the moment it happens.
+    /// The UI clears it once shown; it is not cleared automatically.
+    public private(set) var lastMissedCaller: MissedCaller?
 
     private var config: PileupConfig
     private var rng: any RandomNumberGenerator
@@ -282,9 +304,14 @@ public final class PileupEngine {
         log = []
         qsoCount = 0
         bustCount = 0
+        missedCallers = []
+        lastMissedCaller = nil
         nextID = 1
         phase = .idle
     }
+
+    /// Acknowledge the newest walk-off so it is shown only once.
+    public func clearLastMissedCaller() { lastMissedCaller = nil }
 
     public var summary: String { qsoCount == 0 ? config.mode.label : "\(qsoCount) in the log" }
     public var activeCount: Int { stations.count }
@@ -370,12 +397,44 @@ public final class PileupEngine {
 
     private func handlePileupSend(_ text: String) -> Action {
         phase = .pileup
-        let frag = Self.fragment(text)
-        guard !frag.isEmpty else {
+        let whole = Self.fragment(text)
+        guard !whole.isEmpty else {
             // A bare "?" / AGN / empty send asks the whole pileup to call again.
             guard !stations.isEmpty else { return .silence }
             return .play(stations.map { callVoice(for: $0) })
         }
+        // A send is either a bare call or a call with your exchange behind it
+        // ("N9HS 5NN AL"). Try the whole thing first, so a stray space inside
+        // a call still copies, then fall back to just the leading token.
+        let lead = Self.callToken(text)
+        for frag in (lead.isEmpty || lead == whole) ? [whole] : [whole, lead] {
+            if let action = matchCall(frag) { return action }
+        }
+        // Nobody is even close to the call you sent — you miscopied it badly.
+        // Count it against clean-copy accuracy (issue #30: earlier missed
+        // attempts were being ignored, so a QSO logged after retries showed
+        // 100%), then respond per the busted-call setting. A fragment a station
+        // contains, or one it is a near miss of, was handled above and is a
+        // legitimate copy in progress rather than a bust.
+        if !stations.isEmpty { bustCount += 1 }
+        switch config.bustBehavior {
+        case .forgiving:
+            guard !stations.isEmpty else { return .silence }
+            return .play(stations.map { callVoice(for: $0) })
+        case .silence:
+            return .silence
+        case .nearest:
+            guard let n = nearestStation(to: whole) else { return .silence }
+            return .play([callVoice(for: stations[n])])
+        }
+    }
+
+    /// Resolve a call fragment to a response, or nil when it names nobody.
+    ///
+    /// Three ways a send can land: the exact call opens the exchange, a partial
+    /// re-calls everyone it could be (#85), and a near miss has the one station
+    /// you nearly copied send its call again.
+    private func matchCall(_ frag: String) -> Action? {
         // Exact full-call match -> straight to the exchange.
         if let i = stations.firstIndex(where: { $0.call == frag }) {
             return beginExchange(at: i)
@@ -387,6 +446,7 @@ public final class PileupEngine {
             for idx in matched { bump(idx) }
             let quitters = matched.filter { quit($0) }
             if !quitters.isEmpty {
+                for idx in quitters { recordMiss(at: idx) }
                 removeStations(ids: quitters.map { stations[$0].id })
                 matched = stationsMatching(frag)
             }
@@ -394,22 +454,54 @@ public final class PileupEngine {
         if !matched.isEmpty {
             return .play(matched.map { callVoice(for: stations[$0]) })
         }
-        // No one matches the call you sent — you miscopied the call. Count it
-        // against clean-copy accuracy (issue #30: earlier missed attempts were
-        // being ignored, so a QSO logged after retries showed 100%), then
-        // respond per the busted-call setting. A non-empty fragment that DID
-        // prefix-match a station above is a legitimate partial call, not a bust.
-        if !stations.isEmpty { bustCount += 1 }
-        switch config.bustBehavior {
-        case .forgiving:
-            guard !stations.isEmpty else { return .silence }
-            return .play(stations.map { callVoice(for: $0) })
-        case .silence:
-            return .silence
-        case .nearest:
-            guard let n = nearestStation(to: frag) else { return .silence }
-            return .play([callVoice(for: stations[n])])
+        // A near miss: a call you have all but copied, like "N9HS" for N9HO.
+        // On the air the station answers that by sending their own call again,
+        // and keeps doing it until you get it right — they do not open the
+        // exchange on a call that isn't theirs, and they do not go quiet. It is
+        // still a miscopy, so it counts as a bust and spends their patience: a
+        // caller you never resolve eventually walks, and takes with them a
+        // record of what you had them as.
+        if let i = nearMissStation(for: frag) {
+            bustCount += 1
+            stations[i].miscopiedAs = frag
+            bump(i)
+            if quit(i) { return stationQuits(at: i) }
+            return .play([callVoice(for: stations[i])])
         }
+        return nil
+    }
+
+    /// How far a copied call can sit from a real one and still read as a near
+    /// miss rather than a different station: one character wrong, dropped, or
+    /// added. Substitutions cost 1 and indels 1.5, so 1.5 is exactly that.
+    static let nearMissTolerance = 1.5
+
+    /// The one station a near miss is plainly aimed at.
+    ///
+    /// Nil unless exactly one station is that close: if two are equally near,
+    /// you have not identified either of them, and guessing one would put you
+    /// into an exchange with a station you never actually copied.
+    private func nearMissStation(for frag: String) -> Int? {
+        // Below three characters everything is near everything; that range is
+        // the partial's business, and it has already had its turn above.
+        guard frag.count >= 3 else { return nil }
+        let scored = stations.indices
+            .filter { abs(stations[$0].call.count - frag.count) <= 1 }
+            .map { (i: $0, d: MorseDistance.distance(frag, stations[$0].call)) }
+            .filter { $0.d <= Self.nearMissTolerance }
+            .sorted { $0.d < $1.d }
+        guard let best = scored.first else { return nil }
+        if scored.count > 1, scored[1].d == best.d { return nil }
+        return best.i
+    }
+
+    /// Note a caller who left before being logged, for the feedback readouts.
+    private func recordMiss(at i: Int) {
+        let s = stations[i]
+        let miss = MissedCaller(id: s.id, call: s.call,
+                                miscopiedAs: s.miscopiedAs, attempts: s.attempts)
+        missedCallers.append(miss)
+        lastMissedCaller = miss
     }
 
     /// Stations a partial call could be addressing.
@@ -487,6 +579,7 @@ public final class PileupEngine {
     }
 
     private func stationQuits(at i: Int) -> Action {
+        recordMiss(at: i)
         stations.remove(at: i)
         phase = stations.isEmpty ? .idle : .pileup
         guard !stations.isEmpty else { return .silence }
@@ -583,6 +676,15 @@ public final class PileupEngine {
         var f = text.uppercased().replacingOccurrences(of: " ", with: "")
         while f.hasSuffix("?") { f.removeLast() }
         return f
+    }
+
+    /// The call an operator's send is aimed at: everything up to the first
+    /// space, so "N9HS 5NN AL" reads as a call with an exchange behind it
+    /// rather than one unbroken token.
+    static func callToken(_ text: String) -> String {
+        let head = text.split(separator: " ", maxSplits: 1,
+                              omittingEmptySubsequences: true).first
+        return fragment(head.map(String.init) ?? text)
     }
 
     static func isSignOff(_ s: String) -> Bool {
