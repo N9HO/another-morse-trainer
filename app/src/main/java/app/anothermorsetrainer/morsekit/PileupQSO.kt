@@ -716,11 +716,14 @@ class PileupEngine(
             .filter { it.isNotEmpty() }
             .toMutableList()
         // Drop a leading signal report the operator typed but wasn't asked to
-        // copy ("599 OH" -> "OH"). Only for exchanges that actually send an RST,
-        // and only when there's a surplus token to drop — otherwise a serial
-        // that merely looks like a report (the NS Sprint's serial, or a basic
-        // contest serial in the 500s) would be mistaken for one and stripped.
-        if (config.mode.includesRST && !config.rstRequired && user.size > tokens.size) {
+        // copy ("599 OH" -> "OH"). An operator sends 5NN out of habit even in
+        // the exchanges that don't carry one — SST, CWT, MST, Sprint and Field
+        // Day all take a bare name/serial — so the report is surplus in every
+        // mode, not just the ones that send an RST (#38). Only dropped when
+        // there's a surplus token to drop, so a serial that merely looks like a
+        // report (the NS Sprint's serial, or a basic contest serial in the
+        // 500s) is never mistaken for one and stripped.
+        if (!reportIsRequired && user.size > tokens.size) {
             val first = user.firstOrNull()
             if (first != null && isRSTLike(first)) {
                 user.removeAt(0)
@@ -745,8 +748,20 @@ class PileupEngine(
         // all ("9BEWA" for "9B EWA"). Peel each required token's width off the
         // alphanumeric stream in order. Only reached once the separated parse
         // above has failed, so it can't turn a real miss into a match.
-        return gradeGlued(user.joinToString(""), tokens)
+        val glued = user.joinToString("")
+        if (gradeGlued(glued, tokens)) return true
+        // The same run-together copy with a report typed in front of it
+        // ("5NNOH"): nothing separates the report from the exchange, so the
+        // token split above never saw it as its own field to drop.
+        return !reportIsRequired && gradeGlued(glued, tokens, droppingLeadingReport = true)
     }
+
+    /**
+     * Whether a signal report is one of the tokens the operator has to copy.
+     * The [PileupConfig.rstRequired] setting only bites in a mode that sends one.
+     */
+    private val reportIsRequired: Boolean
+        get() = config.mode.includesRST && config.rstRequired
 
     companion object {
         /**
@@ -755,9 +770,22 @@ class PileupEngine(
          */
         val fieldSeparators = charArrayOf(' ', '/', '-', ',', '.')
 
-        /** Match run-together input by consuming each token's expected width in turn. */
-        fun gradeGlued(input: String, tokens: List<ExchToken>): Boolean {
-            val stream = input.uppercase().filter { it.isLetterOrDigit() }
+        /**
+         * Match run-together input by consuming each token's expected width in
+         * turn. With [droppingLeadingReport], a three-character signal report at
+         * the head of the stream is peeled off first — the glued twin of the
+         * surplus-report drop in `grade`.
+         */
+        fun gradeGlued(
+            input: String,
+            tokens: List<ExchToken>,
+            droppingLeadingReport: Boolean = false
+        ): Boolean {
+            var stream = input.uppercase().filter { it.isLetterOrDigit() }
+            if (droppingLeadingReport) {
+                if (stream.length <= 3 || !isRSTLike(stream.take(3))) return false
+                stream = stream.drop(3)
+            }
             var idx = 0
             for (t in tokens) {
                 val n = t.value.length
@@ -781,8 +809,27 @@ class PileupEngine(
                     if (a != null && b != null) a == b else u == token.value
                 }
                 TokenKind.RAW -> {
-                    user.uppercase().filter { !it.isWhitespace() } == token.value.uppercase()
+                    val u = user.uppercase().filter { !it.isWhitespace() }
+                    val value = token.value.uppercase()
+                    // A mixed field carries digits too: Field Day's class is a
+                    // number and a category letter ("2A"), so an operator
+                    // copying cut numbers writes "UA". Line the copy up against
+                    // the token — a digit position takes its cut letter, a
+                    // letter position must match outright — so cut input works
+                    // wherever a digit is expected (#38).
+                    u == value || matchesWithCutDigits(u, value)
                 }
+            }
+        }
+
+        /**
+         * Compare a copy against a mixed letter/digit field, accepting a cut
+         * letter wherever the field has a digit.
+         */
+        fun matchesWithCutDigits(user: String, value: String): Boolean {
+            if (user.length != value.length) return false
+            return user.zip(value).all { (u, v) ->
+                u == v || (v.isDigit() && CutNumbers.reverse[u] == v)
             }
         }
 

@@ -90,21 +90,20 @@ Education (alternative: Tools)
 ## Tags / keywords (for your reference)
 morse code, CW, Koch method, ham radio, amateur radio, telegraphy, QSO, Q-codes
 
-## "What's new" (release notes for 1.9)
-The pileup now answers a miscopy the way a real operator would. A near miss
-makes the station send its own call again until you get it right. If your copy
-sits equally close to two calls, both come back, because neither knows which you
-meant. A partial query matches anywhere in a call, not just the start, so "9H?"
-works. And when a caller runs out of patience you are told who left and what you
-had them as, either in the run summary or as it happens.
+## "What's new" (release notes for 1.10)
+A fresh install now starts at 33 WPM character speed, matching the Apple app.
+The Koch method needs characters arriving too fast to count, and 18 WPM was slow
+enough to tick off the dits and dahs — the one habit the method exists to
+prevent. Nothing changes for anyone already training: your speed is your speed.
+Drop below 33 and the settings screen now says what you are trading away.
 
-Also: character speed now goes to 60 WPM, with Farnsworth spacing tracking it.
-A background noise floor runs quietly under everything by default, which stops
-Bluetooth earbuds sleeping through the first character. Hardware-keyboard
-answers now go by value, so pressing 4 answers 4. Bluetooth MIDI keys no longer
-stick down when a key-up shares a radio burst with its key-down.
+In the QSO simulator, the exchange accepts what operators actually send. A
+signal report typed in front of the exchange no longer counts as a miscopy —
+including in SST, CWT, MST, Sprint and Field Day, which never send one — whether
+you write it 5NN or 599, spaced or run together. Cut numbers are read wherever a
+digit is expected, so a Field Day class copied as "NB" is a 9B.
 
-(Covers 1.6 through 1.9. Trim to whatever was last shipped to Play.)
+(Covers 1.10. Trim to whatever was last shipped to Play.)
 
 ## Contact / details
 • Developer email: jus.k.rog@gmail.com
