@@ -262,7 +262,27 @@ class PileupEngine(
         val qsb: Boolean,
         val exchange: ExchangeSpec,
         val patience: Int,
-        var attempts: Int = 0
+        var attempts: Int = 0,
+        /**
+         * The nearest call you actually sent for this station, if you have sent
+         * one that was close but wrong. Kept so a caller who walks off can tell
+         * you what you had them as.
+         */
+        var miscopiedAs: String? = null
+    )
+
+    /** A caller who left before you logged them, and the call you had for them. */
+    data class MissedCaller(
+        val id: Int,
+        /** What the station was actually sending. */
+        val call: String,
+        /**
+         * The closest call you sent for them, when you got near enough that they
+         * kept correcting you. Null when you never got close.
+         */
+        val miscopiedAs: String?,
+        /** How many times they came back before giving up. */
+        val attempts: Int
     )
 
     /** One transmission to mix into the pileup audio. */
@@ -307,6 +327,20 @@ class PileupEngine(
     var bustCount: Int = 0
         private set
 
+    /**
+     * Callers who gave up before being logged, oldest first — the end-of-run
+     * "who got away, and what did I have them as" list.
+     */
+    var missedCallers: List<MissedCaller> = emptyList()
+        private set
+
+    /**
+     * The most recent walk-off, for feedback shown the moment it happens. The
+     * UI clears it once shown; it is not cleared automatically.
+     */
+    var lastMissedCaller: MissedCaller? = null
+        private set
+
     private var config: PileupConfig = config
     private val rng: Random = rng
     private var nextID = 1
@@ -320,9 +354,14 @@ class PileupEngine(
         log = emptyList()
         qsoCount = 0
         bustCount = 0
+        missedCallers = emptyList()
+        lastMissedCaller = null
         nextID = 1
         phase = Phase.Idle
     }
+
+    /** Acknowledge the newest walk-off so it is shown only once. */
+    fun clearLastMissedCaller() { lastMissedCaller = null }
 
     val summary: String
         get() = if (qsoCount == 0) config.mode.label else "$qsoCount in the log"
@@ -425,36 +464,26 @@ class PileupEngine(
 
     private fun handlePileupSend(text: String): Action {
         phase = Phase.Pileup
-        val frag = fragment(text)
-        if (frag.isEmpty()) {
+        val whole = fragment(text)
+        if (whole.isEmpty()) {
             // A bare "?" / AGN / empty send asks the whole pileup to call again.
             if (stations.isEmpty()) return Action.Silence
             return Action.Play(stations.map { callVoice(it) })
         }
-        // Exact full-call match -> straight to the exchange.
-        val exact = stations.indexOfFirst { it.call == frag }
-        if (exact >= 0) {
-            return beginExchange(exact)
+        // A send is either a bare call or a call with your exchange behind it
+        // ("N9HS 5NN AL"). Try the whole thing first, so a stray space inside a
+        // call still copies, then fall back to just the leading token.
+        val lead = callToken(text)
+        val candidates = if (lead.isEmpty() || lead == whole) listOf(whole) else listOf(whole, lead)
+        for (frag in candidates) {
+            matchCall(frag)?.let { return it }
         }
-        // Stations the partial could be addressing answer — sending "W1"
-        // brings back the W1s, not everyone. The impatient may quit first.
-        var matched = stationsMatching(frag)
-        if (config.giveUpEnabled && matched.isNotEmpty()) {
-            for (idx in matched) bump(idx)
-            val quitters = matched.filter { quit(it) }
-            if (quitters.isNotEmpty()) {
-                removeStations(quitters.map { stations[it].id })
-                matched = stationsMatching(frag)
-            }
-        }
-        if (matched.isNotEmpty()) {
-            return Action.Play(matched.map { callVoice(stations[it]) })
-        }
-        // No one matches the call you sent — you miscopied the call. Count it
-        // against clean-copy accuracy (issue #30: earlier missed attempts were
-        // being ignored, so a QSO logged after retries showed 100%), then
-        // respond per the busted-call setting. A non-empty fragment that DID
-        // prefix-match a station above is a legitimate partial call, not a bust.
+        // Nobody is even close to the call you sent — you miscopied it badly.
+        // Count it against clean-copy accuracy (issue #30: earlier missed
+        // attempts were being ignored, so a QSO logged after retries showed
+        // 100%), then respond per the busted-call setting. A fragment a station
+        // contains, or one it is a near miss of, was handled above and is a
+        // legitimate copy in progress rather than a bust.
         if (stations.isNotEmpty()) bustCount += 1
         return when (config.bustBehavior) {
             BustBehavior.Forgiving -> {
@@ -463,10 +492,84 @@ class PileupEngine(
             }
             BustBehavior.Silence -> Action.Silence
             BustBehavior.Nearest -> {
-                val n = nearestStation(frag) ?: return Action.Silence
+                val n = nearestStation(whole) ?: return Action.Silence
                 Action.Play(listOf(callVoice(stations[n])))
             }
         }
+    }
+
+    /**
+     * Resolve a call fragment to a response, or null when it names nobody.
+     *
+     * Three ways a send can land: the exact call opens the exchange, a partial
+     * re-calls everyone it could be (Apple repo #85), and a near miss has the
+     * one station you nearly copied send its call again.
+     */
+    private fun matchCall(frag: String): Action? {
+        // Exact full-call match -> straight to the exchange.
+        val exact = stations.indexOfFirst { it.call == frag }
+        if (exact >= 0) return beginExchange(exact)
+
+        // Stations the partial could be addressing answer — sending "W1"
+        // brings back the W1s, not everyone. The impatient may quit first.
+        var matched = stationsMatching(frag)
+        if (config.giveUpEnabled && matched.isNotEmpty()) {
+            for (idx in matched) bump(idx)
+            val quitters = matched.filter { quit(it) }
+            if (quitters.isNotEmpty()) {
+                for (idx in quitters) recordMiss(idx)
+                removeStations(quitters.map { stations[it].id })
+                matched = stationsMatching(frag)
+            }
+        }
+        if (matched.isNotEmpty()) {
+            return Action.Play(matched.map { callVoice(stations[it]) })
+        }
+
+        // A near miss: a call you have all but copied, like "N9HS" for N9HO. On
+        // the air the station answers that by sending their own call again, and
+        // keeps doing it until you get it right — they do not open the exchange
+        // on a call that isn't theirs, and they do not go quiet. It is still a
+        // miscopy, so it counts as a bust and spends their patience: a caller
+        // you never resolve eventually walks, and takes with them a record of
+        // what you had them as.
+        val near = nearMissStation(frag)
+        if (near != null) {
+            bustCount += 1
+            stations = stations.toMutableList().also { it[near] = it[near].copy(miscopiedAs = frag) }
+            bump(near)
+            if (quit(near)) return stationQuits(near)
+            return Action.Play(listOf(callVoice(stations[near])))
+        }
+        return null
+    }
+
+    /** The one station a near miss is plainly aimed at.
+     *
+     * Null unless exactly one station is that close: if two are equally near,
+     * you have not identified either of them, and guessing one would drop you
+     * into an exchange with a station you never actually copied.
+     */
+    private fun nearMissStation(frag: String): Int? {
+        // Below three characters everything is near everything; that range is
+        // the partial's business, and it has already had its turn above.
+        if (frag.length < 3) return null
+        val scored = stations.indices
+            .filter { kotlin.math.abs(stations[it].call.length - frag.length) <= 1 }
+            .map { it to MorseDistance.distance(frag, stations[it].call) }
+            .filter { it.second <= NEAR_MISS_TOLERANCE }
+            .sortedBy { it.second }
+        val best = scored.firstOrNull() ?: return null
+        if (scored.size > 1 && scored[1].second == best.second) return null
+        return best.first
+    }
+
+    /** Note a caller who left before being logged, for the feedback readouts. */
+    private fun recordMiss(i: Int) {
+        val s = stations[i]
+        val miss = MissedCaller(s.id, s.call, s.miscopiedAs, s.attempts)
+        missedCallers = missedCallers + miss
+        lastMissedCaller = miss
     }
 
     /**
@@ -555,6 +658,7 @@ class PileupEngine(
     }
 
     private fun stationQuits(i: Int): Action {
+        recordMiss(i)
         stations = stations.toMutableList().apply { removeAt(i) }
         phase = if (stations.isEmpty()) Phase.Idle else Phase.Pileup
         if (stations.isEmpty()) return Action.Silence
@@ -657,6 +761,14 @@ class PileupEngine(
         fun isQRQ(s: String): Boolean = s.uppercase() == "QRQ"
 
         /**
+         * How far a copied call can sit from a real one and still read as a
+         * near miss rather than a different station: one character wrong,
+         * dropped, or added. Substitutions cost 1 and indels 1.5, so 1.5 is
+         * exactly that.
+         */
+        const val NEAR_MISS_TOLERANCE = 1.5
+
+        /**
          * A callsign fragment from typed input: upper-cased, spaces removed, and the
          * trailing query mark(s) stripped (so "W1?" queries the W1 prefix).
          */
@@ -665,6 +777,14 @@ class PileupEngine(
             while (f.endsWith("?")) { f = f.dropLast(1) }
             return f
         }
+
+        /**
+         * The call an operator's send is aimed at: everything up to the first
+         * space, so "N9HS 5NN AL" reads as a call with an exchange behind it
+         * rather than one unbroken token.
+         */
+        fun callToken(text: String): String =
+            fragment(text.split(" ").firstOrNull { it.isNotEmpty() } ?: text)
 
         fun isSignOff(s: String): Boolean {
             val t = s.uppercase()
