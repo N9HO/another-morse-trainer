@@ -52,6 +52,19 @@ only while you are actively using one of them:</p>
 <p>The app itself does <strong>not</strong> record, save, or transmit any
 audio.</p>
 
+<h2>Bluetooth</h2>
+<p>The app uses Bluetooth for one purpose: finding and connecting a
+<strong>wireless Morse key</strong> (a BLE MIDI key, or a Vail Adapter) so you
+can key into the app. It is used only while you are connecting or using such a
+key, and nothing is transmitted anywhere.</p>
+<p>The app does <strong>not</strong> use Bluetooth to determine your location,
+and does not scan for or collect information about nearby devices other than
+Morse keys. On Android 11 and older the system itself required the location
+permission before any app could scan for Bluetooth LE devices at all; that is
+why it appears in the permission list, it is declared only for those older
+versions, and the scan is flagged to the system as never being used for
+location. On Android 12 and newer no location permission is involved.</p>
+
 <h2>Network features</h2>
 <p>Training, progress and settings all work offline. Two optional features
 connect to the internet when you choose to use them:</p>
