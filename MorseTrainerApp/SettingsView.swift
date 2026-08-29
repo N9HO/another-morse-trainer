@@ -313,6 +313,11 @@ struct SettingsView: View {
                             ForEach(BustBehavior.allCases) { Text($0.label).tag($0) }
                         }
                         Toggle("Callers can give up", isOn: $model.settings.qso.giveUpEnabled)
+                        if model.settings.qso.giveUpEnabled {
+                            Picker("Tell me who got away", selection: $model.settings.qso.missedCallerFeedback) {
+                                ForEach(MissedCallerFeedback.allCases) { Text($0.label).tag($0) }
+                            }
+                        }
                         Toggle("Cut numbers", isOn: $model.settings.qso.cutNumbersEnabled)
                         if model.settings.qso.cutNumbersEnabled {
                             ForEach(CutNumbers.cuttableDigits, id: \.self) { d in
@@ -323,7 +328,7 @@ struct SettingsView: View {
                     } header: {
                         Text("QSO · Realism")
                     } footer: {
-                        Text("Keep partial call: a partly-copied call stays in the box so you can send “?” and add to it instead of retyping. Give-up: a station you keep busting drops out after a few misses, but the pileup continues. Cut numbers send numerals as letters (0→T, 9→N) — you can type either form.")
+                        Text("Keep partial call: a partly-copied call stays in the box so you can send “?” and add to it instead of retyping. Give-up: a station you keep busting drops out after a few misses, but the pileup continues — “Tell me who got away” then names the call you lost and what you had it as, either as it happens or in the end-of-run summary. Cut numbers send numerals as letters (0→T, 9→N) — you can type either form.")
                     }
                     .listRowBackground(Theme.navyElevated)
 

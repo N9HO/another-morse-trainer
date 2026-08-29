@@ -165,6 +165,22 @@ struct ExchangeSpec: Sendable, Equatable {
 
 // MARK: - Config
 
+/// When to tell the operator that a caller gave up, and what they had them as.
+public enum MissedCallerFeedback: String, Codable, CaseIterable, Identifiable, Sendable {
+    case off          // never mention it
+    case endOfRun     // in the run summary only
+    case immediate    // the moment it happens, and in the summary
+
+    public var id: String { rawValue }
+    public var label: String {
+        switch self {
+        case .off: return "Off"
+        case .endOfRun: return "At the end"
+        case .immediate: return "As it happens"
+        }
+    }
+}
+
 public enum BustBehavior: String, Codable, CaseIterable, Identifiable, Sendable {
     case forgiving   // matches repeat; total bust -> whole pileup re-calls
     case silence     // matches repeat; total bust -> silence
