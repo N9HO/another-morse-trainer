@@ -26,6 +26,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.Settings as SettingsGlyph
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -226,6 +227,19 @@ fun SettingsScreen(onBack: () -> Unit, scope: SettingsMode? = null) {
                             "stretches the gaps between characters (set it below the character " +
                             "speed) to give you more time to recognise each one." + qrqNote
                     )
+                    // Twin of the iOS warning: slowing the characters is the one
+                    // adjustment that works against the method, so say so rather
+                    // than letting it pass silently.
+                    if (Settings.characterWpm < KOCH_MIN_WPM) {
+                        SpeedWarning(
+                            "Below ${KOCH_MIN_WPM.toInt()} WPM it's easy to start counting the dits and dahs " +
+                                "instead of hearing each character as a single sound. Training at " +
+                                "${KOCH_MIN_WPM.toInt()}+ WPM builds instant, by-ear recognition, which is the " +
+                                "whole point of the Koch method. If you need more time to answer, " +
+                                "raise \"Recognition target\" or lower the Farnsworth speed instead of " +
+                                "slowing the code."
+                        )
+                    }
                 }
 
                 SectionHeader("Sound")
@@ -710,6 +724,28 @@ private fun SectionHeader(title: String) {
         letterSpacing = 1.sp,
         modifier = Modifier.padding(start = 8.dp, top = 20.dp, bottom = 6.dp)
     )
+}
+
+/** Below this the dits and dahs become countable; see [SpeedWarning]. Mirrors iOS. */
+private const val KOCH_MIN_WPM = 33.0
+
+/** Amber warning under the speed sliders. The grey [SectionFooter] reads as neutral
+ *  guidance, and this is a "you are working against the method" note, so it gets
+ *  the warning colour and icon the iOS build uses. */
+@Composable
+private fun SpeedWarning(text: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(start = 8.dp, end = 8.dp, top = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Icon(
+            Icons.Filled.Warning,
+            contentDescription = null,
+            tint = Brand.warning,
+            modifier = Modifier.size(16.dp)
+        )
+        Text(text, color = Brand.warning, fontSize = 12.sp)
+    }
 }
 
 @Composable

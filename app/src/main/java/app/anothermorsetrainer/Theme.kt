@@ -38,6 +38,7 @@ object Brand {
     val tealBright = Color(0xFF46D6E3)    // highlights / selected
     val textPrimary = Color(0xFFF2F6FA)
     val textSecondary = Color(0xFF9DB2C6)
+    val warning = Color(0xFFF59E0B)       // amber — "this works against you" notes
     val hairline = Color(0x14FFFFFF)      // white @ ~8% — borders / dividers
     val gradientTop = Color(0xFF05121C)   // top of the background gradient
 

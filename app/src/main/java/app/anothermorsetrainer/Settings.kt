@@ -92,10 +92,22 @@ object Settings {
     /** Bottom of the character-speed range. */
     const val MIN_CHARACTER_WPM = 5.0
 
-    // Sensible defaults that match what the screens used before settings existed.
-    var characterWpm by mutableStateOf(18.0)
+    /**
+     * 33 WPM, matching iOS. The Koch method depends on characters arriving too
+     * fast to count: below about 33 you can tick off the dits and dahs and
+     * assemble the letter, which is the habit the whole method exists to avoid,
+     * and it caps you around 10 WPM later. A learner who needs more time should
+     * widen the gaps (Farnsworth) or raise the recognition target, not slow the
+     * characters — see the warning under the speed slider.
+     *
+     * Existing installs are unaffected: [completeOnboarding] persists, and
+     * [persist] always writes charWpm, so anyone past the first-run screen has
+     * an explicit stored value and never falls back to this.
+     */
+    var characterWpm by mutableStateOf(33.0)
         private set
-    var effectiveWpm by mutableStateOf(18.0)   // Farnsworth target; == character ⇒ standard timing
+    /** Equal to the character speed ⇒ standard timing, i.e. Farnsworth off, as on iOS. */
+    var effectiveWpm by mutableStateOf(33.0)
         private set
     var sidetoneHz by mutableStateOf(600.0)
         private set
@@ -201,8 +213,8 @@ object Settings {
 
     fun init(context: Context) {
         prefs = context.applicationContext.getSharedPreferences("amt_settings", Context.MODE_PRIVATE)
-        characterWpm = prefs.getFloat("charWpm", 18f).toDouble()
-        effectiveWpm = prefs.getFloat("effWpm", 18f).toDouble()
+        characterWpm = prefs.getFloat("charWpm", 33f).toDouble()
+        effectiveWpm = prefs.getFloat("effWpm", 33f).toDouble()
         sidetoneHz = prefs.getFloat("sidetone", 600f).toDouble()
         backgroundNoise = runCatching {
             BackgroundNoiseLevel.valueOf(prefs.getString("backgroundNoise", null) ?: "WHISPER")
