@@ -5,6 +5,9 @@ built with **SwiftUI**, with its training logic in a Foundation-only Swift
 package (`Sources/MorseKit`) so it can be unit-tested and ported. The Android
 port lives at [N9HO/another-morse-trainer-android](https://github.com/N9HO/another-morse-trainer-android).
 
+The user guide — every mode, setting and hardware option — lives at
+[anothermorsetrainer.app/guide](https://anothermorsetrainer.app/guide/).
+
 ## Features
 
 - **Journey** — gamified, level-based path (letters → numbers → punctuation →
@@ -28,7 +31,15 @@ port lives at [N9HO/another-morse-trainer-android](https://github.com/N9HO/anoth
   a live score and rate, and an end-of-run scorecard
 - **Code Exam** — FCC/ARRL-style copy test at 5 / 13 / 20 WPM (solid copy or
   content questions)
-- **Short Stories** — continuous copy of public-domain fables
+- **Short Stories** — continuous copy of a public-domain fable (32 bundled), a
+  longer classic sent in parts with a bookmark that keeps your place, or todays
+  news: real RSS headlines sanitized to sendable Morse and hidden until you
+  reveal them
+- **Reference** — browsable, tap-to-hear chart of prosigns, Q-codes,
+  abbreviations, ham lingo, cut numbers, and the full alphabet, with
+  per-signal detail
+- **CW Decoder** — point the microphone at received Morse (a rig's speaker, a
+  WebSDR) and read it as text, with live WPM/pitch telemetry
 - **Listen & Learn** — hands-free: hear the code, then the spoken answer;
   keeps playing with the screen locked
 - **Voice answers** — speak your answer instead of tapping in any of the six
