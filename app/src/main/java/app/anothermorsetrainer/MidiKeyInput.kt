@@ -9,6 +9,7 @@ import android.media.midi.MidiOutputPort
 import android.media.midi.MidiReceiver
 import android.os.Handler
 import android.os.Looper
+import app.anothermorsetrainer.morsekit.MidiKeyParser
 
 /**
  * Listens for key events from a MIDI keyer (the Vail Adapter or a BLE-MIDI key)
@@ -122,26 +123,21 @@ class MidiKeyInput(private val context: Context) {
         if (nowHeld != wasHeld) onKey?.invoke(nowHeld)
     }
 
-    /** Parses raw MIDI bytes into Vail-style key down/up events. */
+    /**
+     * Parses raw MIDI bytes into Vail-style key down/up events.
+     *
+     * One [onSend] can carry several messages — that is what offset/count are
+     * for, and a BLE-MIDI key batches events into a single radio burst — so the
+     * whole buffer is walked. Reading only the first three bytes dropped a
+     * key-up that shared a burst with its key-down, and since the key is held
+     * while any note is down, the dropped release left it stuck. Note mapping
+     * and the byte walk live in [MidiKeyParser] so they can be tested.
+     */
     private inner class KeyReceiver : MidiReceiver() {
         override fun onSend(msg: ByteArray, offset: Int, count: Int, timestamp: Long) {
-            if (count < 3) return
-            val status = msg[offset].toInt() and 0xF0
-            val note = msg[offset + 1].toInt() and 0x7F
-            val velocity = msg[offset + 2].toInt() and 0x7F
-
-            val isDown = when {
-                status == 0x90 && velocity > 0 -> true
-                status == 0x80 -> false
-                status == 0x90 -> false   // Note On, velocity 0 = Note Off
-                else -> return
-            }
-            // Map only the adapter's keyer notes; ignore anything else so an
-            // unrelated MIDI synth never registers as keying.
-            when (note) {
-                0, 1, 20, 61, 2, 21, 62 -> main.post { updateHeld(note, isDown) }
-                else -> return
-            }
+            val events = MidiKeyParser.messages(msg, offset, count)
+            if (events.isEmpty()) return
+            main.post { events.forEach { updateHeld(it.note, it.isDown) } }
         }
     }
 }
