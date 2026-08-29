@@ -280,6 +280,14 @@ class PileupEngine(
         val qsb: Boolean,
         val exchange: ExchangeSpec,
         val patience: Int,
+        /**
+         * How quickly this operator tends to come back, across the delay
+         * window: 0 leaps straight in, 1 hangs back. Drawn once, so a given op
+         * reads as consistently quick or consistently hesitant all run — which
+         * is what makes a pileup sound like people rather than a random number
+         * generator picking a new order every time.
+         */
+        val reaction: Double,
         var attempts: Int = 0,
         /**
          * The nearest call you actually sent for this station, if you have sent
@@ -551,35 +559,52 @@ class PileupEngine(
         // miscopy, so it counts as a bust and spends their patience: a caller
         // you never resolve eventually walks, and takes with them a record of
         // what you had them as.
-        val near = nearMissStation(frag)
-        if (near != null) {
+        var near = nearMissStations(frag)
+        if (near.isNotEmpty()) {
             bustCount += 1
-            stations = stations.toMutableList().also { it[near] = it[near].copy(miscopiedAs = frag) }
-            bump(near)
-            if (quit(near)) return stationQuits(near)
-            return Action.Play(listOf(callVoice(stations[near])))
+            stations = stations.toMutableList().also { list ->
+                for (idx in near) list[idx] = list[idx].copy(miscopiedAs = frag)
+            }
+            for (idx in near) bump(idx)
+            val quitters = near.filter { quit(it) }
+            if (quitters.isNotEmpty()) {
+                for (idx in quitters) recordMiss(idx)
+                removeStations(quitters.map { stations[it].id })
+                near = nearMissStations(frag)
+                if (near.isEmpty()) {
+                    phase = if (stations.isEmpty()) Phase.Idle else Phase.Pileup
+                    if (stations.isEmpty()) return Action.Silence
+                    return Action.Play(stations.map { callVoice(it) })
+                }
+            }
+            // One station knows you mean them and simply corrects you. Two or
+            // more are all plausibly the call you sent, so none of them is sure
+            // it was theirs: they each come back, hanging off the beat while
+            // they work out whether you were answering them.
+            val hesitation = if (near.size > 1) 1.0 else 0.0
+            return Action.Play(near.map { callVoice(stations[it], hesitation) })
         }
         return null
     }
 
-    /** The one station a near miss is plainly aimed at.
+    /**
+     * Every station a near miss could plausibly be aimed at, nearest first.
      *
-     * Null unless exactly one station is that close: if two are equally near,
-     * you have not identified either of them, and guessing one would drop you
-     * into an exchange with a station you never actually copied.
+     * More than one is not a failure to resolve — it is what a real pileup does
+     * when your copy fits two of them. Both come back (neither gives up its
+     * exchange until you actually name it), so you get another pass at the
+     * difference instead of silence.
      */
-    private fun nearMissStation(frag: String): Int? {
+    private fun nearMissStations(frag: String): List<Int> {
         // Below three characters everything is near everything; that range is
         // the partial's business, and it has already had its turn above.
-        if (frag.length < 3) return null
+        if (frag.length < 3) return emptyList()
         val scored = stations.indices
             .filter { kotlin.math.abs(stations[it].call.length - frag.length) <= 1 }
             .map { it to MorseDistance.distance(frag, stations[it].call) }
             .filter { it.second <= NEAR_MISS_TOLERANCE }
             .sortedBy { it.second }
-        val best = scored.firstOrNull() ?: return null
-        if (scored.size > 1 && scored[1].second == best.second) return null
-        return best.first
+        return scored.map { it.first }
     }
 
     /** Note a caller who left before being logged, for the feedback readouts. */
@@ -856,25 +881,58 @@ class PileupEngine(
         ).toFloat()
         val qsb = config.qsbEnabled && rng.nextDouble(1.0) < 0.5
         val patience = closedInt(rng, minOf(config.giveUpMin, config.giveUpMax), maxOf(config.giveUpMin, config.giveUpMax))
+        val reaction = rng.nextDouble(1.0)
         val station = Station(
             id = nextID, call = call, wpm = wpm, toneOffset = offset,
-            volume = vol, qsb = qsb, exchange = exch, patience = patience
+            volume = vol, qsb = qsb, exchange = exch, patience = patience,
+            reaction = reaction
         )
         nextID += 1
         return station
     }
 
-    private fun callVoice(s: Station): Voice =
+    /**
+     * When a station comes back, in seconds after your send.
+     *
+     * Each operator's own [Station.reaction] sets where in the window they
+     * usually land, and fresh jitter on top means no two rounds are identical
+     * even from the same op. [hesitation] (0..1) pushes the whole thing later
+     * and spreads it wider — a station that isn't sure the call you sent was
+     * theirs waits to see whether anyone else answers first.
+     */
+    private fun replyDelay(s: Station, hesitation: Double = 0.0): Double {
+        val lo = config.minDelay
+        val hi = maxOf(config.minDelay, config.maxDelay)
+        val span = hi - lo
+        val base = lo + span * s.reaction
+        // Jitter is a slice of the window, so a deliberately tight window stays
+        // tight and a wide one breathes.
+        val jitter = closedDouble(rng, -0.2, 0.2) * span
+        // Thinking time is never a fixed beat either, or the hesitation itself
+        // would become the metronome.
+        val thinking = hesitation * span * closedDouble(rng, 0.35, 1.0)
+        return maxOf(0.0, base + jitter + thinking)
+    }
+
+    private fun callVoice(s: Station, hesitation: Double = 0.0): Voice =
         Voice(
             text = s.call, wpm = s.wpm, toneOffset = s.toneOffset, volume = s.volume,
-            qsb = s.qsb, delay = closedDouble(rng, config.minDelay, maxOf(config.minDelay, config.maxDelay))
+            qsb = s.qsb, delay = replyDelay(s, hesitation)
         )
 
-    private fun exchangeVoice(s: Station): Voice =
-        Voice(
+    /**
+     * The exchange comes back faster than a call — you have already picked this
+     * operator out and they know it — but not on a fixed beat, which is what a
+     * hard-coded delay made every single exchange sound like.
+     */
+    private fun exchangeVoice(s: Station): Voice {
+        val base = 0.15 + 0.25 * s.reaction
+        val jitter = closedDouble(rng, -0.05, 0.10)
+        return Voice(
             text = s.exchange.sentText, wpm = s.wpm, toneOffset = s.toneOffset,
-            volume = s.volume, qsb = s.qsb, delay = 0.2
+            volume = s.volume, qsb = s.qsb, delay = maxOf(0.05, base + jitter)
         )
+    }
 
     private fun index(id: Int): Int? = stations.indexOfFirst { it.id == id }.takeIf { it >= 0 }
     private fun bump(i: Int) { stations[i].attempts += 1 }
