@@ -33,6 +33,20 @@ public struct MorseItem: Identifiable, Sendable, Equatable {
             return s.compactMap { MorseCode.pattern(for: $0) }.joined()
         }
     }
+
+    /// The dot-dash stream as actually heard: prosign patterns run together,
+    /// text characters separated by an inter-character gap. Unlike `soundKey`
+    /// this keeps the abbreviation BK (-... -.-) apart from the prosign <BK>
+    /// (-...-.-), while the letter K and the prosign <K> compare equal — both
+    /// are a lone -.- on the air.
+    public var audibleKey: String {
+        switch playable {
+        case .pattern(let p):
+            return p
+        case .text(let s):
+            return s.compactMap { MorseCode.pattern(for: $0) }.joined(separator: " ")
+        }
+    }
 }
 
 /// Curated ham-radio reference data (high-frequency words, abbreviations,
@@ -86,8 +100,13 @@ public enum MorseData {
 
     // MARK: Q-codes → meaning
 
+    // Bare QRL is the *statement* (the frequency is busy); the familiar
+    // channel-check question is QRL? — sent with the ordinary question mark.
+    // Both are taught so the two forms never get conflated
+    // (N9HO/another-morse-trainer-android#27).
     public static let qCodes: [(token: String, meaning: String)] = [
-        ("QRG","your exact frequency is"), ("QRL","is this frequency in use?"),
+        ("QRG","your exact frequency is"), ("QRL","this frequency is busy / in use"),
+        ("QRL?","is this frequency in use?"),
         ("QRM","man-made interference"), ("QRN","atmospheric noise / static"),
         ("QRO","increase power"), ("QRP","low power"),
         ("QRQ","send faster"), ("QRS","send slower"),

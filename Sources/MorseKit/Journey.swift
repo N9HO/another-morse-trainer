@@ -226,7 +226,7 @@ public final class JourneyQuiz: QuizSource {
 
     public func record(choice: String, ttr: TimeInterval) -> DrillOutcome {
         guard let item = lastItem else { return DrillOutcome(correct: false, unlocked: nil) }
-        let correct = choice == item.answer
+        let correct = choice == item.answer || isSoundTwinAnswer(choice, of: item)
         attemptsById[item.id, default: []].append(.init(correct: correct, ttr: ttr))
         if attemptsById[item.id]!.count > CharacterStats.historyLimit {
             attemptsById[item.id]!.removeFirst()
@@ -252,13 +252,25 @@ public final class JourneyQuiz: QuizSource {
         return DrillOutcome(correct: correct, unlocked: nil)
     }
 
+    /// True when `choice` is the answer of a pool item indistinguishable by ear
+    /// from `item` — the letter K and the prosign <K> are both a lone -.-, so
+    /// hearing it, either answer must count (issue #75).
+    private func isSoundTwinAnswer(_ choice: String, of item: MorseItem) -> Bool {
+        level.pool.contains { $0.answer == choice && $0.audibleKey == item.audibleKey }
+    }
+
     // MARK: Selection
 
     /// Distinct answer labels: the correct one plus the closest-sounding others,
-    /// drawn only from the current level's learned pool.
+    /// drawn only from the current level's learned pool. Items that sound
+    /// identical to the target (K vs <K>) are excluded — offering both makes
+    /// the drill unanswerable (issue #75).
     private func buildOptions(for target: MorseItem) -> [String] {
         let cap = max(1, config.optionCount)
-        let others = level.pool.filter { $0.id != target.id && $0.answer != target.answer }
+        let others = level.pool.filter {
+            $0.id != target.id && $0.answer != target.answer
+                && $0.audibleKey != target.audibleKey
+        }
         let optionsToShow = min(cap, others.count + 1)
         let needed = max(0, optionsToShow - 1)
         let sorted = others

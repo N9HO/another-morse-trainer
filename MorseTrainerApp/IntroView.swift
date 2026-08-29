@@ -6,6 +6,10 @@ import SwiftUI
 struct IntroView: View {
     @EnvironmentObject var model: AppModel
     var onStart: () -> Void
+    /// When set on arrival, present the selected mode's pre-flight sheet
+    /// immediately — "Change setup" on the session recap lands the user in the
+    /// setup they asked for, not on the menu grid (issue #67).
+    @Binding var openSetup: Bool
 
     @State private var showingSetup = false
     @State private var showingSettings = false
@@ -58,6 +62,12 @@ struct IntroView: View {
         .fullScreenCover(isPresented: $showingRepeater) {
             RepeaterView().environmentObject(repeater)
         }
+        .onAppear {
+            if openSetup {
+                openSetup = false
+                showingSetup = true
+            }
+        }
     }
 
     // MARK: - Top bar
@@ -102,7 +112,7 @@ struct IntroView: View {
                     .foregroundStyle(Theme.teal)
                     .padding(8)
             }
-            .accessibilityLabel("Reference — prosigns, Q-codes, and abbreviations")
+            .accessibilityLabel("Reference — prosigns, Q-codes, abbreviations, and ham lingo")
             Button { showingSendingDrill = true } label: {
                 Image(systemName: "square.and.pencil")
                     .font(.title3)
@@ -1110,7 +1120,7 @@ private struct CustomWordsSheet: View {
 #Preview {
     ZStack {
         Theme.Background()
-        IntroView(onStart: {}).environmentObject(AppModel())
+        IntroView(onStart: {}, openSetup: .constant(false)).environmentObject(AppModel())
     }
     .preferredColorScheme(.dark)
 }

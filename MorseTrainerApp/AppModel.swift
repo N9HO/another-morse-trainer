@@ -1904,6 +1904,18 @@ final class AppModel: ObservableObject {
                       self.phase == .answered else { return }
                 self.next()
             }
+        } else if !outcome.correct {
+            // A miss already holds the correction until Next — after a beat,
+            // re-send the item so the learner re-hears the sound they got
+            // wrong while the answer shows (issue #77). Advancing first
+            // (phase leaves .answered) cancels it.
+            advanceGeneration += 1
+            let token = advanceGeneration
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { [weak self] in
+                guard let self, self.advanceGeneration == token,
+                      self.phase == .answered else { return }
+                _ = self.replay()
+            }
         }
     }
 

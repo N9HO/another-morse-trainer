@@ -28,6 +28,49 @@ public extension MorseData {
         }
     }
 
+    // MARK: Operating lingo (the spoken culture of ham radio)
+
+    /// Ham-radio jargon a newcomer hears in QSOs and club talk that isn't
+    /// (only) a sendable shorthand token — the *language* of operating, from
+    /// "ragchew" to "zero beat" (issue #76). Terms that are also on-air
+    /// shorthand (ES, 73, CQ, the Q-codes…) live in their own tables; this
+    /// list is the culture around them. Reference-only: it never feeds the
+    /// quiz pools, so adding terms can't change anyone's drills.
+    static let lingo: [(term: String, meaning: String)] = [
+        ("HAM",          "an amateur radio operator"),
+        ("CW",           "continuous wave — what hams call Morse code on the air"),
+        ("RAGCHEW",      "a long, relaxed conversational contact"),
+        ("PILEUP",       "many stations calling the same station at once"),
+        ("ELMER",        "a mentor who helps newcomers into the hobby"),
+        ("FIST",         "the personal rhythm of an operator's hand-sent code"),
+        ("ZERO BEAT",    "tuning your pitch to exactly match the other station"),
+        ("SHACK",        "the corner of home where the radio gear lives"),
+        ("LID",          "a sloppy or inconsiderate operator"),
+        ("SILENT KEY",   "an operator who has passed away — written SK"),
+        ("STRAIGHT KEY", "the classic up-and-down key: you time every element"),
+        ("PADDLE",       "a lever key that feeds an electronic keyer"),
+        ("KEYER",        "electronics that turn paddle squeezes into perfect code"),
+        ("BUG",          "a semi-automatic mechanical key — it machine-makes the dits"),
+        ("COPY",         "to receive code, on paper or in your head"),
+        ("HEAD COPY",    "reading code entirely in your head, nothing written"),
+        ("WORK",         "to complete a contact — you worked that station"),
+        ("BUSTED CALL",  "a call sign copied or sent wrong"),
+        ("POTA",         "Parks on the Air — portable operating from parks"),
+        ("SOTA",         "Summits on the Air — operating from mountain tops"),
+        ("WPM",          "words per minute — code speed, measured by the word PARIS"),
+        ("FARNSWORTH",   "full-speed characters with stretched gaps while learning"),
+        ("KOCH METHOD",  "learning at full speed, adding one character at a time")
+    ]
+
+    /// Lingo as reference rows: read the meaning, and — for the curious — tap
+    /// to hear the term itself in Morse like any other entry.
+    static var lingoItems: [MorseItem] {
+        lingo.map {
+            MorseItem(id: "lingo-\($0.term)", playable: .text($0.term),
+                      answer: $0.meaning, display: $0.term)
+        }
+    }
+
     // MARK: Full Morse chart (letters · digits · punctuation)
 
     /// The complete alphabet/number/punctuation chart, in reading order. The

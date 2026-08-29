@@ -1099,6 +1099,71 @@ do {
     let encoded = try! JSONEncoder().encode(prog)
     let decoded = try! JSONDecoder().decode(JourneyProgress.self, from: encoded)
     check("JourneyProgress round-trips through JSON", decoded == prog)
+
+    // Issue #75: the prosign <K> is a lone -.- — audibly identical to the
+    // letter K, and both live in the pool at the prosign levels. The two must
+    // never compete in one drill's options, and hearing -.- either answer is
+    // accepted.
+    let goAhead = MorseData.prosigns.first { $0.name == "<K>" }!.meaning
+    let kLevelIndex = levels.firstIndex { lvl in lvl.newItems.contains { $0.id == "<K>" } }
+    check("curriculum has a level introducing the <K> prosign", kLevelIndex != nil)
+    if let kLevelIndex {
+        let pquiz = JourneyQuiz(levels: levels, startIndex: kLevelIndex, rng: SeededRNG(seed: 11))
+        var sawProsignK = false, sawLetterK = false
+        var offeredTwin = false, twinAccepted = true
+        for _ in 0..<400 {
+            pquiz.select(levelIndex: kLevelIndex)   // pin the level; drills never clear it
+            let d = pquiz.nextDrill()
+            if d.correct == goAhead {
+                sawProsignK = true
+                if d.options.contains("K") { offeredTwin = true }
+                // A learner hearing a lone -.- may well answer "K" — accepted.
+                if !pquiz.record(choice: "K", ttr: 0.5).correct { twinAccepted = false }
+            } else {
+                if d.correct == "K", d.options.contains(goAhead) { offeredTwin = true }
+                if d.correct == "K" { sawLetterK = true }
+                _ = pquiz.record(choice: d.correct, ttr: 0.5)
+            }
+        }
+        check("both the letter K and the prosign <K> get drilled", sawProsignK && sawLetterK)
+        check("K and <K> never appear together as options", !offeredTwin)
+        check("answering K for a heard <K> counts as correct", twinAccepted)
+    }
+}
+
+// Q-codes: QRL is the statement, QRL? the question — the two must never be
+// conflated again (N9HO/another-morse-trainer-android#27).
+print("\nQ-codes:")
+do {
+    let qrl = MorseData.qCodes.first { $0.token == "QRL" }?.meaning ?? ""
+    let qrlQ = MorseData.qCodes.first { $0.token == "QRL?" }?.meaning ?? ""
+    check("QRL is the statement — frequency busy / in use", qrl.contains("busy"))
+    check("QRL? is the question — is it in use?", qrlQ.hasSuffix("?") && qrlQ.contains("in use"))
+    check("Q-code tokens are unique",
+          Set(MorseData.qCodes.map { $0.token }).count == MorseData.qCodes.count)
+    check("every Q-code token is fully sendable",
+          MorseData.qCodes.allSatisfy { CWText.isFullySendable($0.token) })
+}
+
+// Reference lingo (issue #76: the glossary of spoken ham culture)
+print("\nReference lingo:")
+do {
+    let terms = MorseData.lingo.map { $0.term }
+    check("lingo has a healthy number of terms", terms.count >= 20)
+    check("lingo terms are unique", Set(terms).count == terms.count)
+    check("every lingo term is fully sendable in Morse",
+          terms.allSatisfy { CWText.isFullySendable($0) })
+    check("every lingo term has a meaning",
+          MorseData.lingo.allSatisfy { !$0.meaning.isEmpty })
+    // The tables stay disjoint: shorthand that is *sent* on the air lives in
+    // abbreviations/Q-codes, not in the lingo glossary.
+    let shorthand = Set(MorseData.abbreviations.map { $0.token }
+                        + MorseData.qCodes.map { $0.token })
+    check("lingo never duplicates an abbreviation or Q-code token",
+          terms.allSatisfy { !shorthand.contains($0) })
+    check("lingo item ids are namespaced and unique",
+          Set(MorseData.lingoItems.map { $0.id }).count == MorseData.lingoItems.count
+          && MorseData.lingoItems.allSatisfy { $0.id.hasPrefix("lingo-") })
 }
 
 // Rapid Fire (back-to-back copy)
