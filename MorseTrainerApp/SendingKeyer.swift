@@ -18,6 +18,7 @@ final class SendingKeyer: ObservableObject {
     @Published private(set) var midiDeviceNames: [String] = []
     /// True when MIDI setup itself failed, so the UI can say a hardware key
     /// won't work instead of silently ignoring it (the on-screen key still does).
+    /// Distinct from simply having nothing connected yet — see `midiDeviceNames`.
     @Published private(set) var midiUnavailable = false
 
     private let keyer = KeyerEngine()
@@ -58,6 +59,14 @@ final class SendingKeyer: ObservableObject {
             midiDeviceNames = []
             midiUnavailable = true
         }
+    }
+
+    /// Re-enumerate MIDI sources — after connecting a BLE-MIDI key, whose
+    /// arrival CoreMIDI reports but which is worth confirming on the spot.
+    func rescanMIDI() {
+        guard let midi else { return }
+        midi.rescan()
+        midiDeviceNames = midi.connectedSourceNames
     }
 
     func stop() {
