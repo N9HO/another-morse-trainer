@@ -31,6 +31,19 @@ data class MorseItem(
             is Playable.Pattern -> playable.value
             is Playable.Text -> playable.value.mapNotNull { MorseCode.pattern(it) }.joinToString("")
         }
+
+    /**
+     * The dot-dash stream as actually heard: prosign patterns run together,
+     * text characters separated by an inter-character gap. Unlike [soundKey]
+     * this keeps the abbreviation BK (-... -.-) apart from the prosign <BK>
+     * (-...-.-), while the letter K and the prosign <K> compare equal — both
+     * are a lone -.- on the air.
+     */
+    val audibleKey: String
+        get() = when (playable) {
+            is Playable.Pattern -> playable.value
+            is Playable.Text -> playable.value.mapNotNull { MorseCode.pattern(it) }.joinToString(" ")
+        }
 }
 
 /** A token paired with its plain-language meaning (abbreviations, Q-codes). */
