@@ -1356,10 +1356,17 @@ struct ContentView: View {
                     .buttonStyle(.bordered)
                 }
 
+                // Starting from the recap adopts the selected mode, so after a
+                // mid-session mode pick this is the direct way into it — say so
+                // instead of promising to repeat the finished mode (issue #67).
                 Button {
                     model.startSession()
                 } label: {
-                    Label("Practice again", systemImage: "arrow.clockwise")
+                    Label(model.learningMode == s.mode
+                            ? "Practice again"
+                            : "Start \(model.learningMode.title)",
+                          systemImage: model.learningMode == s.mode
+                            ? "arrow.clockwise" : "play.fill")
                         .font(.headline)
                         .foregroundStyle(Theme.navy)
                         .frame(maxWidth: .infinity, minHeight: 52)
