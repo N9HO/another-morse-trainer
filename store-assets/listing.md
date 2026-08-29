@@ -74,6 +74,7 @@ BUILT FOR REAL PRACTICE
 No accounts. No ads. No tracking. Everything stays on your device.
 
 Full user guide: https://anothermorsetrainer.app/guide/
+Community and support: https://discord.gg/qgyk3TPUd9
 
 Another Morse Trainer is a proud part of the Carrier Wave ecosystem.
 
@@ -95,4 +96,5 @@ Reference. Q-code fix: QRL is the busy statement, QRL? asks the question.
 • Developer email: jus.k.rog@gmail.com
 • Website: https://anothermorsetrainer.app
 • User guide: https://anothermorsetrainer.app/guide/
+• Community / support: https://discord.gg/qgyk3TPUd9
 • Privacy policy: https://anothermorsetrainer.app/privacy

@@ -4,6 +4,10 @@ A native Android port of [Another Morse Trainer](https://anothermorsetrainer.app
 (the SwiftUI iOS app at [N9HO/another-morse-trainer](https://github.com/N9HO/another-morse-trainer)).
 Learn to copy Morse code (CW) by ear with the Koch method.
 
+**Testing is currently closed.** Places are limited — ask on
+[Discord](https://discord.gg/qgyk3TPUd9) for a spot. (The iOS beta is open to
+anyone via [TestFlight](https://testflight.apple.com/join/ZwXF88Gh).)
+
 The user guide — every mode, setting and hardware option — lives at
 [anothermorsetrainer.app/guide](https://anothermorsetrainer.app/guide/).
 
