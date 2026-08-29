@@ -90,20 +90,27 @@ Education (alternative: Tools)
 ## Tags / keywords (for your reference)
 morse code, CW, Koch method, ham radio, amateur radio, telegraphy, QSO, Q-codes
 
-## "What's new" (release notes for 1.10)
-A fresh install now starts at 33 WPM character speed, matching the Apple app.
-The Koch method needs characters arriving too fast to count, and 18 WPM was slow
-enough to tick off the dits and dahs — the one habit the method exists to
-prevent. Nothing changes for anyone already training: your speed is your speed.
-Drop below 33 and the settings screen now says what you are trading away.
+## "What's new" (release notes for 1.10.1)
+The soft keyboard now gets out of your way in the QSO Simulator. Entering your
+call sign left the keyboard up with no way to close it, covering the Start
+button so the only escape was the back button. Tap anywhere off the field, or
+press the keyboard's Done key, and it closes; the setup screen also sits above
+the keyboard now, so Start stays reachable either way.
 
-In the QSO simulator, the exchange accepts what operators actually send. A
-signal report typed in front of the exchange no longer counts as a miscopy —
-including in SST, CWT, MST, Sprint and Field Day, which never send one — whether
-you write it 5NN or 599, spaced or run together. Cut numbers are read wherever a
-digit is expected, so a Field Day class copied as "NB" is a 9B.
+Carried over from 1.10, if you are coming from 1.9:
 
-(Covers 1.10. Trim to whatever was last shipped to Play.)
+A fresh install starts at 33 WPM character speed, matching the Apple app. The
+Koch method needs characters arriving too fast to count, and 18 WPM was slow
+enough to tick off the dits and dahs. Nothing changes for anyone already
+training. Drop below 33 and the settings screen says what you are trading away.
+
+The QSO simulator's exchange accepts what operators actually send. A signal
+report typed in front of the exchange no longer counts as a miscopy, including
+in SST, CWT, MST, Sprint and Field Day, which never send one, whether you write
+it 5NN or 599, spaced or run together. Cut numbers are read wherever a digit is
+expected, so a Field Day class copied as "NB" is a 9B.
+
+(Covers 1.10 and 1.10.1. Trim to whatever was last shipped to Play.)
 
 ## Contact / details
 • Developer email: jus.k.rog@gmail.com

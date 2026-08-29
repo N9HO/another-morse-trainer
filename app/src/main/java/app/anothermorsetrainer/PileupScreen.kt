@@ -3,6 +3,7 @@ package app.anothermorsetrainer
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -12,11 +13,14 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
@@ -38,9 +42,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -256,6 +263,7 @@ fun PileupScreen(onBack: () -> Unit) {
 
 @Composable
 private fun PileupSetup(onStart: () -> Unit, onBack: () -> Unit) {
+    val focusManager = LocalFocusManager.current
     Column(modifier = Modifier.fillMaxSize()) {
         Row(modifier = Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
             TextButton(onClick = onBack) { Text("‹ Back", color = Brand.teal) }
@@ -263,7 +271,21 @@ private fun PileupSetup(onStart: () -> Unit, onBack: () -> Unit) {
         }
       CenteredContent {
         Column(
-            modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp),
+            // imePadding keeps the whole setup list above the soft keyboard
+            // (#40). The app targets SDK 36, so it is always edge-to-edge and
+            // the window no longer resizes for the IME; AppBackground insets
+            // the system bars but not the keyboard, which left the Start
+            // button under it with no way to scroll it into view. It sits
+            // outside verticalScroll so the scroll viewport itself shrinks.
+            // A tap on any empty space drops focus and dismisses the keyboard;
+            // children are hit-tested first, so buttons and sliders still get
+            // their own taps.
+            modifier = Modifier
+                .fillMaxSize()
+                .imePadding()
+                .verticalScroll(rememberScrollState())
+                .pointerInput(Unit) { detectTapGestures(onTap = { focusManager.clearFocus() }) }
+                .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             PuSectionLabel("YOUR CALL")
@@ -272,6 +294,10 @@ private fun PileupSetup(onStart: () -> Unit, onBack: () -> Unit) {
                 onValueChange = { PileupSettings.updateMyCall(it) },
                 singleLine = true,
                 placeholder = { Text("N0CALL") },
+                // A call sign is one field, so the IME's action key closes the
+                // keyboard rather than offering a newline you cannot use (#40).
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
                 modifier = Modifier.fillMaxWidth()
             )
 
