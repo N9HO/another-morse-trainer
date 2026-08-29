@@ -3,6 +3,7 @@ import SwiftUI
 @main
 struct MorseTrainerApp: App {
     @StateObject private var model = AppModel()
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
         WindowGroup {
@@ -10,6 +11,14 @@ struct MorseTrainerApp: App {
                 .environmentObject(model)
                 .tint(Theme.teal)              // brand accent on all controls
                 .preferredColorScheme(.dark)   // navy-friendly dark UI
+        }
+        // The background-noise floor (issue #29) is a foreground comfort: it
+        // exists to keep a Bluetooth route awake while you practise. Leaving it
+        // running once the app is backgrounded would hiss indefinitely — the
+        // `.playback` session keeps audio alive for hands-free Listen — so it
+        // follows the scene in and out.
+        .onChange(of: scenePhase) { phase in
+            model.setAudioActive(phase == .active)
         }
     }
 }

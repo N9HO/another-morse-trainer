@@ -339,6 +339,7 @@ final class AppModel: ObservableObject {
         history = AppModel.loadHistory()
         summary = charLadder.summary
         Haptics.enabled = loaded.hapticsEnabled   // didSet doesn't fire in init
+        applyBackgroundNoise()                    // ditto
         // Re-arm the daily reminder in case pending requests were cleared.
         if settings.dailyReminderEnabled {
             PracticeReminders.schedule(hour: settings.dailyReminderHour,
@@ -452,6 +453,24 @@ final class AppModel: ObservableObject {
         applyPhraseConfig(from: settings)
         reconcilePunctuation()
         Haptics.enabled = settings.hapticsEnabled
+        applyBackgroundNoise()
+    }
+
+    /// Whether the app is on screen. The background-noise floor only runs in the
+    /// foreground (issue #29) — see the scene-phase note in MorseTrainerApp.
+    private var audioActive = true
+
+    /// Called as the scene comes and goes.
+    func setAudioActive(_ active: Bool) {
+        guard audioActive != active else { return }
+        audioActive = active
+        applyBackgroundNoise()
+    }
+
+    /// Push the configured noise floor to the player, silencing it whenever the
+    /// app is off screen so it can't hiss on in the background.
+    private func applyBackgroundNoise() {
+        player.setNoiseLevel(audioActive ? settings.backgroundNoise.amplitude : 0)
     }
 
     var timing: MorseTiming {

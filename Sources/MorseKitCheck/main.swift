@@ -23,6 +23,16 @@ func approxEqual(_ a: Double, _ b: Double, _ tol: Double = 1e-5) -> Bool {
     abs(a - b) <= tol
 }
 
+/// "PARIS" plus its trailing word gap — 50 units by definition, so at N WPM
+/// this must come to exactly 60/N seconds.
+func parisDuration(at timing: MorseTiming) -> Double {
+    let word = "PARIS"
+    var total = 0.0
+    for ch in word { total += timing.duration(of: ch) }
+    total += Double(word.count - 1) * timing.characterGap
+    return total + timing.wordGap
+}
+
 /// A tiny seedable RNG so randomized logic is reproducible.
 struct SeededRNG: RandomNumberGenerator {
     var state: UInt64
@@ -1412,6 +1422,69 @@ do {
                                   sampleRate: 8000, amplitude: 8000),
                          inputRate: 8000, passes: 2)
     check("reset() rearms the decoder for a second run", twice.text == "PARIS|PARIS")
+}
+
+// Timing at the new 60 WPM ceiling (issue #79)
+print("\nTiming @ 60 WPM:")
+do {
+    let fast = MorseTiming(wpm: 60)
+    check("dit = 20 ms", approxEqual(fast.dit, 0.020, 1e-9))
+    check("dah = 3 dits", approxEqual(fast.dah, 0.060, 1e-9))
+    check("standard timing keeps spacing at one unit", approxEqual(fast.spacingUnit, fast.unit, 1e-9))
+    check("'PARIS' still takes one second at 60 WPM",
+          approxEqual(parisDuration(at: fast), 1.0, 1e-6))
+
+    // Farnsworth has to keep working from the new ceiling: characters stay at
+    // 60 while the gaps stretch out to the effective speed.
+    let farns = MorseTiming(characterWpm: 60, effectiveWpm: 20)
+    check("Farnsworth from 60 keeps the dit at character speed",
+          approxEqual(farns.dit, 0.020, 1e-9))
+    check("Farnsworth from 60 stretches the spacing", farns.spacingUnit > farns.unit)
+    check("Farnsworth spacing matches the ARRL formula",
+          approxEqual(farns.spacingUnit, (60.0 / 20 - 37.2 / 60) / 19))
+    check("effective == character collapses to standard timing",
+          approxEqual(MorseTiming(characterWpm: 60, effectiveWpm: 60).spacingUnit,
+                      MorseTiming(wpm: 60).unit, 1e-9))
+    check("spacing never drops below one unit, even at effective ≈ character",
+          MorseTiming(characterWpm: 60, effectiveWpm: 59).spacingUnit
+              >= MorseTiming(wpm: 60).unit)
+}
+
+// Hardware-keyboard answer mapping (issue #69, android#30)
+print("\nAnswer keys:")
+do {
+    let singles = ["A", "B", "4", "5"]
+    check("every option is its own key when all are single characters",
+          AnswerKeys.assign(singles).map { $0.map(String.init) ?? "-" } == ["a", "b", "4", "5"])
+    check("a heard digit answers by value, not position",
+          AnswerKeys.option(for: "4", in: singles) == 2)
+
+    // The android#30 case: one multi-character distractor used to renumber the
+    // whole grid, so "4" answered the fourth option instead of the digit 4.
+    let mixed = ["3", "4", "5", "<AR>"]
+    check("a lone multi-character option no longer renumbers the digits",
+          AnswerKeys.option(for: "4", in: mixed) == 1)
+    check("pressing 3 still answers the digit 3, not the third option",
+          AnswerKeys.option(for: "3", in: mixed) == 0)
+    check("the multi-character option takes the first unclaimed digit",
+          AnswerKeys.assign(mixed).last.flatMap { $0 } == "1")
+
+    // Digits already spoken for as options are never reused as positions.
+    let meanings = ["1", "GOING QRT", "BEST REGARDS", "OVER"]
+    let keys = AnswerKeys.assign(meanings)
+    check("no two options share a key", Set(keys.compactMap { $0 }).count == keys.compactMap { $0 }.count)
+    check("positions skip the digit an option already claims",
+          keys.map { $0.map(String.init) ?? "-" } == ["1", "2", "3", "4"])
+
+    check("letters answer case-insensitively", AnswerKeys.option(for: "b", in: singles) == 1)
+    check("an unmapped key answers nothing", AnswerKeys.option(for: "z", in: singles) == nil)
+    check("only the longer options carry a position hint",
+          !AnswerKeys.needsPositionHint(mixed, at: 0) && AnswerKeys.needsPositionHint(mixed, at: 3))
+
+    // More options than free digits: the extras simply have no key.
+    let many = (1...12).map { "OPTION \($0)" }
+    check("options past the ninth get no key",
+          AnswerKeys.assign(many).filter { $0 != nil }.count == 9)
 }
 
 print("\n────────────────────────────")
