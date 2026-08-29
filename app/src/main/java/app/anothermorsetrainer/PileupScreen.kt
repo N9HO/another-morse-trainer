@@ -48,6 +48,7 @@ import app.anothermorsetrainer.morsekit.BustBehavior
 import app.anothermorsetrainer.morsekit.CallsignFormat
 import app.anothermorsetrainer.morsekit.MorseItem
 import app.anothermorsetrainer.morsekit.MorseTiming
+import app.anothermorsetrainer.morsekit.MissedCallerFeedback
 import app.anothermorsetrainer.morsekit.PileupEngine
 import app.anothermorsetrainer.morsekit.QSOContestMode
 import kotlinx.coroutines.delay
@@ -228,6 +229,10 @@ fun PileupScreen(onBack: () -> Unit) {
                 onRepeat = { perform(e.repeatRequest()) },
                 onLog = { perform(e.logCurrent()) },
                 onSettings = { showSettings = true },
+                // The engine isn't Compose-observable, so clearing it has to
+                // ride the same rev bump everything else does or the banner
+                // would sit there until the next clock tick.
+                onDismissMissed = { e.clearLastMissedCaller(); rev++ },
                 onEnd = ::endRun
             )
         }
@@ -362,6 +367,15 @@ private fun PileupSetup(onStart: () -> Unit, onBack: () -> Unit) {
             PuToggle("Impatient callers give up", PileupSettings.giveUpEnabled) {
                 PileupSettings.updateGiveUpEnabled(it)
             }
+            if (PileupSettings.giveUpEnabled) {
+                Column {
+                    PuSectionLabel("TELL ME WHO GOT AWAY")
+                    PuPills(
+                        MissedCallerFeedback.allCases.map { it to it.label },
+                        PileupSettings.missedCallerFeedback
+                    ) { PileupSettings.updateMissedCallerFeedback(it) }
+                }
+            }
             PuToggle("Keep my partial call after \"?\"", PileupSettings.keepPartialCall) {
                 PileupSettings.updateKeepPartialCall(it)
             }
@@ -403,6 +417,7 @@ private fun PileupRun(
     onRepeat: () -> Unit,
     onLog: () -> Unit,
     onSettings: () -> Unit,
+    onDismissMissed: () -> Unit,
     onEnd: () -> Unit
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
@@ -424,6 +439,14 @@ private fun PileupRun(
         Column(modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp)) {
             Spacer(Modifier.height(4.dp))
             PileupScoreboard(engine, elapsedSeconds)
+
+            // A caller just walked off. Naming the call you lost, and what you
+            // had it as, turns a station that quietly vanished into a lesson.
+            val walkedOff = engine.lastMissedCaller
+            if (walkedOff != null &&
+                PileupSettings.missedCallerFeedback == MissedCallerFeedback.Immediate) {
+                MissedCallerBanner(walkedOff, onDismissMissed)
+            }
 
             Column(
                 modifier = Modifier.fillMaxWidth().weight(1f),
@@ -520,6 +543,42 @@ private fun PileupRun(
     }
 }
 
+/** The amber this app already uses for "you got this wrong" (Journey, decoder). */
+private val PuWarn = Color(0xFFE08A1E)
+
+/**
+ * A caller gave up: which call you lost, and what you had them as. Shown only
+ * while the setting asks for it live; the run summary lists them either way.
+ */
+@Composable
+private fun MissedCallerBanner(
+    missed: PileupEngine.MissedCaller,
+    onDismiss: () -> Unit
+) {
+    val detail = missed.miscopiedAs?.let { had ->
+        val times = if (missed.attempts == 1) "time" else "times"
+        "You had them as $had — they came back ${missed.attempts} $times before moving on."
+    } ?: run {
+        val times = if (missed.attempts == 1) "time" else "times"
+        "They came back ${missed.attempts} $times and you never got the call."
+    }
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(top = 8.dp).brandCard().padding(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                "${missed.call} gave up",
+                fontWeight = FontWeight.Bold,
+                color = PuWarn,
+                style = MaterialTheme.typography.bodyMedium
+            )
+            Text(detail, style = MaterialTheme.typography.labelSmall, color = Brand.textSecondary)
+        }
+        TextButton(onClick = onDismiss) { Text("Got it", color = Brand.teal) }
+    }
+}
+
 /** The live readout: contacts, busts, clean-copy rate, and the hourly rate. */
 @Composable
 private fun PileupScoreboard(engine: PileupEngine, elapsedSeconds: Int) {
@@ -567,6 +626,48 @@ private fun PileupSummary(
             PuSummaryRow("Clean copy", if (cleanTotal == 0) "—" else "${(engine.accuracy * 100).roundToInt()}%")
             PuSummaryRow("Busts", "${engine.bustCount}")
             PuSummaryRow("Time", "%d:%02d".format(elapsedSeconds / 60, elapsedSeconds % 60))
+        }
+
+        val missed = engine.missedCallers
+        if (missed.isNotEmpty() && PileupSettings.missedCallerFeedback != MissedCallerFeedback.Off) {
+            Text(
+                "GOT AWAY (${missed.size})",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                color = Brand.textSecondary,
+                modifier = Modifier.padding(start = 20.dp, top = 16.dp, bottom = 6.dp)
+            )
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                missed.forEach { m ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth().brandCard().padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Text(
+                            m.call,
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.Bold,
+                            color = Brand.textPrimary
+                        )
+                        Text(
+                            m.miscopiedAs?.let { "you had $it" } ?: "never copied",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (m.miscopiedAs != null) PuWarn else Brand.textSecondary,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Text(
+                            "${m.attempts}×",
+                            fontFamily = FontFamily.Monospace,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Brand.textSecondary
+                        )
+                    }
+                }
+            }
         }
 
         if (engine.log.isNotEmpty()) {
