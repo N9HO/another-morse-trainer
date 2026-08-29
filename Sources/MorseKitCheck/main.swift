@@ -916,6 +916,65 @@ do {
         check("a wrong run-together Field Day copy is still rejected", fdWorked(11).0.send(wrong) != .silence)
     }
 
+    // Cut numbers and the habitual signal report (#38). An operator sends
+    // "5NN" from muscle memory even in the exchanges that never carry one
+    // (SST, CWT, MST, Sprint, Field Day), types it run together with the
+    // exchange, and copies a Field Day class in cut form. All three used to be
+    // graded as a bust, so the station just repeated itself forever.
+    func workedStation(_ mode: QSOContestMode, _ seed: UInt64) -> (PileupEngine, String) {
+        var c = PileupConfig(); c.mode = mode; c.maxStations = 1
+        let e = PileupEngine(config: c, rng: SeededRNG(seed: seed))
+        _ = e.callCQ(); _ = e.send(e.stations[0].call)
+        return (e, e.expectedCopy ?? "")
+    }
+    for mode in [QSOContestMode.sst, .cwt, .mst, .sprint, .fieldDay] {
+        let copy = workedStation(mode, 11).1
+        check("\(mode.rawValue): a habitual 5NN in front of the exchange is accepted",
+              workedStation(mode, 11).0.send("5NN \(copy)") == .silence)
+        check("\(mode.rawValue): the same report written 599 is accepted",
+              workedStation(mode, 11).0.send("599 \(copy)") == .silence)
+    }
+    for mode in [QSOContestMode.pota, .singleCaller, .basicContest] {
+        let copy = workedStation(mode, 11).1
+        let glued = "5NN" + copy.replacingOccurrences(of: " ", with: "")
+        check("\(mode.rawValue): a report run together with the exchange is accepted",
+              workedStation(mode, 11).0.send(glued) == .silence)
+    }
+    check("a report in front does not rescue a wrong exchange",
+          workedStation(.sst, 11).0.send("5NN XX YY") != .silence)
+    check("a bare report is not a complete exchange",
+          workedStation(.sst, 11).0.send("5NN") != .silence)
+    do {
+        // Field Day's class is a digit and a category letter, so a cut copy of
+        // it ("NB" for "9B") is what a cut-number operator writes down.
+        let copy = fdWorked(11).1
+        let parts = copy.split(separator: " ").map(String.init)
+        if parts.count == 2 {
+            let cutClass = CutNumbers.encode(parts[0], enabled: Set(CutNumbers.cuttableDigits))
+            check("a Field Day class copied in cut numbers grades correct",
+                  fdWorked(11).0.send("\(cutClass) \(parts[1])") == .silence)
+            check("a cut letter in the class's letter position is still wrong",
+                  fdWorked(11).0.send("\(parts[0].prefix(1))U \(parts[1])") != .silence)
+        }
+    }
+    do {
+        // Opting in to copying the report keeps it required: it is a token to
+        // grade, never surplus to drop.
+        var rcfg = PileupConfig()
+        rcfg.mode = .pota; rcfg.maxStations = 1; rcfg.rstRequired = true
+        func rEngine() -> (PileupEngine, String) {
+            let e = PileupEngine(config: rcfg, rng: SeededRNG(seed: 11))
+            _ = e.callCQ(); _ = e.send(e.stations[0].call)
+            return (e, e.expectedCopy ?? "")
+        }
+        let full = rEngine().1                                  // "599 OH"
+        let withoutReport = full.split(separator: " ").dropFirst().joined(separator: " ")
+        check("with the report required, copying it is accepted",
+              rEngine().0.send(full) == .silence)
+        check("with the report required, omitting it is rejected",
+              rEngine().0.send(withoutReport) != .silence)
+    }
+
     // Give-up: an impatient station QRTs after repeated misses; pileup remains.
     var gcfg = PileupConfig()
     gcfg.mode = .pota
