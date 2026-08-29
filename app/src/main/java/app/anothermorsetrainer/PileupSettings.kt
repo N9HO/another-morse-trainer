@@ -7,6 +7,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import app.anothermorsetrainer.morsekit.BustBehavior
 import app.anothermorsetrainer.morsekit.CallsignFormat
+import app.anothermorsetrainer.morsekit.MissedCallerFeedback
 import app.anothermorsetrainer.morsekit.PileupConfig
 import app.anothermorsetrainer.morsekit.QSOContestMode
 
@@ -59,6 +60,9 @@ object PileupSettings {
         private set
     var giveUpEnabled by mutableStateOf(false)
         private set
+    /** Whether — and when — to say who gave up on you, and what you had them as. */
+    var missedCallerFeedback by mutableStateOf(MissedCallerFeedback.EndOfRun)
+        private set
     var formats by mutableStateOf(CallsignFormat.commonDefaults.toSet())
         private set
     var usOnly by mutableStateOf(true)
@@ -90,6 +94,9 @@ object PileupSettings {
         bustBehavior = BustBehavior.allCases.firstOrNull { it.code == prefs.getString("bust", null) }
             ?: BustBehavior.Forgiving
         giveUpEnabled = prefs.getBoolean("giveUp", false)
+        missedCallerFeedback = MissedCallerFeedback.allCases
+            .firstOrNull { it.code == prefs.getString("missedFeedback", null) }
+            ?: MissedCallerFeedback.EndOfRun
         val stored = prefs.getStringSet("formats", null)
         if (stored != null) {
             formats = CallsignFormat.entries.filter { it.code in stored }.toSet()
@@ -130,6 +137,7 @@ object PileupSettings {
     fun updateRstRequired(value: Boolean) { rstRequired = value; persist() }
     fun updateBustBehavior(value: BustBehavior) { bustBehavior = value; persist() }
     fun updateGiveUpEnabled(value: Boolean) { giveUpEnabled = value; persist() }
+    fun updateMissedCallerFeedback(value: MissedCallerFeedback) { missedCallerFeedback = value; persist() }
 
     fun toggleFormat(format: CallsignFormat) {
         val next = if (format in formats) formats - format else formats + format
@@ -176,6 +184,7 @@ object PileupSettings {
             .putBoolean("rstRequired", rstRequired)
             .putString("bust", bustBehavior.code)
             .putBoolean("giveUp", giveUpEnabled)
+            .putString("missedFeedback", missedCallerFeedback.code)
             .putStringSet("formats", formats.map { it.code }.toSet())
             .putBoolean("usOnly", usOnly)
             .putBoolean("keepPartial", keepPartialCall)

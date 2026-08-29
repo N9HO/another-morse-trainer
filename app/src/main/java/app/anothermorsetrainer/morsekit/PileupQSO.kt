@@ -195,6 +195,24 @@ data class ExchangeSpec(
 
 // MARK: - Config
 
+/** When to tell the operator that a caller gave up, and what they had them as. */
+enum class MissedCallerFeedback(val code: String) {
+    Off("off"),                 // never mention it
+    EndOfRun("endOfRun"),       // in the run summary only
+    Immediate("immediate");     // the moment it happens, and in the summary
+
+    val label: String
+        get() = when (this) {
+            Off -> "Off"
+            EndOfRun -> "At the end"
+            Immediate -> "As it happens"
+        }
+
+    companion object {
+        val allCases: List<MissedCallerFeedback> = entries.toList()
+    }
+}
+
 enum class BustBehavior(val code: String) {
     Forgiving("forgiving"),   // matches repeat; total bust -> whole pileup re-calls
     Silence("silence"),       // matches repeat; total bust -> silence
