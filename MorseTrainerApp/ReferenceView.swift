@@ -1,8 +1,9 @@
 import SwiftUI
 
 /// A browsable, tap-to-hear reference for the signals every operator wants at
-/// their fingertips: prosigns, Q-codes, CW abbreviations, contest cut numbers,
-/// and the full Morse chart. Unlike the quiz modes (which test recall), this is
+/// their fingertips: prosigns, Q-codes, CW abbreviations, operating lingo,
+/// contest cut numbers, and the full Morse chart. Unlike the quiz modes (which
+/// test recall), this is
 /// the "remind me / look it up" companion — scan a table, tap any row to hear it
 /// at your configured speed and pitch, or open it for the full detail.
 ///
@@ -22,13 +23,14 @@ struct ReferenceView: View {
 
     /// The reference tables, in the order an operator usually reaches for them.
     enum RefCategory: String, CaseIterable, Identifiable {
-        case prosigns, qCodes, abbreviations, cutNumbers, chart
+        case prosigns, qCodes, abbreviations, lingo, cutNumbers, chart
         var id: String { rawValue }
         var label: String {
             switch self {
             case .prosigns:      return "Prosigns"
             case .qCodes:        return "Q-Codes"
             case .abbreviations: return "Abbr"
+            case .lingo:         return "Lingo"
             case .cutNumbers:    return "Cut #"
             case .chart:         return "Chart"
             }
@@ -38,8 +40,20 @@ struct ReferenceView: View {
             case .prosigns:      return "Procedural signals, sent run-together as one character."
             case .qCodes:        return "Q-signal shorthand for common questions and answers."
             case .abbreviations: return "Everyday CW abbreviations heard in every QSO."
+            case .lingo:         return "The spoken culture of ham radio — from ragchew to zero beat."
             case .cutNumbers:    return "Contest shorthand: a digit sent as a single letter to save time."
             case .chart:         return "The full alphabet, numbers, and punctuation with their rhythm."
+            }
+        }
+
+        var items: [MorseItem] {
+            switch self {
+            case .prosigns:      return MorseData.prosignItems
+            case .qCodes:        return MorseData.qCodeItems
+            case .abbreviations: return MorseData.abbreviationItems
+            case .lingo:         return MorseData.lingoItems
+            case .cutNumbers:    return MorseData.cutNumberItems
+            case .chart:         return MorseData.chartItems
             }
         }
     }
@@ -105,7 +119,7 @@ struct ReferenceView: View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass")
                 .foregroundStyle(Theme.textSecondary)
-            TextField("Search", text: $query)
+            TextField("Search all tables", text: $query)
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
             if !query.isEmpty {
@@ -157,15 +171,7 @@ struct ReferenceView: View {
 
     // MARK: - Data
 
-    private var items: [MorseItem] {
-        switch category {
-        case .prosigns:      return MorseData.prosignItems
-        case .qCodes:        return MorseData.qCodeItems
-        case .abbreviations: return MorseData.abbreviationItems
-        case .cutNumbers:    return MorseData.cutNumberItems
-        case .chart:         return MorseData.chartItems
-        }
-    }
+    private var items: [MorseItem] { category.items }
 
     /// Extra encyclopedic detail for the row, when we have it (prosigns and cut
     /// numbers today).
@@ -174,11 +180,16 @@ struct ReferenceView: View {
     }
 
     /// Match the typed query against either the token (e.g. "QSB", "<AR>") or
-    /// its meaning, so "fade" finds QSB just as "qsb" does.
+    /// its meaning, so "fade" finds QSB just as "qsb" does. A live query spans
+    /// the whole reference — "ragchew" is findable from any tab, with the open
+    /// tab's matches listed first (issue #76).
     private var filtered: [MorseItem] {
         let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !q.isEmpty else { return items }
-        return items.filter {
+        let scope = items + RefCategory.allCases
+            .filter { $0 != category }
+            .flatMap { $0.items }
+        return scope.filter {
             $0.display.localizedCaseInsensitiveContains(q)
                 || $0.answer.localizedCaseInsensitiveContains(q)
         }

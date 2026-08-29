@@ -112,7 +112,7 @@ struct IntroView: View {
                     .foregroundStyle(Theme.teal)
                     .padding(8)
             }
-            .accessibilityLabel("Reference — prosigns, Q-codes, and abbreviations")
+            .accessibilityLabel("Reference — prosigns, Q-codes, abbreviations, and ham lingo")
             Button { showingSendingDrill = true } label: {
                 Image(systemName: "square.and.pencil")
                     .font(.title3)

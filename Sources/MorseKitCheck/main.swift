@@ -1131,6 +1131,27 @@ do {
     }
 }
 
+// Reference lingo (issue #76: the glossary of spoken ham culture)
+print("\nReference lingo:")
+do {
+    let terms = MorseData.lingo.map { $0.term }
+    check("lingo has a healthy number of terms", terms.count >= 20)
+    check("lingo terms are unique", Set(terms).count == terms.count)
+    check("every lingo term is fully sendable in Morse",
+          terms.allSatisfy { CWText.isFullySendable($0) })
+    check("every lingo term has a meaning",
+          MorseData.lingo.allSatisfy { !$0.meaning.isEmpty })
+    // The tables stay disjoint: shorthand that is *sent* on the air lives in
+    // abbreviations/Q-codes, not in the lingo glossary.
+    let shorthand = Set(MorseData.abbreviations.map { $0.token }
+                        + MorseData.qCodes.map { $0.token })
+    check("lingo never duplicates an abbreviation or Q-code token",
+          terms.allSatisfy { !shorthand.contains($0) })
+    check("lingo item ids are namespaced and unique",
+          Set(MorseData.lingoItems.map { $0.id }).count == MorseData.lingoItems.count
+          && MorseData.lingoItems.allSatisfy { $0.id.hasPrefix("lingo-") })
+}
+
 // Rapid Fire (back-to-back copy)
 print("\nRapid Fire:")
 do {
