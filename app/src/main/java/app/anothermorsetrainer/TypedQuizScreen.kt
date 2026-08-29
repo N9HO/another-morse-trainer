@@ -118,9 +118,15 @@ fun TypedQuizScreen(
     }
 
     LaunchedEffect(revealed) {
-        if (revealed && lastCorrect && phase == TqPhase.RUNNING) {
+        if (!revealed || phase != TqPhase.RUNNING) return@LaunchedEffect
+        if (lastCorrect) {
             delay(900)
             advance()
+        } else {
+            // The held correction repeats what was sent after a beat, so you
+            // re-hear the sound you got wrong while the answer shows (#77).
+            delay(450)
+            player.replaySound(drill.playable, Settings.sidetoneHz, timing())
         }
     }
 
@@ -287,6 +293,13 @@ fun TypedQuizScreen(
 
             if (revealed) {
                 if (!lastCorrect) {
+                    // The held correction (issue #77): re-hear it as often as
+                    // needed, move on when ready.
+                    OutlinedButton(
+                        onClick = { player.replaySound(drill.playable, Settings.sidetoneHz, timing()) },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("▶ Replay") }
+                    Spacer(Modifier.height(12.dp))
                     Button(
                         onClick = { advance() },
                         colors = ButtonDefaults.buttonColors(containerColor = Brand.teal, contentColor = Brand.navy),

@@ -45,7 +45,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.key.utf16CodePoint
@@ -140,17 +142,31 @@ fun JourneyScreen(onBack: () -> Unit) {
         player.play(drill.playable, Settings.sidetoneHz, Settings.timing()) { toneFinishedAt = System.nanoTime() }
     }
 
+    /**
+     * Next drill, clearing the reveal state in the same recomposition as the
+     * new drill — LaunchedEffect(round) resets it a frame later, and that
+     * stale frame flashed the new answer in red (issue #63).
+     */
+    fun advanceNow() {
+        drill = quiz.nextDrill()
+        revealed = false
+        chosen = null
+        clearedLabel = null
+        round++
+    }
+
     LaunchedEffect(revealed) {
         if (revealed) {
+            if (lastCorrect == false) {
+                // A miss holds the correction until Next is pressed (issue
+                // #77) — and after a beat repeats what was sent, so you
+                // re-hear the sound you got wrong while the answer shows.
+                delay(450)
+                player.replaySound(drill.playable, Settings.sidetoneHz, Settings.timing())
+                return@LaunchedEffect
+            }
             delay(1100)
-            // Clear the reveal state in the same recomposition as the new
-            // drill — LaunchedEffect(round) resets it a frame later, and that
-            // stale frame flashed the new answer in red (issue #63).
-            drill = quiz.nextDrill()
-            revealed = false
-            chosen = null
-            clearedLabel = null
-            round++
+            advanceNow()
         }
     }
 
@@ -212,7 +228,15 @@ fun JourneyScreen(onBack: () -> Unit) {
     val hwFocus = remember { FocusRequester() }
     fun handleHardwareKey(event: androidx.compose.ui.input.key.KeyEvent): Boolean {
         if (event.type != KeyEventType.KeyDown) return false
-        if (revealed || showMap || showSettings) return false
+        if (showMap || showSettings) return false
+        if (revealed) {
+            // Enter leaves the held correction (issue #77).
+            if (event.key == Key.Enter && lastCorrect == false) {
+                advanceNow()
+                return true
+            }
+            return false
+        }
         val ch = event.utf16CodePoint.takeIf { it > 0 }?.toChar()?.uppercaseChar() ?: return false
         val options = drill.options
         if (options.isNotEmpty() && options.all { it.length == 1 }) {
@@ -319,6 +343,20 @@ fun JourneyScreen(onBack: () -> Unit) {
                         color = if (ok) OK_GREEN else ERR_RED,
                         fontWeight = FontWeight.Medium
                     )
+                    if (!ok) {
+                        // The held correction (issue #77): re-hear it as often
+                        // as needed, move on when ready.
+                        Spacer(Modifier.height(18.dp))
+                        OutlinedButton(onClick = {
+                            player.replaySound(drill.playable, Settings.sidetoneHz, Settings.timing())
+                        }) { Text("▶ Replay") }
+                        Spacer(Modifier.height(10.dp))
+                        Button(
+                            onClick = { advanceNow() },
+                            colors = ButtonDefaults.buttonColors(containerColor = Brand.teal, contentColor = Brand.navy),
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text("Next", fontWeight = FontWeight.SemiBold) }
+                    }
                 } else {
                     Text("?", fontSize = 52.sp, fontWeight = FontWeight.Bold, color = Brand.teal)
                     Spacer(Modifier.height(4.dp))

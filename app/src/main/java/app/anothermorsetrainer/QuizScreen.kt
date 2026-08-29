@@ -48,7 +48,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.key.utf16CodePoint
@@ -316,6 +318,14 @@ fun QuizScreen(
 
     LaunchedEffect(revealed) {
         if (revealed) {
+            if (chosen != drill.correct) {
+                // A miss holds the correction until Next is pressed (issue
+                // #77) — and after a beat repeats what was actually sent, so
+                // you re-hear the sound you got wrong while the answer shows.
+                delay(450)
+                player.replaySound(drill.playable, Settings.sidetoneHz, Settings.timing())
+                return@LaunchedEffect
+            }
             delay(1100)
             if (phase == QuizPhase.RUNNING) advance()
         }
@@ -423,7 +433,15 @@ fun QuizScreen(
     fun handleHardwareKey(event: androidx.compose.ui.input.key.KeyEvent): Boolean {
         if (event.type != KeyEventType.KeyDown) return false
         if (showSettings) return false
-        if (phase != QuizPhase.RUNNING || revealed) return false
+        if (phase != QuizPhase.RUNNING) return false
+        if (revealed) {
+            // Enter leaves the held correction (issue #77).
+            if (event.key == Key.Enter && chosen != drill.correct) {
+                advance()
+                return true
+            }
+            return false
+        }
         if (Settings.answerByKeying && drill.isKeyable) return false
         val ch = event.utf16CodePoint.takeIf { it > 0 }?.toChar()?.uppercaseChar() ?: return false
         val options = drill.options
@@ -564,6 +582,20 @@ fun QuizScreen(
                 unlockedNote?.let {
                     Spacer(Modifier.height(4.dp))
                     Text("★ New: $it", color = Brand.teal, fontWeight = FontWeight.SemiBold)
+                }
+                if (!ok) {
+                    // The held correction (issue #77): re-hear it as often as
+                    // needed, move on when ready.
+                    Spacer(Modifier.height(18.dp))
+                    OutlinedButton(onClick = {
+                        player.replaySound(drill.playable, Settings.sidetoneHz, Settings.timing())
+                    }) { Text("▶ Replay") }
+                    Spacer(Modifier.height(10.dp))
+                    Button(
+                        onClick = { advance() },
+                        colors = ButtonDefaults.buttonColors(containerColor = Brand.teal, contentColor = Brand.navy),
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("Next", fontWeight = FontWeight.SemiBold) }
                 }
             } else {
                 Text(text = "?", fontSize = 52.sp, fontWeight = FontWeight.Bold, color = Brand.teal)
