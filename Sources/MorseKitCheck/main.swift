@@ -1131,6 +1131,20 @@ do {
     }
 }
 
+// Q-codes: QRL is the statement, QRL? the question — the two must never be
+// conflated again (N9HO/another-morse-trainer-android#27).
+print("\nQ-codes:")
+do {
+    let qrl = MorseData.qCodes.first { $0.token == "QRL" }?.meaning ?? ""
+    let qrlQ = MorseData.qCodes.first { $0.token == "QRL?" }?.meaning ?? ""
+    check("QRL is the statement — frequency busy / in use", qrl.contains("busy"))
+    check("QRL? is the question — is it in use?", qrlQ.hasSuffix("?") && qrlQ.contains("in use"))
+    check("Q-code tokens are unique",
+          Set(MorseData.qCodes.map { $0.token }).count == MorseData.qCodes.count)
+    check("every Q-code token is fully sendable",
+          MorseData.qCodes.allSatisfy { CWText.isFullySendable($0.token) })
+}
+
 // Reference lingo (issue #76: the glossary of spoken ham culture)
 print("\nReference lingo:")
 do {

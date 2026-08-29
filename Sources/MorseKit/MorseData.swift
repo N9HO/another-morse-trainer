@@ -100,8 +100,13 @@ public enum MorseData {
 
     // MARK: Q-codes → meaning
 
+    // Bare QRL is the *statement* (the frequency is busy); the familiar
+    // channel-check question is QRL? — sent with the ordinary question mark.
+    // Both are taught so the two forms never get conflated
+    // (N9HO/another-morse-trainer-android#27).
     public static let qCodes: [(token: String, meaning: String)] = [
-        ("QRG","your exact frequency is"), ("QRL","is this frequency in use?"),
+        ("QRG","your exact frequency is"), ("QRL","this frequency is busy / in use"),
+        ("QRL?","is this frequency in use?"),
         ("QRM","man-made interference"), ("QRN","atmospheric noise / static"),
         ("QRO","increase power"), ("QRP","low power"),
         ("QRQ","send faster"), ("QRS","send slower"),
