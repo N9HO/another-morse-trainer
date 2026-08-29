@@ -65,12 +65,16 @@ fun TypedQuizScreen(
     onBack: () -> Unit,
     makeSource: () -> QuizSource,
     timing: () -> MorseTiming = { Settings.timing() },
-    speedControl: (@Composable () -> Unit)? = null
+    speedControl: (@Composable () -> Unit)? = null,
+    settingsMode: SettingsMode = SettingsMode.TYPE_IT
 ) {
     val context = LocalContext.current
     val player = remember { MorsePlayer() }
     val haptics = remember { Haptics(context) }
     val source = remember { makeSource() }
+
+    // Mid-session Settings, drawn over the session so its state lives on.
+    var showSettings by remember { mutableStateOf(false) }
 
     var drill by remember { mutableStateOf(source.nextDrill()) }
     // Monotonic counter drives play/reset — never key on the Drill value (a data
@@ -114,9 +118,15 @@ fun TypedQuizScreen(
     }
 
     LaunchedEffect(revealed) {
-        if (revealed && lastCorrect && phase == TqPhase.RUNNING) {
+        if (!revealed || phase != TqPhase.RUNNING) return@LaunchedEffect
+        if (lastCorrect) {
             delay(900)
             advance()
+        } else {
+            // The held correction repeats what was sent after a beat, so you
+            // re-hear the sound you got wrong while the answer shows (#77).
+            delay(450)
+            player.replaySound(drill.playable, Settings.sidetoneHz, timing())
         }
     }
 
@@ -207,6 +217,7 @@ fun TypedQuizScreen(
                             color = Brand.textSecondary
                         )
                     }
+                    SessionSettingsButton { showSettings = true }
                     TextButton(onClick = { endSession() }) { Text("End") }
                 }
             }
@@ -282,6 +293,13 @@ fun TypedQuizScreen(
 
             if (revealed) {
                 if (!lastCorrect) {
+                    // The held correction (issue #77): re-hear it as often as
+                    // needed, move on when ready.
+                    OutlinedButton(
+                        onClick = { player.replaySound(drill.playable, Settings.sidetoneHz, timing()) },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("▶ Replay") }
+                    Spacer(Modifier.height(12.dp))
                     Button(
                         onClick = { advance() },
                         colors = ButtonDefaults.buttonColors(containerColor = Brand.teal, contentColor = Brand.navy),
@@ -303,6 +321,10 @@ fun TypedQuizScreen(
             }
         }
         }
+
+        if (showSettings) {
+            SessionSettingsOverlay(scope = settingsMode, onClose = { showSettings = false })
+        }
     }
 }
 
@@ -320,6 +342,7 @@ fun QrqScreen(onBack: () -> Unit) {
         onBack = onBack,
         makeSource = { PhraseQuiz("QRQ", MorseData.wordAndCallSignItems, summaryNoun = "words & calls") },
         timing = { MorseTiming(wpm) },
+        settingsMode = SettingsMode.QRQ,
         speedControl = {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 listOf(35.0, 40.0).forEach { speed ->

@@ -8,6 +8,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -44,7 +45,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.utf16CodePoint
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
@@ -154,7 +163,8 @@ internal fun milestoneEmoji(day: Int): String = when {
 fun QuizScreen(
     title: String,
     onBack: () -> Unit,
-    makeSource: () -> QuizSource
+    makeSource: () -> QuizSource,
+    settingsMode: SettingsMode = SettingsMode.CHARACTERS
 ) {
     val context = LocalContext.current
     val player = remember { MorsePlayer() }
@@ -178,6 +188,9 @@ fun QuizScreen(
     /** A newly unlocked character/stage from the last answer (shown with a ★). */
     var unlockedNote by remember { mutableStateOf<String?>(null) }
     var stageRev by remember { mutableStateOf(0) }
+
+    // Mid-session Settings, drawn over the session so its state lives on.
+    var showSettings by remember { mutableStateOf(false) }
 
     // Session phase: drills, then a summary once the timer runs out or End is
     // tapped. Back mid-session still records — it just skips the summary.
@@ -305,6 +318,14 @@ fun QuizScreen(
 
     LaunchedEffect(revealed) {
         if (revealed) {
+            if (chosen != drill.correct) {
+                // A miss holds the correction until Next is pressed (issue
+                // #77) — and after a beat repeats what was actually sent, so
+                // you re-hear the sound you got wrong while the answer shows.
+                delay(450)
+                player.replaySound(drill.playable, Settings.sidetoneHz, Settings.timing())
+                return@LaunchedEffect
+            }
             delay(1100)
             if (phase == QuizPhase.RUNNING) advance()
         }
@@ -404,7 +425,52 @@ fun QuizScreen(
         )
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    // Hardware-keyboard answering (issue #69): with a Bluetooth/USB keyboard
+    // attached, type the character you heard in single-character drills, or
+    // press 1–9 for the Nth option in meaning drills. The root stays focused
+    // so key events land here — no text field competes on this screen.
+    val hwFocus = remember { FocusRequester() }
+    fun handleHardwareKey(event: androidx.compose.ui.input.key.KeyEvent): Boolean {
+        if (event.type != KeyEventType.KeyDown) return false
+        if (showSettings) return false
+        if (phase != QuizPhase.RUNNING) return false
+        if (revealed) {
+            // Enter leaves the held correction (issue #77).
+            if (event.key == Key.Enter && chosen != drill.correct) {
+                advance()
+                return true
+            }
+            return false
+        }
+        if (Settings.answerByKeying && drill.isKeyable) return false
+        val ch = event.utf16CodePoint.takeIf { it > 0 }?.toChar()?.uppercaseChar() ?: return false
+        val options = drill.options
+        if (options.isNotEmpty() && options.all { it.length == 1 }) {
+            // Every option is one character: its own key answers directly.
+            val match = options.firstOrNull { it.uppercase() == ch.toString() } ?: return false
+            answer(match)
+            return true
+        }
+        // Mixed/meaning drills: 1–9 picks the Nth option, so a digit option
+        // and an index can never collide.
+        val index = ch - '1'
+        if (index in 0..8 && index in options.indices) {
+            answer(options[index])
+            return true
+        }
+        return false
+    }
+    LaunchedEffect(phase, round, showSettings) {
+        if (phase == QuizPhase.RUNNING && !showSettings) hwFocus.requestFocus()
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .focusRequester(hwFocus)
+            .onKeyEvent(::handleHardwareKey)
+            .focusable()
+    ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(8.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -420,6 +486,7 @@ fun QuizScreen(
                             color = Brand.textSecondary
                         )
                     }
+                    SessionSettingsButton { showSettings = true }
                     TextButton(onClick = { endSession() }) { Text("End") }
                 }
             }
@@ -516,6 +583,20 @@ fun QuizScreen(
                     Spacer(Modifier.height(4.dp))
                     Text("★ New: $it", color = Brand.teal, fontWeight = FontWeight.SemiBold)
                 }
+                if (!ok) {
+                    // The held correction (issue #77): re-hear it as often as
+                    // needed, move on when ready.
+                    Spacer(Modifier.height(18.dp))
+                    OutlinedButton(onClick = {
+                        player.replaySound(drill.playable, Settings.sidetoneHz, Settings.timing())
+                    }) { Text("▶ Replay") }
+                    Spacer(Modifier.height(10.dp))
+                    Button(
+                        onClick = { advance() },
+                        colors = ButtonDefaults.buttonColors(containerColor = Brand.teal, contentColor = Brand.navy),
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("Next", fontWeight = FontWeight.SemiBold) }
+                }
             } else {
                 Text(text = "?", fontSize = 52.sp, fontWeight = FontWeight.Bold, color = Brand.teal)
                 Spacer(Modifier.height(4.dp))
@@ -603,6 +684,10 @@ fun QuizScreen(
                 }
             }
         }
+        }
+
+        if (showSettings) {
+            SessionSettingsOverlay(scope = settingsMode, onClose = { showSettings = false })
         }
     }
 }

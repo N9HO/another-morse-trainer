@@ -220,6 +220,10 @@ fun RapidFireScreen(onBack: () -> Unit) {
         if (sent.isNotEmpty() && sent.length >= d.correct.length) advance()
     }
 
+    // Mid-session Settings, drawn over the run so the stream lives on.
+    var showSettings by remember { mutableStateOf(false) }
+
+    Box(modifier = Modifier.fillMaxSize()) {
     when (phase) {
         RfPhase.SETUP -> {
             BackHandler { onBack() }
@@ -242,6 +246,7 @@ fun RapidFireScreen(onBack: () -> Unit) {
             RapidFireRun(
                 summary = quiz?.summary ?: "",
                 count = transcript.size,
+                onSettings = { showSettings = true },
                 response = response,
                 revealBox = revealBox,
                 typed = typed,
@@ -271,6 +276,11 @@ fun RapidFireScreen(onBack: () -> Unit) {
                 onBack = onBack
             )
         }
+    }
+
+    if (showSettings) {
+        SessionSettingsOverlay(scope = SettingsMode.RAPID_FIRE, onClose = { showSettings = false })
+    }
     }
 }
 
@@ -350,12 +360,16 @@ private fun RapidFireRun(
     onClearKey: () -> Unit,
     midiDevice: String?,
     onNext: () -> Unit,
+    onSettings: () -> Unit,
     onDone: () -> Unit
 ) {
     Column(modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp)) {
         Row(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
             Text(summary, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            Text("$count sent", style = MaterialTheme.typography.bodySmall, color = Brand.textSecondary)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("$count sent", style = MaterialTheme.typography.bodySmall, color = Brand.textSecondary)
+                SessionSettingsButton(onOpen = onSettings)
+            }
         }
         if (response == RapidFireResponse.KEY && midiDevice != null) {
             Text("🎹 $midiDevice", style = MaterialTheme.typography.labelSmall, color = Brand.teal)

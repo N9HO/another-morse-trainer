@@ -31,6 +31,19 @@ data class MorseItem(
             is Playable.Pattern -> playable.value
             is Playable.Text -> playable.value.mapNotNull { MorseCode.pattern(it) }.joinToString("")
         }
+
+    /**
+     * The dot-dash stream as actually heard: prosign patterns run together,
+     * text characters separated by an inter-character gap. Unlike [soundKey]
+     * this keeps the abbreviation BK (-... -.-) apart from the prosign <BK>
+     * (-...-.-), while the letter K and the prosign <K> compare equal — both
+     * are a lone -.- on the air.
+     */
+    val audibleKey: String
+        get() = when (playable) {
+            is Playable.Pattern -> playable.value
+            is Playable.Text -> playable.value.mapNotNull { MorseCode.pattern(it) }.joinToString(" ")
+        }
 }
 
 /** A token paired with its plain-language meaning (abbreviations, Q-codes). */
@@ -109,8 +122,12 @@ object MorseData {
 
     // ---- Q-codes → meaning ----
 
+    // Bare QRL is the *statement* (the frequency is busy); the familiar
+    // channel-check question is QRL? — sent with the ordinary question mark.
+    // Both are taught so the two forms never get conflated (#27).
     val qCodes: List<TokenMeaning> = listOf(
-        TokenMeaning("QRG", "your exact frequency is"), TokenMeaning("QRL", "is this frequency in use?"),
+        TokenMeaning("QRG", "your exact frequency is"), TokenMeaning("QRL", "this frequency is busy / in use"),
+        TokenMeaning("QRL?", "is this frequency in use?"),
         TokenMeaning("QRM", "man-made interference"), TokenMeaning("QRN", "atmospheric noise / static"),
         TokenMeaning("QRO", "increase power"), TokenMeaning("QRP", "low power"),
         TokenMeaning("QRQ", "send faster"), TokenMeaning("QRS", "send slower"),

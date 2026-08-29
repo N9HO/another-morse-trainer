@@ -2,6 +2,7 @@ package app.anothermorsetrainer
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -64,11 +65,22 @@ fun CodeExamScreen(onBack: () -> Unit) {
     var grading by remember { mutableStateOf(ExamGrading.SOLID_COPY) }
     var session by remember { mutableStateOf<ExamSession?>(null) }
 
+    // Mid-session Settings, drawn over the exam so its state lives on.
+    var showSettings by remember { mutableStateOf(false) }
+
     DisposableEffect(Unit) { onDispose { player.release() } }
     BackHandler { player.stop(); onBack() }
 
+    Box(modifier = Modifier.fillMaxSize()) {
     Column(modifier = Modifier.fillMaxSize()) {
-        TextButton(onClick = onBack, modifier = Modifier.padding(8.dp)) { Text("‹ Back") }
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            TextButton(onClick = onBack) { Text("‹ Back") }
+            SessionSettingsButton { showSettings = true }
+        }
 
       CenteredContent {
         val s = session
@@ -99,6 +111,11 @@ fun CodeExamScreen(onBack: () -> Unit) {
             }
         }
       }
+    }
+
+    if (showSettings) {
+        SessionSettingsOverlay(scope = SettingsMode.EXAM, onClose = { showSettings = false })
+    }
     }
 }
 

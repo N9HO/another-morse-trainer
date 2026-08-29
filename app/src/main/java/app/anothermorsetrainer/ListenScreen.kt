@@ -23,6 +23,10 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -52,8 +56,20 @@ fun ListenScreen(onBack: () -> Unit) {
     val running = ListenState.running
     val paused = ListenState.paused
 
+    // Mid-session Settings, drawn over the screen; the Listen foreground
+    // service keeps playing underneath either way.
+    var showSettings by remember { mutableStateOf(false) }
+
+    Box(modifier = Modifier.fillMaxSize()) {
     Column(modifier = Modifier.fillMaxSize()) {
-        TextButton(onClick = { leave() }, modifier = Modifier.padding(8.dp)) { Text("‹ Back", color = Brand.teal) }
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            TextButton(onClick = { leave() }) { Text("‹ Back", color = Brand.teal) }
+            SessionSettingsButton { showSettings = true }
+        }
 
         CenteredContent {
             Column(
@@ -160,6 +176,11 @@ fun ListenScreen(onBack: () -> Unit) {
                 )
             }
         }
+    }
+
+    if (showSettings) {
+        SessionSettingsOverlay(scope = SettingsMode.LISTEN, onClose = { showSettings = false })
+    }
     }
 }
 

@@ -135,17 +135,31 @@ fun SendingPracticeScreen(onBack: () -> Unit) {
         }
     }
 
-    // After grading, pause on the result, then advance.
+    /**
+     * Next drill, clearing the reveal state in the same recomposition as the
+     * new drill — LaunchedEffect(round) resets it a frame later, and that
+     * stale frame flashed the next item's answer (issue #63).
+     */
+    fun advanceNow() {
+        drill = source.nextDrill()
+        revealed = false
+        sentAnswer = ""
+        round++
+    }
+
+    // After grading, pause on the result, then advance — unless it was a
+    // miss: that holds the correction until Next is pressed (issue #77),
+    // repeating the target after a beat so you re-hear what you should
+    // have keyed while the comparison shows.
     LaunchedEffect(revealed) {
         if (revealed) {
+            if (!lastCorrect) {
+                delay(450)
+                player.replaySound(drill.playable, Settings.sidetoneHz, Settings.timing())
+                return@LaunchedEffect
+            }
             delay(1200)
-            // Clear the reveal state in the same recomposition as the new
-            // drill — LaunchedEffect(round) resets it a frame later, and that
-            // stale frame flashed the next item's answer (issue #63).
-            drill = source.nextDrill()
-            revealed = false
-            sentAnswer = ""
-            round++
+            advanceNow()
         }
     }
 
@@ -159,8 +173,18 @@ fun SendingPracticeScreen(onBack: () -> Unit) {
     }
     BackHandler { finish() }
 
+    // Mid-session Settings, drawn over the session so its state lives on.
+    var showSettings by remember { mutableStateOf(false) }
+
     Box(modifier = Modifier.fillMaxSize()) {
-        TextButton(onClick = { finish() }, modifier = Modifier.padding(8.dp)) { Text("‹ Back") }
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            TextButton(onClick = { finish() }) { Text("‹ Back") }
+            SessionSettingsButton { showSettings = true }
+        }
 
         Column(
             modifier = Modifier.fillMaxSize().padding(24.dp),
@@ -191,6 +215,20 @@ fun SendingPracticeScreen(onBack: () -> Unit) {
                     color = if (lastCorrect) OK_GREEN else ERR_RED,
                     fontWeight = FontWeight.Medium
                 )
+                if (!lastCorrect) {
+                    // The held correction (issue #77): re-hear the target as
+                    // often as needed, move on when ready.
+                    Spacer(Modifier.height(14.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        OutlinedButton(onClick = {
+                            player.replaySound(drill.playable, Settings.sidetoneHz, Settings.timing())
+                        }) { Text("▶ Replay") }
+                        Button(
+                            onClick = { advanceNow() },
+                            colors = ButtonDefaults.buttonColors(containerColor = Brand.teal, contentColor = Brand.navy)
+                        ) { Text("Next", fontWeight = FontWeight.SemiBold) }
+                    }
+                }
             } else {
                 Text("Listen, then key it back", fontSize = 16.sp, color = Brand.teal)
                 Spacer(Modifier.height(8.dp))
@@ -277,6 +315,10 @@ fun SendingPracticeScreen(onBack: () -> Unit) {
                     modifier = Modifier.weight(1f).heightIn(min = 48.dp)
                 ) { Text("Submit", fontWeight = FontWeight.SemiBold) }
             }
+        }
+
+        if (showSettings) {
+            SessionSettingsOverlay(scope = SettingsMode.SENDING, onClose = { showSettings = false })
         }
     }
 }

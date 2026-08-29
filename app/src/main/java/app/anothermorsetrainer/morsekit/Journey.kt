@@ -189,7 +189,7 @@ class JourneyQuiz(
 
     override fun record(choice: String, ttr: Double): DrillOutcome {
         val item = lastItem ?: return DrillOutcome(false, null)
-        val correct = choice == item.answer
+        val correct = choice == item.answer || isSoundTwinAnswer(choice, item)
         val history = attemptsById.getOrPut(item.id) { mutableListOf() }
         history.add(CharacterStats.Attempt(correct, ttr))
         if (history.size > CharacterStats.historyLimit) history.removeAt(0)
@@ -214,15 +214,28 @@ class JourneyQuiz(
         return DrillOutcome(correct, null)
     }
 
+    /**
+     * True when [choice] is the answer of a pool item indistinguishable by ear
+     * from [item] — the letter K and the prosign <K> are both a lone -.-, so
+     * hearing it, either answer must count (issue #75).
+     */
+    private fun isSoundTwinAnswer(choice: String, item: MorseItem): Boolean =
+        level.pool.any { it.answer == choice && it.audibleKey == item.audibleKey }
+
     // ---- Selection ----
 
     /**
      * Distinct answer labels: the correct one plus the closest-sounding others,
-     * drawn only from the current level's learned pool.
+     * drawn only from the current level's learned pool. Items that sound
+     * identical to the target (K vs <K>) are excluded — offering both makes
+     * the drill unanswerable (issue #75).
      */
     private fun buildOptions(target: MorseItem): List<String> {
         val cap = maxOf(1, config.optionCount)
-        val others = level.pool.filter { it.id != target.id && it.answer != target.answer }
+        val others = level.pool.filter {
+            it.id != target.id && it.answer != target.answer &&
+                it.audibleKey != target.audibleKey
+        }
         val optionsToShow = minOf(cap, others.size + 1)
         val needed = maxOf(0, optionsToShow - 1)
         val sorted = others

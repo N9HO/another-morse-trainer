@@ -42,6 +42,56 @@ object MorseReference {
             )
         }
 
+    // ---- Operating lingo (the spoken culture of ham radio) ----
+
+    /**
+     * Ham-radio jargon a newcomer hears in QSOs and club talk that isn't
+     * (only) a sendable shorthand token — the *language* of operating, from
+     * "ragchew" to "zero beat" (issue #76). Terms that are also on-air
+     * shorthand (ES, 73, CQ, the Q-codes…) live in their own tables; this
+     * list is the culture around them. Reference-only: it never feeds the
+     * quiz pools, so adding terms can't change anyone's drills.
+     */
+    val lingo: List<TokenMeaning> = listOf(
+        TokenMeaning("HAM",          "an amateur radio operator"),
+        TokenMeaning("CW",           "continuous wave — what hams call Morse code on the air"),
+        TokenMeaning("RAGCHEW",      "a long, relaxed conversational contact"),
+        TokenMeaning("PILEUP",       "many stations calling the same station at once"),
+        TokenMeaning("ELMER",        "a mentor who helps newcomers into the hobby"),
+        TokenMeaning("FIST",         "the personal rhythm of an operator's hand-sent code"),
+        TokenMeaning("ZERO BEAT",    "tuning your pitch to exactly match the other station"),
+        TokenMeaning("SHACK",        "the corner of home where the radio gear lives"),
+        TokenMeaning("LID",          "a sloppy or inconsiderate operator"),
+        TokenMeaning("SILENT KEY",   "an operator who has passed away — written SK"),
+        TokenMeaning("STRAIGHT KEY", "the classic up-and-down key: you time every element"),
+        TokenMeaning("PADDLE",       "a lever key that feeds an electronic keyer"),
+        TokenMeaning("KEYER",        "electronics that turn paddle squeezes into perfect code"),
+        TokenMeaning("BUG",          "a semi-automatic mechanical key — it machine-makes the dits"),
+        TokenMeaning("COPY",         "to receive code, on paper or in your head"),
+        TokenMeaning("HEAD COPY",    "reading code entirely in your head, nothing written"),
+        TokenMeaning("WORK",         "to complete a contact — you worked that station"),
+        TokenMeaning("BUSTED CALL",  "a call sign copied or sent wrong"),
+        TokenMeaning("POTA",         "Parks on the Air — portable operating from parks"),
+        TokenMeaning("SOTA",         "Summits on the Air — operating from mountain tops"),
+        TokenMeaning("WPM",          "words per minute — code speed, measured by the word PARIS"),
+        TokenMeaning("FARNSWORTH",   "full-speed characters with stretched gaps while learning"),
+        TokenMeaning("KOCH METHOD",  "learning at full speed, adding one character at a time")
+    )
+
+    /**
+     * Lingo as reference rows: read the meaning, and — for the curious — tap
+     * to hear the term itself in Morse like any other entry.
+     */
+    val lingoItems: List<MorseItem>
+        get() = lingo.map {
+            MorseItem(
+                id = "lingo-${it.token}",
+                playable = MorseItem.Playable.Text(it.token),
+                answer = it.meaning,
+                display = it.token
+            )
+        }
+
     // ---- Full Morse chart (letters · digits · punctuation) ----
 
     /**

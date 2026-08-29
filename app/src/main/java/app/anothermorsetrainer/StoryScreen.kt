@@ -89,6 +89,8 @@ fun StoryScreen(onBack: () -> Unit) {
     var index by remember { mutableStateOf(0) }
     var playing by remember { mutableStateOf(false) }
     var revealed by remember { mutableStateOf(false) }
+    // Mid-session Settings, drawn over the session so its state lives on.
+    var showSettings by remember { mutableStateOf(false) }
     // Bumped on every stop/next/content switch so an in-flight completion
     // callback (or a stale news fetch) can't flip state for the wrong passage.
     var generation by remember { mutableStateOf(0) }
@@ -331,6 +333,9 @@ fun StoryScreen(onBack: () -> Unit) {
         rememberSpot()
     }
 
+    // The Box lets the mid-session Settings draw over the running session
+    // without unmounting it (playback and the timer live on underneath).
+    Box(modifier = Modifier.fillMaxSize()) {
     CenteredContent {
         Column(modifier = Modifier.fillMaxSize()) {
             Row(
@@ -348,6 +353,7 @@ fun StoryScreen(onBack: () -> Unit) {
                                 color = Brand.textSecondary
                             )
                         }
+                        SessionSettingsButton { showSettings = true }
                         TextButton(onClick = { endSession() }) { Text("End") }
                     }
                 }
@@ -554,6 +560,11 @@ fun StoryScreen(onBack: () -> Unit) {
                 }
             }
         }
+    }
+
+    if (showSettings) {
+        SessionSettingsOverlay(scope = SettingsMode.STORY, onClose = { showSettings = false })
+    }
     }
 }
 
