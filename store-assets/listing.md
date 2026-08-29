@@ -35,7 +35,7 @@ Copy real content
 Build speed
 • Head Copy: hold a whole word in your head, then grade your own recall.
 • Type It: free recall with no multiple choice to lean on.
-• QRQ Speed: high-speed copy at 35 or 40 WPM.
+• QRQ Speed: high-speed copy at 35, 40, 50 or 60 WPM.
 • Rapid Fire: call signs, words, number groups or states sent back to back.
 
 Get on the air
@@ -59,12 +59,16 @@ Send, decode and look up
   while walking or driving.
 
 BUILT FOR REAL PRACTICE
-• Adjustable character speed, Farnsworth spacing, and sidetone pitch.
+• Adjustable character speed up to 60 WPM, Farnsworth spacing, and sidetone
+  pitch.
 • Answer by tapping, typing, speaking, or keying it back.
 • Speak your answers instead of tapping (optional, uses the microphone). It
   learns your corrections over time.
 • Hardware key support: USB and Bluetooth LE MIDI keys, plus full Vail Adapter
   input and output.
+• An optional background noise floor, on quietly by default, so Bluetooth
+  earbuds don't sleep through the first character of a word. Turn it up and it
+  doubles as band noise to copy through.
 • A daily practice reminder to keep your streak alive.
 • Progress tracking: practice streak, accuracy, your fastest copy, most-confused
   pairs, performance by speed band, and a per-character recognition-speed chart
@@ -86,11 +90,21 @@ Education (alternative: Tools)
 ## Tags / keywords (for your reference)
 morse code, CW, Koch method, ham radio, amateur radio, telegraphy, QSO, Q-codes
 
-## "What's new" (release notes for 1.5)
-Hold the correction after a miss: Next, Replay, and an auto-repeat. Mid-session
-Settings on every training screen, scoped to the mode you're running. Answer the
-choice and Journey drills from a hardware keyboard. New Lingo glossary in
-Reference. Q-code fix: QRL is the busy statement, QRL? asks the question.
+## "What's new" (release notes for 1.9)
+The pileup now answers a miscopy the way a real operator would. A near miss
+makes the station send its own call again until you get it right. If your copy
+sits equally close to two calls, both come back, because neither knows which you
+meant. A partial query matches anywhere in a call, not just the start, so "9H?"
+works. And when a caller runs out of patience you are told who left and what you
+had them as, either in the run summary or as it happens.
+
+Also: character speed now goes to 60 WPM, with Farnsworth spacing tracking it.
+A background noise floor runs quietly under everything by default, which stops
+Bluetooth earbuds sleeping through the first character. Hardware-keyboard
+answers now go by value, so pressing 4 answers 4. Bluetooth MIDI keys no longer
+stick down when a key-up shares a radio burst with its key-down.
+
+(Covers 1.6 through 1.9. Trim to whatever was last shipped to Play.)
 
 ## Contact / details
 • Developer email: jus.k.rog@gmail.com

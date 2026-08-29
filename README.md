@@ -23,6 +23,8 @@ the iOS app's navy/teal look.
 - **Characters**: Koch-method ladder (A-Z, 0-9)
 - **Common Words**, **Abbreviations**, **Q-Codes**, **Prosigns**: phrase drills
 - **Confusion Drill**: targeted review of the pairs you mix up
+- **Head Copy**, **Type It**, **QRQ Speed**: copy in your head, free-recall
+  typing, and high-speed copy at 35 / 40 / 50 / 60 WPM on its own setting
 - **Rapid Fire**: a stream of call signs / words / number groups / states sent
   back to back at your chosen pace; type as you hear it, head-copy then type,
   key each one back, or just listen and review the transmitted list
@@ -30,7 +32,9 @@ the iOS app's navy/teal look.
   flavours (single caller → POTA → contests), realism controls (caller count,
   speed band, tone spread, QSB, QRN, cut numbers, bust behavior, callsign
   shapes), your own side keyed in Morse, auto re-call after TU, and a live
-  log + rate readout
+  log + rate readout. A near miss makes the station re-send its own call, an
+  ambiguous copy brings both stations back, a partial matches anywhere in the
+  call, and walk-offs are reported at the end of the run or as they happen
 - **Contest**: timed runs of the weekly CW events (K1USN SST, ICWC MST, CWops
   CWT, NCCC Sprint, ARRL Field Day) with authentic exchanges, speeds, live
   score/rate, and an end-of-run scorecard
@@ -61,9 +65,10 @@ the iOS app's navy/teal look.
 - **Progress**: daily streak, accuracy, best copy, per-character recognition
   chart, performance by 5-WPM speed band, and per-session detail screens with
   each session's own recognition chart
-- **Settings**: speed, Farnsworth, sidetone pitch, haptics, daily reminders,
-  session length, custom word lists, punctuation opt-ins, and a slashed-zero
-  display option
+- **Settings**: character speed to 60 WPM, Farnsworth, sidetone pitch, a
+  background noise floor (Whisper by default, so Bluetooth earbuds don't sleep
+  through the first character), haptics, daily reminders, session length,
+  custom word lists, punctuation opt-ins, and a slashed-zero display option
 - Dark navy/teal theme, adaptive icon, phone + tablet responsive layout
 
 ## Build
