@@ -7,25 +7,67 @@ struct SettingsView: View {
     @State private var confirmReset = false
     @State private var copiedDiagnostics = false
 
+    /// When opened from inside a session, the running mode: sections that only
+    /// matter to *other* modes are hidden, so Q-Codes practice never scrolls
+    /// past the QSO Simulator's knobs (issue #66). nil — the intro's app-wide
+    /// entry — shows the full surface.
+    var activeMode: TrainingMode? = nil
+
+    /// Modes drawing from the progressive character ladder (proficiency,
+    /// punctuation opt-ins, and the stage preview shape their drills).
+    private static let ladderModes: Set<TrainingMode> = [.characters, .sending, .confusion]
+    /// The choice quizzes governed by the Learning section (recognition time
+    /// and the answer-button count).
+    private static let choiceQuizModes: Set<TrainingMode> =
+        [.journey, .characters, .words, .abbreviations, .qCodes, .prosigns, .confusion]
+    /// The pileup surfaces all four QSO sections configure.
+    private static let pileupModes: Set<TrainingMode> = [.qso, .contest]
+    /// Modes with a play → answer → reveal loop the Feedback section controls.
+    private static let feedbackModes: Set<TrainingMode> =
+        [.journey, .characters, .words, .abbreviations, .qCodes, .prosigns,
+         .headCopy, .typed, .sending, .confusion, .qrq, .rapidFire]
+
+    /// Whether a section that only matters for `modes` belongs on this surface.
+    private func shown(for modes: Set<TrainingMode>) -> Bool {
+        guard let activeMode else { return true }
+        return modes.contains(activeMode)
+    }
+
+    /// The global Speed slider is a no-op where the mode fixes its own speed
+    /// (QRQ's 35/40, the exam's 5/13/20); it still matters in the pileup modes,
+    /// which key *your* transmissions at it.
+    private var showsGlobalSpeed: Bool {
+        activeMode != .qrq && activeMode != .exam
+    }
+
+    /// Farnsworth stretching applies to the standard drills; the pileup modes
+    /// carry their own toggle and the fixed-format speeds ignore it.
+    private var showsFarnsworth: Bool {
+        guard let activeMode else { return true }
+        return !(Self.pileupModes.contains(activeMode) || activeMode == .qrq || activeMode == .exam)
+    }
+
     var body: some View {
         NavigationStack {
             Form {
-                Section {
-                    HStack {
-                        Text("Your callsign")
-                        Spacer()
-                        TextField("W1AW", text: $model.settings.qso.myCall)
-                            .multilineTextAlignment(.trailing)
-                            .textInputAutocapitalization(.characters)
-                            .autocorrectionDisabled()
-                            .font(.system(.body, design: .monospaced))
+                if shown(for: Self.pileupModes) {
+                    Section {
+                        HStack {
+                            Text("Your callsign")
+                            Spacer()
+                            TextField("W1AW", text: $model.settings.qso.myCall)
+                                .multilineTextAlignment(.trailing)
+                                .textInputAutocapitalization(.characters)
+                                .autocorrectionDisabled()
+                                .font(.system(.body, design: .monospaced))
+                        }
+                    } header: {
+                        Text("Your Station")
+                    } footer: {
+                        Text("Used across the app — sent when you call CQ and work stations in the QSO Simulator.")
                     }
-                } header: {
-                    Text("Your Station")
-                } footer: {
-                    Text("Used across the app — sent when you call CQ and work stations in the QSO Simulator.")
+                    .listRowBackground(Theme.navyElevated)
                 }
-                .listRowBackground(Theme.navyElevated)
 
                 Section("Sound") {
                     sliderRow(title: "Side tone",
@@ -37,80 +79,88 @@ struct SettingsView: View {
                     } label: {
                         Label("Preview tone", systemImage: "speaker.wave.2.fill")
                     }
-                    sliderRow(title: "Speed",
-                              value: $model.settings.wpm,
-                              range: 15...60, step: 1,
-                              format: { "\(Int($0)) WPM" })
-                    if model.settings.wpm >= 40 {
-                        Label {
-                            Text("QRQ territory — \(Int(model.settings.wpm)) WPM. Great for pushing instant recognition once 30+ feels comfortable.")
-                        } icon: {
-                            Image(systemName: "hare.fill")
-                        }
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                    }
-                    if model.settings.wpm < 33 {
-                        Label {
-                            Text("Below 33 WPM it's easy to start *counting* the dits and dahs instead of hearing each character as a single sound. Training at 33+ WPM builds instant, by-ear recognition — the whole point of the Koch method. If you need more time to answer, raise “Recognize within” instead of slowing the code.")
-                        } icon: {
-                            Image(systemName: "exclamationmark.triangle.fill")
-                        }
-                        .font(.footnote)
-                        .foregroundStyle(.orange)
-                    }
-                }
-                .listRowBackground(Theme.navyElevated)
-
-                Section {
-                    Toggle("Farnsworth spacing", isOn: $model.settings.farnsworth)
-                    if model.settings.farnsworth {
-                        sliderRow(title: "Effective speed",
-                                  value: $model.settings.effectiveWpm,
-                                  range: 8...max(9, model.settings.wpm), step: 1,
+                    if showsGlobalSpeed {
+                        sliderRow(title: "Speed",
+                                  value: $model.settings.wpm,
+                                  range: 15...60, step: 1,
                                   format: { "\(Int($0)) WPM" })
+                        if model.settings.wpm >= 40 {
+                            Label {
+                                Text("QRQ territory — \(Int(model.settings.wpm)) WPM. Great for pushing instant recognition once 30+ feels comfortable.")
+                            } icon: {
+                                Image(systemName: "hare.fill")
+                            }
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                        }
+                        if model.settings.wpm < 33 {
+                            Label {
+                                Text("Below 33 WPM it's easy to start *counting* the dits and dahs instead of hearing each character as a single sound. Training at 33+ WPM builds instant, by-ear recognition — the whole point of the Koch method. If you need more time to answer, raise “Recognize within” instead of slowing the code.")
+                            } icon: {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                            }
+                            .font(.footnote)
+                            .foregroundStyle(.orange)
+                        }
                     }
-                } header: {
-                    Text("Farnsworth (multi-character)")
-                } footer: {
-                    Text("Keeps each character at full speed but adds extra space between characters, so you have time to recognize them. Applies to words, groups, and other multi-character content — single characters are unaffected.")
                 }
                 .listRowBackground(Theme.navyElevated)
 
-                Section {
-                    Picker("I already know…", selection: proficiencyBinding) {
-                        ForEach(Proficiency.allCases) { level in
-                            Text(level.label).tag(level)
+                if showsFarnsworth {
+                    Section {
+                        Toggle("Farnsworth spacing", isOn: $model.settings.farnsworth)
+                        if model.settings.farnsworth {
+                            sliderRow(title: "Effective speed",
+                                      value: $model.settings.effectiveWpm,
+                                      range: 8...max(9, model.settings.wpm), step: 1,
+                                      format: { "\(Int($0)) WPM" })
                         }
+                    } header: {
+                        Text("Farnsworth (multi-character)")
+                    } footer: {
+                        Text("Keeps each character at full speed but adds extra space between characters, so you have time to recognize them. Applies to words, groups, and other multi-character content — single characters are unaffected.")
                     }
-                } header: {
-                    Text("Proficiency")
-                } footer: {
-                    Text("Sets which characters you start with. Changing this restarts your active set.")
+                    .listRowBackground(Theme.navyElevated)
                 }
-                .listRowBackground(Theme.navyElevated)
 
-                Section {
-                    sliderRow(title: "Recognize within",
-                              value: $model.settings.ttrThreshold,
-                              range: 0.5...3.0, step: 0.1,
-                              format: { String(format: "%.1f s", $0) })
-                    Stepper(value: $model.settings.maxAnswerChoices,
-                            in: AppSettings.answerChoiceRange) {
-                        HStack {
-                            Text("Answer choices")
-                            Spacer()
-                            Text("\(model.settings.maxAnswerChoices)")
-                                .foregroundStyle(.secondary)
-                                .monospacedDigit()
+                if shown(for: Self.ladderModes) {
+                    Section {
+                        Picker("I already know…", selection: proficiencyBinding) {
+                            ForEach(Proficiency.allCases) { level in
+                                Text(level.label).tag(level)
+                            }
                         }
+                    } header: {
+                        Text("Proficiency")
+                    } footer: {
+                        Text("Sets which characters you start with. Changing this restarts your active set.")
                     }
-                } header: {
-                    Text("Learning")
-                } footer: {
-                    Text("When you consistently recognize a letter within this time, a new letter is added. Answer choices only ever include characters you've already met — the number of buttons grows as you learn, up to this many.")
+                    .listRowBackground(Theme.navyElevated)
                 }
-                .listRowBackground(Theme.navyElevated)
+
+                if shown(for: Self.choiceQuizModes) {
+                    Section {
+                        sliderRow(title: "Recognize within",
+                                  value: $model.settings.ttrThreshold,
+                                  range: 0.5...3.0, step: 0.1,
+                                  format: { String(format: "%.1f s", $0) })
+                        Stepper(value: $model.settings.maxAnswerChoices,
+                                in: AppSettings.answerChoiceRange) {
+                            HStack {
+                                Text("Answer choices")
+                                Spacer()
+                                Text("\(model.settings.maxAnswerChoices)")
+                                    .foregroundStyle(.secondary)
+                                    .monospacedDigit()
+                            }
+                        }
+                    } header: {
+                        Text("Learning")
+                    } footer: {
+                        Text("When you consistently recognize a letter within this time, a new letter is added. Answer choices only ever include characters you've already met — the number of buttons grows as you learn, up to this many.")
+                    }
+                    .listRowBackground(Theme.navyElevated)
+                }
 
                 Section {
                     Toggle("Daily reminder", isOn: Binding(
@@ -129,39 +179,43 @@ struct SettingsView: View {
                 }
                 .listRowBackground(Theme.navyElevated)
 
-                Section {
-                    ForEach(AppSettings.availablePunctuation, id: \.symbol) { entry in
-                        Toggle(isOn: punctuationBinding(entry.symbol)) {
-                            HStack {
-                                Text(entry.name)
-                                Text(entry.symbol)
-                                    .font(.system(.body, design: .monospaced))
-                                    .foregroundStyle(.secondary)
-                                Spacer()
-                                Text(MorseCode.pattern(for: Character(entry.symbol)) ?? "")
-                                    .font(.system(.caption, design: .monospaced))
-                                    .foregroundStyle(.secondary)
+                if shown(for: Self.ladderModes) {
+                    Section {
+                        ForEach(AppSettings.availablePunctuation, id: \.symbol) { entry in
+                            Toggle(isOn: punctuationBinding(entry.symbol)) {
+                                HStack {
+                                    Text(entry.name)
+                                    Text(entry.symbol)
+                                        .font(.system(.body, design: .monospaced))
+                                        .foregroundStyle(.secondary)
+                                    Spacer()
+                                    Text(MorseCode.pattern(for: Character(entry.symbol)) ?? "")
+                                        .font(.system(.caption, design: .monospaced))
+                                        .foregroundStyle(.secondary)
+                                }
                             }
                         }
+                    } header: {
+                        Text("Punctuation")
+                    } footer: {
+                        Text("“?” is already part of the base letters & numbers. Turn on any of these extras to mix them into your practice.")
                     }
-                } header: {
-                    Text("Punctuation")
-                } footer: {
-                    Text("“?” is already part of the base letters & numbers. Turn on any of these extras to mix them into your practice.")
+                    .listRowBackground(Theme.navyElevated)
                 }
-                .listRowBackground(Theme.navyElevated)
 
-                Section("Feedback") {
-                    Toggle("Show right / wrong", isOn: $model.settings.showCorrectness)
-                    Picker("Reveal the letter", selection: $model.settings.reveal) {
-                        ForEach(RevealMode.allCases) { mode in
-                            Text(mode.label).tag(mode)
+                if shown(for: Self.feedbackModes) {
+                    Section("Feedback") {
+                        Toggle("Show right / wrong", isOn: $model.settings.showCorrectness)
+                        Picker("Reveal the letter", selection: $model.settings.reveal) {
+                            ForEach(RevealMode.allCases) { mode in
+                                Text(mode.label).tag(mode)
+                            }
                         }
+                        Toggle("Show replay button", isOn: $model.settings.allowReplay)
+                        Toggle("Haptic feedback", isOn: $model.settings.hapticsEnabled)
                     }
-                    Toggle("Show replay button", isOn: $model.settings.allowReplay)
-                    Toggle("Haptic feedback", isOn: $model.settings.hapticsEnabled)
+                    .listRowBackground(Theme.navyElevated)
                 }
-                .listRowBackground(Theme.navyElevated)
 
                 Section {
                     Toggle("Slashed zero", isOn: $model.settings.slashedZero)
@@ -172,128 +226,134 @@ struct SettingsView: View {
                 }
                 .listRowBackground(Theme.navyElevated)
 
-                Section {
-                    Stepper(value: $model.settings.headCopyRepeats,
-                            in: AppSettings.headCopyRepeatRange) {
-                        HStack {
-                            Text("Auto-repeats")
-                            Spacer()
-                            Text(model.settings.headCopyRepeats == 0
-                                 ? "Off"
-                                 : "\(model.settings.headCopyRepeats)×")
-                                .foregroundStyle(.secondary)
-                                .monospacedDigit()
-                        }
-                    }
-                    sliderRow(title: "Auto-reveal after",
-                              value: $model.settings.headCopyRevealSeconds,
-                              range: AppSettings.headCopyRevealRange, step: 1,
-                              format: { $0 < 1 ? "Manual only" : "\(Int($0)) s" })
-                } header: {
-                    Text("Head Copy")
-                } footer: {
-                    Text("After the prompt plays, Head Copy can replay it a few times so you can re-hear it without mentally replaying, then count down to the answer. A manual Repeat button is always available.")
-                }
-                .listRowBackground(Theme.navyElevated)
-
-                Section {
-                    Picker("Mode", selection: $model.settings.qso.mode) {
-                        ForEach(QSOContestMode.allCases) { Text($0.label).tag($0) }
-                    }
-                    if model.settings.qso.mode.isPileup {
-                        Stepper(value: $model.settings.qso.maxStations, in: 1...8) {
-                            Text("Max callers: \(model.settings.qso.maxStations)")
-                        }
-                    }
-                    sliderRow(title: "Min speed", value: $model.settings.qso.minWPM,
-                              range: 12...45, step: 1, format: { "\(Int($0)) WPM" })
-                    sliderRow(title: "Max speed", value: $model.settings.qso.maxWPM,
-                              range: 12...45, step: 1, format: { "\(Int($0)) WPM" })
-                    Toggle("Farnsworth spacing", isOn: $model.settings.qso.farnsworth)
-                    sliderRow(title: "Tone spread", value: $model.settings.qso.toneSpread,
-                              range: 0...500, step: 10,
-                              format: { $0 < 10 ? "Zero-beat" : "±\(Int($0)) Hz" })
-                } header: {
-                    Text("QSO Simulator")
-                } footer: {
-                    Text("Changes apply to your next QSO session. Tone spread splits callers across the band; zero-beat stacks them all on your pitch.")
-                }
-                .listRowBackground(Theme.navyElevated)
-
-                Section("QSO · Signals") {
-                    Toggle("QSB (fading)", isOn: $model.settings.qso.qsbEnabled)
-                    Picker("QRN (noise)", selection: $model.settings.qso.qrn) {
-                        ForEach(QRNLevel.allCases) { Text($0.label).tag($0) }
-                    }
-                    sliderRow(title: "Min wait", value: $model.settings.qso.minDelay,
-                              range: 0...3, step: 0.1, format: { String(format: "%.1f s", $0) })
-                    sliderRow(title: "Max wait", value: $model.settings.qso.maxDelay,
-                              range: 0...4, step: 0.1, format: { String(format: "%.1f s", $0) })
-                }
-                .listRowBackground(Theme.navyElevated)
-
-                Section {
-                    // Only exchanges that actually carry a signal report (POTA,
-                    // Basic Contest, Single Caller) can be asked to copy it — the
-                    // contest sprints send no RST, so the toggle would be a no-op.
-                    if model.settings.qso.mode.includesRST {
-                        Toggle("Copy RST too", isOn: $model.settings.qso.rstRequired)
-                    }
-                    Toggle("Keep partial call in box", isOn: $model.settings.qso.keepPartialCall)
-                    Picker("On a busted call", selection: $model.settings.qso.bustBehavior) {
-                        ForEach(BustBehavior.allCases) { Text($0.label).tag($0) }
-                    }
-                    Toggle("Callers can give up", isOn: $model.settings.qso.giveUpEnabled)
-                    Toggle("Cut numbers", isOn: $model.settings.qso.cutNumbersEnabled)
-                    if model.settings.qso.cutNumbersEnabled {
-                        ForEach(CutNumbers.cuttableDigits, id: \.self) { d in
-                            Toggle("\(d) → \(CutNumbers.map[d].map(String.init) ?? "")",
-                                   isOn: cutBinding(d))
-                        }
-                    }
-                } header: {
-                    Text("QSO · Realism")
-                } footer: {
-                    Text("Keep partial call: a partly-copied call stays in the box so you can send “?” and add to it instead of retyping. Give-up: a station you keep busting drops out after a few misses, but the pileup continues. Cut numbers send numerals as letters (0→T, 9→N) — you can type either form.")
-                }
-                .listRowBackground(Theme.navyElevated)
-
-                Section {
-                    Toggle("US callsigns only", isOn: $model.settings.qso.usOnly)
-                    ForEach(CallsignFormat.allCases) { f in
-                        Toggle(f.label, isOn: formatBinding(f))
-                    }
-                } header: {
-                    Text("QSO · Callsigns")
-                } footer: {
-                    Text("Which callsign shapes appear in pileups. Turn off US-only to mix in DX prefixes.")
-                }
-                .listRowBackground(Theme.navyElevated)
-
-                Section {
-                    ForEach(ProgressiveCharacters.Stage.allCases, id: \.self) { stage in
-                        Button {
-                            model.previewStage(stage)
-                            dismiss()
-                        } label: {
+                if shown(for: [.headCopy]) {
+                    Section {
+                        Stepper(value: $model.settings.headCopyRepeats,
+                                in: AppSettings.headCopyRepeatRange) {
                             HStack {
-                                Text(stage.displayName)
-                                if model.characterStage == stage {
-                                    Image(systemName: "checkmark")
-                                        .font(.caption.weight(.semibold))
-                                        .foregroundStyle(Theme.tealBright)
-                                }
+                                Text("Auto-repeats")
                                 Spacer()
-                                Image(systemName: "play.circle")
+                                Text(model.settings.headCopyRepeats == 0
+                                     ? "Off"
+                                     : "\(model.settings.headCopyRepeats)×")
+                                    .foregroundStyle(.secondary)
+                                    .monospacedDigit()
                             }
                         }
+                        sliderRow(title: "Auto-reveal after",
+                                  value: $model.settings.headCopyRevealSeconds,
+                                  range: AppSettings.headCopyRevealRange, step: 1,
+                                  format: { $0 < 1 ? "Manual only" : "\(Int($0)) s" })
+                    } header: {
+                        Text("Head Copy")
+                    } footer: {
+                        Text("After the prompt plays, Head Copy can replay it a few times so you can re-hear it without mentally replaying, then count down to the answer. A manual Repeat button is always available.")
                     }
-                } header: {
-                    Text("Developer · Preview Stage")
-                } footer: {
-                    Text("Jumps the Characters track to a stage for testing (✓ is where the track is now). Stages beyond Characters expand your active set to all letters & numbers. To hold the track at a stage during normal practice, use “Track stage” on the Characters setup screen instead.")
+                    .listRowBackground(Theme.navyElevated)
                 }
-                .listRowBackground(Theme.navyElevated)
+
+                if shown(for: Self.pileupModes) {
+                    Section {
+                        Picker("Mode", selection: $model.settings.qso.mode) {
+                            ForEach(QSOContestMode.allCases) { Text($0.label).tag($0) }
+                        }
+                        if model.settings.qso.mode.isPileup {
+                            Stepper(value: $model.settings.qso.maxStations, in: 1...8) {
+                                Text("Max callers: \(model.settings.qso.maxStations)")
+                            }
+                        }
+                        sliderRow(title: "Min speed", value: $model.settings.qso.minWPM,
+                                  range: 12...45, step: 1, format: { "\(Int($0)) WPM" })
+                        sliderRow(title: "Max speed", value: $model.settings.qso.maxWPM,
+                                  range: 12...45, step: 1, format: { "\(Int($0)) WPM" })
+                        Toggle("Farnsworth spacing", isOn: $model.settings.qso.farnsworth)
+                        sliderRow(title: "Tone spread", value: $model.settings.qso.toneSpread,
+                                  range: 0...500, step: 10,
+                                  format: { $0 < 10 ? "Zero-beat" : "±\(Int($0)) Hz" })
+                    } header: {
+                        Text("QSO Simulator")
+                    } footer: {
+                        Text("Changes apply to your next QSO session. Tone spread splits callers across the band; zero-beat stacks them all on your pitch.")
+                    }
+                    .listRowBackground(Theme.navyElevated)
+
+                    Section("QSO · Signals") {
+                        Toggle("QSB (fading)", isOn: $model.settings.qso.qsbEnabled)
+                        Picker("QRN (noise)", selection: $model.settings.qso.qrn) {
+                            ForEach(QRNLevel.allCases) { Text($0.label).tag($0) }
+                        }
+                        sliderRow(title: "Min wait", value: $model.settings.qso.minDelay,
+                                  range: 0...3, step: 0.1, format: { String(format: "%.1f s", $0) })
+                        sliderRow(title: "Max wait", value: $model.settings.qso.maxDelay,
+                                  range: 0...4, step: 0.1, format: { String(format: "%.1f s", $0) })
+                    }
+                    .listRowBackground(Theme.navyElevated)
+
+                    Section {
+                        // Only exchanges that actually carry a signal report (POTA,
+                        // Basic Contest, Single Caller) can be asked to copy it — the
+                        // contest sprints send no RST, so the toggle would be a no-op.
+                        if model.settings.qso.mode.includesRST {
+                            Toggle("Copy RST too", isOn: $model.settings.qso.rstRequired)
+                        }
+                        Toggle("Keep partial call in box", isOn: $model.settings.qso.keepPartialCall)
+                        Picker("On a busted call", selection: $model.settings.qso.bustBehavior) {
+                            ForEach(BustBehavior.allCases) { Text($0.label).tag($0) }
+                        }
+                        Toggle("Callers can give up", isOn: $model.settings.qso.giveUpEnabled)
+                        Toggle("Cut numbers", isOn: $model.settings.qso.cutNumbersEnabled)
+                        if model.settings.qso.cutNumbersEnabled {
+                            ForEach(CutNumbers.cuttableDigits, id: \.self) { d in
+                                Toggle("\(d) → \(CutNumbers.map[d].map(String.init) ?? "")",
+                                       isOn: cutBinding(d))
+                            }
+                        }
+                    } header: {
+                        Text("QSO · Realism")
+                    } footer: {
+                        Text("Keep partial call: a partly-copied call stays in the box so you can send “?” and add to it instead of retyping. Give-up: a station you keep busting drops out after a few misses, but the pileup continues. Cut numbers send numerals as letters (0→T, 9→N) — you can type either form.")
+                    }
+                    .listRowBackground(Theme.navyElevated)
+
+                    Section {
+                        Toggle("US callsigns only", isOn: $model.settings.qso.usOnly)
+                        ForEach(CallsignFormat.allCases) { f in
+                            Toggle(f.label, isOn: formatBinding(f))
+                        }
+                    } header: {
+                        Text("QSO · Callsigns")
+                    } footer: {
+                        Text("Which callsign shapes appear in pileups. Turn off US-only to mix in DX prefixes.")
+                    }
+                    .listRowBackground(Theme.navyElevated)
+                }
+
+                if shown(for: Self.ladderModes) {
+                    Section {
+                        ForEach(ProgressiveCharacters.Stage.allCases, id: \.self) { stage in
+                            Button {
+                                model.previewStage(stage)
+                                dismiss()
+                            } label: {
+                                HStack {
+                                    Text(stage.displayName)
+                                    if model.characterStage == stage {
+                                        Image(systemName: "checkmark")
+                                            .font(.caption.weight(.semibold))
+                                            .foregroundStyle(Theme.tealBright)
+                                    }
+                                    Spacer()
+                                    Image(systemName: "play.circle")
+                                }
+                            }
+                        }
+                    } header: {
+                        Text("Developer · Preview Stage")
+                    } footer: {
+                        Text("Jumps the Characters track to a stage for testing (✓ is where the track is now). Stages beyond Characters expand your active set to all letters & numbers. To hold the track at a stage during normal practice, use “Track stage” on the Characters setup screen instead.")
+                    }
+                    .listRowBackground(Theme.navyElevated)
+                }
 
                 Section {
                     Button {

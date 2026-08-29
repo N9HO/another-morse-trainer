@@ -84,11 +84,10 @@ struct ContentView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .principal) { modeMenu }
-                // NOTE: the session-scope readout ("11 chars", "Story 1 of 5")
-                // used to sit here as a topBarLeading item, where the toolbar
-                // dressed it up as a cryptic truncated button ("155 h…" —
-                // issue #61). It now lives in the session bar below, where it
-                // renders in full and doesn't masquerade as a control.
+                // NOTE: the session-scope readout ("11 chars", "155 words &
+                // calls") used to sit here as a topBarLeading chip, then in the
+                // session bar — both were reported as clutter (issues #61,
+                // #74), so it's gone entirely.
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { showBrag = true } label: {
                         Image(systemName: "rosette")
@@ -109,7 +108,10 @@ struct ContentView: View {
                 }
             }
             .sheet(isPresented: $showSettings) {
-                SettingsView().environmentObject(model)
+                // Scoped to the running mode so mid-session settings only show
+                // what applies to it (issue #66); the intro's Settings entry
+                // stays the full app-wide surface.
+                SettingsView(activeMode: model.mode).environmentObject(model)
             }
             .sheet(isPresented: $showStats) {
                 StatsView().environmentObject(model)
