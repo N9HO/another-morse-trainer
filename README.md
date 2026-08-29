@@ -4,6 +4,9 @@ A native Android port of [Another Morse Trainer](https://anothermorsetrainer.app
 (the SwiftUI iOS app at [N9HO/another-morse-trainer](https://github.com/N9HO/another-morse-trainer)).
 Learn to copy Morse code (CW) by ear with the Koch method.
 
+The user guide — every mode, setting and hardware option — lives at
+[anothermorsetrainer.app/guide](https://anothermorsetrainer.app/guide/).
+
 Built with **Kotlin + Jetpack Compose**. The training logic (`morsekit`) is a
 near 1:1 port of the iOS MorseKit package; the UI is rebuilt in Compose to match
 the iOS app's navy/teal look.

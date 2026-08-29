@@ -1,6 +1,6 @@
 # Privacy Policy — Another Morse Trainer
 
-**Effective date:** June 13, 2026
+**Effective date:** August 29, 2026
 
 Another Morse Trainer ("the app") is a Morse code learning app. This policy
 explains what data the app handles. The short version: **the app does not
@@ -22,15 +22,35 @@ third party, and is deleted when you uninstall the app.
 
 ## Microphone
 
-The app requests microphone access **only** for the optional "Voice answers"
-feature, which lets you speak your answer instead of tapping it. When you use
-this feature, your speech is transcribed using Android's built-in speech
-recognition. Depending on your device, Android may process that audio with its
-system speech‑recognition provider (for example, Google) to convert it to text.
+The app requests microphone access for two optional features, and uses it only
+while you are actively using one of them:
 
-The app itself does **not** record, save, or transmit any audio. The microphone
-is used only while you actively tap "Speak answer," and you can leave this
-feature turned off (it is off by default).
+- **Voice answers** — lets you speak your answer instead of tapping it. Your
+  speech is transcribed using Android's built-in speech recognition. Depending
+  on your device, Android may process that audio with its system
+  speech‑recognition provider (for example, Google) to convert it to text.
+  This feature is off by default.
+- **CW Decoder** — listens to received Morse code (from a radio speaker, for
+  instance) and decodes it to text. This runs entirely on your device: the
+  audio is analysed in memory and is not sent anywhere.
+
+The app itself does **not** record, save, or transmit any audio.
+
+## Network features
+
+Training, progress and settings all work offline. Two optional features connect
+to the internet when you choose to use them:
+
+- **Repeater** — connects to the third‑party [Vail](https://vail.woozle.org) CW
+  network so you can send and receive live Morse with other operators. What you
+  key on a channel is sent to others on that channel, along with the channel
+  name you choose. Vail is operated independently of this app and has its own
+  terms; no account and no personal information is required to use it.
+- **Today's news** in Short Stories — fetches public RSS headlines to send as
+  copy practice. This is an ordinary request to the news source for its public
+  feed; no information about you is included.
+
+Neither feature sends your settings, progress, or any personal data.
 
 ## Notifications
 
