@@ -82,15 +82,13 @@ struct SettingsView: View {
                     Picker("Background noise", selection: $model.settings.backgroundNoise) {
                         ForEach(BackgroundNoiseLevel.allCases) { Text($0.label).tag($0) }
                     }
-                    if model.settings.backgroundNoise == .off {
-                        Label {
-                            Text("On Bluetooth earbuds, silence between transmissions lets the link idle — it then wakes a moment late and clips the first character, costing you the answer. A little background noise keeps the link up. It doubles as band noise (QRN) to copy through.")
-                        } icon: {
-                            Image(systemName: "airpods")
-                        }
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+                    Label {
+                        Text("On Bluetooth earbuds, silence between transmissions lets the link idle — it then wakes a moment late and clips the first character, costing you the answer. A faint noise floor keeps the link up, which is why Whisper is the default. Turn it up for band noise (QRN) to copy through, or off if you'd rather have silence.")
+                    } icon: {
+                        Image(systemName: "airpods")
                     }
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
                     if showsGlobalSpeed {
                         sliderRow(title: "Speed",
                                   value: $model.settings.wpm,

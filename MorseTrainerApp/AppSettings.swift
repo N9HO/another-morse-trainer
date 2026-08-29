@@ -515,11 +515,12 @@ struct AppSettings: Codable, Equatable {
     /// Character speed for QRQ high-speed copy practice (35–60 WPM).
     var qrqSpeed: QrqSpeed = .wpm35
 
-    /// Continuous background noise under everything (issue #29). Off by default
-    /// — it is audible, and nobody should start hearing hiss because they
-    /// updated — but turning it up is what stops Bluetooth earbuds clipping the
-    /// first character.
-    var backgroundNoise: BackgroundNoiseLevel = .off
+    /// Continuous background noise under everything (issue #29). Defaults to
+    /// `.whisper`: the Bluetooth clipping it prevents is a silent accuracy tax
+    /// nobody would think to go looking for a setting about, and at ~56 dB under
+    /// the tone the floor does that job without anyone noticing hiss. Louder
+    /// levels are there for people who want band noise to copy through.
+    var backgroundNoise: BackgroundNoiseLevel = .whisper
 
     /// Answer by speaking instead of tapping (Characters & Words modes). A
     /// per-session choice made on the setup screen.
