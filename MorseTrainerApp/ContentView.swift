@@ -1,8 +1,12 @@
 import SwiftUI
+import GameController
 
 struct ContentView: View {
     @EnvironmentObject var model: AppModel
     var onExit: () -> Void = {}
+    /// Tracks whether a physical (Bluetooth/USB/Smart) keyboard is attached,
+    /// to surface the 1–9 answer hints on choice buttons (issue #69).
+    @StateObject private var hardwareKeyboard = HardwareKeyboardObserver()
     @State private var showSettings = false
     @State private var showStats = false
     @State private var showBrag = false
@@ -277,6 +281,8 @@ struct ContentView: View {
                         .transition(.opacity)
                 }
                 HStack(spacing: 16) {
+                    // Hardware keys drive the whole loop (issue #69):
+                    // R repeats, Return reveals, then Return / X self-grade.
                     Button {
                         Haptics.tap()
                         model.headCopyRepeatNow()
@@ -286,6 +292,7 @@ struct ContentView: View {
                             .frame(maxWidth: .infinity, minHeight: 56)
                     }
                     .buttonStyle(.bordered)
+                    .keyboardShortcut(KeyEquivalent("r"), modifiers: [])
                     Button {
                         Haptics.tap()
                         model.revealHeadCopy()
@@ -296,6 +303,7 @@ struct ContentView: View {
                             .frame(maxWidth: .infinity, minHeight: 56)
                     }
                     .buttonStyle(.borderedProminent)
+                    .keyboardShortcut(.defaultAction)
                 }
             }
             .animation(.easeInOut(duration: 0.2), value: model.headCopyCountdown)
@@ -309,6 +317,7 @@ struct ContentView: View {
                         .font(.headline).frame(maxWidth: .infinity, minHeight: 56)
                 }
                 .buttonStyle(.borderedProminent).tint(.red)
+                .keyboardShortcut(KeyEquivalent("x"), modifiers: [])
                 Button {
                     Haptics.success()
                     model.gradeHeadCopy(true)
@@ -317,6 +326,7 @@ struct ContentView: View {
                         .font(.headline).frame(maxWidth: .infinity, minHeight: 56)
                 }
                 .buttonStyle(.borderedProminent).tint(.green)
+                .keyboardShortcut(.defaultAction)
             }
         default:
             Color.clear.frame(height: 56)
@@ -1154,8 +1164,15 @@ struct ContentView: View {
     }
 
     private var choiceGrid: some View {
-        LazyVGrid(columns: columns, spacing: 16) {
-            ForEach(model.drill?.options ?? [], id: \.self) { option in
+        let options = model.drill?.options ?? []
+        // Hardware-keyboard answering (issue #69): when every option is a
+        // single character, its own key answers — type the letter you heard.
+        // Mixed/meaning drills use 1–9 for the Nth option instead, so a digit
+        // option and an index can never collide.
+        let singles = !options.isEmpty && options.allSatisfy { $0.count == 1 }
+        return LazyVGrid(columns: columns, spacing: 16) {
+            ForEach(options.indices, id: \.self) { index in
+                let option = options[index]
                 Button {
                     model.select(option)
                 } label: {
@@ -1170,9 +1187,31 @@ struct ContentView: View {
                 .buttonStyle(.borderedProminent)
                 .tint(tint(for: option))
                 .disabled(model.phase == .answered)
+                .keyboardShortcut(optionShortcut(for: option, at: index, singles: singles))
+                .overlay(alignment: .topLeading) {
+                    // Surface the 1–9 mapping only when a physical keyboard is
+                    // attached; character keys need no hint — the key is the label.
+                    if hardwareKeyboard.isConnected, !singles, index < 9 {
+                        Text("\(index + 1)")
+                            .font(.caption2.monospacedDigit().bold())
+                            .foregroundStyle(Theme.navy.opacity(0.7))
+                            .padding(5)
+                    }
+                }
             }
         }
         .animation(.easeInOut(duration: 0.2), value: model.phase)
+    }
+
+    /// The bare-key equivalent that answers an option from a hardware keyboard
+    /// (issue #69), or nil when the option has none (10th+ option).
+    private func optionShortcut(for option: String, at index: Int, singles: Bool) -> KeyboardShortcut? {
+        if singles {
+            guard let ch = option.lowercased().first else { return nil }
+            return KeyboardShortcut(KeyEquivalent(ch), modifiers: [])
+        }
+        guard index < 9, let digit = "\(index + 1)".first else { return nil }
+        return KeyboardShortcut(KeyEquivalent(digit), modifiers: [])
     }
 
     /// Big monospaced for short tokens, smaller for word-y meanings. Digits
@@ -1206,6 +1245,9 @@ struct ContentView: View {
                     .frame(maxWidth: .infinity, minHeight: 50)
             }
             .buttonStyle(.borderedProminent)
+            // Return advances from a hardware keyboard (issue #69) — except in
+            // the typed flows, where Return already belongs to the text field.
+            .keyboardShortcut(model.usesTypedEntry ? nil : .defaultAction)
         } else {
             Color.clear.frame(height: 50)
         }
@@ -1463,6 +1505,29 @@ struct ContentView: View {
             Text(value).font(.title3.monospacedDigit()).bold()
         }
     }
+}
+
+/// Watches for a physical keyboard (Bluetooth, USB, or a Smart-style attached
+/// one) via GameController, so the choice grid can show its 1–9 answer hints
+/// only when they can actually be typed (issue #69). The shortcuts themselves
+/// are always installed — they're inert without a keyboard.
+final class HardwareKeyboardObserver: ObservableObject {
+    @Published private(set) var isConnected = GCKeyboard.coalesced != nil
+    private var tokens: [NSObjectProtocol] = []
+
+    init() {
+        let center = NotificationCenter.default
+        tokens.append(center.addObserver(forName: .GCKeyboardDidConnect,
+                                         object: nil, queue: .main) { [weak self] _ in
+            self?.isConnected = true
+        })
+        tokens.append(center.addObserver(forName: .GCKeyboardDidDisconnect,
+                                         object: nil, queue: .main) { [weak self] _ in
+            self?.isConnected = GCKeyboard.coalesced != nil
+        })
+    }
+
+    deinit { tokens.forEach(NotificationCenter.default.removeObserver) }
 }
 
 #Preview {
