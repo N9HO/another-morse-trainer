@@ -26,7 +26,18 @@ final class MorsePlayer {
     // Shared with the real-time render thread. `OSAllocatedUnfairLock` is the
     // safe Swift wrapper (a raw os_unfair_lock accessed via &self.lock is
     // undefined behavior and was crashing the app).
-    private struct Playback { var samples: [Float] = []; var cursor: Int = 0 }
+    private struct Playback {
+        var samples: [Float] = []
+        var cursor: Int = 0
+        /// Continuous background-noise amplitude (issue #29). Non-zero means the
+        /// node emits a faint band hiss instead of digital silence between
+        /// tones, which both simulates QRN and — the reason it exists — keeps
+        /// Bluetooth earbuds from idling and swallowing the first character of
+        /// the next transmission. Read and advanced on the render thread.
+        var noise: Float = 0
+        var noiseState: UInt64 = 0x2545F4914F6CDD1D
+        var noiseLast: Float = 0
+    }
     private let state = OSAllocatedUnfairLock(initialState: Playback())
 
     /// Distinguishes completion callbacks so a previous tone's timer can't
@@ -49,10 +60,28 @@ final class MorsePlayer {
             self.state.withLock { play in
                 let count = play.samples.count
                 var c = play.cursor
+                let level = play.noise
+                var st = play.noiseState
+                var last = play.noiseLast
                 for i in 0..<frames {
-                    if c < count { out[i] = play.samples[c]; c += 1 } else { out[i] = 0 }
+                    var v: Float = 0
+                    if c < count { v = play.samples[c]; c += 1 }
+                    if level > 0 {
+                        // Cheap LCG white noise, one-pole lowpassed: raw white
+                        // hiss is harsh and fatiguing, real band noise is softer.
+                        // Top 32 bits taken as a *signed* int so the noise
+                        // swings both ways — the low half alone would be a DC
+                        // offset, not a sound.
+                        st = st &* 6364136223846793005 &+ 1442695040888963407
+                        let white = Float(Int32(truncatingIfNeeded: st >> 32)) / Float(Int32.max)
+                        last += 0.2 * (white - last)
+                        v += last * level
+                    }
+                    out[i] = min(1, max(-1, v))
                 }
                 play.cursor = c
+                play.noiseState = st
+                play.noiseLast = last
             }
             return noErr
         }
@@ -87,6 +116,16 @@ final class MorsePlayer {
 
     func stop() {
         setSamples([])
+    }
+
+    /// Set the continuous background-noise floor, 0…1 (issue #29). The engine
+    /// and its source node already run for the app's lifetime, so this needs no
+    /// extra stream — it just changes what the node emits when it has no tone
+    /// to play, which is exactly what keeps a Bluetooth route from going idle.
+    func setNoiseLevel(_ level: Float) {
+        let clamped = min(1, max(0, level))
+        state.withLock { $0.noise = clamped }
+        if clamped > 0 { activate() }
     }
 
     // MARK: - Playing
@@ -221,12 +260,19 @@ final class MorsePlayer {
                         frequency: Double) -> [Float] {
         let segments = self.segments(for: playable, timing: timing)
         var out: [Float] = []
-        let rampSamples = max(1, Int(rampSeconds * sampleRate))
+        let fullRamp = max(1, Int(rampSeconds * sampleRate))
         let omega = 2.0 * Double.pi * frequency / sampleRate
 
         for segment in segments {
             let toneCount = Int(segment.tone * sampleRate)
             if toneCount > 0 {
+                // Never let the rise and fall overlap: past ~120 WPM a dit is
+                // shorter than two 5 ms ramps, and the `else if` below would
+                // then skip the fall entirely and cut the tone off at full
+                // amplitude — a click. Half a tone each way is the ceiling
+                // (issue #79). At every speed the app offers this is the
+                // unchanged 5 ms.
+                let rampSamples = max(1, min(fullRamp, toneCount / 2))
                 out.reserveCapacity(out.count + toneCount)
                 for n in 0..<toneCount {
                     var amp = Double(amplitude)

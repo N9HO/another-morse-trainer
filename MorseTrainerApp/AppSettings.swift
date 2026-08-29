@@ -124,19 +124,24 @@ enum WordTier: String, Codable, CaseIterable, Identifiable {
 
 /// Character speed for QRQ ("send faster") high-speed copy practice. Above
 /// these rates you can no longer count dits — you copy whole words by sound.
+/// 50 and 60 WPM are there for operators who already work QRQ (issue #79).
 enum QrqSpeed: String, Codable, CaseIterable, Identifiable {
-    case wpm35, wpm40
+    case wpm35, wpm40, wpm50, wpm60
     var id: String { rawValue }
     var wpm: Double {
         switch self {
         case .wpm35: return 35
         case .wpm40: return 40
+        case .wpm50: return 50
+        case .wpm60: return 60
         }
     }
     var label: String {
         switch self {
         case .wpm35: return "35 WPM"
         case .wpm40: return "40 WPM"
+        case .wpm50: return "50 WPM"
+        case .wpm60: return "60 WPM"
         }
     }
 }
@@ -335,6 +340,48 @@ enum QRNLevel: String, Codable, CaseIterable, Identifiable {
     }
 }
 
+/// A continuous, low-level noise floor played underneath everything (issue #29).
+///
+/// Two jobs in one control. The one that prompted it: Bluetooth earbuds power
+/// their receiver down during digital silence and take a moment to wake, which
+/// clips the first character of a transmission and quietly wrecks accuracy
+/// stats. A trickle of real audio never lets the link idle. The other: it is
+/// band noise, so practising against it is more like copying off the air than
+/// off a silent tone generator.
+///
+/// Deliberately *not* `QRNLevel` — that one is mixed into a finished pileup
+/// buffer, so it is scaled for a burst of loud callers. These levels have to sit
+/// comfortably under a single tone for a whole session, and so are much quieter.
+enum BackgroundNoiseLevel: String, Codable, CaseIterable, Identifiable {
+    case off, whisper, low, medium, high
+    var id: String { rawValue }
+    /// Amplitude of the (lowpassed) noise, against a tone amplitude of 0.9.
+    ///
+    /// The lowpass leaves the noise peaking at ~0.74 of this figure, so the top
+    /// level is capped where tone plus noise still fits under 1.0 — a floor that
+    /// clipped the tone it sits under would be worse than no floor. Heavier band
+    /// noise to copy through belongs to the QSO simulator's own `QRNLevel`,
+    /// which is mixed per transmission and peak-normalised afterwards.
+    var amplitude: Float {
+        switch self {
+        case .off:     return 0
+        case .whisper: return 0.010
+        case .low:     return 0.025
+        case .medium:  return 0.060
+        case .high:    return 0.130
+        }
+    }
+    var label: String {
+        switch self {
+        case .off:     return "Off"
+        case .whisper: return "Whisper"
+        case .low:     return "Low"
+        case .medium:  return "Moderate"
+        case .high:    return "Heavy"
+        }
+    }
+}
+
 /// QSO / contest simulator preferences (MorseWalker-style). Persisted as part of
 /// AppSettings; every field has a default so older saves upgrade cleanly.
 struct QSOSettings: Codable, Equatable {
@@ -465,8 +512,15 @@ struct AppSettings: Codable, Equatable {
     /// Stored uppercased and de-duplicated.
     var customWords: [String] = []
 
-    /// Character speed for QRQ high-speed copy practice (35 or 40 WPM).
+    /// Character speed for QRQ high-speed copy practice (35–60 WPM).
     var qrqSpeed: QrqSpeed = .wpm35
+
+    /// Continuous background noise under everything (issue #29). Defaults to
+    /// `.whisper`: the Bluetooth clipping it prevents is a silent accuracy tax
+    /// nobody would think to go looking for a setting about, and at ~56 dB under
+    /// the tone the floor does that job without anyone noticing hiss. Louder
+    /// levels are there for people who want band noise to copy through.
+    var backgroundNoise: BackgroundNoiseLevel = .whisper
 
     /// Answer by speaking instead of tapping (Characters & Words modes). A
     /// per-session choice made on the setup screen.
@@ -556,7 +610,7 @@ extension AppSettings {
         case maxAnswerChoices, selectedPunctuation, journeyDrainOnMiss
         case learningMode, practiceDuration
         case listenContent, listenGap, wordTier, customWords, voiceResponse, keyingResponse
-        case qrqSpeed
+        case qrqSpeed, backgroundNoise
         case examSpeed, examGrading, examUseBundled
         case qso
         case contest
@@ -592,6 +646,8 @@ extension AppSettings {
         s.wordTier = try c.decodeIfPresent(WordTier.self, forKey: .wordTier) ?? s.wordTier
         s.customWords = try c.decodeIfPresent([String].self, forKey: .customWords) ?? s.customWords
         s.qrqSpeed = try c.decodeIfPresent(QrqSpeed.self, forKey: .qrqSpeed) ?? s.qrqSpeed
+        s.backgroundNoise = try c.decodeIfPresent(BackgroundNoiseLevel.self,
+                                                  forKey: .backgroundNoise) ?? s.backgroundNoise
         s.voiceResponse = try c.decodeIfPresent(Bool.self, forKey: .voiceResponse) ?? s.voiceResponse
         s.keyingResponse = try c.decodeIfPresent(Bool.self, forKey: .keyingResponse) ?? s.keyingResponse
         s.examSpeed = try c.decodeIfPresent(ExamSpeed.self, forKey: .examSpeed) ?? s.examSpeed

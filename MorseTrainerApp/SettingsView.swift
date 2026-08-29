@@ -79,6 +79,16 @@ struct SettingsView: View {
                     } label: {
                         Label("Preview tone", systemImage: "speaker.wave.2.fill")
                     }
+                    Picker("Background noise", selection: $model.settings.backgroundNoise) {
+                        ForEach(BackgroundNoiseLevel.allCases) { Text($0.label).tag($0) }
+                    }
+                    Label {
+                        Text("On Bluetooth earbuds, silence between transmissions lets the link idle — it then wakes a moment late and clips the first character, costing you the answer. A faint noise floor keeps the link up, which is why Whisper is the default. Turn it up for band noise (QRN) to copy through, or off if you'd rather have silence.")
+                    } icon: {
+                        Image(systemName: "airpods")
+                    }
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
                     if showsGlobalSpeed {
                         sliderRow(title: "Speed",
                                   value: $model.settings.wpm,
@@ -262,10 +272,12 @@ struct SettingsView: View {
                                 Text("Max callers: \(model.settings.qso.maxStations)")
                             }
                         }
+                        // Same 60 WPM ceiling as the global character speed, so
+                        // QRQ practice carries into the QSO simulator (issue #79).
                         sliderRow(title: "Min speed", value: $model.settings.qso.minWPM,
-                                  range: 12...45, step: 1, format: { "\(Int($0)) WPM" })
+                                  range: 12...60, step: 1, format: { "\(Int($0)) WPM" })
                         sliderRow(title: "Max speed", value: $model.settings.qso.maxWPM,
-                                  range: 12...45, step: 1, format: { "\(Int($0)) WPM" })
+                                  range: 12...60, step: 1, format: { "\(Int($0)) WPM" })
                         Toggle("Farnsworth spacing", isOn: $model.settings.qso.farnsworth)
                         sliderRow(title: "Tone spread", value: $model.settings.qso.toneSpread,
                                   range: 0...500, step: 10,
@@ -516,6 +528,9 @@ struct SettingsView: View {
             lines.append("Rapid Fire: \(s.rapidFire.content.label) · \(s.rapidFire.response.label) · \(s.rapidFire.pace.label)")
         default:
             break
+        }
+        if s.backgroundNoise != .off {
+            lines.append("Background noise: \(s.backgroundNoise.label)")
         }
         if !s.selectedPunctuation.isEmpty {
             lines.append("Punctuation: \(s.selectedPunctuation.sorted().joined())")

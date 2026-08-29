@@ -1169,11 +1169,13 @@ struct ContentView: View {
 
     private var choiceGrid: some View {
         let options = model.drill?.options ?? []
-        // Hardware-keyboard answering (issue #69): when every option is a
-        // single character, its own key answers — type the letter you heard.
-        // Mixed/meaning drills use 1–9 for the Nth option instead, so a digit
-        // option and an index can never collide.
-        let singles = !options.isEmpty && options.allSatisfy { $0.count == 1 }
+        // Hardware-keyboard answering (issue #69). A single-character option is
+        // always answered by its own key; only the longer options take a 1–9
+        // position, and never a digit an option has already claimed. Choosing
+        // the scheme per drill instead of per option meant one multi-character
+        // distractor renumbered the whole grid, so a digit you heard picked the
+        // Nth option (android#30).
+        let keys = AnswerKeys.assign(options)
         return LazyVGrid(columns: columns, spacing: 16) {
             ForEach(options.indices, id: \.self) { index in
                 let option = options[index]
@@ -1191,12 +1193,14 @@ struct ContentView: View {
                 .buttonStyle(.borderedProminent)
                 .tint(tint(for: option))
                 .disabled(model.phase == .answered)
-                .keyboardShortcut(optionShortcut(for: option, at: index, singles: singles))
+                .keyboardShortcut(keys[index].map { KeyboardShortcut(KeyEquivalent($0), modifiers: []) })
                 .overlay(alignment: .topLeading) {
-                    // Surface the 1–9 mapping only when a physical keyboard is
+                    // Surface the position hint only when a physical keyboard is
                     // attached; character keys need no hint — the key is the label.
-                    if hardwareKeyboard.isConnected, !singles, index < 9 {
-                        Text("\(index + 1)")
+                    if hardwareKeyboard.isConnected,
+                       AnswerKeys.needsPositionHint(options, at: index),
+                       let key = keys[index] {
+                        Text(String(key))
                             .font(.caption2.monospacedDigit().bold())
                             .foregroundStyle(Theme.navy.opacity(0.7))
                             .padding(5)
@@ -1205,17 +1209,6 @@ struct ContentView: View {
             }
         }
         .animation(.easeInOut(duration: 0.2), value: model.phase)
-    }
-
-    /// The bare-key equivalent that answers an option from a hardware keyboard
-    /// (issue #69), or nil when the option has none (10th+ option).
-    private func optionShortcut(for option: String, at index: Int, singles: Bool) -> KeyboardShortcut? {
-        if singles {
-            guard let ch = option.lowercased().first else { return nil }
-            return KeyboardShortcut(KeyEquivalent(ch), modifiers: [])
-        }
-        guard index < 9, let digit = "\(index + 1)".first else { return nil }
-        return KeyboardShortcut(KeyEquivalent(digit), modifiers: [])
     }
 
     /// Big monospaced for short tokens, smaller for word-y meanings. Digits
