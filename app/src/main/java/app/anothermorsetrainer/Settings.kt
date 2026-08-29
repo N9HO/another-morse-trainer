@@ -43,6 +43,30 @@ enum class StoryContent(val label: String) {
     NEWS("Todays news")
 }
 
+/**
+ * A continuous, low-level noise floor played underneath everything (issue #29).
+ *
+ * Two jobs in one control. The one that prompted it: Bluetooth earbuds power
+ * their receiver down during digital silence and wake a moment late, clipping
+ * the first character. The other: it is band noise (QRN), so practising against
+ * it is more like copying off the air than off a silent tone generator.
+ *
+ * Amplitudes are against a tone amplitude of 0.9, and are far quieter than the
+ * pileup simulator's own QRN — that one is mixed into a burst of loud callers,
+ * this one has to sit under a single tone for a whole session. The lowpass
+ * leaves the noise peaking at ~0.74 of the figure below, so the top level is
+ * capped where tone plus noise still fits under 1.0: a floor that clipped the
+ * tone it sits under would be worse than no floor. Mirrors iOS
+ * `BackgroundNoiseLevel`.
+ */
+enum class BackgroundNoiseLevel(val amplitude: Float, val label: String) {
+    OFF(0f, "Off"),
+    WHISPER(0.010f, "Whisper"),
+    LOW(0.025f, "Low"),
+    MEDIUM(0.060f, "Moderate"),
+    HIGH(0.130f, "Heavy")
+}
+
 /** How much Morse the learner already knows — seeds the Koch starting set. */
 enum class Proficiency(val label: String) {
     NONE("I know nothing"),
@@ -63,12 +87,26 @@ enum class Proficiency(val label: String) {
 object Settings {
     private lateinit var prefs: SharedPreferences
 
+    /** Top of the character-speed range, shared by the setter and the slider. */
+    const val MAX_CHARACTER_WPM = 60.0
+    /** Bottom of the character-speed range. */
+    const val MIN_CHARACTER_WPM = 5.0
+
     // Sensible defaults that match what the screens used before settings existed.
     var characterWpm by mutableStateOf(18.0)
         private set
     var effectiveWpm by mutableStateOf(18.0)   // Farnsworth target; == character ⇒ standard timing
         private set
     var sidetoneHz by mutableStateOf(600.0)
+        private set
+
+    /**
+     * Continuous background noise under everything (issue #29). Off by default —
+     * it is audible, and nobody should start hearing hiss because they updated —
+     * but turning it up is what stops Bluetooth earbuds clipping the first
+     * character.
+     */
+    var backgroundNoise by mutableStateOf(BackgroundNoiseLevel.OFF)
         private set
     var hapticsEnabled by mutableStateOf(true)
         private set
@@ -164,6 +202,9 @@ object Settings {
         characterWpm = prefs.getFloat("charWpm", 18f).toDouble()
         effectiveWpm = prefs.getFloat("effWpm", 18f).toDouble()
         sidetoneHz = prefs.getFloat("sidetone", 600f).toDouble()
+        backgroundNoise = runCatching {
+            BackgroundNoiseLevel.valueOf(prefs.getString("backgroundNoise", null) ?: "OFF")
+        }.getOrDefault(BackgroundNoiseLevel.OFF)
         hapticsEnabled = prefs.getBoolean("haptics", true)
         voiceAnswersEnabled = prefs.getBoolean("voiceAnswers", false)
         answerByKeying = prefs.getBoolean("answerByKeying", false)
@@ -210,19 +251,27 @@ object Settings {
         PhraseQuiz.Config(ttrThreshold = recognitionTargetSec, optionCount = answerChoices)
 
     fun updateCharacterWpm(value: Double) {
-        characterWpm = value.coerceIn(5.0, 40.0)
+        // 60 WPM ceiling: QRQ operators work well past 40 and asked to practise
+        // there (issue #79). Matches the iOS/iPadOS/macOS slider.
+        characterWpm = value.coerceIn(MIN_CHARACTER_WPM, MAX_CHARACTER_WPM)
         if (effectiveWpm > characterWpm) effectiveWpm = characterWpm  // effective can't exceed character speed
         persist()
     }
 
     fun updateEffectiveWpm(value: Double) {
-        effectiveWpm = value.coerceIn(5.0, characterWpm)
+        effectiveWpm = value.coerceIn(MIN_CHARACTER_WPM, characterWpm)
         persist()
     }
 
     fun updateSidetoneHz(value: Double) {
         sidetoneHz = value.coerceIn(300.0, 1000.0)
         persist()
+    }
+
+    fun updateBackgroundNoise(value: BackgroundNoiseLevel) {
+        backgroundNoise = value
+        persist()
+        BackgroundNoise.refresh()   // the floor is live; retarget it now
     }
 
     fun updateHapticsEnabled(value: Boolean) {
@@ -415,6 +464,7 @@ object Settings {
             .putFloat("charWpm", characterWpm.toFloat())
             .putFloat("effWpm", effectiveWpm.toFloat())
             .putFloat("sidetone", sidetoneHz.toFloat())
+            .putString("backgroundNoise", backgroundNoise.name)
             .putBoolean("haptics", hapticsEnabled)
             .putBoolean("voiceAnswers", voiceAnswersEnabled)
             .putBoolean("answerByKeying", answerByKeying)

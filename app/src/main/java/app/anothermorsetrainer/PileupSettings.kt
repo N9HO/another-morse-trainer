@@ -28,6 +28,12 @@ enum class QrnPreset(val level: Float, val label: String) {
 object PileupSettings {
     private lateinit var prefs: SharedPreferences
 
+    /** Slowest and fastest a simulated caller may send. The top matches the
+     *  global character-speed ceiling so QRQ practice carries into a pileup
+     *  (issue #79). */
+    const val MIN_CALLER_WPM = 10.0
+    const val MAX_CALLER_WPM = 60.0
+
     /** Your station callsign, keyed on your side of the QSO ("" falls back to N0CALL). */
     var myCall by mutableStateOf("")
         private set
@@ -106,13 +112,13 @@ object PileupSettings {
 
     /** Speed band edges keep min ≤ max by dragging the other edge along. */
     fun updateMinWpm(value: Double) {
-        minWpm = value.coerceIn(10.0, 40.0)
+        minWpm = value.coerceIn(MIN_CALLER_WPM, MAX_CALLER_WPM)
         if (maxWpm < minWpm) maxWpm = minWpm
         persist()
     }
 
     fun updateMaxWpm(value: Double) {
-        maxWpm = value.coerceIn(10.0, 40.0)
+        maxWpm = value.coerceIn(MIN_CALLER_WPM, MAX_CALLER_WPM)
         if (minWpm > maxWpm) minWpm = maxWpm
         persist()
     }

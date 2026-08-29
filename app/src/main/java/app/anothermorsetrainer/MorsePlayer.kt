@@ -201,12 +201,18 @@ class MorsePlayer {
     private fun render(playable: MorseItem.Playable, timing: MorseTiming, frequency: Double): FloatArray {
         val segments = segments(playable, timing)
         val out = ArrayList<Float>()
-        val rampSamples = maxOf(1, (rampSeconds * sampleRate).toInt())
+        val fullRamp = maxOf(1, (rampSeconds * sampleRate).toInt())
         val omega = 2.0 * PI * frequency / sampleRate
 
         for (segment in segments) {
             val toneCount = (segment.tone * sampleRate).toInt()
             if (toneCount > 0) {
+                // Never let the rise and fall overlap: past ~120 WPM a dit is
+                // shorter than two 5 ms ramps, and the `else if` below would then
+                // skip the fall entirely and cut the tone off at full amplitude —
+                // a click. Half a tone each way is the ceiling (issue #79). At
+                // every speed the app offers this is the unchanged 5 ms.
+                val rampSamples = maxOf(1, minOf(fullRamp, toneCount / 2))
                 out.ensureCapacity(out.size + toneCount)
                 for (n in 0 until toneCount) {
                     var amp = amplitude

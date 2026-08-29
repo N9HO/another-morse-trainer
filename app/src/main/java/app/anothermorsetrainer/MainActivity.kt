@@ -31,6 +31,19 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
+    // The background-noise floor (issue #29) is a foreground comfort: it exists
+    // to keep a Bluetooth route awake while you practise, so it follows the app
+    // on and off screen rather than hissing on in the background.
+    override fun onStart() {
+        super.onStart()
+        BackgroundNoise.onForeground()
+    }
+
+    override fun onStop() {
+        BackgroundNoise.onBackground()
+        super.onStop()
+    }
 }
 
 /** A selectable training mode, each backed by a ported [QuizSource]. */
