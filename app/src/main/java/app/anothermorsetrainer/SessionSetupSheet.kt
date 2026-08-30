@@ -112,10 +112,8 @@ fun SessionSetupSheet(
             // The Characters track grows singles → pairs → triples → words on
             // its own. Surface that here and let the learner hold it at a stage,
             // so "Characters" serving words is never a mystery with no way back
-            // (issue #51). Offered only where a pin actually bites: unlike iOS,
-            // Android's Sending Practice builds a freshly seeded engine rather
-            // than restoring the stored track, so the control is withheld there
-            // instead of appearing to work and doing nothing.
+            // (issue #51). Sending Practice drills the same persisted track, so
+            // it gets the same control — keying whole words is a big step up.
             if (progressive != null) {
                 SetupCard("Track stage") {
                     key(stageRev) {
