@@ -52,6 +52,24 @@ jobs:
           fi
 
           # jq builds correctly-escaped JSON; thread_id targets the specific thread.
-          jq -n --arg content "$MSG" '{content: $content}' \
-            | curl -sS -X POST -H "Content-Type: application/json" \
-                   --data @- "${WEBHOOK}?thread_id=${THREAD_ID}&wait=true"
+          # curl exits 0 on an HTTP error as long as the request itself worked, so
+          # the status is checked explicitly — without this a rejected announcement
+          # printed its error and still reported the job green, which is how every
+          # Apple-side notification failed unnoticed.
+          BODY="$(mktemp)"
+          CODE="$(jq -n --arg content "$MSG" '{content: $content}' \
+            | curl -sS -o "$BODY" -w '%{http_code}' -X POST \
+                   -H "Content-Type: application/json" --data @- \
+                   "${WEBHOOK}?thread_id=${THREAD_ID}&wait=true")"
+
+          if [ "$CODE" -lt 200 ] || [ "$CODE" -ge 300 ]; then
+            echo "::error::Discord rejected the announcement for #${ISSUE_NUMBER} (HTTP ${CODE})."
+            cat "$BODY"; echo
+            echo "A webhook belongs to exactly ONE channel, and thread_id must name a"
+            echo "thread inside that channel. Code 10003 (Unknown Channel) therefore"
+            echo "means DISCORD_WEBHOOK_URL points at a different channel than the one"
+            echo "the triage threads live in (or the thread was deleted). Recreate the"
+            echo "webhook on the channel holding the threads and update the secret."
+            exit 1
+          fi
+          echo "Announced #${ISSUE_NUMBER} to thread ${THREAD_ID}."
