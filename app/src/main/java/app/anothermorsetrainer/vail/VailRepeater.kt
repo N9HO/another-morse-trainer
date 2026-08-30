@@ -7,6 +7,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import app.anothermorsetrainer.MidiKeyInput
+import app.anothermorsetrainer.AdapterKeyer
 import app.anothermorsetrainer.MidiKeyOutput
 import app.anothermorsetrainer.SidetoneGenerator
 import kotlin.math.pow
@@ -24,7 +25,8 @@ import kotlin.random.Random
  */
 class VailRepeater(context: Context) {
 
-    private val prefs = context.applicationContext.getSharedPreferences("amt_vail", Context.MODE_PRIVATE)
+    private val app = context.applicationContext
+    private val prefs = app.getSharedPreferences("amt_vail", Context.MODE_PRIVATE)
     private val main = Handler(Looper.getMainLooper())
 
     private val client = VailClient(callsign = "", txTone = 72)
@@ -86,7 +88,7 @@ class VailRepeater(context: Context) {
         breakInEnabled = prefs.getBoolean("breakIn", false)
         rxBuzzEnabled = prefs.getBoolean("rxBuzz", true)
         keyerWpm = prefs.getInt("keyerWpm", 20).coerceIn(5, 50)
-        keyerMode = MidiKeyOutput.KeyerMode.fromCode(prefs.getInt("keyerMode", MidiKeyOutput.KeyerMode.STRAIGHT_KEY.code))
+        keyerMode = AdapterKeyer.mode(app)
         client.callsign = callsign
         client.txTone = txTone
         client.baseUrl = serverUrl
@@ -101,6 +103,9 @@ class VailRepeater(context: Context) {
         )
         // Drive the adapter's piezo/keyer: wake it into MIDI mode, push the keyer
         // mode, speed, and sidetone, and (via RX buzz) feed received tones to it.
+        // The mode is re-read rather than trusted from construction time: it is
+        // shared with Settings (#43), which may have changed it since.
+        keyerMode = AdapterKeyer.mode(app)
         midiOut.configure(keyerMode = keyerMode, wpm = keyerWpm, sidetoneMidiNote = txTone)
         midiOut.start { name ->
             adapterName = name
@@ -177,7 +182,7 @@ class VailRepeater(context: Context) {
 
     /** Set the adapter's internal keyer mode (straight key, iambic A/B, …). */
     fun updateKeyerMode(mode: MidiKeyOutput.KeyerMode) {
-        keyerMode = mode; prefs.edit().putInt("keyerMode", mode.code).apply()
+        keyerMode = mode; AdapterKeyer.setMode(app, mode)
         midiOut.setKeyerMode(mode)
     }
 

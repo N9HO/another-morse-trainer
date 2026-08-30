@@ -33,15 +33,14 @@ class HardwareKey(context: Context) {
 
     /**
      * The keyer mode describes the user's *hardware* (straight key vs iambic
-     * paddle), so reuse the one they set for the Vail repeater rather than
-     * resetting their paddle every time practice starts. Speed and sidetone, by
-     * contrast, are what they're practising at and come from [Settings].
+     * paddle), so reuse the one they chose in Settings (or on the Vail repeater
+     * screen — [AdapterKeyer] is the one store behind both) rather than
+     * resetting their paddle every time practice starts. Sidetone is what
+     * they're practising at and comes from [Settings], as does the speed the
+     * adapter's own keyer sends at — in a drill that is the speed being drilled.
      */
     private val storedKeyerMode: MidiKeyOutput.KeyerMode
-        get() = MidiKeyOutput.KeyerMode.fromCode(
-            app.getSharedPreferences("amt_vail", Context.MODE_PRIVATE)
-                .getInt("keyerMode", MidiKeyOutput.KeyerMode.STRAIGHT_KEY.code)
-        )
+        get() = AdapterKeyer.mode(app)
 
     /** True on devices that expose any MIDI support at all. */
     val isSupported: Boolean get() = input.isSupported
