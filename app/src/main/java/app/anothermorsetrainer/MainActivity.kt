@@ -12,6 +12,7 @@ import androidx.compose.ui.Modifier
 import app.anothermorsetrainer.morsekit.ConfusionQuiz
 import app.anothermorsetrainer.morsekit.MorseData
 import app.anothermorsetrainer.morsekit.PhraseQuiz
+import app.anothermorsetrainer.morsekit.ProgressiveCharacters
 import app.anothermorsetrainer.morsekit.QuizSource
 
 class MainActivity : ComponentActivity() {
@@ -85,6 +86,24 @@ val QUIZ_MODES: List<QuizMode> = listOf(
     }
 )
 
+/**
+ * A mode the home menu can launch, described well enough for the pre-flight
+ * [SessionSetupSheet] to ask about it before the run starts.
+ *
+ * [wantsStage] is set only where a pinned track stage actually takes effect —
+ * the Characters quiz, which restores the persisted ladder through
+ * [EngineStore]. Sending Practice drills a freshly seeded engine rather than
+ * the stored track, so it is offered the starting level but not the stage pin,
+ * which would otherwise be a control that silently did nothing.
+ */
+private data class SetupTarget(
+    val route: Route,
+    val title: String,
+    val blurb: String,
+    val settingsMode: SettingsMode,
+    val wantsStage: Boolean = false
+)
+
 private sealed interface Route {
     data object Onboarding : Route
     data object Home : Route
@@ -113,22 +132,51 @@ private fun AppRoot() {
     var route by remember {
         mutableStateOf<Route>(if (Settings.onboardingDone) Route.Home else Route.Onboarding)
     }
+    // The mode awaiting its pre-flight sheet. Home stays composed underneath, so
+    // cancelling the sheet leaves the menu exactly as it was.
+    var setup by remember { mutableStateOf<SetupTarget?>(null) }
+
+    /** Ask first where there is something to ask; otherwise go straight in. */
+    fun launch(target: SetupTarget) {
+        if (sessionSetupHasOptions(target.settingsMode)) setup = target else route = target.route
+    }
+
+    fun quizTarget(mode: QuizMode) = SetupTarget(
+        route = Route.Quiz(mode),
+        title = mode.title,
+        blurb = mode.subtitle,
+        settingsMode = mode.settingsMode,
+        wantsStage = mode.settingsMode == SettingsMode.CHARACTERS
+    )
+
     when (val r = route) {
         Route.Onboarding -> OnboardingScreen(onDone = { route = Route.Home })
         Route.Journey -> JourneyScreen(onBack = { route = Route.Home })
         Route.Home -> HomeScreen(
             onPickJourney = { route = Route.Journey },
-            onPickQuiz = { route = Route.Quiz(it) },
+            onPickQuiz = { launch(quizTarget(it)) },
             onPickPileup = { route = Route.Pileup },
             onPickContest = { route = Route.Contest },
             onPickExam = { route = Route.Exam },
-            onPickListen = { route = Route.Listen },
-            onPickHeadCopy = { route = Route.HeadCopy },
-            onPickTypeIt = { route = Route.TypeIt },
-            onPickQrq = { route = Route.Qrq },
+            onPickListen = {
+                launch(SetupTarget(Route.Listen, "Listen", "Hands-free copy", SettingsMode.LISTEN))
+            },
+            onPickHeadCopy = {
+                launch(SetupTarget(Route.HeadCopy, "Head Copy", "Copy in your head", SettingsMode.HEAD_COPY))
+            },
+            onPickTypeIt = {
+                launch(SetupTarget(Route.TypeIt, "Type It", "Free-recall typing", SettingsMode.TYPE_IT))
+            },
+            onPickQrq = {
+                launch(SetupTarget(Route.Qrq, "QRQ Speed", "High-speed copy", SettingsMode.QRQ))
+            },
             onPickRapidFire = { route = Route.RapidFire },
-            onPickStory = { route = Route.Story },
-            onPickSending = { route = Route.Sending },
+            onPickStory = {
+                launch(SetupTarget(Route.Story, "Story", "Read along in Morse", SettingsMode.STORY))
+            },
+            onPickSending = {
+                launch(SetupTarget(Route.Sending, "Sending Practice", "Key it back", SettingsMode.SENDING))
+            },
             onPickSendingDrills = { route = Route.SendingDrills },
             onPickRepeater = { route = Route.Repeater },
             onPickCwDecoder = { route = Route.CwDecoder },
@@ -140,7 +188,15 @@ private fun AppRoot() {
             title = r.mode.title,
             onBack = { route = Route.Home },
             makeSource = r.mode.make,
-            settingsMode = r.mode.settingsMode
+            settingsMode = r.mode.settingsMode,
+            // "Return home" from the recap lands on the menu with this mode's
+            // setup sheet already open, so changing how the next run is shaped
+            // is one tap rather than a hunt through Settings (iOS issue #67).
+            // The plain Back arrow mid-session still just goes home.
+            onFinish = {
+                route = Route.Home
+                setup = quizTarget(r.mode)
+            }
         )
         Route.Pileup -> PileupScreen(onBack = { route = Route.Home })
         Route.Contest -> ContestScreen(onBack = { route = Route.Home })
@@ -163,6 +219,25 @@ private fun AppRoot() {
         Route.Reference -> ReferenceScreen(onBack = { route = Route.Home })
         Route.Settings -> SettingsScreen(onBack = { route = Route.Home })
         Route.Stats -> StatsScreen(onBack = { route = Route.Home })
+    }
+
+    setup?.let { target ->
+        // Built here rather than inside the sheet so the pin is written through
+        // EngineStore before the screen re-reads the track on start.
+        val track = remember(target) {
+            if (target.wantsStage) EngineStore.characters() else null
+        }
+        SessionSetupSheet(
+            title = target.title,
+            blurb = target.blurb,
+            settingsMode = target.settingsMode,
+            progressive = track,
+            onStart = {
+                setup = null
+                route = target.route
+            },
+            onDismiss = { setup = null }
+        )
     }
 }
 

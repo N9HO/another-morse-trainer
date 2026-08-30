@@ -46,11 +46,26 @@
         android:theme="@style/Theme.AMT">
         <activity
             android:name=".MainActivity"
-            android:exported="true">
+            android:exported="true"
+            android:launchMode="singleTask">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+
+            <!--
+              Offer AMT when a USB MIDI key is plugged in. Without this the app
+              was absent from Android's "Choose an app for the USB device"
+              dialog (issue #42) and so was never granted the device.
+              singleTask keeps an attach from stacking a second copy of the app
+              on top of a running session.
+            -->
+            <intent-filter>
+                <action android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED" />
+            </intent-filter>
+            <meta-data
+                android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED"
+                android:resource="@xml/usb_device_filter" />
         </activity>
 
         <provider

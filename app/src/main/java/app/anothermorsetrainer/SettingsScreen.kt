@@ -71,7 +71,7 @@ enum class SettingsMode {
 }
 
 /** Modes drawing from the Koch ladder — punctuation opt-ins and the starting level shape them. */
-private val LADDER_MODES = setOf(
+internal val LADDER_MODES = setOf(
     SettingsMode.CHARACTERS, SettingsMode.CONFUSION, SettingsMode.SENDING
 )
 
@@ -83,7 +83,7 @@ private val CHOICE_QUIZ_MODES = setOf(
 )
 
 /** The screens that read the session-length setting. */
-private val DURATION_MODES = setOf(
+internal val DURATION_MODES = setOf(
     SettingsMode.CHARACTERS, SettingsMode.WORDS, SettingsMode.ABBREVIATIONS,
     SettingsMode.QCODES, SettingsMode.PROSIGNS, SettingsMode.CONFUSION,
     SettingsMode.TYPE_IT, SettingsMode.QRQ, SettingsMode.HEAD_COPY,

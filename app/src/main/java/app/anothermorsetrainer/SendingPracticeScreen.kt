@@ -70,7 +70,7 @@ fun SendingPracticeScreen(onBack: () -> Unit) {
         ProgressiveCharacters(engine)
     }
     val keyer = remember { SendingKeyer(wpm = Settings.characterWpm, toneHz = Settings.sidetoneHz) }
-    val midi = remember { MidiKeyInput(context) }
+    val midi = remember { HardwareKey(context) }
     val scope = rememberCoroutineScope()
 
     var midiDevice by remember { mutableStateOf<String?>(null) }
@@ -198,6 +198,17 @@ fun SendingPracticeScreen(onBack: () -> Unit) {
                 Spacer(Modifier.height(2.dp))
                 Text("🎹 $it", style = MaterialTheme.typography.labelSmall, color = Brand.teal)
             }
+            // A BLE-MIDI key has to be scanned for and opened before MidiManager
+            // will show it here at all — pairing it in Android's Bluetooth
+            // settings is not enough. Offer that from the screen the key is
+            // actually used on, not only from the repeater.
+            //
+            // Deliberately not hidden once a key is attached: the button owns
+            // the BLE link and releases it when it leaves the composition, so
+            // gating it on `midiDevice == null` would tear the link down the
+            // instant a key connected and bounce it straight back off.
+            Spacer(Modifier.height(8.dp))
+            BluetoothKeyButton()
 
             Spacer(Modifier.height(20.dp))
 
