@@ -60,8 +60,9 @@ class Verdict(BaseModel):
             "Which OS the report is about, when stated or clearly implied: 'ios', "
             "'ipados', 'macos', 'android', 'multiple' (affects more than one), or "
             "'unknown' if the reporter hasn't said. Use 'n/a' for questions/noise. "
-            "AMT ships on all of these, so a BUG's platform must be pinned down "
-            "before it can be filed."
+            "AMT ships on all of these and bugs are often platform-specific, so "
+            "an unknown platform is always worth asking about — but it no longer "
+            "blocks filing."
         ),
     )
     reply: str = Field(
@@ -70,9 +71,11 @@ class Verdict(BaseModel):
     needs_more_info: bool = Field(
         default=False,
         description=(
-            "True if this is a real bug/feature but you don't yet have enough detail "
-            "to file a good issue and are asking the reporter for more (repro steps, "
-            "platform, a screenshot, etc.). In that case 'reply' should be the question."
+            "True if this is a real bug/feature that is still missing detail you "
+            "are asking the reporter for (repro steps, platform, a screenshot, etc.). "
+            "In that case 'reply' should be the question. It is filed regardless, "
+            "labelled 'needs-info' — this flag shapes the issue and the reply, it "
+            "does not withhold the report."
         ),
     )
     issue_update: str = Field(
@@ -107,19 +110,25 @@ Guidelines:
   * feature  = a request for new or changed functionality.
   * question = a support/usage question that should be answered, not filed.
   * noise    = chatter, greetings, off-topic, or empty content.
-- Set should_file = true ONLY for genuine, actionable bugs or feature requests that \
-you have ENOUGH detail to write a useful issue for.
-- If it's a real bug/feature but too thin to file well, set should_file = false and \
-needs_more_info = true, and make 'reply' a specific question for the missing detail \
-(repro steps, platform/OS, a screenshot, expected vs actual). Once the follow-ups \
-give you enough, set should_file = true.
-- PLATFORM IS REQUIRED FOR BUGS. AMT runs on iOS, iPadOS, macOS, and Android, and \
-bugs are frequently platform-specific, so you must know which OS a bug is on before \
-filing. Set the 'platform' field from what the reporter says (or clearly implies). \
-If a bug doesn't state the platform, do NOT file: set should_file = false, \
-needs_more_info = true, platform = 'unknown', and make 'reply' ask specifically \
-which OS they're reporting for — naming the options (iOS / iPadOS / macOS / Android) \
-and asking for the OS/app version too. Once you know it, set 'platform', put a \
+- Set should_file = true for genuine, actionable bugs or feature requests.
+- If it's a real bug/feature but still thin, set needs_more_info = true and make \
+'reply' a specific question for the missing detail (repro steps, platform/OS, a \
+screenshot, expected vs actual). It gets FILED anyway, with a 'needs-info' label — \
+a report that exists only in Discord is lost the moment the reporter stops replying, \
+so we would rather hold an incomplete issue than none at all. Because it will be \
+filed either way, ALWAYS write a usable title and body, and in the body say plainly \
+what is still unknown under a "### Still needed" heading. Answers that arrive later \
+are folded in as issue comments, so the issue gets completed rather than replaced.
+- should_file = false is for things that must never become issues: questions, noise, \
+and duplicates.
+- ALWAYS ESTABLISH THE PLATFORM FOR BUGS. AMT runs on iOS, iPadOS, macOS, and \
+Android, and bugs are frequently platform-specific, so which OS a bug is on is the \
+single most valuable missing detail. Set the 'platform' field from what the reporter \
+says (or clearly implies). \
+If a bug doesn't state the platform, still file it, but set platform = \
+'unknown' and needs_more_info = true, and make 'reply' ask specifically which OS \
+they're reporting for — naming the options (iOS / iPadOS / macOS / Android) and \
+asking for the OS/app version too. Once you know it, set 'platform', put a \
 "**Platform:** <os> (version if known)" line near the TOP of the issue body, and add \
 the matching platform label.
 - Questions and noise are never filed.
@@ -170,21 +179,42 @@ PLATFORM_QUESTION = (
 
 
 def _postprocess_platform(v: Verdict) -> Verdict:
-    """Enforce the platform policy regardless of the model's judgment:
-    a bug can't be filed without a known platform, and a known platform always
-    gets its label so issues stay filterable.
+    """Enforce the platform policy regardless of the model's judgment.
+
+    A bug whose platform we don't know is still filed — it just carries
+    'needs-info' and gets the OS question asked in Discord. Withholding it used
+    to leave the only record in Discord, so a reporter who never answered meant
+    the maintainer never learned the report existed at all; an unrouted issue
+    you can see beats one you never hear about. A known platform always gets its
+    label so issues stay filterable.
     """
-    # A bug with no platform: hold off filing and ask which OS.
+    # A bug with no platform: file it, flag it, and ask which OS.
     if v.kind == "bug" and v.platform in ("unknown", "n/a"):
-        if v.should_file:
-            v.should_file = False
-            v.needs_more_info = True
+        v.needs_more_info = True
         if "needs-info" not in v.labels:
             v.labels.append("needs-info")
         # Make sure the reply actually asks about the OS.
         low = v.reply.lower()
         if not any(p in low for p in ("ios", "ipados", "macos", "android", "platform")):
             v.reply = PLATFORM_QUESTION
+
+    # Anything still missing detail is labelled as such, whoever noticed.
+    if v.needs_more_info and "needs-info" not in v.labels:
+        v.labels.append("needs-info")
+
+    # A thin report is filed too, so it needs a usable title and body either
+    # way — an empty issue would be worse than the Discord message it replaces.
+    if v.needs_more_info and not v.title.strip():
+        v.title = f"[needs info] {v.kind} reported via Discord"
+    if v.needs_more_info and not v.body.strip():
+        v.body = (
+            "A report came in via Discord that wasn't detailed enough to write up "
+            "properly, filed so it isn't lost.\n\n"
+            "### Still needed\n"
+            "Repro steps, the platform and version, and what was expected versus "
+            "what happened. The reporter has been asked in the Discord thread; "
+            "answers will be added here as comments."
+        )
 
     # Attach the platform label whenever we know it (rides along to create_issue).
     label = _PLATFORM_LABELS.get(v.platform)

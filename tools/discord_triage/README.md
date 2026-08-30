@@ -21,22 +21,30 @@ Discord message ──▶ Claude triage ──▶ GitHub issue ──▶ reply i
 - **Dedupes** against currently open issues before filing.
 - **Triages**: suggests labels (`bug` / `enhancement` / `needs-info`) and a
   severity, and tags every issue with a `from-discord` label.
-- **Holds a conversation**: when a report is too thin, it opens a **thread**,
-  asks for the missing detail (repro steps, platform, a **screenshot**), and
-  watches that thread. If the reporter already opened a thread on their
-  message, the bot adopts it — every reply (including "duplicate of #N") lands
-  in that thread, where the reporter is looking, never as a channel-level
-  reply. On each reply it re-reads the whole conversation — **viewing any
-  attached screenshots via Claude's vision** — until it has enough to file.
-  Once filed, further details are added to the issue as comments.
+- **Files first, asks second**: a genuine bug or feature is filed straight
+  away even when it's still thin — labelled `needs-info`, with a
+  "Still needed" section naming what's missing. It used to wait for the
+  reporter before filing, which meant a reporter who went quiet left no record
+  anywhere but Discord and the maintainer never learned the report existed.
+  An incomplete issue you can see beats one you never hear about. Questions,
+  noise and duplicates are still never filed.
+- **Holds a conversation**: it opens a **thread**, asks for the missing detail
+  (repro steps, platform, a **screenshot**), and watches that thread. If the
+  reporter already opened a thread on their message, the bot adopts it — every
+  reply (including "duplicate of #N") lands in that thread, where the reporter
+  is looking, never as a channel-level reply. On each reply it re-reads the
+  whole conversation — **viewing any attached screenshots via Claude's
+  vision** — and adds what it learns to the issue as comments.
 - **Closes the loop**: replies with the issue link, a duplicate pointer, or a
   follow-up question.
 
 Structured outputs (a Pydantic schema) guarantee Claude's verdict always parses.
 
 > The thread → issue mapping is kept **in memory**, so a bot restart forgets
-> in-progress threads. That's fine in practice — just re-trigger the report with
-> a fresh 🐛 and dedup keeps it from filing twice.
+> in-progress threads: later replies in a forgotten thread are no longer folded
+> into its issue. Re-trigger the report with a fresh 🐛 to reattach it — dedup
+> keeps it from filing twice. Since the issue itself is now filed up front, a
+> restart costs you follow-up comments rather than the whole report.
 
 ## Trigger modes
 
