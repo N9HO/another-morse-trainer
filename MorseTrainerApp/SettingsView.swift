@@ -83,7 +83,7 @@ struct SettingsView: View {
                         ForEach(BackgroundNoiseLevel.allCases) { Text($0.label).tag($0) }
                     }
                     Label {
-                        Text("On Bluetooth earbuds, silence between transmissions lets the link idle — it then wakes a moment late and clips the first character, costing you the answer. A faint noise floor keeps the link up, which is why Whisper is the default. Turn it up for band noise (QRN) to copy through, or off if you'd rather have silence.")
+                        Text("On Bluetooth earbuds, silence between transmissions lets the link idle — it then wakes a moment late and clips the first character, costing you the answer. Keep-alive, the default, holds the link open with a floor too quiet to hear. Turn it up for band noise (QRN) to copy through. Off is truly silent, and brings the clipping back.")
                     } icon: {
                         Image(systemName: "airpods")
                     }

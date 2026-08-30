@@ -353,7 +353,7 @@ enum QRNLevel: String, Codable, CaseIterable, Identifiable {
 /// buffer, so it is scaled for a burst of loud callers. These levels have to sit
 /// comfortably under a single tone for a whole session, and so are much quieter.
 enum BackgroundNoiseLevel: String, Codable, CaseIterable, Identifiable {
-    case off, whisper, low, medium, high
+    case off, keepAlive, whisper, low, medium, high
     var id: String { rawValue }
     /// Amplitude of the (lowpassed) noise, against a tone amplitude of 0.9.
     ///
@@ -365,6 +365,12 @@ enum BackgroundNoiseLevel: String, Codable, CaseIterable, Identifiable {
     var amplitude: Float {
         switch self {
         case .off:     return 0
+        // Keep-alive: non-zero PCM so the Bluetooth sink never sees digital
+        // silence, but ~56 dB under the tone — below hearing at any level you
+        // would set to copy comfortably. `off` emits actual zeros, which is
+        // what lets the link idle, so this is the quietest setting that still
+        // does the job issue #29 added it for (issue #92).
+        case .keepAlive: return 0.0015
         case .whisper: return 0.010
         case .low:     return 0.025
         case .medium:  return 0.060
@@ -374,6 +380,7 @@ enum BackgroundNoiseLevel: String, Codable, CaseIterable, Identifiable {
     var label: String {
         switch self {
         case .off:     return "Off"
+        case .keepAlive: return "Keep-alive"
         case .whisper: return "Whisper"
         case .low:     return "Low"
         case .medium:  return "Moderate"
@@ -523,7 +530,10 @@ struct AppSettings: Codable, Equatable {
     /// nobody would think to go looking for a setting about, and at ~56 dB under
     /// the tone the floor does that job without anyone noticing hiss. Louder
     /// levels are there for people who want band noise to copy through.
-    var backgroundNoise: BackgroundNoiseLevel = .whisper
+    var backgroundNoise: BackgroundNoiseLevel = .keepAlive
+    /// Whether this install has been moved off the old Whisper default to the
+    /// inaudible keep-alive floor (issue #92). Runs once; see `init(from:)`.
+    var didMigrateNoiseFloor: Bool = false
 
     /// Answer by speaking instead of tapping (Characters & Words modes). A
     /// per-session choice made on the setup screen.
@@ -613,7 +623,7 @@ extension AppSettings {
         case maxAnswerChoices, selectedPunctuation, journeyDrainOnMiss
         case learningMode, practiceDuration
         case listenContent, listenGap, wordTier, customWords, voiceResponse, keyingResponse
-        case qrqSpeed, backgroundNoise
+        case qrqSpeed, backgroundNoise, didMigrateNoiseFloor
         case examSpeed, examGrading, examUseBundled
         case qso
         case contest
@@ -651,6 +661,15 @@ extension AppSettings {
         s.qrqSpeed = try c.decodeIfPresent(QrqSpeed.self, forKey: .qrqSpeed) ?? s.qrqSpeed
         s.backgroundNoise = try c.decodeIfPresent(BackgroundNoiseLevel.self,
                                                   forKey: .backgroundNoise) ?? s.backgroundNoise
+        // One-time move off the old Whisper default (issue #92). Whisper was
+        // the shipped default, so almost everyone sitting on it never chose it
+        // — they just got the loudest thing that was ever the default. Drop
+        // those installs to the inaudible keep-alive floor, which does the same
+        // job for the link. Guarded by a flag so anyone who deliberately picks
+        // Whisper afterwards keeps it.
+        let migrated = try c.decodeIfPresent(Bool.self, forKey: .didMigrateNoiseFloor) ?? false
+        if !migrated, s.backgroundNoise == .whisper { s.backgroundNoise = .keepAlive }
+        s.didMigrateNoiseFloor = true
         s.voiceResponse = try c.decodeIfPresent(Bool.self, forKey: .voiceResponse) ?? s.voiceResponse
         s.keyingResponse = try c.decodeIfPresent(Bool.self, forKey: .keyingResponse) ?? s.keyingResponse
         s.examSpeed = try c.decodeIfPresent(ExamSpeed.self, forKey: .examSpeed) ?? s.examSpeed
