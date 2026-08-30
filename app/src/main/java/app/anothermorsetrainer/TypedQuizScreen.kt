@@ -11,9 +11,11 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
@@ -234,8 +236,20 @@ fun TypedQuizScreen(
                 onDone = onBack
             )
         } else {
+        // The app targets SDK 36, so it is always edge-to-edge and the window
+        // does not resize when the IME opens; AppBackground insets for the
+        // system bars, which do not include the keyboard. Without imePadding
+        // the Check button sat underneath the IME with no way to reach it
+        // (issue #44) — and because the drill centres itself, the space freed
+        // by the keyboard is taken from the empty half above rather than from
+        // the controls. verticalScroll is the backstop for the short windows
+        // left on small phones, where even the shifted layout will not fit.
         Column(
-            modifier = Modifier.fillMaxSize().padding(24.dp),
+            modifier = Modifier
+                .fillMaxSize()
+                .imePadding()
+                .verticalScroll(rememberScrollState())
+                .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
