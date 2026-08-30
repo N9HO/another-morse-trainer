@@ -6,8 +6,8 @@ import android.os.Looper
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import app.anothermorsetrainer.MidiKeyInput
 import app.anothermorsetrainer.AdapterKeyer
+import app.anothermorsetrainer.MidiKeyInput
 import app.anothermorsetrainer.MidiKeyOutput
 import app.anothermorsetrainer.SidetoneGenerator
 import kotlin.math.pow
