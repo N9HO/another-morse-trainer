@@ -1460,10 +1460,16 @@ struct ContentView: View {
                 }
                 .buttonStyle(.borderedProminent)
 
+                // Named for where it lands, not for the sheet it opens on the
+                // way (issue #90): "Change setup" read as a settings screen,
+                // while what most people want after a run is simply out. The
+                // #67 behavior is unchanged — the intro still opens the
+                // selected mode's setup sheet, which is how you change setup
+                // before starting again.
                 Button {
                     onExit()
                 } label: {
-                    Text("Change setup")
+                    Text("Return home")
                         .font(.headline)
                         .frame(maxWidth: .infinity, minHeight: 52)
                 }
