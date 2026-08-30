@@ -40,8 +40,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import app.anothermorsetrainer.morsekit.ProgressiveCharacters
-import app.anothermorsetrainer.morsekit.TrainerEngine
 import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
 
@@ -64,11 +62,13 @@ fun SendingPracticeScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     val player = remember { MorsePlayer() }
     val haptics = remember { Haptics(context) }
-    val source = remember {
-        val engine = TrainerEngine(Settings.engineConfig())
-        Settings.applyProficiency(engine)
-        ProgressiveCharacters(engine)
-    }
+    // The same persisted Koch ladder the Characters drill uses, not a fresh
+    // engine seeded from proficiency. Sending practice drills what you are
+    // learning to copy, so it should start where copying left off and its
+    // answers should count toward the ladder — as on iOS, where AppModel hands
+    // the sending mode the one shared charLadder. A freshly seeded engine also
+    // meant a pinned track stage silently did nothing here.
+    val source = remember { EngineStore.characters() }
     val keyer = remember { SendingKeyer(wpm = Settings.characterWpm, toneHz = Settings.sidetoneHz) }
     val midi = remember { HardwareKey(context) }
     val scope = rememberCoroutineScope()
@@ -118,6 +118,9 @@ fun SendingPracticeScreen(onBack: () -> Unit) {
         if (drill.correct.length == 1) {
             Stats.recordChar(drill.correct, outcome.correct, null)
         }
+        // Keep the track durable — the ladder resumes next time, and progress
+        // made by keying now counts the same as progress made by copying.
+        EngineStore.save()
         if (Settings.hapticsEnabled) {
             if (outcome.correct) haptics.success() else haptics.error()
         }

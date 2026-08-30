@@ -90,12 +90,14 @@ val QUIZ_MODES: List<QuizMode> = listOf(
  * A mode the home menu can launch, described well enough for the pre-flight
  * [SessionSetupSheet] to ask about it before the run starts.
  *
- * [wantsStage] is set only where a pinned track stage actually takes effect —
- * the Characters quiz, which restores the persisted ladder through
- * [EngineStore]. Sending Practice drills a freshly seeded engine rather than
- * the stored track, so it is offered the starting level but not the stage pin,
- * which would otherwise be a control that silently did nothing.
+ * [wantsStage] is set where a pinned track stage actually takes effect: the
+ * modes that drill the persisted Koch ladder restored through [EngineStore] —
+ * the Characters quiz and Sending Practice, which share one track exactly as
+ * iOS's AppModel hands both the same charLadder.
  */
+/** The modes drilling the shared, persisted Koch ladder, where a stage pin bites. */
+private val STAGE_PIN_MODES = setOf(SettingsMode.CHARACTERS, SettingsMode.SENDING)
+
 private data class SetupTarget(
     val route: Route,
     val title: String,
@@ -146,7 +148,7 @@ private fun AppRoot() {
         title = mode.title,
         blurb = mode.subtitle,
         settingsMode = mode.settingsMode,
-        wantsStage = mode.settingsMode == SettingsMode.CHARACTERS
+        wantsStage = mode.settingsMode in STAGE_PIN_MODES
     )
 
     when (val r = route) {
@@ -175,7 +177,10 @@ private fun AppRoot() {
                 launch(SetupTarget(Route.Story, "Story", "Read along in Morse", SettingsMode.STORY))
             },
             onPickSending = {
-                launch(SetupTarget(Route.Sending, "Sending Practice", "Key it back", SettingsMode.SENDING))
+                launch(SetupTarget(
+                    Route.Sending, "Sending Practice", "Key it back", SettingsMode.SENDING,
+                    wantsStage = true
+                ))
             },
             onPickSendingDrills = { route = Route.SendingDrills },
             onPickRepeater = { route = Route.Repeater },
