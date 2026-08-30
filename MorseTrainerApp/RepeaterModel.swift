@@ -189,7 +189,9 @@ public final class RepeaterModel: ObservableObject {
     private static let txToneDefaultsKey = "RepeaterModel.txTone"
     private static let rxDelayDefaultsKey = "RepeaterModel.rxDelayMs"
     private static let breakInDefaultsKey = "RepeaterModel.breakInEnabled"
-    private static let keyerModeDefaultsKey = "RepeaterModel.keyerMode"
+    /// Shared with `SendingKeyer`, which wakes the same adapter and must not
+    /// clobber the keyer mode the user picked for their paddle.
+    static let keyerModeDefaultsKey = "RepeaterModel.keyerMode"
     private static let keyerWPMDefaultsKey = "RepeaterModel.keyerWPM"
     private static let adapterRxFeedbackDefaultsKey = "RepeaterModel.adapterRxFeedback"
     private static let privateModeDefaultsKey = "RepeaterModel.privateMode"

@@ -1,4 +1,7 @@
 import Foundation
+import OSLog
+
+private let log = Logger(subsystem: "com.justinrogers.MorseTrainer", category: "sendingkeyer")
 
 /// Drives "sending practice": a physical (Vail Adapter / BLE MIDI) or on-screen
 /// Morse key plays sidetone and is decoded back to text via `MorseDecoder`. The
@@ -23,14 +26,28 @@ final class SendingKeyer: ObservableObject {
 
     private let keyer = KeyerEngine()
     private var midi: MIDIInput?
+    /// Output to the key, kept alive for one reason: waking the Vail Adapter.
+    /// The adapter boots in HID keyboard mode and sends **no** MIDI note events
+    /// until it receives a Control Change, so without this the adapter
+    /// enumerates, `midiDeviceNames` names it, and every paddle press goes
+    /// nowhere. Only the repeater ran `MIDIOutput`, so sending practice was
+    /// dead with a USB Vail Adapter — the same defect reported on Android as
+    /// N9HO/another-morse-trainer-android#42.
+    private var midiOutput: MIDIOutput?
     private let decoder: MorseDecoder
+
+    /// Kept so the adapter can be woken with the speed and tone in use.
+    private let keyerWPM: Double
+    private let toneMIDINote: Int
 
     private var keyDownAtMs: Int64?
     private var idleTask: Task<Void, Never>?
 
     init(wpm: Double, toneHz: Double) {
         decoder = MorseDecoder(wpm: wpm)
-        keyer.localTxToneMIDI = Self.midiNote(forHz: toneHz)
+        keyerWPM = wpm
+        toneMIDINote = Self.midiNote(forHz: toneHz)
+        keyer.localTxToneMIDI = toneMIDINote
         decoder.onUpdate = { [weak self] text in
             self?.decodedText = text
         }
@@ -53,6 +70,7 @@ final class SendingKeyer: ObservableObject {
             midi = input
             midiDeviceNames = input.connectedSourceNames
             midiUnavailable = false
+            wakeAdapter()
         } catch {
             // The on-screen key still works, but surface the failure so a
             // hardware-key user isn't left keying into the void.
@@ -63,16 +81,52 @@ final class SendingKeyer: ObservableObject {
 
     /// Re-enumerate MIDI sources — after connecting a BLE-MIDI key, whose
     /// arrival CoreMIDI reports but which is worth confirming on the spot.
+    /// A key that has just arrived also has to be woken before it will send.
     func rescanMIDI() {
         guard let midi else { return }
         midi.rescan()
         midiDeviceNames = midi.connectedSourceNames
+        wakeAdapter()
+    }
+
+    /// Put the Vail Adapter into MIDI mode so it starts sending note events.
+    ///
+    /// `connectToAdapter()` broadcasts the init sequence to every non-network
+    /// destination, because the adapter enumerates under different names across
+    /// firmwares ("Vail", "QT Py M0"). It is idempotent, so calling it on start
+    /// and again after a rescan is safe. A BLE-MIDI paddle that was never in
+    /// keyboard mode simply ignores the sequence.
+    private func wakeAdapter() {
+        do {
+            let out = try midiOutput ?? MIDIOutput()
+            midiOutput = out
+            // The keyer mode describes the user's *hardware* (straight key vs
+            // iambic paddle), so reuse the one they set for the repeater rather
+            // than resetting their paddle every time practice starts. Speed,
+            // by contrast, is what they're practising at.
+            let defaults = UserDefaults.standard
+            let stored = defaults.object(forKey: RepeaterModel.keyerModeDefaultsKey) != nil
+                ? defaults.integer(forKey: RepeaterModel.keyerModeDefaultsKey)
+                : MIDIOutput.KeyerMode.straightKey.rawValue
+            let mode = MIDIOutput.KeyerMode(rawValue: stored) ?? .straightKey
+            let wpm = Int(keyerWPM.rounded())
+            let tone = toneMIDINote
+            Task {
+                await out.configure(keyerMode: mode, wpm: wpm, sidetoneMIDINote: tone)
+                await out.connectToAdapter()
+            }
+        } catch {
+            // The key may still send on its own (a BLE paddle always does), and
+            // the on-screen key is unaffected — so this is not a hard failure.
+            log.error("MIDIOutput init failed: \(error.localizedDescription)")
+        }
     }
 
     func stop() {
         idleTask?.cancel()
         idleTask = nil
         midi = nil
+        midiOutput = nil
         keyer.stop()
     }
 
