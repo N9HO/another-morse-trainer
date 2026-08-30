@@ -101,8 +101,27 @@ become a GitHub issue, then produce a clean, well-structured issue if so.
 
 You may be given a SINGLE message or an ongoing CONVERSATION (the original report \
 plus follow-up replies and your own earlier questions). Screenshots may be attached \
-as images — look at them and fold the relevant details into the issue. When given a \
-conversation, base your verdict on ALL of it together, not just the last line.
+as images — look at them and fold the relevant details into the issue.
+
+A CONVERSATION IS ONE REPORT, NOT A SERIES OF THEM. Reporters routinely split a \
+single thought across several consecutive messages, and answer your questions \
+several messages after you ask them. So:
+- Read the WHOLE transcript before deciding anything, and base every field on all of \
+it together — never on the last line alone. Details stated anywhere in the \
+conversation (or visible in an attached screenshot) are KNOWN, no matter which \
+message they arrived in or how long ago.
+- Lines marked [bot] are your own earlier messages; the messages after one of your \
+questions are the answers to it.
+- NEVER ask for something the conversation has already given you. Re-asking a \
+question the reporter answered earlier in the thread is the worst thing you can do \
+here — it reads as though you weren't listening, and it is the reason this \
+instruction exists. Before you set needs_more_info or put a question in 'reply', \
+re-read the transcript and confirm the detail really is absent from ALL of it. If \
+everything you asked for has now arrived, set needs_more_info = false, acknowledge \
+what they told you, and move on instead of asking again.
+- A transcript may contain the line "--- everything above is already recorded on the \
+GitHub issue; what follows is new ---". Everything above that line is context you \
+must still take into account; what is below it is what the issue does not know yet.
 
 Guidelines:
 - Classify the report as exactly one of: bug, feature, question, noise.
@@ -124,7 +143,10 @@ and duplicates.
 - ALWAYS ESTABLISH THE PLATFORM FOR BUGS. AMT runs on iOS, iPadOS, macOS, and \
 Android, and bugs are frequently platform-specific, so which OS a bug is on is the \
 single most valuable missing detail. Set the 'platform' field from what the reporter \
-says (or clearly implies). \
+says (or clearly implies) ANYWHERE in the conversation — including a reply to an \
+earlier question of yours, and including a device or OS version they mentioned in \
+passing — and keep setting it on every later pass, so a platform established once \
+isn't forgotten. \
 If a bug doesn't state the platform, still file it, but set platform = \
 'unknown' and needs_more_info = true, and make 'reply' ask specifically which OS \
 they're reporting for — naming the options (iOS / iPadOS / macOS / Android) and \
@@ -178,7 +200,7 @@ PLATFORM_QUESTION = (
 )
 
 
-def _postprocess_platform(v: Verdict) -> Verdict:
+def _postprocess_platform(v: Verdict, ask_platform: bool = True) -> Verdict:
     """Enforce the platform policy regardless of the model's judgment.
 
     A bug whose platform we don't know is still filed — it just carries
@@ -187,15 +209,23 @@ def _postprocess_platform(v: Verdict) -> Verdict:
     the maintainer never learned the report existed at all; an unrouted issue
     you can see beats one you never hear about. A known platform always gets its
     label so issues stay filterable.
+
+    `ask_platform` is False once the thread has already been asked which OS it
+    is. The question is worth forcing once; forcing it onto every later reply is
+    how the bot ends up asking something the reporter answered three messages
+    ago. The issue still gets flagged 'needs-info' — the model just gets to
+    decide for itself whether anything is still worth asking out loud.
     """
-    # A bug with no platform: file it, flag it, and ask which OS.
+    # A bug with no platform: file it, flag it, and (the first time) ask which OS.
     if v.kind == "bug" and v.platform in ("unknown", "n/a"):
         v.needs_more_info = True
         if "needs-info" not in v.labels:
             v.labels.append("needs-info")
         # Make sure the reply actually asks about the OS.
         low = v.reply.lower()
-        if not any(p in low for p in ("ios", "ipados", "macos", "android", "platform")):
+        if ask_platform and not any(
+            p in low for p in ("ios", "ipados", "macos", "android", "platform")
+        ):
             v.reply = PLATFORM_QUESTION
 
     # Anything still missing detail is labelled as such, whoever noticed.
@@ -230,6 +260,7 @@ def _triage_sync(
     explicit: bool = False,
     images: Optional[list[tuple[str, str]]] = None,
     has_issue: bool = False,
+    ask_platform: bool = True,
 ) -> Verdict:
     explicit_note = (
         "\n\nNOTE: A maintainer explicitly flagged this for triage. Treat it as worth "
@@ -242,8 +273,12 @@ def _triage_sync(
     )
     issue_note = (
         "\n\nNOTE: An issue has ALREADY been filed for this thread. Do not try to file "
-        "again — instead, if the latest replies add new information, put a concise "
-        "comment in 'issue_update' (otherwise leave it empty)."
+        "again. If the conversation now carries information the issue does not have "
+        "yet, put a concise comment in 'issue_update' covering ONLY what is new — the "
+        "transcript marks where the recorded part ends, and repeating detail that is "
+        "already on the issue just clutters it. Leave 'issue_update' empty when the "
+        "latest messages add nothing (chatter, thanks, a question you can answer in "
+        "'reply')."
         if has_issue
         else ""
     )
@@ -293,7 +328,7 @@ def _triage_sync(
             severity="n/a",
             reply="",
         )
-    return _postprocess_platform(verdict)
+    return _postprocess_platform(verdict, ask_platform)
 
 
 async def triage(
@@ -303,6 +338,7 @@ async def triage(
     explicit: bool = False,
     images: Optional[list[tuple[str, str]]] = None,
     has_issue: bool = False,
+    ask_platform: bool = True,
 ) -> Verdict:
     """Triage a report (single message or full thread transcript) off the event loop.
 
@@ -311,7 +347,16 @@ async def triage(
     `images`    = list of (media_type, base64_data) screenshots to look at.
     `has_issue` = an issue was already filed for this thread, so produce issue_update
                   comments instead of filing again.
+    `ask_platform` = False once this thread has already been asked which OS it is on,
+                  so the forced OS question isn't repeated at every reply.
     """
     return await asyncio.to_thread(
-        _triage_sync, author, content, open_issues, explicit, images, has_issue
+        _triage_sync,
+        author,
+        content,
+        open_issues,
+        explicit,
+        images,
+        has_issue,
+        ask_platform,
     )
