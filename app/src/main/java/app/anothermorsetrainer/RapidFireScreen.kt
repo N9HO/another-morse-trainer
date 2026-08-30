@@ -114,7 +114,7 @@ fun RapidFireScreen(onBack: () -> Unit) {
 
     // "Key each one": the straight key + decoder, live only during a keyed run.
     val keyer = remember { SendingKeyer(wpm = Settings.characterWpm, toneHz = Settings.sidetoneHz) }
-    val midi = remember { MidiKeyInput(context) }
+    val midi = remember { HardwareKey(context) }
     val scope = rememberCoroutineScope()
     var keyPressed by remember { mutableStateOf(false) }
     var midiDevice by remember { mutableStateOf<String?>(null) }

@@ -70,7 +70,7 @@ fun SendingPracticeScreen(onBack: () -> Unit) {
         ProgressiveCharacters(engine)
     }
     val keyer = remember { SendingKeyer(wpm = Settings.characterWpm, toneHz = Settings.sidetoneHz) }
-    val midi = remember { MidiKeyInput(context) }
+    val midi = remember { HardwareKey(context) }
     val scope = rememberCoroutineScope()
 
     var midiDevice by remember { mutableStateOf<String?>(null) }

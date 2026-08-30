@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  USB devices AMT will offer to open: anything on the USB MIDI Streaming
+  interface (Audio class 1, subclass 3). That is what a Vail Adapter — which
+  enumerates as its underlying board, e.g. "Adafruit QT Py M0" — presents, so
+  matching the class rather than a vendor/product id covers every firmware and
+  every clone without listing them.
+
+  Without this filter AMT never appeared in Android's "Choose an app for the
+  USB device" dialog (issue #42), so the app was never granted the device and
+  users had no way to hand a plugged-in key to it.
+-->
+<resources>
+    <usb-device class="1" subclass="3" />
+</resources>

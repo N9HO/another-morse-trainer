@@ -226,7 +226,7 @@ fun QuizScreen(
     // Optional keyed answers: the straight key + decoder, live while the toggle
     // is on (the iOS "answer by keying" panel).
     val keyer = remember { SendingKeyer(wpm = Settings.characterWpm, toneHz = Settings.sidetoneHz) }
-    val midi = remember { MidiKeyInput(context) }
+    val midi = remember { HardwareKey(context) }
     val scope = rememberCoroutineScope()
     var keyPressed by remember { mutableStateOf(false) }
     var midiDevice by remember { mutableStateOf<String?>(null) }
