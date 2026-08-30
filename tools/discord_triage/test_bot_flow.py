@@ -43,6 +43,14 @@ REPORTER = FakeUser(1, "kb1abc")
 BOT_USER = FakeUser(2, "AMT Triage", is_bot=True)
 
 
+class FakeAttachment:
+    def __init__(self, filename: str):
+        self.filename, self.content_type, self.size = filename, "image/png", 10
+
+    async def read(self):
+        return b"not really a png"
+
+
 class FakeMessage:
     def __init__(self, author: FakeUser, content: str):
         self.id, self.author, self.content, self.attachments = next(_ids), author, content, []
@@ -51,8 +59,9 @@ class FakeMessage:
 class FakeThread:
     """Just enough discord.Thread for _gather_thread and _say."""
 
-    def __init__(self, messages: list[FakeMessage]):
+    def __init__(self, messages: list[FakeMessage], name: str = "Triage: a report"):
         self.id = next(_ids)
+        self.name = name
         self.messages = list(messages)
         self.archived = False
         self.parent = None
@@ -262,6 +271,49 @@ def test_auto_mode_stays_quiet_on_chatter():
         run(bot._triage_thread(thread, explicit=False))
     assert thread.said == [], "unprompted chatter gets silence, not a reply"
     assert not h.created
+
+
+def test_the_forum_post_from_the_bug_report():
+    """The real thing: a forum post, an answer already given, two 🐛 reactions.
+
+    Reported at 6:57 ("the keyboard covers the submit button"), answered at
+    7:01 ("Android, latest version"), a screenshot after it — and a maintainer
+    reacting to both the report and the screenshot. The bot used to answer
+    twice, and ask which OS both times.
+    """
+    with Harness([_verdict(platform="android")]) as h:
+        thread = FakeThread(
+            [FakeMessage(REPORTER, "When I'm using the on-screen keyboard everything "
+                                   "below the data entry window is covered by the keyboard.")],
+            name="In QRQ Speed the UI might need to move up the screen.",
+        )
+        thread.post("Android, latest version.")
+        screenshot = thread.post("I have a screenshot")
+        screenshot.attachments = [FakeAttachment("qrq.png")]
+
+        async def two_reactions_a_second_apart():
+            first = asyncio.create_task(bot._triage_thread(thread, explicit=True))
+            await asyncio.sleep(0.01)
+            second = asyncio.create_task(bot._triage_thread(thread, explicit=True))
+            await asyncio.gather(first, second)
+
+        run(two_reactions_a_second_apart())
+
+    assert len(h.transcripts) == 1, "reacting to two messages is one triage of the thread"
+    assert len(thread.said) == 1, "the reporter gets one answer, not two"
+    transcript = h.transcripts[0]
+    # The OS was answered in message two, and the screen is in the post's title.
+    assert "Android, latest version." in transcript
+    assert "Thread title: In QRQ Speed" in transcript
+    assert "the keyboard" in transcript
+
+
+def test_a_bot_opened_threads_title_is_not_repeated():
+    with Harness([_verdict()]) as h:
+        thread = FakeThread([FakeMessage(REPORTER, "QSO sim freezes")],
+                            name="Triage: QSO sim freezes")
+        run(bot._triage_thread(thread, explicit=True))
+    assert "Thread title:" not in h.transcripts[0]
 
 
 def test_a_duplicate_pointer_is_given_once_not_on_every_reply():

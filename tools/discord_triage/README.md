@@ -49,16 +49,23 @@ they saw it on, then a screenshot, then answer the question the bot asked. So
 **anything that happens inside a thread triages the whole thread**, never the
 one message that triggered it:
 
-- **Every trigger reads the entire conversation** — the original report, every
-  follow-up, the bot's own earlier questions, and the answers to them. This
-  holds for threads the bot has never seen before (one the reporter opened
-  themselves, a forum post, a thread left over from before a restart), which is
-  what stopped it re-asking questions that were answered three messages up.
-- **A burst of messages is coalesced into one pass.** Messages posted within
+- **Every trigger reads the entire conversation** — the thread's title, the
+  original report, every follow-up, the bot's own earlier questions, and the
+  answers to them. This holds for threads the bot has never seen before (one
+  the reporter opened themselves, a forum post, a thread left over from before
+  a restart), which is what stopped it re-asking questions that were answered
+  three messages up.
+- **The post's title counts as part of the report.** In a forum channel that's
+  the reporter's headline — "In QRQ Speed the UI might need to move up the
+  screen" names the screen that the messages under it never mention. (A thread
+  the bot opened itself is named after the message it hangs off, so its title
+  is skipped rather than repeated.)
+- **A burst of triggers is coalesced into one pass.** Triggers landing within
   `TRIAGE_SETTLE_SECONDS` (default 8) of each other are read together, so three
-  thoughts typed in a row produce one considered answer instead of three
-  racing triages — and can't file the same bug twice. An emoji trigger skips
-  the wait; someone is waiting on it.
+  thoughts typed in a row — or a 🐛 on the report *and* on the screenshot under
+  it — produce one considered answer instead of two or three racing triages,
+  and can't file the same bug twice. The 👀 goes on immediately, so a
+  maintainer still sees the trigger land.
 - **It asks each question at most once.** The forced "which OS is this?" prompt
   fires once per thread; after that the model decides for itself whether
   anything is genuinely still missing, and the prompt tells it in as many words

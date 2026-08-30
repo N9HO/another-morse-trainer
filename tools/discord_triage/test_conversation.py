@@ -13,8 +13,10 @@ from conversation import (
     RECORDED_MARKER,
     Turn,
     asked_about_platform,
+    bot_already_said,
     find_issue_anchor,
     render_transcript,
+    thread_title,
 )
 
 BOT = "AMT Triage"
@@ -79,6 +81,37 @@ def test_long_thread_keeps_the_report_and_the_latest():
     assert "original report" in text
     assert "the newest detail" in text
     assert ELISION in text
+
+
+def test_a_forum_posts_title_is_part_of_the_report():
+    # The reporter's headline often names the screen — the messages under it
+    # may never repeat it.
+    title = thread_title("In QRQ Speed the UI might need to move up the screen.")
+    text = render_transcript(THREAD, title=title)
+    assert text.startswith("Thread title: In QRQ Speed the UI might need")
+
+
+def test_a_thread_the_bot_named_has_no_title_to_add():
+    assert thread_title("Triage: the QSO sim freezes") is None
+    assert thread_title("   ") is None
+    assert thread_title(None) is None
+
+
+def test_trimming_keeps_the_title_and_the_report():
+    turns = [_user(1, "original report")]
+    turns += [_user(i, f"filler {i} " + "x" * 200) for i in range(2, 200)]
+    turns.append(_user(500, "the newest detail"))
+    text = render_transcript(turns, title="Keyboard covers the submit button", max_chars=2000)
+    assert len(text) <= 2000
+    assert text.startswith("Thread title: Keyboard covers the submit button")
+    assert "original report" in text
+    assert "the newest detail" in text
+
+
+def test_bot_already_said_only_counts_our_own_messages():
+    turns = [_bot(1, "Looks like a duplicate of #17. 🔁"), _user(2, "duplicate of #99?")]
+    assert bot_already_said(turns, "duplicate of #17")
+    assert not bot_already_said(turns, "duplicate of #99")
 
 
 def test_finds_the_issue_the_bot_announced():

@@ -7,12 +7,14 @@ re-reading the whole conversation (including any screenshots, which it views via
 Claude's vision) on every reply until it has enough to file, then files the issue or
 adds the new details as a comment.
 
-Everything inside a thread is triaged as ONE report. A reporter rarely says it all
-in one message: they add a second thought, then a screenshot, then answer the
-question the bot asked. So any trigger inside a thread re-reads the whole thread
-rather than the message that triggered it, and a burst of messages a few seconds
-apart is coalesced into a single pass (TRIAGE_SETTLE_SECONDS) instead of racing one
-triage per fragment.
+Everything inside a thread is triaged as ONE report — its title included, which in
+a forum channel is where the reporter says which screen they're on. A reporter
+rarely says it all in one message: they add a second thought, then a screenshot,
+then answer the question the bot asked. So any trigger inside a thread re-reads the
+whole thread rather than the message that triggered it, and triggers that land
+within TRIAGE_SETTLE_SECONDS of each other — a burst of replies, or a maintainer
+reacting to both the report and the screenshot under it — are coalesced into a
+single pass instead of one triage (and one answer) each.
 
 Trigger modes (TRIGGER_MODE):
   - "react": a maintainer reacts to a message with TRIGGER_EMOJI (default 🐛).
@@ -41,12 +43,14 @@ import discord
 
 from config import settings
 from conversation import (
+    AUTO_THREAD_PREFIX,
     Turn,
     asked_about_platform,
     bot_already_said,
     find_issue_anchor,
     render_transcript,
     render_turn,
+    thread_title,
 )
 from github_client import (
     GitHubError,
@@ -101,11 +105,14 @@ class Conversation:
     turns: list[Turn] = field(default_factory=list)
     images: list[tuple[str, str]] = field(default_factory=list)
     last_message_id: Optional[int] = None
+    # The thread's own name, when it carries information the messages don't —
+    # in a forum channel that's the reporter's headline.
+    title: Optional[str] = None
 
     @property
     def has_content(self) -> bool:
         """Is there anything here a human wrote that we can actually read?"""
-        if self.images:
+        if self.images or self.title:
             return True
         return any(render_turn(turn) for turn in self.turns if not turn.is_bot)
 
@@ -255,6 +262,7 @@ async def _gather_thread(thread: discord.Thread) -> Conversation:
         turns=turns,
         images=await _images_from(messages),
         last_message_id=messages[-1].id if messages else None,
+        title=thread_title(thread.name),
     )
 
 
@@ -304,7 +312,7 @@ async def _ensure_thread(message: discord.Message) -> Optional[discord.Thread]:
     existing = await _message_thread(message)
     if existing is not None:
         return existing
-    name = (f"Triage: {(message.content or '').strip()}" or "Triage")[:90]
+    name = (f"{AUTO_THREAD_PREFIX}{(message.content or '').strip()}" or "Triage")[:90]
     try:
         return await message.create_thread(name=name, auto_archive_duration=1440)
     except discord.HTTPException as err:
@@ -570,16 +578,19 @@ def _lock_for(thread_id: int) -> asyncio.Lock:
 
 
 async def _triage_thread(thread: discord.Thread, *, explicit: bool) -> None:
-    """Triage a whole thread, coalescing a burst of messages into one pass."""
+    """Triage a whole thread, coalescing a burst of triggers into one pass."""
     token = next(_request_tokens)
     _latest_request[thread.id] = token
 
-    # An explicit trigger is someone waiting on an answer, so it runs now; an
-    # automatic one waits to see whether the reporter is still typing.
-    if not explicit and settings.settle_seconds > 0:
+    # Wait for the thread to settle, whoever triggered it. A reporter is still
+    # typing their next thought; a maintainer reacting 🐛 to the report AND to
+    # the screenshot under it means "triage this thread", not "answer me twice"
+    # — and two answers to one conversation is the behavior being fixed. The 👀
+    # already went on, so nobody is left wondering whether it landed.
+    if settings.settle_seconds > 0:
         await asyncio.sleep(settings.settle_seconds)
         if _latest_request.get(thread.id) != token:
-            return  # superseded — the newer request reads this message too
+            return  # superseded — the newer trigger reads this message too
 
     async with _lock_for(thread.id):
         if _latest_request.get(thread.id) != token:
@@ -596,7 +607,9 @@ async def _run_triage(thread: discord.Thread, *, explicit: bool) -> None:
         return
 
     p = await _thread_state(thread, convo)
-    transcript = render_transcript(convo.turns, recorded_through=p.recorded_through)
+    transcript = render_transcript(
+        convo.turns, recorded_through=p.recorded_through, title=convo.title
+    )
     # Drop this thread's own issue from the dedup list so a refinement isn't
     # judged a duplicate of the very issue it's refining.
     open_issues = [

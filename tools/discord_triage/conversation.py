@@ -38,6 +38,10 @@ ELISION = "[... earlier messages omitted ...]"
 MAX_TURN_CHARS = 4000
 MAX_TRANSCRIPT_CHARS = 40_000
 
+# Threads the bot opens itself are named after the message they hang off, so
+# their title would only repeat the first line of the transcript.
+AUTO_THREAD_PREFIX = "Triage: "
+
 
 @dataclass
 class Turn:
@@ -77,16 +81,17 @@ def render_turn(turn: Turn) -> str:
     return f"{who}: {body}" if body else ""
 
 
-def _trim(lines: list[str], max_chars: int) -> list[str]:
-    """Keep the transcript under budget, oldest first — but never drop line 1.
+def _trim(lines: list[str], max_chars: int, keep_head: int = 1) -> list[str]:
+    """Keep the transcript under budget, oldest first — but never drop the head.
 
-    The first line is the original report; the most recent lines are where the
-    reporter's latest thoughts are. It's the middle that can go.
+    The opening lines are the title and the original report; the most recent
+    lines are where the reporter's latest thoughts are. It's the middle that
+    can go.
     """
-    if sum(len(line) + 1 for line in lines) <= max_chars or len(lines) <= 1:
+    if sum(len(line) + 1 for line in lines) <= max_chars or len(lines) <= keep_head:
         return lines
-    head, rest = lines[:1], lines[1:]
-    budget = max_chars - len(head[0]) - len(ELISION) - 2
+    head, rest = lines[:keep_head], lines[keep_head:]
+    budget = max_chars - sum(len(line) + 1 for line in head) - len(ELISION) - 2
     tail: list[str] = []
     for line in reversed(rest):
         if len(line) + 1 > budget:
@@ -99,9 +104,15 @@ def _trim(lines: list[str], max_chars: int) -> list[str]:
 def render_transcript(
     turns: Sequence[Turn],
     recorded_through: Optional[int] = None,
+    title: Optional[str] = None,
     max_chars: int = MAX_TRANSCRIPT_CHARS,
 ) -> str:
     """The conversation as text, with the already-recorded part marked off.
+
+    `title` is the thread's own name. In a forum channel that is where the
+    reporter writes their headline ("In QRQ Speed the UI might need to move up
+    the screen"), which is often the one place the affected screen is named —
+    reading only the messages threw it away.
 
     `recorded_through` is the id of the newest message whose content already
     reached the GitHub issue. Discord snowflake ids increase with time, so
@@ -109,6 +120,8 @@ def render_transcript(
     marker survives a deleted message, which an index would not.
     """
     lines: list[str] = []
+    if title:
+        lines.append(f"Thread title: {title}")
     marked = recorded_through is None
     for turn in turns:
         if not marked and turn.message_id > recorded_through:
@@ -117,7 +130,21 @@ def render_transcript(
         rendered = render_turn(turn)
         if rendered:
             lines.append(rendered)
-    return "\n".join(_trim(lines, max_chars))
+    # Protect the title and the opening report from being trimmed away.
+    return "\n".join(_trim(lines, max_chars, keep_head=2 if title else 1))
+
+
+def thread_title(name: Optional[str]) -> Optional[str]:
+    """The thread's title, when it tells us something the messages don't.
+
+    A forum post's title is the reporter's headline and belongs in the report.
+    A thread the bot opened itself is named after the message it hangs off, so
+    its title is just the transcript's first line again.
+    """
+    name = (name or "").strip()
+    if not name or name.startswith(AUTO_THREAD_PREFIX):
+        return None
+    return name
 
 
 _ISSUE_URL_RE = re.compile(
