@@ -7,6 +7,15 @@ struct SettingsView: View {
     @State private var confirmReset = false
     @State private var copiedDiagnostics = false
 
+    /// The adapter's keyer mode (issue #43). Stored under the repeater's key
+    /// because it is one fact about the operator's hardware, not a per-screen
+    /// preference: `RepeaterModel` and `SendingKeyer` both read it, and each
+    /// asserts it on the adapter when it wakes it. Until it was settable here,
+    /// only the Vail screen could change it — so a paddle configured anywhere
+    /// else was overwritten with Straight Key the moment practice started.
+    @AppStorage(RepeaterModel.keyerModeDefaultsKey) private var adapterKeyerMode: Int =
+        MIDIOutput.KeyerMode.straightKey.rawValue
+
     /// When opened from inside a session, the running mode: sections that only
     /// matter to *other* modes are hidden, so Q-Codes practice never scrolls
     /// past the QSO Simulator's knobs (issue #66). nil — the intro's app-wide
@@ -22,6 +31,9 @@ struct SettingsView: View {
         [.journey, .characters, .words, .abbreviations, .qCodes, .prosigns, .confusion]
     /// The pileup surfaces all four QSO sections configure.
     private static let pileupModes: Set<TrainingMode> = [.qso, .contest]
+    /// The surfaces a hardware key can drive. `SendingKeyer` wakes the adapter
+    /// for Sending Practice; the Vail repeater has its own copy of this control.
+    private static let hardwareKeyModes: Set<TrainingMode> = [.sending]
     /// Modes with a play → answer → reveal loop the Feedback section controls.
     private static let feedbackModes: Set<TrainingMode> =
         [.journey, .characters, .words, .abbreviations, .qCodes, .prosigns,
@@ -223,6 +235,21 @@ struct SettingsView: View {
                         }
                         Toggle("Show replay button", isOn: $model.settings.allowReplay)
                         Toggle("Haptic feedback", isOn: $model.settings.hapticsEnabled)
+                    }
+                    .listRowBackground(Theme.navyElevated)
+                }
+
+                if shown(for: Self.hardwareKeyModes) {
+                    Section {
+                        Picker("Keyer mode", selection: $adapterKeyerMode) {
+                            ForEach(MIDIOutput.KeyerMode.allCases, id: \.rawValue) { mode in
+                                Text(mode.displayName).tag(mode.rawValue)
+                            }
+                        }
+                    } header: {
+                        Text("Hardware key")
+                    } footer: {
+                        Text("How the Vail Adapter should read your key. Straight Key is the default; pick an iambic mode for a paddle. This describes your key rather than a drill, so it applies in Sending Practice and on the Vail screen alike.")
                     }
                     .listRowBackground(Theme.navyElevated)
                 }
