@@ -736,8 +736,10 @@ internal fun SessionSummaryContent(
             modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)
         ) { Text("Practice again", fontWeight = FontWeight.SemiBold) }
         Spacer(Modifier.height(10.dp))
+        // Named for where it lands (issue #90): "Done" said nothing about
+        // the destination, and the iOS recap now says the same thing.
         OutlinedButton(onClick = onDone, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-            Text("Done")
+            Text("Return home")
         }
     }
 }

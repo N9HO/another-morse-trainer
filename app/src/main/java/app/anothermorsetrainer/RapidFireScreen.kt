@@ -539,7 +539,7 @@ private fun RapidFireSummary(
         }
         Row(modifier = Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             OutlinedButton(onClick = onAgain, modifier = Modifier.weight(1f)) { Text("Practice again") }
-            Button(onClick = onBack, modifier = Modifier.weight(1f)) { Text("Done") }
+            Button(onClick = onBack, modifier = Modifier.weight(1f)) { Text("Return home") }
         }
     }
 }
