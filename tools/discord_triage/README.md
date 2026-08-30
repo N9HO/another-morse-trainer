@@ -73,6 +73,16 @@ one message that triggered it:
 - **Follow-ups add only what's new.** The transcript marks where the GitHub
   issue's knowledge ends, so a comment carries the new detail instead of
   restating the thread.
+- **Everyone in the thread is read, not just the reporter.** A helper's
+  diagnosis ("that means AMT is sending MIDI messages that change the adapter's
+  settings") is often the most useful thing in the thread, and it belongs in
+  the issue. Mentions reach the model as names rather than raw ids.
+- **A duplicate is only a duplicate when it can be named.** "Feels familiar"
+  with no issue number used to file nothing and point the reporter at nothing,
+  leaving the report in Discord — the exact failure *files first, asks second*
+  exists to prevent. It's especially likely for Android reports, since dedup
+  only sees the main repo's open issues. A possible duplicate you close in one
+  click beats a report you never hear about.
 - **A restart is no longer amnesia.** The thread → issue map still lives in
   memory, but the bot announces every issue with its full URL and stamps the
   issue body with the thread id, so a forgotten thread recovers its issue from

@@ -122,6 +122,18 @@ what they told you, and move on instead of asking again.
 - A transcript may contain the line "--- everything above is already recorded on the \
 GitHub issue; what follows is new ---". Everything above that line is context you \
 must still take into account; what is below it is what the issue does not know yet.
+- A transcript may open with "Thread title: …". In a forum channel that is the \
+reporter's own headline for the report, and it often names the screen or feature \
+that the messages under it never repeat. Treat it as part of the report.
+- Several people may take part. The reporter is whoever opened the thread; the others \
+are helping, and their diagnosis ("that means AMT is sending MIDI messages that \
+change the adapter's settings") is often the most useful thing in the thread — put it \
+in the issue body, credited, rather than dropping it because it didn't come from the \
+reporter.
+- A thread can carry more than one idea: a bug, plus a suggestion for the setting \
+that would fix it. You produce ONE verdict, so file the primary report — the bug, if \
+there is one — and record the related suggestion in the body under its own heading \
+(e.g. "### Also requested") so it isn't lost.
 
 Guidelines:
 - Classify the report as exactly one of: bug, feature, question, noise.
@@ -158,7 +170,12 @@ the matching platform label.
 in the issue body — the maintainer can't see the image, only your description.
 - You are given the list of currently OPEN issues (number + title). If this report is \
 clearly already covered by one of them, set is_duplicate = true and duplicate_of to its \
-number, and should_file = false.
+number, and should_file = false. Only ever set is_duplicate = true together with the \
+NUMBER in duplicate_of. If you can't point at a specific open issue, it is not a \
+duplicate — treat it as a new report and let it be filed. A vague "this feels \
+familiar" loses the report entirely: nothing gets filed and the reporter gets no \
+issue to follow. Note the list covers the main repo only, so an Android report may \
+have a twin you cannot see.
 - Write title and body for a maintainer, not the reporter: turn casual phrasing into a \
 precise, reproducible report. Use Markdown. For bugs, include Steps to reproduce, \
 Expected, and Actual sections whenever the message gives you enough to fill them; if it \

@@ -40,6 +40,7 @@ class FakeUser:
 
 
 REPORTER = FakeUser(1, "kb1abc")
+HELPER = FakeUser(3, "Abe")
 BOT_USER = FakeUser(2, "AMT Triage", is_bot=True)
 
 
@@ -52,8 +53,10 @@ class FakeAttachment:
 
 
 class FakeMessage:
-    def __init__(self, author: FakeUser, content: str):
+    def __init__(self, author: FakeUser, content: str, clean: str | None = None):
         self.id, self.author, self.content, self.attachments = next(_ids), author, content, []
+        # discord.Message resolves @mentions to display names here.
+        self.clean_content = clean if clean is not None else content
 
 
 class FakeThread:
@@ -82,8 +85,8 @@ class FakeThread:
     async def send(self, text: str):
         self.messages.append(FakeMessage(BOT_USER, text))
 
-    def post(self, text: str) -> FakeMessage:
-        message = FakeMessage(REPORTER, text)
+    def post(self, text: str, author: FakeUser = REPORTER) -> FakeMessage:
+        message = FakeMessage(author, text)
         self.messages.append(message)
         return message
 
@@ -314,6 +317,76 @@ def test_a_bot_opened_threads_title_is_not_repeated():
                             name="Triage: QSO sim freezes")
         run(bot._triage_thread(thread, explicit=True))
     assert "Thread title:" not in h.transcripts[0]
+
+
+def test_three_reactions_on_one_thread_are_one_triage():
+    """The Vail-adapter thread: 🐛 on the report, on a helper's reply, and on the
+    reporter's follow-up. That used to be three isolated triages — three
+    answers, two of them asking for the platform the title already states."""
+    with Harness([_verdict(platform="android")]) as h:
+        thread = FakeThread(
+            [FakeMessage(REPORTER, "The Vail adapter now responds in version 1.11 on "
+                                   "Android. The only problem is the adapter switches "
+                                   "to straight key mode instead of iambic.")],
+            name="Vail adapter on Android goes into straight key mode",
+        )
+        thread.post("I think that means AMT is sending the midi messages to change "
+                    "the vail adapter settings", author=HELPER)
+        thread.post("Yep that's it, there just aren't any settings to toggle mode.")
+
+        async def three_reactions():
+            tasks = []
+            for _ in range(3):
+                tasks.append(asyncio.create_task(bot._triage_thread(thread, explicit=True)))
+                await asyncio.sleep(0.005)
+            await asyncio.gather(*tasks)
+
+        run(three_reactions())
+
+    assert len(h.transcripts) == 1
+    assert len(thread.said) == 1, "one thread, one answer"
+    assert len(h.created) == 1, "and one issue"
+    transcript = h.transcripts[0]
+    assert "Thread title: Vail adapter on Android" in transcript
+    assert "Abe:" in transcript, "a helper's diagnosis belongs in the report too"
+    assert "version 1.11 on Android" in transcript
+
+
+def test_mentions_reach_the_model_as_names_not_raw_ids():
+    with Harness([_verdict()]) as h:
+        thread = FakeThread([FakeMessage(REPORTER, "QSO sim freezes")])
+        thread.messages.append(
+            FakeMessage(REPORTER, "<@339> <@252> any thoughts?", clean="@Darryl @Abe any thoughts?")
+        )
+        run(bot._triage_thread(thread, explicit=True))
+    assert "@Darryl @Abe any thoughts?" in h.transcripts[0]
+    assert "<@339>" not in h.transcripts[0]
+
+
+def test_a_duplicate_it_cannot_name_is_still_filed():
+    """Otherwise the report exists only in Discord — which is the failure the
+    file-first rule was added to prevent."""
+    with Harness([_verdict(should_file=False, is_duplicate=True, duplicate_of=None,
+                           reply="This one feels familiar.")]) as h:
+        thread = FakeThread([FakeMessage(REPORTER, "QSO sim freezes")])
+        run(bot._triage_thread(thread, explicit=True))
+    assert len(h.created) == 1, "an unnamed duplicate must not vanish"
+
+
+def test_a_named_duplicate_is_still_never_filed():
+    with Harness([_verdict(should_file=False, is_duplicate=True, duplicate_of=17)]) as h:
+        thread = FakeThread([FakeMessage(REPORTER, "QSO sim freezes")])
+        run(bot._triage_thread(thread, explicit=True))
+    assert not h.created
+    assert thread.said == ["Looks like a duplicate of #17. 🔁"]
+
+
+def test_auto_mode_files_an_unnamed_duplicate_too():
+    with Harness([_verdict(should_file=False, is_duplicate=True, duplicate_of=None,
+                           reply="Feels familiar.")]) as h:
+        thread = FakeThread([FakeMessage(REPORTER, "QSO sim freezes")])
+        run(bot._triage_thread(thread, explicit=False))
+    assert len(h.created) == 1, "silence would drop the report entirely"
 
 
 def test_a_duplicate_pointer_is_given_once_not_on_every_reply():

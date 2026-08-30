@@ -219,7 +219,9 @@ def _turn_from(message: discord.Message) -> Turn:
     return Turn(
         message_id=message.id,
         author=message.author.display_name,
-        text=(message.content or "").strip(),
+        # clean_content resolves @mentions and #channels to their names; the
+        # raw form is a wall of numeric ids that says nothing to the model.
+        text=(message.clean_content or message.content or "").strip(),
         attachments=[a.filename for a in message.attachments],
         is_bot=message.author.bot,
         is_self=client.user is not None and message.author.id == client.user.id,
@@ -433,13 +435,25 @@ def _should_file_now(verdict) -> bool:
     A genuine bug or feature does, even when it is still missing detail. The
     old rule filed only on `should_file`, which the triage prompt clears while
     it waits on the reporter — so a report whose reporter never came back left
-    no trace outside Discord, and the maintainer never learned of it. Questions,
-    noise and duplicates are still never filed.
+    no trace outside Discord, and the maintainer never learned of it. Questions
+    and noise are still never filed.
+
+    A duplicate is only a duplicate when the model can NAME the issue it
+    duplicates. "Feels like a duplicate" with no number gave us the worst of
+    both: nothing filed, and nothing to point the reporter at — the whole
+    report living in Discord again. It is also the likeliest way to lose an
+    Android report, since dedup only sees the default repo's open issues. A
+    possible duplicate you can close in one click beats a report you never
+    heard about.
     """
     if verdict.kind not in ("bug", "feature"):
         return False
     if verdict.is_duplicate:
-        return False
+        # A duplicate the model can point at is genuinely one. A duplicate it
+        # can't name isn't — and since it cleared should_file *because* it
+        # thought this was a duplicate, that flag can't be trusted here either:
+        # file the report.
+        return not verdict.duplicate_of
     return verdict.should_file or verdict.needs_more_info
 
 
@@ -451,6 +465,8 @@ def _engages(verdict) -> bool:
     counts: pointing at the existing issue is the useful answer.
     """
     if verdict.is_duplicate and verdict.duplicate_of:
+        return True
+    if _should_file_now(verdict):
         return True
     return verdict.should_file or verdict.needs_more_info or verdict.kind == "question"
 
