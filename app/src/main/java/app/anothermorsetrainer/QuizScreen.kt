@@ -165,7 +165,13 @@ fun QuizScreen(
     title: String,
     onBack: () -> Unit,
     makeSource: () -> QuizSource,
-    settingsMode: SettingsMode = SettingsMode.CHARACTERS
+    settingsMode: SettingsMode = SettingsMode.CHARACTERS,
+    /**
+     * Leaving from the end-of-session recap, as opposed to the Back arrow
+     * mid-run. Defaults to [onBack]; the caller overrides it to reopen this
+     * mode's setup sheet on the way home (iOS issue #67).
+     */
+    onFinish: () -> Unit = onBack
 ) {
     val context = LocalContext.current
     val player = remember { MorsePlayer() }
@@ -491,7 +497,7 @@ fun QuizScreen(
                 tally = tally,
                 milestone = milestone,
                 onPracticeAgain = { practiceAgain() },
-                onDone = onBack
+                onDone = onFinish
             )
         } else {
         Column(
@@ -760,7 +766,7 @@ private fun SummaryRow(label: String, value: String) {
  * held stage that never auto-advances. Mirrors the iOS setup-card picker (#51).
  */
 @Composable
-private fun StagePinRow(
+internal fun StagePinRow(
     pinned: ProgressiveCharacters.Stage?,
     onPick: (ProgressiveCharacters.Stage?) -> Unit
 ) {
@@ -783,7 +789,7 @@ private fun StagePinRow(
 }
 
 @Composable
-private fun StagePill(label: String, selected: Boolean, onClick: () -> Unit) {
+internal fun StagePill(label: String, selected: Boolean, onClick: () -> Unit) {
     Box(
         modifier = Modifier
             .background(
