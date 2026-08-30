@@ -31,9 +31,12 @@ struct SettingsView: View {
         [.journey, .characters, .words, .abbreviations, .qCodes, .prosigns, .confusion]
     /// The pileup surfaces all four QSO sections configure.
     private static let pileupModes: Set<TrainingMode> = [.qso, .contest]
-    /// The surfaces a hardware key can drive. `SendingKeyer` wakes the adapter
-    /// for Sending Practice; the Vail repeater has its own copy of this control.
-    private static let hardwareKeyModes: Set<TrainingMode> = [.sending]
+    /// The surfaces a hardware key can drive — every mode `usesKeyingResponse`
+    /// answers yes for, since all of them route through `SendingKeyerView` and
+    /// its `SendingKeyer`, which wakes the adapter. (The Vail repeater carries
+    /// its own copy of this control.)
+    private static let hardwareKeyModes: Set<TrainingMode> =
+        [.sending, .characters, .words, .rapidFire]
     /// Modes with a play → answer → reveal loop the Feedback section controls.
     private static let feedbackModes: Set<TrainingMode> =
         [.journey, .characters, .words, .abbreviations, .qCodes, .prosigns,
