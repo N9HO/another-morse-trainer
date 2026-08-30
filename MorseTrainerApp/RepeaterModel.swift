@@ -192,6 +192,16 @@ public final class RepeaterModel: ObservableObject {
     /// Shared with `SendingKeyer`, which wakes the same adapter and must not
     /// clobber the keyer mode the user picked for their paddle.
     static let keyerModeDefaultsKey = "RepeaterModel.keyerMode"
+
+    /// The operator's keyer mode as stored, defaulting to a straight key — what
+    /// a bare adapter keys as. Shared with `SendingKeyer` and the Settings
+    /// screen, all of which read this one key (issue #43).
+    static var storedKeyerMode: Int {
+        let defaults = UserDefaults.standard
+        return defaults.object(forKey: keyerModeDefaultsKey) != nil
+            ? defaults.integer(forKey: keyerModeDefaultsKey)
+            : MIDIOutput.KeyerMode.straightKey.rawValue
+    }
     private static let keyerWPMDefaultsKey = "RepeaterModel.keyerWPM"
     private static let adapterRxFeedbackDefaultsKey = "RepeaterModel.adapterRxFeedback"
     private static let privateModeDefaultsKey = "RepeaterModel.privateMode"
@@ -231,9 +241,7 @@ public final class RepeaterModel: ObservableObject {
         rxDelayMs = resolvedRxDelay
         breakInEnabled = resolvedBreakIn
 
-        keyerMode = defaults.object(forKey: Self.keyerModeDefaultsKey) != nil
-            ? defaults.integer(forKey: Self.keyerModeDefaultsKey)
-            : MIDIOutput.KeyerMode.straightKey.rawValue
+        keyerMode = Self.storedKeyerMode
         keyerWPM = defaults.object(forKey: Self.keyerWPMDefaultsKey) != nil
             ? defaults.integer(forKey: Self.keyerWPMDefaultsKey)
             : 20
@@ -287,6 +295,10 @@ public final class RepeaterModel: ObservableObject {
         do {
             let out = try MIDIOutput()
             midiOutput = out
+            // Re-read rather than trusting the value loaded at init: the keyer
+            // mode is shared with Settings (issue #43), which may have changed
+            // it since this model was built.
+            keyerMode = Self.storedKeyerMode
             let mode = MIDIOutput.KeyerMode(rawValue: keyerMode) ?? .straightKey
             let wpm = keyerWPM
             let tone = txTone

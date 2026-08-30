@@ -101,14 +101,11 @@ final class SendingKeyer: ObservableObject {
             let out = try midiOutput ?? MIDIOutput()
             midiOutput = out
             // The keyer mode describes the user's *hardware* (straight key vs
-            // iambic paddle), so reuse the one they set for the repeater rather
-            // than resetting their paddle every time practice starts. Speed,
-            // by contrast, is what they're practising at.
-            let defaults = UserDefaults.standard
-            let stored = defaults.object(forKey: RepeaterModel.keyerModeDefaultsKey) != nil
-                ? defaults.integer(forKey: RepeaterModel.keyerModeDefaultsKey)
-                : MIDIOutput.KeyerMode.straightKey.rawValue
-            let mode = MIDIOutput.KeyerMode(rawValue: stored) ?? .straightKey
+            // iambic paddle), so reuse the one they chose — in Settings or on
+            // the repeater screen, which share one stored value — rather than
+            // resetting their paddle every time practice starts. Speed, by
+            // contrast, is what they're practising at.
+            let mode = MIDIOutput.KeyerMode(rawValue: RepeaterModel.storedKeyerMode) ?? .straightKey
             let wpm = Int(keyerWPM.rounded())
             let tone = toneMIDINote
             Task {
