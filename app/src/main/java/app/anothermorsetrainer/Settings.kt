@@ -61,6 +61,12 @@ enum class StoryContent(val label: String) {
  */
 enum class BackgroundNoiseLevel(val amplitude: Float, val label: String) {
     OFF(0f, "Off"),
+    // Keep-alive: non-zero PCM so the Bluetooth sink never sees digital
+    // silence, but ~56 dB under the tone — below hearing at any level you would
+    // set to copy comfortably. OFF stops the stream outright, which is what
+    // lets the link idle, so this is the quietest setting that still does the
+    // job issue #29 added it for (N9HO/another-morse-trainer#92).
+    KEEP_ALIVE(0.0015f, "Keep-alive"),
     WHISPER(0.010f, "Whisper"),
     LOW(0.025f, "Low"),
     MEDIUM(0.060f, "Moderate"),
@@ -114,13 +120,15 @@ object Settings {
 
     /**
      * Continuous background noise under everything (issue #29). Defaults to
-     * [BackgroundNoiseLevel.WHISPER]: the Bluetooth clipping it prevents is a
-     * silent accuracy tax nobody would think to go looking for a setting about,
-     * and at ~56 dB under the tone the floor does that job without anyone
-     * noticing hiss. Louder levels are there for people who want band noise to
-     * copy through.
+     * [BackgroundNoiseLevel.KEEP_ALIVE]: the Bluetooth clipping it prevents is
+     * a silent accuracy tax nobody would think to go looking for a setting
+     * about, and at ~56 dB under the tone that floor does the job without
+     * anyone hearing it. The old WHISPER default sat ~39 dB under the tone,
+     * which was audible enough to be reported as too loud
+     * (N9HO/another-morse-trainer#92). Louder levels remain for people who want
+     * band noise to copy through.
      */
-    var backgroundNoise by mutableStateOf(BackgroundNoiseLevel.WHISPER)
+    var backgroundNoise by mutableStateOf(BackgroundNoiseLevel.KEEP_ALIVE)
         private set
     var hapticsEnabled by mutableStateOf(true)
         private set
@@ -217,8 +225,20 @@ object Settings {
         effectiveWpm = prefs.getFloat("effWpm", 33f).toDouble()
         sidetoneHz = prefs.getFloat("sidetone", 600f).toDouble()
         backgroundNoise = runCatching {
-            BackgroundNoiseLevel.valueOf(prefs.getString("backgroundNoise", null) ?: "WHISPER")
-        }.getOrDefault(BackgroundNoiseLevel.WHISPER)
+            BackgroundNoiseLevel.valueOf(prefs.getString("backgroundNoise", null) ?: "KEEP_ALIVE")
+        }.getOrDefault(BackgroundNoiseLevel.KEEP_ALIVE)
+        // One-time move off the old Whisper default (issue #92). Whisper was
+        // the shipped default, so almost everyone sitting on it never chose it
+        // — they just got the loudest thing that was ever the default. Drop
+        // those installs to the inaudible keep-alive floor, which does the same
+        // job for the link. Guarded by a flag so anyone who deliberately picks
+        // Whisper afterwards keeps it.
+        if (!prefs.getBoolean("noiseFloorMigrated", false)) {
+            if (backgroundNoise == BackgroundNoiseLevel.WHISPER) {
+                backgroundNoise = BackgroundNoiseLevel.KEEP_ALIVE
+            }
+            prefs.edit().putBoolean("noiseFloorMigrated", true).apply()
+        }
         hapticsEnabled = prefs.getBoolean("haptics", true)
         voiceAnswersEnabled = prefs.getBoolean("voiceAnswers", false)
         answerByKeying = prefs.getBoolean("answerByKeying", false)

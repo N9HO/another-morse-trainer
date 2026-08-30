@@ -270,12 +270,12 @@ fun SettingsScreen(onBack: () -> Unit, scope: SettingsMode? = null) {
                 }
                 SectionFooter(
                     "The frequency of the practice tone you hear.\n\n" +
-                        "Background noise plays a faint hiss under everything. On Bluetooth " +
+                        "Background noise plays a floor under everything. On Bluetooth " +
                         "earbuds the silence between transmissions lets the link idle, so it " +
                         "wakes a moment late and clips the first character — costing you the " +
-                        "answer. A faint floor keeps the link up, which is why Whisper is the " +
-                        "default. Turn it up for band noise (QRN) to copy through, or off if " +
-                        "you'd rather have silence."
+                        "answer. Keep-alive, the default, holds the link open with a floor too " +
+                        "quiet to hear. Turn it up for band noise (QRN) to copy through. Off " +
+                        "is truly silent, and brings the clipping back."
                 )
 
                 val showChoiceRows = shown(CHOICE_QUIZ_MODES)
