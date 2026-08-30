@@ -5,3 +5,4 @@ __pycache__/
 venv/
 README.md
 fly.toml
+test_*.py

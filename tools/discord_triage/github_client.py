@@ -89,6 +89,50 @@ def _comment_issue_sync(number: int, body: str, repo: str | None = None) -> dict
     return {"html_url": data["html_url"]}
 
 
+def _find_issue_for_thread_sync(thread_id: int, repos: list[str]) -> Optional[dict]:
+    """Find the issue already filed for a Discord thread, by its hidden stamp.
+
+    Every issue the bot opens carries a `<!-- discord-thread:ID -->` marker in
+    its body. The thread -> issue map lives in memory, so a restart forgets it;
+    this reads the mapping back off GitHub, which is what stops a forgotten
+    thread from filing a second issue for a report it already logged.
+
+    Best effort: search is eventually consistent and rate limited, so a miss
+    (or an error) just means "not found" and the caller carries on.
+
+    Returns {"number": int, "repo": str} or None.
+    """
+    for repo in repos:
+        if not repo:
+            continue
+        params = {
+            "q": f'repo:{repo} in:body "discord-thread:{thread_id}"',
+            "per_page": "5",
+            # The issue-search endpoint's newer syntax mode; harmless otherwise.
+            "advanced_search": "true",
+        }
+        try:
+            with httpx.Client(timeout=15.0) as client:
+                resp = client.get(f"{_API}/search/issues", headers=_HEADERS, params=params)
+        except httpx.HTTPError:
+            continue
+        if resp.status_code >= 400:
+            continue
+        try:
+            items = resp.json().get("items", [])
+        except Exception:
+            continue
+        for item in items:
+            if "pull_request" in item:
+                continue
+            # Search matches on tokens, so confirm the exact stamp is really in
+            # the body before adopting the issue as this thread's.
+            if f"discord-thread:{thread_id}" not in (item.get("body") or ""):
+                continue
+            return {"number": item["number"], "repo": repo}
+    return None
+
+
 def _check_repo_access_sync(repo: str) -> Optional[str]:
     """Probe whether the token can read `repo`'s issues.
 
@@ -122,6 +166,10 @@ async def create_issue(
 
 async def comment_issue(number: int, body: str, repo: str | None = None) -> dict:
     return await asyncio.to_thread(_comment_issue_sync, number, body, repo)
+
+
+async def find_issue_for_thread(thread_id: int, repos: list[str]) -> Optional[dict]:
+    return await asyncio.to_thread(_find_issue_for_thread_sync, thread_id, repos)
 
 
 async def check_repo_access(repo: str) -> Optional[str]:

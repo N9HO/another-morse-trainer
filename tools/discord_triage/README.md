@@ -35,16 +35,60 @@ Discord message ──▶ Claude triage ──▶ GitHub issue ──▶ reply i
   is looking, never as a channel-level reply. On each reply it re-reads the
   whole conversation — **viewing any attached screenshots via Claude's
   vision** — and adds what it learns to the issue as comments.
+- **Remembers the thread**: a thread is ONE report, however many messages it
+  took. See below.
 - **Closes the loop**: replies with the issue link, a duplicate pointer, or a
   follow-up question.
 
 Structured outputs (a Pydantic schema) guarantee Claude's verdict always parses.
 
-> The thread → issue mapping is kept **in memory**, so a bot restart forgets
-> in-progress threads: later replies in a forgotten thread are no longer folded
-> into its issue. Re-trigger the report with a fresh 🐛 to reattach it — dedup
-> keeps it from filing twice. Since the issue itself is now filed up front, a
-> restart costs you follow-up comments rather than the whole report.
+## Thread memory
+
+Reporters don't say it all in one message. They post the bug, then the device
+they saw it on, then a screenshot, then answer the question the bot asked. So
+**anything that happens inside a thread triages the whole thread**, never the
+one message that triggered it:
+
+- **Every trigger reads the entire conversation** — the thread's title, the
+  original report, every follow-up, the bot's own earlier questions, and the
+  answers to them. This holds for threads the bot has never seen before (one
+  the reporter opened themselves, a forum post, a thread left over from before
+  a restart), which is what stopped it re-asking questions that were answered
+  three messages up.
+- **The post's title counts as part of the report.** In a forum channel that's
+  the reporter's headline — "In QRQ Speed the UI might need to move up the
+  screen" names the screen that the messages under it never mention. (A thread
+  the bot opened itself is named after the message it hangs off, so its title
+  is skipped rather than repeated.)
+- **A burst of triggers is coalesced into one pass.** Triggers landing within
+  `TRIAGE_SETTLE_SECONDS` (default 8) of each other are read together, so three
+  thoughts typed in a row — or a 🐛 on the report *and* on the screenshot under
+  it — produce one considered answer instead of two or three racing triages,
+  and can't file the same bug twice. The 👀 goes on immediately, so a
+  maintainer still sees the trigger land.
+- **It asks each question at most once.** The forced "which OS is this?" prompt
+  fires once per thread; after that the model decides for itself whether
+  anything is genuinely still missing, and the prompt tells it in as many words
+  that re-asking an answered question is the worst thing it can do here.
+- **Follow-ups add only what's new.** The transcript marks where the GitHub
+  issue's knowledge ends, so a comment carries the new detail instead of
+  restating the thread.
+- **Everyone in the thread is read, not just the reporter.** A helper's
+  diagnosis ("that means AMT is sending MIDI messages that change the adapter's
+  settings") is often the most useful thing in the thread, and it belongs in
+  the issue. Mentions reach the model as names rather than raw ids.
+- **A duplicate is only a duplicate when it can be named.** "Feels familiar"
+  with no issue number used to file nothing and point the reporter at nothing,
+  leaving the report in Discord — the exact failure *files first, asks second*
+  exists to prevent. It's especially likely for Android reports, since dedup
+  only sees the main repo's open issues. A possible duplicate you close in one
+  click beats a report you never hear about.
+- **A restart is no longer amnesia.** The thread → issue map still lives in
+  memory, but the bot announces every issue with its full URL and stamps the
+  issue body with the thread id, so a forgotten thread recovers its issue from
+  its own transcript — or, if that message is gone, by finding the
+  `discord-thread:<id>` stamp on GitHub. A forgotten thread keeps commenting on
+  the issue it already has instead of filing a second one.
 
 ## Trigger modes
 
@@ -56,6 +100,10 @@ Set via `TRIGGER_MODE`:
 | `auto` | Triages every non-bot message in the watched channels. | Fully hands-off intake, more API calls. |
 
 Scope it to specific channels with `WATCH_CHANNEL_IDS` (comma-separated IDs).
+
+Either way, a trigger *inside a thread* means "re-read this whole conversation":
+in `auto` mode every reply does that automatically, and in `react` mode a 🐛
+anywhere in the thread does it on demand.
 
 ## Setup
 
@@ -94,6 +142,17 @@ cp .env.example .env        # fill it in
 set -a; source .env; set +a # export the vars
 python bot.py
 ```
+
+### Tests
+
+```bash
+python3 test_conversation.py   # pure helpers — no dependencies, no tokens
+python3 test_bot_flow.py       # thread memory, with fake Discord/GitHub/Claude
+```
+
+Both also run under `pytest`. No live tokens are used: `test_bot_flow.py` fills
+in dummy environment variables and swaps in fakes for Discord, GitHub, and the
+model.
 
 ## Deploy on Fly.io
 
@@ -175,8 +234,11 @@ the thread, which Discord keeps for the thread's auto-archive window.)
 | File | Purpose |
 |---|---|
 | `bot.py` | Discord client + event handlers (the entry point). |
+| `conversation.py` | Thread → transcript, and recovering a thread's issue. |
 | `triage.py` | Claude triage call + the structured `Verdict` schema. |
 | `github_client.py` | List open issues / create issues via the GitHub REST API. |
 | `config.py` | Environment-variable configuration. |
+| `test_conversation.py` | Transcript + issue-recovery tests (no deps needed). |
+| `test_bot_flow.py` | Thread-memory tests against fake Discord/GitHub/Claude. |
 | `Dockerfile` / `fly.toml` | Container + Fly.io deployment. |
 | `.env.example` | Template for the required environment variables. |
