@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -220,9 +221,14 @@ private fun SolidCopyExam(
         }
     }
 
+    // Scrolling alone did not reach the grade button (issue #44): edge-to-edge
+    // means the window does not resize for the IME, so the scroll viewport ran
+    // on behind the keyboard. imePadding sits outside the scroll so the
+    // viewport itself shrinks.
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .imePadding()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally

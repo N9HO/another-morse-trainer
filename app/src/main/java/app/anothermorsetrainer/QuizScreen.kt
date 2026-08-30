@@ -534,6 +534,20 @@ fun QuizScreen(
                 }
             }
 
+            // Attaching a BLE-MIDI key has to happen from the screen you are
+            // keying on, since nothing else opens one (see BluetoothKeyButton).
+            //
+            // Gated on the setting alone, never on drill.isKeyable or on
+            // whether a key is already attached: this button owns the BLE link
+            // and closes it when it leaves the composition, so hanging it off
+            // either would drop the key the moment an unkeyable drill came up
+            // or the moment one connected. The setting is what the hardware
+            // key's own lifecycle is keyed to, so they come and go together.
+            if (Settings.answerByKeying) {
+                Spacer(Modifier.height(6.dp))
+                BluetoothKeyButton()
+            }
+
             // Exam-style comprehension prompt (empty for plain recognition drills).
             if (drill.question.isNotEmpty()) {
                 Spacer(Modifier.height(16.dp))

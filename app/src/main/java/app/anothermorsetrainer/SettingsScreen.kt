@@ -82,6 +82,17 @@ private val CHOICE_QUIZ_MODES = setOf(
     SettingsMode.JOURNEY
 )
 
+/**
+ * The screens a hardware key can drive: every mode served by QuizScreen, plus
+ * Rapid Fire and Sending Practice. All of them wake a key through [HardwareKey],
+ * so all of them are governed by the keyer mode.
+ */
+private val KEY_MODES = setOf(
+    SettingsMode.CHARACTERS, SettingsMode.WORDS, SettingsMode.ABBREVIATIONS,
+    SettingsMode.QCODES, SettingsMode.PROSIGNS, SettingsMode.CONFUSION,
+    SettingsMode.JOURNEY, SettingsMode.RAPID_FIRE, SettingsMode.SENDING
+)
+
 /** The screens that read the session-length setting. */
 internal val DURATION_MODES = setOf(
     SettingsMode.CHARACTERS, SettingsMode.WORDS, SettingsMode.ABBREVIATIONS,
@@ -133,6 +144,11 @@ fun SettingsScreen(onBack: () -> Unit, scope: SettingsMode? = null) {
 
     val farnsworthOn = Settings.effectiveWpm < Settings.characterWpm
     var confirmReset by remember { mutableStateOf(false) }
+
+    // A hardware key can only be attached where the device speaks MIDI at all.
+    val midiSupported = remember(context) {
+        context.packageManager.hasSystemFeature(PackageManager.FEATURE_MIDI)
+    }
 
     // Daily reminder: enabling may need the POST_NOTIFICATIONS runtime permission (API 33+).
     val notifPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -460,6 +476,18 @@ fun SettingsScreen(onBack: () -> Unit, scope: SettingsMode? = null) {
                 )
                 }
 
+                // The key plugged into a Vail Adapter. Only worth showing where a
+                // key can be attached at all, and only on a device with MIDI.
+                if (shown(KEY_MODES) && midiSupported) {
+                    SectionHeader("Hardware key")
+                    SettingsGroup { AdapterKeyerSetting(context) }
+                    SectionFooter(
+                        "How the adapter should read your key. Straight key is the default; " +
+                        "pick an iambic mode for a paddle. This is your key, not a drill " +
+                        "setting — it applies in Sending Practice and on the Vail screen alike."
+                    )
+                }
+
                 SectionHeader("Display")
                 SettingsGroup {
                     Row(
@@ -689,6 +717,66 @@ private fun BackgroundNoiseSetting() {
                     )
                 }
             }
+        }
+    }
+}
+
+/**
+ * Which key is plugged into the Vail Adapter (issue #43).
+ *
+ * The adapter has to be told a keyer mode as part of being woken into MIDI
+ * mode, so before this existed outside the Vail repeater screen every practice
+ * screen asserted "straight key" — overwriting an iambic paddle set anywhere
+ * else, including at vailmorse.com. Writing the shared [AdapterKeyer] here
+ * makes the choice reachable without going to the repeater, and every screen
+ * that wakes a key picks it up the next time it does so.
+ *
+ * It deliberately does not open a MIDI port to push the change immediately:
+ * one owner per device input port, or two clients race to open it.
+ */
+@Composable
+private fun AdapterKeyerSetting(context: android.content.Context) {
+    var mode by remember { mutableStateOf(AdapterKeyer.mode(context)) }
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp)) {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text("Keyer mode", color = Brand.textPrimary, fontWeight = FontWeight.Medium)
+            Text(
+                mode.displayName,
+                color = Brand.teal, fontWeight = FontWeight.SemiBold, fontSize = 13.sp
+            )
+        }
+        Spacer(Modifier.height(8.dp))
+        Row(
+            modifier = Modifier.horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            MidiKeyOutput.KeyerMode.entries.forEach { option ->
+                val isSel = option == mode
+                Box(
+                    modifier = Modifier
+                        .background(
+                            if (isSel) Brand.teal else Brand.navyRaised,
+                            shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp)
+                        )
+                        .clickable { mode = option; AdapterKeyer.setMode(context, option) }
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                ) {
+                    Text(
+                        option.displayName,
+                        color = if (isSel) Brand.navy else Brand.textSecondary,
+                        fontWeight = if (isSel) FontWeight.Bold else FontWeight.Medium,
+                        fontSize = 13.sp
+                    )
+                }
+            }
+        }
+        if (AdapterKeyer.adapterTimesSending(mode)) {
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "The adapter times the sending in this mode, at the speed you're practising at.",
+                color = Brand.textSecondary,
+                fontSize = 12.sp
+            )
         }
     }
 }

@@ -446,7 +446,11 @@ private fun PileupRun(
     onDismissMissed: () -> Unit,
     onEnd: () -> Unit
 ) {
-    Column(modifier = Modifier.fillMaxSize()) {
+    // The in-run Send box sits behind the IME on an edge-to-edge window too
+    // (issue #44's defect, in the QSO screens). This shifts the run layout up;
+    // it does not touch focus, so #24/#25 — keeping the keyboard up across
+    // sends — still hold.
+    Column(modifier = Modifier.fillMaxSize().imePadding()) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -724,7 +728,7 @@ private fun PileupSummary(
 
         Row(modifier = Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             OutlinedButton(onClick = onAgain, modifier = Modifier.weight(1f)) { Text("Run again") }
-            Button(onClick = onBack, modifier = Modifier.weight(1f)) { Text("Done") }
+            Button(onClick = onBack, modifier = Modifier.weight(1f)) { Text("Return home") }
         }
     }
 }

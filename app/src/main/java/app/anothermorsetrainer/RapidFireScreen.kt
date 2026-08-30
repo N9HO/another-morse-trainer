@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -363,7 +364,11 @@ private fun RapidFireRun(
     onSettings: () -> Unit,
     onDone: () -> Unit
 ) {
-    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp)) {
+    // Same IME occlusion as the QRQ drill (issue #44): edge-to-edge, so the
+    // window does not resize and the Next/Done row ends up behind the keyboard.
+    // The middle section carries weight(1f), so shrinking the column takes the
+    // space out of the drill area and leaves the buttons reachable.
+    Column(modifier = Modifier.fillMaxSize().imePadding().padding(horizontal = 24.dp)) {
         Row(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
             Text(summary, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -371,8 +376,16 @@ private fun RapidFireRun(
                 SessionSettingsButton(onOpen = onSettings)
             }
         }
-        if (response == RapidFireResponse.KEY && midiDevice != null) {
-            Text("🎹 $midiDevice", style = MaterialTheme.typography.labelSmall, color = Brand.teal)
+        if (response == RapidFireResponse.KEY) {
+            if (midiDevice != null) {
+                Text("🎹 $midiDevice", style = MaterialTheme.typography.labelSmall, color = Brand.teal)
+            }
+            // As in Sending Practice: a BLE-MIDI key is invisible to
+            // MidiManager until something scans for it and opens it, and this
+            // is the screen it would be used on. Not gated on midiDevice —
+            // the button owns the BLE link, so hiding it once a key attached
+            // would close the link and bounce the key straight back off.
+            BluetoothKeyButton()
         }
 
         Column(
