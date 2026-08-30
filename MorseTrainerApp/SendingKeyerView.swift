@@ -106,16 +106,22 @@ struct SendingKeyerView: View {
     /// What hardware key (if any) is feeding this panel: a connected
     /// Vail/BLE-MIDI key is named, and when none is there the panel says which
     /// of the two reasons applies and offers the way out of the fixable one.
-    @ViewBuilder
+    /// The Bluetooth browser and its button live outside the connected/not
+    /// branch on purpose. Hosting the sheet inside the "no key" branch meant the
+    /// view presenting it was torn out of the hierarchy the moment a key
+    /// connected — which is precisely what happens *while the browser is open*,
+    /// since connecting there is what makes CoreMIDI enumerate the key. That
+    /// yanked the sheet away mid-connect, and afterwards there was no way back
+    /// in to attach a second key or retry a dropped one (issue #91).
     private var midiStatus: some View {
-        if !sender.midiDeviceNames.isEmpty {
-            Label(sender.midiDeviceNames.joined(separator: ", "), systemImage: "pianokeys")
-                .font(.caption)
-                .foregroundStyle(Theme.teal)
-                .lineLimit(1)
-                .accessibilityLabel("Hardware key connected: \(sender.midiDeviceNames.joined(separator: ", "))")
-        } else {
-            VStack(spacing: 6) {
+        VStack(spacing: 6) {
+            if !sender.midiDeviceNames.isEmpty {
+                Label(sender.midiDeviceNames.joined(separator: ", "), systemImage: "pianokeys")
+                    .font(.caption)
+                    .foregroundStyle(Theme.teal)
+                    .lineLimit(1)
+                    .accessibilityLabel("Hardware key connected: \(sender.midiDeviceNames.joined(separator: ", "))")
+            } else {
                 // "MIDI unavailable" used to cover both the setup failing and
                 // nothing being plugged in, which read as a dead end. Only the
                 // first is a fault; the second just needs a key connected —
@@ -129,19 +135,22 @@ struct SendingKeyerView: View {
                     .font(.caption)
                     .foregroundStyle(sender.midiUnavailable ? .orange : Theme.textSecondary)
                     .multilineTextAlignment(.center)
+            }
 
-                Button {
-                    showingBluetoothMIDI = true
-                } label: {
-                    Label("Connect a Bluetooth key…", systemImage: "dot.radiowaves.right")
-                        .font(.caption)
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
+            Button {
+                showingBluetoothMIDI = true
+            } label: {
+                Label(sender.midiDeviceNames.isEmpty
+                        ? "Connect a Bluetooth key…"
+                        : "Bluetooth keys…",
+                      systemImage: "dot.radiowaves.right")
+                    .font(.caption)
             }
-            .bluetoothMIDISheet(isPresented: $showingBluetoothMIDI) {
-                sender.rescanMIDI()
-            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+        }
+        .bluetoothMIDISheet(isPresented: $showingBluetoothMIDI) {
+            sender.rescanMIDI()
         }
     }
 
