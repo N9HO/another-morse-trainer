@@ -376,8 +376,16 @@ private fun RapidFireRun(
                 SessionSettingsButton(onOpen = onSettings)
             }
         }
-        if (response == RapidFireResponse.KEY && midiDevice != null) {
-            Text("🎹 $midiDevice", style = MaterialTheme.typography.labelSmall, color = Brand.teal)
+        if (response == RapidFireResponse.KEY) {
+            if (midiDevice != null) {
+                Text("🎹 $midiDevice", style = MaterialTheme.typography.labelSmall, color = Brand.teal)
+            }
+            // As in Sending Practice: a BLE-MIDI key is invisible to
+            // MidiManager until something scans for it and opens it, and this
+            // is the screen it would be used on. Not gated on midiDevice —
+            // the button owns the BLE link, so hiding it once a key attached
+            // would close the link and bounce the key straight back off.
+            BluetoothKeyButton()
         }
 
         Column(
