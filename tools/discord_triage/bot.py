@@ -298,6 +298,41 @@ async def _file_issue(verdict, body: str) -> tuple[Optional[dict], Optional[str]
         return None, None, ""
 
 
+def _should_file_now(verdict) -> bool:
+    """Does this verdict become a GitHub issue right now?
+
+    A genuine bug or feature does, even when it is still missing detail. The
+    old rule filed only on `should_file`, which the triage prompt clears while
+    it waits on the reporter — so a report whose reporter never came back left
+    no trace outside Discord, and the maintainer never learned of it. Questions,
+    noise and duplicates are still never filed.
+    """
+    if verdict.kind not in ("bug", "feature"):
+        return False
+    if verdict.is_duplicate:
+        return False
+    return verdict.should_file or verdict.needs_more_info
+
+
+def _filed_reply(verdict, issue: dict, note: str) -> str:
+    """What to say in Discord once the issue exists.
+
+    A thin report keeps the question as the headline — the reporter still needs
+    to answer it — with the issue mentioned as reassurance rather than as a
+    sign-off, so it doesn't read like the conversation is over.
+    """
+    if verdict.needs_more_info:
+        return (
+            f"{verdict.reply or 'Could you add a bit more detail?'}\n"
+            f"Logged it as #{issue['number']} either way so it isn't lost: "
+            f"{issue['html_url']} 📝{note}"
+        )
+    return (
+        f"{verdict.reply or 'Logged it'} — opened #{issue['number']}: "
+        f"{issue['html_url']} ✅{note}"
+    )
+
+
 async def _apply_verdict(thread: discord.Thread, verdict, key: int) -> None:
     """Act on a verdict inside a triage thread (file, comment, or ask)."""
     p = pending.setdefault(key, Pending())
@@ -338,8 +373,12 @@ async def _apply_verdict(thread: discord.Thread, verdict, key: int) -> None:
         await _say(thread, f"Looks like a duplicate of #{verdict.duplicate_of}. 🔁")
         return
 
-    # Enough detail and not yet filed (the filed case returned above) -> open it.
-    if verdict.should_file:
+    # A real report is filed even while it is still thin. Holding it back until
+    # the reporter answered left the only record in Discord, so a reporter who
+    # went quiet meant the maintainer never learned the report existed. It goes
+    # in labelled 'needs-info', the question still gets asked here, and the
+    # answer lands on the issue through the has_issue path above.
+    if _should_file_now(verdict):
         # Stamp the Discord thread id into the issue (hidden HTML comment) so the
         # "issue closed" GitHub Action can post the resolution back to this thread.
         body = f"{verdict.body}\n\n<!-- discord-thread:{thread.id} -->"
@@ -352,14 +391,10 @@ async def _apply_verdict(thread: discord.Thread, verdict, key: int) -> None:
             return
         p.issue_number = issue["number"]
         p.issue_repo = repo
-        await _say(
-            thread,
-            f"{verdict.reply or 'Logged it'} — opened #{issue['number']}: "
-            f"{issue['html_url']} ✅{note}",
-        )
+        await _say(thread, _filed_reply(verdict, issue, note))
         return
 
-    # Not filed yet, not a duplicate -> asking for more info (or declining).
+    # Question, noise, or a duplicate we couldn't name -> just reply.
     await _say(thread, verdict.reply or "Thanks — could you add a bit more detail?")
 
 
@@ -426,7 +461,7 @@ async def _start_triage(message: discord.Message, explicit: bool) -> None:
     thread = home or await _ensure_thread(message)
     if thread is None:
         # No thread permission: degrade to one-shot (can't watch follow-ups).
-        if verdict.should_file:
+        if _should_file_now(verdict):
             issue, _, note = await _file_issue(verdict, verdict.body)
             if issue is None:
                 await message.reply(
@@ -434,9 +469,7 @@ async def _start_triage(message: discord.Message, explicit: bool) -> None:
                 )
             else:
                 await message.reply(
-                    f"{verdict.reply or 'Logged it'} — opened #{issue['number']}: "
-                    f"{issue['html_url']} ✅{note}",
-                    mention_author=False,
+                    _filed_reply(verdict, issue, note), mention_author=False
                 )
         else:
             await message.reply(verdict.reply or "👍", mention_author=False)
