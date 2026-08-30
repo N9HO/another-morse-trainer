@@ -13,6 +13,9 @@ primary_region = "iad"  # pick the region closest to you: fly platform regions
 
 [env]
   TRIGGER_MODE = "react"
+  # Seconds to let a thread settle so a burst of messages (or of 🐛 reactions)
+  # is read as one report and answered once.
+  TRIAGE_SETTLE_SECONDS = "8"
   ANTHROPIC_MODEL = "claude-opus-4-8"
   GITHUB_REPO = "n9ho/another-morse-trainer"
   TRIAGE_LABEL = "from-discord"
