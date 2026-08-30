@@ -716,7 +716,7 @@ private fun StorySummaryContent(
         ) { Text("Keep copying", fontWeight = FontWeight.SemiBold) }
         Spacer(Modifier.height(10.dp))
         OutlinedButton(onClick = onDone, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-            Text("Done")
+            Text("Return home")
         }
     }
 }

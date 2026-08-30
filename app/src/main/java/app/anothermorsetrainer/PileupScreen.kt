@@ -724,7 +724,7 @@ private fun PileupSummary(
 
         Row(modifier = Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             OutlinedButton(onClick = onAgain, modifier = Modifier.weight(1f)) { Text("Run again") }
-            Button(onClick = onBack, modifier = Modifier.weight(1f)) { Text("Done") }
+            Button(onClick = onBack, modifier = Modifier.weight(1f)) { Text("Return home") }
         }
     }
 }
