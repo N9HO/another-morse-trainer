@@ -729,10 +729,14 @@ private fun BackgroundNoiseSetting() {
  * screen asserted "straight key" — overwriting an iambic paddle set anywhere
  * else, including at vailmorse.com. Writing the shared [AdapterKeyer] here
  * makes the choice reachable without going to the repeater, and every screen
- * that wakes a key picks it up the next time it does so.
+ * that wakes a key picks it up.
  *
- * It deliberately does not open a MIDI port to push the change immediately:
- * one owner per device input port, or two clients race to open it.
+ * It still does not open a MIDI port of its own — one owner per device input
+ * port, or two clients race to open it. The change reaches a connected adapter
+ * because [AdapterKeyer] is observable and the screen underneath this sheet is
+ * still composed, so [AdapterConfigSync] pushes it down the port that screen
+ * already holds. Storing it and waiting for the next wake, as this used to do,
+ * meant the change did nothing until the operator left the module (issue #46).
  */
 @Composable
 private fun AdapterKeyerSetting(context: android.content.Context) {

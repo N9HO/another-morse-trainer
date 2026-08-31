@@ -206,6 +206,13 @@ fun TypedQuizScreen(
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
+        // The header and the drill are stacked, not overlaid. As siblings in the
+        // Box the drill was drawn over the Back/End row, and once #44 gave that
+        // column a verticalScroll — a pointer-input node spanning the whole
+        // window — hit testing stopped there and the two buttons stopped
+        // responding to taps (issue #47). Only the typed modes grew a scroll,
+        // which is why only they broke. Every other screen already stacks.
+        Column(modifier = Modifier.fillMaxSize()) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(8.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -246,7 +253,8 @@ fun TypedQuizScreen(
         // left on small phones, where even the shifted layout will not fit.
         Column(
             modifier = Modifier
-                .fillMaxSize()
+                .weight(1f)
+                .fillMaxWidth()
                 .imePadding()
                 .verticalScroll(rememberScrollState())
                 .padding(24.dp),
@@ -337,6 +345,8 @@ fun TypedQuizScreen(
             }
         }
         }
+
+        }  // end of the header + drill Column
 
         if (showSettings) {
             SessionSettingsOverlay(scope = settingsMode, onClose = { showSettings = false })
