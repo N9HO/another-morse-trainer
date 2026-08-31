@@ -1,7 +1,8 @@
 # Another Morse Trainer: Android
 
-A native Android port of [Another Morse Trainer](https://anothermorsetrainer.app)
-(the SwiftUI iOS app at [N9HO/another-morse-trainer](https://github.com/N9HO/another-morse-trainer)).
+A native Android port of [Another Morse Trainer](https://anothermorsetrainer.app).
+The SwiftUI iOS app is its sibling in this repo, at [`ios/`](../ios) — a separate,
+independently-versioned implementation, not a shared module.
 Learn to copy Morse code (CW) by ear with the Koch method.
 
 **Testing is currently closed.** Places are limited, so ask on

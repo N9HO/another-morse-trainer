@@ -7,7 +7,7 @@ password) you can never publish an update to this listing.** Back up both, somew
 safe (password manager + a second location):
 
 - Keystore: `~/.android-keystores/amt-upload.jks`
-- Credentials: `MorseTrainerAndroid/keystore.properties` (password, alias)
+- Credentials: `android/keystore.properties` in the monorepo (password, alias)
 
 Neither is committed to git (`.gitignore` excludes them). The upload cert SHA-256 is:
 `57:97:26:3B:2E:3D:3A:AC:84:51:68:0E:97:25:F3:61:86:63:CF:FA:20:31:30:E8:95:CE:F6:B7:85:5F:EB:BC`
@@ -27,10 +27,14 @@ Neither is committed to git (`.gitignore` excludes them). The upload cert SHA-25
 
 ```bash
 export JAVA_HOME="/opt/homebrew/opt/openjdk@17"   # was Android Studio's JBR
-cd ~/MorseTrainerAndroid
+cd <your clone of another-morse-trainer>/android
 ./gradlew bundleRelease
 # → app/build/outputs/bundle/release/app-release.aab
 ```
+
+Everything Gradle-related runs from `android/`, which is the Gradle root
+(`settings.gradle.kts` lives there). The iOS app is its sibling at `ios/`; the
+two have independent version numbers and release cadences.
 
 For each update **bump `versionCode`** (2, 3, …) — Play rejects a re-used code —
 and usually `versionName` ("1.0.1", "1.1", …).
@@ -41,16 +45,24 @@ Two workflows are committed under `.github/workflows/`:
 
 - **`android-ci.yml`** — builds the debug APK on every push/PR and attaches it as
   an artifact, so changes made from the Claude phone app can be verified without a
-  laptop (the Android counterpart of the iOS repo's `ios.yml`).
-- **`android-release.yml`** — on a pushed version tag (`v*`), builds the **signed
-  AAB and uploads it to the Play _closed testing_ (beta) track** (`track: alpha`
-  by default — change it if your closed track has a different id). This automates
-  the step iOS still does by hand (Xcode → TestFlight). Cut a release with:
+  laptop (the Android counterpart of `ios.yml`). It is path-filtered to
+  `android/**`, so an iOS-only commit does not start a Gradle build.
+- **`android-release.yml`** — on a pushed **`android-v*`** tag, builds the
+  **signed AAB and uploads it to the Play _closed testing_ (beta) track**
+  (`track: alpha` by default — change it if your closed track has a different
+  id). This automates the step iOS still does by hand (Xcode → TestFlight).
+  Cut a release with:
 
   ```bash
-  # bump versionCode/versionName in app/build.gradle.kts first, commit, then:
-  git tag v1.0.1 && git push origin v1.0.1
+  # bump versionCode/versionName in android/app/build.gradle.kts first, commit, then:
+  git tag android-v1.12.2 && git push origin android-v1.12.2
   ```
+
+  > **The `android-` prefix is required.** Both apps share this repo, and the
+  > iOS announcement workflow watches `ios-v*`. A bare `v1.12.2` tag would match
+  > neither and silently do nothing; before the workflows were re-namespaced it
+  > would have matched *both* and shipped an iOS Discord post for an Android
+  > release. iOS tags are `ios-v*` and are entirely independent of these.
 
   Until the secrets below are set it degrades gracefully — it just builds the AAB
   and uploads it as a workflow artifact instead of failing.
