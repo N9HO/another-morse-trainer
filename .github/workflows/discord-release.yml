@@ -1,6 +1,12 @@
 name: Discord release announcement
 
-# Fires when you push a version tag (e.g. `git tag v1.0.1 && git push amt v1.0.1`).
+# Fires when you push an iOS version tag
+# (e.g. `git tag ios-v1.2 && git push origin ios-v1.2`).
+#
+# The tag prefix matters: this is a monorepo holding both apps, and the Android
+# release workflow watches `android-v*`. A bare `v*` tag would fire both — an iOS
+# Discord post for an Android release, and a Play upload for an iOS one — so each
+# platform releases under its own namespace.
 # Builds a changelog from the commits since the previous tag and posts a formatted
 # embed to a Discord channel via an incoming webhook. No app build / code signing here —
 # you build & upload to TestFlight locally; this just announces the new build.
@@ -12,7 +18,7 @@ name: Discord release announcement
 on:
   push:
     tags:
-      - 'v*'
+      - 'ios-v*'
   workflow_dispatch:
     inputs:
       tag:
@@ -52,10 +58,10 @@ jobs:
           elif [ "${{ github.ref_type }}" = "tag" ]; then
             TAG="${{ github.ref_name }}"
           else
-            TAG="$(git describe --tags --abbrev=0 2>/dev/null || true)"
+            TAG="$(git describe --tags --abbrev=0 --match 'ios-v*' 2>/dev/null || true)"
           fi
           if [ -z "$TAG" ]; then
-            echo "::error::No tag to announce — the repository has no tag reachable from this ref."
+            echo "::error::No tag to announce — no ios-v* tag is reachable from this ref."
             exit 1
           fi
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
@@ -65,7 +71,10 @@ jobs:
           # behavior; on a manual run from a branch it means "everything shipped
           # since the last tag", even when the tag itself sits a few commits back.
           HEAD_SHA="$(git rev-parse HEAD)"
-          PREV="$(git describe --tags --abbrev=0 "${HEAD_SHA}^" 2>/dev/null || true)"
+          # --match keeps this on the iOS tag line: an unfiltered describe would
+          # happily return an `android-v*` tag (or the pre-monorepo `v1.1`) and
+          # start the changelog at someone else's release.
+          PREV="$(git describe --tags --abbrev=0 --match 'ios-v*' "${HEAD_SHA}^" 2>/dev/null || true)"
           if [ -n "$PREV" ]; then
             RANGE="${PREV}..HEAD"
           else
@@ -90,9 +99,9 @@ jobs:
           # outgrows the cap — that's what broke the first two runs of this job).
           # CI, tooling, and repo-housekeeping commits aren't release content,
           # so commits touching only those paths are excluded.
+          # Scoped to ios/ so an Android commit never shows up in an iOS changelog.
           LOG="$(git log --no-merges -25 --pretty=format:'• %s' "$RANGE" -- \
-                 . ':(exclude).github' ':(exclude)tools' \
-                 ':(exclude)HANDOFF.md' ':(exclude).gitignore')"
+                 ios ':(exclude)ios/tools' ':(exclude)ios/HANDOFF.md')"
           [ -z "$LOG" ] && LOG="• (no commits found in range)"
           {
             echo 'changelog<<CHANGELOG_EOF'

@@ -1,14 +1,24 @@
 name: Android CI
 
-# Compiles the app remotely so changes made from the Claude phone app can be
-# verified without a laptop (parity with the iOS repo's ios.yml). Builds the
-# debug APK on every push/PR and uploads it as a downloadable artifact.
+# Compiles the Android app (which lives under android/) remotely so changes made
+# from the Claude phone app can be verified without a laptop (parity with ios.yml).
+# Builds the debug APK on every push/PR and uploads it as a downloadable artifact.
+#
+# Path-filtered so an iOS-only change does not start a Gradle build. The build job
+# sets `working-directory: android`, which covers every `run:` step — but NOT the
+# `uses:` steps, so the upload-artifact path below is spelled from the repo root.
 
 on:
   push:
     branches:
       - "**"
+    paths:
+      - "android/**"
+      - ".github/workflows/android-ci.yml"
   pull_request:
+    paths:
+      - "android/**"
+      - ".github/workflows/android-ci.yml"
   workflow_dispatch:
 
 concurrency:
@@ -19,6 +29,9 @@ jobs:
   build:
     name: Build debug APK
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android
     steps:
       - uses: actions/checkout@v4
 
@@ -30,6 +43,8 @@ jobs:
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
+        with:
+          build-root-directory: android
 
       - name: Run unit tests
         run: ./gradlew :app:testDebugUnitTest --stacktrace
@@ -41,5 +56,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: app-debug
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error

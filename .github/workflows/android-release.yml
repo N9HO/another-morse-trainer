@@ -1,6 +1,12 @@
 name: Android release (Play Store upload)
 
-# Fires when you push a version tag (e.g. `git tag v1.1.1 && git push origin v1.1.1`).
+# Fires when you push an ANDROID version tag
+# (e.g. `git tag android-v1.12.2 && git push origin android-v1.12.2`).
+#
+# The tag prefix matters: this is a monorepo holding both apps, and the iOS
+# announcement workflow watches `ios-v*`. A bare `v*` tag would fire both, so
+# each platform releases under its own namespace and the two cadences stay
+# independent (Android is at versionCode 16 / 1.12.1; iOS at build 24).
 # Builds the SIGNED app bundle (AAB) and uploads it to the Google Play closed
 # testing (beta) track. This automates the step iOS does by hand (Xcode -> TestFlight).
 #
@@ -26,7 +32,7 @@ name: Android release (Play Store upload)
 on:
   push:
     tags:
-      - "v*"
+      - "android-v*"
   workflow_dispatch:
 
 permissions:
@@ -39,6 +45,9 @@ jobs:
     env:
       KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
       PLAY_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+    defaults:
+      run:
+        working-directory: android
     steps:
       - uses: actions/checkout@v4
 
@@ -50,6 +59,8 @@ jobs:
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
+        with:
+          build-root-directory: android
 
       - name: Recreate signing config from secrets
         if: env.KEYSTORE_B64 != ''
@@ -87,7 +98,7 @@ jobs:
         with:
           serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
           packageName: app.anothermorsetrainer
-          releaseFiles: app/build/outputs/bundle/release/app-release.aab
+          releaseFiles: android/app/build/outputs/bundle/release/app-release.aab
           track: alpha   # closed testing (beta); change if your track id differs
           status: completed
 
@@ -95,5 +106,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: app-release-aab
-          path: app/build/outputs/bundle/release/app-release.aab
+          path: android/app/build/outputs/bundle/release/app-release.aab
           if-no-files-found: warn
