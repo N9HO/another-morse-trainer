@@ -1,0 +1,141 @@
+name: Merge gate
+
+# The single status check to mark "required" on main.
+#
+# Why this exists: ios.yml and android-ci.yml are path-filtered, and a workflow
+# whose paths filter does not match creates NO check run at all — not a skipped
+# one, not a pending one, nothing. A required status check that never reports
+# blocks its pull request forever, so neither platform build can safely be marked
+# required. This workflow has no paths filter, so it always runs and always
+# reports, and it derives its result from the platform builds that the pull
+# request actually needed.
+#
+# It mirrors how GitHub evaluates a paths filter on `pull_request`: against the
+# full base...head diff of the PR, not against the latest push.
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  checks: read
+  actions: read
+  pull-requests: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    name: Merge gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Wait for the platform builds this PR needs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+
+          api() { curl -sS -H "Authorization: Bearer $GH_TOKEN" \
+                            -H "Accept: application/vnd.github+json" "$@"; }
+
+          if [ -z "${PR:-}" ]; then
+            echo "Not a pull request (manual run) — nothing to gate."
+            exit 0
+          fi
+
+          # ---- 1. Which files does this PR touch? (paginated) ----
+          FILES=""
+          page=1
+          while :; do
+            batch="$(api "https://api.github.com/repos/$REPO/pulls/$PR/files?per_page=100&page=$page" \
+                     | jq -r '.[].filename')"
+            [ -z "$batch" ] && break
+            FILES="$FILES$batch"$'\n'
+            page=$((page + 1))
+            [ "$page" -gt 30 ] && break
+          done
+
+          echo "── files changed in this PR ──"
+          printf '%s' "$FILES" | sed 's/^/  /'
+
+          # ---- 2. Which platform builds must therefore pass? ----
+          # These conditions must stay in step with the `paths:` filters in
+          # ios.yml and android-ci.yml.
+          NEED=""
+          if printf '%s' "$FILES" | grep -qE '^(ios/|\.github/workflows/ios\.yml$)'; then
+            NEED="$NEED MorseKit-logic-checks Build-MorseTrainer-iOS"
+          fi
+          if printf '%s' "$FILES" | grep -qE '^(android/|\.github/workflows/android-ci\.yml$)'; then
+            NEED="$NEED Build-debug-APK"
+          fi
+
+          if [ -z "$NEED" ]; then
+            echo
+            echo "✅ This PR touches neither platform subtree — no build is required."
+            exit 0
+          fi
+
+          # Map the slugs back to the real check-run names (which contain spaces).
+          name_for() {
+            case "$1" in
+              MorseKit-logic-checks)   echo "MorseKit logic checks" ;;
+              Build-MorseTrainer-iOS)  echo "Build MorseTrainer (iOS)" ;;
+              Build-debug-APK)         echo "Build debug APK" ;;
+            esac
+          }
+
+          echo
+          echo "── builds required for this PR ──"
+          for slug in $NEED; do echo "  $(name_for "$slug")"; done
+
+          # ---- 3. Wait for each required check on the PR head SHA ----
+          DEADLINE=$(( $(date +%s) + 2400 ))   # 40 minutes
+          while :; do
+            RUNS="$(api "https://api.github.com/repos/$REPO/commits/$HEAD_SHA/check-runs?per_page=100")"
+
+            pending=0
+            failed=0
+            echo
+            echo "── $(date -u +%H:%M:%SZ) ──"
+            for slug in $NEED; do
+              n="$(name_for "$slug")"
+              concl="$(printf '%s' "$RUNS" \
+                       | jq -r --arg n "$n" \
+                         '[.check_runs[] | select(.name == $n)]
+                          | sort_by(.started_at) | last
+                          | if . == null then "absent"
+                            elif .status != "completed" then .status
+                            else .conclusion end')"
+              echo "  $n: $concl"
+              case "$concl" in
+                success)                      ;;
+                absent|queued|in_progress|pending|waiting) pending=1 ;;
+                skipped|neutral)              ;;   # ran and opted out — not a failure
+                *)                            failed=1 ;;
+              esac
+            done
+
+            if [ "$failed" -eq 1 ]; then
+              echo
+              echo "::error::A required platform build failed on $HEAD_SHA. See the runs above."
+              exit 1
+            fi
+            if [ "$pending" -eq 0 ]; then
+              echo
+              echo "✅ Every build this PR required has passed."
+              exit 0
+            fi
+            if [ "$(date +%s)" -ge "$DEADLINE" ]; then
+              echo
+              echo "::error::Timed out waiting for a required platform build on $HEAD_SHA."
+              exit 1
+            fi
+            sleep 20
+          done

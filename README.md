@@ -1,94 +1,129 @@
 # Another Morse Trainer
 
-Learn to copy Morse code (CW) by ear with the Koch method, in a native iOS app
-built with **SwiftUI**, with its training logic in a Foundation-only Swift
-package (`Sources/MorseKit`) so it can be unit-tested and ported. The Android
-port lives at [N9HO/another-morse-trainer-android](https://github.com/N9HO/another-morse-trainer-android).
+Learn to copy Morse code (CW) by ear with the Koch method. This repository holds
+both apps:
 
-**The beta is open.** Join on
-[TestFlight](https://testflight.apple.com/join/ZwXF88Gh).
+| | | |
+|---|---|---|
+| [**`ios/`**](ios/) | SwiftUI + SwiftPM + Xcode | iOS / iPadOS — [open beta on TestFlight](https://testflight.apple.com/join/ZwXF88Gh) |
+| [**`android/`**](android/) | Kotlin + Jetpack Compose + Gradle | Android — closed testing |
 
-The user guide, covering every mode, setting and hardware option, lives at
+The user guide lives at
 [anothermorsetrainer.app/guide](https://anothermorsetrainer.app/guide/), and
 testers, bug reports and feature chat live on
 [Discord](https://discord.gg/qgyk3TPUd9).
 
-## Features
+Each platform's own README has the full feature list and setup notes:
+[ios/README.md](ios/README.md) · [android/README.md](android/README.md).
 
-- **Journey**: gamified, level-based path (letters → numbers → punctuation →
-  prosigns → Q-codes → abbreviations → words → call signs) with a progress bar
-  that fills on a hit and drains on a miss (toggleable), an unlock map, and
-  saved progress
-- **Characters**: Koch-method ladder (A-Z, 0-9) with a user-pinnable
-  "Track stage" (characters, pairs, triples, words & call signs)
-- **Common Words**, **Abbreviations**, **Q-Codes**, **Prosigns**: phrase
-  drills, with custom word lists and optional punctuation extras
-- **Confusion Drill**: targeted review of the pairs you actually mix up
-- **Head Copy**: copy in your head with auto-repeats and a timed reveal
-- **Type It / QRQ Speed**: free-recall typing, plus high-speed copy at
-  35 / 40 / 50 / 60 WPM on its own speed setting
-- **Rapid Fire**: call signs / words / number groups / states sent back to
-  back at your pace; type, head-copy, key each one back, or just listen
-- **QSO Simulator**: call CQ and work a simulated pileup, with your own side
-  keyed on the air: adjustable callers, speeds, QSB/QRN, cut numbers, bust
-  behavior, callsign shapes, and a live log
-- **Contest**: timed runs of the weekly CW events (K1USN SST, ICWC MST,
-  CWops CWT, NCCC Sprint, ARRL Field Day) with authentic exchanges and speeds,
-  a live score and rate, and an end-of-run scorecard
-- **Code Exam**: FCC/ARRL-style copy test at 5 / 13 / 20 WPM (solid copy or
-  content questions)
-- **Short Stories**: continuous copy of a public-domain fable (32 bundled), a
-  longer classic sent in parts with a bookmark that keeps your place, or todays
-  news: real RSS headlines sanitized to sendable Morse and hidden until you
-  reveal them
-- **Reference**: browsable, tap-to-hear chart of prosigns, Q-codes,
-  abbreviations, ham lingo, cut numbers, and the full alphabet, with
-  per-signal detail
-- **CW Decoder**: point the microphone at received Morse (a rig's speaker, a
-  WebSDR) and read it as text, with live WPM/pitch telemetry
-- **Listen & Learn**: hands-free: hear the code, then the spoken answer;
-  keeps playing with the screen locked
-- **Voice answers**: speak your answer instead of tapping in any of the six
-  choice quizzes, with a confirm/closest-match fallback that learns your
-  corrections
-- **Answer by keying**: key the answer on a touch or hardware Morse key
-- **Sending Practice**: a dedicated hear-it, key-it-back mode on the adaptive
-  ladder, with live decode, always-on replay, and a connected-MIDI-key
-  readout; plus printable drill sheets built from what you've studied
-- **Vail repeater**: live CW over the [Vail](https://vail.woozle.org) network
-  with Vail Adapter support: MIDI key input *and* output (keyer modes,
-  speed, sidetone, RX piezo buzz), chat, and a signal timeline
-- **Bluetooth LE MIDI keys**: paired from inside the app via the system MIDI
-  sheet, which is the only thing on iOS that makes a BLE key visible to apps
-- **Background noise**: an optional low noise floor under everything (Whisper by
-  default) that stops Bluetooth earbuds sleeping through the first character,
-  and doubles as band noise to copy through
-- **Progress**: daily streak with milestone celebrations, session history
-  with per-session recognition charts, per-character stats, most-confused
-  pairs, performance by 5-WPM speed band, and a shareable Brag Sheet
-- Character speed adjustable to 60 WPM, with Farnsworth spacing tracking it
-- Timed practice sessions (1-30 min or open-ended) with mid-session timer
-  controls and an end-of-session summary
-- Daily practice reminders (minute precision, streak-aware)
+## Two ports, deliberately not one
 
-## Project layout
+`ios/Sources/MorseKit/` (Swift) and
+`android/app/src/main/java/app/anothermorsetrainer/morsekit/` (Kotlin) are
+**parallel ports of the same training logic, kept as two independent trees.**
+Sharing a repository is not sharing code: there is no Kotlin Multiplatform layer,
+no common module, and the data tables are intentionally duplicated. Converging
+them is a separate project with its own risk; please don't start it by accident
+while fixing something else.
 
-- `MorseTrainerApp/`: the SwiftUI app (audio, UI, persistence)
-- `Sources/MorseKit/`: pure training logic: engines, quizzes, contest and
-  pileup simulation, exam grading, stats. No UIKit/SwiftUI imports.
-- `Sources/MorseKitCheck/`: a command-line harness exercising MorseKit
-  (`swift run MorseKitCheck`)
-- `tools/`: TestFlight upload + App Store Connect helpers, Discord triage bot
+The same goes for the vendored CW decoder — `ios/Sources/CWDecoderCore/` (C99)
+and `android/…/morsekit/cw/` (its Kotlin port). Both are kept byte-identical to
+a firmware copy and carry their own `PROVENANCE.md`; don't reformat, relicense
+or tidy them.
 
-## Build
+## Building
 
-Open `MorseTrainer.xcodeproj` in Xcode and run the `MorseTrainer` scheme, or
-build the logic package alone with:
+Each app builds from its own directory; nothing at the repository root builds
+anything.
 
 ```bash
-swift build
-swift run MorseKitCheck
+# iOS — needs macOS + Xcode
+cd ios
+swift build && swift run MorseKitCheck            # logic harness, no Xcode needed
+xcodebuild -list -project MorseTrainer.xcodeproj
 ```
 
-CI (`.github/workflows/ios.yml`) builds both the package and the app on every
-push, so changes made away from a Mac still get compile-checked.
+```bash
+# Android — needs JDK 17 + the Android SDK
+cd android
+./gradlew :app:assembleDebug
+./gradlew :app:testDebugUnitTest
+```
+
+## Versions and releases
+
+**The two apps have independent version numbers and release cadences and are not
+coupled.** iOS is at build 24; Android at versionCode 16 / versionName 1.12.1.
+
+Release tags are namespaced per platform, because a single repository now feeds
+both release workflows:
+
+| Tag | Fires | Effect |
+|---|---|---|
+| `ios-v*` | `.github/workflows/discord-release.yml` | Posts a changelog embed to Discord (scoped to `ios/`) |
+| `android-v*` | `.github/workflows/android-release.yml` | Builds the signed AAB and uploads it to the Play closed-testing track |
+
+An unprefixed `v*` tag fires **nothing**. Before the split it would have fired
+**both** — an iOS Discord announcement for an Android release, and an attempted
+Play upload for an iOS one.
+
+`android/RELEASE.md` covers the Play Store side in full.
+
+## CI
+
+`ios.yml` and `android-ci.yml` are path-filtered to `ios/**` and `android/**`
+(plus their own workflow files), so a single-platform commit only starts that
+platform's build. This matters: the iOS jobs run on `macos-15`, billed at 10x a
+Linux runner.
+
+A consequence worth knowing: **a skipped path-filtered job reports no status at
+all.** If either build is ever made a *required* status check on `main`,
+single-platform PRs will be blocked from merging forever. Use an always-runs gate
+job in that case, not a required build.
+
+## History note
+
+**The two repositories were merged on 2026-08-31.** Before that date the Android
+app lived at
+[`N9HO/another-morse-trainer-android`](https://github.com/N9HO/another-morse-trainer-android),
+which is now archived and read-only. Its full commit history was grafted in with
+`git subtree` — no history was rewritten, and every original commit SHA is still
+reachable here.
+
+**That leaves one ambiguity that cannot be fixed without rewriting history, so it
+is documented instead.** At the cutover, iOS was at PR #94 and Android at PR #48.
+Merging code does not merge issues, so **an `#N` reference in any commit message
+from the Android lineage points at the archived
+`another-morse-trainer-android` repository, not at this one** — GitHub will
+nevertheless autolink it to this repo's issue #N, which is a different ticket
+entirely. Android-lineage commits with `(#46)` and `(#47)` in their subjects are
+real examples: those are Android tickets, not this repo's #46 and #47.
+
+The boundary is the graft commit `ae5bde2` ("Add 'android/' from commit
+aa23570…"). To tell which side a commit came from:
+
+```bash
+# Commits from the Android lineage (their #N refs mean the archived repo)
+git log ae5bde2^2
+```
+
+Issue references created **after** the cutover mean this repository, on both
+platforms.
+
+### Following a file's history across the graft
+
+`git log --follow` does not cross a subtree graft, so on a post-move path it
+returns nothing. The history is all there — ask for it with the pre-move path,
+or with both paths at once:
+
+```bash
+# Full history, using the path as it was before the move
+git log --follow -- app/src/main/java/app/anothermorsetrainer/morsekit/TrainerEngine.kt
+
+# Or both paths, which also shows the graft commit itself
+git log -- android/app/src/main/java/app/anothermorsetrainer/morsekit/TrainerEngine.kt \
+           app/src/main/java/app/anothermorsetrainer/morsekit/TrainerEngine.kt
+```
+
+The iOS tree moved with `git mv`, so rename detection handles it and
+`git log --follow -- ios/<path>` works normally.

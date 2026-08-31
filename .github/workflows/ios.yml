@@ -1,15 +1,26 @@
 name: iOS Build
 
-# Compiles the project remotely so changes made from the Claude phone app can be
-# verified without a laptop:
+# Compiles the iOS app (which lives under ios/) remotely so changes made from the
+# Claude phone app can be verified without a laptop:
 #   * logic-job  - builds/runs the Foundation-only MorseKit package + MorseKitCheck
 #                  harness (fast feedback, no Xcode needed)
 #   * ios-build  - real `xcodebuild` of the MorseTrainer iOS app on a macOS runner
+#
+# Path-filtered: this repo also holds the Android app, and a macOS runner bills at
+# 10x a Linux one, so an Android-only change must not start this workflow. Both
+# jobs set `working-directory: ios`, which is why the swift and xcodebuild
+# invocations below still name their paths relative to the iOS tree.
 on:
   push:
     branches:
       - "**"
+    paths:
+      - "ios/**"
+      - ".github/workflows/ios.yml"
   pull_request:
+    paths:
+      - "ios/**"
+      - ".github/workflows/ios.yml"
   workflow_dispatch:
 
 concurrency:
@@ -20,6 +31,9 @@ jobs:
   logic-job:
     name: MorseKit logic checks
     runs-on: macos-15
+    defaults:
+      run:
+        working-directory: ios
     steps:
       - uses: actions/checkout@v4
       - name: Show Swift version
@@ -32,6 +46,9 @@ jobs:
   ios-build:
     name: Build MorseTrainer (iOS)
     runs-on: macos-15
+    defaults:
+      run:
+        working-directory: ios
     steps:
       - uses: actions/checkout@v4
 

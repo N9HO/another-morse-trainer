@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="brand_navy">#FF0B1A2D</color>
+
+    <!-- Pre-Compose window theme: on-brand navy launch background (matches iOS). -->
+    <style name="Theme.AMT" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/brand_navy</item>
+        <item name="android:statusBarColor">@color/brand_navy</item>
+        <item name="android:navigationBarColor">@color/brand_navy</item>
+    </style>
+</resources>

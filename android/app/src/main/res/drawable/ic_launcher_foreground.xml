@@ -1,0 +1,19 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Teal "lit ring" (matches iOS logo), with a white Morse dit-dah inside. -->
+    <path
+        android:strokeColor="#2CC0D1"
+        android:strokeWidth="5"
+        android:pathData="M54,54 m-30,0 a30,30 0 1,0 60,0 a30,30 0 1,0 -60,0" />
+    <!-- dit -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M44,54 m-5,0 a5,5 0 1,0 10,0 a5,5 0 1,0 -10,0 Z" />
+    <!-- dah (stadium) -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M55,49 L65,49 A5,5 0 0,1 65,59 L55,59 A5,5 0 0,1 55,49 Z" />
+</vector>

@@ -1,5 +1,9 @@
-# macOS
+# Shared
 .DS_Store
+
+# ---------------------------------------------------------------------------
+# iOS  (ios/)
+# ---------------------------------------------------------------------------
 
 # Swift Package Manager
 .build/
@@ -17,8 +21,43 @@ xcuserdata/
 # Sim build output (xcodebuild -derivedDataPath)
 build-sim/
 
-# App Store Connect API credentials (local only)
-tools/asc-auth.sh
+# App Store Connect API credentials (local only).
+# Re-anchored for the monorepo: as bare `tools/asc-auth.sh` this stopped
+# matching once the iOS tree moved under ios/, and the credential file would
+# have become committable.
+ios/tools/asc-auth.sh
 
-# Python bytecode (tools/*.py)
+# Python bytecode (ios/tools/*.py)
 __pycache__/
+
+# ---------------------------------------------------------------------------
+# Android  (android/)
+# ---------------------------------------------------------------------------
+
+# Secrets — never commit.
+# Deliberately left unanchored so they match at any depth, which is what the
+# leading-slash entries below could not do after the move.
+keystore.properties
+*.jks
+*.keystore
+
+# Android / Gradle build output.
+# These were root-anchored (`/build/`, `/app/build/`, `/local.properties`) in
+# the standalone repo. Left alone they would have stopped matching once the
+# tree moved under android/, and Gradle output would have started getting
+# committed — so each is re-anchored to its new location.
+*.iml
+.gradle/
+/android/local.properties
+/android/build/
+/android/app/build/
+/android/captures/
+.externalNativeBuild/
+.cxx/
+
+# Kotlin compiler scratch. A .kotlin/errors/errors-*.log was committed in the
+# Android repo; it should never have been tracked.
+.kotlin/
+
+# Android Studio / IntelliJ
+.idea/

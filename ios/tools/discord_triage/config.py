@@ -7,6 +7,7 @@ See .env.example for the full list and the README for how to set them on Fly.io.
 from __future__ import annotations
 
 import os
+import warnings
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -46,6 +47,29 @@ def _emoji_set(raw: str) -> frozenset[str]:
     return frozenset(parts) or frozenset({"🐛"})
 
 
+def _deprecated_android_repo() -> str:
+    """Always "" — see Settings.github_repo_android.
+
+    The Android app moved into the same repo as iOS, so a separate Android
+    destination is always wrong now; the old repo is archived, which makes its
+    issue tracker read-only. Warns rather than fails when GITHUB_REPO_ANDROID is
+    still set, because a config change in git does not redeploy the bot — a live
+    Fly.io secret can outlive this file, and a warning puts that in the logs
+    instead of silently ignoring it.
+    """
+    stale = os.environ.get("GITHUB_REPO_ANDROID", "").strip()
+    if stale:
+        warnings.warn(
+            f"GITHUB_REPO_ANDROID is set to {stale!r} but is no longer used: the "
+            "Android app now lives in the same repo as iOS, so every platform "
+            "files in GITHUB_REPO. Unset it with "
+            "`fly secrets unset GITHUB_REPO_ANDROID`.",
+            RuntimeWarning,
+            stacklevel=2,
+        )
+    return ""
+
+
 @dataclass(frozen=True)
 class Settings:
     # --- Discord ---
@@ -74,10 +98,12 @@ class Settings:
 
     # --- GitHub ---
     github_token: str
-    github_repo: str  # "owner/name" — default repo for all platforms…
-    # …except Android, which is routed here when set. Empty string = no separate
-    # Android repo, so Android bugs fall back to github_repo (the old behavior).
-    # The GITHUB_TOKEN must have Issues: read/write on this repo too.
+    github_repo: str  # "owner/name" — the repo every issue is filed in.
+    # Always "" since the iOS and Android apps merged into one monorepo: there is
+    # no second repo to route Android bugs to, so every platform files in
+    # github_repo. Kept as a field (rather than deleted) because bot.py reads it
+    # to decide whether to preflight a second repo's token scope; empty is
+    # exactly the "single repo" answer it already knows how to handle.
     github_repo_android: str
     # Apply this label to every issue the bot opens, so they're easy to find/filter.
     triage_label: str
@@ -85,8 +111,8 @@ class Settings:
     def repo_for(self, platform: Optional[str]) -> str:
         """Pick the destination repo for a verdict's platform.
 
-        Android reports go to the dedicated Android repo when one is configured;
-        everything else (iOS/iPadOS/macOS/multiple/unknown) goes to the default.
+        One monorepo now holds both apps, so every platform files in the same
+        place. The platform is still recorded on the issue via its label.
         """
         if platform == "android" and self.github_repo_android:
             return self.github_repo_android
@@ -108,7 +134,7 @@ class Settings:
             model=os.environ.get("ANTHROPIC_MODEL", "claude-opus-4-8"),
             github_token=_required("GITHUB_TOKEN"),
             github_repo=_required("GITHUB_REPO"),
-            github_repo_android=os.environ.get("GITHUB_REPO_ANDROID", "").strip(),
+            github_repo_android=_deprecated_android_repo(),
             triage_label=os.environ.get("TRIAGE_LABEL", "from-discord"),
         )
 

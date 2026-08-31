@@ -1,0 +1,110 @@
+name: Android release (Play Store upload)
+
+# Fires when you push an ANDROID version tag
+# (e.g. `git tag android-v1.12.2 && git push origin android-v1.12.2`).
+#
+# The tag prefix matters: this is a monorepo holding both apps, and the iOS
+# announcement workflow watches `ios-v*`. A bare `v*` tag would fire both, so
+# each platform releases under its own namespace and the two cadences stay
+# independent (Android is at versionCode 16 / 1.12.1; iOS at build 24).
+# Builds the SIGNED app bundle (AAB) and uploads it to the Google Play closed
+# testing (beta) track. This automates the step iOS does by hand (Xcode -> TestFlight).
+#
+# The track id below ("alpha") is the default name of the first closed-testing
+# track; if you renamed it or made a custom track, set `track:` to that exact
+# track id (Play Console -> Testing -> Closed testing -> the track's name).
+#
+# It degrades gracefully: if the signing/Play secrets aren't configured yet, it
+# builds the bundle and uploads it as a workflow artifact instead of failing, so
+# the workflow is safe to merge before Play Console setup is finished.
+#
+# Required repository secrets (Settings -> Secrets and variables -> Actions):
+#   ANDROID_KEYSTORE_BASE64   - `base64 -i amt-upload.jks` (the upload keystore)
+#   ANDROID_KEYSTORE_PASSWORD - keystore (store) password
+#   ANDROID_KEY_ALIAS         - key alias (e.g. amt-upload)
+#   ANDROID_KEY_PASSWORD      - key password
+#   PLAY_SERVICE_ACCOUNT_JSON - the full JSON of a Google Play service account
+#                               with "Release manager" access (see RELEASE.md)
+#
+# NOTE: the app must already exist in Play Console and have had ONE manual upload
+# on the target track before the API will accept automated uploads.
+
+on:
+  push:
+    tags:
+      - "android-v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    name: Build + upload AAB
+    runs-on: ubuntu-latest
+    env:
+      KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      PLAY_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          build-root-directory: android
+
+      - name: Recreate signing config from secrets
+        if: env.KEYSTORE_B64 != ''
+        env:
+          STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          # Decode leniently: pasted base64 may carry CRLF/whitespace (Windows
+          # clipboards) or wrapper lines like certutil's -----BEGIN/END-----
+          # headers. --ignore-garbage skips every non-base64 character, so any
+          # paste style decodes as long as the base64 payload itself is intact.
+          echo "$KEYSTORE_B64" | base64 -d --ignore-garbage > "$RUNNER_TEMP/amt-upload.jks"
+          # Fail loudly (before a confusing Gradle signing error) if what we
+          # decoded is obviously not a keystore.
+          SIZE=$(stat -c%s "$RUNNER_TEMP/amt-upload.jks")
+          if [ "$SIZE" -lt 500 ]; then
+            echo "::error::Decoded keystore is only ${SIZE} bytes — the ANDROID_KEYSTORE_BASE64 secret does not contain a valid base64-encoded keystore. Re-create it (macOS: base64 -i amt-upload.jks | pbcopy; PowerShell: [Convert]::ToBase64String([IO.File]::ReadAllBytes('amt-upload.jks')) | Set-Clipboard) and paste the result as the secret value."
+            exit 1
+          fi
+          cat > keystore.properties <<EOF
+          storeFile=$RUNNER_TEMP/amt-upload.jks
+          storePassword=$STORE_PASSWORD
+          keyAlias=$KEY_ALIAS
+          keyPassword=$KEY_PASSWORD
+          EOF
+
+      - name: Build signed AAB
+        run: ./gradlew :app:bundleRelease --stacktrace
+
+      - name: Upload to Google Play (internal track)
+        if: env.PLAY_JSON != '' && env.KEYSTORE_B64 != ''
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: app.anothermorsetrainer
+          releaseFiles: android/app/build/outputs/bundle/release/app-release.aab
+          track: alpha   # closed testing (beta); change if your track id differs
+          status: completed
+
+      - name: Save AAB as artifact (fallback / record)
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release-aab
+          path: android/app/build/outputs/bundle/release/app-release.aab
+          if-no-files-found: warn
