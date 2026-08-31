@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- Brag-sheet share images live in cacheDir/shared and are exposed to other
+         apps through the FileProvider authority "${applicationId}.fileprovider". -->
+    <cache-path name="shared" path="shared/" />
+</paths>

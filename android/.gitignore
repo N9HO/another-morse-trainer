@@ -1,0 +1,18 @@
+# Secrets — never commit
+keystore.properties
+*.jks
+*.keystore
+
+# Android / Gradle build output
+*.iml
+.gradle/
+/local.properties
+/build/
+/app/build/
+/captures/
+.externalNativeBuild/
+.cxx/
+
+# Android Studio / IntelliJ
+.idea/
+.DS_Store
