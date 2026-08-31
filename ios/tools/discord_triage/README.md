@@ -121,13 +121,23 @@ anywhere in the thread does it on demand.
 > granted (re-run the invite URL to update permissions if needed).
 
 ### 2. Create a GitHub token
-A fine-grained PAT with **Issues: Read and write** on **every repo the bot
-files into** (→ `GITHUB_TOKEN`): `n9ho/another-morse-trainer`, plus
-`n9ho/another-morse-trainer-android` if `GITHUB_REPO_ANDROID` is set — a token
-scoped to the iOS repo alone gets a 404 filing Android reports. Note the
-expiration you pick: fine-grained PATs expire silently, and an expired token
-turns every filing into a 401. The bot verifies access to each configured repo
-at startup and logs exactly what's wrong.
+A fine-grained PAT with **Issues: Read and write** on the one repo the bot
+files into (→ `GITHUB_TOKEN`): `n9ho/another-morse-trainer`. Since the Android
+app moved into that same monorepo there is no second destination — every
+platform files there, and the platform is recorded on the issue's label. Note
+the expiration you pick: fine-grained PATs expire silently, and an expired
+token turns every filing into a 401. The bot verifies access at startup and
+logs exactly what's wrong.
+
+> **`GITHUB_REPO_ANDROID` is retired.** It used to route Android reports to
+> `n9ho/another-morse-trainer-android`; that repo is archived, so its issue
+> tracker is read-only. `config.py` now ignores the variable and logs a
+> `RuntimeWarning` if it is still set. **A config change in git does not
+> redeploy the bot** — clear the live secret by hand:
+>
+> ```bash
+> fly secrets unset GITHUB_REPO_ANDROID
+> ```
 
 ### 3. Get an Anthropic API key
 From https://console.anthropic.com → **API Keys** (→ `ANTHROPIC_API_KEY`).
@@ -198,18 +208,14 @@ GitHub status, and `fly logs` has the full story, including a startup probe of
 every configured repo. The usual suspects:
 
 - **401 Bad credentials** — the PAT expired or was revoked. Generate a new one
-  (covering both repos) and `fly secrets set GITHUB_TOKEN=...`.
-- **404 Not Found** — the repo isn't granted to the PAT. Classic case: routing
-  was enabled via `GITHUB_REPO_ANDROID` but the token from the original setup
-  only covers the iOS repo. Edit the PAT's repository access to add the
-  Android repo.
+  and `fly secrets set GITHUB_TOKEN=...`.
+- **404 Not Found** — the repo isn't granted to the PAT. Edit the PAT's
+  repository access to include `n9ho/another-morse-trainer`.
 - **403 Resource not accessible** — the repo is granted but the token lacks
   the **Issues: Read and write** permission on it.
 
-When the *routed* (Android) repo rejects the token with 403/404, the bot falls
-back to filing in `GITHUB_REPO` — with the `platform: android` label and a ⚠️
-note in the Discord reply — so the report isn't lost while the token gets
-fixed.
+The fallback path that re-filed a rejected Android report into `GITHUB_REPO`
+is now a no-op: with a single repo, `GITHUB_REPO` is already the destination.
 
 ## Resolution notifications ("this is fixed")
 

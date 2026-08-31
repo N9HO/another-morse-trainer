@@ -59,5 +59,6 @@ CI built this commit with `xcodebuild` on a macOS runner and ran the
 ## Ship it
 
     git checkout main && git pull
+    cd ios
     source tools/asc-auth.sh
     ./tools/upload-testflight.sh

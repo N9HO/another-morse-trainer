@@ -3,7 +3,8 @@
 Learn to copy Morse code (CW) by ear with the Koch method, in a native iOS app
 built with **SwiftUI**, with its training logic in a Foundation-only Swift
 package (`Sources/MorseKit`) so it can be unit-tested and ported. The Android
-port lives at [N9HO/another-morse-trainer-android](https://github.com/N9HO/another-morse-trainer-android).
+port is its sibling in this repo, at [`android/`](../android) — a separate,
+independently-versioned Kotlin implementation, not a shared module.
 
 **The beta is open.** Join on
 [TestFlight](https://testflight.apple.com/join/ZwXF88Gh).
