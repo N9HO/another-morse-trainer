@@ -1,6 +1,9 @@
 package app.anothermorsetrainer
 
 import android.content.Context
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.platform.LocalContext
 import kotlin.math.log2
 import kotlin.math.roundToInt
 
@@ -79,9 +82,48 @@ class HardwareKey(context: Context) {
     /** User-triggered retry of the wake sequence, for a key plugged in late. */
     fun wakeAdapter() = output.wakeAdapter()
 
+    /**
+     * Re-push the key and practice settings to an adapter that is already open.
+     *
+     * [start] configures the adapter once, from the settings as they stood when
+     * the screen opened. Everything reachable from the mid-session Settings
+     * sheet can move afterwards — the keyer mode itself, and the speed the
+     * adapter's own keyer sends at in the modes where
+     * [AdapterKeyer.adapterTimesSending] holds — and until this existed none of
+     * it reached the adapter until the next wake, i.e. not until the operator
+     * left the module and came back (issue #46). Only differences go on the
+     * wire, so calling this is cheap.
+     */
+    fun applyConfig() {
+        output.applyConfig(
+            keyerMode = storedKeyerMode,
+            wpm = Settings.characterWpm.roundToInt(),
+            sidetoneMidiNote = midiNoteForHz(Settings.sidetoneHz)
+        )
+    }
+
     private companion object {
         /** Nearest MIDI note to a frequency in Hz (A4 = 69 = 440 Hz). */
         fun midiNoteForHz(hz: Double): Int =
             if (hz <= 0) 72 else (69 + 12 * log2(hz / 440.0)).roundToInt().coerceIn(0, 127)
     }
+}
+
+/**
+ * Keep [key]'s adapter in step with the settings for as long as it is on screen.
+ *
+ * The Settings sheet is drawn *over* a running session rather than replacing
+ * it, so the screen holding the adapter open is still composed while the
+ * operator changes their keyer mode or speed. Reading those settings here
+ * subscribes to them, and every change pushes down the port that is already
+ * open — no second client racing for the device's input port, which is the
+ * reason the setting used to only store itself and wait (issue #46).
+ */
+@Composable
+fun AdapterConfigSync(key: HardwareKey) {
+    val context = LocalContext.current
+    val mode = AdapterKeyer.mode(context)
+    val wpm = Settings.characterWpm
+    val sidetoneHz = Settings.sidetoneHz
+    LaunchedEffect(mode, wpm, sidetoneHz) { key.applyConfig() }
 }

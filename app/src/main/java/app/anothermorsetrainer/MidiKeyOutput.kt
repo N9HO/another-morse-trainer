@@ -91,6 +91,23 @@ class MidiKeyOutput(private val context: Context) {
         this.sidetoneMidiNote = sidetoneMidiNote.coerceIn(0, 127)
     }
 
+    /**
+     * Apply settings to an adapter that is already connected, sending only what
+     * actually changed. This is the live counterpart to [configure]: the wake
+     * sequence pushes the whole config once, and this keeps it current while
+     * the port stays open, so a mode or speed picked mid-session reaches the
+     * adapter instead of waiting for the next wake (issue #46).
+     *
+     * The mirrored fields are the comparison, so a repeated call with unchanged
+     * values costs nothing on the wire, and a change made before anything is
+     * connected still lands — it updates the mirror the next wake will send.
+     */
+    fun applyConfig(keyerMode: KeyerMode, wpm: Int, sidetoneMidiNote: Int) {
+        if (keyerMode != this.keyerMode) setKeyerMode(keyerMode)
+        if (ditDurationMs(wpm) != this.ditDurationMs) setSpeed(wpm)
+        if (sidetoneMidiNote.coerceIn(0, 127) != this.sidetoneMidiNote) setSidetone(sidetoneMidiNote)
+    }
+
     /** Begin: open every device input port and broadcast the init sequence. */
     @Suppress("DEPRECATION")
     fun start(onConnected: (String?) -> Unit) {

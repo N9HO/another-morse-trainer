@@ -233,6 +233,9 @@ fun QuizScreen(
     // is on (the iOS "answer by keying" panel).
     val keyer = remember { SendingKeyer(wpm = Settings.characterWpm, toneHz = Settings.sidetoneHz) }
     val midi = remember { HardwareKey(context) }
+    // Push a keyer mode or speed picked in the Settings sheet to the adapter
+    // now, rather than at the next wake — i.e. after leaving the module (#46).
+    AdapterConfigSync(midi)
     val scope = rememberCoroutineScope()
     var keyPressed by remember { mutableStateOf(false) }
     var midiDevice by remember { mutableStateOf<String?>(null) }

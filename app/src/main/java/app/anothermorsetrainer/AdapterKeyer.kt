@@ -1,6 +1,10 @@
 package app.anothermorsetrainer
 
 import android.content.Context
+import android.content.SharedPreferences
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 
 /**
  * Which kind of key is plugged into the Vail Adapter, in one place.
@@ -17,6 +21,13 @@ import android.content.Context
  * that mode was always [MidiKeyOutput.KeyerMode.STRAIGHT_KEY] — which is why an
  * iambic paddle configured at vailmorse.com reverted the moment AMT opened it.
  * The wake still asserts a mode; it now asserts the operator's.
+ *
+ * The mode is a Compose state as well as a stored pref, so a screen that is
+ * *currently holding the adapter open* recomposes when the Settings sheet drawn
+ * over it changes the mode, and can push the change down the port it already
+ * has. Storing it alone was not enough: the new mode then waited for the next
+ * wake, which is why changing it looked like it did nothing at all until you
+ * backed out of the module and came in again (issue #46).
  */
 object AdapterKeyer {
 
@@ -27,14 +38,33 @@ object AdapterKeyer {
     /** A straight key is the safe assumption: it is what a bare adapter keys as. */
     val DEFAULT_MODE = MidiKeyOutput.KeyerMode.STRAIGHT_KEY
 
-    private fun prefs(context: Context) =
+    private var prefs: SharedPreferences? = null
+    private var current by mutableStateOf(DEFAULT_MODE)
+
+    private fun prefsFor(context: Context): SharedPreferences =
         context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
+    /** Seed the observable mode from storage. Called once, from `MainActivity`. */
+    fun init(context: Context) {
+        val p = prefsFor(context)
+        prefs = p
+        current = MidiKeyOutput.KeyerMode.fromCode(p.getInt(KEY_MODE, DEFAULT_MODE.code))
+    }
+
+    /**
+     * The operator's key. Reading this from a Composable subscribes it to
+     * changes made anywhere else — that is what makes the push in
+     * [AdapterConfigSync] fire. The fallback covers a caller that runs before
+     * [init]; it reads storage directly rather than writing the state, so it is
+     * safe to call during composition.
+     */
     fun mode(context: Context): MidiKeyOutput.KeyerMode =
-        MidiKeyOutput.KeyerMode.fromCode(prefs(context).getInt(KEY_MODE, DEFAULT_MODE.code))
+        if (prefs != null) current
+        else MidiKeyOutput.KeyerMode.fromCode(prefsFor(context).getInt(KEY_MODE, DEFAULT_MODE.code))
 
     fun setMode(context: Context, mode: MidiKeyOutput.KeyerMode) {
-        prefs(context).edit().putInt(KEY_MODE, mode.code).apply()
+        current = mode
+        prefsFor(context).also { prefs = it }.edit().putInt(KEY_MODE, mode.code).apply()
     }
 
     /**
