@@ -129,7 +129,7 @@
       "wpm": 60,
       "unit": 0.02,
       "dit": 0.02,
-      "dah": 0.06005999999999999,
+      "dah": 0.06,
       "elementGap": 0.02,
       "spacingUnit": 0.02,
       "characterGap": 0.06,
@@ -422,7 +422,7 @@
     {
       "characterWpm": 60,
       "effectiveWpm": 90,
-      "resolvedEffectiveWpm": 90,
+      "resolvedEffectiveWpm": 60,
       "unit": 0.02,
       "dit": 0.02,
       "spacingUnit": 0.02,
