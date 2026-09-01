@@ -91,15 +91,16 @@ Android idiom for a media-playback foreground service, and ducking would leave
 the reported problem half-fixed, since copying Morse under music is the hard
 case. It is a real difference between the ports; it is not drift.
 
-Two things that were *not* done and are worth knowing:
+Left undone, and worth knowing: Android quiz screens still have no equivalent of
+the iOS listen-loop pause. They block on an answer, so they stall rather than run
+away, which is why it was left — but a Compose-side pause is still missing.
 
-- Android quiz screens still have no equivalent of the iOS listen-loop pause.
-  They block on an answer, so they stall rather than run away, which is why this
-  was left — but a Compose-side pause is still missing.
-- `AudioFocus` holds an `AudioFocusRequest` field (API 26) on a minSdk-24 class,
-  guarded by `SDK_INT` checks in the repo's existing style. There is no local
-  JDK or Android SDK, so **whether AGP lint's `NewApi` accepts that field
-  declaration was verified only in CI**, not before the push.
+The Android side was written blind, as everything here must be, and verified only
+by CI: all four jobs green, lint unchanged at 0 errors / 29 warnings / 69 hints.
+Note that **the "28 warnings" this file used to quote was already stale** — `main`
+reported 29 before this change; the compose-bom bump in
+[#116](https://github.com/N9HO/another-morse-trainer/pull/116) moved it and the
+number was never re-read. Read the count off a run, not off this file.
 
 ## Still to do
 
@@ -157,8 +158,8 @@ the rest is the path to Swift 6 language mode. Measure with:
 Use a fresh `-derivedDataPath` — an incremental build silently reports a
 fraction of the warnings and looks like good news.
 
-**6. What Android lint found.** Its first run: 0 errors, 28 warnings, 69 hints.
-Nothing latent. Worth acting on: `ListenService.kt:196` guards
+**6. What Android lint found.** Currently 0 errors, 29 warnings, 69 hints.
+Nothing latent. Worth acting on: `ListenService.kt:239` guards
 `stopForeground(STOP_FOREGROUND_REMOVE)` behind `SDK_INT >= N` (API 24) while
 `minSdk` *is* 24, so the branch is dead and its `@Suppress("DEPRECATION")`
 suppresses nothing. The rest is 23 `UseKtx` and 69 `AutoboxingStateCreation`
