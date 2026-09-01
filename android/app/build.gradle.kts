@@ -37,7 +37,16 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // R8 was off, so release builds shipped every generated icon in
+            // material-icons-extended (the app references about 30 of them)
+            // along with full symbol names and unreachable code. Tree-shaking
+            // this is the largest APK-size lever available here.
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
             if (keystorePropsFile.exists()) {
                 signingConfig = signingConfigs.getByName("release")
             }

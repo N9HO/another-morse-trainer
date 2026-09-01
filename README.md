@@ -53,15 +53,22 @@ cd android
 ## Versions and releases
 
 **The two apps have independent version numbers and release cadences and are not
-coupled.** iOS is at build 24; Android at versionCode 16 / versionName 1.12.1.
+coupled.** The live numbers are `CURRENT_PROJECT_VERSION` / `MARKETING_VERSION`
+in `ios/MorseTrainer.xcodeproj/project.pbxproj` and `versionCode` /
+`versionName` in `android/app/build.gradle.kts` — they are deliberately not
+copied here, because a copy is a copy that goes stale.
 
 Release tags are namespaced per platform, because a single repository now feeds
 both release workflows:
 
 | Tag | Fires | Effect |
 |---|---|---|
-| `ios-v*` | `.github/workflows/discord-release.yml` | Posts a changelog embed to Discord (scoped to `ios/`) |
+| `ios-v*` | `.github/workflows/ios-release.yml` | Builds and uploads the iOS build to TestFlight |
 | `android-v*` | `.github/workflows/android-release.yml` | Builds the signed AAB and uploads it to the Play closed-testing track |
+
+`.github/workflows/discord-release.yml` is not tag-triggered: it runs on
+`workflow_run` once a release workflow *succeeds*, so an announcement can never
+precede the release it announces.
 
 An unprefixed `v*` tag fires **nothing**. Before the split it would have fired
 **both** — an iOS Discord announcement for an Android release, and an attempted
@@ -75,6 +82,24 @@ Play upload for an iOS one.
 (plus their own workflow files), so a single-platform commit only starts that
 platform's build. This matters: the iOS jobs run on `macos-15`, billed at 10x a
 Linux runner.
+
+Both run on pull requests and on pushes to `main` — deliberately not on pushes
+to every branch, which built each PR commit twice. `pull_request` is the trigger
+that has to stay: GitHub evaluates a `paths:` filter on `pull_request` against
+the whole `base...head` diff, but on `push` against the single commit, and the
+merge gate below derives what it requires from the full PR diff. The trade is
+that a branch pushed with no PR open gets no build; `workflow_dispatch` covers
+that.
+
+`android-ci.yml` runs three jobs. `Build debug APK` runs the unit tests and
+`assembleDebug`. `Build release APK` runs `assembleRelease`, the only place in
+CI where R8 and the resource shrinker run at all — debug builds are not
+minified; it signs with a key generated on the runner so its APK can actually be
+installed, and uploads the R8 mapping beside it. `Release smoke test` boots an
+emulator, installs that exact APK, launches it, and fails on a crash or a
+missing symbol — R8 breaks things at runtime, not at build time, so the build
+job is green either way. It uploads two screenshots, which with no Android
+hardware behind this repo is also the only way to see the app running.
 
 A consequence worth knowing: **a skipped path-filtered job reports no status at
 all.** If either build is ever made a *required* status check on `main`,

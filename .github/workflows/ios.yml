@@ -10,10 +10,21 @@ name: iOS Build
 # 10x a Linux one, so an Android-only change must not start this workflow. Both
 # jobs set `working-directory: ios`, which is why the swift and xcodebuild
 # invocations below still name their paths relative to the iOS tree.
+#
+# Triggers: pull requests, plus pushes to main. NOT pushes to every branch —
+# that built each PR commit twice on macOS runners, at 10x billing for the
+# duplicate. `pull_request` is the half that has to stay, because GitHub
+# evaluates a `paths:` filter on `pull_request` against the whole base...head
+# diff but on `push` against that one commit: a PR touching ios/ and then topped
+# with a docs-only commit gets no push run, and merge-gate.yml would wait
+# forever for a check that never appears. Same reasoning in android-ci.yml.
+#
+# The cost of dropping it: a branch pushed with no PR open gets no build. Use
+# workflow_dispatch, or open the PR.
 on:
   push:
     branches:
-      - "**"
+      - main
     paths:
       - "ios/**"
       - ".github/workflows/ios.yml"

@@ -23,6 +23,15 @@ class CharacterStats(
         const val historyLimit = 20
     }
 
+    /**
+     * An independent copy, so a snapshot taken from a live engine is frozen at
+     * the moment it was taken. Swift's `CharacterStats` is a `struct`, so
+     * `Array(stats.values)` there copies by value; the Kotlin port is a class,
+     * and without this a snapshot would keep aliasing the engine's own
+     * [attempts] list and every later [record] would mutate it.
+     */
+    fun copy(): CharacterStats = CharacterStats(character, attempts.toList())
+
     fun record(correct: Boolean, ttr: Double) {
         attempts.add(Attempt(correct, ttr))
         if (attempts.size > historyLimit) {

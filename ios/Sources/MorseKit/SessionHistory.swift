@@ -165,9 +165,12 @@ public extension SessionHistory {
     }
 
     /// Performance grouped into 5-WPM speed bands, slowest band first. Only
-    /// sessions that actually answered something are counted.
+    /// sessions that actually answered something — and recorded their speed —
+    /// are counted (older persisted sessions predate the speed field, and
+    /// without the speed check they all land in a phantom 0-4 WPM band at the
+    /// head of the chart).
     func wpmBandSummaries() -> [WPMBandSummary] {
-        let answered = sessions.filter { $0.attempts > 0 }
+        let answered = sessions.filter { $0.attempts > 0 && $0.characterWPM > 0 }
         let grouped = Dictionary(grouping: answered) { Self.band(forWPM: $0.characterWPM).lowerBound }
         return grouped.keys.sorted().map { lower in
             let records = grouped[lower] ?? []

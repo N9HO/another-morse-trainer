@@ -1261,6 +1261,23 @@ do {
     for _ in 0..<(SessionHistory.limit + 10) { capped.add(older) }
     check("history is bounded to the cap", capped.sessions.count == SessionHistory.limit)
 
+    // WPM bands: sessions persisted before the speed field carry
+    // characterWPM == 0 and must not form a phantom "0-4" band. The Kotlin
+    // port has filtered these since it gained the field; Swift did not, and
+    // nothing here caught it. Twin of `summarize` in morsekit/SessionHistory.kt.
+    var banded = SessionHistory()
+    let preSpeedField = SessionRecord(id: UUID(), date: Date(), mode: "characters",
+                                      characterWPM: 0, effectiveWPM: 0, attempts: 8, correct: 6,
+                                      fastestTTR: nil, medianTTR: nil, durationSeconds: nil,
+                                      characters: [], activeCharacters: [])
+    banded.add(preSpeedField)
+    banded.add(rec)
+    let bands = banded.wpmBandSummaries()
+    check("a session with no recorded speed is left out of the bands",
+          bands.allSatisfy { $0.band.lowerBound > 0 })
+    check("sessions that did record a speed still band normally",
+          bands.count == 1 && bands[0].band.contains(25))
+
     // Codable round-trip.
     do {
         let data = try JSONEncoder().encode(hist)

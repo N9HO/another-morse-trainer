@@ -200,9 +200,25 @@ class MorsePlayer {
 
     private fun render(playable: MorseItem.Playable, timing: MorseTiming, frequency: Double): FloatArray {
         val segments = segments(playable, timing)
-        val out = ArrayList<Float>()
         val fullRamp = maxOf(1, (rampSeconds * sampleRate).toInt())
         val omega = 2.0 * PI * frequency / sampleRate
+
+        // Size the buffer up front and fill it by index. This used to be an
+        // ArrayList<Float>, which boxes every sample into a java.lang.Float:
+        // a long Farnsworth passage (Short Stories at 33/8) is tens of millions
+        // of samples, and the boxed form ran to hundreds of megabytes of
+        // transient heap on the main thread. The counts here must match the
+        // loops below exactly, so both derive from the same expressions.
+        // maxOf(0, ..) on both counts, matching the `> 0` guards the append
+        // form had: a non-positive duration must contribute nothing, or the
+        // sizing pass and the fill pass below could disagree.
+        var total = 0
+        for (segment in segments) {
+            total += maxOf(0, (segment.tone * sampleRate).toInt())
+            total += maxOf(0, (segment.gap * sampleRate).toInt())
+        }
+        val out = FloatArray(total)
+        var i = 0
 
         for (segment in segments) {
             val toneCount = (segment.tone * sampleRate).toInt()
@@ -213,7 +229,6 @@ class MorsePlayer {
                 // a click. Half a tone each way is the ceiling (issue #79). At
                 // every speed the app offers this is the unchanged 5 ms.
                 val rampSamples = maxOf(1, minOf(fullRamp, toneCount / 2))
-                out.ensureCapacity(out.size + toneCount)
                 for (n in 0 until toneCount) {
                     var amp = amplitude
                     if (n < rampSamples) {
@@ -222,13 +237,13 @@ class MorsePlayer {
                         val m = toneCount - n
                         amp *= 0.5 * (1 - cos(PI * m / rampSamples))
                     }
-                    out.add((amp * sin(omega * n)).toFloat())
+                    out[i++] = (amp * sin(omega * n)).toFloat()
                 }
             }
-            val gapCount = (segment.gap * sampleRate).toInt()
-            repeat(gapCount) { out.add(0f) }
+            // Gap samples are already zero in a fresh FloatArray.
+            i += maxOf(0, (segment.gap * sampleRate).toInt())
         }
-        return out.toFloatArray()
+        return out
     }
 
     private fun segments(playable: MorseItem.Playable, timing: MorseTiming): List<Segment> {

@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Privacy manifest. Without this, App Store Connect rejects uploads with
+  ITMS-91053 ("Missing API declaration") for the required-reason APIs below.
+
+  Lives in MorseTrainerApp/ because that folder is a synchronized root group
+  in the Xcode project, so it is bundled as a resource automatically — there
+  is no file reference to maintain in project.pbxproj.
+
+  The two declared categories are the ones this app actually uses:
+    * UserDefaults  — settings, progress, streak, news cache. AppSettings.swift,
+                      AppModel.swift, NewsFetcher.swift, RepeaterModel.swift,
+                      MorseKit/Journey.swift, MorseKit/VoiceProfile.swift.
+    * System boot time — mach_absolute_time, for MIDI packet timestamps and
+                      audio scheduling. MIDIInput.swift, MIDIOutput.swift,
+                      KeyerEngine.swift.
+  Checked and not used: file timestamp, disk space, active keyboard APIs.
+
+  The app collects nothing and tracks nobody. It makes outbound requests to
+  news feeds and to the Vail relay, but sends no user or device data with them.
+-->
+<plist version="1.0">
+<dict>
+    <key>NSPrivacyTracking</key>
+    <false/>
+    <key>NSPrivacyTrackingDomains</key>
+    <array/>
+    <key>NSPrivacyCollectedDataTypes</key>
+    <array/>
+    <key>NSPrivacyAccessedAPITypes</key>
+    <array>
+        <dict>
+            <key>NSPrivacyAccessedAPIType</key>
+            <string>NSPrivacyAccessedAPICategoryUserDefaults</string>
+            <key>NSPrivacyAccessedAPITypeReasons</key>
+            <array>
+                <string>CA92.1</string>
+            </array>
+        </dict>
+        <dict>
+            <key>NSPrivacyAccessedAPIType</key>
+            <string>NSPrivacyAccessedAPICategorySystemBootTime</string>
+            <key>NSPrivacyAccessedAPITypeReasons</key>
+            <array>
+                <string>35F9.1</string>
+            </array>
+        </dict>
+    </array>
+</dict>
+</plist>

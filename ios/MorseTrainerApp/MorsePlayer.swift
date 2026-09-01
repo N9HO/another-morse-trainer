@@ -259,9 +259,25 @@ final class MorsePlayer {
                         timing: MorseTiming,
                         frequency: Double) -> [Float] {
         let segments = self.segments(for: playable, timing: timing)
-        var out: [Float] = []
         let fullRamp = max(1, Int(rampSeconds * sampleRate))
         let omega = 2.0 * Double.pi * frequency / sampleRate
+
+        // Allocate once and fill by index. The previous form grew the array
+        // with per-segment `reserveCapacity` + `append`, so a long Farnsworth
+        // passage (a Code Exam at novice speed is ~22M samples) reallocated
+        // repeatedly and peaked at roughly twice its final size. The counts
+        // here must match the loops below exactly, so both derive from the
+        // same expressions.
+        // max(0, ..) on both counts, matching the `> 0` guards the append form
+        // had: a non-positive duration must contribute nothing, or the sizing
+        // pass and the fill pass below could disagree.
+        var total = 0
+        for segment in segments {
+            total += max(0, Int(segment.tone * sampleRate))
+            total += max(0, Int(segment.gap * sampleRate))
+        }
+        var out = [Float](repeating: 0, count: total)
+        var i = 0
 
         for segment in segments {
             let toneCount = Int(segment.tone * sampleRate)
@@ -273,7 +289,6 @@ final class MorsePlayer {
                 // (issue #79). At every speed the app offers this is the
                 // unchanged 5 ms.
                 let rampSamples = max(1, min(fullRamp, toneCount / 2))
-                out.reserveCapacity(out.count + toneCount)
                 for n in 0..<toneCount {
                     var amp = Double(amplitude)
                     if n < rampSamples {
@@ -282,11 +297,12 @@ final class MorsePlayer {
                         let m = toneCount - n
                         amp *= 0.5 * (1 - cos(Double.pi * Double(m) / Double(rampSamples)))
                     }
-                    out.append(Float(amp * sin(omega * Double(n))))
+                    out[i] = Float(amp * sin(omega * Double(n)))
+                    i += 1
                 }
             }
-            let gapCount = Int(segment.gap * sampleRate)
-            if gapCount > 0 { out.append(contentsOf: repeatElement(0, count: gapCount)) }
+            // Gap samples are already zero in the pre-filled buffer.
+            i += max(0, Int(segment.gap * sampleRate))
         }
         return out
     }
