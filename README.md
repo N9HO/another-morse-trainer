@@ -83,6 +83,14 @@ Play upload for an iOS one.
 platform's build. This matters: the iOS jobs run on `macos-15`, billed at 10x a
 Linux runner.
 
+Both run on pull requests and on pushes to `main` — deliberately not on pushes
+to every branch, which built each PR commit twice. `pull_request` is the trigger
+that has to stay: GitHub evaluates a `paths:` filter on `pull_request` against
+the whole `base...head` diff, but on `push` against the single commit, and the
+merge gate below derives what it requires from the full PR diff. The trade is
+that a branch pushed with no PR open gets no build; `workflow_dispatch` covers
+that.
+
 `android-ci.yml` runs two jobs. `Build debug APK` runs the unit tests and
 `assembleDebug`; `Build release APK` runs `assembleRelease`, which is the only
 place in CI where R8 and the resource shrinker run at all — debug builds are not

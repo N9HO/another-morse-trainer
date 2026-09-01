@@ -15,10 +15,21 @@ name: Android CI
 # set `working-directory: android`, which covers every `run:` step — but NOT the
 # `uses:` steps, so the upload-artifact paths below are spelled from the repo root.
 
+# Triggers: pull requests, plus pushes to main. NOT pushes to every branch —
+# that built each PR commit twice, once per event. `pull_request` is the trigger
+# that has to stay: GitHub evaluates a `paths:` filter on `pull_request` against
+# the whole base...head diff, but on `push` against that one commit. A PR that
+# touches android/ and is then topped with a docs-only commit gets no push run
+# at all, and merge-gate.yml — which derives what to require from the full PR
+# diff — would wait for a check that never appears. The push run was the
+# expendable half.
+#
+# The cost of dropping it: a branch pushed with no PR open gets no build. Use
+# workflow_dispatch, or open the PR.
 on:
   push:
     branches:
-      - "**"
+      - main
     paths:
       - "android/**"
       - ".github/workflows/android-ci.yml"
