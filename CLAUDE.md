@@ -46,7 +46,17 @@ cd android                                # needs JDK 17 + Android SDK
 ./gradlew :app:assembleDebug
 ```
 
-The triage bot has its own suite: `cd ios/tools/discord_triage && pytest`.
+The triage bot has its own suite, run in CI by `triage-bot.yml`:
+
+```bash
+cd ios/tools/discord_triage
+pip install -r requirements-dev.txt   # requirements.txt + pytest
+pytest
+```
+
+`ios/tools/**` is excluded from `ios.yml` — nothing under it reaches the Xcode
+build — so a change there runs the Python suite on Linux instead of two
+`macos-15` runners.
 
 ## Versions, tags, CI
 

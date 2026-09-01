@@ -153,7 +153,7 @@ From https://console.anthropic.com → **API Keys** (→ `ANTHROPIC_API_KEY`).
 ## Run locally
 
 ```bash
-cd tools/discord_triage
+cd ios/tools/discord_triage
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env        # fill it in
@@ -168,14 +168,26 @@ python3 test_conversation.py   # pure helpers — no dependencies, no tokens
 python3 test_bot_flow.py       # thread memory, with fake Discord/GitHub/Claude
 ```
 
-Both also run under `pytest`. No live tokens are used: `test_bot_flow.py` fills
-in dummy environment variables and swaps in fakes for Discord, GitHub, and the
-model.
+Both also run under `pytest`, which is what CI does:
+
+```bash
+pip install -r requirements-dev.txt   # requirements.txt + pytest
+pytest
+```
+
+`pytest` is kept out of `requirements.txt` on purpose — the Dockerfile installs
+that file into the production image, and `.dockerignore` keeps `test_*.py` out
+of it, so a test runner in there would have nothing to run.
+
+No live tokens are used: `test_bot_flow.py` fills in dummy environment variables
+and swaps in fakes for Discord, GitHub, and the model. `.github/workflows/triage-bot.yml`
+runs the suite on every pull request that touches this directory, on Python 3.12
+to match the Dockerfile.
 
 ## Deploy on Fly.io
 
 ```bash
-cd tools/discord_triage
+cd ios/tools/discord_triage
 fly launch --no-deploy        # accept the included fly.toml; pick an app name/region
 
 # Secrets (never put these in fly.toml or .env in git):

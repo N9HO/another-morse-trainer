@@ -21,16 +21,24 @@ name: iOS Build
 #
 # The cost of dropping it: a branch pushed with no PR open gets no build. Use
 # workflow_dispatch, or open the PR.
+# `!ios/tools/**` because nothing under it reaches this build: the Xcode project
+# references no file there and neither does Package.swift. Those are Python and
+# shell helpers (the Discord triage bot, the App Store Connect scripts), and a
+# change to one of them used to start two macOS runners to rebuild Swift that
+# had not changed. The triage bot's own tests run in triage-bot.yml, on Linux.
+# Later patterns win, so the negation must stay after `ios/**`.
 on:
   push:
     branches:
       - main
     paths:
       - "ios/**"
+      - "!ios/tools/**"
       - ".github/workflows/ios.yml"
   pull_request:
     paths:
       - "ios/**"
+      - "!ios/tools/**"
       - ".github/workflows/ios.yml"
   workflow_dispatch:
 

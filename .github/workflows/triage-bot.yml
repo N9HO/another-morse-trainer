@@ -1,0 +1,70 @@
+name: Triage bot
+
+# Runs the Discord triage bot's Python suite.
+#
+# Until this existed the suite ran nowhere automatically: no workflow invoked
+# pytest, so the only thing standing behind the bot that files this project's
+# issues was somebody remembering to run it by hand, on a machine with its
+# dependencies installed. A change could break it and CI would say nothing.
+#
+# Worse, ios/tools/ sits inside ios.yml's `ios/**` filter, so a Python-only pull
+# request started two macos-15 runners at 10x Linux billing, built Swift that
+# had not changed, and ran zero Python. ios.yml now excludes ios/tools/** and
+# this Linux job covers it instead.
+#
+# Python 3.12 to match the Dockerfile (FROM python:3.12-slim) — testing the bot
+# on a version production does not run is a gap, not a convenience.
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "ios/tools/discord_triage/**"
+      - ".github/workflows/triage-bot.yml"
+  pull_request:
+    paths:
+      - "ios/tools/discord_triage/**"
+      - ".github/workflows/triage-bot.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Triage bot tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: ios/tools/discord_triage
+    env:
+      # config.py validates its settings at import time, so the module will not
+      # load without these. The suite fakes Discord, GitHub and Claude, so
+      # nothing here is ever sent anywhere — they only have to be non-empty.
+      DISCORD_BOT_TOKEN: x
+      ANTHROPIC_API_KEY: x
+      GITHUB_TOKEN: x
+      GITHUB_REPO: n9ho/another-morse-trainer
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: ios/tools/discord_triage/requirements*.txt
+
+      # requirements-dev.txt pulls in requirements.txt and adds pytest, which is
+      # kept out of the production image on purpose.
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Run the suite
+        run: pytest -q
