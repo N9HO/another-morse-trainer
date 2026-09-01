@@ -35,11 +35,13 @@ on:
       - "ios/**"
       - "!ios/tools/**"
       - ".github/workflows/ios.yml"
+      - "fixtures/**"
   pull_request:
     paths:
       - "ios/**"
       - "!ios/tools/**"
       - ".github/workflows/ios.yml"
+      - "fixtures/**"
   workflow_dispatch:
 
 concurrency:

@@ -42,11 +42,13 @@ on:
       - "android/**"
       - ".github/workflows/android-ci.yml"
       - ".github/scripts/android-smoke.sh"
+      - "fixtures/**"
   pull_request:
     paths:
       - "android/**"
       - ".github/workflows/android-ci.yml"
       - ".github/scripts/android-smoke.sh"
+      - "fixtures/**"
   workflow_dispatch:
 
 concurrency:

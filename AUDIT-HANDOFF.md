@@ -167,14 +167,22 @@ Weigh it against the cost before starting: it is ~12 files touched heavily, and
 the emulator smoke test never gets past onboarding. CI would compile it and tell
 you nothing about whether it works.
 
-**4. Test parity.** Android's core engine — `TrainerEngine`,
-`ProgressiveCharacters`, `CharacterStats`, `PhraseQuiz`, persistence — has **no
-tests**, while the Swift twin has ~200 checks. And parity is currently kept by
-hand-copying test code (`CwDecoderTest.kt` is a line-for-line transcription of
-`main.swift:1591-1694`), which has already failed: `MorseTimingTest.kt:35-72`
-sweeps all 56 speeds and pins the Farnsworth clamp, and **iOS pins neither**.
-A `fixtures/*.json` set consumed by both trees shares *data*, not code, so it
-does not violate the two-ports rule. Start with `fixtures/timing.json`.
+**4. Test parity — the mechanism is fixed, the coverage is not.**
+`fixtures/timing.json` now exists and both trees read it (`MorseTimingTest.kt`
+via `org.json`, `MorseKitCheck/main.swift` via `JSONDecoder`), so timing is
+pinned to one set of numbers instead of two hand-copied test files. The drift it
+was written to catch is gone: iOS now pins the Farnsworth clamp, which only the
+Kotlin side did. `CLAUDE.md` records why sharing data is not a crack in the
+two-ports rule.
+
+What remains is coverage, not mechanism. Android's core engine — `TrainerEngine`,
+`ProgressiveCharacters`, `CharacterStats`, `PhraseQuiz`, persistence — still has
+**no tests**, while the Swift twin has ~200 checks; the 12 Kotlin test classes
+cover data tables, the CW decoder and the MIDI parser, none of the engine. And
+`CwDecoderTest.kt` is still a line-for-line transcription of
+`main.swift:1591-1694`, which is the next fixture to write. Follow the pattern
+already there: derive expected values from the spec rather than from either
+implementation, or the fixture just records whatever both ports happen to do.
 
 **5. The app target's 42 concurrency warnings.** `SWIFT_STRICT_CONCURRENCY` is
 `targeted` on `MorseTrainerApp/`; the package is already at `complete` and

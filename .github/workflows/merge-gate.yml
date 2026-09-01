@@ -75,14 +75,14 @@ jobs:
           # which `pipefail` turns into a false condition — exactly right: no
           # iOS build is required for it.
           if printf '%s' "$FILES" | grep -vE '^ios/tools/' \
-               | grep -qE '^(ios/|\.github/workflows/ios\.yml$)'; then
+               | grep -qE '^(ios/|fixtures/|\.github/workflows/ios\.yml$)'; then
             NEED="$NEED MorseKit-logic-checks Build-MorseTrainer-iOS"
           fi
           if printf '%s' "$FILES" \
                | grep -qE '^(ios/tools/discord_triage/|\.github/workflows/triage-bot\.yml$)'; then
             NEED="$NEED Triage-bot-tests"
           fi
-          if printf '%s' "$FILES" | grep -qE '^(android/|\.github/workflows/android-ci\.yml$|\.github/scripts/android-smoke\.sh$)'; then
+          if printf '%s' "$FILES" | grep -qE '^(android/|fixtures/|\.github/workflows/android-ci\.yml$|\.github/scripts/android-smoke\.sh$)'; then
             NEED="$NEED Build-debug-APK Build-release-APK Release-smoke-test Android-lint"
           fi
 
