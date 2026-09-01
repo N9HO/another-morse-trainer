@@ -1,0 +1,788 @@
+{
+  "$comment": "Shared timing fixture, consumed by BOTH ports: android MorseTimingTest and ios MorseKitCheck. Data, not code \u2014 see CLAUDE.md's two-ports rule. Regenerate only with a deliberate timing change, and say so in the commit.",
+  "derivation": {
+    "unitSeconds": "(1200 / characterWpm) / 1000",
+    "dah": "3 * unit",
+    "elementGap": "unit",
+    "spacingUnit": "effective >= character ? unit : max(unit, (60/effective - 37.2/character) / 19)",
+    "characterGap": "3 * spacingUnit",
+    "wordGap": "7 * spacingUnit",
+    "parisSeconds": "sum(char durations of PARIS) + 4*characterGap + wordGap; 50 units by definition",
+    "note": "Derived from these formulas directly, independently of either implementation."
+  },
+  "tolerance": {
+    "duration": 1e-09,
+    "paris": 1e-06
+  },
+  "standard": [
+    {
+      "wpm": 5,
+      "unit": 0.24,
+      "dit": 0.24,
+      "dah": 0.72,
+      "elementGap": 0.24,
+      "spacingUnit": 0.24,
+      "characterGap": 0.72,
+      "wordGap": 1.68,
+      "parisSeconds": 12.0
+    },
+    {
+      "wpm": 8,
+      "unit": 0.15,
+      "dit": 0.15,
+      "dah": 0.44999999999999996,
+      "elementGap": 0.15,
+      "spacingUnit": 0.15,
+      "characterGap": 0.44999999999999996,
+      "wordGap": 1.05,
+      "parisSeconds": 7.499999999999999
+    },
+    {
+      "wpm": 12,
+      "unit": 0.1,
+      "dit": 0.1,
+      "dah": 0.30000000000000004,
+      "elementGap": 0.1,
+      "spacingUnit": 0.1,
+      "characterGap": 0.30000000000000004,
+      "wordGap": 0.7000000000000001,
+      "parisSeconds": 5.0
+    },
+    {
+      "wpm": 15,
+      "unit": 0.08,
+      "dit": 0.08,
+      "dah": 0.24,
+      "elementGap": 0.08,
+      "spacingUnit": 0.08,
+      "characterGap": 0.24,
+      "wordGap": 0.56,
+      "parisSeconds": 4.0
+    },
+    {
+      "wpm": 20,
+      "unit": 0.06,
+      "dit": 0.06,
+      "dah": 0.18,
+      "elementGap": 0.06,
+      "spacingUnit": 0.06,
+      "characterGap": 0.18,
+      "wordGap": 0.42,
+      "parisSeconds": 3.0
+    },
+    {
+      "wpm": 25,
+      "unit": 0.048,
+      "dit": 0.048,
+      "dah": 0.14400000000000002,
+      "elementGap": 0.048,
+      "spacingUnit": 0.048,
+      "characterGap": 0.14400000000000002,
+      "wordGap": 0.336,
+      "parisSeconds": 2.4
+    },
+    {
+      "wpm": 30,
+      "unit": 0.04,
+      "dit": 0.04,
+      "dah": 0.12,
+      "elementGap": 0.04,
+      "spacingUnit": 0.04,
+      "characterGap": 0.12,
+      "wordGap": 0.28,
+      "parisSeconds": 2.0
+    },
+    {
+      "wpm": 33,
+      "unit": 0.03636363636363637,
+      "dit": 0.03636363636363637,
+      "dah": 0.1090909090909091,
+      "elementGap": 0.03636363636363637,
+      "spacingUnit": 0.03636363636363637,
+      "characterGap": 0.1090909090909091,
+      "wordGap": 0.2545454545454546,
+      "parisSeconds": 1.8181818181818186
+    },
+    {
+      "wpm": 40,
+      "unit": 0.03,
+      "dit": 0.03,
+      "dah": 0.09,
+      "elementGap": 0.03,
+      "spacingUnit": 0.03,
+      "characterGap": 0.09,
+      "wordGap": 0.21,
+      "parisSeconds": 1.5
+    },
+    {
+      "wpm": 50,
+      "unit": 0.024,
+      "dit": 0.024,
+      "dah": 0.07200000000000001,
+      "elementGap": 0.024,
+      "spacingUnit": 0.024,
+      "characterGap": 0.07200000000000001,
+      "wordGap": 0.168,
+      "parisSeconds": 1.2
+    },
+    {
+      "wpm": 60,
+      "unit": 0.02,
+      "dit": 0.02,
+      "dah": 0.06,
+      "elementGap": 0.02,
+      "spacingUnit": 0.02,
+      "characterGap": 0.06,
+      "wordGap": 0.14,
+      "parisSeconds": 1.0
+    }
+  ],
+  "parisSweep": [
+    {
+      "wpm": 5,
+      "seconds": 12.0
+    },
+    {
+      "wpm": 6,
+      "seconds": 10.0
+    },
+    {
+      "wpm": 7,
+      "seconds": 8.571428571428571
+    },
+    {
+      "wpm": 8,
+      "seconds": 7.499999999999999
+    },
+    {
+      "wpm": 9,
+      "seconds": 6.666666666666666
+    },
+    {
+      "wpm": 10,
+      "seconds": 6.0
+    },
+    {
+      "wpm": 11,
+      "seconds": 5.454545454545455
+    },
+    {
+      "wpm": 12,
+      "seconds": 5.0
+    },
+    {
+      "wpm": 13,
+      "seconds": 4.615384615384616
+    },
+    {
+      "wpm": 14,
+      "seconds": 4.285714285714286
+    },
+    {
+      "wpm": 15,
+      "seconds": 4.0
+    },
+    {
+      "wpm": 16,
+      "seconds": 3.7499999999999996
+    },
+    {
+      "wpm": 17,
+      "seconds": 3.5294117647058822
+    },
+    {
+      "wpm": 18,
+      "seconds": 3.333333333333333
+    },
+    {
+      "wpm": 19,
+      "seconds": 3.1578947368421053
+    },
+    {
+      "wpm": 20,
+      "seconds": 3.0
+    },
+    {
+      "wpm": 21,
+      "seconds": 2.857142857142857
+    },
+    {
+      "wpm": 22,
+      "seconds": 2.7272727272727275
+    },
+    {
+      "wpm": 23,
+      "seconds": 2.6086956521739135
+    },
+    {
+      "wpm": 24,
+      "seconds": 2.5
+    },
+    {
+      "wpm": 25,
+      "seconds": 2.4
+    },
+    {
+      "wpm": 26,
+      "seconds": 2.307692307692308
+    },
+    {
+      "wpm": 27,
+      "seconds": 2.2222222222222223
+    },
+    {
+      "wpm": 28,
+      "seconds": 2.142857142857143
+    },
+    {
+      "wpm": 29,
+      "seconds": 2.0689655172413794
+    },
+    {
+      "wpm": 30,
+      "seconds": 2.0
+    },
+    {
+      "wpm": 31,
+      "seconds": 1.9354838709677422
+    },
+    {
+      "wpm": 32,
+      "seconds": 1.8749999999999998
+    },
+    {
+      "wpm": 33,
+      "seconds": 1.8181818181818186
+    },
+    {
+      "wpm": 34,
+      "seconds": 1.7647058823529411
+    },
+    {
+      "wpm": 35,
+      "seconds": 1.7142857142857144
+    },
+    {
+      "wpm": 36,
+      "seconds": 1.6666666666666665
+    },
+    {
+      "wpm": 37,
+      "seconds": 1.6216216216216215
+    },
+    {
+      "wpm": 38,
+      "seconds": 1.5789473684210527
+    },
+    {
+      "wpm": 39,
+      "seconds": 1.5384615384615388
+    },
+    {
+      "wpm": 40,
+      "seconds": 1.5
+    },
+    {
+      "wpm": 41,
+      "seconds": 1.4634146341463414
+    },
+    {
+      "wpm": 42,
+      "seconds": 1.4285714285714286
+    },
+    {
+      "wpm": 43,
+      "seconds": 1.3953488372093024
+    },
+    {
+      "wpm": 44,
+      "seconds": 1.3636363636363638
+    },
+    {
+      "wpm": 45,
+      "seconds": 1.3333333333333333
+    },
+    {
+      "wpm": 46,
+      "seconds": 1.3043478260869568
+    },
+    {
+      "wpm": 47,
+      "seconds": 1.2765957446808511
+    },
+    {
+      "wpm": 48,
+      "seconds": 1.25
+    },
+    {
+      "wpm": 49,
+      "seconds": 1.2244897959183676
+    },
+    {
+      "wpm": 50,
+      "seconds": 1.2
+    },
+    {
+      "wpm": 51,
+      "seconds": 1.1764705882352944
+    },
+    {
+      "wpm": 52,
+      "seconds": 1.153846153846154
+    },
+    {
+      "wpm": 53,
+      "seconds": 1.1320754716981132
+    },
+    {
+      "wpm": 54,
+      "seconds": 1.1111111111111112
+    },
+    {
+      "wpm": 55,
+      "seconds": 1.0909090909090908
+    },
+    {
+      "wpm": 56,
+      "seconds": 1.0714285714285714
+    },
+    {
+      "wpm": 57,
+      "seconds": 1.0526315789473686
+    },
+    {
+      "wpm": 58,
+      "seconds": 1.0344827586206897
+    },
+    {
+      "wpm": 59,
+      "seconds": 1.0169491525423728
+    },
+    {
+      "wpm": 60,
+      "seconds": 1.0
+    }
+  ],
+  "farnsworth": [
+    {
+      "characterWpm": 60,
+      "effectiveWpm": 20,
+      "resolvedEffectiveWpm": 20,
+      "unit": 0.02,
+      "dit": 0.02,
+      "spacingUnit": 0.12526315789473683,
+      "characterGap": 0.37578947368421045,
+      "wordGap": 0.8768421052631578,
+      "parisSeconds": 2.9999999999999996
+    },
+    {
+      "characterWpm": 33,
+      "effectiveWpm": 8,
+      "resolvedEffectiveWpm": 8,
+      "unit": 0.03636363636363637,
+      "dit": 0.03636363636363637,
+      "spacingUnit": 0.3354066985645933,
+      "characterGap": 1.00622009569378,
+      "wordGap": 2.3478468899521534,
+      "parisSeconds": 7.5
+    },
+    {
+      "characterWpm": 20,
+      "effectiveWpm": 5,
+      "resolvedEffectiveWpm": 5,
+      "unit": 0.06,
+      "dit": 0.06,
+      "spacingUnit": 0.5336842105263159,
+      "characterGap": 1.6010526315789475,
+      "wordGap": 3.735789473684211,
+      "parisSeconds": 12.0
+    },
+    {
+      "characterWpm": 60,
+      "effectiveWpm": 59,
+      "resolvedEffectiveWpm": 59,
+      "unit": 0.02,
+      "dit": 0.02,
+      "spacingUnit": 0.020892060660124886,
+      "characterGap": 0.06267618198037465,
+      "wordGap": 0.1462444246208742,
+      "parisSeconds": 1.0169491525423728
+    },
+    {
+      "characterWpm": 60,
+      "effectiveWpm": 60,
+      "resolvedEffectiveWpm": 60,
+      "unit": 0.02,
+      "dit": 0.02,
+      "spacingUnit": 0.02,
+      "characterGap": 0.06,
+      "wordGap": 0.14,
+      "parisSeconds": 1.0
+    },
+    {
+      "characterWpm": 60,
+      "effectiveWpm": 90,
+      "resolvedEffectiveWpm": 60,
+      "unit": 0.02,
+      "dit": 0.02,
+      "spacingUnit": 0.02,
+      "characterGap": 0.06,
+      "wordGap": 0.14,
+      "parisSeconds": 1.0
+    },
+    {
+      "characterWpm": 20,
+      "effectiveWpm": 25,
+      "resolvedEffectiveWpm": 20,
+      "unit": 0.06,
+      "dit": 0.06,
+      "spacingUnit": 0.06,
+      "characterGap": 0.18,
+      "wordGap": 0.42,
+      "parisSeconds": 3.0
+    }
+  ],
+  "spacingFloorSweep": [
+    {
+      "characterWpm": 60,
+      "effectiveWpm": 5,
+      "spacingUnit": 0.5989473684210527
+    },
+    {
+      "characterWpm": 60,
+      "effectiveWpm": 6,
+      "spacingUnit": 0.49368421052631584
+    },
+    {
+      "characterWpm": 60,
+      "effectiveWpm": 7,
+      "spacingUnit": 0.41849624060150376
+    },
+    {
+      "characterWpm": 60,
+      "effectiveWpm": 8,
+      "spacingUnit": 0.3621052631578947
+    },
+    {
+      "characterWpm": 60,
+      "effectiveWpm": 9,
+      "spacingUnit": 0.3182456140350877
+    },
+    {
+      "characterWpm": 60,
+      "effectiveWpm": 10,
+      "spacingUnit": 0.2831578947368421
+    },
+    {
+      "characterWpm": 60,
+      "effectiveWpm": 11,
+      "spacingUnit": 0.2544497607655502
+    },
+    {
+      "characterWpm": 60,
+      "effectiveWpm": 12,
+      "spacingUnit": 0.2305263157894737
+    },
+    {
+      "characterWpm": 60,
+      "effectiveWpm": 13,
+      "spacingUnit": 0.21028340080971658
+    },
+    {
+      "characterWpm": 60,
+      "effectiveWpm": 14,
+      "spacingUnit": 0.19293233082706765
+    },
+    {
+      "characterWpm": 60,
+      "effectiveWpm": 15,
+      "spacingUnit": 0.17789473684210524
+    },
+    {
+      "characterWpm": 60,
+      "effectiveWpm": 16,
+      "spacingUnit": 0.16473684210526315
+    },
+    {
+      "characterWpm": 60,
+      "effectiveWpm": 17,
+      "spacingUnit": 0.15312693498452012
+    },
+    {
+      "characterWpm": 60,
+      "effectiveWpm": 18,
+      "spacingUnit": 0.14280701754385966
+    },
+    {
+      "characterWpm": 60,
+      "effectiveWpm": 19,
+      "spacingUnit": 0.13357340720221605
+    },
+    {
+      "characterWpm": 60,
+      "effectiveWpm": 20,
+      "spacingUnit": 0.12526315789473683
+    },
+    {
+      "characterWpm": 60,
+      "effectiveWpm": 21,
+      "spacingUnit": 0.11774436090225564
+    },
+    {
+      "characterWpm": 60,
+      "effectiveWpm": 22,
+      "spacingUnit": 0.11090909090909089
+    },
+    {
+      "characterWpm": 60,
+      "effectiveWpm": 23,
+      "spacingUnit": 0.10466819221967963
+    },
+    {
+      "characterWpm": 60,
+      "effectiveWpm": 24,
+      "spacingUnit": 0.09894736842105263
+    },
+    {
+      "characterWpm": 60,
+      "effectiveWpm": 25,
+      "spacingUnit": 0.09368421052631577
+    },
+    {
+      "characterWpm": 60,
+      "effectiveWpm": 26,
+      "spacingUnit": 0.08882591093117408
+    },
+    {
+      "characterWpm": 60,
+      "effectiveWpm": 27,
+      "spacingUnit": 0.08432748538011696
+    },
+    {
+      "characterWpm": 60,
+      "effectiveWpm": 28,
+      "spacingUnit": 0.08015037593984961
+    },
+    {
+      "characterWpm": 60,
+      "effectiveWpm": 29,
+      "spacingUnit": 0.07626134301270418
+    },
+    {
+      "characterWpm": 60,
+      "effectiveWpm": 30,
+      "spacingUnit": 0.07263157894736842
+    },
+    {
+      "characterWpm": 60,
+      "effectiveWpm": 31,
+      "spacingUnit": 0.06923599320882852
+    },
+    {
+      "characterWpm": 60,
+      "effectiveWpm": 32,
+      "spacingUnit": 0.06605263157894736
+    },
+    {
+      "characterWpm": 60,
+      "effectiveWpm": 33,
+      "spacingUnit": 0.0630622009569378
+    },
+    {
+      "characterWpm": 60,
+      "effectiveWpm": 34,
+      "spacingUnit": 0.06024767801857584
+    },
+    {
+      "characterWpm": 60,
+      "effectiveWpm": 35,
+      "spacingUnit": 0.05759398496240602
+    },
+    {
+      "characterWpm": 60,
+      "effectiveWpm": 36,
+      "spacingUnit": 0.05508771929824562
+    },
+    {
+      "characterWpm": 60,
+      "effectiveWpm": 37,
+      "spacingUnit": 0.05271692745376957
+    },
+    {
+      "characterWpm": 60,
+      "effectiveWpm": 38,
+      "spacingUnit": 0.05047091412742383
+    },
+    {
+      "characterWpm": 60,
+      "effectiveWpm": 39,
+      "spacingUnit": 0.04834008097165993
+    },
+    {
+      "characterWpm": 60,
+      "effectiveWpm": 40,
+      "spacingUnit": 0.04631578947368421
+    },
+    {
+      "characterWpm": 60,
+      "effectiveWpm": 41,
+      "spacingUnit": 0.04439024390243902
+    },
+    {
+      "characterWpm": 60,
+      "effectiveWpm": 42,
+      "spacingUnit": 0.04255639097744361
+    },
+    {
+      "characterWpm": 60,
+      "effectiveWpm": 43,
+      "spacingUnit": 0.0408078335373317
+    },
+    {
+      "characterWpm": 60,
+      "effectiveWpm": 44,
+      "spacingUnit": 0.03913875598086124
+    },
+    {
+      "characterWpm": 60,
+      "effectiveWpm": 45,
+      "spacingUnit": 0.0375438596491228
+    },
+    {
+      "characterWpm": 60,
+      "effectiveWpm": 46,
+      "spacingUnit": 0.03601830663615561
+    },
+    {
+      "characterWpm": 60,
+      "effectiveWpm": 47,
+      "spacingUnit": 0.03455767077267637
+    },
+    {
+      "characterWpm": 60,
+      "effectiveWpm": 48,
+      "spacingUnit": 0.03315789473684211
+    },
+    {
+      "characterWpm": 60,
+      "effectiveWpm": 49,
+      "spacingUnit": 0.03181525241675618
+    },
+    {
+      "characterWpm": 60,
+      "effectiveWpm": 50,
+      "spacingUnit": 0.030526315789473683
+    },
+    {
+      "characterWpm": 60,
+      "effectiveWpm": 51,
+      "spacingUnit": 0.02928792569659443
+    },
+    {
+      "characterWpm": 60,
+      "effectiveWpm": 52,
+      "spacingUnit": 0.028097165991902828
+    },
+    {
+      "characterWpm": 60,
+      "effectiveWpm": 53,
+      "spacingUnit": 0.026951340615690166
+    },
+    {
+      "characterWpm": 60,
+      "effectiveWpm": 54,
+      "spacingUnit": 0.025847953216374273
+    },
+    {
+      "characterWpm": 60,
+      "effectiveWpm": 55,
+      "spacingUnit": 0.02478468899521531
+    },
+    {
+      "characterWpm": 60,
+      "effectiveWpm": 56,
+      "spacingUnit": 0.0237593984962406
+    },
+    {
+      "characterWpm": 60,
+      "effectiveWpm": 57,
+      "spacingUnit": 0.022770083102493073
+    },
+    {
+      "characterWpm": 60,
+      "effectiveWpm": 58,
+      "spacingUnit": 0.02181488203266788
+    },
+    {
+      "characterWpm": 60,
+      "effectiveWpm": 59,
+      "spacingUnit": 0.020892060660124886
+    },
+    {
+      "characterWpm": 60,
+      "effectiveWpm": 60,
+      "spacingUnit": 0.02
+    }
+  ],
+  "characterDurations": {
+    "wpm": 20,
+    "entries": [
+      {
+        "character": "0",
+        "seconds": 1.14
+      },
+      {
+        "character": "5",
+        "seconds": 0.54
+      },
+      {
+        "character": "7",
+        "seconds": 0.78
+      },
+      {
+        "character": "A",
+        "seconds": 0.3
+      },
+      {
+        "character": "E",
+        "seconds": 0.06
+      },
+      {
+        "character": "I",
+        "seconds": 0.18
+      },
+      {
+        "character": "K",
+        "seconds": 0.54
+      },
+      {
+        "character": "M",
+        "seconds": 0.42
+      },
+      {
+        "character": "N",
+        "seconds": 0.3
+      },
+      {
+        "character": "O",
+        "seconds": 0.66
+      },
+      {
+        "character": "P",
+        "seconds": 0.6599999999999999
+      },
+      {
+        "character": "R",
+        "seconds": 0.42
+      },
+      {
+        "character": "S",
+        "seconds": 0.3
+      },
+      {
+        "character": "T",
+        "seconds": 0.18
+      }
+    ]
+  }
+}

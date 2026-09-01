@@ -67,6 +67,16 @@ android {
     // AGP ships lint for free and nothing was running it. Path exclusions live
     // in lint.xml next to this file — the vendored CW decoder is kept
     // byte-identical to a firmware copy, so lint must not have opinions about it.
+    // The shared timing fixture lives at the repo root, above both app trees,
+    // because it is consumed by the iOS harness too (fixtures/timing.json). Put
+    // it on the unit-test classpath so MorseTimingTest can read it by name
+    // rather than walking relative paths out of the module.
+    sourceSets {
+        getByName("test") {
+            resources.srcDir(rootProject.file("../fixtures"))
+        }
+    }
+
     lint {
         lintConfig = file("lint.xml")
         // Fail the build on lint *errors*; warnings are reported, not fatal.
@@ -101,4 +111,8 @@ dependencies {
     // JVM unit tests: the ported CW decoder core is held to the firmware
     // bench's synthetic-audio checks.
     testImplementation("junit:junit:4.13.2")
+    // A real org.json for unit tests. The org.json in android.jar is a stub that
+    // throws "Stub!" on every call, so parsing the shared fixture on the JVM
+    // needs the actual implementation ahead of it on the classpath.
+    testImplementation("org.json:json:20240303")
 }

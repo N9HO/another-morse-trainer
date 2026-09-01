@@ -1826,6 +1826,124 @@ do {
           MIDIKeyParser.paddle(forNote: 20) == .dit && MIDIKeyParser.paddle(forNote: 21) == .dah)
 }
 
+// MARK: - Shared timing fixture
+//
+// fixtures/timing.json at the repo root, consumed by this harness AND by
+// android MorseTimingTest. Parity used to be kept by hand-copying test code
+// between the trees, and it had already drifted: the Kotlin side swept all 56
+// speeds and pinned the effective-above-character clamp, and this harness
+// pinned neither. Sharing the *data* fixes the mechanism rather than that one
+// instance — and it is data, not code, so the two-ports rule still holds.
+//
+// Located via #filePath rather than a bundled resource: the fixture lives above
+// the SwiftPM package, and this is a source-run dev harness (`swift run`), so
+// the compile-time path is the honest way to find it. A relocated release
+// binary would not find it, which the harness is never built as.
+struct TimingFixture: Decodable {
+    struct Tolerance: Decodable { let duration: Double; let paris: Double }
+    struct Standard: Decodable {
+        let wpm: Double
+        let unit, dit, dah, elementGap, spacingUnit, characterGap, wordGap, parisSeconds: Double
+    }
+    struct Sweep: Decodable { let wpm: Double; let seconds: Double }
+    struct Farnsworth: Decodable {
+        let characterWpm, effectiveWpm, resolvedEffectiveWpm: Double
+        let unit, dit, spacingUnit, characterGap, wordGap, parisSeconds: Double
+    }
+    struct Floor: Decodable { let characterWpm, effectiveWpm, spacingUnit: Double }
+    struct CharEntry: Decodable { let character: String; let seconds: Double }
+    struct CharDurations: Decodable { let wpm: Double; let entries: [CharEntry] }
+
+    let tolerance: Tolerance
+    let standard: [Standard]
+    let parisSweep: [Sweep]
+    let farnsworth: [Farnsworth]
+    let spacingFloorSweep: [Floor]
+    let characterDurations: CharDurations
+}
+
+func loadTimingFixture() -> TimingFixture? {
+    // main.swift → MorseKitCheck → Sources → ios → repo root
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+    let url = root.appendingPathComponent("fixtures/timing.json")
+    guard let data = try? Data(contentsOf: url) else { return nil }
+    return try? JSONDecoder().decode(TimingFixture.self, from: data)
+}
+
+print("\nShared timing fixture (fixtures/timing.json):")
+if let fx = loadTimingFixture() {
+    let dTol = fx.tolerance.duration
+    let pTol = fx.tolerance.paris
+
+    var standardOK = true
+    for c in fx.standard {
+        let t = MorseTiming(wpm: c.wpm)
+        if !(approxEqual(t.unit, c.unit, dTol) && approxEqual(t.dit, c.dit, dTol)
+             && approxEqual(t.dah, c.dah, dTol) && approxEqual(t.elementGap, c.elementGap, dTol)
+             && approxEqual(t.spacingUnit, c.spacingUnit, dTol)
+             && approxEqual(t.characterGap, c.characterGap, dTol)
+             && approxEqual(t.wordGap, c.wordGap, dTol)
+             && approxEqual(parisDuration(at: t), c.parisSeconds, pTol)) {
+            standardOK = false
+            print("      ↳ standard \(c.wpm) WPM disagrees with the fixture")
+        }
+    }
+    check("standard timing matches the fixture at \(fx.standard.count) speeds", standardOK)
+
+    var sweepOK = true
+    for c in fx.parisSweep where !approxEqual(parisDuration(at: MorseTiming(wpm: c.wpm)), c.seconds, pTol) {
+        sweepOK = false
+        print("      ↳ PARIS at \(c.wpm) WPM disagrees with the fixture")
+    }
+    check("PARIS holds its 50-unit definition across \(fx.parisSweep.count) speeds", sweepOK)
+
+    var farnsOK = true
+    for c in fx.farnsworth {
+        let t = MorseTiming(characterWpm: c.characterWpm, effectiveWpm: c.effectiveWpm)
+        if !(approxEqual(t.effectiveWpm, c.resolvedEffectiveWpm, dTol)
+             && approxEqual(t.unit, c.unit, dTol) && approxEqual(t.dit, c.dit, dTol)
+             && approxEqual(t.spacingUnit, c.spacingUnit, dTol)
+             && approxEqual(t.characterGap, c.characterGap, dTol)
+             && approxEqual(t.wordGap, c.wordGap, dTol)
+             && approxEqual(parisDuration(at: t), c.parisSeconds, pTol)) {
+            farnsOK = false
+            print("      ↳ Farnsworth \(c.characterWpm)/\(c.effectiveWpm) disagrees with the fixture")
+        }
+    }
+    // Two of these cases ask for an effective speed above the character speed;
+    // the fixture's resolvedEffectiveWpm is what pins the clamp. This harness
+    // never checked that before — the Kotlin twin did.
+    check("Farnsworth matches the fixture, clamp included, across \(fx.farnsworth.count) cases", farnsOK)
+
+    var floorOK = true
+    for c in fx.spacingFloorSweep {
+        let t = MorseTiming(characterWpm: c.characterWpm, effectiveWpm: c.effectiveWpm)
+        if !approxEqual(t.spacingUnit, c.spacingUnit, dTol) || t.spacingUnit < t.unit - 1e-12 {
+            floorOK = false
+            print("      ↳ spacing floor at effective \(c.effectiveWpm) disagrees with the fixture")
+        }
+    }
+    check("spacing never drops below one unit, across \(fx.spacingFloorSweep.count) effective speeds", floorOK)
+
+    let ct = MorseTiming(wpm: fx.characterDurations.wpm)
+    var charsOK = true
+    for e in fx.characterDurations.entries {
+        guard let ch = e.character.first,
+              approxEqual(ct.duration(of: ch), e.seconds, dTol) else {
+            charsOK = false
+            print("      ↳ duration of '\(e.character)' disagrees with the fixture")
+            continue
+        }
+    }
+    check("character durations match the fixture for \(fx.characterDurations.entries.count) characters", charsOK)
+} else {
+    check("fixtures/timing.json loads and decodes", false)
+}
+
 print("\n────────────────────────────")
 if failures == 0 {
     print("✅ All \(checks) checks passed.\n")

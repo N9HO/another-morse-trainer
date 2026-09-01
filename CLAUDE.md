@@ -7,6 +7,7 @@ span directories.
 
     ios/        SwiftUI app + SwiftPM package (Xcode project, macOS to build)
     android/    Kotlin + Compose app (Gradle root; settings.gradle.kts lives here)
+    fixtures/   Shared test *data*, read by both trees. Not code — see below.
 
 Nothing at the repository root builds anything. `cd ios` or `cd android` first.
 
@@ -22,6 +23,24 @@ Nothing at the repository root builds anything. `cd ios` or `cd android` first.
   idiom of that tree.
 - Changing one side does not obligate you to change the other in the same
   change, but say which side you touched.
+
+The one thing the two trees *do* share is `fixtures/`: JSON files of expected
+values, each tree reading them in its own idiom (`JSONDecoder` in the Swift
+harness, `org.json` in the Kotlin tests). That is deliberate and is not a crack
+in the rule — it shares **data**, never behaviour, so neither port can start
+depending on the other's code.
+
+It exists because the alternative failed. Parity used to be kept by hand-copying
+test code between the trees, and the copies drifted: `MorseTimingTest.kt` swept
+all 56 speeds and pinned the Farnsworth clamp while the Swift twin pinned
+neither, so the two ports had different guarantees and nothing said so. A
+fixture pins both to the same numbers. Expected values are derived from the
+documented formulas independently of either implementation, so both ports
+drifting the same way still fails.
+
+`fixtures/**` is in the `paths:` filter of *both* workflows and in
+`merge-gate.yml`'s detection for both platforms — a fixture change has to build
+both apps, or it is only half checked.
 
 ## Do not touch the vendored decoder
 
