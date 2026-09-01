@@ -19,6 +19,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Settings.init(this)
+        AudioFocus.init(this)
         AdapterKeyer.init(this)
         PileupSettings.init(this)
         Stats.init(this)

@@ -38,6 +38,13 @@ class ListenService : Service() {
     private var tickJob: Job? = null
     private var sessionRecorded = false
     private val rng = Random(SystemClock.elapsedRealtimeNanos())
+    private var focusObservation: AudioFocus.Observation? = null
+    /**
+     * Set when focus — not the user — paused the loop, so regaining focus
+     * resumes only what it interrupted. Without it, hanging up a call would
+     * restart a session the user had deliberately paused before answering.
+     */
+    private var pausedByFocus = false
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -46,6 +53,33 @@ class ListenService : Service() {
         player = MorsePlayer()
         speech = SpeechPlayer(this)
         ensureChannel(this)
+        // Idempotent, and needed here as well as in MainActivity: a Resume tapped
+        // on the notification after the activity has gone can start this service
+        // in a process where onCreate never ran.
+        AudioFocus.init(this)
+        observeAudioFocus()
+    }
+
+    /**
+     * The loop is a chain of coroutine delays; none of them know whether a sound
+     * was audible. A call used to leave it stepping through items in silence and
+     * counting every one as heard, so the session summary claimed practice that
+     * never happened.
+     */
+    private fun observeAudioFocus() {
+        focusObservation = AudioFocus.observe { event ->
+            when (event) {
+                AudioFocus.Event.LOST ->
+                    if (ListenState.running) stopEverything()
+                AudioFocus.Event.LOST_TRANSIENT ->
+                    if (ListenState.running && !ListenState.paused) {
+                        pausedByFocus = true
+                        pause()
+                    }
+                AudioFocus.Event.REGAINED ->
+                    if (pausedByFocus && ListenState.running && ListenState.paused) resume()
+            }
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -76,6 +110,9 @@ class ListenService : Service() {
 
     private fun startLoop() {
         loopJob?.cancel()
+        // Held for the whole session, not just while a tone renders: the speech
+        // and the gaps between items are part of the lesson too.
+        AudioFocus.acquire(this)
         ListenState.running = true
         ListenState.paused = false
         loopJob = scope.launch { runLoop() }
@@ -116,6 +153,7 @@ class ListenService : Service() {
     }
 
     private fun resume() {
+        pausedByFocus = false
         ListenState.paused = false
         startLoop()
     }
@@ -169,12 +207,17 @@ class ListenService : Service() {
         ListenState.paused = false
         ListenState.playing = false
         ListenState.display = ""
+        pausedByFocus = false
+        AudioFocus.release(this)
         ServiceCompat_stopForeground()
         stopSelf()
     }
 
     override fun onDestroy() {
         loopJob?.cancel()
+        focusObservation?.let { AudioFocus.removeObserver(it) }
+        focusObservation = null
+        AudioFocus.release(this)
         player.release()
         speech.release()
         scope.cancel()

@@ -50,6 +50,25 @@ object BackgroundNoise {
     @Volatile private var target = 0f
     /** True while the app is on screen. */
     private var foreground = false
+    /** True while another app holds audio focus — a call, or music taking over. */
+    private var yielded = false
+
+    init {
+        // A listener, never a holder. The floor runs the whole time the app is on
+        // screen, home screen and settings list included, so taking focus for it
+        // would pause the user's music just to browse a menu. But it must still
+        // get out of the way: hissing under a phone call is exactly the "talks
+        // through calls" complaint, and the quietest bug to miss.
+        AudioFocus.observe { event ->
+            when (event) {
+                AudioFocus.Event.LOST, AudioFocus.Event.LOST_TRANSIENT ->
+                    synchronized(this) { yielded = true }
+                AudioFocus.Event.REGAINED ->
+                    synchronized(this) { yielded = false }
+            }
+            refresh()
+        }
+    }
 
     /** The app came to the foreground: start the floor if the setting calls for one. */
     fun onForeground() {
@@ -66,7 +85,7 @@ object BackgroundNoise {
     /** Re-read [Settings.backgroundNoise] — call after the user changes it. */
     @Synchronized
     fun refresh() {
-        val level = if (foreground) Settings.backgroundNoise.amplitude else 0f
+        val level = if (foreground && !yielded) Settings.backgroundNoise.amplitude else 0f
         target = level
         if (level > 0f) start() else stop()
     }

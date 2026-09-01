@@ -53,7 +53,7 @@ and the first screen only. Home and Settings are one tap deeper and unexercised.
 Reaching them needs `adb shell input tap` on fixed coordinates, which breaks
 whenever the onboarding copy moves.
 
-## What #8 established, because it corrects the list below
+## What #8 established, because it shaped the audio work
 
 Follow-up #8 assumed `SWIFT_STRICT_CONCURRENCY` would catch the races it named.
 **It does not, at any level.** Measured on clean builds: `targeted` produces zero
@@ -62,12 +62,50 @@ lock in `KeyerEngine`'s render callback, both of which compile. They are
 callbacks from C APIs imported without `@Sendable`, so there is no concurrency
 construct to check. `CLAUDE.md` records this.
 
-So those two hazards remain, and they are hand-fixes. They belong with #3.
+Both were fixed by hand with the audio-session work — `MIDIInput`'s two callback
+`var`s now go through its existing `stateLock`, and `ToneGenerator` uses
+`OSAllocatedUnfairLock` like `MorsePlayer` already did. **Neither fix is
+protected by anything.** A future edit can reintroduce either and every build
+will stay green, so both sites carry a comment saying so.
+
+## The audio-session and audio-focus work
+
+The old items 3 and 4 are done, on both ports.
+
+- **iOS**: `MorseTrainerApp/AudioSession.swift` is now the single owner of the
+  shared `AVAudioSession`. The five call sites that each set a category — and
+  hand-restored `.playback` on the way out — became claims on a stack, so the
+  session falls back to whatever is *still held* rather than to a guess.
+  Interruption, route-change and `mediaServicesWereReset` are observed for the
+  first time: the Listen loop pauses instead of advancing in silence, and
+  `MorsePlayer` rebuilds its engine after a reset.
+- **Android**: `AudioFocus.kt` is the app's first-ever focus holder,
+  reference-counted across `MorsePlayer`, `SidetoneGenerator` and
+  `ListenService`. `BackgroundNoise` is a *listener*, not a holder, on purpose —
+  the floor runs on the home screen, and taking focus to browse a menu would be
+  wrong.
+
+**One deliberate divergence to be aware of.** iOS uses `.duckOthers` (other audio
+turns down); Android requests `AUDIOFOCUS_GAIN` (other audio pauses). That is the
+Android idiom for a media-playback foreground service, and ducking would leave
+the reported problem half-fixed, since copying Morse under music is the hard
+case. It is a real difference between the ports; it is not drift.
+
+Left undone, and worth knowing: Android quiz screens still have no equivalent of
+the iOS listen-loop pause. They block on an answer, so they stall rather than run
+away, which is why it was left — but a Compose-side pause is still missing.
+
+The Android side was written blind, as everything here must be, and verified only
+by CI: all four jobs green, lint unchanged at 0 errors / 29 warnings / 69 hints.
+Note that **the "28 warnings" this file used to quote was already stale** — `main`
+reported 29 before this change; the compose-bom bump in
+[#116](https://github.com/N9HO/another-morse-trainer/pull/116) moved it and the
+number was never re-read. Read the count off a run, not off this file.
 
 ## Still to do
 
-Ordered by value. Each is self-contained. #7 and #8's tooling are done; what
-follows is the remainder.
+Ordered by value. Each is self-contained. #7 and #8's tooling, and the two audio
+items above, are done; what follows is the remainder.
 
 **1. Stream the audio instead of pre-rendering it.** The buffers are sized once
 rather than grown, but a long Farnsworth passage is still tens of millions of
@@ -86,36 +124,14 @@ Android and **37** on iOS (`ProgressiveCharacters.kt:128` vs `.swift:110`).
 Decide which is intended, then port or remove. Do not "fix" this by making the
 ports share code.
 
-**3. iOS audio-session hardening — now carrying #8's leftovers.** There is no
-`AVAudioSession` interruption, route-change, or `mediaServicesWereReset` handling
-anywhere. Take a call during Listen mode and the loop keeps advancing, silently;
-unplug headphones and it does not pause; after a media-services reset the engine
-is dead with no recovery. Five call sites set conflicting categories with no
-owner — `MorsePlayer.swift:106`, `VoiceRecognizer.swift:163,271`,
-`CWDecoderEngine.swift:64,78`, `KeyerEngine.swift:95`. One coordinator that owns
-category/mode/options is the fix.
-
-Fold in the two hazards the compiler cannot see, since they live in the same
-code: the unsynchronized `MIDIInput.onEvent` (a `var` on a plain class, written
-on the main actor and read on the CoreMIDI thread at `MIDIInput.swift:174`), and
-the `NSLock` taken inside the `AVAudioSourceNode` render callback at
-`KeyerEngine.swift:260`, where `MorsePlayer` already knows to use
-`OSAllocatedUnfairLock`.
-
-**4. Android audio focus.** Nothing in the app ever requests or abandons audio
-focus — `grep` for `requestAudioFocus` returns nothing — while running a
-`FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK` service. The app talks over music and
-through calls. `BackgroundNoise` is already a process-wide singleton and is the
-natural owner. This is #3's twin; do them together.
-
-**5. Android state survival.** Zero `rememberSaveable`, zero ViewModels, zero
+**3. Android state survival.** Zero `rememberSaveable`, zero ViewModels, zero
 `SavedStateHandle` in the app. `MainActivity.kt:135` holds the whole nav state in
 plain `remember`, so rotating mid-quiz drops you on Home and loses the session's
 stats and streak day (`Stats.record` only runs from the explicit exits). The
 Koch ladder survives because `EngineStore.save()` runs per answer — the right
 instinct applied to one of the two things worth saving.
 
-**6. Test parity.** Android's core engine — `TrainerEngine`,
+**4. Test parity.** Android's core engine — `TrainerEngine`,
 `ProgressiveCharacters`, `CharacterStats`, `PhraseQuiz`, persistence — has **no
 tests**, while the Swift twin has ~200 checks. And parity is currently kept by
 hand-copying test code (`CwDecoderTest.kt` is a line-for-line transcription of
@@ -124,13 +140,15 @@ sweeps all 56 speeds and pins the Farnsworth clamp, and **iOS pins neither**.
 A `fixtures/*.json` set consumed by both trees shares *data*, not code, so it
 does not violate the two-ports rule. Start with `fixtures/timing.json`.
 
-**7. The app target's 43 concurrency warnings.** `SWIFT_STRICT_CONCURRENCY` is
+**5. The app target's 42 concurrency warnings.** `SWIFT_STRICT_CONCURRENCY` is
 `targeted` on `MorseTrainerApp/`; the package is already at `complete` and
-pinned there. Complete checking on the app reports 43 distinct warnings across 10
-files — 13 non-`Sendable` captures in `@Sendable` closures, 8
+pinned there. Complete checking on the app reported 43 distinct warnings across
+10 files — 13 non-`Sendable` captures in `@Sendable` closures, 8
 sending-risks-data-races, 15 main-actor isolation violations — concentrated in
-`MorsePlayer`, `Haptics`, `SendingDrillView` and `NewsFetcher`. Clearing them is
-the path to Swift 6 language mode. Measure with:
+`MorsePlayer`, `Haptics`, `SendingDrillView` and `NewsFetcher`. The audio-session
+work took it to **42**, by collapsing two `allowBluetooth` deprecations into one;
+it added no concurrency warnings, which was checked rather than assumed. Clearing
+the rest is the path to Swift 6 language mode. Measure with:
 
     xcodebuild build -project MorseTrainer.xcodeproj -scheme MorseTrainer \
       -sdk iphonesimulator -destination "generic/platform=iOS Simulator" \
@@ -140,8 +158,8 @@ the path to Swift 6 language mode. Measure with:
 Use a fresh `-derivedDataPath` — an incremental build silently reports a
 fraction of the warnings and looks like good news.
 
-**8. What Android lint found.** Its first run: 0 errors, 28 warnings, 69 hints.
-Nothing latent. Worth acting on: `ListenService.kt:196` guards
+**6. What Android lint found.** Currently 0 errors, 29 warnings, 69 hints.
+Nothing latent. Worth acting on: `ListenService.kt:239` guards
 `stopForeground(STOP_FOREGROUND_REMOVE)` behind `SDK_INT >= N` (API 24) while
 `minSdk` *is* 24, so the branch is dead and its `@Suppress("DEPRECATION")`
 suppresses nothing. The rest is 23 `UseKtx` and 69 `AutoboxingStateCreation`
@@ -153,7 +171,7 @@ version. **The AGP one is a wall, not a nit:** compose-bom 2026.08.00 needs AGP
 9.1 and compileSdk 37, so the Compose pin cannot move past 2026.06.01 until AGP
 9 lands. That is its own piece of work.
 
-**9. Smaller, verified, not urgent.** `Stats.kt:95-97` — `parseRecent` and
+**7. Smaller, verified, not urgent.** `Stats.kt:95-97` — `parseRecent` and
 `parseChars` are unguarded while `parseHistory` is wrapped in `runCatching`, so
 corrupt prefs are an unrecoverable launch crash. `SidetoneGenerator.kt:90` — an
 overshoot guard of the form `a > b && b > a`, provably always false;

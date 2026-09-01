@@ -14,6 +14,7 @@
 // See CLAUDE.md §3 for full audio model.
 
 import AVFoundation
+import os
 import OSLog
 
 private let log = Logger(subsystem: "com.justinrogers.MorseTrainer", category: "audio")
@@ -48,12 +49,15 @@ public final class KeyerEngine {
     /// One AVAudioPlayerNode per unique sender MIDI tone. Lazy-created.
     private var rxPlayers: [Int: AVAudioPlayerNode] = [:]
 
+    /// Live between `start()` and `stop()`.
+    private var sessionClaim: AudioSession.Claim?
+
     // MARK: - Lifecycle
 
     public init() {}
 
     public func start() throws {
-        try configureAudioSession()
+        configureAudioSession()
 
         let mixer = engine.mainMixerNode
         let mixerFormat = mixer.outputFormat(forBus: 0)
@@ -80,6 +84,10 @@ public final class KeyerEngine {
     public func stop() {
         engine.stop()
         rxPlayers.removeAll()
+        if let claim = sessionClaim {
+            sessionClaim = nil
+            AudioSession.shared.release(claim)
+        }
     }
 
     /// Force-stop everything. Mirror of `outputs.mjs` `Panic()`.
@@ -90,14 +98,12 @@ public final class KeyerEngine {
         }
     }
 
-    private func configureAudioSession() throws {
-        let session = AVAudioSession.sharedInstance()
-        try session.setCategory(
-            .playback,
-            mode: .default,
-            options: [.mixWithOthers, .duckOthers]
-        )
-        try session.setActive(true)
+    /// The repeater mixes rather than taking the route, so it can run alongside
+    /// a radio app. Released in `stop()`, which drops the session back to plain
+    /// `.playback` for the rest of the trainer.
+    private func configureAudioSession() {
+        guard sessionClaim == nil else { return }
+        sessionClaim = AudioSession.shared.claim(.repeaterMix)
     }
 
     // MARK: - TX
@@ -209,28 +215,37 @@ public final class KeyerEngine {
 
 /// AVAudioSourceNode-based continuous sine with key gating.
 ///
-/// The render block executes on the audio thread. We use a lock for the
-/// small amount of state read each block (key state, frequency, phase). For
-/// CW timing this is overkill — the block runs every ~10ms and the lock is
-/// held for microseconds — but it keeps things obviously correct.
+/// The render block executes on the audio thread, at realtime priority, and
+/// shares a few fields with the main actor (key state, frequency, phase).
+///
+/// The lock is `OSAllocatedUnfairLock` and not `NSLock` deliberately, and this
+/// is the one hazard on this path that no amount of concurrency checking will
+/// flag: the render block is a closure handed to a C API, so at *complete*
+/// checking the compiler still sees nothing to diagnose here. `NSLock` parks a
+/// waiter in the kernel with no way to boost whoever holds it, so a main-thread
+/// caller descheduled mid-`setKeyDown` can stall the audio thread past its
+/// deadline — an audible dropout. `OSAllocatedUnfairLock` boosts the holder to
+/// the waiter's priority, which is why MorsePlayer already uses it on exactly
+/// this kind of path. Contention is near zero either way; the point is the
+/// worst case, not the common one.
 private final class ToneGenerator {
     let node: AVAudioSourceNode
 
     var frequency: Double {
-        get { lock.withLock { state.frequency } }
-        set { lock.withLock { state.frequency = newValue } }
+        get { state.withLock { $0.frequency } }
+        set { state.withLock { $0.frequency = newValue } }
     }
 
     var sampleRate: Double {
-        get { lock.withLock { state.sampleRate } }
-        set { lock.withLock { state.sampleRate = newValue } }
+        get { state.withLock { $0.sampleRate } }
+        set { state.withLock { $0.sampleRate = newValue } }
     }
 
     func setKeyDown(_ down: Bool) {
-        lock.withLock { state.keyDown = down }
+        state.withLock { $0.keyDown = down }
     }
 
-    private final class State {
+    private struct State {
         var keyDown: Bool = false
         var currentGain: Float = 0
         var phase: Double = 0
@@ -238,32 +253,32 @@ private final class ToneGenerator {
         var sampleRate: Double = 48000
     }
 
-    private let state = State()
-    private let lock = NSLock()
+    private let state = OSAllocatedUnfairLock(initialState: State())
 
     init(initialFrequency: Double) {
         let stateRef = state
-        let lockRef = lock
 
         // The format here is the source node's *output* format. AVAudioEngine
         // negotiates with the connection's format param during engine.connect.
         // Standard 48k mono is a safe default; actual sampleRate is updated
         // before render via the State and reflected in the omega calc.
         let format = AVAudioFormat(standardFormatWithSampleRate: 48000, channels: 1)!
-        state.frequency = initialFrequency
+        state.withLock { $0.frequency = initialFrequency }
 
         node = AVAudioSourceNode(format: format) { _, _, frameCount, audioBufferList -> OSStatus in
             let abl = UnsafeMutableAudioBufferListPointer(audioBufferList)
             guard let buffer = abl.first else { return noErr }
             let ptr = buffer.mData!.assumingMemoryBound(to: Float.self)
 
-            lockRef.lock()
-            let target: Float = stateRef.keyDown ? KeyerEngine.peakAmplitude : 0
-            let freq = stateRef.frequency
-            let sampleRate = stateRef.sampleRate
-            var phase = stateRef.phase
-            var gain = stateRef.currentGain
-            lockRef.unlock()
+            // One critical section in, one out — same shape as before, so the
+            // ramp maths below is untouched.
+            let (target, freq, sampleRate, phase0, gain0) = stateRef.withLock {
+                s -> (Float, Double, Double, Double, Float) in
+                (s.keyDown ? KeyerEngine.peakAmplitude : 0,
+                 s.frequency, s.sampleRate, s.phase, s.currentGain)
+            }
+            var phase = phase0
+            var gain = gain0
 
             // Linear ramp toward target. 5ms at sampleRate = rampFrames samples.
             let rampFrames = Float(KeyerEngine.envelopeRampMs * sampleRate / 1000.0)
@@ -286,11 +301,12 @@ private final class ToneGenerator {
                 if phase > twoPi { phase -= twoPi }
             }
 
-            // Write back the advanced phase and gain.
-            lockRef.lock()
-            stateRef.phase = phase
-            stateRef.currentGain = gain
-            lockRef.unlock()
+            // Write back the advanced phase and gain. Bound to lets first:
+            // `withLock` takes a @Sendable closure, which may not capture a
+            // mutable local.
+            let endPhase = phase
+            let endGain = gain
+            stateRef.withLock { $0.phase = endPhase; $0.currentGain = endGain }
 
             // Mirror to remaining channels if multi-channel.
             for j in 1 ..< abl.count {

@@ -5,9 +5,9 @@ import AVFoundation
 ///
 /// Wraps `AVSpeechSynthesizer` and reports completion on the main thread so the
 /// listen loop can chain: play Morse → pause → speak → next. It deliberately
-/// does NOT touch the shared `AVAudioSession` (MorsePlayer owns that, configured
-/// for `.playback` so both the tone engine and speech keep working in the
-/// background with the screen locked).
+/// takes no `AudioSession` claim of its own: it only ever speaks alongside the
+/// tone player, whose permanent `.playback` claim is exactly what speech needs,
+/// and a claim of its own would just be a second vote for the same profile.
 final class SpeechPlayer: NSObject, AVSpeechSynthesizerDelegate {
 
     private let synth = AVSpeechSynthesizer()

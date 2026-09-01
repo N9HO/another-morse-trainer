@@ -17,7 +17,9 @@ import os
 /// quiz loop can never get stuck waiting on the audio system.
 final class MorsePlayer {
 
-    private let engine = AVAudioEngine()
+    /// `var` rather than `let` so it can be replaced wholesale after a
+    /// media-services reset, which invalidates every audio object in the process.
+    private var engine = AVAudioEngine()
     private var sourceNode: AVAudioSourceNode!
     private let sampleRate: Double = 44_100
     private let rampSeconds: Double = 0.005
@@ -43,9 +45,27 @@ final class MorsePlayer {
     /// Distinguishes completion callbacks so a previous tone's timer can't
     /// fire for the current one.
     private var generation = 0
-    private var didActivate = false
+    /// Held for the object's lifetime once taken: the tone engine is the thing
+    /// that makes `.playback` the session's resting state (see AudioSession).
+    private var sessionClaim: AudioSession.Claim?
+    /// The `AudioSession.resetGeneration` this engine was built against.
+    private var builtForReset = 0
 
     init() {
+        buildEngine()
+        // Pre-warm immediately so the first real tone isn't lost to cold-start.
+        activate()
+    }
+
+    deinit {
+        if let sessionClaim { AudioSession.shared.release(sessionClaim) }
+    }
+
+    /// Attach a fresh source node to the current engine. The render state lives
+    /// in `state`, which is a `let` and outlives any rebuild, so a replacement
+    /// node picks up mid-tone exactly where the old one left off.
+    private func buildEngine() {
+        builtForReset = AudioSession.shared.resetGeneration
         let format = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 1)!
         sourceNode = AVAudioSourceNode { [weak self] _, _, frameCount, audioBufferList in
             let abl = UnsafeMutableAudioBufferListPointer(audioBufferList)
@@ -87,26 +107,34 @@ final class MorsePlayer {
         }
         engine.attach(sourceNode)
         engine.connect(sourceNode, to: engine.mainMixerNode, format: format)
-        // Pre-warm immediately so the first real tone isn't lost to cold-start.
-        activate()
     }
 
-    /// Start the audio session/engine. The session is configured only once
-    /// (re-poking it on every play was causing intermittent dropouts); the
-    /// engine is simply ensured-running thereafter.
+    /// Claim the session for playback (once), rebuild if the media server has
+    /// restarted since we last built, and ensure the engine is running.
+    ///
+    /// `.playback` keeps the tone playing with the screen locked / app
+    /// backgrounded (paired with UIBackgroundModes = audio) for hands-free
+    /// Listen mode. The claim is idempotent and AudioSession suppresses a repeat
+    /// configuration, which is what keeps this cheap enough to call per play —
+    /// re-poking the session on every play was causing intermittent dropouts.
+    ///
+    /// Recovery is checked here rather than driven by an `AudioSession.observe`
+    /// callback on purpose. Every path that makes a sound already comes through
+    /// this method, so a poll costs one integer compare and needs no handler —
+    /// and a handler would have to capture this class, which is not `Sendable`,
+    /// across an isolation boundary. AppModel calls this on the way out of an
+    /// interruption so the recovery does not wait for the next tone.
     func activate() {
-        if !didActivate {
-            #if os(iOS)
-            let session = AVAudioSession.sharedInstance()
-            // `.playback` keeps the tone playing with the screen locked / app
-            // backgrounded (paired with UIBackgroundModes = audio) for
-            // hands-free Listen mode. `.duckOthers` matches the category the
-            // voice recogniser restores to, so switching between them doesn't
-            // thrash the session.
-            try? session.setCategory(.playback, mode: .default, options: [.duckOthers])
-            try? session.setActive(true)
-            #endif
-            didActivate = true
+        if sessionClaim == nil {
+            sessionClaim = AudioSession.shared.claim(.playback)
+        }
+        if AudioSession.shared.resetGeneration != builtForReset {
+            // The media server restarted. The engine and node are dead objects —
+            // they cannot be restarted, only replaced. `state` is a `let` and
+            // survives, so a rebuilt node resumes mid-tone where the old one
+            // stopped.
+            engine = AVAudioEngine()
+            buildEngine()
         }
         if !engine.isRunning {
             engine.prepare()
