@@ -63,6 +63,22 @@ android {
     buildFeatures {
         compose = true
     }
+
+    // AGP ships lint for free and nothing was running it. Path exclusions live
+    // in lint.xml next to this file — the vendored CW decoder is kept
+    // byte-identical to a firmware copy, so lint must not have opinions about it.
+    lint {
+        lintConfig = file("lint.xml")
+        // Fail the build on lint *errors*; warnings are reported, not fatal.
+        // Raising warnings to errors is a decision to make after reading a run,
+        // not before.
+        abortOnError = true
+        warningsAsErrors = false
+        // Printed in the CI log, and uploaded as a browsable report.
+        textReport = true
+        htmlReport = true
+        xmlReport = true
+    }
 }
 
 dependencies {

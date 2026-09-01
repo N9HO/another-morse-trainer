@@ -3,10 +3,12 @@ name: Android CI
 # Compiles the Android app (which lives under android/) remotely so changes made
 # from the Claude phone app can be verified without a laptop (parity with ios.yml).
 #
-# Three jobs. The first two run in parallel; the third waits on the second.
+# Four jobs. Three run in parallel; the smoke test waits on the release build.
 #
 #   Build debug APK    — unit tests + assembleDebug. Debug builds are NOT
 #                        minified, so this job says nothing about R8.
+#   Android lint       — AGP's own lint, which nothing used to run. Exclusions
+#                        in app/lint.xml.
 #   Build release APK  — assembleRelease, which is the only thing here that runs
 #                        R8 and the resource shrinker (isMinifyEnabled /
 #                        isShrinkResources in app/build.gradle.kts).
@@ -80,6 +82,45 @@ jobs:
           name: app-debug
           path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
+
+  # AGP ships lint and nothing was running it — the best bug-per-line-of-config
+  # available on this side of the repo. Its exclusions live in app/lint.xml; the
+  # vendored CW decoder is exempt there, since a finding inside a byte-identical
+  # firmware port is an invitation to break its provenance.
+  lint:
+    name: Android lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v5
+
+      - name: Run lint
+        run: ./gradlew :app:lint --stacktrace
+
+      # `if: always()` on purpose: the run that FAILS is the one whose report you
+      # most want to read, and the text report in the log above is truncated for
+      # long findings.
+      - name: Upload lint report
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: android-lint-report
+          path: |
+            android/app/build/reports/lint-results-*.html
+            android/app/build/reports/lint-results-*.xml
+          if-no-files-found: warn
 
   release:
     name: Build release APK

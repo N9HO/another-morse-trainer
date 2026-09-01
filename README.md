@@ -97,8 +97,10 @@ merge gate below derives what it requires from the full PR diff. The trade is
 that a branch pushed with no PR open gets no build; `workflow_dispatch` covers
 that.
 
-`android-ci.yml` runs three jobs. `Build debug APK` runs the unit tests and
-`assembleDebug`. `Build release APK` runs `assembleRelease`, the only place in
+`android-ci.yml` runs four jobs. `Build debug APK` runs the unit tests and
+`assembleDebug`. `Android lint` runs AGP's own lint, which nothing used to run —
+its exclusions live in `android/app/lint.xml`, where the vendored CW decoder is
+exempt. `Build release APK` runs `assembleRelease`, the only place in
 CI where R8 and the resource shrinker run at all — debug builds are not
 minified; it signs with a key generated on the runner so its APK can actually be
 installed, and uploads the R8 mapping beside it. `Release smoke test` boots an

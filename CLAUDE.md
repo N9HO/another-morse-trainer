@@ -40,9 +40,26 @@ xcodebuild build -project MorseTrainer.xcodeproj -scheme MorseTrainer \
   CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO
 ```
 
+Swift concurrency checking is set at two different levels on purpose:
+
+- `Sources/` (the SwiftPM package) is on **complete** checking, via
+  `.enableUpcomingFeature("StrictConcurrency")` in `Package.swift`. It was
+  already clean under it, so this pins that rather than describing an ambition —
+  a new warning there is a regression, not a backlog item.
+- `MorseTrainerApp/` (the Xcode target) is on **targeted**
+  (`SWIFT_STRICT_CONCURRENCY` in the project file). Complete checking reports 43
+  warnings there; going up a level is real work, not a setting change.
+
+Know what this does *not* buy you: neither level diagnoses a race in a callback
+from a C API, because there is no concurrency construct for it to check. The
+CoreMIDI read block in `MIDIInput.swift` and the `AVAudioSourceNode` render
+block in `KeyerEngine.swift` are both invisible to it at *complete*. Those need
+reading, not compiling.
+
 ```bash
 cd android                                # needs JDK 17 + Android SDK
 ./gradlew :app:testDebugUnitTest          # 12 test classes
+./gradlew :app:lint                       # AGP lint; exclusions in app/lint.xml
 ./gradlew :app:assembleDebug
 ```
 

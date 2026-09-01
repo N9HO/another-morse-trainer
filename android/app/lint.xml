@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Lint configuration for the Android app.
+
+  The only rule here is the one that matters: the vendored CW decoder is exempt.
+  `morsekit/cw/` is a line-faithful Kotlin port of the C99 core vendored into the
+  iOS app, itself byte-identical to the Carrier Wave firmware's host-tested copy
+  (see PROVENANCE.md in that directory). Keeping it diffable against its source
+  is worth more than any style opinion lint could have about it, and CLAUDE.md
+  says not to reformat, relicense, tidy or relocate it. So lint says nothing
+  about that package — a finding there would be an invitation to break the
+  provenance.
+
+  Everything else is deliberately left at lint's defaults. Suppress an issue
+  here only with a comment saying why, so the file stays a record of decisions
+  rather than a place findings go to be forgotten.
+-->
+<lint>
+    <issue id="all">
+        <ignore path="src/main/java/app/anothermorsetrainer/morsekit/cw" />
+    </issue>
+</lint>

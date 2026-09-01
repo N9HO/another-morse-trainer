@@ -6,9 +6,14 @@ import MorseKit
 // command-line Swift tools (XCTest needs the full Xcode app). Once Xcode is
 // installed these same checks become proper XCTest cases in the app project.
 
+// `main.swift`'s top-level code is @MainActor-isolated, so these two counters
+// are too — and a plain `func` is not, which is an error under complete
+// concurrency checking rather than a warning. The harness is single-threaded
+// from top to bottom, so saying so is the whole fix.
 var failures = 0
 var checks = 0
 
+@MainActor
 func check(_ name: String, _ condition: Bool) {
     checks += 1
     if condition {
