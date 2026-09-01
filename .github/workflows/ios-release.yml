@@ -55,7 +55,7 @@ jobs:
       run:
         working-directory: ios
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Select Xcode
         run: sudo xcode-select -switch /Applications/Xcode.app
@@ -136,7 +136,7 @@ jobs:
 
       - name: Save the archive logs on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: ios-release-logs
           path: ios/build/export/Packaging.log
