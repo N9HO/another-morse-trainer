@@ -60,7 +60,7 @@ jobs:
       run:
         working-directory: android
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       # First run in the monorepo: prove the secrets survived the move before
       # trusting a real release with them. Prints presence only — never values.
@@ -87,15 +87,13 @@ jobs:
           report PLAY_SERVICE_ACCOUNT_JSON "$PLAY_JSON"
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "17"
 
       - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          build-root-directory: android
+        uses: gradle/actions/setup-gradle@v5
 
       - name: Recreate signing config from secrets
         if: env.KEYSTORE_B64 != ''
@@ -162,7 +160,7 @@ jobs:
           echo "::notice::Dry run: AAB built, signed and verified. Play upload skipped, no versionCode consumed."
 
       - name: Save AAB as artifact (fallback / record)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: app-release-aab
           path: android/app/build/outputs/bundle/release/app-release.aab
