@@ -1,28 +1,30 @@
 name: Discord release announcement
 
-# Fires when you push an iOS version tag
-# (e.g. `git tag ios-v1.2 && git push origin ios-v1.2`).
+# Announces a release on Discord, for BOTH apps.
 #
-# The tag prefix matters: this is a monorepo holding both apps, and the Android
-# release workflow watches `android-v*`. A bare `v*` tag would fire both — an iOS
-# Discord post for an Android release, and a Play upload for an iOS one — so each
-# platform releases under its own namespace.
-# Builds a changelog from the commits since the previous tag and posts a formatted
-# embed to a Discord channel via an incoming webhook. No app build / code signing here —
-# you build & upload to TestFlight locally; this just announces the new build.
+# Triggered by the release workflows *finishing successfully* — not by the tag.
+# That ordering matters: when this fired on the tag directly, it raced the build
+# and announced ios-v1.1-b25 while that upload was still going, which then failed
+# App Store validation. The announcement outlived the release it described. Now
+# nothing is announced until the store actually has the build.
+#
+# Each app keeps its own changelog, scoped to its own subtree, so an Android
+# release never lists iOS commits or vice versa.
 #
 # Manual runs (Actions tab or API) take extra inputs:
-#   tag             — tag to announce; defaults to the nearest tag from the run's ref
-#   testflight_link — public TestFlight join URL to include (verified before posting)
+#   tag             — tag to announce; platform is inferred from its prefix
+#   testflight_link — public TestFlight join URL to include (verified; iOS only)
 #   dry_run         — "true" builds and prints the payload but posts nothing
 on:
-  push:
-    tags:
-      - 'ios-v*'
+  workflow_run:
+    workflows:
+      - "iOS release (TestFlight upload)"
+      - "Android release (Play Store upload)"
+    types: [completed]
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Tag to announce (defaults to latest)'
+        description: 'Tag to announce (ios-v* or android-v*)'
         required: false
       testflight_link:
         description: 'Public TestFlight join link to include (https://testflight.apple.com/join/…)'
@@ -34,52 +36,70 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   announce:
     runs-on: ubuntu-latest
+    # Never announce a release that didn't happen. A manual run is always allowed.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
     steps:
       - name: Checkout (full history for changelog)
         uses: actions/checkout@v5
         with:
           fetch-depth: 0
+          # On workflow_run this defaults to the default branch, which is not
+          # necessarily the released commit.
+          ref: ${{ github.event.workflow_run.head_sha || github.ref }}
 
-      - name: Build release info
-        id: info
+      - name: Resolve which release this is
+        id: rel
         env:
-          REPO: ${{ github.repository }}
           TAG_INPUT: ${{ github.event.inputs.tag }}
+          RUN_WORKFLOW: ${{ github.event.workflow_run.name }}
+          RUN_BRANCH: ${{ github.event.workflow_run.head_branch }}
         run: |
           set -euo pipefail
 
-          # Resolve the tag we're announcing.
-          if [ -n "${TAG_INPUT:-}" ]; then
-            TAG="$TAG_INPUT"
-          elif [ "${{ github.ref_type }}" = "tag" ]; then
-            TAG="${{ github.ref_name }}"
-          else
-            TAG="$(git describe --tags --abbrev=0 --match 'ios-v*' 2>/dev/null || true)"
-          fi
-          if [ -z "$TAG" ]; then
-            echo "::error::No tag to announce — no ios-v* tag is reachable from this ref."
-            exit 1
-          fi
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          # A release run triggered by a tag push carries the tag in head_branch.
+          # A manually dispatched release carries a branch name instead — there is
+          # no release tag to announce then, so skip rather than invent one.
+          TAG="${TAG_INPUT:-${RUN_BRANCH:-}}"
 
-          # The changelog always ends at the commit this run checked out (HEAD).
-          # On a tag push HEAD is the tagged commit, so this matches the old
-          # behavior; on a manual run from a branch it means "everything shipped
-          # since the last tag", even when the tag itself sits a few commits back.
+          case "$TAG" in
+            ios-v*)     PLATFORM=ios ;;
+            android-v*) PLATFORM=android ;;
+            *)
+              echo "::notice::'$TAG' is not a release tag (workflow: ${RUN_WORKFLOW:-manual}) — nothing to announce."
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+              exit 0 ;;
+          esac
+
+          echo "skip=false"        >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG"          >> "$GITHUB_OUTPUT"
+          echo "platform=$PLATFORM" >> "$GITHUB_OUTPUT"
+          echo "Announcing $TAG ($PLATFORM)"
+
+      - name: Build release info
+        id: info
+        if: steps.rel.outputs.skip != 'true'
+        env:
+          REPO: ${{ github.repository }}
+          TAG: ${{ steps.rel.outputs.tag }}
+          PLATFORM: ${{ steps.rel.outputs.platform }}
+        run: |
+          set -euo pipefail
+
+          # Keep each platform's changelog on its own tag line: an unfiltered
+          # describe would happily return the other app's tag (or the
+          # pre-monorepo `v1.1`) and start the changelog at someone else's release.
+          MATCH="${PLATFORM}-v*"
+
           HEAD_SHA="$(git rev-parse HEAD)"
-          # --match keeps this on the iOS tag line: an unfiltered describe would
-          # happily return an `android-v*` tag (or the pre-monorepo `v1.1`) and
-          # start the changelog at someone else's release.
-          PREV="$(git describe --tags --abbrev=0 --match 'ios-v*' "${HEAD_SHA}^" 2>/dev/null || true)"
-          if [ -n "$PREV" ]; then
-            RANGE="${PREV}..HEAD"
-          else
-            RANGE="HEAD"
-          fi
+          PREV="$(git describe --tags --abbrev=0 --match "$MATCH" "${HEAD_SHA}^" 2>/dev/null || true)"
+          if [ -n "$PREV" ]; then RANGE="${PREV}..HEAD"; else RANGE="HEAD"; fi
 
           # Compare link: use the tag name when it points at HEAD, the sha otherwise.
           if [ "$(git rev-parse "refs/tags/${TAG}^{commit}" 2>/dev/null || true)" = "$HEAD_SHA" ]; then
@@ -97,11 +117,15 @@ jobs:
           # Changelog: one bullet per commit, newest first. -25 caps it inside git
           # (piping through `head` dies of SIGPIPE under pipefail once the range
           # outgrows the cap — that's what broke the first two runs of this job).
-          # CI, tooling, and repo-housekeeping commits aren't release content,
-          # so commits touching only those paths are excluded.
-          # Scoped to ios/ so an Android commit never shows up in an iOS changelog.
-          LOG="$(git log --no-merges -25 --pretty=format:'• %s' "$RANGE" -- \
-                 ios ':(exclude)ios/tools' ':(exclude)ios/HANDOFF.md')"
+          # Scoped to the app's own subtree, with CI/tooling/docs paths excluded:
+          # those aren't release content.
+          if [ "$PLATFORM" = "ios" ]; then
+            LOG="$(git log --no-merges -25 --pretty=format:'• %s' "$RANGE" -- \
+                   ios ':(exclude)ios/tools' ':(exclude)ios/HANDOFF.md')"
+          else
+            LOG="$(git log --no-merges -25 --pretty=format:'• %s' "$RANGE" -- \
+                   android ':(exclude)android/tools' ':(exclude)android/HANDOFF.md')"
+          fi
           [ -z "$LOG" ] && LOG="• (no commits found in range)"
           {
             echo 'changelog<<CHANGELOG_EOF'
@@ -109,11 +133,10 @@ jobs:
             echo 'CHANGELOG_EOF'
           } >> "$GITHUB_OUTPUT"
 
-          # ISO-8601 timestamp for the embed footer.
           echo "ts=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
 
       - name: Verify the TestFlight link resolves
-        if: ${{ github.event.inputs.testflight_link != '' }}
+        if: ${{ steps.rel.outputs.skip != 'true' && github.event.inputs.testflight_link != '' }}
         env:
           LINK: ${{ github.event.inputs.testflight_link }}
           DRY_RUN: ${{ github.event.inputs.dry_run }}
@@ -131,9 +154,11 @@ jobs:
           fi
 
       - name: Post to Discord
+        if: steps.rel.outputs.skip != 'true'
         env:
           WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL }}
-          TAG: ${{ steps.info.outputs.tag }}
+          TAG: ${{ steps.rel.outputs.tag }}
+          PLATFORM: ${{ steps.rel.outputs.platform }}
           COMPARE: ${{ steps.info.outputs.compare }}
           CHANGELOG: ${{ steps.info.outputs.changelog }}
           TS: ${{ steps.info.outputs.ts }}
@@ -142,6 +167,14 @@ jobs:
         run: |
           set -euo pipefail
 
+          if [ "$PLATFORM" = "ios" ]; then
+            EMOJI="📱"; LABEL="iOS"; COLOR=3447003
+            BLURB="A new TestFlight build is on the way."
+          else
+            EMOJI="🤖"; LABEL="Android"; COLOR=3066993
+            BLURB="A new build is on the way to Google Play closed testing."
+          fi
+
           # jq builds correctly-escaped JSON from the raw values.
           PAYLOAD="$(jq -n \
             --arg tag "$TAG" \
@@ -149,17 +182,21 @@ jobs:
             --arg log "$CHANGELOG" \
             --arg ts "$TS" \
             --arg link "${LINK:-}" \
+            --arg emoji "$EMOJI" \
+            --arg label "$LABEL" \
+            --arg blurb "$BLURB" \
+            --argjson color "$COLOR" \
             '{
               username: "Another Morse Trainer",
               embeds: [{
-                title: "📱 New build — \($tag)",
+                title: "\($emoji) New build — \($tag)",
                 url: $compare,
                 description: ((if $link != ""
                                then "A new TestFlight build is out.\n\n🔗 **Join the beta:** \($link)\n\n"
-                               else "A new TestFlight build is on the way.\n\n" end)
+                               else $blurb + "\n\n" end)
                               + "**Changelog**\n\($log)"),
-                color: 3447003,
-                footer: { text: "Another Morse Trainer • iOS" },
+                color: $color,
+                footer: { text: "Another Morse Trainer • \($label)" },
                 timestamp: $ts
               }]
             }')"
