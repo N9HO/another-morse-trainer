@@ -59,6 +59,7 @@ reading, not compiling.
 ```bash
 cd android                                # needs JDK 17 + Android SDK
 ./gradlew :app:testDebugUnitTest          # 12 test classes
+./gradlew :app:lint                       # AGP lint; exclusions in app/lint.xml
 ./gradlew :app:assembleDebug
 ```
 
