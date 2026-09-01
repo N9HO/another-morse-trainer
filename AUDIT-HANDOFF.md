@@ -98,7 +98,7 @@ deliberately in `ced64d1`.
 | Privacy manifest actually bundles | Found at `MorseTrainer.app/PrivacyInfo.xcprivacy` in the build output, and `plutil`-valid there |
 | `claude.yml`, `android-release.yml` | YAML parses; job keys asserted |
 | All Kotlin changes | CI `Build debug APK` — compiles the module and runs `:app:testDebugUnitTest` (55 tests). **Pass** |
-| **R8 / `isMinifyEnabled = true`** | CI `Build release APK` — the new `android-ci.yml` job, the only one that runs R8 and `shrinkResources`. Proves the shrunk build **compiles and packages**; see below for what it still cannot prove |
+| **R8 / `isMinifyEnabled = true`** | CI `Build release APK` — the new `android-ci.yml` job, the only one that runs R8 and `shrinkResources`. **Pass**, 1,765,841-byte release APK. Proves the shrunk build **compiles and packages**; see below for what it still cannot prove |
 
 `swift build` compiles only the SwiftPM package. **It does not compile
 `ios/MorseTrainerApp/`** — an agent that edits the app target, runs the fast
