@@ -9,19 +9,32 @@
     <string>upload</string>
     <key>teamID</key>
     <string>F6ASU3CH5M</string>
-    <!-- Manual signing: this account/key can't do xcodebuild cloud signing, so we
-         supply an Apple Distribution cert (in the keychain) and an App Store
-         provisioning profile (in ~/Library/MobileDevice/Provisioning Profiles)
-         explicitly. Both were created via the App Store Connect API. -->
+    <!-- Cloud signing: Apple holds the distribution private key and signs
+         server-side, so nothing but the App Store Connect API key is needed.
+         No cert in the keychain, no provisioning profile on disk, nothing to
+         rotate annually — which is what makes CI cheap to own.
+
+         This file used to say the account "can't do cloud signing" and pinned
+         manual signing with an explicit cert + profile. That was true of the
+         key it was written against, but the cause was the key's ROLE, not the
+         account. Verified 2026-08-31:
+
+           - xcodebuild cloud signing requires an App Store Connect API key
+             with the Admin role. App Manager is NOT sufficient — it fails with
+             "Cloud signing permission error" / FORBIDDEN_ERROR, "You haven't
+             been given access to cloud-managed distribution certificates".
+           - The permission cannot be granted to a key after the fact; there is
+             no UI for it. Admin keys simply have it. Re-key to fix.
+           - Tested by archiving and exporting against an EMPTY temporary
+             keychain (a stand-in for a clean CI runner). With the App Manager
+             key the export failed; with an Admin key it produced an .ipa
+             signed by "Apple Distribution: JUSTIN KEITH ROGERS (F6ASU3CH5M)"
+             using an auto-generated iOS Team Store profile.
+
+         So: if this ever regresses to "no signing certificate found", check the
+         role on the key in ASC_KEY_ID before reaching for manual signing. -->
     <key>signingStyle</key>
-    <string>manual</string>
-    <key>signingCertificate</key>
-    <string>Apple Distribution</string>
-    <key>provisioningProfiles</key>
-    <dict>
-        <key>com.justinrogers.MorseTrainer</key>
-        <string>AMT App Store CLI</string>
-    </dict>
+    <string>automatic</string>
     <!-- Strip bitcode/symbols handling left at defaults; upload dSYMs. -->
     <key>uploadSymbols</key>
     <true/>
