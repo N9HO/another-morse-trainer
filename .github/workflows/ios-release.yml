@@ -1,0 +1,144 @@
+name: iOS release (TestFlight upload)
+
+# Fires when you push an iOS version tag
+# (e.g. `git tag ios-v1.2 && git push origin ios-v1.2`).
+#
+# The tag prefix matters: this is a monorepo holding both apps, and the Android
+# release workflow watches `android-v*`. A bare `v*` tag would fire both, so each
+# platform releases under its own namespace and the two cadences stay independent.
+#
+# Runs `ios/tools/upload-testflight.sh` — the same script used by hand on a Mac —
+# rather than reimplementing archive/export/upload in YAML. CI's only job is to
+# reconstruct the credentials that script expects, so the two paths cannot drift.
+#
+# NO `paths:` FILTER, deliberately. Every other workflow here is path-filtered
+# because macOS bills at 10x Linux, but this one is tag-triggered: on a tag push
+# GitHub evaluates `paths:` against the tagged commit's changed files, so a
+# release tag on a commit that happened to touch only android/ would silently
+# not release. Tag namespacing already does the filtering.
+#
+# Required repository secrets:
+#   ASC_KEY_ID     - App Store Connect API key ID. MUST be an ADMIN team key:
+#                    cloud signing fails on App Manager with "Cloud signing
+#                    permission error". See tools/ExportOptions.plist.
+#   ASC_ISSUER_ID  - the team's issuer UUID (same for every key)
+#   ASC_APP_ID     - the app's numeric App Store Connect id
+#   ASC_API_KEY_P8 - base64 of the key's .p8  (`base64 -i AuthKey_XXX.p8`)
+#
+# No distribution certificate or provisioning profile is needed: signing is
+# cloud-managed, so Apple holds the private key and signs server-side.
+
+on:
+  push:
+    tags:
+      - "ios-v*"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Set to "true" to archive and cloud-sign without uploading'
+        required: false
+        default: "false"
+
+permissions:
+  contents: read
+
+# Never let two releases race for the same build number.
+concurrency:
+  group: ios-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Archive + upload to TestFlight
+    runs-on: macos-15
+    defaults:
+      run:
+        working-directory: ios
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -switch /Applications/Xcode.app
+
+      - name: Install cryptography (asc-api.py's only dependency)
+        run: |
+          set -euo pipefail
+          # Runner python is Homebrew-managed and marks itself externally
+          # managed; --break-system-packages is the sanctioned override on an
+          # ephemeral runner. Fall back for images where the flag isn't needed.
+          python3 -m pip install --break-system-packages cryptography \
+            || python3 -m pip install cryptography
+
+      - name: Reconstruct the credentials the script reads
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_APP_ID: ${{ secrets.ASC_APP_ID }}
+          ASC_API_KEY_P8: ${{ secrets.ASC_API_KEY_P8 }}
+        run: |
+          set -euo pipefail
+          for v in ASC_KEY_ID ASC_ISSUER_ID ASC_APP_ID ASC_API_KEY_P8; do
+            if [ -z "${!v}" ]; then
+              echo "::error::Secret $v is not set. iOS releases need all four."
+              exit 1
+            fi
+          done
+
+          KEY_PATH="$RUNNER_TEMP/AuthKey_${ASC_KEY_ID}.p8"
+          printf '%s' "$ASC_API_KEY_P8" | base64 -d > "$KEY_PATH"
+          chmod 600 "$KEY_PATH"
+          # A .p8 that decoded to junk produces a baffling JWT error much later.
+          if ! grep -q "BEGIN PRIVATE KEY" "$KEY_PATH"; then
+            echo "::error::ASC_API_KEY_P8 did not decode to a PEM private key. Re-create it with: base64 -i AuthKey_${ASC_KEY_ID}.p8"
+            exit 1
+          fi
+
+          # Write the same gitignored file a local run sources, so the script
+          # needs no CI-specific branch.
+          cat > tools/asc-auth.sh <<EOF
+          export ASC_KEY_ID="$ASC_KEY_ID"
+          export ASC_ISSUER_ID="$ASC_ISSUER_ID"
+          export ASC_KEY_PATH="$KEY_PATH"
+          export ASC_APP_ID="$ASC_APP_ID"
+          export ASC_BUNDLE_ID="com.justinrogers.MorseTrainer"
+          EOF
+          chmod 600 tools/asc-auth.sh
+
+      - name: Create a temporary keychain
+        run: |
+          set -euo pipefail
+          # Archiving with automatic signing needs somewhere to put the signing
+          # identity Xcode provisions. Use a throwaway keychain rather than the
+          # runner's login keychain so nothing is left behind, and so a failure
+          # can't strand an unlocked keychain holding credentials.
+          KC="$RUNNER_TEMP/ios-release.keychain-db"
+          PW="$(openssl rand -hex 20)"
+          echo "KEYCHAIN_PATH=$KC" >> "$GITHUB_ENV"
+          security create-keychain -p "$PW" "$KC"
+          security set-keychain-settings "$KC"          # no auto-lock mid-build
+          security unlock-keychain -p "$PW" "$KC"
+          security list-keychains -d user -s "$KC" login.keychain-db
+          security default-keychain -d user -s "$KC"
+
+      - name: Archive, cloud-sign and upload
+        env:
+          DRY_RUN: ${{ github.event.inputs.dry_run == 'true' && '1' || '0' }}
+        run: ./tools/upload-testflight.sh
+
+      # `always()` so a failed or cancelled run still tears the keychain down.
+      - name: Delete the temporary keychain
+        if: always()
+        run: |
+          security list-keychains -d user -s login.keychain-db || true
+          security default-keychain -d user -s login.keychain-db || true
+          security delete-keychain "${KEYCHAIN_PATH:-}" 2>/dev/null || true
+          rm -f "$RUNNER_TEMP"/AuthKey_*.p8 tools/asc-auth.sh || true
+
+      - name: Save the archive logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-release-logs
+          path: ios/build/export/Packaging.log
+          if-no-files-found: ignore
+          retention-days: 7

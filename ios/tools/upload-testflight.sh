@@ -7,6 +7,13 @@
 # will reject a duplicate build.
 #
 # Usage:  ./tools/upload-testflight.sh
+#         DRY_RUN=1 ./tools/upload-testflight.sh        # build + sign, no upload
+#         SKIP_DISTRIBUTE=1 ./tools/upload-testflight.sh # upload, don't submit
+#
+# This script is the single code path for TestFlight releases: `ios-release.yml`
+# runs this exact file rather than reimplementing the steps in YAML, so CI and a
+# local run cannot drift apart. CI supplies the credentials by writing the same
+# gitignored tools/asc-auth.sh this reads locally.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -19,9 +26,36 @@ ARCHIVE="build/AMT-$(date +%Y%m%d-%H%M%S).xcarchive"
 EXPORT_DIR="build/export"
 rm -rf "$EXPORT_DIR"
 
-echo "▸ Archiving (Release)…"
+# DRY_RUN=1 exercises the whole pipeline — archive, cloud-sign, export — but
+# writes the .ipa to disk instead of uploading it. Nothing reaches TestFlight
+# and no build number is consumed, which makes it safe to run against a build
+# number that already shipped. CI uses this to prove the plumbing; it's equally
+# useful locally for checking a signing change without burning a build.
+EXPORT_PLIST="tools/ExportOptions.plist"
+if [ "${DRY_RUN:-0}" = "1" ]; then
+  EXPORT_PLIST="$(mktemp -d)/ExportOptions-dryrun.plist"
+  cp tools/ExportOptions.plist "$EXPORT_PLIST"
+  plutil -replace destination -string export "$EXPORT_PLIST"
+  echo "▸ DRY RUN: exporting to disk, not uploading."
+fi
+
+echo "▸ Archiving (Release, unsigned)…"
+# Archive unsigned and let `-exportArchive` do all the signing. Cloud signing
+# re-signs at export anyway, so a signed archive buys nothing — and it costs
+# something real: on a machine with no signing identity in its keychain (i.e.
+# every CI runner, which starts clean), automatic signing silently provisions a
+# fresh Apple Development certificate. That accumulates against the account's
+# certificate cap, one per release, until releases start failing. Verified
+# 2026-08-31: with these flags the development-certificate count is unchanged
+# across a full archive+export, and the exported .ipa is still signed by
+# "Apple Distribution: JUSTIN KEITH ROGERS (F6ASU3CH5M)".
+#
+# Trade-off: the .xcarchive itself is unsigned, so it can't be re-exported from
+# Xcode's Organizer for ad-hoc/enterprise distribution without signing it first.
+# We only ever ship it to the App Store, so that costs us nothing.
 xcodebuild -project MorseTrainer.xcodeproj -scheme MorseTrainer -configuration Release \
   -destination 'generic/platform=iOS' -archivePath "$ARCHIVE" \
+  CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
   archive -allowProvisioningUpdates \
   -authenticationKeyPath "$ASC_KEY_PATH" \
   -authenticationKeyID "$ASC_KEY_ID" \
@@ -30,12 +64,34 @@ xcodebuild -project MorseTrainer.xcodeproj -scheme MorseTrainer -configuration R
 echo "▸ Exporting + uploading to TestFlight…"
 xcodebuild -exportArchive \
   -archivePath "$ARCHIVE" \
-  -exportOptionsPlist tools/ExportOptions.plist \
+  -exportOptionsPlist "$EXPORT_PLIST" \
   -exportPath "$EXPORT_DIR" \
   -allowProvisioningUpdates \
   -authenticationKeyPath "$ASC_KEY_PATH" \
   -authenticationKeyID "$ASC_KEY_ID" \
   -authenticationKeyIssuerID "$ASC_ISSUER_ID"
+
+if [ "${DRY_RUN:-0}" = "1" ]; then
+  # Prove the export is genuinely App Store distribution-signed. Cloud signing
+  # keeps the private key on Apple's side, so the only local evidence that it
+  # worked is the signature on the .ipa itself.
+  UNPACK="$(mktemp -d)"
+  unzip -qo "$EXPORT_DIR"/*.ipa -d "$UNPACK"
+  # Capture once rather than piping codesign into `grep -q` twice: grep -q exits
+  # on its first match, codesign takes SIGPIPE, and `set -o pipefail` then reports
+  # the whole pipeline as failed even though the signature was fine.
+  SIGINFO=$(codesign -dvvv "$UNPACK"/Payload/*.app 2>&1)
+  echo "▸ Signature on the exported app:"
+  printf '%s\n' "$SIGINFO" \
+    | grep -E '^Authority=|^TeamIdentifier=|^Identifier=' | sed 's/^/    /'
+  if printf '%s\n' "$SIGINFO" | grep -q '^Authority=Apple Distribution'; then
+    echo "✅ DRY RUN passed: archived, cloud-signed and exported. Nothing uploaded."
+  else
+    echo "❌ DRY RUN: export is not signed by an Apple Distribution certificate."
+    exit 1
+  fi
+  exit 0
+fi
 
 echo "✅ Uploaded. Waiting for processing, then submitting for beta review + notifying testers…"
 
