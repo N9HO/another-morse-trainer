@@ -7,6 +7,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.listSaver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import app.anothermorsetrainer.morsekit.ConfusionQuiz
@@ -131,14 +134,105 @@ private sealed interface Route {
     data object Stats : Route
 }
 
+/**
+ * Nav state as a string, so it can go in the saved-instance-state bundle.
+ *
+ * `android:configChanges` (see the manifest) keeps rotation from recreating the
+ * activity at all, which is what makes practice survive being turned sideways.
+ * It does nothing for *process death*, though: background the app long enough
+ * for Android to reclaim it and the whole nav stack is gone, so you come back to
+ * Home from wherever you were. That is what these savers are for.
+ *
+ * An unrecognised tag restores as `null`, which `rememberSaveable` reads as
+ * "could not restore" and falls back to the initial value — Home. That is the
+ * behaviour we want if a route is ever renamed or removed between the save and
+ * the restore, rather than a crash on a stale bundle.
+ */
+private fun routeTag(route: Route): String = when (route) {
+    Route.Onboarding -> "onboarding"
+    Route.Home -> "home"
+    Route.Journey -> "journey"
+    is Route.Quiz -> "quiz:${route.mode.title}"
+    Route.Pileup -> "pileup"
+    Route.Contest -> "contest"
+    Route.Exam -> "exam"
+    Route.Listen -> "listen"
+    Route.HeadCopy -> "headCopy"
+    Route.TypeIt -> "typeIt"
+    Route.Qrq -> "qrq"
+    Route.RapidFire -> "rapidFire"
+    Route.Story -> "story"
+    Route.Sending -> "sending"
+    Route.SendingDrills -> "sendingDrills"
+    Route.Repeater -> "repeater"
+    Route.CwDecoder -> "cwDecoder"
+    Route.Reference -> "reference"
+    Route.Settings -> "settings"
+    Route.Stats -> "stats"
+}
+
+private fun routeFrom(tag: String): Route? = when (tag) {
+    "onboarding" -> Route.Onboarding
+    "home" -> Route.Home
+    "journey" -> Route.Journey
+    "pileup" -> Route.Pileup
+    "contest" -> Route.Contest
+    "exam" -> Route.Exam
+    "listen" -> Route.Listen
+    "headCopy" -> Route.HeadCopy
+    "typeIt" -> Route.TypeIt
+    "qrq" -> Route.Qrq
+    "rapidFire" -> Route.RapidFire
+    "story" -> Route.Story
+    "sending" -> Route.Sending
+    "sendingDrills" -> Route.SendingDrills
+    "repeater" -> Route.Repeater
+    "cwDecoder" -> Route.CwDecoder
+    "reference" -> Route.Reference
+    "settings" -> Route.Settings
+    "stats" -> Route.Stats
+    // Keyed by title rather than list index: a mode reordered in QUIZ_MODES
+    // between save and restore would otherwise silently resume the wrong quiz.
+    else -> tag.removePrefix("quiz:").takeIf { it != tag }
+        ?.let { title -> QUIZ_MODES.firstOrNull { it.title == title } }
+        ?.let(Route::Quiz)
+}
+
+private val RouteSaver: Saver<Route, String> = Saver(
+    save = { routeTag(it) },
+    restore = { routeFrom(it) }
+)
+
+/**
+ * The pending pre-flight sheet. Saved alongside the route so a process death
+ * while the sheet is open comes back to the sheet, not to a bare menu.
+ *
+ * An absent sheet saves as an empty list; restoring that yields null, which is
+ * also the initial value, so the two paths agree.
+ */
+private val SetupSaver: Saver<SetupTarget?, Any> = listSaver(
+    save = { target ->
+        target?.let {
+            listOf<Any>(routeTag(it.route), it.title, it.blurb, it.settingsMode.name, it.wantsStage)
+        } ?: emptyList()
+    },
+    restore = { items ->
+        val route = items.getOrNull(0)?.let { routeFrom(it as String) }
+        val mode = items.getOrNull(3)
+            ?.let { name -> runCatching { SettingsMode.valueOf(name as String) }.getOrNull() }
+        if (route == null || mode == null) null
+        else SetupTarget(route, items[1] as String, items[2] as String, mode, items[4] as Boolean)
+    }
+)
+
 @Composable
 private fun AppRoot() {
-    var route by remember {
+    var route by rememberSaveable(stateSaver = RouteSaver) {
         mutableStateOf<Route>(if (Settings.onboardingDone) Route.Home else Route.Onboarding)
     }
     // The mode awaiting its pre-flight sheet. Home stays composed underneath, so
     // cancelling the sheet leaves the menu exactly as it was.
-    var setup by remember { mutableStateOf<SetupTarget?>(null) }
+    var setup by rememberSaveable(stateSaver = SetupSaver) { mutableStateOf<SetupTarget?>(null) }
 
     /** Ask first where there is something to ask; otherwise go straight in. */
     fun launch(target: SetupTarget) {
