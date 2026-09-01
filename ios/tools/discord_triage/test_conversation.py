@@ -15,6 +15,7 @@ from conversation import (
     asked_about_platform,
     bot_already_said,
     find_issue_anchor,
+    mentioned_issue,
     render_transcript,
     thread_title,
 )
@@ -112,6 +113,19 @@ def test_bot_already_said_only_counts_our_own_messages():
     turns = [_bot(1, "Looks like a duplicate of #17. 🔁"), _user(2, "duplicate of #99?")]
     assert bot_already_said(turns, "duplicate of #17")
     assert not bot_already_said(turns, "duplicate of #99")
+
+
+def test_a_longer_issue_number_is_not_mistaken_for_a_shorter_one():
+    """Why mentioned_issue exists rather than a substring check.
+
+    "#41" is a substring of "#413", so the substring test would treat a thread
+    already pointed at #413 as having been pointed at #41 — and swallow the
+    pointer to #41 that the reporter actually needed.
+    """
+    turns = [_bot(1, "Looks like a duplicate of #413. 🔁"), _user(2, "what about #41?")]
+    assert mentioned_issue(turns, 413)
+    assert not mentioned_issue(turns, 41), "#41 must not match inside #413"
+    assert not mentioned_issue(turns, 4), "nor #4"
 
 
 def test_finds_the_issue_the_bot_announced():

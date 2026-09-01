@@ -192,6 +192,18 @@ def bot_already_said(turns: Iterable[Turn], phrase: str) -> bool:
     return any(turn.is_self and low in turn.text.lower() for turn in turns)
 
 
+def mentioned_issue(turns: Iterable[Turn], number: int) -> bool:
+    """Has the bot already named issue `number` in this thread?
+
+    `bot_already_said` matches a substring, which cannot be used for an issue
+    number: "#41" is a substring of "#413", so pointing a reporter at #41 would
+    silence a later, genuine pointer at #413. The digits have to end where the
+    number ends.
+    """
+    pattern = re.compile(rf"#{number}(?!\d)")
+    return any(turn.is_self and pattern.search(turn.text or "") for turn in turns)
+
+
 _PLATFORM_NAMES = ("ios", "ipados", "macos", "android")
 
 

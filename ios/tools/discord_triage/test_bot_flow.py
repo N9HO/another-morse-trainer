@@ -98,8 +98,12 @@ class FakeThread:
 class Harness:
     """Swaps the bot's collaborators for recorders, and restores them after."""
 
-    def __init__(self, verdicts: list[Verdict]):
+    def __init__(self, verdicts: list[Verdict], corpus: list[dict] | None = None):
         self.verdicts = list(verdicts)
+        # The issues the model was shown. A duplicate pointer is only honoured
+        # when it names one of these, so the default carries the #17 the
+        # duplicate tests point at.
+        self.corpus = list(corpus) if corpus is not None else [_issue(17)]
         self.transcripts: list[str] = []
         self.calls: list[dict] = []
         self.created: list[dict] = []
@@ -107,7 +111,10 @@ class Harness:
         self.stamp_lookups = 0
         self.stamped: dict | None = None
 
-    async def _triage(self, author, content, open_issues, **kw):
+    async def _issue_corpus(self):
+        return list(self.corpus)
+
+    async def _triage(self, author, content, issues, **kw):
         self.transcripts.append(content)
         self.calls.append(kw)
         return self.verdicts.pop(0) if self.verdicts else _verdict()
@@ -129,12 +136,12 @@ class Harness:
         self._saved = {
             name: getattr(bot, name)
             for name in ("triage", "create_issue", "comment_issue",
-                         "list_open_issues", "find_issue_for_thread", "settings", "client")
+                         "issue_corpus", "find_issue_for_thread", "settings", "client")
         }
         bot.triage = self._triage
         bot.create_issue = self._create_issue
         bot.comment_issue = self._comment_issue
-        bot.list_open_issues = _no_open_issues
+        bot.issue_corpus = self._issue_corpus
         bot.find_issue_for_thread = self._find_issue_for_thread
         # A short settle keeps the tests quick; the coalescing logic is the same.
         bot.settings = dataclasses.replace(self._saved["settings"], settle_seconds=0.05)
@@ -153,8 +160,16 @@ class FakeUserClient:
     user = BOT_USER
 
 
-async def _no_open_issues(limit=50):
-    return []
+def _issue(number: int, state: str = "open", **kw) -> dict:
+    """One corpus entry, shaped the way github_client.issue_corpus returns them."""
+    return {
+        "number": number,
+        "title": kw.get("title", "QSO simulator freezes at speed"),
+        "state": state,
+        "state_reason": kw.get("state_reason", ""),
+        "labels": kw.get("labels", []),
+        "snippet": kw.get("snippet", ""),
+    }
 
 
 def _verdict(**kw) -> Verdict:
@@ -378,7 +393,62 @@ def test_a_named_duplicate_is_still_never_filed():
         thread = FakeThread([FakeMessage(REPORTER, "QSO sim freezes")])
         run(bot._triage_thread(thread, explicit=True))
     assert not h.created
-    assert thread.said == ["Looks like a duplicate of #17. 🔁"]
+    assert thread.said == [
+        "Looks like a duplicate of #17. 🔁 Added your report to it, so you'll "
+        "get the ping when it closes."
+    ]
+
+
+def test_a_duplicate_attaches_this_thread_to_the_issue_it_duplicates():
+    """The second reporter has to end up on the close notification too.
+
+    The workflow reads discord-thread stamps from the body AND the comments, so
+    the stamp in this comment is what earns them the ping.
+    """
+    with Harness([_verdict(should_file=False, is_duplicate=True, duplicate_of=17)]) as h:
+        thread = FakeThread([FakeMessage(REPORTER, "QSO sim freezes")])
+        run(bot._triage_thread(thread, explicit=True))
+    assert len(h.comments) == 1, "the duplicate should be recorded on #17"
+    number, body = h.comments[0]
+    assert number == 17
+    assert f"<!-- discord-thread:{thread.id} -->" in body
+    assert REPORTER.display_name in body, "the new reporter should be credited"
+
+
+def test_a_duplicate_of_a_closed_issue_says_it_is_fixed_and_files_nothing():
+    """The re-report the bot could not previously recognise at all.
+
+    Someone on an old build hits a bug that was fixed weeks ago. Before the
+    corpus carried closed issues this became a brand-new duplicate issue every
+    time; now it points at the fix and asks them to update.
+    """
+    with Harness(
+        [_verdict(should_file=False, is_duplicate=True, duplicate_of=17,
+                  reply="That one's already fixed.")],
+        corpus=[_issue(17, state="closed", state_reason="completed")],
+    ) as h:
+        thread = FakeThread([FakeMessage(REPORTER, "QSO sim freezes")])
+        run(bot._triage_thread(thread, explicit=True))
+
+    assert not h.created, "a fixed bug must not be filed again"
+    assert len(h.comments) == 1 and h.comments[0][0] == 17
+    assert "after this issue was closed" in h.comments[0][1]
+    reply = thread.said[0]
+    assert "#17" in reply
+    assert "update" in reply.lower(), f"should ask them to update: {reply!r}"
+
+
+def test_a_duplicate_pointer_at_an_issue_we_never_showed_is_filed_instead():
+    """A number the model invented sends the reporter nowhere and loses the
+    report on the way, so an unresolvable pointer is treated as no pointer."""
+    with Harness(
+        [_verdict(should_file=False, is_duplicate=True, duplicate_of=999)],
+        corpus=[_issue(17)],
+    ) as h:
+        thread = FakeThread([FakeMessage(REPORTER, "QSO sim freezes")])
+        run(bot._triage_thread(thread, explicit=True))
+    assert len(h.created) == 1, "an unresolvable duplicate must not vanish"
+    assert not h.comments
 
 
 def test_auto_mode_files_an_unnamed_duplicate_too():
@@ -398,8 +468,10 @@ def test_a_duplicate_pointer_is_given_once_not_on_every_reply():
         thread.post("any workaround?")
         run(bot._triage_thread(thread, explicit=True))
 
-    assert thread.said == ["Looks like a duplicate of #17. 🔁"]
+    assert len(thread.said) == 1, f"said it twice: {thread.said}"
+    assert "#17" in thread.said[0]
     assert not h.created
+    assert len(h.comments) == 1, "the issue should collect one comment, not one per reply"
 
 
 def test_the_filed_issue_is_stamped_with_its_thread():
