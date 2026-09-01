@@ -1,7 +1,11 @@
-# Posts a message back to the originating Discord thread when an issue that the
-# triage bot filed is closed (e.g. a fix is merged). The bot stamps each issue
-# it opens with an HTML comment "<!-- discord-thread:<id> -->"; this reads that
-# id and posts to the thread via a Discord channel webhook.
+# Posts a message back to the originating Discord thread(s) when an issue that
+# the triage bot filed is closed (e.g. a fix is merged). The bot stamps each
+# issue it opens with an HTML comment "<!-- discord-thread:<id> -->" — and adds
+# the same stamp in a COMMENT when it attaches a later duplicate report to an
+# existing issue. So one issue can carry several threads: the reporter who filed
+# it and everyone who ran into the same bug afterwards. This reads the stamps
+# from the body and from every comment, and posts to each thread via a Discord
+# channel webhook. Reading the body alone told only the first reporter.
 #
 # Requires a repository secret DISCORD_WEBHOOK_URL:
 #   In Discord: the channel the triage threads live in -> Edit Channel ->
@@ -17,13 +21,20 @@ on:
   issues:
     types: [closed]
 
+# Reading the issue's comments is what finds the threads of everyone who
+# reported the bug after it was first filed.
+permissions:
+  issues: read
+
 jobs:
   notify:
     runs-on: ubuntu-latest
     steps:
-      - name: Post resolution to the Discord thread
+      - name: Post resolution to every Discord thread that reported it
         env:
           WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
           ISSUE_BODY: ${{ github.event.issue.body }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
           ISSUE_URL: ${{ github.event.issue.html_url }}
@@ -37,11 +48,24 @@ jobs:
             exit 0
           fi
 
-          # Pull the Discord thread id the bot embedded in the issue body.
-          THREAD_ID="$(printf '%s' "$ISSUE_BODY" \
-            | grep -oE 'discord-thread:[0-9]+' | head -n1 | cut -d: -f2 || true)"
-          if [ -z "${THREAD_ID:-}" ]; then
-            echo "No discord-thread marker on this issue; nothing to notify."
+          markers() { grep -oE 'discord-thread:[0-9]+' | cut -d: -f2 || true; }
+
+          # The thread that filed it (stamped in the body)…
+          BODY_IDS="$(printf '%s' "$ISSUE_BODY" | markers)"
+
+          # …and the threads of anyone who reported it again afterwards, which
+          # the bot records as a comment carrying the same stamp. One page of
+          # 100 comments is far more than this project's issues attract.
+          COMMENT_IDS="$(curl -sS \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/${REPO}/issues/${ISSUE_NUMBER}/comments?per_page=100" \
+            | jq -r '.[].body // empty' | markers)"
+
+          THREAD_IDS="$(printf '%s\n%s\n' "$BODY_IDS" "$COMMENT_IDS" \
+            | grep -E '^[0-9]+$' | sort -u || true)"
+          if [ -z "${THREAD_IDS:-}" ]; then
+            echo "No discord-thread markers on this issue; nothing to notify."
             exit 0
           fi
 
@@ -51,20 +75,30 @@ jobs:
             MSG="✅ Good news — this is fixed! Issue #${ISSUE_NUMBER} (\"${ISSUE_TITLE}\") has been closed: ${ISSUE_URL}"
           fi
 
-          # jq builds correctly-escaped JSON; thread_id targets the specific thread.
           # curl exits 0 on an HTTP error as long as the request itself worked, so
           # the status is checked explicitly — without this a rejected announcement
           # printed its error and still reported the job green, which is how every
-          # Apple-side notification failed unnoticed.
-          BODY="$(mktemp)"
-          CODE="$(jq -n --arg content "$MSG" '{content: $content}' \
-            | curl -sS -o "$BODY" -w '%{http_code}' -X POST \
-                   -H "Content-Type: application/json" --data @- \
-                   "${WEBHOOK}?thread_id=${THREAD_ID}&wait=true")"
+          # Apple-side notification failed unnoticed. One thread failing must not
+          # stop the others, so failures are collected and reported at the end.
+          FAILED=""
+          for THREAD_ID in $THREAD_IDS; do
+            # jq builds correctly-escaped JSON; thread_id targets the specific thread.
+            BODY="$(mktemp)"
+            CODE="$(jq -n --arg content "$MSG" '{content: $content}' \
+              | curl -sS -o "$BODY" -w '%{http_code}' -X POST \
+                     -H "Content-Type: application/json" --data @- \
+                     "${WEBHOOK}?thread_id=${THREAD_ID}&wait=true")"
+            if [ "$CODE" -lt 200 ] || [ "$CODE" -ge 300 ]; then
+              echo "::warning::Discord rejected the announcement to thread ${THREAD_ID} (HTTP ${CODE})."
+              cat "$BODY"; echo
+              FAILED="$FAILED $THREAD_ID"
+            else
+              echo "Announced #${ISSUE_NUMBER} to thread ${THREAD_ID}."
+            fi
+          done
 
-          if [ "$CODE" -lt 200 ] || [ "$CODE" -ge 300 ]; then
-            echo "::error::Discord rejected the announcement for #${ISSUE_NUMBER} (HTTP ${CODE})."
-            cat "$BODY"; echo
+          if [ -n "$FAILED" ]; then
+            echo "::error::Could not announce #${ISSUE_NUMBER} to thread(s):${FAILED}"
             echo "A webhook belongs to exactly ONE channel, and thread_id must name a"
             echo "thread inside that channel. Code 10003 (Unknown Channel) therefore"
             echo "means DISCORD_WEBHOOK_URL points at a different channel than the one"
@@ -72,4 +106,3 @@ jobs:
             echo "webhook on the channel holding the threads and update the secret."
             exit 1
           fi
-          echo "Announced #${ISSUE_NUMBER} to thread ${THREAD_ID}."

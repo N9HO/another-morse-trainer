@@ -1,4 +1,6 @@
 discord.py>=2.4,<3
-anthropic>=0.69
+# Upper bound deliberate: an unpinned major means the next SDK release can break
+# the running bot with no change on our side, and this one deploys from main.
+anthropic>=0.69,<2
 httpx>=0.27
 pydantic>=2.7

@@ -83,6 +83,12 @@ Play upload for an iOS one.
 platform's build. This matters: the iOS jobs run on `macos-15`, billed at 10x a
 Linux runner.
 
+`ios.yml` further excludes `!ios/tools/**`. Nothing under it reaches the Xcode
+build — it holds the Discord triage bot and the App Store Connect scripts — so a
+Python-only change used to start two macOS runners, rebuild unchanged Swift, and
+run none of the bot's own tests. Those now run in `triage-bot.yml`, on Linux,
+against Python 3.12 to match the bot's Dockerfile.
+
 Both run on pull requests and on pushes to `main` — deliberately not on pushes
 to every branch, which built each PR commit twice. `pull_request` is the trigger
 that has to stay: GitHub evaluates a `paths:` filter on `pull_request` against

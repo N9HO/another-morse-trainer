@@ -46,8 +46,8 @@ from conversation import (
     AUTO_THREAD_PREFIX,
     Turn,
     asked_about_platform,
-    bot_already_said,
     find_issue_anchor,
+    mentioned_issue,
     render_transcript,
     render_turn,
     thread_title,
@@ -58,7 +58,7 @@ from github_client import (
     comment_issue,
     create_issue,
     find_issue_for_thread,
-    list_open_issues,
+    issue_corpus,
 )
 from triage import triage
 
@@ -138,16 +138,36 @@ def _issue_repos() -> list[str]:
     return repos
 
 
-async def _safe_open_issues() -> list[dict]:
-    # Dedup runs before the platform is known, so we check the default repo only.
-    # Android issues live in a separate repo (settings.github_repo_android) and are
-    # not yet cross-checked here — acceptable while that repo is small; revisit if
-    # Android duplicate reports become common.
+async def _safe_issue_corpus() -> list[dict]:
+    """Open + recently-closed issues, or [] rather than losing the report."""
     try:
-        return await list_open_issues()
+        return await issue_corpus()
     except Exception:
-        log.exception("Failed to fetch open issues; proceeding without dedup")
+        log.exception("Failed to fetch the issue corpus; proceeding without dedup")
         return []
+
+
+def _resolve_duplicate(verdict, corpus: list[dict]) -> Optional[dict]:
+    """The corpus entry `verdict.duplicate_of` names, if it names a real one.
+
+    A number the model invented is worse than no number at all: the reporter is
+    sent to an issue that does not cover their bug (or does not exist), and the
+    report is dropped on the way. So a pointer is only honoured when it matches
+    an issue we actually put in front of the model; anything else has its
+    duplicate flag cleared, which routes it back through the normal path and
+    gets it filed.
+    """
+    if not verdict.is_duplicate or not verdict.duplicate_of:
+        return None
+    for entry in corpus:
+        if entry.get("number") == verdict.duplicate_of:
+            return entry
+    log.warning(
+        "Discarding duplicate pointer to #%s: not in the corpus we supplied",
+        verdict.duplicate_of,
+    )
+    verdict.duplicate_of = None
+    return None
 
 
 # --- images -------------------------------------------------------------------
@@ -429,6 +449,65 @@ async def _file_issue(verdict, body: str) -> tuple[Optional[dict], Optional[str]
         return None, None, ""
 
 
+def _attach_body(verdict, entry: dict, author: str, thread_id: int) -> str:
+    """The comment that records a duplicate report on the issue it duplicates.
+
+    It carries the same `discord-thread` stamp a filed issue gets, which is what
+    puts the second reporter on the close notification: the workflow reads the
+    markers from the body AND the comments, so everyone who reported a bug hears
+    when it is fixed. Before this, only the first reporter ever did.
+    """
+    detail = (verdict.body or verdict.reply or "").strip()
+    if entry.get("state") == "closed":
+        lead = (
+            f"Reported again in Discord by {author}, after this issue was closed. "
+            f"Either the fix hasn't reached them yet or it has come back."
+        )
+    else:
+        lead = f"Also reported in Discord by {author}."
+    parts = [lead]
+    if detail:
+        parts.append(detail)
+    parts.append(f"<!-- discord-thread:{thread_id} -->")
+    return "\n\n".join(parts)
+
+
+async def _attach_duplicate(verdict, entry: dict, author: str, thread_id: int) -> bool:
+    """Record this report on the issue it duplicates. True when it landed."""
+    try:
+        await comment_issue(entry["number"], _attach_body(verdict, entry, author, thread_id))
+    except Exception:
+        log.exception("Failed to attach duplicate report to #%s", entry["number"])
+        return False
+    return True
+
+
+def _duplicate_reply(entry: dict, verdict, attached: bool) -> str:
+    """What Discord hears about a duplicate.
+
+    A closed issue is the more useful answer — usually the reporter is simply on
+    an old build — so it says so and asks them to check, rather than pointing at
+    a closed issue and going quiet.
+    """
+    number = entry["number"]
+    if entry.get("state") == "closed":
+        base = (
+            verdict.reply.strip()
+            or f"This one's already fixed — see #{number}."
+        )
+        if f"#{number}" not in base:
+            base = f"{base} (#{number})"
+        tail = (
+            " Could you update to the latest version and let me know if it's still there?"
+            if "update" not in base.lower()
+            else ""
+        )
+        follow = " I've noted your report on it." if attached else ""
+        return f"✅ {base}{tail}{follow}"
+    follow = " Added your report to it, so you'll get the ping when it closes." if attached else ""
+    return f"Looks like a duplicate of #{number}. 🔁{follow}"
+
+
 def _should_file_now(verdict) -> bool:
     """Does this verdict become a GitHub issue right now?
 
@@ -439,12 +518,11 @@ def _should_file_now(verdict) -> bool:
     and noise are still never filed.
 
     A duplicate is only a duplicate when the model can NAME the issue it
-    duplicates. "Feels like a duplicate" with no number gave us the worst of
-    both: nothing filed, and nothing to point the reporter at — the whole
-    report living in Discord again. It is also the likeliest way to lose an
-    Android report, since dedup only sees the default repo's open issues. A
-    possible duplicate you can close in one click beats a report you never
-    heard about.
+    duplicates — and, since _resolve_duplicate runs first, only when that name
+    matches an issue we really showed it. "Feels like a duplicate" with no
+    number gave us the worst of both: nothing filed, and nothing to point the
+    reporter at — the whole report living in Discord again. A possible duplicate
+    you can close in one click beats a report you never heard about.
     """
     if verdict.kind not in ("bug", "feature"):
         return False
@@ -497,6 +575,7 @@ async def _apply_verdict(
     convo: Conversation,
     *,
     explicit: bool,
+    duplicate: Optional[dict] = None,
 ) -> None:
     """Act on a verdict inside a triage thread (file, comment, or ask)."""
     # Already filed for this thread -> any new detail is a refinement of THIS
@@ -538,13 +617,16 @@ async def _apply_verdict(
             await _say(thread, verdict.reply or "👍")
         return
 
-    if verdict.is_duplicate and verdict.duplicate_of:
+    if duplicate is not None:
         # Say it once. Every message re-triages the whole thread, so the same
         # verdict comes back on every follow-up — and a bot that keeps
-        # repeating its last answer is the thing we're fixing.
-        pointer = f"duplicate of #{verdict.duplicate_of}"
-        if not bot_already_said(convo.turns, pointer):
-            await _say(thread, f"Looks like a {pointer}. 🔁")
+        # repeating its last answer is the thing we're fixing. The attach is
+        # guarded by the same check, so the issue collects one comment per
+        # report rather than one per reply.
+        if mentioned_issue(convo.turns, duplicate["number"]):
+            return
+        attached = await _attach_duplicate(verdict, duplicate, convo.author, thread.id)
+        await _say(thread, _duplicate_reply(duplicate, verdict, attached))
         return
 
     # A real report is filed even while it is still thin. Holding it back until
@@ -628,14 +710,14 @@ async def _run_triage(thread: discord.Thread, *, explicit: bool) -> None:
     )
     # Drop this thread's own issue from the dedup list so a refinement isn't
     # judged a duplicate of the very issue it's refining.
-    open_issues = [
-        i for i in await _safe_open_issues() if i.get("number") != p.issue_number
+    corpus = [
+        i for i in await _safe_issue_corpus() if i.get("number") != p.issue_number
     ]
     try:
         verdict = await triage(
             convo.author,
             transcript,
-            open_issues,
+            corpus,
             explicit=explicit,
             images=convo.images,
             has_issue=p.issue_number is not None,
@@ -658,9 +740,12 @@ async def _run_triage(thread: discord.Thread, *, explicit: bool) -> None:
 
     # In auto mode, a thread we're watching is still a conversation between
     # humans: only speak up when there's something to do.
+    duplicate = _resolve_duplicate(verdict, corpus)
     if not explicit and p.issue_number is None and not _engages(verdict):
         return
-    await _apply_verdict(thread, verdict, p, convo, explicit=explicit)
+    await _apply_verdict(
+        thread, verdict, p, convo, explicit=explicit, duplicate=duplicate
+    )
 
 
 # --- entry flows --------------------------------------------------------------
@@ -692,9 +777,9 @@ async def _start_triage(message: discord.Message, explicit: bool) -> None:
             )
         return
 
-    open_issues = await _safe_open_issues()
+    corpus = await _safe_issue_corpus()
     try:
-        verdict = await triage(author, content, open_issues, explicit=explicit, images=images)
+        verdict = await triage(author, content, corpus, explicit=explicit, images=images)
     except Exception:
         # Never leave a 👀 hanging: an analysis failure gets said out loud.
         log.exception("Triage failed for msg=%s", message.id)
@@ -710,20 +795,25 @@ async def _start_triage(message: discord.Message, explicit: bool) -> None:
         verdict.needs_more_info, verdict.is_duplicate, explicit,
     )
 
-    if verdict.is_duplicate and verdict.duplicate_of:
-        await message.reply(
-            f"Looks like a duplicate of #{verdict.duplicate_of}. 🔁", mention_author=False
-        )
-        return
+    duplicate = _resolve_duplicate(verdict, corpus)
 
     # Decide whether to engage at all. In auto mode we stay silent on noise.
     if not _engages(verdict) and not explicit:
         return
 
+    # A duplicate used to be answered right here and dropped. It now goes
+    # through the thread like any other report, because attaching it to the
+    # issue it duplicates needs a thread id to stamp — that stamp is what puts
+    # this reporter on the close notification alongside the first one.
     thread = await _ensure_thread(message)
     if thread is None:
-        # No thread permission: degrade to one-shot (can't watch follow-ups).
-        if _should_file_now(verdict):
+        # No thread permission: degrade to one-shot (can't watch follow-ups,
+        # and with no thread there is nothing to notify, so nothing to attach).
+        if duplicate is not None:
+            await message.reply(
+                _duplicate_reply(duplicate, verdict, attached=False), mention_author=False
+            )
+        elif _should_file_now(verdict):
             issue, _, note = await _file_issue(verdict, verdict.body)
             if issue is None:
                 await message.reply(
@@ -741,7 +831,9 @@ async def _start_triage(message: discord.Message, explicit: bool) -> None:
         author=author, turns=[_turn_from(message)], images=images, last_message_id=message.id
     )
     p = pending.setdefault(thread.id, Pending())
-    await _apply_verdict(thread, verdict, p, convo, explicit=explicit)
+    await _apply_verdict(
+        thread, verdict, p, convo, explicit=explicit, duplicate=duplicate
+    )
 
 
 # --- events -------------------------------------------------------------------

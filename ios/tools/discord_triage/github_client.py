@@ -1,4 +1,4 @@
-"""Minimal GitHub REST helpers: list open issues and create new ones.
+"""Minimal GitHub REST helpers: read the issue corpus and create new issues.
 
 Kept dependency-light (httpx) and synchronous; callers dispatch via asyncio.to_thread
 so the Discord event loop is never blocked.
@@ -7,6 +7,7 @@ so the Discord event loop is never blocked.
 from __future__ import annotations
 
 import asyncio
+import re
 from typing import Optional
 
 import httpx
@@ -46,20 +47,71 @@ def _raise_for_status(resp: httpx.Response, repo: str) -> None:
     raise GitHubError(resp.status_code, repo, detail)
 
 
-def _list_open_issues_sync(limit: int = 50) -> list[dict]:
-    """Return open issues as [{number, title}], excluding pull requests."""
+# How much of each issue's corpus entry the model sees. Titles alone were enough
+# to spot a duplicate but not to tell one apart from a near neighbour, and a
+# closed issue's body is where "fixed in 1.12.2" lives.
+OPEN_LIMIT = 50
+CLOSED_LIMIT = 30
+SNIPPET_CHARS = 240
+
+# The bot's own thread stamps are noise in a snippet, and leaking one into the
+# model's context invites it to echo a thread id at a reporter.
+_MARKER_RE = re.compile(r"<!--\s*discord-thread:\d+\s*-->")
+
+
+def _snippet(body: str | None) -> str:
+    """The first SNIPPET_CHARS of an issue body, flattened to one line."""
+    text = _MARKER_RE.sub("", body or "")
+    text = " ".join(text.split())
+    return text[:SNIPPET_CHARS]
+
+
+def _fetch_issues_sync(state: str, limit: int, sort: str) -> list[dict]:
+    """One page of issues in `state`, newest first, PRs filtered out."""
     url = f"{_API}/repos/{settings.github_repo}/issues"
-    params = {"state": "open", "per_page": str(min(limit, 100)), "sort": "created"}
+    params = {
+        "state": state,
+        "per_page": str(min(limit, 100)),
+        "sort": sort,
+        "direction": "desc",
+    }
     with httpx.Client(timeout=15.0) as client:
         resp = client.get(url, headers=_HEADERS, params=params)
         _raise_for_status(resp, settings.github_repo)
         data = resp.json()
     # The issues endpoint also returns PRs; filter them out.
-    return [
-        {"number": item["number"], "title": item["title"]}
-        for item in data
-        if "pull_request" not in item
-    ]
+    return [item for item in data if "pull_request" not in item]
+
+
+def _issue_corpus_sync() -> list[dict]:
+    """Open issues plus recently-closed ones, for dedup.
+
+    Open issues answer "is this already tracked". Closed ones answer a question
+    the bot could not previously ask: "was this already FIXED?" — the most
+    common re-report there is, since a reporter on an old build hits a bug that
+    was closed weeks ago. Without the closed half that arrives as a brand-new
+    issue every time.
+
+    Each entry: {number, title, state, state_reason, labels, snippet}. Closed
+    issues are sorted by update time so the recently-fixed ones are the ones
+    that fit in the window.
+    """
+    corpus: list[dict] = []
+    for state, limit, sort in (("open", OPEN_LIMIT, "created"),
+                               ("closed", CLOSED_LIMIT, "updated")):
+        for item in _fetch_issues_sync(state, limit, sort):
+            corpus.append({
+                "number": item["number"],
+                "title": item["title"],
+                "state": state,
+                "state_reason": item.get("state_reason") or "",
+                "labels": [
+                    lab["name"] if isinstance(lab, dict) else str(lab)
+                    for lab in item.get("labels", [])
+                ],
+                "snippet": _snippet(item.get("body")),
+            })
+    return corpus
 
 
 def _create_issue_sync(
@@ -154,8 +206,8 @@ def _check_repo_access_sync(repo: str) -> Optional[str]:
     return f"{resp.status_code} {detail}"
 
 
-async def list_open_issues(limit: int = 50) -> list[dict]:
-    return await asyncio.to_thread(_list_open_issues_sync, limit)
+async def issue_corpus() -> list[dict]:
+    return await asyncio.to_thread(_issue_corpus_sync)
 
 
 async def create_issue(

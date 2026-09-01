@@ -168,14 +168,22 @@ the matching platform label.
 - Questions and noise are never filed.
 - If a screenshot is attached, describe what it shows (error text, screen, UI state) \
 in the issue body — the maintainer can't see the image, only your description.
-- You are given the list of currently OPEN issues (number + title). If this report is \
-clearly already covered by one of them, set is_duplicate = true and duplicate_of to its \
-number, and should_file = false. Only ever set is_duplicate = true together with the \
-NUMBER in duplicate_of. If you can't point at a specific open issue, it is not a \
-duplicate — treat it as a new report and let it be filed. A vague "this feels \
-familiar" loses the report entirely: nothing gets filed and the reporter gets no \
-issue to follow. Note the list covers the main repo only, so an Android report may \
-have a twin you cannot see.
+- You are given the existing issues, each marked OPEN or CLOSED, with its labels and \
+the first lines of its body. If this report is clearly already covered by one of them, \
+set is_duplicate = true and duplicate_of to its number, and should_file = false. Only \
+ever set is_duplicate = true together with the NUMBER in duplicate_of. If you can't \
+point at a specific issue, it is not a duplicate — treat it as a new report and let it \
+be filed. A vague "this feels familiar" loses the report entirely: nothing gets filed \
+and the reporter gets no issue to follow.
+- A CLOSED issue counts as a duplicate too, and it is the more useful catch: it \
+usually means the reporter is on a build from before the fix. Point at it the same \
+way — is_duplicate = true, duplicate_of = its number — and make 'reply' say it is \
+already fixed and ask them to update to the latest version and report back if it \
+persists. Do not claim a fix shipped in a specific version unless the issue says so. \
+Two exceptions, where the right answer is a NEW report rather than a duplicate: the \
+closed issue was closed as not planned, or the reporter has already said they are on \
+the current version — in that case it is a regression, so set is_duplicate = false and \
+let it file, and say in the body that it resurfaces the closed issue.
 - Write title and body for a maintainer, not the reporter: turn casual phrasing into a \
 precise, reproducible report. Use Markdown. For bugs, include Steps to reproduce, \
 Expected, and Actual sections whenever the message gives you enough to fill them; if it \
@@ -193,10 +201,30 @@ why in a helpful way (e.g. what extra detail would let you file it, or that it r
 like a question/duplicate). Never leave reply empty."""
 
 
-def _format_open_issues(open_issues: list[dict]) -> str:
-    if not open_issues:
+def _format_issue_corpus(issues: list[dict]) -> str:
+    """One line per issue: state, number, title, labels, and a body snippet.
+
+    The state is what lets the model tell "already tracked" from "already
+    fixed", so it leads the line. `state_reason` matters for exactly one case —
+    a not-planned close is not a fix, and re-reporting it should file.
+    """
+    if not issues:
         return "(none)"
-    return "\n".join(f"#{i['number']}: {i['title']}" for i in open_issues)
+    lines = []
+    for i in issues:
+        state = str(i.get("state", "open")).upper()
+        reason = i.get("state_reason") or ""
+        if state == "CLOSED" and reason:
+            state = f"CLOSED/{reason}"
+        line = f"[{state}] #{i['number']}: {i['title']}"
+        labels = i.get("labels") or []
+        if labels:
+            line += f"  (labels: {', '.join(labels)})"
+        snippet = (i.get("snippet") or "").strip()
+        if snippet:
+            line += f"\n    {snippet}"
+        lines.append(line)
+    return "\n".join(lines)
 
 
 # GitHub label per platform. Missing labels are created automatically when the
@@ -273,7 +301,7 @@ def _postprocess_platform(v: Verdict, ask_platform: bool = True) -> Verdict:
 def _triage_sync(
     author: str,
     content: str,
-    open_issues: list[dict],
+    issues: list[dict],
     explicit: bool = False,
     images: Optional[list[tuple[str, str]]] = None,
     has_issue: bool = False,
@@ -302,8 +330,8 @@ def _triage_sync(
     user_text = (
         f"Discord report from {author}:\n"
         f"\"\"\"\n{content}\n\"\"\"\n\n"
-        f"Currently open issues (for duplicate detection):\n"
-        f"{_format_open_issues(open_issues)}"
+        f"Existing issues (for duplicate detection):\n"
+        f"{_format_issue_corpus(issues)}"
         f"{explicit_note}"
         f"{issue_note}"
     )
@@ -351,7 +379,7 @@ def _triage_sync(
 async def triage(
     author: str,
     content: str,
-    open_issues: list[dict],
+    issues: list[dict],
     explicit: bool = False,
     images: Optional[list[tuple[str, str]]] = None,
     has_issue: bool = False,
@@ -371,7 +399,7 @@ async def triage(
         _triage_sync,
         author,
         content,
-        open_issues,
+        issues,
         explicit,
         images,
         has_issue,

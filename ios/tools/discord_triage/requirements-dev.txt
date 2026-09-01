@@ -1,0 +1,9 @@
+# Test-only dependencies.
+#
+# Deliberately NOT in requirements.txt: the Dockerfile installs that file into
+# the production image, and .dockerignore keeps test_*.py out of it — so adding
+# a test runner there ships a runner for tests the image does not contain.
+#
+#     pip install -r requirements-dev.txt && pytest
+-r requirements.txt
+pytest>=8,<9

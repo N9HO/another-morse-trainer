@@ -18,7 +18,10 @@ Discord message ──▶ Claude triage ──▶ GitHub issue ──▶ reply i
 - **Cleans it up**: rewrites casual phrasing into a precise issue with
   Steps to reproduce / Expected / Actual, references app areas (QSO Simulator,
   Confusion Matrix, Timing, …), and credits the reporter.
-- **Dedupes** against currently open issues before filing.
+- **Dedupes** against open issues *and* recently-closed ones before filing. A
+  match on a closed issue is the more useful catch: it usually means the
+  reporter is on a build from before the fix, so the bot says so and asks them
+  to update instead of filing the same bug again.
 - **Triages**: suggests labels (`bug` / `enhancement` / `needs-info`) and a
   severity, and tags every issue with a `from-discord` label.
 - **Files first, asks second**: a genuine bug or feature is filed straight
@@ -80,9 +83,14 @@ one message that triggered it:
 - **A duplicate is only a duplicate when it can be named.** "Feels familiar"
   with no issue number used to file nothing and point the reporter at nothing,
   leaving the report in Discord — the exact failure *files first, asks second*
-  exists to prevent. It's especially likely for Android reports, since dedup
-  only sees the main repo's open issues. A possible duplicate you close in one
-  click beats a report you never hear about.
+  exists to prevent. A possible duplicate you close in one click beats a report
+  you never hear about. A number the model invents is treated the same way: a
+  pointer that doesn't match an issue the bot actually showed it is discarded
+  and the report is filed.
+- **A duplicate report is attached, not just answered.** The bot comments on the
+  issue it duplicates, crediting the new reporter and stamping that comment with
+  their thread id — so when the issue closes, everyone who reported the bug gets
+  told, not only whoever reported it first.
 - **A restart is no longer amnesia.** The thread → issue map still lives in
   memory, but the bot announces every issue with its full URL and stamps the
   issue body with the thread id, so a forgotten thread recovers its issue from
@@ -145,7 +153,7 @@ From https://console.anthropic.com → **API Keys** (→ `ANTHROPIC_API_KEY`).
 ## Run locally
 
 ```bash
-cd tools/discord_triage
+cd ios/tools/discord_triage
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env        # fill it in
@@ -160,14 +168,26 @@ python3 test_conversation.py   # pure helpers — no dependencies, no tokens
 python3 test_bot_flow.py       # thread memory, with fake Discord/GitHub/Claude
 ```
 
-Both also run under `pytest`. No live tokens are used: `test_bot_flow.py` fills
-in dummy environment variables and swaps in fakes for Discord, GitHub, and the
-model.
+Both also run under `pytest`, which is what CI does:
+
+```bash
+pip install -r requirements-dev.txt   # requirements.txt + pytest
+pytest
+```
+
+`pytest` is kept out of `requirements.txt` on purpose — the Dockerfile installs
+that file into the production image, and `.dockerignore` keeps `test_*.py` out
+of it, so a test runner in there would have nothing to run.
+
+No live tokens are used: `test_bot_flow.py` fills in dummy environment variables
+and swaps in fakes for Discord, GitHub, and the model. `.github/workflows/triage-bot.yml`
+runs the suite on every pull request that touches this directory, on Python 3.12
+to match the Dockerfile.
 
 ## Deploy on Fly.io
 
 ```bash
-cd tools/discord_triage
+cd ios/tools/discord_triage
 fly launch --no-deploy        # accept the included fly.toml; pick an app name/region
 
 # Secrets (never put these in fly.toml or .env in git):
@@ -220,10 +240,12 @@ is now a no-op: with a single repo, `GITHUB_REPO` is already the destination.
 ## Resolution notifications ("this is fixed")
 
 When an issue the bot filed is **closed** (e.g. a fix is merged), the bot posts a
-message back into the original Discord thread. This is handled by a GitHub Action
-(`.github/workflows/notify-discord-on-close.yml`), not the bot process itself —
-the bot stamps each issue it opens with a hidden `discord-thread:<id>` marker, and
-the Action reads it on close and posts via a Discord webhook.
+message back into **every** Discord thread that reported it. This is handled by a
+GitHub Action (`.github/workflows/notify-discord-on-close.yml`), not the bot
+process itself — the bot stamps each issue it opens with a hidden
+`discord-thread:<id>` marker, and adds the same marker in a comment when it
+attaches a later duplicate report. The Action reads the markers from the body and
+from every comment on close, and posts to each thread via a Discord webhook.
 
 To enable it:
 1. **Create a Discord channel webhook**: in the channel your triage threads live
@@ -242,7 +264,7 @@ the thread, which Discord keeps for the thread's auto-archive window.)
 | `bot.py` | Discord client + event handlers (the entry point). |
 | `conversation.py` | Thread → transcript, and recovering a thread's issue. |
 | `triage.py` | Claude triage call + the structured `Verdict` schema. |
-| `github_client.py` | List open issues / create issues via the GitHub REST API. |
+| `github_client.py` | Read the issue corpus (open + recently closed) / create and comment on issues via the GitHub REST API. |
 | `config.py` | Environment-variable configuration. |
 | `test_conversation.py` | Transcript + issue-recovery tests (no deps needed). |
 | `test_bot_flow.py` | Thread-memory tests against fake Discord/GitHub/Claude. |
