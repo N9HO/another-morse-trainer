@@ -98,7 +98,8 @@ deliberately in `ced64d1`.
 | Privacy manifest actually bundles | Found at `MorseTrainer.app/PrivacyInfo.xcprivacy` in the build output, and `plutil`-valid there |
 | `claude.yml`, `android-release.yml` | YAML parses; job keys asserted |
 | All Kotlin changes | CI `Build debug APK` — compiles the module and runs `:app:testDebugUnitTest` (55 tests). **Pass** |
-| **R8 / `isMinifyEnabled = true`** | CI `Build release APK` — the new `android-ci.yml` job, the only one that runs R8 and `shrinkResources`. **Pass**, 1,765,841-byte release APK. Proves the shrunk build **compiles and packages**; see below for what it still cannot prove |
+| **R8 / `isMinifyEnabled = true`** | CI `Build release APK` — the only job that runs R8 and `shrinkResources`. **Pass**, 1,765,841-byte release APK |
+| **R8 at runtime** | CI `Release smoke test` — emulator, installs that APK, launches it. **Pass**, no fatal exception, navy launch window and onboarding render correctly in the uploaded screenshots. Covers launch only; see below |
 
 `swift build` compiles only the SwiftPM package. **It does not compile
 `ios/MorseTrainerApp/`** — an agent that edits the app target, runs the fast
@@ -114,14 +115,25 @@ wrote to `mapping/release/` (the job logs that directory, so the run itself says
 which reports this AGP version produced). `merge-gate.yml` requires the new job
 for any PR that touches `android/`.
 
-**R8 breaks things at runtime, not at build time.** A green job means no keep
-rule is missing badly enough to fail the build; it does not mean the shrunk app
-works. There is no instrumented test here, so the icon-heavy screens still need
-one hand check: download the `app-release-ci-signed` artifact from the run and
-sideload it. It carries the real `applicationId` and a throwaway signer, so it
-cannot install over the Play build or over an earlier CI build — uninstalling
-first **erases that device's saved training progress**. Use a spare device or an
-emulator.
+**R8 breaks things at runtime, not at build time**, so a second job,
+`Release smoke test`, boots an emulator, installs that exact APK, launches
+`MainActivity`, and fails on a fatal exception or a missing symbol. It uploads
+two screenshots — one taken immediately after `am start`, one after the UI
+settles — as `release-smoke-screenshots`. With no Android hardware behind this
+repo, that artifact is also the only way to see the app running at all.
+
+That closed the one open question from the shrinker. `resources.txt` reports
+`style/Theme_AMT` reachable but the `@color/brand_navy` it references
+unreachable; since `Theme.AMT` is the application theme, a genuinely dropped
+colour throws during inflation. The launch screenshot comes back navy with the
+adaptive icon composited, so aapt2 had inlined the literal ARGB and nothing was
+lost.
+
+**What the smoke test still does not reach:** a fresh install lands on
+onboarding, so it verifies launch and the first screen only. Home and Settings —
+the icon-heavy ones — are one tap further in and unexercised. Getting there
+needs `adb shell input tap` on fixed coordinates, which breaks whenever the
+onboarding copy moves.
 
 If R8 misbehaves, reverting `isMinifyEnabled` is independent of every other
 change on the branch.
