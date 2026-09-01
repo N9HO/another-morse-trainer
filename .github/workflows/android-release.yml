@@ -151,7 +151,7 @@ jobs:
           serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
           packageName: app.anothermorsetrainer
           releaseFiles: android/app/build/outputs/bundle/release/app-release.aab
-          track: alpha   # closed testing (beta); change if your track id differs
+          tracks: alpha   # closed testing (beta); change if your track id differs
           status: completed
 
       - name: Dry run — upload skipped
@@ -160,7 +160,7 @@ jobs:
           echo "::notice::Dry run: AAB built, signed and verified. Play upload skipped, no versionCode consumed."
 
       - name: Save AAB as artifact (fallback / record)
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: app-release-aab
           path: android/app/build/outputs/bundle/release/app-release.aab
