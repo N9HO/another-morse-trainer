@@ -21,18 +21,44 @@ on:
 
 jobs:
   claude:
-    # Only run when someone actually mentions @claude.
+    # Two gates, both required.
+    #
+    # 1. WHO. This repository is public, so without an actor check any GitHub
+    #    account could start this job — and it holds `contents: write` plus the
+    #    API key. Worse, ios/tools/discord_triage files issues whose bodies are
+    #    composed from Discord messages and the invite is in the README, so the
+    #    path ran "anyone in the Discord -> bot-filed issue -> privileged job"
+    #    with no GitHub account needed at all. Only people who already have
+    #    write access to this repo may trigger it.
+    #
+    # 2. WHAT. The @claude mention, as before.
+    #
+    # Note the association lives on a different object per event type, hence the
+    # repetition; there is no single expression that covers all four.
     if: |
-      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
-      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude')) ||
-      (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude')) ||
-      (github.event_name == 'issues' && (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude')))
+      (github.event_name == 'issue_comment' &&
+        contains(github.event.comment.body, '@claude') &&
+        contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)) ||
+      (github.event_name == 'pull_request_review_comment' &&
+        contains(github.event.comment.body, '@claude') &&
+        contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)) ||
+      (github.event_name == 'pull_request_review' &&
+        contains(github.event.review.body, '@claude') &&
+        contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.review.author_association)) ||
+      (github.event_name == 'issues' &&
+        (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude')) &&
+        contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association))
     runs-on: ubuntu-latest
+    # An unbounded, unthrottled job that strangers could queue was also a
+    # billing risk; the other workflows in this repo all bound themselves.
+    timeout-minutes: 30
+    concurrency:
+      group: claude-${{ github.event.issue.number || github.event.pull_request.number || github.run_id }}
+      cancel-in-progress: false
     permissions:
-      contents: write
+      contents: write      # opening fix branches / PRs
       pull-requests: write
       issues: write
-      id-token: write
       actions: read
     steps:
       - name: Checkout repository

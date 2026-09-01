@@ -51,8 +51,12 @@ The triage bot has its own suite: `cd ios/tools/discord_triage && pytest`.
 ## Versions, tags, CI
 
 - **The two apps are not coupled.** Independent version numbers, independent
-  release cadences. iOS: build 24. Android: versionCode 16 / 1.12.1. Never bump
-  one "to match" the other.
+  release cadences. Never bump one "to match" the other. The current numbers
+  are not repeated here on purpose — they went stale the first release after
+  they were written. Read them from the source of truth:
+  - iOS: `CURRENT_PROJECT_VERSION` / `MARKETING_VERSION` in
+    `ios/MorseTrainer.xcodeproj/project.pbxproj`
+  - Android: `versionCode` / `versionName` in `android/app/build.gradle.kts`
 - Release tags are namespaced: **`ios-v*`** and **`android-v*`**. A bare `v*`
   tag fires nothing.
 - `ios.yml` and `android-ci.yml` are path-filtered to their own subtree. If you

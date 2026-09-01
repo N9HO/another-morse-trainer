@@ -6,7 +6,8 @@ name: Android release (Play Store upload)
 # The tag prefix matters: this is a monorepo holding both apps, and the iOS
 # announcement workflow watches `ios-v*`. A bare `v*` tag would fire both, so
 # each platform releases under its own namespace and the two cadences stay
-# independent (Android is at versionCode 16 / 1.12.1; iOS at build 24).
+# independent. (Version numbers live in android/app/build.gradle.kts and in the
+# iOS project file; they are not restated here, to keep them from drifting.)
 # Builds the SIGNED app bundle (AAB) and uploads it to the Google Play closed
 # testing (beta) track. This automates the step iOS does by hand (Xcode -> TestFlight).
 #

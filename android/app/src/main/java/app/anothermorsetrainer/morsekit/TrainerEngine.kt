@@ -240,27 +240,35 @@ class TrainerEngine(
         val activeCharacters: List<Char>,
         val stats: List<CharacterStats>,
         val confusions: Map<String, Int> = emptyMap(),
-        val exposedCharacters: Set<Char> = emptySet()
+        /**
+         * `null` means the saved snapshot predates exposure tracking, which is
+         * different from a snapshot that recorded an empty set. Swift gets this
+         * distinction free from `decodeIfPresent`; here it has to be explicit,
+         * or a brand-new learner who saves before answering anything is
+         * restored as if every active character had already been met.
+         */
+        val exposedCharacters: Set<Char>? = null
     )
 
     val snapshot: Snapshot
         get() = Snapshot(
             activeCharacters = activeCharacters,
-            stats = stats.values.toList(),
+            stats = stats.values.map { it.copy() },
             confusions = confusions.snapshot(),
             exposedCharacters = exposedCharacters
         )
 
     fun restore(snapshot: Snapshot) {
         activeCharacters = snapshot.activeCharacters
-        stats = snapshot.stats.associateBy { it.character }.toMutableMap()
+        stats = snapshot.stats.associateBy({ it.character }, { it.copy() }).toMutableMap()
         confusions = ConfusionMatrix().apply { restore(snapshot.confusions) }
-        // Snapshots predating exposure tracking: treat every active character as
-        // already met, so existing learners keep their full set of choices.
-        exposedCharacters = if (snapshot.exposedCharacters.isNotEmpty())
-            snapshot.exposedCharacters.toMutableSet()
-        else
-            snapshot.activeCharacters.toMutableSet()
+        // Snapshots predating exposure tracking (null, not empty): treat every
+        // active character as already met, so existing learners keep their full
+        // set of choices. An empty-but-present set is a real beginner state and
+        // must survive, or the "choices grow as you meet characters" onboarding
+        // is skipped the first time a fresh learner relaunches.
+        exposedCharacters = snapshot.exposedCharacters?.toMutableSet()
+            ?: snapshot.activeCharacters.toMutableSet()
     }
 
     // ---- QuizSource bridge (was TrainerEngine+Quiz.swift) ----

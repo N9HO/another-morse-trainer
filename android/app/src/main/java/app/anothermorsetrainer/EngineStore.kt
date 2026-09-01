@@ -100,7 +100,7 @@ object EngineStore {
         for ((k, v) in snap.engine.confusions) confusions.put(k, v)
         val obj = JSONObject()
             .put("active", snap.engine.activeCharacters.joinToString(""))
-            .put("exposed", snap.engine.exposedCharacters.joinToString(""))
+            .put("exposed", snap.engine.exposedCharacters.orEmpty().joinToString(""))
             .put("stats", statsArr)
             .put("conf", confusions)
             .put("stage", snap.stage.name)
@@ -131,12 +131,20 @@ object EngineStore {
         val pin = obj.optString("pin", "").takeIf { it.isNotEmpty() }?.let {
             runCatching { ProgressiveCharacters.Stage.valueOf(it) }.getOrNull()
         }
+        // `getString` throws when the key is absent, and `decode` is called
+        // inside a `runCatching { }.getOrNull()` — so reading "exposed" that way
+        // turned any pre-exposure-tracking save into a decode failure, which
+        // `characters()` cannot distinguish from "never saved" and answers by
+        // reseeding from proficiency. That silently discarded the learner's
+        // whole Koch ladder on upgrade. Absent stays absent (null) here and the
+        // engine's restore backfills it.
+        val exposed = if (obj.has("exposed")) obj.getString("exposed").toSet() else null
         return ProgressiveCharacters.Snapshot(
             engine = TrainerEngine.Snapshot(
                 activeCharacters = obj.getString("active").toList(),
                 stats = stats,
                 confusions = confusions,
-                exposedCharacters = obj.getString("exposed").toSet()
+                exposedCharacters = exposed
             ),
             stage = stage,
             pinnedStage = pin

@@ -53,15 +53,22 @@ cd android
 ## Versions and releases
 
 **The two apps have independent version numbers and release cadences and are not
-coupled.** iOS is at build 24; Android at versionCode 16 / versionName 1.12.1.
+coupled.** The live numbers are `CURRENT_PROJECT_VERSION` / `MARKETING_VERSION`
+in `ios/MorseTrainer.xcodeproj/project.pbxproj` and `versionCode` /
+`versionName` in `android/app/build.gradle.kts` — they are deliberately not
+copied here, because a copy is a copy that goes stale.
 
 Release tags are namespaced per platform, because a single repository now feeds
 both release workflows:
 
 | Tag | Fires | Effect |
 |---|---|---|
-| `ios-v*` | `.github/workflows/discord-release.yml` | Posts a changelog embed to Discord (scoped to `ios/`) |
+| `ios-v*` | `.github/workflows/ios-release.yml` | Builds and uploads the iOS build to TestFlight |
 | `android-v*` | `.github/workflows/android-release.yml` | Builds the signed AAB and uploads it to the Play closed-testing track |
+
+`.github/workflows/discord-release.yml` is not tag-triggered: it runs on
+`workflow_run` once a release workflow *succeeds*, so an announcement can never
+precede the release it announces.
 
 An unprefixed `v*` tag fires **nothing**. Before the split it would have fired
 **both** — an iOS Discord announcement for an Android release, and an attempted
