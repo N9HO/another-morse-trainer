@@ -35,7 +35,7 @@ previously had none:
     android-ci.yml    Build debug APK            unit tests + assembleDebug
                       Android lint               AGP lint, exclusions in app/lint.xml
                       Build release APK          the ONLY job that runs R8
-                      Release smoke test         emulator: installs and launches it
+                      Release smoke test         emulator: launches it, rotates it
     triage-bot.yml    Triage bot tests           40 pytest tests, on Linux
 
 `merge-gate.yml` is the single required check; it derives what a PR needs from
@@ -48,10 +48,18 @@ way anyone sees this app running, and they are what made the Compose bump
 checkable rather than hopeful. Treat that job as the Android equivalent of
 "install it and look".
 
-Known gap: a fresh install lands on onboarding, so the smoke test covers launch
-and the first screen only. Home and Settings are one tap deeper and unexercised.
-Reaching them needs `adb shell input tap` on fixed coordinates, which breaks
-whenever the onboarding copy moves.
+The smoke test also rotates the device and asserts `MainActivity` is not
+recreated, via the framework's own `wm_on_create_called` event. That assertion is
+built not to pass for the wrong reason: it first confirms the launch emits the
+tag at all, and it fails outright if the display did not actually change size. It
+was checked against a deliberate negative control — removing `configChanges` made
+it fail with exactly the expected output — so it is a check that has been seen to
+fail, not only to pass.
+
+Known gap: a fresh install lands on onboarding, so the smoke test covers launch,
+the first screen, and rotation of that screen. Home and Settings are one tap
+deeper and unexercised. Reaching them needs `adb shell input tap` on fixed
+coordinates, which breaks whenever the onboarding copy moves.
 
 ## What #8 established, because it shaped the audio work
 
@@ -102,6 +110,26 @@ reported 29 before this change; the compose-bom bump in
 [#116](https://github.com/N9HO/another-morse-trainer/pull/116) moved it and the
 number was never re-read. Read the count off a run, not off this file.
 
+## Rotation no longer restarts practice
+
+`MainActivity` declares `android:configChanges` for orientation, screen size and
+layout, density, font scale and UI mode, so Android stops recreating the activity
+for any of them — asserted by the smoke test, against a negative control. A single-Activity Compose UI needs no recreation to re-lay-out —
+Compose updates `LocalConfiguration` itself, so `isWideScreen()` and the theme
+still track the new configuration — and this fixes all ten session screens at
+once rather than one at a time. A side benefit: rotation used to blip the
+background-noise floor off and on through `onStart`/`onStop`.
+
+The nav state (`route` and the pending `SetupTarget`) is additionally on
+`rememberSaveable` with string savers, so *where you were* survives process death
+even though the session running there does not. An unrecognised tag restores as
+`null`, which falls back to Home rather than crashing on a stale bundle.
+
+**This is deliberately not the migration the audit asked for**, which was
+`rememberSaveable`/ViewModels everywhere. It buys the whole rotation fix for two
+files instead of twelve, in a codebase nobody can run locally. What it does not
+buy is process death, which is item 3 below.
+
 ## Still to do
 
 Ordered by value. Each is self-contained. #7 and #8's tooling, and the two audio
@@ -124,12 +152,20 @@ Android and **37** on iOS (`ProgressiveCharacters.kt:128` vs `.swift:110`).
 Decide which is intended, then port or remove. Do not "fix" this by making the
 ports share code.
 
-**3. Android state survival.** Zero `rememberSaveable`, zero ViewModels, zero
-`SavedStateHandle` in the app. `MainActivity.kt:135` holds the whole nav state in
-plain `remember`, so rotating mid-quiz drops you on Home and loses the session's
-stats and streak day (`Stats.record` only runs from the explicit exits). The
-Koch ladder survives because `EngineStore.save()` runs per answer — the right
-instinct applied to one of the two things worth saving.
+**3. Android session state through process death.** Rotation is handled — see
+below — but a backgrounded app that Android reclaims still loses whatever
+session was running, because every screen holds its tally in plain `remember`
+and `Stats.record` only runs from the explicit exits. Ten screens carry that
+shape: `QuizScreen`, `TypedQuizScreen`, `HeadCopyScreen`, `StoryScreen`,
+`ContestScreen`, `PileupScreen`, `RapidFireScreen`, `SendingPracticeScreen`,
+`CodeExamScreen`, `JourneyScreen`. The fix is `rememberSaveable` or a ViewModel
+per screen, plus a `Saver` for `Tally` (`QuizScreen.kt:78`), whose `ttrsMs` list
+and `charOutcomes` map are both private.
+
+Weigh it against the cost before starting: it is ~12 files touched heavily, and
+**nothing here can exercise it** — no local toolchain, no instrumented tests, and
+the emulator smoke test never gets past onboarding. CI would compile it and tell
+you nothing about whether it works.
 
 **4. Test parity.** Android's core engine — `TrainerEngine`,
 `ProgressiveCharacters`, `CharacterStats`, `PhraseQuiz`, persistence — has **no

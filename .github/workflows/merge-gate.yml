@@ -82,7 +82,7 @@ jobs:
                | grep -qE '^(ios/tools/discord_triage/|\.github/workflows/triage-bot\.yml$)'; then
             NEED="$NEED Triage-bot-tests"
           fi
-          if printf '%s' "$FILES" | grep -qE '^(android/|\.github/workflows/android-ci\.yml$)'; then
+          if printf '%s' "$FILES" | grep -qE '^(android/|\.github/workflows/android-ci\.yml$|\.github/scripts/android-smoke\.sh$)'; then
             NEED="$NEED Build-debug-APK Build-release-APK Release-smoke-test Android-lint"
           fi
 

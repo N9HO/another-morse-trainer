@@ -44,10 +44,25 @@
         android:label="Another Morse Trainer"
         android:supportsRtl="true"
         android:theme="@style/Theme.AMT">
+        <!--
+          configChanges: rotation must not restart practice. Without it Android
+          recreates the activity, every screen's `remember` state goes with it,
+          and a session mid-quiz is lost outright — the tally never reaches
+          Stats.record, which only runs from the explicit exits. A single-Activity
+          Compose UI needs no recreation to re-lay-out: Compose updates
+          LocalConfiguration itself, so isWideScreen() and the theme still track
+          the new configuration. It also stops rotation blipping the
+          background-noise floor off and on via onStart/onStop.
+
+          This does NOT survive process death — a backgrounded app that Android
+          kills still loses the session. Only the nav state below is saved for
+          that case; per-screen session state is not, and that remains open.
+        -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:launchMode="singleTask">
+            android:launchMode="singleTask"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden|density|fontScale|uiMode">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

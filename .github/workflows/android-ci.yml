@@ -13,7 +13,10 @@ name: Android CI
 #                        R8 and the resource shrinker (isMinifyEnabled /
 #                        isShrinkResources in app/build.gradle.kts).
 #   Release smoke test — boots an emulator and runs that APK, because the job
-#                        above proves only that it builds.
+#                        above proves only that it builds. It also rotates the
+#                        device and asserts MainActivity is not recreated, which
+#                        is the only check anywhere that android:configChanges is
+#                        actually doing its job.
 #
 # Path-filtered so an iOS-only change does not start a Gradle build. The two
 # Gradle jobs set `working-directory: android`, which covers every `run:` step —
@@ -38,10 +41,12 @@ on:
     paths:
       - "android/**"
       - ".github/workflows/android-ci.yml"
+      - ".github/scripts/android-smoke.sh"
   pull_request:
     paths:
       - "android/**"
       - ".github/workflows/android-ci.yml"
+      - ".github/scripts/android-smoke.sh"
   workflow_dispatch:
 
 concurrency:
@@ -254,4 +259,5 @@ jobs:
           path: |
             launch.png
             home.png
+            landscape.png
           if-no-files-found: warn
