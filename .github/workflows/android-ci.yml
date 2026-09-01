@@ -141,13 +141,8 @@ jobs:
       # deobfuscate a crash from this build, and whichever usage/resource
       # reports this AGP version emits — the step above lists what they were.
       #
-      # THIS BUILD PASSING DOES NOT PROVE THE RELEASE APP WORKS. R8 breaks things
-      # at runtime, not at build time, and there is no instrumented test here.
-      # To check by hand, sideload this APK — but note it carries the real
-      # applicationId (app.anothermorsetrainer) and a throwaway signer, so
-      # installing it over the Play build or over an earlier CI build requires
-      # uninstalling first, which erases that device's saved training progress.
-      # Use a spare device or an emulator.
+      # This job proves the shrunk build compiles and packages, nothing more.
+      # Whether it RUNS is the smoke job below, which installs this exact APK.
       - name: Upload release APK + R8 mapping
         uses: actions/upload-artifact@v6
         with:
@@ -156,3 +151,109 @@ jobs:
             android/app/build/outputs/apk/release/app-release.apk
             android/app/build/outputs/mapping/release/
           if-no-files-found: error
+
+  # The only runtime coverage this app has. R8 breaks things at runtime, not at
+  # build time — a stripped keep rule surfaces as ClassNotFoundException or
+  # Resources$NotFoundException on the device, and `Build release APK` above is
+  # green either way. There are no instrumented tests in this repo, and no
+  # Android hardware behind it, so this job is what stands in for "install it
+  # and see".
+  #
+  # It installs the exact APK the release job produced (not a rebuild) and
+  # asserts the app starts and survives. Two screenshots come back as an
+  # artifact, which is also the only way to LOOK at this app without a device.
+  smoke:
+    name: Release smoke test
+    needs: release
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Download the release APK built above
+        uses: actions/download-artifact@v8
+        with:
+          name: app-release-ci-signed
+          path: artifact
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      # The emulator needs hardware acceleration to be usable. GitHub's Linux
+      # runners expose /dev/kvm but not to the runner user by default.
+      - name: Enable KVM for the runner user
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Boot an emulator, install the release APK, launch it
+        uses: reactivecircus/android-emulator-runner@v2.38.0
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          disable-animations: true
+          script: |
+            set -uo pipefail
+            APK=$(find artifact -name 'app-release.apk' | head -1)
+            if [ -z "$APK" ]; then echo "::error::no app-release.apk in the artifact"; exit 1; fi
+            echo "installing $APK"
+            adb install -r "$APK"
+
+            adb logcat -c
+            adb shell am start -n app.anothermorsetrainer/.MainActivity
+
+            # Grabbed as early as possible on purpose: android:windowBackground
+            # from Theme.AMT is what is on screen before Compose draws its first
+            # frame, so this is where a dropped @color/brand_navy would show.
+            adb exec-out screencap -p > launch.png || true
+
+            pid=""
+            for _ in $(seq 1 30); do
+              pid=$(adb shell pidof app.anothermorsetrainer 2>/dev/null | tr -d '\r\n')
+              [ -n "$pid" ] && break
+              sleep 1
+            done
+            if [ -z "$pid" ]; then
+              echo "::error::app.anothermorsetrainer never started"
+              adb logcat -d | tail -200
+              exit 1
+            fi
+            echo "started, pid $pid"
+
+            sleep 10
+            adb exec-out screencap -p > home.png || true
+
+            if [ -z "$(adb shell pidof app.anothermorsetrainer 2>/dev/null | tr -d '\r\n')" ]; then
+              echo "::error::app died within 10s of launch"
+              adb logcat -d | tail -200
+              exit 1
+            fi
+
+            # Theme.AMT is the application theme, so a missing colour resource
+            # would have thrown here rather than rendered wrong.
+            PAT='FATAL EXCEPTION|Resources\$NotFoundException|ClassNotFoundException|NoSuchMethodError|NoClassDefFoundError'
+            if adb logcat -d | grep -qE "$PAT"; then
+              echo "::error::crash or missing symbol in logcat — most likely an R8 keep rule"
+              adb logcat -d | grep -B 5 -A 40 -E "$PAT" | head -150
+              exit 1
+            fi
+
+            echo "✅ installed, launched, and alive 10s later with no fatal exception"
+
+      # Uploaded even on failure — a screenshot of the broken state is the most
+      # useful thing to have when the assertion above trips.
+      - name: Upload launch screenshots
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: release-smoke-screenshots
+          path: |
+            launch.png
+            home.png
+          if-no-files-found: warn

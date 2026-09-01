@@ -73,7 +73,7 @@ jobs:
             NEED="$NEED MorseKit-logic-checks Build-MorseTrainer-iOS"
           fi
           if printf '%s' "$FILES" | grep -qE '^(android/|\.github/workflows/android-ci\.yml$)'; then
-            NEED="$NEED Build-debug-APK Build-release-APK"
+            NEED="$NEED Build-debug-APK Build-release-APK Release-smoke-test"
           fi
 
           if [ -z "$NEED" ]; then
@@ -89,6 +89,7 @@ jobs:
               Build-MorseTrainer-iOS)  echo "Build MorseTrainer (iOS)" ;;
               Build-debug-APK)         echo "Build debug APK" ;;
               Build-release-APK)       echo "Build release APK" ;;
+              Release-smoke-test)      echo "Release smoke test" ;;
             esac
           }
 
