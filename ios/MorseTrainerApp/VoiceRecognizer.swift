@@ -33,6 +33,9 @@ final class VoiceRecognizer: NSObject, ObservableObject {
     private var didFinish = false
     private var silenceTimer: Timer?
     private var lastTranscripts: [String] = []
+    /// Live only while the mic is up; see `beginRecording` / `teardown`.
+    private var sessionClaim: AudioSession.Claim?
+    private var sessionObservation: AudioSession.Observation?
 
     /// Prepared custom-LM configuration (typed as Any to avoid an availability
     /// annotation on a stored property). Holds `SFSpeechLanguageModel.Configuration`.
@@ -44,6 +47,29 @@ final class VoiceRecognizer: NSObject, ObservableObject {
     private let settleSeconds: TimeInterval = 0.9
 
     var isAvailable: Bool { recognizer?.isAvailable ?? false }
+
+    override init() {
+        super.init()
+        // A call, a lost route or a media reset kills the microphone mid-round.
+        // Falling back to tapping is the graceful answer; without this the round
+        // sits waiting on a recogniser that will never report, which reads to
+        // the user as the quiz having frozen.
+        sessionObservation = AudioSession.shared.observe { [weak self] event in
+            guard let self else { return }
+            switch event {
+            case .interruptionBegan, .routeLost, .mediaServicesWereReset:
+                guard self.sessionClaim != nil, !self.didFinish else { return }
+                self.deliver([])
+            case .interruptionEnded:
+                break
+            }
+        }
+    }
+
+    deinit {
+        if let sessionObservation { AudioSession.shared.removeObserver(sessionObservation) }
+        if let sessionClaim { AudioSession.shared.release(sessionClaim) }
+    }
 
     // MARK: - Permissions
 
@@ -153,19 +179,10 @@ final class VoiceRecognizer: NSObject, ObservableObject {
     /// The caller has already confirmed authorization and recognizer availability.
     private func beginRecording(with recognizer: SFSpeechRecognizer,
                                 contextualStrings: [String]) {
-        // The session must allow recording while the tone can still play.
-        // Note: no `.notifyOthersOnDeactivation` on setActive — the session is
-        // shared with the Morse tone player, and that option explicitly hands
-        // audio focus back to other apps when we deactivate, which was killing
-        // background/locked-screen playback in hands-free Listen mode.
-        let session = AVAudioSession.sharedInstance()
-        do {
-            try session.setCategory(.playAndRecord, mode: .measurement,
-                                    options: [.duckOthers, .defaultToSpeaker, .allowBluetooth])
-            try session.setActive(true)
-        } catch {
-            deliver([]); return
-        }
+        // The session must allow recording while the tone can still play. The
+        // claim is released in `teardown()`, which drops the session back to
+        // whatever else still holds it rather than to a hardcoded `.playback`.
+        sessionClaim = AudioSession.shared.claim(.recording)
 
         let request = SFSpeechAudioBufferRecognitionRequest()
         request.shouldReportPartialResults = true
@@ -262,15 +279,13 @@ final class VoiceRecognizer: NSObject, ObservableObject {
         audioEngine.inputNode.removeTap(onBus: 0)
         task?.cancel()
         task = nil
-        // Hand the shared session back to plain playback. The mic needs the
-        // record-capable `.playAndRecord` category, but leaving the session
-        // there afterwards stops the Morse tone from continuing in the
+        // Give the record-capable category back. Leaving the session on
+        // `.playAndRecord` stops the Morse tone from continuing in the
         // background / with the screen locked during hands-free Listen mode.
-        #if os(iOS)
-        let session = AVAudioSession.sharedInstance()
-        try? session.setCategory(.playback, mode: .default, options: [.duckOthers])
-        try? session.setActive(true)
-        #endif
+        if let claim = sessionClaim {
+            sessionClaim = nil
+            AudioSession.shared.release(claim)
+        }
     }
 
     private static func collect(_ result: SFSpeechRecognitionResult) -> [String] {

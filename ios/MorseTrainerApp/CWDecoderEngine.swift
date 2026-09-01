@@ -23,6 +23,28 @@ final class CWDecoderEngine: ObservableObject {
 
     private let audioEngine = AVAudioEngine()
     private let core = CoreBox()
+    /// Live only while the tap is installed; see `beginListening` / `stop`.
+    private var sessionClaim: AudioSession.Claim?
+    private var sessionObservation: AudioSession.Observation?
+
+    init() {
+        // Losing the microphone mid-decode leaves the transcript frozen with the
+        // UI still saying "listening". Stop for real so the button reflects it.
+        sessionObservation = AudioSession.shared.observe { [weak self] event in
+            guard let self, self.isListening else { return }
+            switch event {
+            case .interruptionBegan, .routeLost, .mediaServicesWereReset:
+                self.stop()
+            case .interruptionEnded:
+                break
+            }
+        }
+    }
+
+    deinit {
+        if let sessionObservation { AudioSession.shared.removeObserver(sessionObservation) }
+        if let sessionClaim { AudioSession.shared.release(sessionClaim) }
+    }
 
     /// Keep the rolling transcript bounded so a long listen can't grow forever.
     private static let transcriptLimit = 800
@@ -57,12 +79,16 @@ final class CWDecoderEngine: ObservableObject {
         isListening = false
         tonePresent = false
         inputLevel = 0
-        // Hand the shared session back to plain playback, mirroring
-        // VoiceRecognizer: staying on .playAndRecord would break background
-        // tone playback elsewhere in the app.
-        let session = AVAudioSession.sharedInstance()
-        try? session.setCategory(.playback, mode: .default, options: [.duckOthers])
-        try? session.setActive(true)
+        releaseSession()
+    }
+
+    private func releaseSession() {
+        // Staying on `.playAndRecord` would break background tone playback
+        // elsewhere in the app. Releasing (rather than forcing `.playback`) lets
+        // the voice recogniser keep the mic if it is the one still holding it.
+        guard let claim = sessionClaim else { return }
+        sessionClaim = nil
+        AudioSession.shared.release(claim)
     }
 
     func clear() {
@@ -73,21 +99,22 @@ final class CWDecoderEngine: ObservableObject {
 
     private func beginListening() {
         micDenied = false
-        let session = AVAudioSession.sharedInstance()
-        do {
-            try session.setCategory(.playAndRecord, mode: .measurement,
-                                    options: [.duckOthers, .defaultToSpeaker, .allowBluetooth])
-            try session.setActive(true)
-        } catch { return }
+        sessionClaim = AudioSession.shared.claim(.recording)
 
         let input = audioEngine.inputNode
         let format = input.outputFormat(forBus: 0)
         // A dead input route (permission race, simulator, no mic) reports a
         // 0 Hz format; installing a tap on it crashes. Same guard as
-        // VoiceRecognizer. The core itself needs at least 6 kHz.
-        guard format.sampleRate >= 6000, format.channelCount > 0 else { return }
+        // VoiceRecognizer. The core itself needs at least 6 kHz. Every bail-out
+        // from here on has to hand the record category back, or the app is left
+        // on `.playAndRecord` with nothing listening.
+        guard format.sampleRate >= 6000, format.channelCount > 0 else {
+            releaseSession(); return
+        }
 
-        guard core.createDecoder(inputRate: UInt32(format.sampleRate)) else { return }
+        guard core.createDecoder(inputRate: UInt32(format.sampleRate)) else {
+            releaseSession(); return
+        }
 
         let box = core
         input.installTap(onBus: 0, bufferSize: 2048, format: format) { [weak self] buffer, _ in
@@ -99,6 +126,7 @@ final class CWDecoderEngine: ObservableObject {
         do { try audioEngine.start() } catch {
             input.removeTap(onBus: 0)
             core.destroyDecoder()
+            releaseSession()
             return
         }
         isListening = true

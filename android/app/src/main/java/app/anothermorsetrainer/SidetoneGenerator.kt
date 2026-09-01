@@ -32,6 +32,7 @@ class SidetoneGenerator(frequencyHz: Double = 600.0) {
     fun start() {
         if (running) return
         running = true
+        AudioFocus.acquire(this)
         val minBytes = AudioTrack.getMinBufferSize(
             sampleRate, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_FLOAT
         ).coerceAtLeast(2048)
@@ -72,6 +73,7 @@ class SidetoneGenerator(frequencyHz: Double = 600.0) {
             it.release()
         }
         track = null
+        AudioFocus.release(this)
     }
 
     private fun renderLoop(t: AudioTrack) {

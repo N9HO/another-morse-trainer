@@ -346,6 +346,56 @@ final class AppModel: ObservableObject {
                                        minute: settings.dailyReminderMinute,
                                        streak: streak.display(on: Date()))
         }
+        observeAudioSession()
+    }
+
+    // MARK: - Audio session events
+
+    /// The engines recover themselves (see MorsePlayer); what belongs here is
+    /// what should happen to the *lesson* when the audio stops.
+    ///
+    /// The listen loop is the case that matters. It is a chain of timers, none
+    /// of which know or care whether a sound was audible, so a phone call used
+    /// to leave it advancing through items in silence — you came back to a
+    /// session that had "heard" thirty things you never got. Pausing is both the
+    /// honest state and the one the notification controls already understand.
+    private func observeAudioSession() {
+        AudioSession.shared.observe { [weak self] event in
+            guard let self else { return }
+            switch event {
+            case .interruptionBegan, .routeLost:
+                self.handleAudioLoss()
+            case .mediaServicesWereReset:
+                self.handleAudioLoss()
+                // The player rebuilds itself on the next `activate()`; call it
+                // now so the engine and the noise floor are back before the
+                // user taps anything.
+                self.player.activate()
+                self.applyBackgroundNoise()
+            case .interruptionEnded(let shouldResume):
+                guard shouldResume else { return }
+                // Restart the engine and the noise floor, but deliberately do
+                // *not* auto-resume the listen loop: the user put the phone
+                // down to take a call, and starting Morse in their ear the
+                // moment they hang up is the wrong instinct. The paused loop is
+                // one tap from where they left it.
+                self.player.activate()
+                self.applyBackgroundNoise()
+            }
+        }
+    }
+
+    private func handleAudioLoss() {
+        guard isListening else {
+            // A quiz is safe to leave alone: it blocks on an answer, so an
+            // inaudible item stalls on screen rather than running away. Killing
+            // the tone is enough — and deliberately *not* the pending advance,
+            // since in Rapid Fire that timer is the only way forward and
+            // cancelling it would wedge the session.
+            player.stop()
+            return
+        }
+        pauseListening()
     }
 
     private var source: QuizSource {

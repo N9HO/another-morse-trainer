@@ -14,8 +14,9 @@ import java.util.Locale
  * Ported from the iOS MorseTrainerApp/SpeechPlayer.swift: wraps the platform
  * speech synthesiser (Android [TextToSpeech]) and reports completion on the
  * main thread so the listen loop can chain play-Morse → pause → speak → next.
- * Like the iOS version it does not touch audio focus — [MorsePlayer] owns the
- * tone output.
+ * Like the iOS version it takes no [AudioFocus] holding of its own: its only
+ * owner is [ListenService], which holds focus for the whole session — speech,
+ * tones and the gaps between them alike.
  */
 class SpeechPlayer(context: Context) {
 

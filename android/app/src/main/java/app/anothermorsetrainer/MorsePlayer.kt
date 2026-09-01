@@ -148,10 +148,24 @@ class MorsePlayer {
         releaseCurrent()
     }
 
-    /** Free the audio resources. Call from the owner's onDispose/onDestroy. */
-    fun release() = stop()
+    /**
+     * Free the audio resources. Call from the owner's onDispose/onDestroy.
+     *
+     * This — not [stop] — is where audio focus is given back. [stop] runs between
+     * every item in a drill, and dropping focus in those gaps would let the
+     * user's music swell back for a second at a time between characters.
+     */
+    fun release() {
+        stop()
+        AudioFocus.release(this)
+    }
 
     private fun playFloats(floats: FloatArray) {
+        // Taken on first sound rather than at construction: a screen that builds
+        // a player and never plays (Reference, until something is tapped) has no
+        // business pausing anyone's music.
+        AudioFocus.acquire(this)
+
         // A new sound can arrive while the previous one is still playing —
         // answers are accepted mid-audio, so the auto-advance often lands
         // before the old word finishes. Stopping that track outright cuts it

@@ -34,11 +34,29 @@ public final class MIDIInput {
         public let timestampMs: Int64
     }
 
-    public var onEvent: (@Sendable (Event) -> Void)?
+    /// Fired from a CoreMIDI thread for every key edge.
+    ///
+    /// Both callbacks go through `stateLock`. They are set on the main actor
+    /// (a view appearing, a keyer being wired up) and read on a CoreMIDI
+    /// thread, which is a data race on a plain `var` — a torn read of a closure
+    /// is a crash, not a glitch. Nothing diagnoses it: the reader is a block
+    /// handed to a C API, so even `complete` concurrency checking sees no
+    /// construct here to check. It has to be held by hand.
+    public var onEvent: (@Sendable (Event) -> Void)? {
+        get { stateLock.lock(); defer { stateLock.unlock() }; return storedOnEvent }
+        set { stateLock.lock(); storedOnEvent = newValue; stateLock.unlock() }
+    }
+
     /// Fired (from a CoreMIDI thread) whenever the set of connected sources
     /// changes — hot-plug, unplug, or the initial scan. Carries the current
     /// device names so the UI can show what hardware key is attached.
-    public var onSourcesChanged: (@Sendable ([String]) -> Void)?
+    public var onSourcesChanged: (@Sendable ([String]) -> Void)? {
+        get { stateLock.lock(); defer { stateLock.unlock() }; return storedOnSourcesChanged }
+        set { stateLock.lock(); storedOnSourcesChanged = newValue; stateLock.unlock() }
+    }
+
+    private var storedOnEvent: (@Sendable (Event) -> Void)?
+    private var storedOnSourcesChanged: (@Sendable ([String]) -> Void)?
 
     private var client: MIDIClientRef = 0
     private var port: MIDIPortRef = 0
@@ -169,9 +187,13 @@ public final class MIDIInput {
             return
         }
 
+        // Read the handler once, not once per message: a packet carrying a
+        // key-down and its key-up must deliver both to the same closure even if
+        // the UI swaps handlers between them.
+        guard let handler = onEvent else { return }
         let timestampMs = Self.machTimeToWallClockMs(packet.timeStamp)
         for message in messages {
-            onEvent?(Event(
+            handler(Event(
                 key: message.paddle,
                 isDown: message.isDown,
                 machTimestamp: packet.timeStamp,
