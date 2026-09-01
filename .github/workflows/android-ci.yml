@@ -2,11 +2,18 @@ name: Android CI
 
 # Compiles the Android app (which lives under android/) remotely so changes made
 # from the Claude phone app can be verified without a laptop (parity with ios.yml).
-# Builds the debug APK on every push/PR and uploads it as a downloadable artifact.
 #
-# Path-filtered so an iOS-only change does not start a Gradle build. The build job
-# sets `working-directory: android`, which covers every `run:` step — but NOT the
-# `uses:` steps, so the upload-artifact path below is spelled from the repo root.
+# Two jobs, run in parallel:
+#
+#   Build debug APK    — unit tests + assembleDebug. Debug builds are NOT
+#                        minified, so this job says nothing about R8.
+#   Build release APK  — assembleRelease, which is the only thing here that runs
+#                        R8 and the resource shrinker (isMinifyEnabled /
+#                        isShrinkResources in app/build.gradle.kts).
+#
+# Path-filtered so an iOS-only change does not start a Gradle build. Both jobs
+# set `working-directory: android`, which covers every `run:` step — but NOT the
+# `uses:` steps, so the upload-artifact paths below are spelled from the repo root.
 
 on:
   push:
@@ -24,6 +31,9 @@ on:
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
   build:
@@ -55,4 +65,83 @@ jobs:
         with:
           name: app-debug
           path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+
+  release:
+    name: Build release APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v5
+
+      # Without a signing config, assembleRelease emits app-release-UNSIGNED.apk,
+      # which no device will install — so the R8'd build could be compiled but
+      # never actually run. app/build.gradle.kts already picks up a
+      # keystore.properties if one exists (it is gitignored), so writing a
+      # throwaway one here makes the artifact installable without involving the
+      # real upload key. That key lives only in the ANDROID_KEYSTORE_* secrets
+      # used by android-release.yml, and nothing here touches it.
+      #
+      # The key is regenerated every run, so consecutive CI APKs cannot upgrade
+      # over each other — see the install caveats on the artifact step below.
+      - name: Generate a throwaway signing key
+        run: |
+          set -euo pipefail
+          keytool -genkeypair \
+            -keystore "$RUNNER_TEMP/ci-throwaway.jks" \
+            -storepass ci-throwaway -keypass ci-throwaway \
+            -alias ci -keyalg RSA -keysize 2048 -validity 365 \
+            -dname "CN=Android CI throwaway, O=another-morse-trainer, C=US"
+          cat > keystore.properties <<EOF
+          storeFile=$RUNNER_TEMP/ci-throwaway.jks
+          storePassword=ci-throwaway
+          keyAlias=ci
+          keyPassword=ci-throwaway
+          EOF
+
+      # The one step in CI that exercises R8 and the resource shrinker. The
+      # shipped artifact is an AAB (android-release.yml runs bundleRelease), but
+      # both tasks read the same minify/shrink config, so a keep rule missing
+      # here is a keep rule missing there.
+      - name: Assemble release APK (runs R8 + resource shrinking)
+        run: ./gradlew :app:assembleRelease --stacktrace
+
+      - name: Report release APK size and R8 outputs
+        run: |
+          set -euo pipefail
+          APK=app/build/outputs/apk/release/app-release.apk
+          ls -l "$APK" | awk '{print "release APK: " $5 " bytes"}'
+          echo "R8 outputs (all of these are in the uploaded artifact):"
+          ls -1s app/build/outputs/mapping/release/ | sed 's/^/  /'
+
+      # Ships the APK together with everything R8 wrote: mapping.txt to
+      # deobfuscate a crash from this build, and whichever usage/resource
+      # reports this AGP version emits — the step above lists what they were.
+      #
+      # THIS BUILD PASSING DOES NOT PROVE THE RELEASE APP WORKS. R8 breaks things
+      # at runtime, not at build time, and there is no instrumented test here.
+      # To check by hand, sideload this APK — but note it carries the real
+      # applicationId (app.anothermorsetrainer) and a throwaway signer, so
+      # installing it over the Play build or over an earlier CI build requires
+      # uninstalling first, which erases that device's saved training progress.
+      # Use a spare device or an emulator.
+      - name: Upload release APK + R8 mapping
+        uses: actions/upload-artifact@v6
+        with:
+          name: app-release-ci-signed
+          path: |
+            android/app/build/outputs/apk/release/app-release.apk
+            android/app/build/outputs/mapping/release/
           if-no-files-found: error

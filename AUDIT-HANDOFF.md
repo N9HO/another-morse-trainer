@@ -75,7 +75,10 @@ for and are not used.
 **Android — R8.** Release builds had `isMinifyEnabled = false` while bundling
 `material-icons-extended` (thousands of generated icons; the app uses ~30).
 Now minify + `shrinkResources` with a near-empty `proguard-rules.pro` that keeps
-the vendored `morsekit.cw` package un-renamed.
+the vendored `morsekit.cw` package un-renamed. `android-ci.yml` gained a
+`Build release APK` job so this path is exercised on every Android PR instead of
+first running at release time — see the verification section below for what that
+job does and does not prove.
 
 **Docs.** The version numbers in `CLAUDE.md`, `README.md`, and
 `android-release.yml` all said iOS build 24 / Android 16 / 1.12.1; actual was 25
@@ -95,24 +98,33 @@ deliberately in `ced64d1`.
 | Privacy manifest actually bundles | Found at `MorseTrainer.app/PrivacyInfo.xcprivacy` in the build output, and `plutil`-valid there |
 | `claude.yml`, `android-release.yml` | YAML parses; job keys asserted |
 | All Kotlin changes | CI `Build debug APK` — compiles the module and runs `:app:testDebugUnitTest` (55 tests). **Pass** |
-| **R8 / `isMinifyEnabled = true`** | **STILL NOT EXERCISED.** Debug builds are not minified, so no CI job covers this |
+| **R8 / `isMinifyEnabled = true`** | CI `Build release APK` — the new `android-ci.yml` job, the only one that runs R8 and `shrinkResources`. Proves the shrunk build **compiles and packages**; see below for what it still cannot prove |
 
 `swift build` compiles only the SwiftPM package. **It does not compile
 `ios/MorseTrainerApp/`** — an agent that edits the app target, runs the fast
 loop, sees green, and reports success has verified nothing. Use the `xcodebuild`
 line in `CLAUDE.md` for anything under `MorseTrainerApp/`.
 
-CI covers the Kotlin compile and the unit tests. It does **not** cover R8:
-`android-ci.yml` builds `assembleDebug`, and debug builds are not minified. So
-before merging, on a machine with the Android toolchain:
+CI now covers R8, but only as far as a build can. `android-ci.yml` gained a
+second job, `Build release APK`, that runs `assembleRelease` — the one task in
+CI that invokes R8 and the resource shrinker (`assembleDebug` does not, which is
+why this was uncovered before). It signs with a keystore generated on the runner
+so the artifact is installable, and uploads the APK together with everything R8
+wrote to `mapping/release/` (the job logs that directory, so the run itself says
+which reports this AGP version produced). `merge-gate.yml` requires the new job
+for any PR that touches `android/`.
 
-```bash
-cd android && ./gradlew :app:assembleRelease
-```
+**R8 breaks things at runtime, not at build time.** A green job means no keep
+rule is missing badly enough to fail the build; it does not mean the shrunk app
+works. There is no instrumented test here, so the icon-heavy screens still need
+one hand check: download the `app-release-ci-signed` artifact from the run and
+sideload it. It carries the real `applicationId` and a throwaway signer, so it
+cannot install over the Play build or over an earlier CI build — uninstalling
+first **erases that device's saved training progress**. Use a spare device or an
+emulator.
 
-Then install that APK and check the icon-heavy screens, since `shrinkResources`
-is the part most likely to remove something wanted. If R8 misbehaves, reverting
-`isMinifyEnabled` is independent of every other change on the branch.
+If R8 misbehaves, reverting `isMinifyEnabled` is independent of every other
+change on the branch.
 
 ## Not done — the follow-up list
 

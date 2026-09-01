@@ -83,6 +83,12 @@ Play upload for an iOS one.
 platform's build. This matters: the iOS jobs run on `macos-15`, billed at 10x a
 Linux runner.
 
+`android-ci.yml` runs two jobs. `Build debug APK` runs the unit tests and
+`assembleDebug`; `Build release APK` runs `assembleRelease`, which is the only
+place in CI where R8 and the resource shrinker run at all — debug builds are not
+minified. The second job signs with a key generated on the runner so its APK can
+actually be installed, and uploads the R8 mapping beside it.
+
 A consequence worth knowing: **a skipped path-filtered job reports no status at
 all.** If either build is ever made a *required* status check on `main`,
 single-platform PRs will be blocked from merging forever. Use an always-runs gate
