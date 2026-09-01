@@ -57,8 +57,22 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - name: Select Xcode
-        run: sudo xcode-select -switch /Applications/Xcode.app
+      # NOT /Applications/Xcode.app: on macos-15 that symlinks to Xcode 16.4,
+      # whose iOS 18.5 SDK App Store Connect now refuses outright —
+      # "All iOS and iPadOS apps must be built with the iOS 26 SDK or later".
+      # Picks the newest Xcode 26.x present rather than pinning an exact
+      # version, so a runner-image update doesn't break releases.
+      - name: Select Xcode 26 (App Store Connect requires the iOS 26 SDK)
+        run: |
+          set -euo pipefail
+          XC=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1 || true)
+          if [ -z "$XC" ]; then
+            echo "::error::No Xcode 26.x on this runner. App Store Connect rejects anything built with an older SDK, so failing before the build rather than after the upload."
+            ls -d /Applications/Xcode*.app || true
+            exit 1
+          fi
+          sudo xcode-select -switch "$XC"
+          xcodebuild -version
 
       - name: Install cryptography (asc-api.py's only dependency)
         run: |

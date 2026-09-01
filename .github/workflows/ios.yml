@@ -52,8 +52,19 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - name: Select Xcode
-        run: sudo xcode-select -switch /Applications/Xcode.app
+      # Match ios-release.yml: releases must use the iOS 26 SDK (App Store
+      # Connect rejects older ones), so CI has to compile against the same SDK
+      # or it can pass while a release build fails.
+      - name: Select Xcode 26
+        run: |
+          set -euo pipefail
+          XC=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1 || true)
+          if [ -z "$XC" ]; then
+            echo "::error::No Xcode 26.x on this runner."
+            ls -d /Applications/Xcode*.app || true
+            exit 1
+          fi
+          sudo xcode-select -switch "$XC"
 
       - name: Show build environment
         run: |
