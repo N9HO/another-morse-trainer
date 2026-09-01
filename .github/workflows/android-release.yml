@@ -28,12 +28,23 @@ name: Android release (Play Store upload)
 #
 # NOTE: the app must already exist in Play Console and have had ONE manual upload
 # on the target track before the API will accept automated uploads.
+#
+# Manual runs (Actions tab or API) take one input:
+#   dry_run — "true" builds and signs the AAB, reports which secrets resolved and
+#             checks the signer fingerprint, then STOPS before the Play upload.
+#             Use this to prove the pipeline in the monorepo without burning a
+#             versionCode: Play permanently rejects a reused one.
 
 on:
   push:
     tags:
       - "android-v*"
   workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Set to "true" to build and sign but skip the Play upload'
+        required: false
+        default: 'false'
 
 permissions:
   contents: read
@@ -50,6 +61,30 @@ jobs:
         working-directory: android
     steps:
       - uses: actions/checkout@v4
+
+      # First run in the monorepo: prove the secrets survived the move before
+      # trusting a real release with them. Prints presence only — never values.
+      - name: Report which secrets resolved
+        env:
+          STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          echo "dry_run = '${{ github.event.inputs.dry_run }}'"
+          report() {
+            if [ -n "${2:-}" ]; then
+              echo "  ✅ $1  (set)"
+            else
+              echo "  ❌ $1  (EMPTY — this release would fall back to an artifact upload)"
+            fi
+          }
+          echo "Signing + Play secrets:"
+          report ANDROID_KEYSTORE_BASE64   "$KEYSTORE_B64"
+          report ANDROID_KEYSTORE_PASSWORD "$STORE_PASSWORD"
+          report ANDROID_KEY_ALIAS         "$KEY_ALIAS"
+          report ANDROID_KEY_PASSWORD      "$KEY_PASSWORD"
+          report PLAY_SERVICE_ACCOUNT_JSON "$PLAY_JSON"
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -92,8 +127,27 @@ jobs:
       - name: Build signed AAB
         run: ./gradlew :app:bundleRelease --stacktrace
 
-      - name: Upload to Google Play (internal track)
-        if: env.PLAY_JSON != '' && env.KEYSTORE_B64 != ''
+      # Proves the AAB was signed by the real upload key, not a debug key —
+      # Play rejects a wrong signer, and the dry run is where we want to find out.
+      - name: Verify the AAB signer fingerprint
+        if: env.KEYSTORE_B64 != ''
+        run: |
+          set -euo pipefail
+          AAB=app/build/outputs/bundle/release/app-release.aab
+          EXPECTED="57:97:26:3B:2E:3D:3A:AC:84:51:68:0E:97:25:F3:61:86:63:CF:FA:20:31:30:E8:95:CE:F6:B7:85:5F:EB:BC"
+          ACTUAL=$(keytool -printcert -jarfile "$AAB" \
+                   | grep -m1 'SHA256:' | sed 's/.*SHA256: *//' | tr -d ' \r')
+          echo "expected: $EXPECTED"
+          echo "actual:   $ACTUAL"
+          if [ "$ACTUAL" = "$EXPECTED" ]; then
+            echo "✅ signed by the upload key"
+          else
+            echo "::error::AAB signer does not match the registered upload key. Play would reject this."
+            exit 1
+          fi
+
+      - name: Upload to Google Play (closed testing / alpha track)
+        if: env.PLAY_JSON != '' && env.KEYSTORE_B64 != '' && github.event.inputs.dry_run != 'true'
         uses: r0adkll/upload-google-play@v1
         with:
           serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
@@ -101,6 +155,11 @@ jobs:
           releaseFiles: android/app/build/outputs/bundle/release/app-release.aab
           track: alpha   # closed testing (beta); change if your track id differs
           status: completed
+
+      - name: Dry run — upload skipped
+        if: github.event.inputs.dry_run == 'true'
+        run: |
+          echo "::notice::Dry run: AAB built, signed and verified. Play upload skipped, no versionCode consumed."
 
       - name: Save AAB as artifact (fallback / record)
         uses: actions/upload-artifact@v4
