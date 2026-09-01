@@ -94,23 +94,25 @@ deliberately in `ced64d1`.
 | iOS app target (incl. `MorsePlayer.swift`) | `xcodebuild` simulator build — **BUILD SUCCEEDED** |
 | Privacy manifest actually bundles | Found at `MorseTrainer.app/PrivacyInfo.xcprivacy` in the build output, and `plutil`-valid there |
 | `claude.yml`, `android-release.yml` | YAML parses; job keys asserted |
-| **All Kotlin changes** | **NOT COMPILED.** No JDK and no Android SDK on the machine this was done on |
-| **R8 / `isMinifyEnabled = true`** | **NOT BUILT.** Highest-risk change here |
+| All Kotlin changes | CI `Build debug APK` — compiles the module and runs `:app:testDebugUnitTest` (55 tests). **Pass** |
+| **R8 / `isMinifyEnabled = true`** | **STILL NOT EXERCISED.** Debug builds are not minified, so no CI job covers this |
 
 `swift build` compiles only the SwiftPM package. **It does not compile
 `ios/MorseTrainerApp/`** — an agent that edits the app target, runs the fast
 loop, sees green, and reports success has verified nothing. Use the `xcodebuild`
 line in `CLAUDE.md` for anything under `MorseTrainerApp/`.
 
-Before merging, someone with a JDK + Android SDK must run:
+CI covers the Kotlin compile and the unit tests. It does **not** cover R8:
+`android-ci.yml` builds `assembleDebug`, and debug builds are not minified. So
+before merging, on a machine with the Android toolchain:
 
 ```bash
-cd android && ./gradlew :app:testDebugUnitTest && ./gradlew :app:assembleRelease
+cd android && ./gradlew :app:assembleRelease
 ```
 
-`assembleDebug` is not sufficient — debug builds are not minified, so it cannot
-exercise R8. If R8 misbehaves, reverting `isMinifyEnabled` is independent of
-every other change on the branch.
+Then install that APK and check the icon-heavy screens, since `shrinkResources`
+is the part most likely to remove something wanted. If R8 misbehaves, reverting
+`isMinifyEnabled` is independent of every other change on the branch.
 
 ## Not done — the follow-up list
 
