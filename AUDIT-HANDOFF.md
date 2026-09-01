@@ -35,7 +35,7 @@ previously had none:
     android-ci.yml    Build debug APK            unit tests + assembleDebug
                       Android lint               AGP lint, exclusions in app/lint.xml
                       Build release APK          the ONLY job that runs R8
-                      Release smoke test         emulator: installs and launches it
+                      Release smoke test         emulator: launches it, rotates it
     triage-bot.yml    Triage bot tests           40 pytest tests, on Linux
 
 `merge-gate.yml` is the single required check; it derives what a PR needs from
@@ -48,10 +48,18 @@ way anyone sees this app running, and they are what made the Compose bump
 checkable rather than hopeful. Treat that job as the Android equivalent of
 "install it and look".
 
-Known gap: a fresh install lands on onboarding, so the smoke test covers launch
-and the first screen only. Home and Settings are one tap deeper and unexercised.
-Reaching them needs `adb shell input tap` on fixed coordinates, which breaks
-whenever the onboarding copy moves.
+The smoke test also rotates the device and asserts `MainActivity` is not
+recreated, via the framework's own `wm_on_create_called` event. That assertion is
+built not to pass for the wrong reason: it first confirms the launch emits the
+tag at all, and it fails outright if the display did not actually change size. It
+was checked against a deliberate negative control — removing `configChanges` made
+it fail with exactly the expected output — so it is a check that has been seen to
+fail, not only to pass.
+
+Known gap: a fresh install lands on onboarding, so the smoke test covers launch,
+the first screen, and rotation of that screen. Home and Settings are one tap
+deeper and unexercised. Reaching them needs `adb shell input tap` on fixed
+coordinates, which breaks whenever the onboarding copy moves.
 
 ## What #8 established, because it shaped the audio work
 
@@ -106,7 +114,7 @@ number was never re-read. Read the count off a run, not off this file.
 
 `MainActivity` declares `android:configChanges` for orientation, screen size and
 layout, density, font scale and UI mode, so Android stops recreating the activity
-for any of them. A single-Activity Compose UI needs no recreation to re-lay-out —
+for any of them — asserted by the smoke test, against a negative control. A single-Activity Compose UI needs no recreation to re-lay-out —
 Compose updates `LocalConfiguration` itself, so `isWideScreen()` and the theme
 still track the new configuration — and this fixes all ten session screens at
 once rather than one at a time. A side benefit: rotation used to blip the
