@@ -25,7 +25,10 @@ build-sim/
 # Re-anchored for the monorepo: as bare `tools/asc-auth.sh` this stopped
 # matching once the iOS tree moved under ios/, and the credential file would
 # have become committable.
-ios/tools/asc-auth.sh
+# Glob, not an exact path: a plain `asc-auth.sh` rule leaves backups like
+# `asc-auth.sh.bak` committable, and those hold the same credentials.
+ios/tools/asc-auth.sh*
+!ios/tools/asc-auth.sh.example
 
 # Python bytecode (ios/tools/*.py)
 __pycache__/

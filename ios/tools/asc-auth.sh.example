@@ -5,6 +5,13 @@
 # from a sibling clone) before concluding the credentials don't exist.
 # Bootstrapping a brand-new machine only: Issuer ID + Key ID live at
 # App Store Connect → Users and Access → Integrations.
+#
+# The key MUST be a Team Key with the ADMIN role. App Manager is not enough:
+# xcodebuild cloud signing then fails with "Cloud signing permission error"
+# ("You haven't been given access to cloud-managed distribution certificates"),
+# and the permission cannot be granted to an existing key — there is no UI for
+# it, so the only fix is to generate a new Admin key. Individual Keys (the other
+# tab) authenticate differently and do not work with xcodebuild at all.
 export ASC_KEY_ID="XXXXXXXXXX"
 export ASC_ISSUER_ID="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
 export ASC_KEY_PATH="$HOME/.appstoreconnect/private_keys/AuthKey_XXXXXXXXXX.p8"
