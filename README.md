@@ -91,11 +91,15 @@ merge gate below derives what it requires from the full PR diff. The trade is
 that a branch pushed with no PR open gets no build; `workflow_dispatch` covers
 that.
 
-`android-ci.yml` runs two jobs. `Build debug APK` runs the unit tests and
-`assembleDebug`; `Build release APK` runs `assembleRelease`, which is the only
-place in CI where R8 and the resource shrinker run at all — debug builds are not
-minified. The second job signs with a key generated on the runner so its APK can
-actually be installed, and uploads the R8 mapping beside it.
+`android-ci.yml` runs three jobs. `Build debug APK` runs the unit tests and
+`assembleDebug`. `Build release APK` runs `assembleRelease`, the only place in
+CI where R8 and the resource shrinker run at all — debug builds are not
+minified; it signs with a key generated on the runner so its APK can actually be
+installed, and uploads the R8 mapping beside it. `Release smoke test` boots an
+emulator, installs that exact APK, launches it, and fails on a crash or a
+missing symbol — R8 breaks things at runtime, not at build time, so the build
+job is green either way. It uploads two screenshots, which with no Android
+hardware behind this repo is also the only way to see the app running.
 
 A consequence worth knowing: **a skipped path-filtered job reports no status at
 all.** If either build is ever made a *required* status check on `main`,

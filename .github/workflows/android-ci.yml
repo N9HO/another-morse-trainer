@@ -3,17 +3,20 @@ name: Android CI
 # Compiles the Android app (which lives under android/) remotely so changes made
 # from the Claude phone app can be verified without a laptop (parity with ios.yml).
 #
-# Two jobs, run in parallel:
+# Three jobs. The first two run in parallel; the third waits on the second.
 #
 #   Build debug APK    — unit tests + assembleDebug. Debug builds are NOT
 #                        minified, so this job says nothing about R8.
 #   Build release APK  — assembleRelease, which is the only thing here that runs
 #                        R8 and the resource shrinker (isMinifyEnabled /
 #                        isShrinkResources in app/build.gradle.kts).
+#   Release smoke test — boots an emulator and runs that APK, because the job
+#                        above proves only that it builds.
 #
-# Path-filtered so an iOS-only change does not start a Gradle build. Both jobs
-# set `working-directory: android`, which covers every `run:` step — but NOT the
-# `uses:` steps, so the upload-artifact paths below are spelled from the repo root.
+# Path-filtered so an iOS-only change does not start a Gradle build. The two
+# Gradle jobs set `working-directory: android`, which covers every `run:` step —
+# but NOT the `uses:` steps, so the upload-artifact paths below are spelled from
+# the repo root. The smoke job stays at the repo root throughout.
 
 # Triggers: pull requests, plus pushes to main. NOT pushes to every branch —
 # that built each PR commit twice, once per event. `pull_request` is the trigger
@@ -198,53 +201,7 @@ jobs:
           target: google_apis
           arch: x86_64
           disable-animations: true
-          script: |
-            set -uo pipefail
-            APK=$(find artifact -name 'app-release.apk' | head -1)
-            if [ -z "$APK" ]; then echo "::error::no app-release.apk in the artifact"; exit 1; fi
-            echo "installing $APK"
-            adb install -r "$APK"
-
-            adb logcat -c
-            adb shell am start -n app.anothermorsetrainer/.MainActivity
-
-            # Grabbed as early as possible on purpose: android:windowBackground
-            # from Theme.AMT is what is on screen before Compose draws its first
-            # frame, so this is where a dropped @color/brand_navy would show.
-            adb exec-out screencap -p > launch.png || true
-
-            pid=""
-            for _ in $(seq 1 30); do
-              pid=$(adb shell pidof app.anothermorsetrainer 2>/dev/null | tr -d '\r\n')
-              [ -n "$pid" ] && break
-              sleep 1
-            done
-            if [ -z "$pid" ]; then
-              echo "::error::app.anothermorsetrainer never started"
-              adb logcat -d | tail -200
-              exit 1
-            fi
-            echo "started, pid $pid"
-
-            sleep 10
-            adb exec-out screencap -p > home.png || true
-
-            if [ -z "$(adb shell pidof app.anothermorsetrainer 2>/dev/null | tr -d '\r\n')" ]; then
-              echo "::error::app died within 10s of launch"
-              adb logcat -d | tail -200
-              exit 1
-            fi
-
-            # Theme.AMT is the application theme, so a missing colour resource
-            # would have thrown here rather than rendered wrong.
-            PAT='FATAL EXCEPTION|Resources\$NotFoundException|ClassNotFoundException|NoSuchMethodError|NoClassDefFoundError'
-            if adb logcat -d | grep -qE "$PAT"; then
-              echo "::error::crash or missing symbol in logcat — most likely an R8 keep rule"
-              adb logcat -d | grep -B 5 -A 40 -E "$PAT" | head -150
-              exit 1
-            fi
-
-            echo "✅ installed, launched, and alive 10s later with no fatal exception"
+          script: bash .github/scripts/android-smoke.sh
 
       # Uploaded even on failure — a screenshot of the broken state is the most
       # useful thing to have when the assertion above trips.
