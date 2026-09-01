@@ -20,8 +20,8 @@ android {
         applicationId = "app.anothermorsetrainer"
         minSdk = 24
         targetSdk = 36
-        versionCode = 16
-        versionName = "1.12.1"
+        versionCode = 17
+        versionName = "1.12.2"
     }
 
     signingConfigs {
