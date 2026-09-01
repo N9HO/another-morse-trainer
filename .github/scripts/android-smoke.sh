@@ -89,11 +89,26 @@ else
        "rotation is exercised below but recreation cannot be asserted"
 fi
 
+# The display's current size, which swaps on a real rotation. Without checking
+# this the assertion below could pass for free: if `user_rotation` silently did
+# not take, nothing rotated, so of course nothing was recreated.
+display_size() {
+  adb shell dumpsys window displays | grep -om1 'cur=[0-9]*x[0-9]*'
+}
+before=$(display_size)
+
 adb logcat -b events -c
 adb shell settings put system accelerometer_rotation 0
 adb shell settings put system user_rotation 1   # 1 = 90°, landscape
 sleep 5
 adb exec-out screencap -p > landscape.png || true
+
+after=$(display_size)
+echo "display $before -> $after"
+if [ -z "$before" ] || [ "$before" = "$after" ]; then
+  echo "::error::the display did not rotate ($before -> $after); the check below would be vacuous"
+  exit 1
+fi
 
 if [ -z "$(pid_of)" ]; then
   echo "::error::$PKG died on rotation"
