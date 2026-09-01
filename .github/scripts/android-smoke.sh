@@ -66,4 +66,60 @@ if adb logcat -d | grep -qE "$PAT"; then
   exit 1
 fi
 
-echo "✅ installed, launched, and alive 10s later with no fatal exception"
+# ---- Rotation must not restart the activity ----
+#
+# MainActivity declares android:configChanges for orientation and screen size,
+# so a rotation has to reconfigure in place rather than recreate. Recreating
+# throws away every screen's `remember` state, and mid-quiz that is the
+# session's tally — it never reaches Stats.record, which only runs from the
+# explicit exits. A compile cannot see any of that, so assert it here.
+#
+# The signal is the framework's own lifecycle event in the `events` buffer.
+# Asserting only "the tag did not appear after rotating" would pass for the
+# wrong reason on an image that never emits it, so confirm first that the launch
+# above DID emit it. Without that, say so and skip rather than bank a pass we
+# did not earn.
+CREATE_TAG=wm_on_create_called
+
+if adb logcat -b events -d | grep -q "${CREATE_TAG}.*MainActivity"; then
+  signal_ok=yes
+else
+  signal_ok=no
+  echo "::warning::${CREATE_TAG} was not emitted for MainActivity on this image;" \
+       "rotation is exercised below but recreation cannot be asserted"
+fi
+
+adb logcat -b events -c
+adb shell settings put system accelerometer_rotation 0
+adb shell settings put system user_rotation 1   # 1 = 90°, landscape
+sleep 5
+adb exec-out screencap -p > landscape.png || true
+
+if [ -z "$(pid_of)" ]; then
+  echo "::error::$PKG died on rotation"
+  adb logcat -d | tail -200
+  exit 1
+fi
+
+if adb logcat -d | grep -qE "$PAT"; then
+  echo "::error::crash on rotation"
+  adb logcat -d | grep -B 5 -A 40 -E "$PAT" | head -150
+  exit 1
+fi
+
+if [ "$signal_ok" = yes ] && adb logcat -b events -d | grep -q "${CREATE_TAG}.*MainActivity"; then
+  echo "::error::MainActivity was recreated by a rotation — android:configChanges is not covering it"
+  adb logcat -b events -d | grep "$CREATE_TAG" | head -20
+  exit 1
+fi
+
+# Leave the device as we found it, so a later step reads an upright screen.
+adb shell settings put system user_rotation 0
+
+if [ "$signal_ok" = yes ]; then
+  echo "✅ installed, launched, alive with no fatal exception, and survived a"
+  echo "   rotation without the activity being recreated"
+else
+  echo "✅ installed, launched, alive with no fatal exception, and survived a"
+  echo "   rotation (recreation not asserted — see the warning above)"
+fi
