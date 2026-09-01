@@ -94,7 +94,6 @@ jobs:
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v5
-        with:
 
       - name: Recreate signing config from secrets
         if: env.KEYSTORE_B64 != ''
