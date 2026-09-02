@@ -124,11 +124,11 @@ fun HomeScreen(
         HomeItem(stringResource(R.string.mode_listen_and_learn), stringResource(R.string.home_hands_free_eyes_free), Icons.Filled.Headphones, onPickListen) +
         HomeItem(stringResource(R.string.mode_reference), stringResource(R.string.home_look_it_up), Icons.AutoMirrored.Filled.ListAlt, onPickReference)
 
-        CenteredScrollColumn(
-            contentModifier = Modifier
-                .padding(horizontal = 20.dp)
-                .padding(top = 12.dp, bottom = 32.dp)
-        ) {
+    CenteredScrollColumn(
+        contentModifier = Modifier
+            .padding(horizontal = 20.dp)
+            .padding(top = 12.dp, bottom = 32.dp)
+    ) {
             // Top bar: CW decoder + Stats + Settings, like the iOS toolbar.
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                 IconButton(onClick = onPickCwDecoder) {
