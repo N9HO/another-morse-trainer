@@ -40,6 +40,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -229,7 +230,7 @@ fun TypedQuizScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            TextButton(onClick = { if (phase == TqPhase.SUMMARY) onBack() else finish() }) { Text("‹ Back") }
+            TextButton(onClick = { if (phase == TqPhase.SUMMARY) onBack() else finish() }) { Text(stringResource(R.string.common_back)) }
             if (phase == TqPhase.RUNNING) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     remaining?.let {
@@ -240,7 +241,7 @@ fun TypedQuizScreen(
                         )
                     }
                     SessionSettingsButton { showSettings = true }
-                    TextButton(onClick = { endSession() }) { Text("End") }
+                    TextButton(onClick = { endSession() }) { Text(stringResource(R.string.common_end)) }
                 }
             }
         }
@@ -293,12 +294,12 @@ fun TypedQuizScreen(
                 )
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    text = if (lastCorrect) "✓ correct" else "✗ you typed “${input.trim().uppercase()}”",
+                    text = if (lastCorrect) stringResource(R.string.typed_correct) else stringResource(R.string.typed_wrong, input.trim().uppercase()),
                     color = if (lastCorrect) OK_GREEN else ERR_RED,
                     fontWeight = FontWeight.Medium
                 )
             } else {
-                Text(text = "Type what you hear", fontSize = 18.sp, color = Brand.teal)
+                Text(text = stringResource(R.string.typed_type_what_you_hear), fontSize = 18.sp, color = Brand.teal)
             }
 
             Spacer(Modifier.height(28.dp))
@@ -333,13 +334,13 @@ fun TypedQuizScreen(
                     OutlinedButton(
                         onClick = { player.replaySound(drill.playable, Settings.sidetoneHz, timing()) },
                         modifier = Modifier.fillMaxWidth()
-                    ) { Text("▶ Replay") }
+                    ) { Text(stringResource(R.string.common_replay)) }
                     Spacer(Modifier.height(12.dp))
                     Button(
                         onClick = { advance() },
                         colors = ButtonDefaults.buttonColors(containerColor = Brand.teal, contentColor = Brand.navy),
                         modifier = Modifier.fillMaxWidth()
-                    ) { Text("Next", fontWeight = FontWeight.SemiBold) }
+                    ) { Text(stringResource(R.string.common_next), fontWeight = FontWeight.SemiBold) }
                 }
             } else {
                 Button(
@@ -347,12 +348,12 @@ fun TypedQuizScreen(
                     enabled = input.isNotBlank(),
                     colors = ButtonDefaults.buttonColors(containerColor = Brand.teal, contentColor = Brand.navy),
                     modifier = Modifier.fillMaxWidth()
-                ) { Text("Check", fontWeight = FontWeight.SemiBold) }
+                ) { Text(stringResource(R.string.typed_check), fontWeight = FontWeight.SemiBold) }
                 Spacer(Modifier.height(12.dp))
                 OutlinedButton(
                     onClick = { player.replaySound(drill.playable, Settings.sidetoneHz, timing()) },
                     modifier = Modifier.fillMaxWidth()
-                ) { Text("▶ Replay") }
+                ) { Text(stringResource(R.string.common_replay)) }
             }
         }
         }
@@ -376,7 +377,7 @@ fun TypedQuizScreen(
 fun QrqScreen(onBack: () -> Unit) {
     var wpm by remember { mutableDoubleStateOf(35.0) }
     TypedQuizScreen(
-        title = "QRQ Speed",
+        title = stringResource(R.string.mode_qrq_speed),
         onBack = onBack,
         makeSource = { PhraseQuiz("QRQ", MorseData.wordAndCallSignItems, summaryNoun = "words & calls") },
         timing = { MorseTiming(wpm) },
@@ -394,9 +395,9 @@ fun QrqScreen(onBack: () -> Unit) {
                         Button(
                             onClick = { wpm = speed },
                             colors = ButtonDefaults.buttonColors(containerColor = Brand.teal, contentColor = Brand.navy)
-                        ) { Text("${speed.toInt()} WPM", fontWeight = FontWeight.SemiBold) }
+                        ) { Text(stringResource(R.string.common_wpm_value, speed.toInt()), fontWeight = FontWeight.SemiBold) }
                     } else {
-                        OutlinedButton(onClick = { wpm = speed }) { Text("${speed.toInt()} WPM") }
+                        OutlinedButton(onClick = { wpm = speed }) { Text(stringResource(R.string.common_wpm_value, speed.toInt())) }
                     }
                 }
             }

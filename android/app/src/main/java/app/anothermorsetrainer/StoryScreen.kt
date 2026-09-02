@@ -48,6 +48,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -143,11 +144,11 @@ fun StoryScreen(onBack: () -> Unit) {
             val stories = MorseStories.all
             val idx = ((index % stories.size) + stories.size) % stories.size
             val story = stories[idx]
-            Passage(story.title, story.text, "Story ${idx + 1} of ${stories.size} · ${story.lengthLabel}")
+            Passage(story.title, story.text, stringResource(R.string.story_counter_fable, idx + 1, stories.size, story.lengthLabel))
         }
         StoryContent.SERIALS -> {
             val idx = index.coerceIn(0, serial.parts.size - 1)
-            Passage(serial.title, serial.parts[idx], "Part ${idx + 1} of ${serial.parts.size}")
+            Passage(serial.title, serial.parts[idx], stringResource(R.string.story_counter_serial, idx + 1, serial.parts.size))
         }
         StoryContent.NEWS -> {
             if (newsPassages.isEmpty()) null
@@ -155,18 +156,18 @@ fun StoryScreen(onBack: () -> Unit) {
                 val idx = ((index % newsPassages.size) + newsPassages.size) % newsPassages.size
                 // The title stays generic so nothing is given away before reveal.
                 Passage(Settings.newsSource.attribution, newsPassages[idx],
-                    "Headline ${idx + 1} of ${newsPassages.size}")
+                    stringResource(R.string.story_counter_news, idx + 1, newsPassages.size))
             }
         }
     }
 
     /** The line under the title (what the passage is and where it came from). */
     val subtitle = when (content) {
-        StoryContent.FABLES -> "Public-domain fable · continuous copy"
-        StoryContent.SERIALS -> "${serial.author} · your bookmark keeps your place"
+        StoryContent.FABLES -> stringResource(R.string.story_subtitle_fable)
+        StoryContent.SERIALS -> stringResource(R.string.story_subtitle_serial, serial.author)
         StoryContent.NEWS -> {
             val source = Settings.newsSource.attribution
-            if (newsIsFromCache) "$source · saved headlines" else "$source · decode the news"
+            if (newsIsFromCache) stringResource(R.string.story_subtitle_news_cached, source) else stringResource(R.string.story_subtitle_news, source)
         }
     }
 
@@ -352,7 +353,7 @@ fun StoryScreen(onBack: () -> Unit) {
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                TextButton(onClick = { if (phase == StPhase.SUMMARY) onBack() else finish() }) { Text("‹ Back") }
+                TextButton(onClick = { if (phase == StPhase.SUMMARY) onBack() else finish() }) { Text(stringResource(R.string.common_back)) }
                 if (phase == StPhase.RUNNING) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         remaining?.let {
@@ -363,7 +364,7 @@ fun StoryScreen(onBack: () -> Unit) {
                             )
                         }
                         SessionSettingsButton { showSettings = true }
-                        TextButton(onClick = { endSession() }) { Text("End") }
+                        TextButton(onClick = { endSession() }) { Text(stringResource(R.string.common_end)) }
                     }
                 }
             }
@@ -385,7 +386,7 @@ fun StoryScreen(onBack: () -> Unit) {
                         .padding(bottom = 24.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Text("Short Stories", style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center)
+                    Text(stringResource(R.string.mode_short_stories), style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center)
                     Spacer(Modifier.height(10.dp))
 
                     // What to copy: fables, a serialized classic, or the news.
@@ -419,9 +420,9 @@ fun StoryScreen(onBack: () -> Unit) {
                             Spacer(Modifier.width(6.dp))
                             Text(
                                 if (resume == 0)
-                                    "A longer tale sent in short parts. Your bookmark moves as you go, so you can pick the story back up any day."
+                                    stringResource(R.string.story_serial_intro)
                                 else
-                                    "Your bookmark picks this story back up at part ${resume + 1} of ${serial.parts.size}.",
+                                    stringResource(R.string.story_serial_resume, resume + 1, serial.parts.size),
                                 style = MaterialTheme.typography.labelMedium,
                                 color = Brand.textSecondary
                             )
@@ -442,7 +443,7 @@ fun StoryScreen(onBack: () -> Unit) {
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                "Include the summary",
+                                stringResource(R.string.story_include_the_summary),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = Brand.textPrimary,
                                 modifier = Modifier.weight(1f)
@@ -482,7 +483,7 @@ fun StoryScreen(onBack: () -> Unit) {
                         content == StoryContent.NEWS && newsFetching -> {
                             CircularProgressIndicator(color = Brand.teal)
                             Spacer(Modifier.height(10.dp))
-                            Text("Fetching todays headlines…", color = Brand.textSecondary)
+                            Text(stringResource(R.string.story_fetching_todays_headlines), color = Brand.textSecondary)
                         }
                         content == StoryContent.NEWS && newsError != null -> {
                             Icon(
@@ -495,7 +496,7 @@ fun StoryScreen(onBack: () -> Unit) {
                             OutlinedButton(onClick = { refreshNews() }) {
                                 Icon(Icons.Filled.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
                                 Spacer(Modifier.width(6.dp))
-                                Text("Try Again")
+                                Text(stringResource(R.string.story_try_again))
                             }
                         }
                         revealed && passage != null -> {
@@ -517,9 +518,9 @@ fun StoryScreen(onBack: () -> Unit) {
                             Spacer(Modifier.height(8.dp))
                             Text(
                                 when {
-                                    playing -> "Sending… copy along"
-                                    content == StoryContent.NEWS -> "Press Play, then decode the headline"
-                                    else -> "Copy the passage, then reveal to check."
+                                    playing -> stringResource(R.string.story_sending_copy_along)
+                                    content == StoryContent.NEWS -> stringResource(R.string.story_prompt_news)
+                                    else -> stringResource(R.string.story_prompt_passage)
                                 },
                                 color = Brand.textSecondary,
                                 textAlign = TextAlign.Center
@@ -538,7 +539,7 @@ fun StoryScreen(onBack: () -> Unit) {
                                 shape = RoundedCornerShape(Brand.cornerRadius),
                                 modifier = Modifier.heightIn(min = 56.dp)
                             ) {
-                                Icon(Icons.Filled.SkipPrevious, contentDescription = "Previous part", modifier = Modifier.size(20.dp))
+                                Icon(Icons.Filled.SkipPrevious, contentDescription = stringResource(R.string.story_previous_part), modifier = Modifier.size(20.dp))
                             }
                         }
                         Button(
@@ -547,7 +548,7 @@ fun StoryScreen(onBack: () -> Unit) {
                             colors = ButtonDefaults.buttonColors(containerColor = Brand.teal, contentColor = Brand.navy),
                             shape = RoundedCornerShape(Brand.cornerRadius),
                             modifier = Modifier.weight(1f).heightIn(min = 56.dp)
-                        ) { Text(if (playing) "■ Stop" else "▶ Play passage", fontWeight = FontWeight.SemiBold) }
+                        ) { Text(if (playing) stringResource(R.string.story_stop) else stringResource(R.string.story_play_passage), fontWeight = FontWeight.SemiBold) }
                     }
 
                     Spacer(Modifier.height(12.dp))
@@ -558,14 +559,14 @@ fun StoryScreen(onBack: () -> Unit) {
                         },
                         enabled = !revealed && !playing && ready,
                         modifier = Modifier.fillMaxWidth()
-                    ) { Text("Reveal text") }
+                    ) { Text(stringResource(R.string.story_reveal_text)) }
 
                     Spacer(Modifier.height(12.dp))
                     OutlinedButton(
                         onClick = { next() },
                         enabled = ready,
                         modifier = Modifier.fillMaxWidth()
-                    ) { Text(if (content == StoryContent.NEWS) "Next headline ›" else "Next story ›") }
+                    ) { Text(if (content == StoryContent.NEWS) stringResource(R.string.story_next_headline) else stringResource(R.string.story_next_story)) }
                 }
             }
         }
@@ -678,9 +679,9 @@ private fun StorySummaryContent(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Text("Session complete", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+        Text(stringResource(R.string.common_session_complete), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(4.dp))
-        Text("Short Stories", style = MaterialTheme.typography.labelMedium, color = Brand.textSecondary)
+        Text(stringResource(R.string.mode_short_stories), style = MaterialTheme.typography.labelMedium, color = Brand.textSecondary)
 
         Spacer(Modifier.height(24.dp))
         Column(modifier = Modifier.fillMaxWidth().brandCard()) {
@@ -688,14 +689,14 @@ private fun StorySummaryContent(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Text("Passages copied", color = Brand.textSecondary)
+                Text(stringResource(R.string.story_passages_copied), color = Brand.textSecondary)
                 Text("$passages", color = Brand.textPrimary, fontWeight = FontWeight.SemiBold)
             }
             Row(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Text("Time", color = Brand.textSecondary)
+                Text(stringResource(R.string.common_time), color = Brand.textSecondary)
                 Text(
                     "%d:%02d".format(elapsedSeconds / 60, elapsedSeconds % 60),
                     color = Brand.textPrimary,
@@ -711,8 +712,8 @@ private fun StorySummaryContent(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(milestoneEmoji(day), fontSize = 40.sp)
-                Text("$day-day streak!", fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                Text("New milestone reached — keep it going.", color = Brand.textSecondary, fontSize = 13.sp)
+                Text(stringResource(R.string.common_streak_milestone, day), fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                Text(stringResource(R.string.common_milestone_body), color = Brand.textSecondary, fontSize = 13.sp)
             }
         }
 
@@ -722,10 +723,10 @@ private fun StorySummaryContent(
             colors = ButtonDefaults.buttonColors(containerColor = Brand.teal, contentColor = Brand.navy),
             shape = RoundedCornerShape(Brand.cornerRadius),
             modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)
-        ) { Text("Keep copying", fontWeight = FontWeight.SemiBold) }
+        ) { Text(stringResource(R.string.story_keep_copying), fontWeight = FontWeight.SemiBold) }
         Spacer(Modifier.height(10.dp))
         OutlinedButton(onClick = onDone, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-            Text("Return home")
+            Text(stringResource(R.string.common_return_home))
         }
     }
 }

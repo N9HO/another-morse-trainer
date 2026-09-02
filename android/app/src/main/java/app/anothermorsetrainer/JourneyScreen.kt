@@ -57,6 +57,7 @@ import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.key.utf16CodePoint
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -274,13 +275,13 @@ fun JourneyScreen(onBack: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            TextButton(onClick = { finish() }) { Text("‹ Back", color = Brand.teal) }
+            TextButton(onClick = { finish() }) { Text(stringResource(R.string.common_back), color = Brand.teal) }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 SessionSettingsButton { showSettings = true }
                 OutlinedButton(onClick = { player.stop(); showMap = true }) {
                     Icon(Icons.Filled.Map, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(6.dp))
-                    Text("Map")
+                    Text(stringResource(R.string.journey_map_button))
                 }
             }
         }
@@ -293,7 +294,7 @@ fun JourneyScreen(onBack: () -> Unit) {
             // Journey banner: level header + progress bar.
             Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text("Level $levelNumber", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.journey_level_n, levelNumber), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     Spacer(Modifier.width(8.dp))
                     Text(levelSection, style = MaterialTheme.typography.bodyMedium, color = Brand.textSecondary)
                     Spacer(Modifier.weight(1f))
@@ -337,9 +338,9 @@ fun JourneyScreen(onBack: () -> Unit) {
                     }
                     Text(
                         text = when {
-                            ok -> "✓ recalled in %.1f s".format(lastTtr)
-                            showAnswer -> "✗ it was “${drill.correct}”"
-                            else -> "✗ not quite"
+                            ok -> stringResource(R.string.common_recalled_in, lastTtr)
+                            showAnswer -> stringResource(R.string.common_it_was, drill.correct)
+                            else -> stringResource(R.string.common_not_quite)
                         },
                         color = if (ok) OK_GREEN else ERR_RED,
                         fontWeight = FontWeight.Medium
@@ -350,19 +351,19 @@ fun JourneyScreen(onBack: () -> Unit) {
                         Spacer(Modifier.height(18.dp))
                         OutlinedButton(onClick = {
                             player.replaySound(drill.playable, Settings.sidetoneHz, Settings.timing())
-                        }) { Text("▶ Replay") }
+                        }) { Text(stringResource(R.string.common_replay)) }
                         Spacer(Modifier.height(10.dp))
                         Button(
                             onClick = { advanceNow() },
                             colors = ButtonDefaults.buttonColors(containerColor = Brand.teal, contentColor = Brand.navy),
                             modifier = Modifier.fillMaxWidth()
-                        ) { Text("Next", fontWeight = FontWeight.SemiBold) }
+                        ) { Text(stringResource(R.string.common_next), fontWeight = FontWeight.SemiBold) }
                     }
                 } else {
                     Text("?", fontSize = 52.sp, fontWeight = FontWeight.Bold, color = Brand.teal)
                     Spacer(Modifier.height(4.dp))
                     OutlinedButton(onClick = { player.replaySound(drill.playable, Settings.sidetoneHz, Settings.timing()) }) {
-                        Text("▶ Replay")
+                        Text(stringResource(R.string.common_replay))
                     }
                 }
             }
@@ -442,8 +443,8 @@ private fun JourneyMap(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            TextButton(onClick = onBack) { Text("‹ Back", color = Brand.teal) }
-            Text("Journey Map", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            TextButton(onClick = onBack) { Text(stringResource(R.string.common_back), color = Brand.teal) }
+            Text(stringResource(R.string.journey_map_title), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             Spacer(Modifier.width(56.dp))
         }
         LazyColumn(
@@ -487,12 +488,12 @@ private fun JourneyMapRow(level: JourneyLevel, unlocked: Boolean, completed: Boo
             else -> Icon(Icons.Filled.Lock, contentDescription = null, tint = Brand.textSecondary, modifier = Modifier.size(24.dp))
         }
         Column(modifier = Modifier.weight(1f)) {
-            Text("Level ${level.number}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = if (unlocked) Brand.textPrimary else Brand.textSecondary)
+            Text(stringResource(R.string.journey_level_n, level.number), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = if (unlocked) Brand.textPrimary else Brand.textSecondary)
             Text(level.title, style = MaterialTheme.typography.bodySmall, color = Brand.textSecondary, maxLines = 1)
         }
         if (isCurrent) {
             Box(modifier = Modifier.background(Brand.teal.copy(alpha = 0.2f), RoundedCornerShape(12.dp)).padding(horizontal = 8.dp, vertical = 3.dp)) {
-                Text("Current", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Brand.teal)
+                Text(stringResource(R.string.journey_current), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Brand.teal)
             }
         }
     }

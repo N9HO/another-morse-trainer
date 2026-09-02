@@ -48,6 +48,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -308,8 +310,8 @@ private fun PileupSetup(onStart: () -> Unit, onBack: () -> Unit) {
     val focusManager = LocalFocusManager.current
     Column(modifier = Modifier.fillMaxSize()) {
         Row(modifier = Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = onBack) { Text("‹ Back", color = Brand.teal) }
-            Text("Pileup Runner", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            TextButton(onClick = onBack) { Text(stringResource(R.string.common_back), color = Brand.teal) }
+            Text(stringResource(R.string.mode_pileup_runner), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         }
       CenteredContent {
         Column(
@@ -330,7 +332,7 @@ private fun PileupSetup(onStart: () -> Unit, onBack: () -> Unit) {
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            PuSectionLabel("YOUR CALL")
+            PuSectionLabel(stringResource(R.string.pileup_your_call))
             OutlinedTextField(
                 value = PileupSettings.myCall,
                 onValueChange = { PileupSettings.updateMyCall(it) },
@@ -343,7 +345,7 @@ private fun PileupSetup(onStart: () -> Unit, onBack: () -> Unit) {
                 modifier = Modifier.fillMaxWidth()
             )
 
-            PuSectionLabel("EXCHANGE")
+            PuSectionLabel(stringResource(R.string.pileup_exchange))
             PuPills(QSOContestMode.allCases.map { it to it.label }, PileupSettings.mode) {
                 PileupSettings.updateMode(it)
             }
@@ -353,47 +355,47 @@ private fun PileupSetup(onStart: () -> Unit, onBack: () -> Unit) {
                 color = Brand.textSecondary
             )
 
-            PuSectionLabel("THE PILEUP")
+            PuSectionLabel(stringResource(R.string.pileup_the_pileup))
             PuSlider(
-                label = "Callers",
-                value = "up to ${PileupSettings.maxStations}",
+                label = stringResource(R.string.pileup_callers),
+                value = stringResource(R.string.pileup_callers_value, PileupSettings.maxStations),
                 position = PileupSettings.maxStations.toFloat(),
                 range = 1f..8f, steps = 6,
                 onChange = { PileupSettings.updateMaxStations(it.roundToInt()) },
                 enabled = PileupSettings.mode.isPileup
             )
             PuSlider(
-                label = "Slowest caller",
-                value = "${PileupSettings.minWpm.roundToInt()} WPM",
+                label = stringResource(R.string.pileup_slowest_caller),
+                value = stringResource(R.string.common_wpm_value, PileupSettings.minWpm.roundToInt()),
                 position = PileupSettings.minWpm.toFloat(),
                 range = PileupSettings.MIN_CALLER_WPM.toFloat()..PileupSettings.MAX_CALLER_WPM.toFloat(),
                 steps = 49,
                 onChange = { PileupSettings.updateMinWpm(it.toDouble()) }
             )
             PuSlider(
-                label = "Fastest caller",
-                value = "${PileupSettings.maxWpm.roundToInt()} WPM",
+                label = stringResource(R.string.pileup_fastest_caller),
+                value = stringResource(R.string.common_wpm_value, PileupSettings.maxWpm.roundToInt()),
                 position = PileupSettings.maxWpm.toFloat(),
                 range = PileupSettings.MIN_CALLER_WPM.toFloat()..PileupSettings.MAX_CALLER_WPM.toFloat(),
                 steps = 49,
                 onChange = { PileupSettings.updateMaxWpm(it.toDouble()) }
             )
             PuSlider(
-                label = "Tone spread",
-                value = if (PileupSettings.toneSpread <= 0.0) "Zero beat" else "±${PileupSettings.toneSpread.roundToInt()} Hz",
+                label = stringResource(R.string.pileup_tone_spread),
+                value = if (PileupSettings.toneSpread <= 0.0) stringResource(R.string.pileup_zero_beat) else stringResource(R.string.pileup_tone_spread_value, PileupSettings.toneSpread.roundToInt()),
                 position = PileupSettings.toneSpread.toFloat(),
                 range = 0f..400f, steps = 0,
                 onChange = { PileupSettings.updateToneSpread(it.toDouble()) }
             )
-            PuToggle("QSB fading", PileupSettings.qsbEnabled) { PileupSettings.updateQsbEnabled(it) }
+            PuToggle(stringResource(R.string.pileup_qsb_fading), PileupSettings.qsbEnabled) { PileupSettings.updateQsbEnabled(it) }
             Column {
-                PuSectionLabel("QRN STATIC")
+                PuSectionLabel(stringResource(R.string.pileup_qrn_static))
                 PuPills(QrnPreset.entries.map { it to it.label }, PileupSettings.qrn) {
                     PileupSettings.updateQrn(it)
                 }
             }
 
-            PuSectionLabel("CALLSIGNS")
+            PuSectionLabel(stringResource(R.string.pileup_callsigns))
             Row(
                 modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -415,42 +417,42 @@ private fun PileupSetup(onStart: () -> Unit, onBack: () -> Unit) {
                     }
                 }
             }
-            PuToggle("US calls only", PileupSettings.usOnly) { PileupSettings.updateUsOnly(it) }
+            PuToggle(stringResource(R.string.common_us_calls_only), PileupSettings.usOnly) { PileupSettings.updateUsOnly(it) }
 
-            PuSectionLabel("OPERATING")
-            PuToggle("Cut numbers (5NN, 1 → A…)", PileupSettings.cutNumbersEnabled) {
+            PuSectionLabel(stringResource(R.string.pileup_operating))
+            PuToggle(stringResource(R.string.pileup_cut_numbers), PileupSettings.cutNumbersEnabled) {
                 PileupSettings.updateCutNumbersEnabled(it)
             }
             if (PileupSettings.mode.includesRST) {
-                PuToggle("Require the RST copied", PileupSettings.rstRequired) {
+                PuToggle(stringResource(R.string.pileup_require_the_rst_copied), PileupSettings.rstRequired) {
                     PileupSettings.updateRstRequired(it)
                 }
             }
             Column {
-                PuSectionLabel("ON A BUSTED CALL")
+                PuSectionLabel(stringResource(R.string.pileup_on_a_busted_call))
                 PuPills(BustBehavior.allCases.map { it to it.label }, PileupSettings.bustBehavior) {
                     PileupSettings.updateBustBehavior(it)
                 }
             }
-            PuToggle("Impatient callers give up", PileupSettings.giveUpEnabled) {
+            PuToggle(stringResource(R.string.pileup_impatient_callers_give_up), PileupSettings.giveUpEnabled) {
                 PileupSettings.updateGiveUpEnabled(it)
             }
             if (PileupSettings.giveUpEnabled) {
                 Column {
-                    PuSectionLabel("TELL ME WHO GOT AWAY")
+                    PuSectionLabel(stringResource(R.string.pileup_tell_me_who_got_away))
                     PuPills(
                         MissedCallerFeedback.allCases.map { it to it.label },
                         PileupSettings.missedCallerFeedback
                     ) { PileupSettings.updateMissedCallerFeedback(it) }
                 }
             }
-            PuToggle("Keep my partial call after \"?\"", PileupSettings.keepPartialCall) {
+            PuToggle(stringResource(R.string.pileup_keep_my_partial_call_after), PileupSettings.keepPartialCall) {
                 PileupSettings.updateKeepPartialCall(it)
             }
-            PuToggle("Key my side in Morse", PileupSettings.keyMySide) {
+            PuToggle(stringResource(R.string.pileup_key_my_side_in_morse), PileupSettings.keyMySide) {
                 PileupSettings.updateKeyMySide(it)
             }
-            PuToggle("Pileup re-calls after TU", PileupSettings.autoRecall) {
+            PuToggle(stringResource(R.string.pileup_recall_after_tu), PileupSettings.autoRecall) {
                 PileupSettings.updateAutoRecall(it)
             }
 
@@ -459,7 +461,7 @@ private fun PileupSetup(onStart: () -> Unit, onBack: () -> Unit) {
                 onClick = onStart,
                 modifier = Modifier.fillMaxWidth().height(52.dp),
                 shape = RoundedCornerShape(Brand.cornerRadius)
-            ) { Text("Start — ${PileupSettings.mode.label}", fontWeight = FontWeight.Bold, fontSize = 17.sp) }
+            ) { Text(stringResource(R.string.pileup_start_button, PileupSettings.mode.label), fontWeight = FontWeight.Bold, fontSize = 17.sp) }
             Spacer(Modifier.height(16.dp))
         }
       }
@@ -497,7 +499,7 @@ private fun PileupRun(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            TextButton(onClick = onEnd) { Text("End", color = Brand.teal) }
+            TextButton(onClick = onEnd) { Text(stringResource(R.string.common_end), color = Brand.teal) }
             Spacer(Modifier.weight(1f))
             Text(
                 "${PileupSettings.mode.label} · %d:%02d".format(elapsedSeconds / 60, elapsedSeconds % 60),
@@ -527,21 +529,21 @@ private fun PileupRun(
             ) {
                 when (engine.phase) {
                     PileupEngine.Phase.Idle -> {
-                        Text("Tap to call CQ and start a pileup.", textAlign = TextAlign.Center)
+                        Text(stringResource(R.string.pileup_idle_prompt), textAlign = TextAlign.Center)
                         Spacer(Modifier.height(20.dp))
-                        Button(onClick = onCQ) { Text("Call CQ") }
+                        Button(onClick = onCQ) { Text(stringResource(R.string.common_call_cq)) }
                     }
 
                     PileupEngine.Phase.Pileup -> {
                         Text(
-                            "${engine.activeCount} stations calling.",
+                            stringResource(R.string.common_stations_calling, engine.activeCount),
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Medium
                         )
-                        Text("Copy a call and send it.", textAlign = TextAlign.Center)
+                        Text(stringResource(R.string.common_copy_a_call_and_send_it), textAlign = TextAlign.Center)
                         if (reveal) {
                             Text(
-                                "calling: ${engine.stations.joinToString(", ") { it.call }}",
+                                stringResource(R.string.common_calling_list, engine.stations.joinToString(", ") { it.call }),
                                 style = MaterialTheme.typography.labelSmall
                             )
                         }
@@ -549,22 +551,22 @@ private fun PileupRun(
                         CallEntry(input = input, onChange = onInput, onSend = onSend)
                         Spacer(Modifier.height(12.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            OutlinedButton(onClick = onRepeat) { Text("▶ Again") }
-                            OutlinedButton(onClick = onCQ) { Text("CQ") }
+                            OutlinedButton(onClick = onRepeat) { Text(stringResource(R.string.common_again)) }
+                            OutlinedButton(onClick = onCQ) { Text(stringResource(R.string.common_cq)) }
                         }
                         Spacer(Modifier.height(8.dp))
                         TextButton(onClick = onToggleReveal) {
-                            Text(if (reveal) "Hide hint" else "Show hint")
+                            Text(if (reveal) stringResource(R.string.common_hide_hint) else stringResource(R.string.common_show_hint))
                         }
                     }
 
                     is PileupEngine.Phase.Working, is PileupEngine.Phase.ReadyToLog -> {
                         val st = engine.workingStation
-                        Text("Working ${st?.call ?: "?"}", fontSize = 22.sp, fontWeight = FontWeight.Bold)
-                        Text("Copy their exchange and send it.", textAlign = TextAlign.Center)
+                        Text(stringResource(R.string.common_working_station, st?.call ?: "?"), fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.common_copy_their_exchange_and_send_it), textAlign = TextAlign.Center)
                         if (reveal) {
                             Text(
-                                "expecting: ${engine.expectedCopy ?: "—"}",
+                                stringResource(R.string.common_expecting, engine.expectedCopy ?: "—"),
                                 style = MaterialTheme.typography.labelSmall
                             )
                         }
@@ -572,12 +574,12 @@ private fun PileupRun(
                         CallEntry(input = input, onChange = onInput, onSend = onSend)
                         Spacer(Modifier.height(12.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            OutlinedButton(onClick = onRepeat) { Text("▶ Again") }
-                            Button(onClick = onLog) { Text("Log (TU)") }
+                            OutlinedButton(onClick = onRepeat) { Text(stringResource(R.string.common_again)) }
+                            Button(onClick = onLog) { Text(stringResource(R.string.common_log_tu)) }
                         }
                         Spacer(Modifier.height(8.dp))
                         TextButton(onClick = onToggleReveal) {
-                            Text(if (reveal) "Hide hint" else "Show hint")
+                            Text(if (reveal) stringResource(R.string.common_hide_hint) else stringResource(R.string.common_show_hint))
                         }
                     }
                 }
@@ -586,7 +588,7 @@ private fun PileupRun(
             // The live log: latest contact on top, so the run reads like a real one.
             if (engine.log.isNotEmpty()) {
                 Text(
-                    "LOG",
+                    stringResource(R.string.pileup_log),
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,
                     color = Brand.textSecondary,
@@ -604,7 +606,7 @@ private fun PileupRun(
                         ) {
                             Text(q.call, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, color = Brand.textPrimary, modifier = Modifier.weight(1f))
                             Text(q.exchange, fontFamily = FontFamily.Monospace, color = Brand.textSecondary)
-                            Text("${q.wpm} wpm", style = MaterialTheme.typography.labelSmall, color = Brand.textSecondary)
+                            Text(stringResource(R.string.common_wpm_lower, q.wpm), style = MaterialTheme.typography.labelSmall, color = Brand.textSecondary)
                         }
                     }
                 }
@@ -628,11 +630,9 @@ private fun MissedCallerBanner(
     onDismiss: () -> Unit
 ) {
     val detail = missed.miscopiedAs?.let { had ->
-        val times = if (missed.attempts == 1) "time" else "times"
-        "You had them as $had — they came back ${missed.attempts} $times before moving on."
+        pluralStringResource(R.plurals.pileup_missed_you_had, missed.attempts, had, missed.attempts)
     } ?: run {
-        val times = if (missed.attempts == 1) "time" else "times"
-        "They came back ${missed.attempts} $times and you never got the call."
+        pluralStringResource(R.plurals.pileup_missed_never_copied, missed.attempts, missed.attempts)
     }
     Row(
         modifier = Modifier.fillMaxWidth().padding(top = 8.dp).brandCard().padding(12.dp),
@@ -640,14 +640,14 @@ private fun MissedCallerBanner(
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                "${missed.call} gave up",
+                stringResource(R.string.pileup_gave_up, missed.call),
                 fontWeight = FontWeight.Bold,
                 color = PuWarn,
                 style = MaterialTheme.typography.bodyMedium
             )
             Text(detail, style = MaterialTheme.typography.labelSmall, color = Brand.textSecondary)
         }
-        TextButton(onClick = onDismiss) { Text("Got it", color = Brand.teal) }
+        TextButton(onClick = onDismiss) { Text(stringResource(R.string.pileup_got_it), color = Brand.teal) }
     }
 }
 
@@ -659,10 +659,10 @@ private fun PileupScoreboard(engine: PileupEngine, elapsedSeconds: Int) {
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(22.dp, Alignment.CenterHorizontally)
     ) {
-        PuStat("Worked", "${engine.qsoCount}")
-        PuStat("Busts", "${engine.bustCount}")
-        PuStat("Clean", "${(engine.accuracy * 100).roundToInt()}%")
-        PuStat("Rate", "$rate/hr")
+        PuStat(stringResource(R.string.pileup_worked), "${engine.qsoCount}")
+        PuStat(stringResource(R.string.common_busts), "${engine.bustCount}")
+        PuStat(stringResource(R.string.pileup_clean), "${(engine.accuracy * 100).roundToInt()}%")
+        PuStat(stringResource(R.string.common_rate), stringResource(R.string.common_rate_per_hour, rate))
     }
 }
 
@@ -688,22 +688,22 @@ private fun PileupSummary(
 
     Column(modifier = Modifier.fillMaxSize()) {
         Row(modifier = Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = onBack) { Text("‹ Back", color = Brand.teal) }
-            Text("Pileup — ${PileupSettings.mode.label}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            TextButton(onClick = onBack) { Text(stringResource(R.string.common_back), color = Brand.teal) }
+            Text(stringResource(R.string.pileup_summary_title, PileupSettings.mode.label), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         }
 
         Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).brandCard().padding(14.dp)) {
-            PuSummaryRow("Worked", "${engine.qsoCount}")
-            PuSummaryRow("Rate", "$rate/hr")
-            PuSummaryRow("Clean copy", if (cleanTotal == 0) "—" else "${(engine.accuracy * 100).roundToInt()}%")
-            PuSummaryRow("Busts", "${engine.bustCount}")
-            PuSummaryRow("Time", "%d:%02d".format(elapsedSeconds / 60, elapsedSeconds % 60))
+            PuSummaryRow(stringResource(R.string.pileup_worked), "${engine.qsoCount}")
+            PuSummaryRow(stringResource(R.string.common_rate), stringResource(R.string.common_rate_per_hour, rate))
+            PuSummaryRow(stringResource(R.string.common_clean_copy), if (cleanTotal == 0) "—" else "${(engine.accuracy * 100).roundToInt()}%")
+            PuSummaryRow(stringResource(R.string.common_busts), "${engine.bustCount}")
+            PuSummaryRow(stringResource(R.string.common_time), "%d:%02d".format(elapsedSeconds / 60, elapsedSeconds % 60))
         }
 
         val missed = engine.missedCallers
         if (missed.isNotEmpty() && PileupSettings.missedCallerFeedback != MissedCallerFeedback.Off) {
             Text(
-                "GOT AWAY (${missed.size})",
+                stringResource(R.string.pileup_got_away_header, missed.size),
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold,
                 color = Brand.textSecondary,
@@ -726,7 +726,7 @@ private fun PileupSummary(
                             color = Brand.textPrimary
                         )
                         Text(
-                            m.miscopiedAs?.let { "you had $it" } ?: "never copied",
+                            m.miscopiedAs?.let { stringResource(R.string.pileup_you_had, it) } ?: stringResource(R.string.pileup_never_copied),
                             style = MaterialTheme.typography.labelSmall,
                             color = if (m.miscopiedAs != null) PuWarn else Brand.textSecondary,
                             modifier = Modifier.weight(1f)
@@ -744,7 +744,7 @@ private fun PileupSummary(
 
         if (engine.log.isNotEmpty()) {
             Text(
-                "WORKED",
+                stringResource(R.string.common_worked),
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold,
                 color = Brand.textSecondary,
@@ -763,14 +763,14 @@ private fun PileupSummary(
                 ) {
                     Text(q.call, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, color = Brand.textPrimary, modifier = Modifier.weight(1f))
                     Text(q.exchange, fontFamily = FontFamily.Monospace, color = Brand.textSecondary)
-                    Text("${q.wpm} wpm", style = MaterialTheme.typography.labelSmall, color = Brand.textSecondary)
+                    Text(stringResource(R.string.common_wpm_lower, q.wpm), style = MaterialTheme.typography.labelSmall, color = Brand.textSecondary)
                 }
             }
         }
 
         Row(modifier = Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            OutlinedButton(onClick = onAgain, modifier = Modifier.weight(1f)) { Text("Run again") }
-            Button(onClick = onBack, modifier = Modifier.weight(1f)) { Text("Return home") }
+            OutlinedButton(onClick = onAgain, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.common_run_again)) }
+            Button(onClick = onBack, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.common_return_home)) }
         }
     }
 }
@@ -793,10 +793,10 @@ private fun CallEntry(input: String, onChange: (String) -> Unit, onSend: () -> U
             value = input,
             onValueChange = onChange,
             singleLine = true,
-            label = { Text("Send") },
+            label = { Text(stringResource(R.string.common_send)) },
             modifier = Modifier.fillMaxWidth(0.6f)
         )
-        Button(onClick = onSend, modifier = Modifier.height(56.dp)) { Text("Send") }
+        Button(onClick = onSend, modifier = Modifier.height(56.dp)) { Text(stringResource(R.string.common_send)) }
     }
 }
 

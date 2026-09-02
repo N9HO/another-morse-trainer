@@ -12,6 +12,8 @@ import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.res.stringResource
 import app.anothermorsetrainer.morsekit.ConfusionQuiz
 import app.anothermorsetrainer.morsekit.MorseData
 import app.anothermorsetrainer.morsekit.PhraseQuiz
@@ -227,6 +229,7 @@ private val SetupSaver: Saver<SetupTarget?, Any> = listSaver(
 
 @Composable
 private fun AppRoot() {
+    val resources = LocalResources.current
     var route by rememberSaveable(stateSaver = RouteSaver) {
         mutableStateOf<Route>(if (Settings.onboardingDone) Route.Home else Route.Onboarding)
     }
@@ -257,24 +260,24 @@ private fun AppRoot() {
             onPickContest = { route = Route.Contest },
             onPickExam = { route = Route.Exam },
             onPickListen = {
-                launch(SetupTarget(Route.Listen, "Listen", "Hands-free copy", SettingsMode.LISTEN))
+                launch(SetupTarget(Route.Listen, resources.getString(R.string.setup_listen), resources.getString(R.string.setup_hands_free_copy), SettingsMode.LISTEN))
             },
             onPickHeadCopy = {
-                launch(SetupTarget(Route.HeadCopy, "Head Copy", "Copy in your head", SettingsMode.HEAD_COPY))
+                launch(SetupTarget(Route.HeadCopy, resources.getString(R.string.mode_head_copy), resources.getString(R.string.common_copy_in_your_head), SettingsMode.HEAD_COPY))
             },
             onPickTypeIt = {
-                launch(SetupTarget(Route.TypeIt, "Type It", "Free-recall typing", SettingsMode.TYPE_IT))
+                launch(SetupTarget(Route.TypeIt, resources.getString(R.string.mode_type_it), resources.getString(R.string.common_free_recall_typing), SettingsMode.TYPE_IT))
             },
             onPickQrq = {
-                launch(SetupTarget(Route.Qrq, "QRQ Speed", "High-speed copy", SettingsMode.QRQ))
+                launch(SetupTarget(Route.Qrq, resources.getString(R.string.mode_qrq_speed), resources.getString(R.string.common_high_speed_copy), SettingsMode.QRQ))
             },
             onPickRapidFire = { route = Route.RapidFire },
             onPickStory = {
-                launch(SetupTarget(Route.Story, "Story", "Read along in Morse", SettingsMode.STORY))
+                launch(SetupTarget(Route.Story, resources.getString(R.string.setup_story), resources.getString(R.string.setup_read_along_in_morse), SettingsMode.STORY))
             },
             onPickSending = {
                 launch(SetupTarget(
-                    Route.Sending, "Sending Practice", "Key it back", SettingsMode.SENDING,
+                    Route.Sending, resources.getString(R.string.mode_sending_practice), resources.getString(R.string.common_key_it_back), SettingsMode.SENDING,
                     wantsStage = true
                 ))
             },
@@ -305,7 +308,7 @@ private fun AppRoot() {
         Route.Listen -> ListenScreen(onBack = { route = Route.Home })
         Route.HeadCopy -> HeadCopyScreen(onBack = { route = Route.Home })
         Route.TypeIt -> TypedQuizScreen(
-            title = "Type It",
+            title = stringResource(R.string.mode_type_it),
             onBack = { route = Route.Home },
             makeSource = { PhraseQuiz("Type It", MorseData.wordAndCallSignItems, summaryNoun = "words & calls") },
             settingsMode = SettingsMode.TYPE_IT

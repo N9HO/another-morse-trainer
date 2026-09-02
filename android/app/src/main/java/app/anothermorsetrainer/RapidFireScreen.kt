@@ -56,6 +56,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -334,26 +335,26 @@ private fun RapidFireSetup(
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         Row(modifier = Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = onBack) { Text("‹ Back", color = Brand.teal) }
-            Text("Rapid Fire", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            TextButton(onClick = onBack) { Text(stringResource(R.string.common_back), color = Brand.teal) }
+            Text(stringResource(R.string.mode_rapid_fire), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         }
         Column(
             modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            SectionLabel("WHAT TO COPY")
+            SectionLabel(stringResource(R.string.rapidfire_what_to_copy))
             Pills(RapidFireContent.entries.map { it to it.label }, content, onContent)
             when (content) {
                 RapidFireContent.WORDS -> {
-                    Stepper("Min length", wordMin, onWordMin)
-                    Stepper("Max length", wordMax, onWordMax)
+                    Stepper(stringResource(R.string.rapidfire_min_length), wordMin, onWordMin)
+                    Stepper(stringResource(R.string.rapidfire_max_length), wordMax, onWordMax)
                 }
-                RapidFireContent.NUMBERS -> Stepper("Digits per group", numberCount, onNumberCount)
-                RapidFireContent.CALLSIGNS, RapidFireContent.MIXED -> ToggleRow("US calls only", usOnly, onUsOnly)
+                RapidFireContent.NUMBERS -> Stepper(stringResource(R.string.rapidfire_digits_per_group), numberCount, onNumberCount)
+                RapidFireContent.CALLSIGNS, RapidFireContent.MIXED -> ToggleRow(stringResource(R.string.common_us_calls_only), usOnly, onUsOnly)
                 else -> {}
             }
 
-            SectionLabel("HOW TO COPY")
+            SectionLabel(stringResource(R.string.rapidfire_how_to_copy))
             Column(modifier = Modifier.fillMaxWidth().brandCard()) {
                 RapidFireResponse.entries.forEach { r ->
                     Row(
@@ -370,7 +371,7 @@ private fun RapidFireSetup(
                 }
             }
 
-            SectionLabel("PACE")
+            SectionLabel(stringResource(R.string.rapidfire_pace))
             Pills(RapidFirePace.entries.map { it to it.label }, pace, onPace)
 
             Spacer(Modifier.height(8.dp))
@@ -378,7 +379,7 @@ private fun RapidFireSetup(
                 onClick = onStart,
                 modifier = Modifier.fillMaxWidth().height(52.dp),
                 shape = RoundedCornerShape(Brand.cornerRadius)
-            ) { Text("Start", fontWeight = FontWeight.Bold, fontSize = 17.sp) }
+            ) { Text(stringResource(R.string.common_start), fontWeight = FontWeight.Bold, fontSize = 17.sp) }
             Spacer(Modifier.height(16.dp))
         }
     }
@@ -409,7 +410,7 @@ private fun RapidFireRun(
         Row(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
             Text(summary, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("$count sent", style = MaterialTheme.typography.bodySmall, color = Brand.textSecondary)
+                Text(stringResource(R.string.rapidfire_count_sent, count), style = MaterialTheme.typography.bodySmall, color = Brand.textSecondary)
                 SessionSettingsButton(onOpen = onSettings)
             }
         }
@@ -441,12 +442,12 @@ private fun RapidFireRun(
             }
 
             when (response) {
-                RapidFireResponse.REVIEW -> Text("Copy along — review the list when you're done.", color = Brand.textSecondary, textAlign = TextAlign.Center)
+                RapidFireResponse.REVIEW -> Text(stringResource(R.string.rapidfire_prompt_review), color = Brand.textSecondary, textAlign = TextAlign.Center)
                 RapidFireResponse.HEAD_COPY -> if (!revealBox) {
-                    Text("Copy it in your head…", color = Brand.textSecondary, textAlign = TextAlign.Center)
+                    Text(stringResource(R.string.common_copy_it_in_your_head), color = Brand.textSecondary, textAlign = TextAlign.Center)
                 }
                 RapidFireResponse.KEY -> if (!revealBox) {
-                    Text("Listen — then key it back.", color = Brand.textSecondary, textAlign = TextAlign.Center)
+                    Text(stringResource(R.string.rapidfire_prompt_key), color = Brand.textSecondary, textAlign = TextAlign.Center)
                 }
                 else -> {}
             }
@@ -459,7 +460,7 @@ private fun RapidFireRun(
                         .padding(vertical = 12.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Text("YOU SENT", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Brand.textSecondary)
+                    Text(stringResource(R.string.common_you_sent), fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Brand.textSecondary)
                     Spacer(Modifier.height(4.dp))
                     Text(
                         text = decoded.ifEmpty { "—" },
@@ -500,7 +501,7 @@ private fun RapidFireRun(
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text("⠿", fontSize = 24.sp, color = if (keyPressed) Brand.navy else Brand.teal)
                         Text(
-                            "HOLD TO KEY",
+                            stringResource(R.string.common_hold_to_key),
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             color = if (keyPressed) Brand.navy else Brand.textSecondary
@@ -513,7 +514,7 @@ private fun RapidFireRun(
                     value = typed,
                     onValueChange = onTyped,
                     singleLine = true,
-                    placeholder = { Text("Type what you copy", color = Brand.textSecondary) },
+                    placeholder = { Text(stringResource(R.string.rapidfire_type_what_you_copy), color = Brand.textSecondary) },
                     keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters, imeAction = ImeAction.Done),
                     keyboardActions = KeyboardActions(onDone = { onNext() }),
                     colors = OutlinedTextFieldDefaults.colors(
@@ -530,12 +531,12 @@ private fun RapidFireRun(
 
         Row(modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             if (response == RapidFireResponse.KEY) {
-                OutlinedButton(onClick = onClearKey, modifier = Modifier.weight(1f)) { Text("Clear") }
+                OutlinedButton(onClick = onClearKey, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.common_clear)) }
             }
             if (response != RapidFireResponse.REVIEW) {
-                OutlinedButton(onClick = onNext, modifier = Modifier.weight(1f)) { Text("Next ▸") }
+                OutlinedButton(onClick = onNext, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.rapidfire_next)) }
             }
-            Button(onClick = onDone, modifier = Modifier.weight(1f)) { Text("Done") }
+            Button(onClick = onDone, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.common_done)) }
         }
     }
 }
@@ -551,19 +552,19 @@ private fun RapidFireSummary(
     val correct = results.count { it.correct == true }
     Column(modifier = Modifier.fillMaxSize()) {
         Row(modifier = Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = onBack) { Text("‹ Back", color = Brand.teal) }
-            Text("Rapid Fire — Results", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            TextButton(onClick = onBack) { Text(stringResource(R.string.common_back), color = Brand.teal) }
+            Text(stringResource(R.string.rapidfire_results_title), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         }
         if (response != RapidFireResponse.REVIEW && graded > 0) {
             Text(
-                "$correct / $graded correct (${(100.0 * correct / graded).roundToInt()}%)",
+                stringResource(R.string.rapidfire_score, correct, graded, (100.0 * correct / graded).roundToInt()),
                 style = MaterialTheme.typography.titleMedium,
                 color = Brand.teal,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
             )
         } else {
-            Text("${results.size} sent", style = MaterialTheme.typography.titleMedium, color = Brand.teal, modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp))
+            Text(stringResource(R.string.rapidfire_count_sent, results.size), style = MaterialTheme.typography.titleMedium, color = Brand.teal, modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp))
         }
         LazyColumn(
             modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 16.dp),
@@ -579,7 +580,7 @@ private fun RapidFireSummary(
                 ) {
                     Text(r.sent, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Brand.textPrimary, modifier = Modifier.weight(1f))
                     r.typed?.let {
-                        Text("you: ${it.ifEmpty { "—" }}", fontFamily = FontFamily.Monospace, color = Brand.textSecondary)
+                        Text(stringResource(R.string.rapidfire_you_typed, it.ifEmpty { "—" }), fontFamily = FontFamily.Monospace, color = Brand.textSecondary)
                     }
                     r.correct?.let {
                         Text(if (it) "✓" else "✗", color = if (it) OK else ERR, fontWeight = FontWeight.Bold)
@@ -588,8 +589,8 @@ private fun RapidFireSummary(
             }
         }
         Row(modifier = Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            OutlinedButton(onClick = onAgain, modifier = Modifier.weight(1f)) { Text("Practice again") }
-            Button(onClick = onBack, modifier = Modifier.weight(1f)) { Text("Return home") }
+            OutlinedButton(onClick = onAgain, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.common_practice_again)) }
+            Button(onClick = onBack, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.common_return_home)) }
         }
     }
 }
@@ -630,9 +631,9 @@ private fun Stepper(label: String, value: Int, onChange: (Int) -> Unit) {
     ) {
         Text(label, color = Brand.textPrimary, fontWeight = FontWeight.Medium)
         Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = { onChange(value - 1) }) { Icon(Icons.Filled.Remove, contentDescription = "Decrease", tint = Brand.teal) }
+            IconButton(onClick = { onChange(value - 1) }) { Icon(Icons.Filled.Remove, contentDescription = stringResource(R.string.rapidfire_decrease), tint = Brand.teal) }
             Text("$value", fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, color = Brand.textPrimary, modifier = Modifier.padding(horizontal = 6.dp))
-            IconButton(onClick = { onChange(value + 1) }) { Icon(Icons.Filled.Add, contentDescription = "Increase", tint = Brand.teal) }
+            IconButton(onClick = { onChange(value + 1) }) { Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.rapidfire_increase), tint = Brand.teal) }
         }
     }
 }

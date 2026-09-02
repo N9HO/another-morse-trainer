@@ -27,6 +27,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -55,7 +56,7 @@ fun OnboardingScreen(onDone: () -> Unit) {
                 modifier = Modifier.size(96.dp)
             )
             Text(
-                "Welcome to\nAnother Morse Trainer",
+                stringResource(R.string.onboarding_welcome),
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Bold,
                 color = Brand.textPrimary,
@@ -63,8 +64,7 @@ fun OnboardingScreen(onDone: () -> Unit) {
             )
             Spacer(Modifier.height(8.dp))
             Text(
-                "Learn to copy Morse by ear with the Koch method — full-speed characters, " +
-                    "one at a time, building up as you go.",
+                stringResource(R.string.onboarding_blurb),
                 style = MaterialTheme.typography.bodyMedium,
                 color = Brand.textSecondary,
                 textAlign = TextAlign.Center
@@ -72,7 +72,7 @@ fun OnboardingScreen(onDone: () -> Unit) {
 
             Spacer(Modifier.height(28.dp))
             Text(
-                "How much Morse do you already know?",
+                stringResource(R.string.onboarding_proficiency_question),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
                 color = Brand.textPrimary,
@@ -94,7 +94,7 @@ fun OnboardingScreen(onDone: () -> Unit) {
                 onClick = { Settings.completeOnboarding(selected); onDone() },
                 colors = ButtonDefaults.buttonColors(containerColor = Brand.teal, contentColor = Brand.navy),
                 modifier = Modifier.fillMaxWidth().height(54.dp)
-            ) { Text("Start practicing", fontWeight = FontWeight.Bold) }
+            ) { Text(stringResource(R.string.onboarding_start_practicing), fontWeight = FontWeight.Bold) }
         }
     }
 }

@@ -51,6 +51,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -96,34 +97,34 @@ fun HomeScreen(
         "Confusion Drill" to Icons.Filled.SwapHoriz
     )
     val modeTaglines = mapOf(
-        "Characters" to "Core Koch drill",
-        "Common Words" to "Whole ham words",
-        "Abbreviations" to "CW abbreviations",
-        "Q-Codes" to "Q-signal shorthand",
-        "Prosigns" to "Run-together signals",
-        "Confusion Drill" to "Drill your mix-ups"
+        "Characters" to stringResource(R.string.home_core_koch_drill),
+        "Common Words" to stringResource(R.string.home_whole_ham_words),
+        "Abbreviations" to stringResource(R.string.home_cw_abbreviations),
+        "Q-Codes" to stringResource(R.string.home_q_signal_shorthand),
+        "Prosigns" to stringResource(R.string.home_run_together_signals),
+        "Confusion Drill" to stringResource(R.string.home_drill_your_mix_ups)
     )
     val items = listOf(
-        HomeItem("Journey", "Leveled path", Icons.Filled.Map, onPickJourney)
+        HomeItem(stringResource(R.string.mode_journey), stringResource(R.string.home_leveled_path), Icons.Filled.Map, onPickJourney)
     ) + QUIZ_MODES.map { mode ->
         HomeItem(
             mode.title,
             modeTaglines[mode.title] ?: mode.subtitle,
             modeIcons[mode.title] ?: Icons.Filled.Abc
         ) { onPickQuiz(mode) }
-    } + HomeItem("Head Copy", "Copy in your head", Icons.Filled.Psychology, onPickHeadCopy) +
-        HomeItem("Type It", "Free-recall typing", Icons.Filled.Keyboard, onPickTypeIt) +
-        HomeItem("QRQ Speed", "High-speed copy", Icons.Filled.Bolt, onPickQrq) +
-        HomeItem("Rapid Fire", "Back-to-back copy", Icons.Filled.FlashOn, onPickRapidFire) +
-        HomeItem("Sending Practice", "Key it back", Icons.Filled.Vibration, onPickSending) +
-        HomeItem("Sending Drills", "Printable sheets", Icons.Filled.Print, onPickSendingDrills) +
-        HomeItem("Repeater", "Live over the network", Icons.Filled.Wifi, onPickRepeater) +
-        HomeItem("Short Stories", "Continuous copy", Icons.AutoMirrored.Filled.MenuBook, onPickStory) +
-        HomeItem("Pileup Runner", "Work a CW pileup", Icons.Filled.RecordVoiceOver, onPickPileup) +
-        HomeItem("Contest", "Timed contest runs", Icons.Filled.EmojiEvents, onPickContest) +
-        HomeItem("Code Exam", "ARRL/FCC code exam", Icons.Filled.WorkspacePremium, onPickExam) +
-        HomeItem("Listen & Learn", "Hands-free, eyes-free", Icons.Filled.Headphones, onPickListen) +
-        HomeItem("Reference", "Look it up", Icons.AutoMirrored.Filled.ListAlt, onPickReference)
+    } + HomeItem(stringResource(R.string.mode_head_copy), stringResource(R.string.common_copy_in_your_head), Icons.Filled.Psychology, onPickHeadCopy) +
+        HomeItem(stringResource(R.string.mode_type_it), stringResource(R.string.common_free_recall_typing), Icons.Filled.Keyboard, onPickTypeIt) +
+        HomeItem(stringResource(R.string.mode_qrq_speed), stringResource(R.string.common_high_speed_copy), Icons.Filled.Bolt, onPickQrq) +
+        HomeItem(stringResource(R.string.mode_rapid_fire), stringResource(R.string.home_back_to_back_copy), Icons.Filled.FlashOn, onPickRapidFire) +
+        HomeItem(stringResource(R.string.mode_sending_practice), stringResource(R.string.common_key_it_back), Icons.Filled.Vibration, onPickSending) +
+        HomeItem(stringResource(R.string.mode_sending_drills), stringResource(R.string.home_printable_sheets), Icons.Filled.Print, onPickSendingDrills) +
+        HomeItem(stringResource(R.string.mode_repeater), stringResource(R.string.home_live_over_the_network), Icons.Filled.Wifi, onPickRepeater) +
+        HomeItem(stringResource(R.string.mode_short_stories), stringResource(R.string.home_continuous_copy), Icons.AutoMirrored.Filled.MenuBook, onPickStory) +
+        HomeItem(stringResource(R.string.mode_pileup_runner), stringResource(R.string.home_work_a_cw_pileup), Icons.Filled.RecordVoiceOver, onPickPileup) +
+        HomeItem(stringResource(R.string.mode_contest), stringResource(R.string.home_timed_contest_runs), Icons.Filled.EmojiEvents, onPickContest) +
+        HomeItem(stringResource(R.string.mode_code_exam), stringResource(R.string.home_arrl_fcc_code_exam), Icons.Filled.WorkspacePremium, onPickExam) +
+        HomeItem(stringResource(R.string.mode_listen_and_learn), stringResource(R.string.home_hands_free_eyes_free), Icons.Filled.Headphones, onPickListen) +
+        HomeItem(stringResource(R.string.mode_reference), stringResource(R.string.home_look_it_up), Icons.AutoMirrored.Filled.ListAlt, onPickReference)
 
     CenteredContent {
         Column(
@@ -138,15 +139,15 @@ fun HomeScreen(
                 IconButton(onClick = onPickCwDecoder) {
                     Icon(
                         Icons.Filled.GraphicEq,
-                        contentDescription = "CW decoder — turn received Morse audio into text",
+                        contentDescription = stringResource(R.string.home_cw_decoder_description),
                         tint = Brand.teal
                     )
                 }
                 IconButton(onClick = onPickStats) {
-                    Icon(Icons.Filled.BarChart, contentDescription = "Progress", tint = Brand.teal)
+                    Icon(Icons.Filled.BarChart, contentDescription = stringResource(R.string.common_progress), tint = Brand.teal)
                 }
                 IconButton(onClick = onPickSettings) {
-                    Icon(Icons.Filled.Settings, contentDescription = "Settings", tint = Brand.teal)
+                    Icon(Icons.Filled.Settings, contentDescription = stringResource(R.string.common_settings), tint = Brand.teal)
                 }
             }
 
@@ -158,7 +159,7 @@ fun HomeScreen(
                     modifier = Modifier.size(112.dp)
                 )
                 Text(
-                    text = "Another Morse Trainer",
+                    text = stringResource(R.string.app_name),
                     style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.Bold,
                     color = Brand.textPrimary,
@@ -166,7 +167,7 @@ fun HomeScreen(
                 )
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    text = "A proud part of the Carrier Wave ecosystem.",
+                    text = stringResource(R.string.home_tagline),
                     style = MaterialTheme.typography.bodyMedium,
                     color = Brand.textSecondary,
                     textAlign = TextAlign.Center
@@ -200,7 +201,7 @@ private fun StreakBadge(days: Int) {
             .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text("🔥  $days day streak", color = Brand.textPrimary, fontWeight = FontWeight.SemiBold)
+        Text(stringResource(R.string.home_streak, days), color = Brand.textPrimary, fontWeight = FontWeight.SemiBold)
     }
 }
 

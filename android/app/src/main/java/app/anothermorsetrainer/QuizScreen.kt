@@ -60,6 +60,8 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.key.utf16CodePoint
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.res.stringResource
 import androidx.core.content.ContextCompat
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -125,6 +127,7 @@ fun QuizScreen(
     onFinish: () -> Unit = onBack
 ) {
     val context = LocalContext.current
+    val resources = LocalResources.current
     val player = remember { MorsePlayer() }
     val haptics = remember { Haptics(context) }
     val source = remember { makeSource() }
@@ -178,7 +181,7 @@ fun QuizScreen(
     var voiceChoices by remember { mutableStateOf<List<String>>(emptyList()) }
     var listenTick by remember { mutableIntStateOf(0) }
     val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) listenTick++ else voiceNote = "Microphone permission is needed for voice answers."
+        if (granted) listenTick++ else voiceNote = resources.getString(R.string.quiz_mic_permission_needed)
     }
 
     fun clearVoicePrompts() {
@@ -383,12 +386,12 @@ fun QuizScreen(
                 when {
                     token != null && res.isConfident -> answer(token)
                     token != null -> voiceGuess = token
-                    else -> voiceNote = "Didn't catch that — tap an option or try again."
+                    else -> voiceNote = resources.getString(R.string.quiz_voice_not_caught)
                 }
             },
             onError = {
                 listening = false
-                voiceNote = "Didn't catch that — tap an option or try again."
+                voiceNote = resources.getString(R.string.quiz_voice_not_caught)
             }
         )
     }
@@ -436,7 +439,7 @@ fun QuizScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            TextButton(onClick = { if (phase == QuizPhase.SUMMARY) onBack() else finish() }) { Text("‹ Back") }
+            TextButton(onClick = { if (phase == QuizPhase.SUMMARY) onBack() else finish() }) { Text(stringResource(R.string.common_back)) }
             if (phase == QuizPhase.RUNNING) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     remaining?.let {
@@ -447,7 +450,7 @@ fun QuizScreen(
                         )
                     }
                     SessionSettingsButton { showSettings = true }
-                    TextButton(onClick = { endSession() }) { Text("End") }
+                    TextButton(onClick = { endSession() }) { Text(stringResource(R.string.common_end)) }
                 }
             }
         }
@@ -488,7 +491,7 @@ fun QuizScreen(
             if (drill.isKeyable) {
                 TextButton(onClick = { Settings.updateAnswerByKeying(!Settings.answerByKeying) }) {
                     Text(
-                        if (Settings.answerByKeying) "⠿ Key answers · on" else "⠿ Key answers · off",
+                        if (Settings.answerByKeying) stringResource(R.string.quiz_key_answers_on) else stringResource(R.string.quiz_key_answers_off),
                         fontSize = 13.sp,
                         color = if (Settings.answerByKeying) Brand.teal else Brand.textSecondary
                     )
@@ -546,16 +549,16 @@ fun QuizScreen(
                 }
                 Text(
                     text = when {
-                        ok -> "✓ recalled in %.1f s".format(lastTtr)
-                        showAnswer -> "✗ it was “${drill.correct}”"
-                        else -> "✗ not quite"
+                        ok -> stringResource(R.string.common_recalled_in, lastTtr)
+                        showAnswer -> stringResource(R.string.common_it_was, drill.correct)
+                        else -> stringResource(R.string.common_not_quite)
                     },
                     color = if (ok) OK_GREEN else ERR_RED,
                     fontWeight = FontWeight.Medium
                 )
                 unlockedNote?.let {
                     Spacer(Modifier.height(4.dp))
-                    Text("★ New: $it", color = Brand.teal, fontWeight = FontWeight.SemiBold)
+                    Text(stringResource(R.string.quiz_new_character, it), color = Brand.teal, fontWeight = FontWeight.SemiBold)
                 }
                 if (!ok) {
                     // The held correction (issue #77): re-hear it as often as
@@ -563,19 +566,19 @@ fun QuizScreen(
                     Spacer(Modifier.height(18.dp))
                     OutlinedButton(onClick = {
                         player.replaySound(drill.playable, Settings.sidetoneHz, Settings.timing())
-                    }) { Text("▶ Replay") }
+                    }) { Text(stringResource(R.string.common_replay)) }
                     Spacer(Modifier.height(10.dp))
                     Button(
                         onClick = { advance() },
                         colors = ButtonDefaults.buttonColors(containerColor = Brand.teal, contentColor = Brand.navy),
                         modifier = Modifier.fillMaxWidth()
-                    ) { Text("Next", fontWeight = FontWeight.SemiBold) }
+                    ) { Text(stringResource(R.string.common_next), fontWeight = FontWeight.SemiBold) }
                 }
             } else {
                 Text(text = "?", fontSize = 52.sp, fontWeight = FontWeight.Bold, color = Brand.teal)
                 Spacer(Modifier.height(4.dp))
                 OutlinedButton(onClick = { player.replaySound(drill.playable, Settings.sidetoneHz, Settings.timing()) }) {
-                    Text("▶ Replay")
+                    Text(stringResource(R.string.common_replay))
                 }
             }
 
@@ -612,7 +615,7 @@ fun QuizScreen(
                     enabled = !listening
                 ) {
                     Icon(Icons.Filled.Mic, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Text(if (listening) "  Listening…" else "  Speak answer")
+                    Text(if (listening) stringResource(R.string.quiz_listening) else stringResource(R.string.quiz_speak_answer))
                 }
 
                 // Not sure what was said: confirm the best guess…
@@ -623,11 +626,11 @@ fun QuizScreen(
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         Text(
-                            "Did you say “$guess”?",
+                            stringResource(R.string.quiz_voice_confirm, guess),
                             style = MaterialTheme.typography.labelMedium,
                             color = Brand.textPrimary
                         )
-                        TextButton(onClick = { acceptVoice(guess) }) { Text("Yes") }
+                        TextButton(onClick = { acceptVoice(guess) }) { Text(stringResource(R.string.quiz_yes)) }
                         TextButton(onClick = {
                             // …or fall back to picking the closest-sounding answers.
                             voiceGuess = null
@@ -635,12 +638,12 @@ fun QuizScreen(
                                 .rankedCandidates(voiceHeard, drill.options)
                                 .filter { it != guess }
                                 .take(3)
-                        }) { Text("No") }
+                        }) { Text(stringResource(R.string.quiz_no)) }
                     }
                 }
                 if (voiceChoices.isNotEmpty()) {
                     Spacer(Modifier.height(4.dp))
-                    Text("I said:", style = MaterialTheme.typography.labelMedium, color = Brand.textSecondary)
+                    Text(stringResource(R.string.quiz_i_said), style = MaterialTheme.typography.labelMedium, color = Brand.textSecondary)
                     Row(
                         modifier = Modifier.horizontalScroll(rememberScrollState()),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -648,7 +651,7 @@ fun QuizScreen(
                         voiceChoices.forEach { choice ->
                             OutlinedButton(onClick = { acceptVoice(choice) }) { Text(choice, maxLines = 1) }
                         }
-                        TextButton(onClick = { clearVoicePrompts() }) { Text("None") }
+                        TextButton(onClick = { clearVoicePrompts() }) { Text(stringResource(R.string.quiz_none)) }
                     }
                 }
 
@@ -684,17 +687,17 @@ internal fun SessionSummaryContent(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Text("Session complete", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+        Text(stringResource(R.string.common_session_complete), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(4.dp))
         Text(title, style = MaterialTheme.typography.labelMedium, color = Brand.textSecondary)
 
         Spacer(Modifier.height(24.dp))
         Column(modifier = Modifier.fillMaxWidth().brandCard()) {
-            SummaryRow("Answered", "${tally.attempts}")
+            SummaryRow(stringResource(R.string.common_answered), "${tally.attempts}")
             val pct = if (tally.attempts == 0) 0 else (tally.correct * 100.0 / tally.attempts).roundToInt()
-            SummaryRow("Accuracy", "$pct%")
-            SummaryRow("Fastest", tally.bestMs?.let { "%.2f s".format(it / 1000.0) } ?: "—")
-            SummaryRow("Median", tally.medianMs()?.let { "%.2f s".format(it / 1000.0) } ?: "—")
+            SummaryRow(stringResource(R.string.common_accuracy), "$pct%")
+            SummaryRow(stringResource(R.string.common_fastest), tally.bestMs?.let { stringResource(R.string.common_seconds_2dp, it / 1000.0) } ?: "—")
+            SummaryRow(stringResource(R.string.common_median), tally.medianMs()?.let { stringResource(R.string.common_seconds_2dp, it / 1000.0) } ?: "—")
         }
 
         milestone?.let { day ->
@@ -704,8 +707,8 @@ internal fun SessionSummaryContent(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(milestoneEmoji(day), fontSize = 40.sp)
-                Text("$day-day streak!", fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                Text("New milestone reached — keep it going.", color = Brand.textSecondary, fontSize = 13.sp)
+                Text(stringResource(R.string.common_streak_milestone, day), fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                Text(stringResource(R.string.common_milestone_body), color = Brand.textSecondary, fontSize = 13.sp)
             }
         }
 
@@ -715,12 +718,12 @@ internal fun SessionSummaryContent(
             colors = ButtonDefaults.buttonColors(containerColor = Brand.teal, contentColor = Brand.navy),
             shape = RoundedCornerShape(Brand.cornerRadius),
             modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)
-        ) { Text("Practice again", fontWeight = FontWeight.SemiBold) }
+        ) { Text(stringResource(R.string.common_practice_again), fontWeight = FontWeight.SemiBold) }
         Spacer(Modifier.height(10.dp))
         // Named for where it lands (issue #90): "Done" said nothing about
         // the destination, and the iOS recap now says the same thing.
         OutlinedButton(onClick = onDone, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-            Text("Return home")
+            Text(stringResource(R.string.common_return_home))
         }
     }
 }
@@ -750,12 +753,12 @@ internal fun StagePinRow(
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text("Stage", style = MaterialTheme.typography.labelMedium, color = Brand.textSecondary)
-        StagePill("Auto", selected = pinned == null) { onPick(null) }
+        Text(stringResource(R.string.quiz_stage), style = MaterialTheme.typography.labelMedium, color = Brand.textSecondary)
+        StagePill(stringResource(R.string.common_auto), selected = pinned == null) { onPick(null) }
         ProgressiveCharacters.Stage.entries.forEach { stage ->
             val label = when (stage) {
-                ProgressiveCharacters.Stage.Singles -> "Chars"
-                ProgressiveCharacters.Stage.Phrases -> "Words"
+                ProgressiveCharacters.Stage.Singles -> stringResource(R.string.quiz_chars)
+                ProgressiveCharacters.Stage.Phrases -> stringResource(R.string.quiz_words)
                 else -> stage.displayName
             }
             StagePill(label, selected = pinned == stage) { onPick(stage) }
@@ -812,7 +815,7 @@ private fun KeyedAnswerPanel(
                 .padding(vertical = 10.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text("YOU SENT", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Brand.textSecondary)
+            Text(stringResource(R.string.common_you_sent), fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Brand.textSecondary)
             Spacer(Modifier.height(4.dp))
             Text(
                 text = decoded.ifEmpty { "—" },
@@ -853,7 +856,7 @@ private fun KeyedAnswerPanel(
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text("⠿", fontSize = 22.sp, color = if (keyPressed) Brand.navy else Brand.teal)
                 Text(
-                    "HOLD TO KEY",
+                    stringResource(R.string.common_hold_to_key),
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
                     color = if (keyPressed) Brand.navy else Brand.textSecondary
@@ -866,13 +869,13 @@ private fun KeyedAnswerPanel(
                 onClick = onClear,
                 enabled = enabled,
                 modifier = Modifier.weight(1f).heightIn(min = 44.dp)
-            ) { Text("Clear") }
+            ) { Text(stringResource(R.string.common_clear)) }
             Button(
                 onClick = onSubmit,
                 enabled = enabled && decoded.isNotBlank(),
                 colors = ButtonDefaults.buttonColors(containerColor = Brand.teal, contentColor = Brand.navy),
                 modifier = Modifier.weight(1f).heightIn(min = 44.dp)
-            ) { Text("Submit", fontWeight = FontWeight.SemiBold) }
+            ) { Text(stringResource(R.string.common_submit), fontWeight = FontWeight.SemiBold) }
         }
     }
 }

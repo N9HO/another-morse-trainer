@@ -23,8 +23,8 @@ object Reminders {
     /** Create the notification channel (idempotent; safe to call repeatedly). */
     fun ensureChannel(context: Context) {
         val channel = NotificationChannelCompat.Builder(CHANNEL_ID, NotificationManagerCompat.IMPORTANCE_DEFAULT)
-            .setName("Practice reminders")
-            .setDescription("A daily nudge to keep your Morse streak alive.")
+            .setName(context.getString(R.string.reminder_channel_name))
+            .setDescription(context.getString(R.string.reminder_channel_description))
             .build()
         NotificationManagerCompat.from(context).createNotificationChannel(channel)
     }

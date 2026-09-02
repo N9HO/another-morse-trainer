@@ -34,6 +34,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -84,7 +85,7 @@ fun CodeExamScreen(onBack: () -> Unit) {
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            TextButton(onClick = onBack) { Text("‹ Back") }
+            TextButton(onClick = onBack) { Text(stringResource(R.string.common_back)) }
             SessionSettingsButton { showSettings = true }
         }
 
@@ -142,16 +143,16 @@ private fun ExamSetup(
             .padding(horizontal = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text("Code Exam", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+        Text(stringResource(R.string.mode_code_exam), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(4.dp))
         Text(
-            "The old FCC code test: copy a 5-minute QSO at speed, then prove it.",
+            stringResource(R.string.exam_intro),
             style = MaterialTheme.typography.bodyMedium,
             textAlign = TextAlign.Center
         )
         Spacer(Modifier.height(24.dp))
 
-        Text("Speed", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+        Text(stringResource(R.string.common_speed), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(8.dp))
         ExamSpeed.allCases.forEach { option ->
             ChoiceRow(
@@ -163,7 +164,7 @@ private fun ExamSetup(
         }
 
         Spacer(Modifier.height(16.dp))
-        Text("How you'll pass", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+        Text(stringResource(R.string.exam_how_youll_pass), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(8.dp))
         ExamGrading.allCases.forEach { option ->
             ChoiceRow(
@@ -176,7 +177,7 @@ private fun ExamSetup(
 
         Spacer(Modifier.height(24.dp))
         Button(onClick = onStart, modifier = Modifier.fillMaxWidth().height(52.dp)) {
-            Text("Start Exam", fontSize = 18.sp)
+            Text(stringResource(R.string.exam_start_exam), fontSize = 18.sp)
         }
         Spacer(Modifier.height(24.dp))
     }
@@ -238,18 +239,17 @@ private fun SolidCopyExam(
             .padding(horizontal = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text("Code Exam · ${session.speed.wpmLabel}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+        Text(stringResource(R.string.exam_title_with_speed, session.speed.wpmLabel), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(4.dp))
         Text(
-            "Play the transmission, then type what you copied. " +
-                "Pass = ${ExamSession.requiredRun} characters in a row.",
+            stringResource(R.string.exam_solid_copy_instructions, ExamSession.requiredRun),
             style = MaterialTheme.typography.bodyMedium,
             textAlign = TextAlign.Center
         )
         Spacer(Modifier.height(20.dp))
 
         Button(onClick = { playPassage() }, enabled = !playing, modifier = Modifier.fillMaxWidth().height(52.dp)) {
-            Text(if (playing) "Sending…" else "▶ Play transmission", fontSize = 18.sp)
+            Text(if (playing) stringResource(R.string.exam_sending) else stringResource(R.string.exam_play_transmission), fontSize = 18.sp)
         }
         Spacer(Modifier.height(16.dp))
 
@@ -260,7 +260,7 @@ private fun SolidCopyExam(
         OutlinedTextField(
             value = typed,
             onValueChange = { typed = it.uppercase() },
-            label = { Text("Your copy") },
+            label = { Text(stringResource(R.string.exam_your_copy)) },
             modifier = Modifier.fillMaxWidth().height(160.dp)
         )
         Spacer(Modifier.height(12.dp))
@@ -285,25 +285,25 @@ private fun SolidCopyExam(
                 enabled = typed.isNotBlank(),
                 modifier = Modifier.fillMaxWidth().height(52.dp)
             ) {
-                Text("Grade my copy", fontSize = 18.sp)
+                Text(stringResource(R.string.exam_grade_my_copy), fontSize = 18.sp)
             }
         } else {
             val result = session.gradeSolidCopy(typed)
             Text(
-                if (result.passed) "✓ PASS" else "✗ Not yet",
+                if (result.passed) stringResource(R.string.exam_pass) else stringResource(R.string.exam_not_yet),
                 color = if (result.passed) OK_GREEN else ERR_RED,
                 fontSize = 26.sp,
                 fontWeight = FontWeight.Bold
             )
             Spacer(Modifier.height(4.dp))
             Text(
-                "Longest solid run: ${result.longestRun} / ${result.required}",
+                stringResource(R.string.exam_longest_run, result.longestRun, result.required),
                 style = MaterialTheme.typography.bodyLarge
             )
             Spacer(Modifier.height(16.dp))
 
             OutlinedButton(onClick = { revealed = !revealed }, modifier = Modifier.fillMaxWidth()) {
-                Text(if (revealed) "Hide what was sent" else "Show what was sent")
+                Text(if (revealed) stringResource(R.string.exam_hide_what_was_sent) else stringResource(R.string.exam_show_what_was_sent))
             }
             if (revealed) {
                 Spacer(Modifier.height(8.dp))
@@ -318,11 +318,11 @@ private fun SolidCopyExam(
             }
             Spacer(Modifier.height(16.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-                OutlinedButton(onClick = onQuit, modifier = Modifier.weight(1f)) { Text("Done") }
+                OutlinedButton(onClick = onQuit, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.common_done)) }
                 Button(
                     onClick = { player.stop(); onNew() },
                     modifier = Modifier.weight(1f)
-                ) { Text("New passage") }
+                ) { Text(stringResource(R.string.exam_new_passage)) }
             }
         }
         Spacer(Modifier.height(24.dp))
@@ -368,20 +368,20 @@ private fun QuestionsExam(
     ) {
         run {
             if (!heardPassage) {
-                Text("Code Exam · ${session.speed.wpmLabel}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text(stringResource(R.string.exam_title_with_speed, session.speed.wpmLabel), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    "Listen to the whole QSO once, then answer $total questions about it.",
+                    stringResource(R.string.exam_questions_intro, total),
                     style = MaterialTheme.typography.bodyMedium,
                     textAlign = TextAlign.Center
                 )
                 Spacer(Modifier.height(20.dp))
                 Button(onClick = { playPassage() }, enabled = !playing, modifier = Modifier.fillMaxWidth().height(52.dp)) {
-                    Text(if (playing) "Sending…" else "▶ Play transmission", fontSize = 18.sp)
+                    Text(if (playing) stringResource(R.string.exam_sending) else stringResource(R.string.exam_play_transmission), fontSize = 18.sp)
                 }
             } else if (!finished) {
                 val q = session.questions[qIndex]
-                Text("Q ${qIndex + 1} of $total", style = MaterialTheme.typography.labelMedium)
+                Text(stringResource(R.string.exam_question_counter, qIndex + 1, total), style = MaterialTheme.typography.labelMedium)
                 Spacer(Modifier.height(16.dp))
                 Text(
                     q.prompt,
@@ -437,7 +437,7 @@ private fun QuestionsExam(
                         },
                         modifier = Modifier.fillMaxWidth().height(48.dp)
                     ) {
-                        Text(if (qIndex >= total - 1) "See results" else "Next question")
+                        Text(if (qIndex >= total - 1) stringResource(R.string.exam_see_results) else stringResource(R.string.exam_next_question))
                     }
                 }
             } else {
@@ -445,17 +445,17 @@ private fun QuestionsExam(
                 val passed = total > 0 && score.toDouble() / total >= 0.7  // historical bar ≈ 70%
                 Spacer(Modifier.height(24.dp))
                 Text(
-                    if (passed) "✓ PASS" else "✗ Not yet",
+                    if (passed) stringResource(R.string.exam_pass) else stringResource(R.string.exam_not_yet),
                     color = if (passed) OK_GREEN else ERR_RED,
                     fontSize = 30.sp,
                     fontWeight = FontWeight.Bold
                 )
                 Spacer(Modifier.height(8.dp))
-                Text("$score / $total correct", style = MaterialTheme.typography.headlineSmall)
+                Text(stringResource(R.string.exam_score, score, total), style = MaterialTheme.typography.headlineSmall)
                 Spacer(Modifier.height(28.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-                    OutlinedButton(onClick = onQuit, modifier = Modifier.weight(1f)) { Text("Done") }
-                    Button(onClick = onNew, modifier = Modifier.weight(1f)) { Text("New exam") }
+                    OutlinedButton(onClick = onQuit, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.common_done)) }
+                    Button(onClick = onNew, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.exam_new_exam)) }
                 }
             }
         }

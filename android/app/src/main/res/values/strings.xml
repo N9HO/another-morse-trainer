@@ -1,0 +1,484 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  User-facing copy for the Android app, moved out of the composables (issue #132).
+  Every value was extracted from the Kotlin literal it replaced by script, not
+  retyped; format arguments are %n$s because that is what a Kotlin template does
+  (toString), and %d would localise digits.
+-->
+<resources>
+
+    <!-- App -->
+    <string name="app_name">Another Morse Trainer</string>
+
+    <!-- Home menu modes -->
+    <string name="mode_journey">Journey</string>
+    <string name="mode_head_copy">Head Copy</string>
+    <string name="mode_type_it">Type It</string>
+    <string name="mode_qrq_speed">QRQ Speed</string>
+    <string name="mode_rapid_fire">Rapid Fire</string>
+    <string name="mode_sending_practice">Sending Practice</string>
+    <string name="mode_sending_drills">Sending Drills</string>
+    <string name="mode_repeater">Repeater</string>
+    <string name="mode_short_stories">Short Stories</string>
+    <string name="mode_pileup_runner">Pileup Runner</string>
+    <string name="mode_contest">Contest</string>
+    <string name="mode_code_exam">Code Exam</string>
+    <string name="mode_listen_and_learn">Listen &amp; Learn</string>
+    <string name="mode_reference">Reference</string>
+
+    <!-- Shared across screens -->
+    <string name="common_copy_in_your_head">Copy in your head</string>
+    <string name="common_free_recall_typing">Free-recall typing</string>
+    <string name="common_high_speed_copy">High-speed copy</string>
+    <string name="common_key_it_back">Key it back</string>
+    <string name="common_progress">Progress</string>
+    <string name="common_settings">Settings</string>
+    <string name="common_cancel">Cancel</string>
+    <string name="common_back">‹ Back</string>
+    <string name="common_end">End</string>
+    <string name="common_recalled_in">✓ recalled in %1$.1f s</string>
+    <string name="common_it_was">✗ it was “%1$s”</string>
+    <string name="common_not_quite">✗ not quite</string>
+    <string name="common_replay">▶ Replay</string>
+    <string name="common_next">Next</string>
+    <string name="common_session_complete">Session complete</string>
+    <string name="common_answered">Answered</string>
+    <string name="common_accuracy">Accuracy</string>
+    <string name="common_fastest">Fastest</string>
+    <string name="common_seconds_2dp">%1$.2f s</string>
+    <string name="common_median">Median</string>
+    <string name="common_streak_milestone">%1$s-day streak!</string>
+    <string name="common_milestone_body">New milestone reached — keep it going.</string>
+    <string name="common_practice_again">Practice again</string>
+    <string name="common_return_home">Return home</string>
+    <string name="common_auto">Auto</string>
+    <string name="common_you_sent">YOU SENT</string>
+    <string name="common_hold_to_key">HOLD TO KEY</string>
+    <string name="common_clear">Clear</string>
+    <string name="common_submit">Submit</string>
+    <string name="common_wpm_value">%1$s WPM</string>
+    <string name="common_off">Off</string>
+    <string name="common_copy_it_in_your_head">Copy it in your head…</string>
+    <string name="common_time">Time</string>
+    <string name="common_speed">Speed</string>
+    <string name="common_done">Done</string>
+    <string name="common_call_cq">Call CQ</string>
+    <string name="common_stations_calling">%1$s stations calling.</string>
+    <string name="common_copy_a_call_and_send_it">Copy a call and send it.</string>
+    <string name="common_calling_list">calling: %1$s</string>
+    <string name="common_again">▶ Again</string>
+    <string name="common_cq">CQ</string>
+    <string name="common_hide_hint">Hide hint</string>
+    <string name="common_show_hint">Show hint</string>
+    <string name="common_working_station">Working %1$s</string>
+    <string name="common_copy_their_exchange_and_send_it">Copy their exchange and send it.</string>
+    <string name="common_expecting">expecting: %1$s</string>
+    <string name="common_log_tu">Log (TU)</string>
+    <string name="common_rate">Rate</string>
+    <string name="common_rate_per_hour">%1$s/hr</string>
+    <string name="common_clean_copy">Clean copy</string>
+    <string name="common_busts">Busts</string>
+    <string name="common_worked">WORKED</string>
+    <string name="common_wpm_lower">%1$s wpm</string>
+    <string name="common_run_again">Run again</string>
+    <string name="common_send">Send</string>
+    <string name="common_us_calls_only">US calls only</string>
+    <string name="common_start">Start</string>
+    <string name="common_bluetooth_permission_needed">Bluetooth permission is needed to find a key.</string>
+    <string name="common_find_bluetooth_key">Find Bluetooth key</string>
+    <string name="common_hz_value">%1$s Hz</string>
+    <string name="common_stop">Stop</string>
+    <string name="common_play">Play</string>
+
+    <!-- OnboardingScreen -->
+    <string name="onboarding_welcome">Welcome to\nAnother Morse Trainer</string>
+    <string name="onboarding_blurb">Learn to copy Morse by ear with the Koch method — full-speed characters, one at a time, building up as you go.</string>
+    <string name="onboarding_proficiency_question">How much Morse do you already know?</string>
+    <string name="onboarding_start_practicing">Start practicing</string>
+
+    <!-- HomeScreen -->
+    <string name="home_core_koch_drill">Core Koch drill</string>
+    <string name="home_whole_ham_words">Whole ham words</string>
+    <string name="home_cw_abbreviations">CW abbreviations</string>
+    <string name="home_q_signal_shorthand">Q-signal shorthand</string>
+    <string name="home_run_together_signals">Run-together signals</string>
+    <string name="home_drill_your_mix_ups">Drill your mix-ups</string>
+    <string name="home_leveled_path">Leveled path</string>
+    <string name="home_back_to_back_copy">Back-to-back copy</string>
+    <string name="home_printable_sheets">Printable sheets</string>
+    <string name="home_live_over_the_network">Live over the network</string>
+    <string name="home_continuous_copy">Continuous copy</string>
+    <string name="home_work_a_cw_pileup">Work a CW pileup</string>
+    <string name="home_timed_contest_runs">Timed contest runs</string>
+    <string name="home_arrl_fcc_code_exam">ARRL/FCC code exam</string>
+    <string name="home_hands_free_eyes_free">Hands-free, eyes-free</string>
+    <string name="home_look_it_up">Look it up</string>
+    <string name="home_cw_decoder_description">CW decoder — turn received Morse audio into text</string>
+    <string name="home_tagline">A proud part of the Carrier Wave ecosystem.</string>
+    <string name="home_streak">"🔥  %1$s day streak"</string>
+
+    <!-- SessionSetupSheet -->
+    <string name="setup_where_are_you_starting">Where are you starting?</string>
+    <string name="setup_proficiency_blurb">How much Morse you already know — sets where the drill begins. Changing this restarts your active set.</string>
+    <string name="setup_track_stage">Track stage</string>
+    <string name="setup_duration_question">How long do you want to practice?</string>
+    <string name="setup_start_training">Start Training</string>
+
+    <!-- MainActivity -->
+    <string name="setup_listen">Listen</string>
+    <string name="setup_hands_free_copy">Hands-free copy</string>
+    <string name="setup_story">Story</string>
+    <string name="setup_read_along_in_morse">Read along in Morse</string>
+
+    <!-- QuizScreen -->
+    <string name="quiz_mic_permission_needed">Microphone permission is needed for voice answers.</string>
+    <string name="quiz_voice_not_caught">Didn\'t catch that — tap an option or try again.</string>
+    <string name="quiz_key_answers_on">⠿ Key answers · on</string>
+    <string name="quiz_key_answers_off">⠿ Key answers · off</string>
+    <string name="quiz_new_character">★ New: %1$s</string>
+    <string name="quiz_listening">"  Listening…"</string>
+    <string name="quiz_speak_answer">"  Speak answer"</string>
+    <string name="quiz_voice_confirm">Did you say “%1$s”?</string>
+    <string name="quiz_yes">Yes</string>
+    <string name="quiz_no">No</string>
+    <string name="quiz_i_said">I said:</string>
+    <string name="quiz_none">None</string>
+    <string name="quiz_stage">Stage</string>
+    <string name="quiz_chars">Chars</string>
+    <string name="quiz_words">Words</string>
+
+    <!-- TypedQuizScreen -->
+    <string name="typed_correct">✓ correct</string>
+    <string name="typed_wrong">✗ you typed “%1$s”</string>
+    <string name="typed_type_what_you_hear">Type what you hear</string>
+    <string name="typed_check">Check</string>
+
+    <!-- HeadCopyScreen -->
+    <string name="headcopy_repeat">Repeat</string>
+    <string name="headcopy_reveal">Reveal</string>
+    <string name="headcopy_manual">Manual</string>
+    <string name="headcopy_reveal_2s">2s</string>
+    <string name="headcopy_reveal_4s">4s</string>
+    <string name="headcopy_reveal_6s">6s</string>
+    <string name="headcopy_did_you_copy_it">Did you copy it?</string>
+    <string name="headcopy_missed">✗ Missed</string>
+    <string name="headcopy_got_it">✓ Got it</string>
+
+    <!-- StoryScreen -->
+    <string name="story_counter_fable">Story %1$s of %2$s · %3$s</string>
+    <string name="story_counter_serial">Part %1$s of %2$s</string>
+    <string name="story_counter_news">Headline %1$s of %2$s</string>
+    <string name="story_subtitle_fable">Public-domain fable · continuous copy</string>
+    <string name="story_subtitle_serial">%1$s · your bookmark keeps your place</string>
+    <string name="story_subtitle_news_cached">%1$s · saved headlines</string>
+    <string name="story_subtitle_news">%1$s · decode the news</string>
+    <string name="story_serial_intro">A longer tale sent in short parts. Your bookmark moves as you go, so you can pick the story back up any day.</string>
+    <string name="story_serial_resume">Your bookmark picks this story back up at part %1$s of %2$s.</string>
+    <string name="story_include_the_summary">Include the summary</string>
+    <string name="story_fetching_todays_headlines">Fetching todays headlines…</string>
+    <string name="story_try_again">Try Again</string>
+    <string name="story_sending_copy_along">Sending… copy along</string>
+    <string name="story_prompt_news">Press Play, then decode the headline</string>
+    <string name="story_prompt_passage">Copy the passage, then reveal to check.</string>
+    <string name="story_previous_part">Previous part</string>
+    <string name="story_stop">■ Stop</string>
+    <string name="story_play_passage">▶ Play passage</string>
+    <string name="story_reveal_text">Reveal text</string>
+    <string name="story_next_headline">Next headline ›</string>
+    <string name="story_next_story">Next story ›</string>
+    <string name="story_passages_copied">Passages copied</string>
+    <string name="story_keep_copying">Keep copying</string>
+
+    <!-- CodeExamScreen -->
+    <string name="exam_intro">The old FCC code test: copy a 5-minute QSO at speed, then prove it.</string>
+    <string name="exam_how_youll_pass">How you\'ll pass</string>
+    <string name="exam_start_exam">Start Exam</string>
+    <string name="exam_title_with_speed">Code Exam · %1$s</string>
+    <string name="exam_solid_copy_instructions">Play the transmission, then type what you copied. Pass = %1$s characters in a row.</string>
+    <string name="exam_sending">Sending…</string>
+    <string name="exam_play_transmission">▶ Play transmission</string>
+    <string name="exam_your_copy">Your copy</string>
+    <string name="exam_grade_my_copy">Grade my copy</string>
+    <string name="exam_pass">✓ PASS</string>
+    <string name="exam_not_yet">✗ Not yet</string>
+    <string name="exam_longest_run">Longest solid run: %1$s / %2$s</string>
+    <string name="exam_hide_what_was_sent">Hide what was sent</string>
+    <string name="exam_show_what_was_sent">Show what was sent</string>
+    <string name="exam_new_passage">New passage</string>
+    <string name="exam_questions_intro">Listen to the whole QSO once, then answer %1$s questions about it.</string>
+    <string name="exam_question_counter">Q %1$s of %2$s</string>
+    <string name="exam_see_results">See results</string>
+    <string name="exam_next_question">Next question</string>
+    <string name="exam_score">%1$s / %2$s correct</string>
+    <string name="exam_new_exam">New exam</string>
+
+    <!-- ContestScreen -->
+    <string name="contest_which_contest">WHICH CONTEST?</string>
+    <string name="contest_speed_range">Stations run %1$s–%2$s WPM.</string>
+    <string name="contest_duration_question">HOW LONG DO YOU WANT TO RUN?</string>
+    <string name="contest_start_button">Start %1$s</string>
+    <string name="contest_idle_prompt">Call CQ %1$s and work who answers.</string>
+    <string name="contest_score">Score</string>
+    <string name="contest_qsos">QSOs</string>
+    <string name="contest_acc">Acc</string>
+
+    <!-- PileupScreen -->
+    <string name="pileup_your_call">YOUR CALL</string>
+    <string name="pileup_exchange">EXCHANGE</string>
+    <string name="pileup_the_pileup">THE PILEUP</string>
+    <string name="pileup_callers">Callers</string>
+    <string name="pileup_callers_value">up to %1$s</string>
+    <string name="pileup_slowest_caller">Slowest caller</string>
+    <string name="pileup_fastest_caller">Fastest caller</string>
+    <string name="pileup_tone_spread">Tone spread</string>
+    <string name="pileup_zero_beat">Zero beat</string>
+    <string name="pileup_tone_spread_value">±%1$s Hz</string>
+    <string name="pileup_qsb_fading">QSB fading</string>
+    <string name="pileup_qrn_static">QRN STATIC</string>
+    <string name="pileup_callsigns">CALLSIGNS</string>
+    <string name="pileup_operating">OPERATING</string>
+    <string name="pileup_cut_numbers">Cut numbers (5NN, 1 → A…)</string>
+    <string name="pileup_require_the_rst_copied">Require the RST copied</string>
+    <string name="pileup_on_a_busted_call">ON A BUSTED CALL</string>
+    <string name="pileup_impatient_callers_give_up">Impatient callers give up</string>
+    <string name="pileup_tell_me_who_got_away">TELL ME WHO GOT AWAY</string>
+    <string name="pileup_keep_my_partial_call_after">Keep my partial call after \"?\"</string>
+    <string name="pileup_key_my_side_in_morse">Key my side in Morse</string>
+    <string name="pileup_recall_after_tu">Pileup re-calls after TU</string>
+    <string name="pileup_start_button">Start — %1$s</string>
+    <string name="pileup_idle_prompt">Tap to call CQ and start a pileup.</string>
+    <string name="pileup_log">LOG</string>
+    <string name="pileup_gave_up">%1$s gave up</string>
+    <string name="pileup_got_it">Got it</string>
+    <string name="pileup_worked">Worked</string>
+    <string name="pileup_clean">Clean</string>
+    <string name="pileup_summary_title">Pileup — %1$s</string>
+    <string name="pileup_got_away_header">GOT AWAY (%1$s)</string>
+    <string name="pileup_you_had">you had %1$s</string>
+    <string name="pileup_never_copied">never copied</string>
+
+    <!-- RapidFireScreen -->
+    <string name="rapidfire_what_to_copy">WHAT TO COPY</string>
+    <string name="rapidfire_min_length">Min length</string>
+    <string name="rapidfire_max_length">Max length</string>
+    <string name="rapidfire_digits_per_group">Digits per group</string>
+    <string name="rapidfire_how_to_copy">HOW TO COPY</string>
+    <string name="rapidfire_pace">PACE</string>
+    <string name="rapidfire_count_sent">%1$s sent</string>
+    <string name="rapidfire_prompt_review">Copy along — review the list when you\'re done.</string>
+    <string name="rapidfire_prompt_key">Listen — then key it back.</string>
+    <string name="rapidfire_type_what_you_copy">Type what you copy</string>
+    <string name="rapidfire_next">Next ▸</string>
+    <string name="rapidfire_results_title">Rapid Fire — Results</string>
+    <string name="rapidfire_score">%1$s / %2$s correct (%3$s%%)</string>
+    <string name="rapidfire_you_typed">you: %1$s</string>
+    <string name="rapidfire_decrease">Decrease</string>
+    <string name="rapidfire_increase">Increase</string>
+
+    <!-- SendingPracticeScreen -->
+    <string name="sending_you_sent_it">✓ you sent it</string>
+    <string name="sending_wrong">✗ you sent “%1$s”</string>
+    <string name="sending_listen_then_key_it_back">Listen, then key it back</string>
+
+    <!-- SendingDrillScreen -->
+    <string name="drills_sheet_subtitle">%1$s WPM · %2$s</string>
+    <string name="drills_cw_sending_practice">CW Sending Practice</string>
+    <string name="drills_generate_a_new_sheet">Generate a new sheet</string>
+    <string name="drills_groups">Groups</string>
+    <string name="drills_groups_readout">%1$s groups</string>
+    <string name="drills_group_size">Group size</string>
+    <string name="drills_group_size_readout">%1$s chars</string>
+    <string name="drills_share_practice_sheet">Share practice sheet</string>
+    <string name="drills_share">Share</string>
+    <string name="drills_print">Print</string>
+
+    <!-- RepeaterScreen -->
+    <string name="repeater_disconnected">Disconnected</string>
+    <string name="repeater_connecting">Connecting…</string>
+    <string name="repeater_status_connected">Connected · %1$s on channel</string>
+    <string name="repeater_idle_key_to_reconnect">Idle — key to reconnect</string>
+    <string name="repeater_reconnecting">Reconnecting…</string>
+    <string name="repeater_subtitle">Live CW practice over the network (Vail)</string>
+    <string name="repeater_callsign">Callsign</string>
+    <string name="repeater_channel">Channel</string>
+    <string name="repeater_server">Server</string>
+    <string name="repeater_server_url">Server URL</string>
+    <string name="repeater_disconnect">Disconnect</string>
+    <string name="repeater_connect">Connect</string>
+    <string name="repeater_lag">Lag %1$s ms</string>
+    <string name="repeater_break_in_transmit">Break-in (transmit)</string>
+    <string name="repeater_send_your_keying_to_the_channel">Send your keying to the channel</string>
+    <string name="repeater_private_channel">Private channel</string>
+    <string name="repeater_stay_off_the_public_room_list">Stay off the public room list</string>
+    <string name="repeater_tx_tone">TX tone</string>
+    <string name="repeater_rx_delay">RX delay</string>
+    <string name="repeater_ms_value">%1$s ms</string>
+    <string name="repeater_adapter_keyer">ADAPTER KEYER</string>
+    <string name="repeater_wake_adapter">Wake adapter</string>
+    <string name="repeater_connected_to">Connected: %1$s</string>
+    <string name="repeater_no_adapter_connected">No adapter connected</string>
+    <string name="repeater_keyer_speed">Keyer speed</string>
+    <string name="repeater_rx_buzz">RX buzz</string>
+    <string name="repeater_rx_buzz_description">Buzz the adapter\'s piezo for received tones</string>
+    <string name="repeater_on_channel">ON CHANNEL</string>
+    <string name="repeater_you_suffix">"  (you)"</string>
+    <string name="repeater_activity">ACTIVITY</string>
+    <string name="repeater_chat">CHAT</string>
+    <string name="repeater_no_messages_yet">No messages yet.</string>
+    <string name="repeater_message">Message</string>
+
+    <!-- CwDecoderScreen -->
+    <string name="decoder_title">CW Decoder</string>
+    <string name="decoder_listening_its_quiet">Listening — it\'s quiet</string>
+    <string name="decoder_hearing_audio">Hearing audio</string>
+    <string name="decoder_waiting_for_cw">Waiting for CW…</string>
+    <string name="decoder_idle_prompt">Tap Start and hold the phone near the audio you want copied.</string>
+    <string name="decoder_mic_denied">Microphone access is off. Allow it in Settings → Apps → Permissions to decode audio.</string>
+
+    <!-- ListenScreen -->
+    <string name="listen_blurb">Hear the code, then the answer spoken aloud — no tapping. Keeps playing with the screen locked.</string>
+    <string name="listen_heard_count">%1$s heard</string>
+    <string name="listen_time_left">" · %1$d:%2$02d left"</string>
+    <string name="listen_tap_play_prompt">Tap play to start a hands-free loop.</string>
+    <string name="listen_status_paused">paused</string>
+    <string name="listen_status_listening">"🎧  listening…"</string>
+    <string name="listen_pause">Pause</string>
+    <string name="listen_status_running">Listening — lock the screen and keep going</string>
+    <string name="listen_paused_tap_to_resume">Paused — tap to resume</string>
+    <string name="listen_ready">Ready</string>
+
+    <!-- ListenService -->
+    <string name="listen_session_complete">Session complete — %1$d heard</string>
+    <string name="listen_notification_paused">Paused</string>
+    <string name="listen_notification_listening">Listening…</string>
+    <string name="listen_hands_free_practice">Hands-free practice</string>
+    <string name="listen_resume">Resume</string>
+    <string name="listen_channel_name">Listen &amp; Learn playback</string>
+    <string name="listen_channel_description">Ongoing hands-free practice playback.</string>
+
+    <!-- ReferenceScreen -->
+    <string name="reference_playback_settings">Playback settings</string>
+    <string name="reference_search_all_tables">Search all tables</string>
+    <string name="reference_clear_search">Clear search</string>
+    <string name="reference_no_matches">No matches for “%1$s”</string>
+    <string name="reference_play_description">Play %1$s in Morse code</string>
+    <string name="reference_playing">Playing…</string>
+    <string name="reference_itu_operational_name">ITU / operational name</string>
+    <string name="reference_also_written">Also written</string>
+    <string name="reference_meaning">Meaning</string>
+    <string name="reference_about">About</string>
+    <string name="reference_playback">Playback</string>
+    <string name="reference_history_and_sources">HISTORY &amp; SOURCES</string>
+    <string name="reference_side_tone">Side tone</string>
+    <string name="reference_farnsworth_spacing">Farnsworth spacing</string>
+    <string name="reference_effective_speed">Effective speed</string>
+
+    <!-- StatsScreen -->
+    <string name="stats_share_your_brag_sheet">Share your brag sheet</string>
+    <string name="stats_brag_sheet">Brag Sheet</string>
+    <string name="stats_empty">No sessions yet.\nFinish a practice round and your stats will show up here.</string>
+    <string name="stats_lifetime">Lifetime</string>
+    <string name="stats_sessions">Sessions</string>
+    <string name="stats_practice_time">Practice time</string>
+    <string name="stats_personal_bests">Personal bests</string>
+    <string name="stats_recognition_speed">Recognition speed</string>
+    <string name="stats_recognition_speed_blurb">Median time to copy each character — shorter is better.</string>
+    <string name="stats_performance_by_speed">Performance by speed</string>
+    <string name="stats_performance_by_speed_blurb">How you do at each character-speed range. Watch where accuracy dips or reaction time climbs — that\'s your next speed to drill.</string>
+    <string name="stats_recent_sessions">Recent sessions</string>
+    <string name="stats_day_streak">day streak</string>
+    <string name="stats_longest">Longest</string>
+    <string name="stats_fastest_copy">Fastest copy</string>
+    <string name="stats_best_session_accuracy">Best session accuracy</string>
+    <string name="stats_biggest_session">Biggest session</string>
+    <string name="stats_biggest_session_value">%1$s answered</string>
+    <string name="stats_characters_mastered">Characters mastered</string>
+    <string name="stats_back_to_sessions">‹ Sessions</string>
+    <string name="stats_duration">Duration</string>
+    <string name="stats_eff_suffix">" (eff %1$s)"</string>
+    <string name="stats_speed_value">%1$s WPM%2$s</string>
+    <string name="stats_characters_this_session">Characters this session</string>
+    <string name="stats_characters_this_session_blurb">Median copy time per character — hollow rows were in your active set but not drilled this time.</string>
+    <string name="stats_reaction_value">%1$s reaction</string>
+
+    <!-- SettingsScreen -->
+    <string name="settings_scoped_note">Showing what applies here — the full settings live on the home screen.</string>
+    <string name="settings_character_speed">Character speed</string>
+    <string name="settings_farnsworth_speed">Farnsworth speed</string>
+    <string name="settings_qrq_note">\n\nQRQ territory — %1$s WPM. Great for pushing instant recognition once 30+ feels comfortable.</string>
+    <string name="settings_speed_footer">Character speed is how fast the dits and dahs are sent. Farnsworth stretches the gaps between characters (set it below the character speed) to give you more time to recognise each one.</string>
+    <string name="settings_speed_warning">Below %1$s WPM it\'s easy to start counting the dits and dahs instead of hearing each character as a single sound. Training at %2$s+ WPM builds instant, by-ear recognition, which is the whole point of the Koch method. If you need more time to answer, raise \"Recognition target\" or lower the Farnsworth speed instead of slowing the code.</string>
+    <string name="settings_sound">Sound</string>
+    <string name="settings_sidetone_pitch">Sidetone pitch</string>
+    <string name="settings_preview_tone">Preview tone</string>
+    <string name="settings_play_button">" Play"</string>
+    <string name="settings_sound_footer">The frequency of the practice tone you hear.\n\nBackground noise plays a floor under everything. On Bluetooth earbuds the silence between transmissions lets the link idle, so it wakes a moment late and clips the first character — costing you the answer. Keep-alive, the default, holds the link open with a floor too quiet to hear. Turn it up for band noise (QRN) to copy through. Off is truly silent, and brings the clipping back.</string>
+    <string name="settings_practice">Practice</string>
+    <string name="settings_answer_choices">Answer choices</string>
+    <string name="settings_recognition_target">Recognition target</string>
+    <string name="settings_seconds_1dp">%1$.1f s</string>
+    <string name="settings_word_pool">Word pool</string>
+    <string name="settings_reveal_answer">Reveal answer</string>
+    <string name="settings_my_words">My words</string>
+    <string name="settings_use_my_word_list">Use my word list</string>
+    <string name="settings_custom_words_placeholder">CQ DX\nANTENNA\nMORSE …</string>
+    <string name="settings_custom_words_footer_lead">"One word per line (spaces and commas split too). "</string>
+    <string name="settings_words_ready">%1$s words ready — Common Words drills your list.</string>
+    <string name="settings_custom_words_need_two">Add at least two words; until then the ranked pool is used.</string>
+    <string name="settings_custom_words_footer_off">Practice your own words — a callsign, your name, club abbreviations — in Common Words instead of the ranked pool.</string>
+    <string name="settings_punctuation">Punctuation</string>
+    <string name="settings_punctuation_footer">Study punctuation too. Opted-in marks join the Characters ladder after the letters and numbers.</string>
+    <string name="settings_starting_level">Starting level</string>
+    <string name="settings_starting_level_footer">How much Morse you already know — sets where the Characters drill begins. Changing this restarts your active set.</string>
+    <string name="settings_feedback">Feedback</string>
+    <string name="settings_haptic_feedback">Haptic feedback</string>
+    <string name="settings_voice_answers">Voice answers</string>
+    <string name="settings_feedback_footer">Buzz on right and wrong answers. Voice answers let you speak instead of tap (uses the microphone).</string>
+    <string name="settings_feedback_footer_haptics_only">Buzz on right and wrong answers.</string>
+    <string name="settings_hardware_key">Hardware key</string>
+    <string name="settings_hardware_key_footer">How the adapter should read your key. Straight key is the default; pick an iambic mode for a paddle. This is your key, not a drill setting — it applies in Sending Practice and on the Vail screen alike.</string>
+    <string name="settings_display">Display</string>
+    <string name="settings_slashed_zero">Slashed zero</string>
+    <string name="settings_slashed_zero_footer">Show the digit 0 with a line through it — the operator\'s convention for telling 0 from O.</string>
+    <string name="settings_reminders">Reminders</string>
+    <string name="settings_daily_reminder">Daily reminder</string>
+    <string name="settings_reminders_footer">A daily nudge to keep your streak alive.</string>
+    <string name="settings_reset_all_progress">Reset all progress</string>
+    <string name="settings_reset_footer">Clears your learned characters, stats, streak, and Journey progress. Settings are kept.</string>
+    <string name="settings_reset_confirm_title">Reset all progress?</string>
+    <string name="settings_reset_confirm_body">This clears your learned characters and stats. Settings are kept.</string>
+    <string name="settings_reset">Reset</string>
+    <string name="settings_session_length">Session length</string>
+    <string name="settings_background_noise">Background noise</string>
+    <string name="settings_keyer_mode">Keyer mode</string>
+    <string name="settings_keyer_mode_note">The adapter times the sending in this mode, at the speed you\'re practising at.</string>
+
+    <!-- JourneyScreen -->
+    <string name="journey_map_button">Map</string>
+    <string name="journey_level_n">Level %1$s</string>
+    <string name="journey_map_title">Journey Map</string>
+    <string name="journey_current">Current</string>
+
+    <!-- ReminderReceiver -->
+    <string name="reminder_body_streak">Keep your %1$d-day streak alive — a few minutes of CW is all it takes.</string>
+    <string name="reminder_body_default">A few minutes of code practice keeps your ear sharp. Tap to start.</string>
+    <string name="reminder_title">Time to practice Morse</string>
+
+    <!-- Reminders -->
+    <string name="reminder_channel_name">Practice reminders</string>
+    <string name="reminder_channel_description">A daily nudge to keep your Morse streak alive.</string>
+
+    <!-- Plurals -->
+    <plurals name="stats_band_sessions">
+        <item quantity="one">%1$s session</item>
+        <item quantity="other">%1$s sessions</item>
+    </plurals>
+    <plurals name="pileup_missed_you_had">
+        <item quantity="one">You had them as %1$s — they came back %2$s time before moving on.</item>
+        <item quantity="other">You had them as %1$s — they came back %2$s times before moving on.</item>
+    </plurals>
+    <plurals name="pileup_missed_never_copied">
+        <item quantity="one">They came back %1$s time and you never got the call.</item>
+        <item quantity="other">They came back %1$s times and you never got the call.</item>
+    </plurals>
+</resources>

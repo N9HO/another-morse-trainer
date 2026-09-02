@@ -50,6 +50,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
@@ -139,10 +140,10 @@ fun ReferenceScreen(onBack: () -> Unit) {
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                TextButton(onClick = onBack) { Text("‹ Back", color = Brand.teal) }
-                Text("Reference", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                TextButton(onClick = onBack) { Text(stringResource(R.string.common_back), color = Brand.teal) }
+                Text(stringResource(R.string.mode_reference), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 IconButton(onClick = { showAudio = !showAudio }) {
-                    Icon(Icons.Filled.Tune, contentDescription = "Playback settings", tint = Brand.teal)
+                    Icon(Icons.Filled.Tune, contentDescription = stringResource(R.string.reference_playback_settings), tint = Brand.teal)
                 }
             }
 
@@ -190,12 +191,12 @@ fun ReferenceScreen(onBack: () -> Unit) {
                 value = query,
                 onValueChange = { query = it },
                 singleLine = true,
-                placeholder = { Text("Search all tables", color = Brand.textSecondary) },
+                placeholder = { Text(stringResource(R.string.reference_search_all_tables), color = Brand.textSecondary) },
                 leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null, tint = Brand.textSecondary) },
                 trailingIcon = {
                     if (query.isNotEmpty()) {
                         IconButton(onClick = { query = "" }) {
-                            Icon(Icons.Filled.Clear, contentDescription = "Clear search", tint = Brand.textSecondary)
+                            Icon(Icons.Filled.Clear, contentDescription = stringResource(R.string.reference_clear_search), tint = Brand.textSecondary)
                         }
                     }
                 },
@@ -229,7 +230,7 @@ fun ReferenceScreen(onBack: () -> Unit) {
                 ) {
                     Icon(Icons.Filled.Search, contentDescription = null, tint = Brand.teal.copy(alpha = 0.5f), modifier = Modifier.size(40.dp))
                     Spacer(Modifier.height(8.dp))
-                    Text("No matches for “$query”", style = MaterialTheme.typography.bodySmall, color = Brand.textSecondary)
+                    Text(stringResource(R.string.reference_no_matches, query), style = MaterialTheme.typography.bodySmall, color = Brand.textSecondary)
                 }
             } else {
                 LazyColumn(
@@ -283,7 +284,7 @@ private fun ReferenceRow(item: MorseItem, isPlaying: Boolean, onOpen: () -> Unit
         IconButton(onClick = onPlay) {
             Icon(
                 if (isPlaying) Icons.Filled.VolumeUp else Icons.Filled.PlayCircleOutline,
-                contentDescription = "Play ${item.display} in Morse code",
+                contentDescription = stringResource(R.string.reference_play_description, item.display),
                 tint = if (isPlaying) Brand.tealBright else Brand.teal
             )
         }
@@ -299,7 +300,7 @@ private fun ReferenceDetailScreen(item: MorseItem, isPlaying: Boolean, onPlay: (
             modifier = Modifier.fillMaxWidth().padding(4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            TextButton(onClick = onBack) { Text("‹ Back", color = Brand.teal) }
+            TextButton(onClick = onBack) { Text(stringResource(R.string.common_back), color = Brand.teal) }
         }
         Column(
             modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
@@ -320,7 +321,7 @@ private fun ReferenceDetailScreen(item: MorseItem, isPlaying: Boolean, onPlay: (
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         Icon(if (isPlaying) Icons.Filled.VolumeUp else Icons.Filled.PlayCircleOutline, contentDescription = null, tint = Brand.navy, modifier = Modifier.size(20.dp))
-                        Text(if (isPlaying) "Playing…" else "Play", color = Brand.navy, fontWeight = FontWeight.Bold)
+                        Text(if (isPlaying) stringResource(R.string.reference_playing) else stringResource(R.string.common_play), color = Brand.navy, fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -328,14 +329,14 @@ private fun ReferenceDetailScreen(item: MorseItem, isPlaying: Boolean, onPlay: (
             detail?.summary?.takeIf { it.isNotEmpty() }?.let {
                 Text(it, style = MaterialTheme.typography.bodyMedium, color = Brand.textSecondary)
             }
-            detail?.ituName?.let { Field("ITU / operational name", it) }
-            detail?.alsoWritten?.takeIf { it.isNotEmpty() }?.let { Field("Also written", it.joinToString("   ")) }
-            Field("Meaning", item.answer)
-            detail?.description?.takeIf { it.isNotEmpty() }?.let { Field("About", it) }
+            detail?.ituName?.let { Field(stringResource(R.string.reference_itu_operational_name), it) }
+            detail?.alsoWritten?.takeIf { it.isNotEmpty() }?.let { Field(stringResource(R.string.reference_also_written), it.joinToString("   ")) }
+            Field(stringResource(R.string.reference_meaning), item.answer)
+            detail?.description?.takeIf { it.isNotEmpty() }?.let { Field(stringResource(R.string.reference_about), it) }
             detail?.citations?.takeIf { it.isNotEmpty() }?.let { Citations(it) }
 
             HorizontalDivider(color = Brand.hairline)
-            Text("Playback", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Brand.textPrimary)
+            Text(stringResource(R.string.reference_playback), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Brand.textPrimary)
             ReferenceAudioControls()
         }
     }
@@ -352,7 +353,7 @@ private fun Field(title: String, value: String) {
 @Composable
 private fun Citations(citations: List<MorseReference.Citation>) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("HISTORY & SOURCES", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Brand.textSecondary)
+        Text(stringResource(R.string.reference_history_and_sources), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Brand.textSecondary)
         citations.forEach { c ->
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(c.date, fontFamily = FontFamily.Monospace, fontSize = 13.sp, color = Brand.teal, modifier = Modifier.width(64.dp))
@@ -375,11 +376,11 @@ fun ReferenceAudioControls(modifier: Modifier = Modifier) {
         modifier = modifier.fillMaxWidth().brandCard().padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        RefSlider("Side tone", "${Settings.sidetoneHz.toInt()} Hz", Settings.sidetoneHz.toFloat(), 300f..1000f) {
+        RefSlider(stringResource(R.string.reference_side_tone), stringResource(R.string.common_hz_value, Settings.sidetoneHz.toInt()), Settings.sidetoneHz.toFloat(), 300f..1000f) {
             Settings.updateSidetoneHz(it.toDouble())
         }
         RefSlider(
-            "Speed", "${Settings.characterWpm.toInt()} WPM", Settings.characterWpm.toFloat(),
+            stringResource(R.string.common_speed), stringResource(R.string.common_wpm_value, Settings.characterWpm.toInt()), Settings.characterWpm.toFloat(),
             15f..Settings.MAX_CHARACTER_WPM.toFloat()
         ) {
             Settings.updateCharacterWpm(it.toDouble())
@@ -390,7 +391,7 @@ fun ReferenceAudioControls(modifier: Modifier = Modifier) {
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Text("Farnsworth spacing", style = MaterialTheme.typography.bodyMedium, color = Brand.textPrimary)
+            Text(stringResource(R.string.reference_farnsworth_spacing), style = MaterialTheme.typography.bodyMedium, color = Brand.textPrimary)
             Switch(
                 checked = farnsworth,
                 onCheckedChange = { on ->
@@ -402,7 +403,7 @@ fun ReferenceAudioControls(modifier: Modifier = Modifier) {
             )
         }
         if (farnsworth) {
-            RefSlider("Effective speed", "${Settings.effectiveWpm.toInt()} WPM",
+            RefSlider(stringResource(R.string.reference_effective_speed), stringResource(R.string.common_wpm_value, Settings.effectiveWpm.toInt()),
                 Settings.effectiveWpm.toFloat(), 5f..Settings.characterWpm.toFloat().coerceAtLeast(6f)) {
                 Settings.updateEffectiveWpm(it.toDouble())
             }
