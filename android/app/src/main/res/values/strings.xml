@@ -62,6 +62,27 @@
     <string name="common_time">Time</string>
     <string name="common_speed">Speed</string>
     <string name="common_done">Done</string>
+    <string name="common_call_cq">Call CQ</string>
+    <string name="common_stations_calling">%1$s stations calling.</string>
+    <string name="common_copy_a_call_and_send_it">Copy a call and send it.</string>
+    <string name="common_calling_list">calling: %1$s</string>
+    <string name="common_again">▶ Again</string>
+    <string name="common_cq">CQ</string>
+    <string name="common_hide_hint">Hide hint</string>
+    <string name="common_show_hint">Show hint</string>
+    <string name="common_working_station">Working %1$s</string>
+    <string name="common_copy_their_exchange_and_send_it">Copy their exchange and send it.</string>
+    <string name="common_expecting">expecting: %1$s</string>
+    <string name="common_log_tu">Log (TU)</string>
+    <string name="common_rate">Rate</string>
+    <string name="common_rate_per_hour">%1$s/hr</string>
+    <string name="common_clean_copy">Clean copy</string>
+    <string name="common_busts">Busts</string>
+    <string name="common_worked">WORKED</string>
+    <string name="common_wpm_lower">%1$s wpm</string>
+    <string name="common_run_again">Run again</string>
+    <string name="common_send">Send</string>
+    <string name="common_us_calls_only">US calls only</string>
 
     <!-- OnboardingScreen -->
     <string name="onboarding_welcome">Welcome to\nAnother Morse Trainer</string>
@@ -185,9 +206,64 @@
     <string name="exam_score">%1$s / %2$s correct</string>
     <string name="exam_new_exam">New exam</string>
 
+    <!-- ContestScreen -->
+    <string name="contest_which_contest">WHICH CONTEST?</string>
+    <string name="contest_speed_range">Stations run %1$s–%2$s WPM.</string>
+    <string name="contest_duration_question">HOW LONG DO YOU WANT TO RUN?</string>
+    <string name="contest_start_button">Start %1$s</string>
+    <string name="contest_idle_prompt">Call CQ %1$s and work who answers.</string>
+    <string name="contest_score">Score</string>
+    <string name="contest_qsos">QSOs</string>
+    <string name="contest_acc">Acc</string>
+
+    <!-- PileupScreen -->
+    <string name="pileup_your_call">YOUR CALL</string>
+    <string name="pileup_exchange">EXCHANGE</string>
+    <string name="pileup_the_pileup">THE PILEUP</string>
+    <string name="pileup_callers">Callers</string>
+    <string name="pileup_callers_value">up to %1$s</string>
+    <string name="pileup_slowest_caller">Slowest caller</string>
+    <string name="pileup_fastest_caller">Fastest caller</string>
+    <string name="pileup_tone_spread">Tone spread</string>
+    <string name="pileup_zero_beat">Zero beat</string>
+    <string name="pileup_tone_spread_value">±%1$s Hz</string>
+    <string name="pileup_qsb_fading">QSB fading</string>
+    <string name="pileup_qrn_static">QRN STATIC</string>
+    <string name="pileup_callsigns">CALLSIGNS</string>
+    <string name="pileup_operating">OPERATING</string>
+    <string name="pileup_cut_numbers">Cut numbers (5NN, 1 → A…)</string>
+    <string name="pileup_require_the_rst_copied">Require the RST copied</string>
+    <string name="pileup_on_a_busted_call">ON A BUSTED CALL</string>
+    <string name="pileup_impatient_callers_give_up">Impatient callers give up</string>
+    <string name="pileup_tell_me_who_got_away">TELL ME WHO GOT AWAY</string>
+    <string name="pileup_keep_my_partial_call_after">Keep my partial call after \"?\"</string>
+    <string name="pileup_key_my_side_in_morse">Key my side in Morse</string>
+    <string name="pileup_recall_after_tu">Pileup re-calls after TU</string>
+    <string name="pileup_start_button">Start — %1$s</string>
+    <string name="pileup_idle_prompt">Tap to call CQ and start a pileup.</string>
+    <string name="pileup_log">LOG</string>
+    <string name="pileup_gave_up">%1$s gave up</string>
+    <string name="pileup_got_it">Got it</string>
+    <string name="pileup_worked">Worked</string>
+    <string name="pileup_clean">Clean</string>
+    <string name="pileup_summary_title">Pileup — %1$s</string>
+    <string name="pileup_got_away_header">GOT AWAY (%1$s)</string>
+    <string name="pileup_you_had">you had %1$s</string>
+    <string name="pileup_never_copied">never copied</string>
+
     <!-- JourneyScreen -->
     <string name="journey_map_button">Map</string>
     <string name="journey_level_n">Level %1$s</string>
     <string name="journey_map_title">Journey Map</string>
     <string name="journey_current">Current</string>
+
+    <!-- Plurals -->
+    <plurals name="pileup_missed_you_had">
+        <item quantity="one">You had them as %1$s — they came back %2$s time before moving on.</item>
+        <item quantity="other">You had them as %1$s — they came back %2$s times before moving on.</item>
+    </plurals>
+    <plurals name="pileup_missed_never_copied">
+        <item quantity="one">They came back %1$s time and you never got the call.</item>
+        <item quantity="other">They came back %1$s times and you never got the call.</item>
+    </plurals>
 </resources>

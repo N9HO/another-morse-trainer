@@ -38,6 +38,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -287,15 +288,15 @@ private fun ContestSetup(
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         Row(modifier = Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = onBack) { Text("‹ Back", color = Brand.teal) }
-            Text("Contest", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            TextButton(onClick = onBack) { Text(stringResource(R.string.common_back), color = Brand.teal) }
+            Text(stringResource(R.string.mode_contest), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         }
       CenteredContent {
         Column(
             modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            CtSectionLabel("WHICH CONTEST?")
+            CtSectionLabel(stringResource(R.string.contest_which_contest))
             CtPills(ContestType.allCases.map { it to it.shortName }, contest, onContest)
             Text(
                 contest.blurb,
@@ -303,12 +304,12 @@ private fun ContestSetup(
                 color = Brand.textSecondary
             )
             Text(
-                "Stations run ${contest.minWPM.roundToInt()}–${contest.maxWPM.roundToInt()} WPM.",
+                stringResource(R.string.contest_speed_range, contest.minWPM.roundToInt(), contest.maxWPM.roundToInt()),
                 style = MaterialTheme.typography.labelSmall,
                 color = Brand.textSecondary
             )
 
-            CtSectionLabel("HOW LONG DO YOU WANT TO RUN?")
+            CtSectionLabel(stringResource(R.string.contest_duration_question))
             CtPills(ContestLength.allCases.map { it to it.label }, length, onLength)
 
             Spacer(Modifier.height(8.dp))
@@ -316,7 +317,7 @@ private fun ContestSetup(
                 onClick = onStart,
                 modifier = Modifier.fillMaxWidth().height(52.dp),
                 shape = RoundedCornerShape(Brand.cornerRadius)
-            ) { Text("Start ${contest.shortName}", fontWeight = FontWeight.Bold, fontSize = 17.sp) }
+            ) { Text(stringResource(R.string.contest_start_button, contest.shortName), fontWeight = FontWeight.Bold, fontSize = 17.sp) }
             Spacer(Modifier.height(16.dp))
         }
       }
@@ -355,7 +356,7 @@ private fun ContestRun(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            TextButton(onClick = onEnd) { Text("End", color = Brand.teal) }
+            TextButton(onClick = onEnd) { Text(stringResource(R.string.common_end), color = Brand.teal) }
             Spacer(Modifier.weight(1f))
             Text(
                 "${contest.eventName} · $clockText",
@@ -376,21 +377,21 @@ private fun ContestRun(
 
             when (engine.phase) {
                 PileupEngine.Phase.Idle -> {
-                    Text("Call CQ ${contest.shortName} and work who answers.", textAlign = TextAlign.Center)
+                    Text(stringResource(R.string.contest_idle_prompt, contest.shortName), textAlign = TextAlign.Center)
                     Spacer(Modifier.height(20.dp))
-                    Button(onClick = onCQ) { Text("Call CQ") }
+                    Button(onClick = onCQ) { Text(stringResource(R.string.common_call_cq)) }
                 }
 
                 PileupEngine.Phase.Pileup -> {
                     Text(
-                        "${engine.activeCount} stations calling.",
+                        stringResource(R.string.common_stations_calling, engine.activeCount),
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Medium
                     )
-                    Text("Copy a call and send it.", textAlign = TextAlign.Center)
+                    Text(stringResource(R.string.common_copy_a_call_and_send_it), textAlign = TextAlign.Center)
                     if (reveal) {
                         Text(
-                            "calling: ${engine.stations.joinToString(", ") { it.call }}",
+                            stringResource(R.string.common_calling_list, engine.stations.joinToString(", ") { it.call }),
                             style = MaterialTheme.typography.labelSmall
                         )
                     }
@@ -398,22 +399,22 @@ private fun ContestRun(
                     ContestEntry(input = input, onChange = onInput, onSend = onSend)
                     Spacer(Modifier.height(12.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        OutlinedButton(onClick = onRepeat) { Text("▶ Again") }
-                        OutlinedButton(onClick = onCQ) { Text("CQ") }
+                        OutlinedButton(onClick = onRepeat) { Text(stringResource(R.string.common_again)) }
+                        OutlinedButton(onClick = onCQ) { Text(stringResource(R.string.common_cq)) }
                     }
                     Spacer(Modifier.height(8.dp))
                     TextButton(onClick = onToggleReveal) {
-                        Text(if (reveal) "Hide hint" else "Show hint")
+                        Text(if (reveal) stringResource(R.string.common_hide_hint) else stringResource(R.string.common_show_hint))
                     }
                 }
 
                 is PileupEngine.Phase.Working, is PileupEngine.Phase.ReadyToLog -> {
                     val st = engine.workingStation
-                    Text("Working ${st?.call ?: "?"}", fontSize = 22.sp, fontWeight = FontWeight.Bold)
-                    Text("Copy their exchange and send it.", textAlign = TextAlign.Center)
+                    Text(stringResource(R.string.common_working_station, st?.call ?: "?"), fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.common_copy_their_exchange_and_send_it), textAlign = TextAlign.Center)
                     if (reveal) {
                         Text(
-                            "expecting: ${engine.expectedCopy ?: "—"}",
+                            stringResource(R.string.common_expecting, engine.expectedCopy ?: "—"),
                             style = MaterialTheme.typography.labelSmall
                         )
                     }
@@ -421,12 +422,12 @@ private fun ContestRun(
                     ContestEntry(input = input, onChange = onInput, onSend = onSend)
                     Spacer(Modifier.height(12.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        OutlinedButton(onClick = onRepeat) { Text("▶ Again") }
-                        Button(onClick = onLog) { Text("Log (TU)") }
+                        OutlinedButton(onClick = onRepeat) { Text(stringResource(R.string.common_again)) }
+                        Button(onClick = onLog) { Text(stringResource(R.string.common_log_tu)) }
                     }
                     Spacer(Modifier.height(8.dp))
                     TextButton(onClick = onToggleReveal) {
-                        Text(if (reveal) "Hide hint" else "Show hint")
+                        Text(if (reveal) stringResource(R.string.common_hide_hint) else stringResource(R.string.common_show_hint))
                     }
                 }
             }
@@ -445,17 +446,17 @@ private fun ContestScoreboard(engine: PileupEngine, contest: ContestType, elapse
     val score = contest.score(qsoCount = engine.qsoCount, multipliers = mults)
     val rate = if (elapsedSeconds <= 0) 0 else (engine.qsoCount * 3600.0 / elapsedSeconds).roundToInt()
     Row(horizontalArrangement = Arrangement.spacedBy(22.dp)) {
-        CtStat("Score", "$score")
+        CtStat(stringResource(R.string.contest_score), "$score")
         // QSOs only when the score isn't simply the QSO count (a multiplier
         // applies, or each QSO is worth more than a point).
         if (contest.usesMultipliers || contest.pointsPerQSO != 1) {
-            CtStat("QSOs", "${engine.qsoCount}")
+            CtStat(stringResource(R.string.contest_qsos), "${engine.qsoCount}")
         }
         contest.multiplierLabel?.let { CtStat(it, "$mults") }
-        CtStat("Rate", "$rate/hr")
+        CtStat(stringResource(R.string.common_rate), stringResource(R.string.common_rate_per_hour, rate))
         // Drop accuracy when a multiplier column already fills the row.
         if (!contest.usesMultipliers) {
-            CtStat("Acc", "${(engine.accuracy * 100).roundToInt()}%")
+            CtStat(stringResource(R.string.contest_acc), "${(engine.accuracy * 100).roundToInt()}%")
         }
     }
 }
@@ -489,24 +490,24 @@ private fun ContestSummary(
 
     Column(modifier = Modifier.fillMaxSize()) {
         Row(modifier = Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = onBack) { Text("‹ Back", color = Brand.teal) }
+            TextButton(onClick = onBack) { Text(stringResource(R.string.common_back), color = Brand.teal) }
             Text("${contest.eventName} — ${length.label}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         }
 
         Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).brandCard().padding(14.dp)) {
-            CtSummaryRow("Score", "$score")
+            CtSummaryRow(stringResource(R.string.contest_score), "$score")
             if (contest.usesMultipliers || contest.pointsPerQSO != 1) {
-                CtSummaryRow("QSOs", "${engine.qsoCount}")
+                CtSummaryRow(stringResource(R.string.contest_qsos), "${engine.qsoCount}")
             }
             contest.multiplierLabel?.let { CtSummaryRow(it, "$mults") }
-            CtSummaryRow("Rate", "$rate/hr")
-            CtSummaryRow("Clean copy", if (cleanTotal == 0) "—" else "${(engine.accuracy * 100).roundToInt()}%")
-            CtSummaryRow("Busts", "${engine.bustCount}")
+            CtSummaryRow(stringResource(R.string.common_rate), stringResource(R.string.common_rate_per_hour, rate))
+            CtSummaryRow(stringResource(R.string.common_clean_copy), if (cleanTotal == 0) "—" else "${(engine.accuracy * 100).roundToInt()}%")
+            CtSummaryRow(stringResource(R.string.common_busts), "${engine.bustCount}")
         }
 
         if (engine.log.isNotEmpty()) {
             Text(
-                "WORKED",
+                stringResource(R.string.common_worked),
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold,
                 color = Brand.textSecondary,
@@ -525,14 +526,14 @@ private fun ContestSummary(
                 ) {
                     Text(q.call, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, color = Brand.textPrimary, modifier = Modifier.weight(1f))
                     Text(q.exchange, fontFamily = FontFamily.Monospace, color = Brand.textSecondary)
-                    Text("${q.wpm} wpm", style = MaterialTheme.typography.labelSmall, color = Brand.textSecondary)
+                    Text(stringResource(R.string.common_wpm_lower, q.wpm), style = MaterialTheme.typography.labelSmall, color = Brand.textSecondary)
                 }
             }
         }
 
         Row(modifier = Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            OutlinedButton(onClick = onAgain, modifier = Modifier.weight(1f)) { Text("Run again") }
-            Button(onClick = onBack, modifier = Modifier.weight(1f)) { Text("Return home") }
+            OutlinedButton(onClick = onAgain, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.common_run_again)) }
+            Button(onClick = onBack, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.common_return_home)) }
         }
     }
 }
@@ -555,10 +556,10 @@ private fun ContestEntry(input: String, onChange: (String) -> Unit, onSend: () -
             value = input,
             onValueChange = onChange,
             singleLine = true,
-            label = { Text("Send") },
+            label = { Text(stringResource(R.string.common_send)) },
             modifier = Modifier.fillMaxWidth(0.6f)
         )
-        Button(onClick = onSend, modifier = Modifier.height(56.dp)) { Text("Send") }
+        Button(onClick = onSend, modifier = Modifier.height(56.dp)) { Text(stringResource(R.string.common_send)) }
     }
 }
 
