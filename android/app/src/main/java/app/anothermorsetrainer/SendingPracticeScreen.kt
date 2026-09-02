@@ -38,6 +38,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -193,7 +194,7 @@ fun SendingPracticeScreen(onBack: () -> Unit) {
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            TextButton(onClick = { finish() }) { Text("‹ Back") }
+            TextButton(onClick = { finish() }) { Text(stringResource(R.string.common_back)) }
             SessionSettingsButton { showSettings = true }
         }
 
@@ -202,7 +203,7 @@ fun SendingPracticeScreen(onBack: () -> Unit) {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            Text("Sending Practice", style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center)
+            Text(stringResource(R.string.mode_sending_practice), style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center)
             Spacer(Modifier.height(4.dp))
             Text(summary, style = MaterialTheme.typography.labelMedium, color = Brand.textSecondary)
             midiDevice?.let {
@@ -233,7 +234,7 @@ fun SendingPracticeScreen(onBack: () -> Unit) {
                 )
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    text = if (lastCorrect) "✓ you sent it" else "✗ you sent “$sentAnswer”",
+                    text = if (lastCorrect) stringResource(R.string.sending_you_sent_it) else stringResource(R.string.sending_wrong, sentAnswer),
                     color = if (lastCorrect) OK_GREEN else ERR_RED,
                     fontWeight = FontWeight.Medium
                 )
@@ -244,19 +245,19 @@ fun SendingPracticeScreen(onBack: () -> Unit) {
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         OutlinedButton(onClick = {
                             player.replaySound(drill.playable, Settings.sidetoneHz, Settings.timing())
-                        }) { Text("▶ Replay") }
+                        }) { Text(stringResource(R.string.common_replay)) }
                         Button(
                             onClick = { advanceNow() },
                             colors = ButtonDefaults.buttonColors(containerColor = Brand.teal, contentColor = Brand.navy)
-                        ) { Text("Next", fontWeight = FontWeight.SemiBold) }
+                        ) { Text(stringResource(R.string.common_next), fontWeight = FontWeight.SemiBold) }
                     }
                 }
             } else {
-                Text("Listen, then key it back", fontSize = 16.sp, color = Brand.teal)
+                Text(stringResource(R.string.sending_listen_then_key_it_back), fontSize = 16.sp, color = Brand.teal)
                 Spacer(Modifier.height(8.dp))
                 OutlinedButton(onClick = {
                     player.replaySound(drill.playable, Settings.sidetoneHz, Settings.timing())
-                }) { Text("▶ Replay") }
+                }) { Text(stringResource(R.string.common_replay)) }
             }
 
             Spacer(Modifier.height(20.dp))
@@ -267,7 +268,7 @@ fun SendingPracticeScreen(onBack: () -> Unit) {
                     .padding(vertical = 12.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Text("YOU SENT", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Brand.textSecondary)
+                Text(stringResource(R.string.common_you_sent), fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Brand.textSecondary)
                 Spacer(Modifier.height(4.dp))
                 val decoded = keyer.decodedText
                 Text(
@@ -314,7 +315,7 @@ fun SendingPracticeScreen(onBack: () -> Unit) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("⠿", fontSize = 26.sp, color = if (keyPressed) Brand.navy else Brand.teal)
                     Text(
-                        "HOLD TO KEY",
+                        stringResource(R.string.common_hold_to_key),
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
                         color = if (keyPressed) Brand.navy else Brand.textSecondary
@@ -329,13 +330,13 @@ fun SendingPracticeScreen(onBack: () -> Unit) {
                     onClick = { keyer.clear() },
                     enabled = !revealed,
                     modifier = Modifier.weight(1f).heightIn(min = 48.dp)
-                ) { Text("Clear") }
+                ) { Text(stringResource(R.string.common_clear)) }
                 Button(
                     onClick = { grade(keyer.submit().uppercase()) },
                     enabled = !revealed && keyer.decodedText.isNotBlank(),
                     colors = ButtonDefaults.buttonColors(containerColor = Brand.teal, contentColor = Brand.navy),
                     modifier = Modifier.weight(1f).heightIn(min = 48.dp)
-                ) { Text("Submit", fontWeight = FontWeight.SemiBold) }
+                ) { Text(stringResource(R.string.common_submit), fontWeight = FontWeight.SemiBold) }
             }
         }
 

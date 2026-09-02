@@ -83,6 +83,7 @@
     <string name="common_run_again">Run again</string>
     <string name="common_send">Send</string>
     <string name="common_us_calls_only">US calls only</string>
+    <string name="common_start">Start</string>
 
     <!-- OnboardingScreen -->
     <string name="onboarding_welcome">Welcome to\nAnother Morse Trainer</string>
@@ -250,6 +251,41 @@
     <string name="pileup_got_away_header">GOT AWAY (%1$s)</string>
     <string name="pileup_you_had">you had %1$s</string>
     <string name="pileup_never_copied">never copied</string>
+
+    <!-- RapidFireScreen -->
+    <string name="rapidfire_what_to_copy">WHAT TO COPY</string>
+    <string name="rapidfire_min_length">Min length</string>
+    <string name="rapidfire_max_length">Max length</string>
+    <string name="rapidfire_digits_per_group">Digits per group</string>
+    <string name="rapidfire_how_to_copy">HOW TO COPY</string>
+    <string name="rapidfire_pace">PACE</string>
+    <string name="rapidfire_count_sent">%1$s sent</string>
+    <string name="rapidfire_prompt_review">Copy along — review the list when you\'re done.</string>
+    <string name="rapidfire_prompt_key">Listen — then key it back.</string>
+    <string name="rapidfire_type_what_you_copy">Type what you copy</string>
+    <string name="rapidfire_next">Next ▸</string>
+    <string name="rapidfire_results_title">Rapid Fire — Results</string>
+    <string name="rapidfire_score">%1$s / %2$s correct (%3$s%%)</string>
+    <string name="rapidfire_you_typed">you: %1$s</string>
+    <string name="rapidfire_decrease">Decrease</string>
+    <string name="rapidfire_increase">Increase</string>
+
+    <!-- SendingPracticeScreen -->
+    <string name="sending_you_sent_it">✓ you sent it</string>
+    <string name="sending_wrong">✗ you sent “%1$s”</string>
+    <string name="sending_listen_then_key_it_back">Listen, then key it back</string>
+
+    <!-- SendingDrillScreen -->
+    <string name="drills_sheet_subtitle">%1$s WPM · %2$s</string>
+    <string name="drills_cw_sending_practice">CW Sending Practice</string>
+    <string name="drills_generate_a_new_sheet">Generate a new sheet</string>
+    <string name="drills_groups">Groups</string>
+    <string name="drills_groups_readout">%1$s groups</string>
+    <string name="drills_group_size">Group size</string>
+    <string name="drills_group_size_readout">%1$s chars</string>
+    <string name="drills_share_practice_sheet">Share practice sheet</string>
+    <string name="drills_share">Share</string>
+    <string name="drills_print">Print</string>
 
     <!-- JourneyScreen -->
     <string name="journey_map_button">Map</string>

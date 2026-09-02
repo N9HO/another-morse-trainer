@@ -37,6 +37,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -76,19 +77,19 @@ fun SendingDrillScreen(onBack: () -> Unit) {
             groupSize = groupSize
         )
     }
-    val subtitle = "${Settings.characterWpm.roundToInt()} WPM · ${LocalDate.now().format(SHEET_DATE)}"
-    val sheetText = drill.plainText(title = "CW Sending Practice", subtitle = subtitle)
+    val subtitle = stringResource(R.string.drills_sheet_subtitle, Settings.characterWpm.roundToInt(), LocalDate.now().format(SHEET_DATE))
+    val sheetText = drill.plainText(title = stringResource(R.string.drills_cw_sending_practice), subtitle = subtitle)
 
     Column(modifier = Modifier.fillMaxSize()) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            TextButton(onClick = onBack) { Text("‹ Back", color = Brand.teal) }
-            Text("Sending Drills", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            TextButton(onClick = onBack) { Text(stringResource(R.string.common_back), color = Brand.teal) }
+            Text(stringResource(R.string.mode_sending_drills), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             Spacer(Modifier.weight(1f))
             IconButton(onClick = { regen++ }) {
-                Icon(Icons.Filled.Refresh, contentDescription = "Generate a new sheet", tint = Brand.teal)
+                Icon(Icons.Filled.Refresh, contentDescription = stringResource(R.string.drills_generate_a_new_sheet), tint = Brand.teal)
             }
         }
 
@@ -104,15 +105,15 @@ fun SendingDrillScreen(onBack: () -> Unit) {
                 ) { kind = it }
                 Text(kind.blurb, style = MaterialTheme.typography.bodySmall, color = Brand.textSecondary)
                 DrillSlider(
-                    label = "Groups",
-                    readout = "$groupCount groups",
+                    label = stringResource(R.string.drills_groups),
+                    readout = stringResource(R.string.drills_groups_readout, groupCount),
                     value = groupCount,
                     range = 10..100,
                     step = 5
                 ) { groupCount = it }
                 DrillSlider(
-                    label = "Group size",
-                    readout = "$groupSize chars",
+                    label = stringResource(R.string.drills_group_size),
+                    readout = stringResource(R.string.drills_group_size_readout, groupSize),
                     value = groupSize,
                     range = 3..7,
                     step = 1
@@ -147,17 +148,17 @@ fun SendingDrillScreen(onBack: () -> Unit) {
                     onClick = {
                         val send = Intent(Intent.ACTION_SEND).apply {
                             type = "text/plain"
-                            putExtra(Intent.EXTRA_SUBJECT, "CW Sending Practice")
+                            putExtra(Intent.EXTRA_SUBJECT, context.getString(R.string.drills_cw_sending_practice))
                             putExtra(Intent.EXTRA_TEXT, sheetText)
                         }
-                        context.startActivity(Intent.createChooser(send, "Share practice sheet"))
+                        context.startActivity(Intent.createChooser(send, context.getString(R.string.drills_share_practice_sheet)))
                     },
                     modifier = Modifier.weight(1f)
-                ) { Text("Share") }
+                ) { Text(stringResource(R.string.drills_share)) }
                 Button(
-                    onClick = { SheetPrinter.print(context, sheetText, "CW Sending Practice") },
+                    onClick = { SheetPrinter.print(context, sheetText, context.getString(R.string.drills_cw_sending_practice)) },
                     modifier = Modifier.weight(1f)
-                ) { Text("Print") }
+                ) { Text(stringResource(R.string.drills_print)) }
             }
         }
       }
