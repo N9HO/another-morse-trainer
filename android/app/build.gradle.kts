@@ -116,5 +116,5 @@ dependencies {
     // A real org.json for unit tests. The org.json in android.jar is a stub that
     // throws "Stub!" on every call, so parsing the shared fixture on the JVM
     // needs the actual implementation ahead of it on the classpath.
-    testImplementation("org.json:json:20240303")
+    testImplementation("org.json:json:20260814")
 }
