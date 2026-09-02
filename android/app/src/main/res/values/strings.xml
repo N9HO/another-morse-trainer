@@ -33,6 +33,13 @@
     <string name="common_key_it_back">Key it back</string>
     <string name="common_progress">Progress</string>
     <string name="common_settings">Settings</string>
+    <string name="common_cancel">Cancel</string>
+
+    <!-- OnboardingScreen -->
+    <string name="onboarding_welcome">Welcome to\nAnother Morse Trainer</string>
+    <string name="onboarding_blurb">Learn to copy Morse by ear with the Koch method — full-speed characters, one at a time, building up as you go.</string>
+    <string name="onboarding_proficiency_question">How much Morse do you already know?</string>
+    <string name="onboarding_start_practicing">Start practicing</string>
 
     <!-- HomeScreen -->
     <string name="home_core_koch_drill">Core Koch drill</string>
@@ -54,6 +61,13 @@
     <string name="home_cw_decoder_description">CW decoder — turn received Morse audio into text</string>
     <string name="home_tagline">A proud part of the Carrier Wave ecosystem.</string>
     <string name="home_streak">"🔥  %1$s day streak"</string>
+
+    <!-- SessionSetupSheet -->
+    <string name="setup_where_are_you_starting">Where are you starting?</string>
+    <string name="setup_proficiency_blurb">How much Morse you already know — sets where the drill begins. Changing this restarts your active set.</string>
+    <string name="setup_track_stage">Track stage</string>
+    <string name="setup_duration_question">How long do you want to practice?</string>
+    <string name="setup_start_training">Start Training</string>
 
     <!-- MainActivity -->
     <string name="setup_listen">Listen</string>

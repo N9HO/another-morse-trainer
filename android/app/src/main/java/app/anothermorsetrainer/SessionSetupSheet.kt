@@ -31,6 +31,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -87,7 +88,7 @@ fun SessionSetupSheet(
             Text(blurb, style = MaterialTheme.typography.bodySmall, color = Brand.textSecondary)
 
             if (settingsMode in LADDER_MODES) {
-                SetupCard("Where are you starting?") {
+                SetupCard(stringResource(R.string.setup_where_are_you_starting)) {
                     Proficiency.entries.forEach { level ->
                         SetupRadioRow(
                             label = level.label,
@@ -101,8 +102,7 @@ fun SessionSetupSheet(
                     }
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        "How much Morse you already know — sets where the drill begins. " +
-                            "Changing this restarts your active set.",
+                        stringResource(R.string.setup_proficiency_blurb),
                         style = MaterialTheme.typography.labelSmall,
                         color = Brand.textSecondary
                     )
@@ -115,7 +115,7 @@ fun SessionSetupSheet(
             // (issue #51). Sending Practice drills the same persisted track, so
             // it gets the same control — keying whole words is a big step up.
             if (progressive != null) {
-                SetupCard("Track stage") {
+                SetupCard(stringResource(R.string.setup_track_stage)) {
                     key(stageRev) {
                         StagePinRow(pinned = progressive.pinnedStage) { pick ->
                             if (pick == null) progressive.unpin() else progressive.pin(pick)
@@ -133,7 +133,7 @@ fun SessionSetupSheet(
             }
 
             if (settingsMode in DURATION_MODES) {
-                SetupCard("How long do you want to practice?") {
+                SetupCard(stringResource(R.string.setup_duration_question)) {
                     Row(
                         modifier = Modifier.horizontalScroll(rememberScrollState()),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -158,10 +158,10 @@ fun SessionSetupSheet(
                 shape = RoundedCornerShape(Brand.cornerRadius),
                 modifier = Modifier.fillMaxWidth().heightIn(min = 54.dp)
             ) {
-                Text("Start Training", fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+                Text(stringResource(R.string.setup_start_training), fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
             }
             TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
-                Text("Cancel", color = Brand.textSecondary)
+                Text(stringResource(R.string.common_cancel), color = Brand.textSecondary)
             }
         }
     }
