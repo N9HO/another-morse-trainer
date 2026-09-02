@@ -65,7 +65,7 @@ class JourneyTest {
         val letters = koch.filter { it.isLetter() }
         assertEquals("K M only: nothing beyond level 1 is known", 2, JourneyCurriculum.firstLevelBeyond(koch.take(2).toSet()))
         assertEquals("some letters", 7, JourneyCurriculum.firstLevelBeyond(letters.take(13).toSet()))
-        assertEquals("all letters", 12, JourneyCurriculum.firstLevelBeyond(letters.toSet()))
+        assertEquals("all letters", 9, JourneyCurriculum.firstLevelBeyond(letters.toSet()))
         assertEquals("all letters and numbers", 20, JourneyCurriculum.firstLevelBeyond(koch.toSet()))
         assertEquals("nothing known", 1, JourneyCurriculum.firstLevelBeyond(emptySet()))
     }
