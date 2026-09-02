@@ -21,22 +21,23 @@
     </issue>
 
     <!--
-      The Gradle wrapper and the Android Gradle plugin are held back on purpose.
-      Moving them is the AGP 9 upgrade described next to the compose-bom pin in
-      build.gradle.kts — its own piece of work, with a compileSdk bump attached —
-      not a version-string edit, and this check cannot be verified locally
-      because nothing here runs Gradle. Until that project happens the finding
-      is the same line on every run.
+      targetSdk deliberately trails compileSdk by one (36 against 37, see the
+      comment on it in build.gradle.kts): the AGP 9 / compileSdk 37 move was a
+      toolchain change, and raising targetSdk changes the app's behaviour on
+      Android 17, which nothing in CI can run. Remove this when targetSdk moves;
+      Play's target-API deadline for 37 is the one that forces it.
     -->
-    <issue id="AndroidGradlePluginVersion" severity="ignore" />
+    <issue id="OldTargetApi" severity="ignore" />
 
     <!--
-      compose-bom is pinned at 2026.06.01 for the reason given in
-      build.gradle.kts: the newer BOM pulls a Compose that needs AGP 9.1 and
-      compileSdk 37. Only that one artifact is silenced; every other dependency
-      is still checked for newer versions.
+      Lint 9.x reports newer *major* versions too (NewerVersionAvailable, which
+      GradleDependency does not cover). OkHttp 5 is one: a major with API changes
+      behind the one HTTP fetch this app makes (NewsFetcher), and no test runs
+      that path. Moving it is a change to read the 5.x migration notes for, not
+      a version-string edit in a toolchain PR. Only okhttp is silenced; every
+      other dependency is still checked.
     -->
-    <issue id="GradleDependency">
-        <ignore regexp="compose-bom" />
+    <issue id="NewerVersionAvailable">
+        <ignore regexp="okhttp" />
     </issue>
 </lint>
