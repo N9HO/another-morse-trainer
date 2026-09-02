@@ -25,6 +25,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -88,6 +89,9 @@ fun SendingPracticeScreen(onBack: () -> Unit) {
     var lastCorrect by remember { mutableStateOf(false) }
     var sentAnswer by remember { mutableStateOf("") }
     var summary by remember { mutableStateOf(source.summary) }
+    // Pinning a stage mutates the shared track in place, so it has no Compose
+    // state of its own — bump a revision to redraw the pills after a pick.
+    var stageRev by remember { mutableIntStateOf(0) }
     var toneFinishedAt by remember { mutableLongStateOf(0L) }
     var keyPressed by remember { mutableStateOf(false) }
 
@@ -206,6 +210,20 @@ fun SendingPracticeScreen(onBack: () -> Unit) {
             Text(stringResource(R.string.mode_sending_practice), style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center)
             Spacer(Modifier.height(4.dp))
             Text(summary, style = MaterialTheme.typography.labelMedium, color = Brand.textSecondary)
+
+            // The same hold the Characters quiz offers (#51): this drills the
+            // same track, and keying whole words with no way back to single
+            // characters was the complaint in #95.
+            Spacer(Modifier.height(10.dp))
+            key(stageRev) {
+                StagePinRow(pinned = source.pinnedStage) { pick ->
+                    if (pick == null) source.unpin() else source.pin(pick)
+                    EngineStore.save()
+                    summary = source.summary
+                    stageRev++
+                    advanceNow()
+                }
+            }
             midiDevice?.let {
                 Spacer(Modifier.height(2.dp))
                 Text("🎹 $it", style = MaterialTheme.typography.labelSmall, color = Brand.teal)
