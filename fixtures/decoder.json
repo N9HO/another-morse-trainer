@@ -1,0 +1,104 @@
+{
+  "$comment": "Shared CW decoder fixture, consumed by BOTH ports: android CwDecoderTest and ios MorseKitCheck. Data, not code \u2014 see CLAUDE.md's two-ports rule.",
+  "derivation": {
+    "render": "Hard-keyed CW as 16-bit PCM. unit = 1.2/wpm seconds; dit = unit, dah = 3*unit; gap after an element = unit, after a character = 3*unit, after a word = 7*unit, after the final character of the message = 10*unit. 0.7 s of silence leads (noise-floor calibration) and 0.5 s trails (flushes the last character). Each tone or gap spans trunc(seconds * sampleRate) samples. tone sample n = amplitude * sin(2*pi*toneHz/sampleRate * n), phase restarting at every element; gaps are silence.",
+    "noise": "Uniform in [-noiseAmplitude, +noiseAmplitude), added to every sample including the silences, from xorshift64* (x ^= x>>12; x ^= x<<25; x ^= x>>27; out = x * 0x2545F4914F6CDD1D; a zero seed becomes 0x9E3779B97F4A7C15): value = ((out >> 40) / 8388608 - 1) * noiseAmplitude. A noiseAmplitude of 0 adds nothing and does not advance the generator.",
+    "sample": "clamp(value + noise, -32767, 32767) truncated toward zero to Int16.",
+    "decode": "The core's default config with input_rate_hz = inputRate and target_rate_hz = 8000; every on_symbol text appended in order and whitespace-trimmed. passes > 1 replays the same PCM after a decoder reset with the sink cleared, and the pass outputs are joined with '|'.",
+    "expectations": "expectedText is the message itself (the spec), repeated per pass. wpmRange and expectedToneHz/toneToleranceHz are the documented tolerances of the core's speed and pitch estimators, not measured values.",
+    "renderedSamples": "Exact: every segment length is integer arithmetic on the same doubles both ports use.",
+    "absSum": "Sum of |sample| over the whole render. Computed here in double precision with a correctly-rounded sin; the ports truncate the same doubles, so a flip needs a sample within one ulp of an integer boundary \u2014 which is why the relative tolerance is loose next to the exact count. A real regression in either renderer (a wrong gap, a dropped element, unseeded noise) moves this by percent.",
+    "note": "Re-implemented from this description, not transcribed from either port. It pins both bench renderers to the same audio and the vendored core to the same copy of it; it is not a claim about the core's accuracy against any external standard."
+  },
+  "tolerance": {
+    "absSumRelative": 1e-06
+  },
+  "cases": [
+    {
+      "name": "clean 25 WPM at 700 Hz (8 kHz PCM)",
+      "message": "CQ CQ DE N9HO N9HO K",
+      "wpm": 25.0,
+      "toneHz": 700.0,
+      "sampleRate": 8000.0,
+      "amplitude": 8000.0,
+      "noiseAmplitude": 0.0,
+      "noiseSeed": 0,
+      "inputRate": 8000,
+      "passes": 1,
+      "wpmRange": [
+        20.0,
+        30.0
+      ],
+      "renderedSamples": 92928,
+      "absSum": 212864337,
+      "expectedText": "CQ CQ DE N9HO N9HO K",
+      "note": "the baseline: hard-keyed CW at the core's default pitch, decoded at its native rate"
+    },
+    {
+      "name": "pitch search recovers a 620 Hz signal against the 700 Hz default",
+      "message": "CQ CQ DE N9HO N9HO K",
+      "wpm": 25.0,
+      "toneHz": 620.0,
+      "sampleRate": 8000.0,
+      "amplitude": 8000.0,
+      "noiseAmplitude": 0.0,
+      "noiseSeed": 0,
+      "inputRate": 8000,
+      "passes": 1,
+      "expectedToneHz": 620.0,
+      "toneToleranceHz": 25.0,
+      "renderedSamples": 92928,
+      "absSum": 212991190,
+      "expectedText": "CQ CQ DE N9HO N9HO K",
+      "note": "80 Hz off the seed pitch, inside the 500-900 Hz search window"
+    },
+    {
+      "name": "stays solid through seeded noise (~20 dB SNR)",
+      "message": "CQ CQ DE N9HO N9HO K",
+      "wpm": 25.0,
+      "toneHz": 700.0,
+      "sampleRate": 8000.0,
+      "amplitude": 8000.0,
+      "noiseAmplitude": 1000.0,
+      "noiseSeed": 42,
+      "inputRate": 8000,
+      "passes": 1,
+      "renderedSamples": 92928,
+      "absSum": 239224387,
+      "expectedText": "CQ CQ DE N9HO N9HO K",
+      "note": "uniform noise at 1/8 of the tone amplitude is ~20 dB SNR by power, far inside the ~11 dB limit measured for this core, so the case stays deterministic across toolchains and math libraries"
+    },
+    {
+      "name": "48 kHz input decimates down and still decodes",
+      "message": "PARIS",
+      "wpm": 20.0,
+      "toneHz": 700.0,
+      "sampleRate": 48000.0,
+      "amplitude": 8000.0,
+      "noiseAmplitude": 0.0,
+      "noiseSeed": 0,
+      "inputRate": 48000,
+      "passes": 1,
+      "renderedSamples": 210240,
+      "absSum": 322655256,
+      "expectedText": "PARIS",
+      "note": "the rate a phone microphone delivers; the core decimates to targetRate before detecting"
+    },
+    {
+      "name": "reset() rearms the decoder for a second run",
+      "message": "PARIS",
+      "wpm": 20.0,
+      "toneHz": 700.0,
+      "sampleRate": 8000.0,
+      "amplitude": 8000.0,
+      "noiseAmplitude": 0.0,
+      "noiseSeed": 0,
+      "inputRate": 8000,
+      "passes": 2,
+      "renderedSamples": 35040,
+      "absSum": 53749344,
+      "expectedText": "PARIS|PARIS",
+      "note": "the same PCM twice with a reset between; both passes must copy cleanly"
+    }
+  ]
+}

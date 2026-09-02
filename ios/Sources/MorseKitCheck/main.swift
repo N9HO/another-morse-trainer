@@ -165,6 +165,19 @@ do {
     check("stats survive a save/load round-trip", fresh.stats.count == e.stats.count)
     check("the met-characters set survives a save/load round-trip",
           fresh.exposedCharacters == e.exposedCharacters)
+
+    // A save from before exposure tracking has no exposedCharacters key. It
+    // must decode with every active character treated as met, or an existing
+    // learner relaunches into the one-option onboarding. The Kotlin twin pins
+    // the same rule in EngineStoreCodecTest; the formats differ, the rule not.
+    var legacyMet = false
+    if var obj = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] {
+        obj.removeValue(forKey: "exposedCharacters")
+        let legacy = try JSONSerialization.data(withJSONObject: obj)
+        let old = try JSONDecoder().decode(TrainerEngine.Snapshot.self, from: legacy)
+        legacyMet = old.exposedCharacters == Set(e.activeCharacters)
+    }
+    check("a save predating exposure tracking restores every active character as met", legacyMet)
 } catch {
     check("encode/decode without throwing", false)
 }
@@ -1609,9 +1622,43 @@ check("clipping prefers a sentence boundary",
 check("hard clip still closes the sentence",
       CWText.clipped("ONE TWO THREE FOUR FIVE SIX SEVEN", maxWords: 4) == "ONE TWO THREE FOUR.")
 
+// MARK: - Shared decoder fixture
+//
+// fixtures/decoder.json, read by this harness and by android CwDecoderTest.
+// These scenarios used to be hard-coded here and transcribed line for line
+// into the Kotlin test — the last instance of the copied-test-code habit that
+// fixtures/ was built to replace. The fixture carries the scenarios and their
+// expectations as data; the bench render and the decode loop stay per-tree,
+// in each tree's own idiom, so no behaviour is shared. The fixture also pins
+// the render itself (sample count and |sum|), so the two benches are proven
+// to feed the two decoders the same audio.
+struct DecoderFixture: Decodable {
+    struct Tolerance: Decodable { let absSumRelative: Double }
+    struct Case: Decodable {
+        let name, message: String
+        let wpm, toneHz, sampleRate, amplitude, noiseAmplitude: Double
+        let noiseSeed: UInt64
+        let inputRate, passes, renderedSamples: Int
+        let absSum: Double
+        let expectedText: String
+        let wpmRange: [Double]?
+        let expectedToneHz, toneToleranceHz: Double?
+    }
+    let tolerance: Tolerance
+    let cases: [Case]
+}
+
+func loadDecoderFixture() -> DecoderFixture? {
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent()
+        .deletingLastPathComponent().deletingLastPathComponent()
+    guard let data = try? Data(contentsOf: root.appendingPathComponent("fixtures/decoder.json")) else { return nil }
+    return try? JSONDecoder().decode(DecoderFixture.self, from: data)
+}
+
 // Vendored CW decoder core — synthetic PCM through the real C audio engine.
-print("\nCW decoder core (vendored):")
-do {
+print("\nCW decoder core (vendored), against fixtures/decoder.json:")
+if let fx = loadDecoderFixture() {
     final class AudioSink {
         var text = ""
     }
@@ -1619,6 +1666,7 @@ do {
     /// Render hard-keyed CW as 16-bit PCM: a calibration lead-in of silence,
     /// the message at ITU timing, and enough tail to flush the last character.
     /// Noise is seeded and uniform, so every run hears identical samples.
+    /// The fixture's `derivation.render` block is the spec this implements.
     func renderCW(_ message: String, wpm: Double, toneHz: Double,
                   sampleRate: Double, amplitude: Double,
                   noiseAmplitude: Double = 0, noiseSeed: UInt64 = 0) -> [Int16] {
@@ -1686,33 +1734,38 @@ do {
         return (texts.joined(separator: "|"), cw_decoder_wpm(decoder), cw_decoder_tone_hz(decoder))
     }
 
-    let message = "CQ CQ DE N9HO N9HO K"
-    let clean = decodeCW(renderCW(message, wpm: 25, toneHz: 700,
-                                  sampleRate: 8000, amplitude: 8000), inputRate: 8000)
-    check("decodes clean 25 WPM CW at 700 Hz (8 kHz PCM)", clean.text == message)
-    check("speed estimate lands near 25 WPM", clean.wpm > 20 && clean.wpm < 30)
+    check("fixture carries cases", !fx.cases.isEmpty)
+    for c in fx.cases {
+        let pcm = renderCW(c.message, wpm: c.wpm, toneHz: c.toneHz,
+                           sampleRate: c.sampleRate, amplitude: c.amplitude,
+                           noiseAmplitude: c.noiseAmplitude, noiseSeed: c.noiseSeed)
+        let absSum = pcm.reduce(0.0) { $0 + abs(Double($1)) }
+        let renderOK = pcm.count == c.renderedSamples
+            && approxEqual(absSum, c.absSum, max(1e-6, c.absSum * fx.tolerance.absSumRelative))
+        check("\(c.name): bench render matches the fixture (\(c.renderedSamples) samples)", renderOK)
+        if !renderOK {
+            print("      ↳ rendered \(pcm.count) samples with |sum| \(absSum); fixture says \(c.renderedSamples) and \(c.absSum)")
+        }
 
-    let mistuned = decodeCW(renderCW(message, wpm: 25, toneHz: 620,
-                                     sampleRate: 8000, amplitude: 8000), inputRate: 8000)
-    check("pitch search recovers a 620 Hz signal against the 700 Hz default",
-          mistuned.text == message)
-    check("locked tone sits by the real 620 Hz, not the seed", abs(mistuned.toneHz - 620) < 25)
+        let result = decodeCW(pcm, inputRate: UInt32(c.inputRate), passes: c.passes)
+        check("\(c.name): decodes '\(c.expectedText)'", result.text == c.expectedText)
+        if result.text != c.expectedText { print("      ↳ decoded '\(result.text)'") }
 
-    // ≈20 dB SNR — far inside the ~11 dB limit measured for this core, so the
-    // committed case stays deterministic across toolchains and math libraries.
-    let noisy = decodeCW(renderCW(message, wpm: 25, toneHz: 700,
-                                  sampleRate: 8000, amplitude: 8000,
-                                  noiseAmplitude: 1000, noiseSeed: 42), inputRate: 8000)
-    check("stays solid through seeded noise (≈20 dB SNR)", noisy.text == message)
-
-    let hires = decodeCW(renderCW("PARIS", wpm: 20, toneHz: 700,
-                                  sampleRate: 48000, amplitude: 8000), inputRate: 48000)
-    check("48 kHz input decimates down and still decodes", hires.text == "PARIS")
-
-    let twice = decodeCW(renderCW("PARIS", wpm: 20, toneHz: 700,
-                                  sampleRate: 8000, amplitude: 8000),
-                         inputRate: 8000, passes: 2)
-    check("reset() rearms the decoder for a second run", twice.text == "PARIS|PARIS")
+        if let range = c.wpmRange, range.count == 2 {
+            check("\(c.name): speed estimate lands in \(range[0])–\(range[1]) WPM",
+                  Double(result.wpm) > range[0] && Double(result.wpm) < range[1])
+        }
+        if let tone = c.expectedToneHz, let tol = c.toneToleranceHz {
+            check("\(c.name): locked tone sits within \(tol) Hz of \(tone) Hz",
+                  abs(Double(result.toneHz) - tone) < tol)
+        }
+    }
+    // The optional expectations are what make two of these cases worth
+    // having; a fixture edit that dropped them would otherwise pass quietly.
+    check("fixture still pins a speed estimate and a pitch lock",
+          fx.cases.contains { $0.wpmRange != nil } && fx.cases.contains { $0.expectedToneHz != nil })
+} else {
+    check("fixtures/decoder.json loads and decodes", false)
 }
 
 // Timing at the new 60 WPM ceiling (issue #79)

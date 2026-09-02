@@ -1,21 +1,46 @@
 package app.anothermorsetrainer.morsekit.cw
 
 import app.anothermorsetrainer.morsekit.MorseCode
+import org.json.JSONObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import kotlin.math.abs
-import kotlin.math.min
 import kotlin.math.max
+import kotlin.math.min
 import kotlin.math.sin
 
 /**
- * Synthetic-PCM checks for the ported CW decoder core — the same scenarios
- * the firmware bench (iOS `MorseKitCheck`) runs against the vendored C core,
- * so the port is held to the C core's observed behavior: clean copy,
- * mistuned pitch search, seeded noise, 48 kHz decimation, and reset re-arm.
+ * The ported CW decoder core, pinned against `fixtures/decoder.json` at the
+ * repo root — the same file the iOS `MorseKitCheck` harness reads against the
+ * vendored C core.
+ *
+ * The scenarios here used to be a line-for-line transcription of the Swift
+ * harness, the last instance of the copied-test-code habit that `fixtures/`
+ * was built to replace. The fixture now carries the scenarios and their
+ * expectations as data; the bench render and the decode loop below stay
+ * per-tree, in this tree's idiom, so no behaviour is shared. The fixture also
+ * pins the render itself (sample count and |sum|), so the two benches are
+ * proven to feed the two decoders the same audio before either decodes it.
+ *
+ * Put on the classpath by `sourceSets["test"].resources` in build.gradle.kts.
  */
 class CwDecoderTest {
+
+    private val fixture: JSONObject by lazy {
+        val stream = javaClass.classLoader?.getResourceAsStream("decoder.json")
+        assertNotNull("fixtures/decoder.json is not on the test classpath", stream)
+        JSONObject(stream!!.bufferedReader().readText())
+    }
+
+    private val sumTolerance: Double get() = fixture.getJSONObject("tolerance").getDouble("absSumRelative")
+
+    private fun cases(): List<JSONObject> {
+        val arr = fixture.getJSONArray("cases")
+        assertTrue("fixture has no cases", arr.length() > 0)
+        return (0 until arr.length()).map { arr.getJSONObject(it) }
+    }
 
     /** The bench's tiny seedable RNG (xorshift64*), so noise is reproducible. */
     private class SeededRng(seed: ULong) {
@@ -32,6 +57,7 @@ class CwDecoderTest {
      * Render hard-keyed CW as 16-bit PCM: a calibration lead-in of silence,
      * the message at ITU timing, and enough tail to flush the last character.
      * Noise is seeded and uniform, so every run hears identical samples.
+     * The fixture's `derivation.render` block is the spec this implements.
      */
     private fun renderCW(
         message: String,
@@ -82,6 +108,16 @@ class CwDecoderTest {
         return samples.toShortArray()
     }
 
+    private fun render(c: JSONObject): ShortArray = renderCW(
+        c.getString("message"),
+        wpm = c.getDouble("wpm"),
+        toneHz = c.getDouble("toneHz"),
+        sampleRate = c.getDouble("sampleRate"),
+        amplitude = c.getDouble("amplitude"),
+        noiseAmplitude = c.getDouble("noiseAmplitude"),
+        noiseSeed = c.getLong("noiseSeed").toULong()
+    )
+
     private class Decoded(val text: String, val wpm: Float, val toneHz: Float)
 
     /**
@@ -107,60 +143,59 @@ class CwDecoderTest {
         return Decoded(texts.joinToString("|"), decoder.wpm, decoder.toneHz)
     }
 
-    private val message = "CQ CQ DE N9HO N9HO K"
+    private fun decode(c: JSONObject): Decoded =
+        decodeCW(render(c), inputRate = c.getInt("inputRate"), passes = c.getInt("passes"))
+
+    private fun label(c: JSONObject) = c.getString("name")
 
     @Test
-    fun decodesClean25WpmAt700Hz() {
-        val clean = decodeCW(
-            renderCW(message, wpm = 25.0, toneHz = 700.0, sampleRate = 8000.0, amplitude = 8000.0),
-            inputRate = 8000
-        )
-        assertEquals(message, clean.text)
-        assertTrue("speed estimate ${clean.wpm} should land near 25 WPM", clean.wpm > 20f && clean.wpm < 30f)
+    fun `bench render matches the shared fixture`() {
+        for (c in cases()) {
+            val pcm = render(c)
+            assertEquals("${label(c)} sample count", c.getInt("renderedSamples"), pcm.size)
+            val absSum = pcm.sumOf { abs(it.toDouble()) }
+            val expected = c.getDouble("absSum")
+            assertEquals("${label(c)} |sum|", expected, absSum, max(1e-6, expected * sumTolerance))
+        }
     }
 
     @Test
-    fun pitchSearchRecoversMistunedSignal() {
-        val mistuned = decodeCW(
-            renderCW(message, wpm = 25.0, toneHz = 620.0, sampleRate = 8000.0, amplitude = 8000.0),
-            inputRate = 8000
-        )
-        assertEquals(message, mistuned.text)
-        assertTrue(
-            "locked tone ${mistuned.toneHz} should sit by the real 620 Hz",
-            abs(mistuned.toneHz - 620f) < 25f
-        )
+    fun `decoded text matches the shared fixture for every case`() {
+        for (c in cases()) {
+            assertEquals(label(c), c.getString("expectedText"), decode(c).text)
+        }
     }
 
     @Test
-    fun staysSolidThroughSeededNoise() {
-        // ≈20 dB SNR — far inside the ~11 dB limit measured for the C core, so
-        // the committed case stays deterministic across platforms.
-        val noisy = decodeCW(
-            renderCW(
-                message, wpm = 25.0, toneHz = 700.0, sampleRate = 8000.0,
-                amplitude = 8000.0, noiseAmplitude = 1000.0, noiseSeed = 42uL
-            ),
-            inputRate = 8000
-        )
-        assertEquals(message, noisy.text)
+    fun `speed estimate lands in the fixture's range`() {
+        var pinned = 0
+        for (c in cases()) {
+            if (!c.has("wpmRange")) continue
+            pinned++
+            val range = c.getJSONArray("wpmRange")
+            val lo = range.getDouble(0)
+            val hi = range.getDouble(1)
+            val wpm = decode(c).wpm.toDouble()
+            assertTrue("${label(c)}: speed estimate $wpm should land in $lo-$hi WPM", wpm > lo && wpm < hi)
+        }
+        // A fixture edit that dropped the expectation would otherwise pass quietly.
+        assertTrue("fixture no longer pins a speed estimate", pinned > 0)
     }
 
     @Test
-    fun decimatesFrom48kHz() {
-        val hires = decodeCW(
-            renderCW("PARIS", wpm = 20.0, toneHz = 700.0, sampleRate = 48000.0, amplitude = 8000.0),
-            inputRate = 48000
-        )
-        assertEquals("PARIS", hires.text)
-    }
-
-    @Test
-    fun resetRearmsForASecondRun() {
-        val twice = decodeCW(
-            renderCW("PARIS", wpm = 20.0, toneHz = 700.0, sampleRate = 8000.0, amplitude = 8000.0),
-            inputRate = 8000, passes = 2
-        )
-        assertEquals("PARIS|PARIS", twice.text)
+    fun `locked tone sits by the fixture's real pitch`() {
+        var pinned = 0
+        for (c in cases()) {
+            if (!c.has("expectedToneHz")) continue
+            pinned++
+            val expected = c.getDouble("expectedToneHz")
+            val tolerance = c.getDouble("toneToleranceHz")
+            val tone = decode(c).toneHz.toDouble()
+            assertTrue(
+                "${label(c)}: locked tone $tone should sit within $tolerance Hz of $expected Hz",
+                abs(tone - expected) < tolerance
+            )
+        }
+        assertTrue("fixture no longer pins a pitch lock", pinned > 0)
     }
 }
