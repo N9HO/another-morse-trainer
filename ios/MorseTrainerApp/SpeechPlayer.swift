@@ -7,7 +7,7 @@ import os
 /// Wraps `AVSpeechSynthesizer` and reports completion on the main thread so the
 /// listen loop can chain: play Morse → pause → speak → next. It deliberately
 /// takes no `AudioSession` claim of its own: it only ever speaks alongside the
-/// tone player, whose permanent `.playback` claim is exactly what speech needs,
+/// tone player, whose session-long `.playback` claim is exactly what speech needs,
 /// and a claim of its own would just be a second vote for the same profile.
 ///
 /// The SDK marks `AVSpeechSynthesizerDelegate` `Sendable`, so anything that

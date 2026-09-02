@@ -369,8 +369,10 @@ final class AppModel: ObservableObject {
                 self.handleAudioLoss()
                 // The player rebuilds itself on the next `activate()`; call it
                 // now so the engine and the noise floor are back before the
-                // user taps anything.
-                self.player.activate()
+                // user taps anything — but only mid-session. Outside one the
+                // player holds no claim, and taking one here would pause
+                // other apps' audio from the menu.
+                if self.player.isSessionHeld { self.player.activate() }
                 self.applyBackgroundNoise()
             case .interruptionEnded(let shouldResume):
                 guard shouldResume else { return }
@@ -378,8 +380,10 @@ final class AppModel: ObservableObject {
                 // *not* auto-resume the listen loop: the user put the phone
                 // down to take a call, and starting Morse in their ear the
                 // moment they hang up is the wrong instinct. The paused loop is
-                // one tap from where they left it.
-                self.player.activate()
+                // one tap from where they left it. Outside a session there is
+                // no claim to re-establish, and taking one would pause the
+                // very audio the interruption just handed back.
+                if self.player.isSessionHeld { self.player.activate() }
                 self.applyBackgroundNoise()
             }
         }
@@ -548,6 +552,10 @@ final class AppModel: ObservableObject {
     // MARK: - Game loop
 
     func start() {
+        // Take the audio session now, ahead of the first tone: other audio
+        // pauses at this point, and the engine's cold start is paid here rather
+        // than on the first character. endSession() hands it back.
+        player.activate()
         resetVoiceRound()
         storyGeneration += 1   // cancel any in-flight story playback
         storyPlaying = false
@@ -1807,6 +1815,9 @@ final class AppModel: ObservableObject {
             history.add(record)            // triggers saveHistory()
             lastSessionRecord = record
         }
+        // Hand the route back: whatever was playing before the session may
+        // resume now. Nothing above this line makes a sound after it.
+        player.releaseSession()
         sessionEnded = true
     }
 

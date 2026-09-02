@@ -14,7 +14,8 @@ struct ReferenceView: View {
     @Environment(\.dismiss) private var dismiss
 
     // A private player kept alive for the life of the sheet. `@State` retains
-    // the instance across re-renders; it pre-warms its audio engine on init.
+    // the instance across re-renders; it takes the audio session on first play
+    // and gives it back when the sheet disappears.
     @State private var player = MorsePlayer()
     @State private var playingID: String?
     @State private var category: RefCategory = .prosigns
@@ -110,6 +111,9 @@ struct ReferenceView: View {
                 player.stop()
                 playingID = nil
             }
+            // Hand the audio session back when the sheet goes, so whatever was
+            // playing before resumes; a bare stop() would leave the claim held.
+            .onDisappear { player.releaseSession() }
         }
     }
 
@@ -352,7 +356,9 @@ private struct ReferenceDetailView: View {
         }
         .navigationTitle(item.display)
         .navigationBarTitleDisplayMode(.inline)
-        .onDisappear { player.stop() }
+        // Hand the audio session back on the way out, so whatever was playing
+        // before resumes; a bare stop() would leave the claim held.
+        .onDisappear { player.releaseSession() }
     }
 
     private var header: some View {
