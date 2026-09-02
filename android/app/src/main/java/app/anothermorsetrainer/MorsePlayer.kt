@@ -5,37 +5,71 @@ import android.media.AudioFormat
 import android.media.AudioTrack
 import android.os.Handler
 import android.os.Looper
-import app.anothermorsetrainer.morsekit.MorseCode
 import app.anothermorsetrainer.morsekit.MorseItem
+import app.anothermorsetrainer.morsekit.MorseSynth
 import app.anothermorsetrainer.morsekit.MorseTiming
 import kotlin.math.PI
 import kotlin.math.abs
-import kotlin.math.cos
 import kotlin.math.sin
 
 /**
  * Generates and plays the sound of a Morse character/word/prosign.
  *
- * Ported from the iOS MorseTrainerApp/MorsePlayer.swift. The *rendering* (clean
- * sine tones with short raised-cosine ramps so they don't click) is a direct
- * translation; the *output* swaps Apple's AVAudioEngine/AVAudioSourceNode for
- * Android's [AudioTrack] in static-buffer mode. The "finished" signal stays
- * time-based — scheduled for the exact known duration — so the quiz loop can
- * never get stuck waiting on the audio system.
+ * Ported from the iOS MorseTrainerApp/MorsePlayer.swift, and now streaming like
+ * it. The *synthesis* lives in [MorseSynth] (morsekit) on both sides; what is
+ * left here is the platform half: Android's [AudioTrack] where Apple has
+ * `AVAudioSourceNode`.
+ *
+ * **This used to pre-render.** Every sound was built into a whole `FloatArray`,
+ * handed to a fresh `MODE_STATIC` track, and blocking-written — all on the
+ * calling thread, which is the main thread. A Code Exam at novice speed is
+ * roughly 22 million samples, ~88 MB, so Story and Exam at slow effective
+ * speeds froze the UI before a single note played. Now a single persistent
+ * `MODE_STREAM` track is fed by one background thread that synthesises a chunk
+ * at a time from a segment list of a few hundred entries, whatever the passage
+ * length. The same shape [SidetoneGenerator] and [BackgroundNoise] already use.
+ *
+ * The "finished" signal stays **time-based** — scheduled for the exact known
+ * duration — so the quiz loop can never get stuck waiting on the audio system.
+ *
+ * On swapping sounds mid-tone (answers are accepted while audio is still
+ * playing, so this is routine) the outgoing program is **faded out over the
+ * same 5 ms the envelope uses** rather than cut. The old code muted the
+ * previous track and leaned on a blocking write to give the mixer a beat to
+ * apply it, which was the fix for issue #63; a real cross-fade is what that was
+ * approximating.
  */
 class MorsePlayer {
 
     private val sampleRate = 44_100
     private val rampSeconds = 0.005
-    private val amplitude = 0.9
+    private val amplitude = 0.9f
 
     private val mainHandler = Handler(Looper.getMainLooper())
-    private var current: AudioTrack? = null
 
     /** Distinguishes completion callbacks so a previous tone's timer can't fire for the current one. */
     private var generation = 0
 
-    private data class Segment(val tone: Double, val gap: Double)
+    /**
+     * What the feeder should be playing. Immutable and swapped whole, so the
+     * feeder only ever reads a consistent pair; [generation] tells it when the
+     * program changed without having to compare contents.
+     *
+     * Exactly one of [synth] and [buffer] is set. The pileup path still
+     * materialises — several voices summed, each with its own pitch, speed, QSB
+     * envelope and gain, then band noise and a peak normalisation over the
+     * finished mix, none of which can be decided one sample ahead. Pileups are
+     * callsigns and short exchanges, so that is bounded by what a pileup *is*,
+     * unlike the Story and Exam passages this rewrite was for.
+     */
+    private class Program(val generation: Int, val synth: MorseSynth?, val buffer: FloatArray?)
+
+    @Volatile private var program = Program(0, null, null)
+    private var programGeneration = 0
+
+    @Volatile private var running = false
+    private var feeder: Thread? = null
+    private var track: AudioTrack? = null
 
     // ---- Playing ----
 
@@ -48,14 +82,16 @@ class MorsePlayer {
      * duration. This drives the time-to-recognize clock.
      */
     fun play(playable: MorseItem.Playable, frequency: Double, timing: MorseTiming, onFinished: () -> Unit) {
-        val floats = render(playable, timing, frequency)
-        if (floats.isEmpty()) { onFinished(); return }
+        // Built here, on the calling thread: a few hundred segments, not
+        // millions of samples. The feeder thread does the synthesis.
+        val synth = synthFor(playable, timing, frequency)
+        if (synth.totalSamples == 0) { onFinished(); return }
 
         generation += 1
         val token = generation
-        playFloats(floats)
+        startProgram(Program(nextProgramGeneration(), synth, null))
 
-        val durationMs = (floats.size.toDouble() / sampleRate * 1000).toLong()
+        val durationMs = (synth.totalSamples.toDouble() / sampleRate * 1000).toLong()
         mainHandler.postDelayed({ if (generation == token) onFinished() }, durationMs)
     }
 
@@ -65,10 +101,10 @@ class MorsePlayer {
      * sound's duration in seconds (0 if nothing to play).
      */
     fun replaySound(playable: MorseItem.Playable, frequency: Double, timing: MorseTiming): Double {
-        val floats = render(playable, timing, frequency)
-        if (floats.isEmpty()) return 0.0
-        playFloats(floats)
-        return floats.size.toDouble() / sampleRate
+        val synth = synthFor(playable, timing, frequency)
+        if (synth.totalSamples == 0) return 0.0
+        startProgram(Program(nextProgramGeneration(), synth, null))
+        return synth.totalSamples.toDouble() / sampleRate
     }
 
     // ---- Pileup (multiple simultaneous transmissions) ----
@@ -96,7 +132,7 @@ class MorsePlayer {
         if (mixed.isEmpty()) { onFinished(); return }
         generation += 1
         val token = generation
-        playFloats(mixed)
+        startProgram(Program(nextProgramGeneration(), null, mixed))
         val durationMs = (mixed.size.toDouble() / sampleRate * 1000).toLong()
         mainHandler.postDelayed({ if (generation == token) onFinished() }, durationMs)
     }
@@ -106,7 +142,7 @@ class MorsePlayer {
     private fun mixPileup(voices: List<PileupVoice>, qrn: Float): FloatArray {
         val rendered = voices.map { v ->
             Rendered(
-                render(MorseItem.Playable.Text(v.text), v.timing, v.frequency),
+                synthFor(MorseItem.Playable.Text(v.text), v.timing, v.frequency).renderAll(),
                 maxOf(0, (v.startDelay * sampleRate).toInt()), v.gain, v.qsbRate
             )
         }
@@ -145,38 +181,155 @@ class MorsePlayer {
 
     fun stop() {
         mainHandler.removeCallbacksAndMessages(null)
-        releaseCurrent()
+        // A silent program rather than a torn-down track: the feeder cross-fades
+        // out of whatever was sounding, so stopping mid-tone is as quiet as
+        // starting.
+        startProgram(Program(nextProgramGeneration(), null, null))
     }
 
     /**
      * Free the audio resources. Call from the owner's onDispose/onDestroy.
      *
-     * This — not [stop] — is where audio focus is given back. [stop] runs between
-     * every item in a drill, and dropping focus in those gaps would let the
-     * user's music swell back for a second at a time between characters.
+     * This — not [stop] — is where audio focus is given back and the feeder
+     * ends. [stop] runs between every item in a drill, and tearing the track
+     * down in those gaps is exactly what this rewrite removed.
      */
     fun release() {
-        stop()
+        mainHandler.removeCallbacksAndMessages(null)
+        running = false
+        startProgram(Program(nextProgramGeneration(), null, null))
+        feeder?.let { runCatching { it.join(250) } }
+        feeder = null
+        track?.let {
+            runCatching { it.stop() }
+            runCatching { it.release() }
+        }
+        track = null
         AudioFocus.release(this)
     }
 
-    private fun playFloats(floats: FloatArray) {
-        // Taken on first sound rather than at construction: a screen that builds
-        // a player and never plays (Reference, until something is tapped) has no
-        // business pausing anyone's music.
-        AudioFocus.acquire(this)
+    private fun synthFor(playable: MorseItem.Playable, timing: MorseTiming, frequency: Double): MorseSynth =
+        MorseSynth.forPlayable(
+            playable, timing, sampleRate.toDouble(), frequency, amplitude, rampSeconds
+        )
 
-        // A new sound can arrive while the previous one is still playing —
-        // answers are accepted mid-audio, so the auto-advance often lands
-        // before the old word finishes. Stopping that track outright cuts it
-        // mid-sine, an audible click/crackle on every such transition
-        // (issue #63). Mute it first (the mixer ramps volume changes), let the
-        // blocking write of the new buffer give that ramp a beat to land, and
-        // only then release it.
-        val previous = current
-        current = null
-        previous?.let { runCatching { it.setVolume(0f) } }
-        val track = AudioTrack.Builder()
+    @Synchronized
+    private fun nextProgramGeneration(): Int {
+        programGeneration += 1
+        return programGeneration
+    }
+
+    /** Hand the feeder a new program, starting it if this is the first sound. */
+    private fun startProgram(next: Program) {
+        program = next
+        if (next.synth == null && next.buffer == null) return   // silence needs no feeder
+        // Taken on first sound rather than at construction: a screen that builds
+        // a player and never plays has no business pausing anyone's music.
+        AudioFocus.acquire(this)
+        ensureFeeder()
+    }
+
+    @Synchronized
+    private fun ensureFeeder() {
+        if (running && feeder != null) return
+        val t = openTrack() ?: return   // no route: practice carries on silently
+        track = t
+        running = true
+        feeder = Thread { feed(t) }.apply { isDaemon = true; name = "amt-morse-feeder"; start() }
+    }
+
+    /**
+     * Owns the streaming track. Writes are blocking, so the loop paces itself
+     * against playback and the thread spends nearly all of its time parked —
+     * the same shape as [BackgroundNoise].
+     *
+     * A chunk is ~12 ms, which is also the worst case for how long an
+     * already-queued sound keeps playing after [stop]. That is a tail of real
+     * audio faded to nothing, not a click, and it is well under the gap between
+     * drills.
+     */
+    private fun feed(t: AudioTrack) {
+        val buf = FloatArray(CHUNK)
+        val rampSamples = maxOf(1, (rampSeconds * sampleRate).toInt())
+
+        var playing: Program? = null
+        var cursor = MorseSynth.Cursor()
+        var bufferIndex = 0
+
+        // The outgoing program, still sounding while it fades.
+        var fading: Program? = null
+        var fadeCursor = MorseSynth.Cursor()
+        var fadeIndex = 0
+        var fadeLeft = 0
+
+        // Deliberately not a helper returning a pair of (sample, newIndex):
+        // that allocates once per sample, 44,100 times a second, on the thread
+        // least able to afford GC pressure. These mutate the captured cursors
+        // in place instead.
+        fun liveSample(): Float {
+            val p = playing ?: return 0f
+            val synth = p.synth
+            if (synth != null) return synth.next(cursor)
+            val b = p.buffer ?: return 0f
+            return if (bufferIndex < b.size) b[bufferIndex++] else 0f
+        }
+
+        fun fadingSample(): Float {
+            val p = fading ?: return 0f
+            val synth = p.synth
+            if (synth != null) return synth.next(fadeCursor)
+            val b = p.buffer ?: return 0f
+            return if (fadeIndex < b.size) b[fadeIndex++] else 0f
+        }
+
+        try {
+            t.play()
+            while (running) {
+                val next = program
+                val current = playing
+                if (current == null || next.generation != current.generation) {
+                    // Fade the old one out instead of cutting it. Answers are
+                    // accepted mid-audio, so this path is routine, and cutting a
+                    // sine at full amplitude is an audible click (issue #63).
+                    if (current != null) {
+                        fading = current
+                        fadeCursor = cursor.copy()
+                        fadeIndex = bufferIndex
+                        fadeLeft = rampSamples
+                    }
+                    playing = next
+                    cursor = MorseSynth.Cursor()
+                    bufferIndex = 0
+                }
+
+                for (i in 0 until CHUNK) {
+                    var v = liveSample()
+                    if (fadeLeft > 0) {
+                        v += fadingSample() * (fadeLeft.toFloat() / rampSamples)
+                        fadeLeft -= 1
+                        if (fadeLeft == 0) fading = null
+                    }
+                    buf[i] = v.coerceIn(-1f, 1f)
+                }
+                if (t.write(buf, 0, CHUNK, AudioTrack.WRITE_BLOCKING) < 0) break
+            }
+        } catch (_: IllegalStateException) {
+            // Track died under us (route change, audio policy). Nothing to salvage.
+        } finally {
+            synchronized(this) { running = false }
+        }
+    }
+
+    private fun openTrack(): AudioTrack? = try {
+        val minBytes = AudioTrack.getMinBufferSize(
+            sampleRate, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_FLOAT
+        )
+        // getMinBufferSize reports an error as a negative value; fall back to a
+        // couple of chunks rather than handing AudioTrack.Builder nonsense.
+        // Kept small on purpose: this buffer is the latency between asking for a
+        // sound and hearing it, and between stop() and silence.
+        val bufferBytes = if (minBytes > 0) maxOf(minBytes, CHUNK * 4 * 2) else CHUNK * 4 * 2
+        AudioTrack.Builder()
             .setAudioAttributes(
                 AudioAttributes.Builder()
                     .setUsage(AudioAttributes.USAGE_MEDIA)
@@ -190,113 +343,15 @@ class MorsePlayer {
                     .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
                     .build()
             )
-            .setBufferSizeInBytes(floats.size * 4)
-            .setTransferMode(AudioTrack.MODE_STATIC)
+            .setBufferSizeInBytes(bufferBytes)
+            .setTransferMode(AudioTrack.MODE_STREAM)
             .build()
-        track.write(floats, 0, floats.size, AudioTrack.WRITE_BLOCKING)
-        previous?.let {
-            try { it.stop() } catch (_: IllegalStateException) {}
-            it.release()
-        }
-        track.play()
-        current = track
+    } catch (_: Exception) {
+        null
     }
 
-    private fun releaseCurrent() {
-        current?.let {
-            try { it.stop() } catch (_: IllegalStateException) {}
-            it.release()
-        }
-        current = null
-    }
-
-    // ---- Rendering to float samples ----
-
-    private fun render(playable: MorseItem.Playable, timing: MorseTiming, frequency: Double): FloatArray {
-        val segments = segments(playable, timing)
-        val fullRamp = maxOf(1, (rampSeconds * sampleRate).toInt())
-        val omega = 2.0 * PI * frequency / sampleRate
-
-        // Size the buffer up front and fill it by index. This used to be an
-        // ArrayList<Float>, which boxes every sample into a java.lang.Float:
-        // a long Farnsworth passage (Short Stories at 33/8) is tens of millions
-        // of samples, and the boxed form ran to hundreds of megabytes of
-        // transient heap on the main thread. The counts here must match the
-        // loops below exactly, so both derive from the same expressions.
-        // maxOf(0, ..) on both counts, matching the `> 0` guards the append
-        // form had: a non-positive duration must contribute nothing, or the
-        // sizing pass and the fill pass below could disagree.
-        var total = 0
-        for (segment in segments) {
-            total += maxOf(0, (segment.tone * sampleRate).toInt())
-            total += maxOf(0, (segment.gap * sampleRate).toInt())
-        }
-        val out = FloatArray(total)
-        var i = 0
-
-        for (segment in segments) {
-            val toneCount = (segment.tone * sampleRate).toInt()
-            if (toneCount > 0) {
-                // Never let the rise and fall overlap: past ~120 WPM a dit is
-                // shorter than two 5 ms ramps, and the `else if` below would then
-                // skip the fall entirely and cut the tone off at full amplitude —
-                // a click. Half a tone each way is the ceiling (issue #79). At
-                // every speed the app offers this is the unchanged 5 ms.
-                val rampSamples = maxOf(1, minOf(fullRamp, toneCount / 2))
-                for (n in 0 until toneCount) {
-                    var amp = amplitude
-                    if (n < rampSamples) {
-                        amp *= 0.5 * (1 - cos(PI * n / rampSamples))
-                    } else if (n >= toneCount - rampSamples) {
-                        val m = toneCount - n
-                        amp *= 0.5 * (1 - cos(PI * m / rampSamples))
-                    }
-                    out[i++] = (amp * sin(omega * n)).toFloat()
-                }
-            }
-            // Gap samples are already zero in a fresh FloatArray.
-            i += maxOf(0, (segment.gap * sampleRate).toInt())
-        }
-        return out
-    }
-
-    private fun segments(playable: MorseItem.Playable, timing: MorseTiming): List<Segment> {
-        return when (playable) {
-            is MorseItem.Playable.Pattern -> {
-                val els = playable.value.map { if (it == '.') MorseCode.Element.DIT else MorseCode.Element.DAH }
-                withGaps(els, timing, interElement = timing.elementGap, trailing = 0.0)
-            }
-            is MorseItem.Playable.Text -> {
-                val chars = playable.value.toList()
-                val result = ArrayList<Segment>()
-                for ((ci, ch) in chars.withIndex()) {
-                    // A space is a word gap: stretch the previous character's trailing
-                    // gap to a full word gap. Single tokens are unaffected.
-                    if (ch == ' ') {
-                        if (result.isNotEmpty()) {
-                            val last = result.removeAt(result.size - 1)
-                            result.add(last.copy(gap = timing.wordGap))
-                        }
-                        continue
-                    }
-                    val els = MorseCode.elements(ch)
-                    if (els.isEmpty()) continue
-                    val afterChar = if (ci == chars.size - 1) 0.0 else timing.characterGap
-                    result.addAll(withGaps(els, timing, interElement = timing.elementGap, trailing = afterChar))
-                }
-                result
-            }
-        }
-    }
-
-    private fun withGaps(
-        elements: List<MorseCode.Element>,
-        timing: MorseTiming,
-        interElement: Double,
-        trailing: Double
-    ): List<Segment> = elements.mapIndexed { i, el ->
-        val tone = if (el == MorseCode.Element.DIT) timing.dit else timing.dah
-        val gap = if (i == elements.size - 1) trailing else interElement
-        Segment(tone, gap)
+    private companion object {
+        /** ~12 ms at 44.1 kHz: small enough to react, big enough to be cheap. */
+        const val CHUNK = 512
     }
 }
