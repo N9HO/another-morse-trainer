@@ -13,10 +13,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Abc
 import androidx.compose.material.icons.filled.Bolt
@@ -126,11 +124,8 @@ fun HomeScreen(
         HomeItem(stringResource(R.string.mode_listen_and_learn), stringResource(R.string.home_hands_free_eyes_free), Icons.Filled.Headphones, onPickListen) +
         HomeItem(stringResource(R.string.mode_reference), stringResource(R.string.home_look_it_up), Icons.AutoMirrored.Filled.ListAlt, onPickReference)
 
-    CenteredContent {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
+        CenteredScrollColumn(
+            contentModifier = Modifier
                 .padding(horizontal = 20.dp)
                 .padding(top = 12.dp, bottom = 32.dp)
         ) {
@@ -189,7 +184,6 @@ fun HomeScreen(
                 Spacer(Modifier.height(14.dp))
             }
         }
-    }
 }
 
 @Composable

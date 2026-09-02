@@ -15,10 +15,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Bolt
@@ -96,12 +94,8 @@ fun StatsScreen(onBack: () -> Unit) {
             }
         }
 
-      CenteredContent {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp),
+        CenteredScrollColumn(
+            contentModifier = Modifier.padding(horizontal = 20.dp)
         ) {
             Text(
                 stringResource(R.string.stats_brag_sheet),
@@ -196,7 +190,6 @@ fun StatsScreen(onBack: () -> Unit) {
             }
             Spacer(Modifier.height(24.dp))
         }
-      }
     }
 }
 
@@ -376,12 +369,8 @@ private fun SessionDetail(record: SessionRecord, onBack: () -> Unit) {
         Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             TextButton(onClick = onBack) { Text(stringResource(R.string.stats_back_to_sessions)) }
         }
-      CenteredContent {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp)
+        CenteredScrollColumn(
+            contentModifier = Modifier.padding(horizontal = 20.dp)
         ) {
             Text(
                 record.mode,
@@ -434,7 +423,6 @@ private fun SessionDetail(record: SessionRecord, onBack: () -> Unit) {
             }
             Spacer(Modifier.height(24.dp))
         }
-      }
     }
 }
 

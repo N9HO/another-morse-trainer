@@ -11,8 +11,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -89,7 +87,6 @@ fun CodeExamScreen(onBack: () -> Unit) {
             SessionSettingsButton { showSettings = true }
         }
 
-      CenteredContent {
         val s = session
         if (s == null) {
             ExamSetup(
@@ -117,7 +114,6 @@ fun CodeExamScreen(onBack: () -> Unit) {
                 )
             }
         }
-      }
     }
 
     if (showSettings) {
@@ -136,11 +132,8 @@ private fun ExamSetup(
     onGrading: (ExamGrading) -> Unit,
     onStart: () -> Unit
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 24.dp),
+    CenteredScrollColumn(
+        contentModifier = Modifier.padding(horizontal = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(stringResource(R.string.mode_code_exam), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
@@ -231,12 +224,9 @@ private fun SolidCopyExam(
     // means the window does not resize for the IME, so the scroll viewport ran
     // on behind the keyboard. imePadding sits outside the scroll so the
     // viewport itself shrinks.
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .imePadding()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 24.dp),
+    CenteredScrollColumn(
+        modifier = Modifier.imePadding(),
+        contentModifier = Modifier.padding(horizontal = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(stringResource(R.string.exam_title_with_speed, session.speed.wpmLabel), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
@@ -359,11 +349,8 @@ private fun QuestionsExam(
         }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 24.dp),
+    CenteredScrollColumn(
+        contentModifier = Modifier.padding(horizontal = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         run {

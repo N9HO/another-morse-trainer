@@ -313,8 +313,7 @@ private fun PileupSetup(onStart: () -> Unit, onBack: () -> Unit) {
             TextButton(onClick = onBack) { Text(stringResource(R.string.common_back), color = Brand.teal) }
             Text(stringResource(R.string.mode_pileup_runner), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         }
-      CenteredContent {
-        Column(
+        CenteredScrollColumn(
             // imePadding keeps the whole setup list above the soft keyboard
             // (#40). The app targets SDK 36, so it is always edge-to-edge and
             // the window no longer resizes for the IME; AppBackground insets
@@ -323,13 +322,12 @@ private fun PileupSetup(onStart: () -> Unit, onBack: () -> Unit) {
             // outside verticalScroll so the scroll viewport itself shrinks.
             // A tap on any empty space drops focus and dismisses the keyboard;
             // children are hit-tested first, so buttons and sliders still get
-            // their own taps.
+            // their own taps. Both ride the full-width outer column, so the
+            // tablet gutters dismiss the keyboard as well as scroll.
             modifier = Modifier
-                .fillMaxSize()
                 .imePadding()
-                .verticalScroll(rememberScrollState())
-                .pointerInput(Unit) { detectTapGestures(onTap = { focusManager.clearFocus() }) }
-                .padding(horizontal = 16.dp),
+                .pointerInput(Unit) { detectTapGestures(onTap = { focusManager.clearFocus() }) },
+            contentModifier = Modifier.padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             PuSectionLabel(stringResource(R.string.pileup_your_call))
@@ -464,7 +462,6 @@ private fun PileupSetup(onStart: () -> Unit, onBack: () -> Unit) {
             ) { Text(stringResource(R.string.pileup_start_button, PileupSettings.mode.label), fontWeight = FontWeight.Bold, fontSize = 17.sp) }
             Spacer(Modifier.height(16.dp))
         }
-      }
     }
 }
 
