@@ -317,7 +317,14 @@ public final class PileupEngine {
         self.rng = rng
     }
 
-    public func update(config: PileupConfig) { self.config = config }
+    /// Adopt new settings mid-session. Callers already on the air keep the
+    /// speed and pitch they arrived with, but the caller cap applies at once:
+    /// a smaller pileup is what the operator asked for, so the surplus leaves
+    /// now rather than at the next session (#143).
+    public func update(config: PileupConfig) {
+        self.config = config
+        enforceCap()
+    }
 
     /// Clear all state and start a fresh session with `config`.
     public func reset(config: PileupConfig) {
@@ -357,6 +364,10 @@ public final class PileupEngine {
     // MARK: Calling CQ
 
     /// Call CQ: top the pileup up with fresh callers and have them all answer.
+    ///
+    /// Topping up never trimmed: a pileup that had grown to eight stayed eight
+    /// after Max callers came down to two, which read as the setting doing
+    /// nothing (#143). The cap is enforced here as well as on `update`.
     public func callCQ() -> Action {
         if config.mode.isPileup {
             let target = Int.random(in: max(1, config.maxStations / 2)...max(1, config.maxStations), using: &rng)
@@ -364,6 +375,7 @@ public final class PileupEngine {
         } else if stations.isEmpty {
             stations = [makeStation()]
         }
+        enforceCap()
         phase = .pileup
         guard !stations.isEmpty else { return .silence }
         return .play(stations.map { callVoice(for: $0) })
@@ -463,16 +475,7 @@ public final class PileupEngine {
         }
         // Stations the partial could be addressing answer — sending "W1"
         // brings back the W1s, not everyone. The impatient may quit first.
-        var matched = stationsMatching(frag)
-        if config.giveUpEnabled && !matched.isEmpty {
-            for idx in matched { bump(idx) }
-            let quitters = matched.filter { quit($0) }
-            if !quitters.isEmpty {
-                for idx in quitters { recordMiss(at: idx) }
-                removeStations(ids: quitters.map { stations[$0].id })
-                matched = stationsMatching(frag)
-            }
-        }
+        let matched = recallers { Self.isTightPartial(frag, of: $0) }
         if !matched.isEmpty {
             return .play(matched.map { callVoice(for: stations[$0]) })
         }
@@ -505,6 +508,18 @@ public final class PileupEngine {
             // they work out whether you were answering them.
             let hesitation = near.count > 1 ? 1.0 : 0.0
             return .play(near.map { callVoice(for: stations[$0], hesitation: hesitation) })
+        }
+        // A partial with a hole in it: "WU?" for W1ABU, the first and last
+        // letters of a call heard through two others on top of it. No call
+        // contains "WU", and at two characters it is nobody's near miss, so
+        // it fell through to the busted-call path — on the silence setting,
+        // no reply at all (#143). On the air every W-something-U station
+        // would come back; here every call carrying those letters in that
+        // order does. Tried last, so a tight partial or a near miss keeps
+        // the meaning it already had.
+        let loose = recallers { Self.isLoosePartial(frag, of: $0) }
+        if !loose.isEmpty {
+            return .play(loose.map { callVoice(for: stations[$0]) })
         }
         return nil
     }
@@ -541,7 +556,8 @@ public final class PileupEngine {
         lastMissedCaller = miss
     }
 
-    /// Stations a partial call could be addressing.
+    /// The stations a partial re-calls: those `matches` picks out, less any
+    /// whose patience this attempt exhausted (they walk, and are recorded).
     ///
     /// A partial is whatever fragment you managed to copy, and it is not always
     /// the front of the call. Two stations landing on top of each other often
@@ -553,8 +569,36 @@ public final class PileupEngine {
     ///
     /// Callers guarantee a non-empty fragment; an empty one matches every call
     /// and is handled earlier as a bare "?" to the whole pileup.
-    private func stationsMatching(_ frag: String) -> [Int] {
-        stations.indices.filter { stations[$0].call.contains(frag) }
+    private func recallers(_ matches: (String) -> Bool) -> [Int] {
+        var matched = stations.indices.filter { matches(stations[$0].call) }
+        if config.giveUpEnabled && !matched.isEmpty {
+            for idx in matched { bump(idx) }
+            let quitters = matched.filter { quit($0) }
+            if !quitters.isEmpty {
+                for idx in quitters { recordMiss(at: idx) }
+                removeStations(ids: quitters.map { stations[$0].id })
+                matched = stations.indices.filter { matches(stations[$0].call) }
+            }
+        }
+        return matched
+    }
+
+    /// A tight partial: the fragment is a run of consecutive characters of the
+    /// call — "9H?" for N9HO. Pinned by fixtures/pileup-partials.json.
+    public static func isTightPartial(_ frag: String, of call: String) -> Bool {
+        call.contains(frag)
+    }
+
+    /// A loose partial: the fragment's characters occur in the call in that
+    /// order, with anything at all between them — "WU?" for W1ABU. Every tight
+    /// partial is also loose. Pinned by fixtures/pileup-partials.json.
+    public static func isLoosePartial(_ frag: String, of call: String) -> Bool {
+        var rest = call[...]
+        for ch in frag {
+            guard let i = rest.firstIndex(of: ch) else { return false }
+            rest = rest[rest.index(after: i)...]
+        }
+        return true
     }
 
     private func beginExchange(at i: Int) -> Action {
@@ -745,12 +789,13 @@ public final class PileupEngine {
 
     static func isQRQ(_ s: String) -> Bool { s.uppercased() == "QRQ" }
 
-    /// A callsign fragment from typed input: upper-cased, spaces removed, and the
-    /// trailing query mark(s) stripped (so "W1?" queries the W1 prefix).
-    static func fragment(_ text: String) -> String {
-        var f = text.uppercased().replacingOccurrences(of: " ", with: "")
-        while f.hasSuffix("?") { f.removeLast() }
-        return f
+    /// A callsign fragment from typed input: upper-cased, with spaces and every
+    /// query mark dropped. "W1?" queries the W1 prefix; "W?U" and "?U" mark
+    /// where the missed letters were. No call carries a "?", so one left in
+    /// place could never have matched anything (#143). Pinned by
+    /// fixtures/pileup-partials.json.
+    public static func fragment(_ text: String) -> String {
+        text.uppercased().filter { $0 != " " && $0 != "?" }
     }
 
     /// The call an operator's send is aimed at: everything up to the first
@@ -829,6 +874,28 @@ public final class PileupEngine {
     }
 
     private func index(of id: Int) -> Int? { stations.firstIndex { $0.id == id } }
+
+    /// The most callers the settings allow on the air at once.
+    private var stationCap: Int { config.mode.isPileup ? max(1, config.maxStations) : 1 }
+
+    /// Send the callers beyond the cap away, newest first. They leave without
+    /// a trace: nobody miscopied them, so it is neither a walk-off nor a bust.
+    /// A station being worked is never the one sent away.
+    private func enforceCap() {
+        var surplus = stations.count - stationCap
+        guard surplus > 0 else { return }
+        let workingID: Int?
+        switch phase {
+        case .working(let id), .readyToLog(let id): workingID = id
+        default: workingID = nil
+        }
+        var kept: [Station] = []
+        for s in stations.reversed() {
+            if surplus > 0 && s.id != workingID { surplus -= 1; continue }
+            kept.append(s)
+        }
+        stations = kept.reversed()
+    }
     private func bump(_ i: Int) { stations[i].attempts += 1 }
     private func quit(_ i: Int) -> Bool { config.giveUpEnabled && stations[i].attempts > stations[i].patience }
     private func removeStations(ids: [Int]) { stations.removeAll { ids.contains($0.id) } }

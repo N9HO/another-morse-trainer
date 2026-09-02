@@ -684,6 +684,72 @@ do {
               playCount(e.send("QXJZ?")) == 0 && e.bustCount >= 1)
     }
 
+    // #143: a partial with a hole in it. "WU?" is the first and last letters
+    // of a call heard through two others; no call contains "WU" and at two
+    // characters it is nobody's near miss, so it used to fall through to the
+    // bust path — silence, on that setting. Every call carrying those letters
+    // in that order comes back, and it is not a bust.
+    do {
+        var pcfg = PileupConfig()
+        pcfg.mode = .pota
+        pcfg.maxStations = 4
+        pcfg.minWPM = 20; pcfg.maxWPM = 20
+        pcfg.giveUpEnabled = false
+        pcfg.bustBehavior = .silence
+        let probe = PileupEngine(config: pcfg, rng: SeededRNG(seed: 7))
+        _ = probe.callCQ()
+        let live = probe.stations.map { $0.call }
+        let call = live[0]
+        let ends = String(call.first!) + String(call.last!)
+        // A tight match, where some call has one, takes precedence (checked above).
+        let expected = live.contains { $0.contains(ends) }
+            ? live.filter { $0.contains(ends) }.count
+            : live.filter { PileupEngine.isLoosePartial(ends, of: $0) }.count
+        let e = PileupEngine(config: pcfg, rng: SeededRNG(seed: 7))
+        _ = e.callCQ()
+        check("first-and-last letters draw every call carrying them in order (#143)",
+              expected >= 1 && playCount(e.send(ends + "?")) == expected)
+        check("a partial with a hole is a copy in progress, not a bust", e.bustCount == 0)
+        let e2 = PileupEngine(config: pcfg, rng: SeededRNG(seed: 7))
+        _ = e2.callCQ()
+        check("a query mark marking the hole asks the same question (#143)",
+              playCount(e2.send(String(call.first!) + "?" + String(call.last!))) == expected)
+    }
+
+    // #143: Max callers is a cap, not just a top-up target. Lowering it
+    // mid-session thins the pileup at once, and CQ never refills past it.
+    do {
+        var big = PileupConfig()
+        big.mode = .pota
+        big.maxStations = 8
+        big.minWPM = 20; big.maxWPM = 20
+        big.giveUpEnabled = false
+        let e = PileupEngine(config: big, rng: SeededRNG(seed: 7))
+        // The top-up target is random in maxStations/2...maxStations, so CQ
+        // until the pileup has grown past the cap it is about to be given.
+        var cqs = 0
+        repeat { _ = e.callCQ(); cqs += 1 } while e.activeCount <= 2 && cqs < 20
+        check("a pileup grows past two under Max callers 8", e.activeCount > 2)
+        var small = big
+        small.maxStations = 2
+        e.update(config: small)
+        check("lowering Max callers thins the pileup at once (#143)",
+              e.activeCount >= 1 && e.activeCount <= 2)
+        _ = e.callCQ()
+        check("CQ never refills past Max callers (#143)",
+              e.activeCount >= 1 && e.activeCount <= 2)
+        check("callers the cap sent away are neither walk-offs nor busts",
+              e.missedCallers.isEmpty && e.bustCount == 0)
+        // The station being worked is never the one sent away.
+        let worked = e.stations[0].call
+        _ = e.send(worked)
+        var one = big
+        one.maxStations = 1
+        e.update(config: one)
+        check("the cap never sends away the station being worked",
+              e.activeCount == 1 && e.workingStation?.call == worked)
+    }
+
     // A near miss — a call you have all but copied — is answered by the one
     // station it names, over and over, until you get it right. It never opens
     // an exchange on a call that isn't theirs, and it never goes quiet.
@@ -2354,6 +2420,46 @@ if let fx = loadMasteryFixture() {
     check("mastery matches the fixture across \(fx.cases.count) attempt sequences", allOK)
 } else {
     check("fixtures/mastery.json loads and decodes", false)
+}
+
+// Shared partial-call fixture: how typed input becomes a fragment, and which
+// calls a fragment addresses — the tight and loose rules the pileup applies in
+// order (#85, #143). fixtures/pileup-partials.json is read by this harness AND
+// by android PileupPartialCallTest, so both ports answer the same partials.
+struct PartialFixture: Decodable {
+    struct Case: Decodable {
+        let typed, call, fragment: String
+        let tight, loose: Bool?
+    }
+    let cases: [Case]
+}
+print("\nShared partial-call fixture (fixtures/pileup-partials.json):")
+do {
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent()
+        .deletingLastPathComponent().deletingLastPathComponent()
+    if let data = try? Data(contentsOf: root.appendingPathComponent("fixtures/pileup-partials.json")),
+       let fx = try? JSONDecoder().decode(PartialFixture.self, from: data) {
+        var allOK = true
+        for c in fx.cases {
+            let frag = PileupEngine.fragment(c.typed)
+            if frag != c.fragment {
+                allOK = false
+                print("  ✗ fragment(\"\(c.typed)\") = \"\(frag)\", fixture says \"\(c.fragment)\"")
+            }
+            if let t = c.tight, PileupEngine.isTightPartial(c.fragment, of: c.call) != t {
+                allOK = false
+                print("  ✗ \"\(c.fragment)\" tight partial of \(c.call) should be \(t)")
+            }
+            if let l = c.loose, PileupEngine.isLoosePartial(c.fragment, of: c.call) != l {
+                allOK = false
+                print("  ✗ \"\(c.fragment)\" loose partial of \(c.call) should be \(l)")
+            }
+        }
+        check("partial-call rules match the fixture across \(fx.cases.count) cases", allOK)
+    } else {
+        check("fixtures/pileup-partials.json loads and decodes", false)
+    }
 }
 
 print("\n────────────────────────────")

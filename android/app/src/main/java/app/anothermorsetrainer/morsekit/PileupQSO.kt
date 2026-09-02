@@ -371,7 +371,16 @@ class PileupEngine(
     private val rng: Random = rng
     private var nextID = 1
 
-    fun update(config: PileupConfig) { this.config = config }
+    /**
+     * Adopt new settings mid-session. Callers already on the air keep the
+     * speed and pitch they arrived with, but the caller cap applies at once:
+     * a smaller pileup is what the operator asked for, so the surplus leaves
+     * now rather than at the next session (#143).
+     */
+    fun update(config: PileupConfig) {
+        this.config = config
+        enforceCap()
+    }
 
     /** Clear all state and start a fresh session with [config]. */
     fun reset(config: PileupConfig) {
@@ -419,7 +428,13 @@ class PileupEngine(
 
     // MARK: Calling CQ
 
-    /** Call CQ: top the pileup up with fresh callers and have them all answer. */
+    /**
+     * Call CQ: top the pileup up with fresh callers and have them all answer.
+     *
+     * Topping up never trimmed: a pileup that had grown to eight stayed eight
+     * after Max callers came down to two, which read as the setting doing
+     * nothing (#143). The cap is enforced here as well as on [update].
+     */
     fun callCQ(): Action {
         if (config.mode.isPileup) {
             val target = closedInt(rng, maxOf(1, config.maxStations / 2), maxOf(1, config.maxStations))
@@ -429,6 +444,7 @@ class PileupEngine(
         } else if (stations.isEmpty()) {
             stations = listOf(makeStation(emptyList()))
         }
+        enforceCap()
         phase = Phase.Pileup
         if (stations.isEmpty()) return Action.Silence
         return Action.Play(stations.map { callVoice(it) })
@@ -538,16 +554,7 @@ class PileupEngine(
 
         // Stations the partial could be addressing answer — sending "W1"
         // brings back the W1s, not everyone. The impatient may quit first.
-        var matched = stationsMatching(frag)
-        if (config.giveUpEnabled && matched.isNotEmpty()) {
-            for (idx in matched) bump(idx)
-            val quitters = matched.filter { quit(it) }
-            if (quitters.isNotEmpty()) {
-                for (idx in quitters) recordMiss(idx)
-                removeStations(quitters.map { stations[it].id })
-                matched = stationsMatching(frag)
-            }
-        }
+        val matched = recallers { isTightPartial(frag, it) }
         if (matched.isNotEmpty()) {
             return Action.Play(matched.map { callVoice(stations[it]) })
         }
@@ -584,6 +591,18 @@ class PileupEngine(
             val hesitation = if (near.size > 1) 1.0 else 0.0
             return Action.Play(near.map { callVoice(stations[it], hesitation) })
         }
+        // A partial with a hole in it: "WU?" for W1ABU, the first and last
+        // letters of a call heard through two others on top of it. No call
+        // contains "WU", and at two characters it is nobody's near miss, so
+        // it fell through to the busted-call path — on the silence setting,
+        // no reply at all (#143). On the air every W-something-U station
+        // would come back; here every call carrying those letters in that
+        // order does. Tried last, so a tight partial or a near miss keeps
+        // the meaning it already had.
+        val loose = recallers { isLoosePartial(frag, it) }
+        if (loose.isNotEmpty()) {
+            return Action.Play(loose.map { callVoice(stations[it]) })
+        }
         return null
     }
 
@@ -616,7 +635,8 @@ class PileupEngine(
     }
 
     /**
-     * Stations a partial call could be addressing.
+     * The stations a partial re-calls: those [matches] picks out, less any
+     * whose patience this attempt exhausted (they walk, and are recorded).
      *
      * A partial is whatever fragment you managed to copy, and it is not always
      * the front of the call. Two stations landing on top of each other often
@@ -629,8 +649,19 @@ class PileupEngine(
      * Callers guarantee a non-empty fragment; an empty one matches every call
      * and is handled earlier as a bare "?" to the whole pileup.
      */
-    private fun stationsMatching(frag: String): List<Int> =
-        stations.indices.filter { stations[it].call.contains(frag) }
+    private fun recallers(matches: (String) -> Boolean): List<Int> {
+        var matched = stations.indices.filter { matches(stations[it].call) }
+        if (config.giveUpEnabled && matched.isNotEmpty()) {
+            for (idx in matched) bump(idx)
+            val quitters = matched.filter { quit(it) }
+            if (quitters.isNotEmpty()) {
+                for (idx in quitters) recordMiss(idx)
+                removeStations(quitters.map { stations[it].id })
+                matched = stations.indices.filter { matches(stations[it].call) }
+            }
+        }
+        return matched
+    }
 
     private fun beginExchange(i: Int): Action {
         phase = Phase.Working(stations[i].id)
@@ -859,13 +890,34 @@ class PileupEngine(
         const val NEAR_MISS_TOLERANCE = 1.5
 
         /**
-         * A callsign fragment from typed input: upper-cased, spaces removed, and the
-         * trailing query mark(s) stripped (so "W1?" queries the W1 prefix).
+         * A callsign fragment from typed input: upper-cased, with spaces and
+         * every query mark dropped. "W1?" queries the W1 prefix; "W?U" and "?U"
+         * mark where the missed letters were. No call carries a "?", so one
+         * left in place could never have matched anything (#143). Pinned by
+         * fixtures/pileup-partials.json.
          */
-        fun fragment(text: String): String {
-            var f = text.uppercase().replace(" ", "")
-            while (f.endsWith("?")) { f = f.dropLast(1) }
-            return f
+        fun fragment(text: String): String =
+            text.uppercase().filter { it != ' ' && it != '?' }
+
+        /**
+         * A tight partial: the fragment is a run of consecutive characters of
+         * the call — "9H?" for N9HO. Pinned by fixtures/pileup-partials.json.
+         */
+        fun isTightPartial(frag: String, call: String): Boolean = call.contains(frag)
+
+        /**
+         * A loose partial: the fragment's characters occur in the call in that
+         * order, with anything at all between them — "WU?" for W1ABU. Every
+         * tight partial is also loose. Pinned by fixtures/pileup-partials.json.
+         */
+        fun isLoosePartial(frag: String, call: String): Boolean {
+            var from = 0
+            for (ch in frag) {
+                val i = call.indexOf(ch, from)
+                if (i < 0) return false
+                from = i + 1
+            }
+            return true
         }
 
         /**
@@ -982,6 +1034,31 @@ class PileupEngine(
     }
 
     private fun index(id: Int): Int? = stations.indexOfFirst { it.id == id }.takeIf { it >= 0 }
+
+    /** The most callers the settings allow on the air at once. */
+    private val stationCap: Int
+        get() = if (config.mode.isPileup) maxOf(1, config.maxStations) else 1
+
+    /**
+     * Send the callers beyond the cap away, newest first. They leave without
+     * a trace: nobody miscopied them, so it is neither a walk-off nor a bust.
+     * A station being worked is never the one sent away.
+     */
+    private fun enforceCap() {
+        var surplus = stations.size - stationCap
+        if (surplus <= 0) return
+        val workingId = when (val p = phase) {
+            is Phase.Working -> p.id
+            is Phase.ReadyToLog -> p.id
+            else -> null
+        }
+        val kept = mutableListOf<Station>()
+        for (s in stations.asReversed()) {
+            if (surplus > 0 && s.id != workingId) { surplus -= 1; continue }
+            kept.add(s)
+        }
+        stations = kept.reversed()
+    }
     private fun bump(i: Int) { stations[i].attempts += 1 }
     private fun quit(i: Int): Boolean = config.giveUpEnabled && stations[i].attempts > stations[i].patience
     private fun removeStations(ids: List<Int>) {

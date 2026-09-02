@@ -1,5 +1,8 @@
 package app.anothermorsetrainer.morsekit
 
+import org.json.JSONObject
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import kotlin.random.Random
@@ -13,6 +16,11 @@ import kotlin.random.Random
  * trailing letter, and "9H?" for N9HO queries the middle. Matching only a
  * prefix sent those to the busted-call path — on the silence setting, no reply
  * at all.
+ *
+ * A partial can also have a hole in it (#143): "WU?" is the first and last
+ * letters of a call heard through two others. The rules for what a fragment
+ * is and which calls it addresses are pinned by `fixtures/pileup-partials.json`
+ * at the repo root, shared with the iOS harness.
  */
 class PileupPartialCallTest {
 
@@ -68,5 +76,56 @@ class PileupPartialCallTest {
     fun `a partial matching nobody is still a bust`() {
         val e = engine()
         assertTrue(playCount(e.send("QXJZ?")) == 0 && e.bustCount >= 1)
+    }
+
+    /**
+     * The first and last letters of a live call, with the middle missed. No
+     * call contains the pair and at two characters it is nobody's near miss,
+     * so it used to fall through to the bust path — silence, on that setting.
+     */
+    @Test
+    fun `first and last letters draw every call carrying them in order`() {
+        val live = engine().stations.map { it.call }
+        val call = live.first()
+        val ends = "${call.first()}${call.last()}"
+        // A tight match, where some call has one, takes precedence (covered above).
+        val expected = if (live.any { it.contains(ends) }) live.count { it.contains(ends) }
+            else live.count { PileupEngine.isLoosePartial(ends, it) }
+        assertTrue("the probe call should carry its own ends", expected >= 1)
+
+        val e = engine()
+        assertEquals(expected, playCount(e.send("$ends?")))
+        assertEquals("a partial with a hole is a copy in progress, not a bust", 0, e.bustCount)
+    }
+
+    @Test
+    fun `a query mark marking the hole asks the same question`() {
+        val live = engine().stations.map { it.call }
+        val call = live.first()
+        val ends = "${call.first()}${call.last()}"
+        assertEquals(playCount(engine().send("$ends?")), playCount(engine().send("${call.first()}?${call.last()}")))
+    }
+
+    @Test
+    fun `partial-call rules match the shared fixture`() {
+        val stream = javaClass.classLoader?.getResourceAsStream("pileup-partials.json")
+        assertNotNull("fixtures/pileup-partials.json is not on the test classpath", stream)
+        val cases = JSONObject(stream!!.bufferedReader().readText()).getJSONArray("cases")
+        assertTrue("fixture has no cases", cases.length() > 0)
+        for (i in 0 until cases.length()) {
+            val c = cases.getJSONObject(i)
+            val typed = c.getString("typed")
+            val call = c.getString("call")
+            val fragment = c.getString("fragment")
+            assertEquals("fragment(\"$typed\")", fragment, PileupEngine.fragment(typed))
+            if (!c.isNull("tight")) {
+                assertEquals("\"$fragment\" tight partial of $call",
+                    c.getBoolean("tight"), PileupEngine.isTightPartial(fragment, call))
+            }
+            if (!c.isNull("loose")) {
+                assertEquals("\"$fragment\" loose partial of $call",
+                    c.getBoolean("loose"), PileupEngine.isLoosePartial(fragment, call))
+            }
+        }
     }
 }
