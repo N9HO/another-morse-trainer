@@ -40,17 +40,26 @@ object EngineStore {
         val chars = ProgressiveCharacters(engine)
         val saved = load()
         if (saved != null) chars.restore(saved) else Settings.applyProficiency(engine)
-        engine.studyOrder = Settings.studyOrder()
         tracked = chars
+        // A mark opted out while no track was live (Settings before Characters
+        // after a relaunch) is reconciled here instead, and saved for the same
+        // reason applyStudyOrder saves.
+        if (engine.applyStudyOrder(Settings.studyOrder()).isNotEmpty()) save()
         return chars
     }
 
     /**
      * Re-derive the introduction order (Koch core + opted-in punctuation) on
-     * the live engine after a settings change. Derived state, so nothing to save.
+     * the live engine after a settings change. The order itself is derived
+     * state, so nothing to save — but opting *out* of a mark already earned
+     * removes it from the active set (issue #133), and the active set is in
+     * the snapshot, so a removal is saved right away rather than left to the
+     * next answer. Its stats stay, so opting back in and re-earning it loses
+     * no history.
      */
     fun applyStudyOrder() {
-        tracked?.engine?.studyOrder = Settings.studyOrder()
+        val engine = tracked?.engine ?: return
+        if (engine.applyStudyOrder(Settings.studyOrder()).isNotEmpty()) save()
     }
 
     /** Persist the tracked track's current snapshot (no-op when none is live). */

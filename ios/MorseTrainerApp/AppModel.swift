@@ -2490,8 +2490,15 @@ final class AppModel: ObservableObject {
     /// Like Kotlin's `EngineStore`, the order is derived on every launch and on
     /// every change rather than persisted: it belongs to the settings, not to
     /// the progress snapshot.
+    ///
+    /// Opting *out* of a mark already earned removes it from the active set so
+    /// it stops being drilled (issue #133); its stats stay, so opting back in
+    /// and re-earning it loses no history. The active set *is* part of the
+    /// snapshot, so a removal is saved right away — otherwise the mark would be
+    /// back after a relaunch until the next answer happened to save.
     private func reconcilePunctuation() {
-        engine.studyOrder = settings.studyOrder
+        let removed = engine.applyStudyOrder(settings.studyOrder)
+        if !removed.isEmpty { saveProgress() }
         if mode == .characters { summary = charLadder.summary }
     }
 

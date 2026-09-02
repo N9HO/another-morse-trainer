@@ -2135,10 +2135,18 @@ struct LadderFixture: Decodable {
         let studyOrder: String
         let length: Int
     }
+    struct OptOutCase: Decodable {
+        let name: String
+        let activeBefore: String
+        let selectedPunctuation: String
+        let activeAfter: String
+        let removed: String
+    }
     let kochOrder: String
     let kochOrderLength: Int
     let pickablePunctuation: String
     let cases: [Case]
+    let optOutCases: [OptOutCase]
 }
 
 func loadLadderFixture() -> LadderFixture? {
@@ -2169,6 +2177,20 @@ if let fx = loadLadderFixture() {
         }
     }
     check("study order matches the fixture for all \(fx.cases.count) punctuation selections", ordersOK)
+
+    // Issue #133: opting out of a mark already earned removes it from the
+    // active set; only pickable punctuation, never the Koch core.
+    var optOutOK = true
+    for c in fx.optOutCases {
+        let eng = TrainerEngine(seedCount: 2, rng: SeededRNG(seed: 5))
+        eng.setActiveCharacters(Array(c.activeBefore))
+        let removed = eng.applyStudyOrder(MorseCode.studyOrder(withPunctuation: Set(c.selectedPunctuation)))
+        if String(eng.activeCharacters) != c.activeAfter || String(removed) != c.removed {
+            print("      ↳ \(c.name): active '\(String(eng.activeCharacters))', removed '\(String(removed))'")
+            optOutOK = false
+        }
+    }
+    check("opting out reconciles the active set as the fixture says for all \(fx.optOutCases.count) cases", optOutOK)
 } else {
     check("fixtures/ladder.json loads and decodes", false)
 }
@@ -2209,6 +2231,43 @@ do {
     fresh.studyOrder = MorseCode.studyOrder(withPunctuation: [".", ",", "/"])
     check("opting in does not drop the mark straight into the active set",
           !fresh.activeCharacters.contains(".") && !fresh.activeCharacters.contains(","))
+}
+
+// Issue #133: opting back *out* of a mark already earned takes it out of the
+// drill — but keeps its stats, so opting back in and re-earning it loses no
+// history. The fixture pins the active-set arithmetic; this is the state
+// around it that a fixture cannot express.
+print("\nOpting out removes the mark, keeps its history:")
+do {
+    let eng = TrainerEngine(seedCount: 2, rng: SeededRNG(seed: 9))
+    eng.applyStudyOrder(MorseCode.studyOrder(withPunctuation: [".", ",", "/"]))
+    eng.setActiveCharacters(MorseCode.kochOrder + [".", ","])
+    eng.setExposedCharacters(eng.activeCharacters)
+    for _ in 0..<3 { eng.noteAttempt(answer: ",", target: ",", ttr: 0.4) }
+    let attemptsBefore = eng.stats[","]?.attempts.count
+
+    let removed = eng.applyStudyOrder(MorseCode.studyOrder(withPunctuation: ["."]))
+    check("the opted-out comma leaves the active set", removed == [","] && !eng.activeCharacters.contains(","))
+    check("the still-opted-in period is untouched", eng.activeCharacters.contains("."))
+    check("the comma's stats survive the removal",
+          eng.stats[","]?.attempts.count == attemptsBefore && attemptsBefore == 3)
+    check("the comma stays 'met', so it returns with a full set of choices", eng.exposedCharacters.contains(","))
+    check("nothing in the active set is offered as a question after removal",
+          (0..<50).allSatisfy { _ in eng.nextQuestion().target != "," })
+
+    // Opting back in puts it on the ladder, not into the drill; the ladder
+    // then re-introduces it and finds the old stats rather than fresh ones.
+    eng.applyStudyOrder(MorseCode.studyOrder(withPunctuation: [".", ","]))
+    check("opting back in does not re-add the mark immediately", !eng.activeCharacters.contains(","))
+    for c in eng.activeCharacters { for _ in 0..<5 { eng.noteAttempt(answer: c, target: c, ttr: 0.1) } }
+    check("the ladder re-introduces the mark once the rest is mastered", eng.advanceIfReady() == ",")
+
+    // Koch core is never removed, whatever the ladder says.
+    let core = TrainerEngine(seedCount: 2, rng: SeededRNG(seed: 9))
+    core.setActiveCharacters(MorseCode.kochOrder)
+    let dropped = core.applyStudyOrder(MorseCode.studyOrder(withPunctuation: []))
+    check("the Koch core — '?' included — is never removed by a reconcile",
+          dropped.isEmpty && core.activeCharacters == MorseCode.kochOrder)
 }
 
 // MARK: - Shared mastery fixture
