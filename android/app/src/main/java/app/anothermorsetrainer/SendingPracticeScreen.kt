@@ -25,6 +25,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -80,12 +82,12 @@ fun SendingPracticeScreen(onBack: () -> Unit) {
     var midiDevice by remember { mutableStateOf<String?>(null) }
 
     var drill by remember { mutableStateOf(source.nextDrill()) }
-    var round by remember { mutableStateOf(0) }
+    var round by remember { mutableIntStateOf(0) }
     var revealed by remember { mutableStateOf(false) }
     var lastCorrect by remember { mutableStateOf(false) }
     var sentAnswer by remember { mutableStateOf("") }
     var summary by remember { mutableStateOf(source.summary) }
-    var toneFinishedAt by remember { mutableStateOf(0L) }
+    var toneFinishedAt by remember { mutableLongStateOf(0L) }
     var keyPressed by remember { mutableStateOf(false) }
 
     // Saved with the instance state, so a process reclaimed mid-session still

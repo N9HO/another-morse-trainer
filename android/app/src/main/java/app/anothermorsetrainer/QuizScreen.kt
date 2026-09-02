@@ -38,6 +38,9 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableDoubleStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -134,15 +137,15 @@ fun QuizScreen(
     // happens to return a value-equal round (common with small option sets like a
     // 2-character drill), assigning it is a no-op to Compose and the effect never
     // relaunches — leaving the screen frozen on the answered state. (issue #43)
-    var round by remember { mutableStateOf(0) }
+    var round by remember { mutableIntStateOf(0) }
     var revealed by remember { mutableStateOf(false) }
     var chosen by remember { mutableStateOf<String?>(null) }
-    var lastTtr by remember { mutableStateOf(0.0) }
+    var lastTtr by remember { mutableDoubleStateOf(0.0) }
     var summary by remember { mutableStateOf(source.summary) }
-    var toneFinishedAt by remember { mutableStateOf(0L) }
+    var toneFinishedAt by remember { mutableLongStateOf(0L) }
     /** A newly unlocked character/stage from the last answer (shown with a ★). */
     var unlockedNote by remember { mutableStateOf<String?>(null) }
-    var stageRev by remember { mutableStateOf(0) }
+    var stageRev by remember { mutableIntStateOf(0) }
 
     // Mid-session Settings, drawn over the session so its state lives on.
     var showSettings by remember { mutableStateOf(false) }
@@ -173,7 +176,7 @@ fun QuizScreen(
     var voiceHeard by remember { mutableStateOf<List<String>>(emptyList()) }
     var voiceGuess by remember { mutableStateOf<String?>(null) }
     var voiceChoices by remember { mutableStateOf<List<String>>(emptyList()) }
-    var listenTick by remember { mutableStateOf(0) }
+    var listenTick by remember { mutableIntStateOf(0) }
     val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) listenTick++ else voiceNote = "Microphone permission is needed for voice answers."
     }

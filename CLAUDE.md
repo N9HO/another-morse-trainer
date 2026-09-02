@@ -74,11 +74,14 @@ Know what this does *not* buy you: neither level diagnoses a race in a callback
 from a C API, because there is no concurrency construct for it to check. The
 CoreMIDI read block in `MIDIInput.swift` and the `AVAudioSourceNode` render
 block in `KeyerEngine.swift` are both invisible to it at *complete*. Those need
-reading, not compiling.
+reading, not compiling. Two races there were fixed by hand — `MIDIInput`'s
+callback `var`s behind `stateLock`, and `ToneGenerator`'s
+`OSAllocatedUnfairLock` — and nothing but the comments at those sites guards
+against their return: reintroduce either and every build stays green.
 
 ```bash
 cd android                                # needs JDK 17 + Android SDK
-./gradlew :app:testDebugUnitTest          # 12 test classes
+./gradlew :app:testDebugUnitTest          # JUnit 4; fixtures/ is on the classpath
 ./gradlew :app:lint                       # AGP lint; exclusions in app/lint.xml
 ./gradlew :app:assembleDebug
 ```
@@ -94,6 +97,60 @@ pytest
 `ios/tools/**` is excluded from `ios.yml` — nothing under it reaches the Xcode
 build — so a change there runs the Python suite on Linux instead of two
 `macos-15` runners.
+
+## Verifying a change here
+
+**There is no Android hardware behind this project, and no JDK or Android SDK
+on the maintainer's machine.** `./gradlew` cannot run locally; every Android
+change is written blind and verified only by CI. iOS builds locally, but nobody
+can *hear* either app, and no test on either side plays audio. Everything in
+this section exists because of that.
+
+1. **Shared expectations go in `fixtures/`, as data.** Derive the values from
+   the documented spec, not by running either port: a fixture captured from the
+   code only records what the code already does, and both ports drifting the
+   same way would still pass. Never regenerate a fixture to make a failing test
+   pass; regenerate only when the behaviour is *meant* to change, and say so in
+   the commit.
+2. **Run a negative control on every new test.** Gradle prints test names only
+   on failure, so a green build cannot distinguish "passed" from "never
+   executed". Perturb the expectation in a throwaway commit, confirm the
+   specific test names itself in the failed job's log, then revert that one
+   commit with `git revert --no-edit <sha>` and read `git log` before pushing.
+   Three ways a control lies: it can itself fail to *compile*, which from
+   outside looks exactly like a successful control (check *which* job failed
+   and *which* test named itself); `git revert A..B` excludes `A`; and
+   `git revert` rejects `-q`, so a `&&`-chained commit lands on top of the
+   unreverted control.
+3. **Anything outside `ios/` and `android/` needs wiring into CI by hand.**
+   Both platform workflows are path-filtered and `merge-gate.yml` derives its
+   required checks from the diff, so a new file elsewhere triggers nothing and
+   is required by nothing until it is added. Read `merge-gate.yml`'s header
+   before touching a `paths:` filter.
+4. **Measure iOS warnings against a clean worktree at `HEAD`**, each build with
+   a fresh `-derivedDataPath`. A bare count means nothing, and an incremental
+   build under-reports badly.
+
+The Android emulator smoke test installs the release APK, launches it, rotates
+it, and asserts `MainActivity` is not recreated. It is the only thing that ever
+runs the app where anyone can see it, and a fresh install stops at onboarding.
+
+Standing traps, all deliberate:
+
+- **The pileup mixer materialises its buffer on both ports, on purpose.**
+  Voices summed with per-voice pitch, speed, QSB and gain, then band noise and
+  a peak normalisation over the finished mix — none decidable a sample ahead.
+  Do not "finish" the streaming rewrite by changing it.
+- **Nobody has heard the streaming audio player.** `fixtures/render.json`
+  proves the samples are unchanged and CI proves it launches; the mid-tone
+  cross-fade is behaviour no test covers. Story or Code Exam at a slow
+  effective speed is the case to listen to.
+- **Session state on Android survives process death as a score, not a round.**
+  The quiz screens keep their tally, phase and clock under `rememberSaveable`;
+  the engine-driven screens (Pileup, Contest, Rapid Fire) mirror their score
+  into saveable state and close a reclaimed run out to `Stats` on restore. The
+  in-flight drill, pileup or exam passage is not restored, and nothing but CI
+  compiling it has ever exercised any of it.
 
 ## Versions, tags, CI
 

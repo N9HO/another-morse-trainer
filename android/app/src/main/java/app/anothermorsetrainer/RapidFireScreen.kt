@@ -43,6 +43,8 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -100,26 +102,26 @@ fun RapidFireScreen(onBack: () -> Unit) {
     var content by rememberSaveable { mutableStateOf(RapidFireContent.CALLSIGNS) }
     var response by rememberSaveable { mutableStateOf(RapidFireResponse.TYPE) }
     var pace by rememberSaveable { mutableStateOf(RapidFirePace.STEADY) }
-    var wordMin by rememberSaveable { mutableStateOf(3) }
-    var wordMax by rememberSaveable { mutableStateOf(6) }
-    var numberCount by rememberSaveable { mutableStateOf(5) }
+    var wordMin by rememberSaveable { mutableIntStateOf(3) }
+    var wordMax by rememberSaveable { mutableIntStateOf(6) }
+    var numberCount by rememberSaveable { mutableIntStateOf(5) }
     var usOnly by rememberSaveable { mutableStateOf(true) }
 
     // Run state.
     var quiz by remember { mutableStateOf<RapidFireQuiz?>(null) }
     var drill by remember { mutableStateOf<Drill?>(null) }
-    var step by remember { mutableStateOf(0) }
+    var step by remember { mutableIntStateOf(0) }
     var typed by remember { mutableStateOf("") }
-    var toneEndedStep by remember { mutableStateOf(-1) }
+    var toneEndedStep by remember { mutableIntStateOf(-1) }
     var revealBox by remember { mutableStateOf(false) }
     val transcript = remember { mutableStateListOf<RfResult>() }
-    var startedAtMs by rememberSaveable { mutableStateOf(0L) }
+    var startedAtMs by rememberSaveable { mutableLongStateOf(0L) }
     // The run's score, mirrored out of the transcript on every item so it
     // rides the saved-instance-state bundle. The quiz and the transcript die
     // with the process; the phase, the start and these do not.
-    var runAttempts by rememberSaveable { mutableStateOf(0) }
-    var runCorrect by rememberSaveable { mutableStateOf(0) }
-    var lastSeenMs by rememberSaveable { mutableStateOf(0L) }
+    var runAttempts by rememberSaveable { mutableIntStateOf(0) }
+    var runCorrect by rememberSaveable { mutableIntStateOf(0) }
+    var lastSeenMs by rememberSaveable { mutableLongStateOf(0L) }
 
     // "Key each one": the straight key + decoder, live only during a keyed run.
     val keyer = remember { SendingKeyer(wpm = Settings.characterWpm, toneHz = Settings.sidetoneHz) }

@@ -36,6 +36,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -102,16 +104,16 @@ fun PileupScreen(onBack: () -> Unit) {
     var engine by remember { mutableStateOf<PileupEngine?>(null) }
     var input by remember { mutableStateOf("") }
     var reveal by remember { mutableStateOf(false) }
-    var startedAtMs by rememberSaveable { mutableStateOf(0L) }
-    var endedAtMs by remember { mutableStateOf(0L) }
+    var startedAtMs by rememberSaveable { mutableLongStateOf(0L) }
+    var endedAtMs by remember { mutableLongStateOf(0L) }
     // Engine state isn't Compose-observable; the clock also rides this tick.
-    var rev by remember { mutableStateOf(0) }
+    var rev by remember { mutableIntStateOf(0) }
     // The run's scoreboard, mirrored out of the engine on every action and
     // clock tick so it rides the saved-instance-state bundle. The engine and
     // its callers die with the process; the phase, the start and these do not.
-    var runQsos by rememberSaveable { mutableStateOf(0) }
-    var runBusts by rememberSaveable { mutableStateOf(0) }
-    var lastSeenMs by rememberSaveable { mutableStateOf(0L) }
+    var runQsos by rememberSaveable { mutableIntStateOf(0) }
+    var runBusts by rememberSaveable { mutableIntStateOf(0) }
+    var lastSeenMs by rememberSaveable { mutableLongStateOf(0L) }
 
     DisposableEffect(Unit) { onDispose { player.release() } }
 

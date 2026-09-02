@@ -37,6 +37,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableDoubleStateOf
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -119,17 +123,17 @@ fun JourneyScreen(onBack: () -> Unit) {
 
     // ---- Play loop ----
     var drill by remember { mutableStateOf(quiz.nextDrill()) }
-    var round by remember { mutableStateOf(0) }
+    var round by remember { mutableIntStateOf(0) }
     var revealed by remember { mutableStateOf(false) }
     var chosen by remember { mutableStateOf<String?>(null) }
-    var lastTtr by remember { mutableStateOf(0.0) }
-    var toneFinishedAt by remember { mutableStateOf(0L) }
+    var lastTtr by remember { mutableDoubleStateOf(0.0) }
+    var toneFinishedAt by remember { mutableLongStateOf(0L) }
 
     var summary by remember { mutableStateOf(quiz.summary) }
-    var levelNumber by remember { mutableStateOf(quiz.levelNumber) }
+    var levelNumber by remember { mutableIntStateOf(quiz.levelNumber) }
     var levelTitle by remember { mutableStateOf(quiz.level.title) }
     var levelSection by remember { mutableStateOf(quiz.level.section) }
-    var barProgress by remember { mutableStateOf(quiz.progress.toFloat()) }
+    var barProgress by remember { mutableFloatStateOf(quiz.progress.toFloat()) }
     var lastCorrect by remember { mutableStateOf<Boolean?>(null) }
     var clearedLabel by remember { mutableStateOf<String?>(null) }
 
