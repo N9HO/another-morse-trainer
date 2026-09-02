@@ -586,7 +586,18 @@ private fun PileupRun(
             }
 
             // The live log: latest contact on top, so the run reads like a real one.
-            if (engine.log.isNotEmpty()) {
+            //
+            // Read the log HERE, not inside the LazyColumn's content lambda. The
+            // engine is not Compose-observable, so the list only re-renders when
+            // that lambda is rebuilt — and under strong skipping the compiler
+            // memoises it on what it captures. Capturing `engine` (one instance
+            // for the whole run) froze the lambda on the first contact, and
+            // LazyColumn's item provider never re-read engine.log: the run
+            // showed one contact until the summary (#111). Capturing the list
+            // itself — a fresh instance every time a contact is logged — rebuilds
+            // the lambda exactly when the log changes.
+            val log = engine.log
+            if (log.isNotEmpty()) {
                 Text(
                     stringResource(R.string.pileup_log),
                     fontSize = 12.sp,
@@ -598,7 +609,7 @@ private fun PileupRun(
                     modifier = Modifier.fillMaxWidth().weight(1f),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    items(engine.log.asReversed(), key = { it.id }) { q ->
+                    items(log.asReversed(), key = { it.id }) { q ->
                         Row(
                             modifier = Modifier.fillMaxWidth().brandCard(cornerRadius = 10.dp).padding(horizontal = 12.dp, vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically,
