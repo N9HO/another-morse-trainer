@@ -44,6 +44,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -85,11 +87,11 @@ fun StatsScreen(onBack: () -> Unit) {
             modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            TextButton(onClick = onBack) { Text("‹ Back") }
+            TextButton(onClick = onBack) { Text(stringResource(R.string.common_back)) }
             Spacer(Modifier.weight(1f))
             if (Stats.totalSessions > 0) {
                 IconButton(onClick = { ShareCard.share(context) }) {
-                    Icon(Icons.Filled.IosShare, contentDescription = "Share your brag sheet", tint = Brand.teal)
+                    Icon(Icons.Filled.IosShare, contentDescription = stringResource(R.string.stats_share_your_brag_sheet), tint = Brand.teal)
                 }
             }
         }
@@ -102,7 +104,7 @@ fun StatsScreen(onBack: () -> Unit) {
                 .padding(horizontal = 20.dp),
         ) {
             Text(
-                "Brag Sheet",
+                stringResource(R.string.stats_brag_sheet),
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
@@ -112,7 +114,7 @@ fun StatsScreen(onBack: () -> Unit) {
             if (Stats.totalSessions == 0) {
                 Spacer(Modifier.height(40.dp))
                 Text(
-                    "No sessions yet.\nFinish a practice round and your stats will show up here.",
+                    stringResource(R.string.stats_empty),
                     textAlign = TextAlign.Center,
                     style = MaterialTheme.typography.bodyLarge,
                     modifier = Modifier.fillMaxWidth()
@@ -122,27 +124,27 @@ fun StatsScreen(onBack: () -> Unit) {
 
             StreakHero()
 
-            SectionLabel("Lifetime")
+            SectionLabel(stringResource(R.string.stats_lifetime))
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                MetricTile("Sessions", "${Stats.totalSessions}", Modifier.weight(1f))
-                MetricTile("Answered", "${Stats.totalAttempts}", Modifier.weight(1f))
+                MetricTile(stringResource(R.string.stats_sessions), "${Stats.totalSessions}", Modifier.weight(1f))
+                MetricTile(stringResource(R.string.common_answered), "${Stats.totalAttempts}", Modifier.weight(1f))
             }
             Spacer(Modifier.height(10.dp))
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                MetricTile("Practice time", fmtDuration(Stats.totalPracticeSeconds), Modifier.weight(1f))
-                MetricTile("Accuracy", "${(Stats.overallAccuracy * 100).roundToInt()}%", Modifier.weight(1f), GOOD)
+                MetricTile(stringResource(R.string.stats_practice_time), fmtDuration(Stats.totalPracticeSeconds), Modifier.weight(1f))
+                MetricTile(stringResource(R.string.common_accuracy), "${(Stats.overallAccuracy * 100).roundToInt()}%", Modifier.weight(1f), GOOD)
             }
 
-            SectionLabel("Personal bests")
+            SectionLabel(stringResource(R.string.stats_personal_bests))
             PersonalBests()
 
             val charRows = Stats.charStats.entries
                 .mapNotNull { e -> e.value.medianMs?.let { CharBar(e.key, it, e.value.accuracy) } }
                 .sortedWith(compareBy(SessionRecord.characterOrder) { it.character })
             if (charRows.isNotEmpty()) {
-                SectionLabel("Recognition speed")
+                SectionLabel(stringResource(R.string.stats_recognition_speed))
                 Text(
-                    "Median time to copy each character — shorter is better.",
+                    stringResource(R.string.stats_recognition_speed_blurb),
                     style = MaterialTheme.typography.bodySmall,
                     color = Brand.textSecondary,
                     modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
@@ -160,9 +162,9 @@ fun StatsScreen(onBack: () -> Unit) {
                 Stats.recent.map { WPMBands.Entry(it.characterWpm, it.attempts, it.correct, it.medianTtrMs) }
             )
             if (bands.isNotEmpty()) {
-                SectionLabel("Performance by speed")
+                SectionLabel(stringResource(R.string.stats_performance_by_speed))
                 Text(
-                    "How you do at each character-speed range. Watch where accuracy dips or reaction time climbs — that's your next speed to drill.",
+                    stringResource(R.string.stats_performance_by_speed_blurb),
                     style = MaterialTheme.typography.bodySmall,
                     color = Brand.textSecondary,
                     modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
@@ -175,7 +177,7 @@ fun StatsScreen(onBack: () -> Unit) {
                 }
             }
 
-            SectionLabel("Recent sessions")
+            SectionLabel(stringResource(R.string.stats_recent_sessions))
             Column(modifier = Modifier.fillMaxWidth().brandCard(14.dp)) {
                 val recent = Stats.recent.take(6)
                 recent.forEachIndexed { i, s ->
@@ -220,10 +222,10 @@ private fun StreakHero() {
             Spacer(Modifier.width(8.dp))
             Text("${Stats.currentStreak}", fontSize = 38.sp, fontWeight = FontWeight.Bold, color = Brand.textPrimary)
             Spacer(Modifier.width(8.dp))
-            Text("day streak", style = MaterialTheme.typography.bodyMedium, color = Brand.textSecondary)
+            Text(stringResource(R.string.stats_day_streak), style = MaterialTheme.typography.bodyMedium, color = Brand.textSecondary)
             Spacer(Modifier.weight(1f))
             Column(horizontalAlignment = Alignment.End) {
-                Text("Longest", style = MaterialTheme.typography.labelSmall, color = Brand.textSecondary)
+                Text(stringResource(R.string.stats_longest), style = MaterialTheme.typography.labelSmall, color = Brand.textSecondary)
                 Text("${Stats.longestStreak}", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Brand.textPrimary)
             }
         }
@@ -286,16 +288,16 @@ private fun PersonalBests() {
     val total = MorseCode.kochOrder.size
 
     Column(modifier = Modifier.fillMaxWidth().brandCard(14.dp).padding(horizontal = 14.dp, vertical = 4.dp)) {
-        BestRow(Icons.Filled.Bolt, "Fastest copy", Brand.teal,
+        BestRow(Icons.Filled.Bolt, stringResource(R.string.stats_fastest_copy), Brand.teal,
             Stats.bestTtrMs?.let { fmtMs(it) } ?: "—", Brand.teal)
         HairlineDivider()
-        BestRow(Icons.Filled.TrackChanges, "Best session accuracy", Brand.textSecondary,
+        BestRow(Icons.Filled.TrackChanges, stringResource(R.string.stats_best_session_accuracy), Brand.textSecondary,
             bestAcc?.let { "${(it * 100).roundToInt()}%" } ?: "—", if (bestAcc == null) Brand.textPrimary else GOOD)
         HairlineDivider()
-        BestRow(Icons.Filled.BarChart, "Biggest session", Brand.textSecondary,
-            biggest?.let { "$it answered" } ?: "—", Brand.textPrimary)
+        BestRow(Icons.Filled.BarChart, stringResource(R.string.stats_biggest_session), Brand.textSecondary,
+            biggest?.let { stringResource(R.string.stats_biggest_session_value, it) } ?: "—", Brand.textPrimary)
         HairlineDivider()
-        BestRow(Icons.Filled.WorkspacePremium, "Characters mastered", MASTERED, "$mastered / $total", MASTERED)
+        BestRow(Icons.Filled.WorkspacePremium, stringResource(R.string.stats_characters_mastered), MASTERED, "$mastered / $total", MASTERED)
         LinearProgressIndicator(
             progress = { if (total == 0) 0f else mastered.toFloat() / total },
             modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 12.dp).clip(RoundedCornerShape(3.dp)),
@@ -372,7 +374,7 @@ private fun SessionRow(
 private fun SessionDetail(record: SessionRecord, onBack: () -> Unit) {
     Column(modifier = Modifier.fillMaxSize()) {
         Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = onBack) { Text("‹ Sessions") }
+            TextButton(onClick = onBack) { Text(stringResource(R.string.stats_back_to_sessions)) }
         }
       CenteredContent {
         Column(
@@ -397,27 +399,27 @@ private fun SessionDetail(record: SessionRecord, onBack: () -> Unit) {
             )
 
             Column(modifier = Modifier.fillMaxWidth().brandCard(14.dp).padding(horizontal = 14.dp, vertical = 4.dp)) {
-                DetailRow("Answered", "${record.attempts}")
+                DetailRow(stringResource(R.string.common_answered), "${record.attempts}")
                 HairlineDivider()
-                DetailRow("Accuracy", "${(record.accuracy * 100).roundToInt()}%")
+                DetailRow(stringResource(R.string.common_accuracy), "${(record.accuracy * 100).roundToInt()}%")
                 HairlineDivider()
-                DetailRow("Fastest", record.fastestTTR?.let { "%.2f s".format(it) } ?: "—")
+                DetailRow(stringResource(R.string.common_fastest), record.fastestTTR?.let { stringResource(R.string.common_seconds_2dp, it) } ?: "—")
                 HairlineDivider()
-                DetailRow("Median", record.medianTTR?.let { "%.2f s".format(it) } ?: "—")
+                DetailRow(stringResource(R.string.common_median), record.medianTTR?.let { stringResource(R.string.common_seconds_2dp, it) } ?: "—")
                 HairlineDivider()
-                DetailRow("Duration", record.durationSeconds?.let { fmtDuration(it.roundToInt()) } ?: "—")
+                DetailRow(stringResource(R.string.stats_duration), record.durationSeconds?.let { fmtDuration(it.roundToInt()) } ?: "—")
                 if (record.characterWPM > 0) {
                     HairlineDivider()
-                    val eff = if (record.effectiveWPM in 1 until record.characterWPM) " (eff ${record.effectiveWPM})" else ""
-                    DetailRow("Speed", "${record.characterWPM} WPM$eff")
+                    val eff = if (record.effectiveWPM in 1 until record.characterWPM) stringResource(R.string.stats_eff_suffix, record.effectiveWPM) else ""
+                    DetailRow(stringResource(R.string.common_speed), stringResource(R.string.stats_speed_value, record.characterWPM, eff))
                 }
             }
 
             val rows = record.chartRows
             if (rows.isNotEmpty()) {
-                SectionLabel("Characters this session")
+                SectionLabel(stringResource(R.string.stats_characters_this_session))
                 Text(
-                    "Median copy time per character — hollow rows were in your active set but not drilled this time.",
+                    stringResource(R.string.stats_characters_this_session_blurb),
                     style = MaterialTheme.typography.bodySmall,
                     color = Brand.textSecondary,
                     modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
@@ -511,9 +513,9 @@ private fun SpeedBandRow(band: WPMBandSummary) {
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(modifier = Modifier.weight(1f)) {
-            Text("${band.label} WPM", fontWeight = FontWeight.SemiBold, color = Brand.textPrimary)
+            Text(stringResource(R.string.common_wpm_value, band.label), fontWeight = FontWeight.SemiBold, color = Brand.textPrimary)
             Text(
-                "${band.sessions} session" + if (band.sessions == 1) "" else "s",
+                pluralStringResource(R.plurals.stats_band_sessions, band.sessions, band.sessions),
                 style = MaterialTheme.typography.labelSmall,
                 color = Brand.textSecondary
             )
@@ -525,7 +527,7 @@ private fun SpeedBandRow(band: WPMBandSummary) {
                 color = if (band.accuracy >= 0.9) GOOD else MASTERED
             )
             Text(
-                band.medianMs?.let { "${fmtMs(it)} reaction" } ?: "—",
+                band.medianMs?.let { stringResource(R.string.stats_reaction_value, fmtMs(it)) } ?: "—",
                 style = MaterialTheme.typography.labelSmall,
                 color = Brand.textSecondary
             )

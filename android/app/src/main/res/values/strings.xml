@@ -373,6 +373,34 @@
     <string name="reference_farnsworth_spacing">Farnsworth spacing</string>
     <string name="reference_effective_speed">Effective speed</string>
 
+    <!-- StatsScreen -->
+    <string name="stats_share_your_brag_sheet">Share your brag sheet</string>
+    <string name="stats_brag_sheet">Brag Sheet</string>
+    <string name="stats_empty">No sessions yet.\nFinish a practice round and your stats will show up here.</string>
+    <string name="stats_lifetime">Lifetime</string>
+    <string name="stats_sessions">Sessions</string>
+    <string name="stats_practice_time">Practice time</string>
+    <string name="stats_personal_bests">Personal bests</string>
+    <string name="stats_recognition_speed">Recognition speed</string>
+    <string name="stats_recognition_speed_blurb">Median time to copy each character — shorter is better.</string>
+    <string name="stats_performance_by_speed">Performance by speed</string>
+    <string name="stats_performance_by_speed_blurb">How you do at each character-speed range. Watch where accuracy dips or reaction time climbs — that\'s your next speed to drill.</string>
+    <string name="stats_recent_sessions">Recent sessions</string>
+    <string name="stats_day_streak">day streak</string>
+    <string name="stats_longest">Longest</string>
+    <string name="stats_fastest_copy">Fastest copy</string>
+    <string name="stats_best_session_accuracy">Best session accuracy</string>
+    <string name="stats_biggest_session">Biggest session</string>
+    <string name="stats_biggest_session_value">%1$s answered</string>
+    <string name="stats_characters_mastered">Characters mastered</string>
+    <string name="stats_back_to_sessions">‹ Sessions</string>
+    <string name="stats_duration">Duration</string>
+    <string name="stats_eff_suffix">" (eff %1$s)"</string>
+    <string name="stats_speed_value">%1$s WPM%2$s</string>
+    <string name="stats_characters_this_session">Characters this session</string>
+    <string name="stats_characters_this_session_blurb">Median copy time per character — hollow rows were in your active set but not drilled this time.</string>
+    <string name="stats_reaction_value">%1$s reaction</string>
+
     <!-- JourneyScreen -->
     <string name="journey_map_button">Map</string>
     <string name="journey_level_n">Level %1$s</string>
@@ -380,6 +408,10 @@
     <string name="journey_current">Current</string>
 
     <!-- Plurals -->
+    <plurals name="stats_band_sessions">
+        <item quantity="one">%1$s session</item>
+        <item quantity="other">%1$s sessions</item>
+    </plurals>
     <plurals name="pileup_missed_you_had">
         <item quantity="one">You had them as %1$s — they came back %2$s time before moving on.</item>
         <item quantity="other">You had them as %1$s — they came back %2$s times before moving on.</item>
