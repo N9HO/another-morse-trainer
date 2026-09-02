@@ -38,6 +38,26 @@ public enum MorseCode {
                          // sendable so exam passages can key authentic BT breaks)
     ]
 
+    /// The punctuation offered by the settings opt-in picker, in teaching order.
+    /// ('=' stays out — it's sendable for exam passages but not studied.)
+    ///
+    /// This order is the ladder's, not the picker's convenience: period, comma,
+    /// slash. It was `, / .` on this side and `. , /` on the Kotlin side, which
+    /// meant the two ports taught opted-in punctuation in different sequences.
+    public static let pickablePunctuation: [Character] = [".", ",", "/"]
+
+    /// The ladder's introduction order: the Koch core, then whichever
+    /// punctuation the learner has opted into, appended at the end so it is
+    /// introduced only after the core set is done.
+    ///
+    /// Opting in adds a mark to the *ladder*, not to the active set — it still
+    /// has to be reached and mastered like any other character. Lives here
+    /// rather than in the app's settings type so both ports build it the same
+    /// way and `fixtures/ladder.json` can pin it.
+    public static func studyOrder(withPunctuation punctuation: Set<Character>) -> [Character] {
+        kochOrder + pickablePunctuation.filter { punctuation.contains($0) }
+    }
+
     /// Pattern lookup across both the base table and optional punctuation.
     private static let allPatterns: [Character: String] =
         table.merging(optionalPunctuation) { base, _ in base }

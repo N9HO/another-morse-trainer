@@ -419,8 +419,7 @@ object Settings {
     }
 
     /** The ladder's introduction order: the Koch core plus opted-in punctuation at the end. */
-    fun studyOrder(): List<Char> =
-        MorseCode.kochOrder + MorseCode.pickablePunctuation.filter { it in punctuationChars }
+    fun studyOrder(): List<Char> = MorseCode.studyOrder(punctuationChars)
 
     fun updateCustomWordsText(value: String) {
         customWordsText = value.take(4000)

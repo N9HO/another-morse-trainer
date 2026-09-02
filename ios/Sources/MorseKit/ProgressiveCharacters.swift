@@ -109,7 +109,7 @@ public final class ProgressiveCharacters: QuizSource {
 
     private var singlesComplete: Bool {
         engine.allActiveMastered &&
-        MorseCode.kochOrder.allSatisfy { engine.activeCharacters.contains($0) }
+        engine.studyOrder.allSatisfy { engine.activeCharacters.contains($0) }
     }
 
     /// Time allowed to recognize, in seconds, scaled to the current stage.

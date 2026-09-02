@@ -2477,15 +2477,21 @@ final class AppModel: ObservableObject {
         if mode == .characters { summary = charLadder.summary }
     }
 
+    /// Re-derive the ladder's introduction order from the punctuation opt-in.
+    ///
+    /// Opting in adds a mark to the **ladder**, not to the active set: it is
+    /// introduced only once the Koch core is done, and has to be mastered like
+    /// any other character. This used to call `addActiveCharacter` and drop the
+    /// mark straight into the drill — and `removeActiveCharacter` on opting back
+    /// out — which is the behaviour that diverged from the Kotlin port. Unlocking
+    /// singles→pairs took 37 characters here and 40 there. The ladder is the
+    /// intended design, so this side conforms.
+    ///
+    /// Like Kotlin's `EngineStore`, the order is derived on every launch and on
+    /// every change rather than persisted: it belongs to the settings, not to
+    /// the progress snapshot.
     private func reconcilePunctuation() {
-        for entry in AppSettings.availablePunctuation {
-            guard let ch = entry.symbol.first else { continue }
-            if settings.selectedPunctuation.contains(entry.symbol) {
-                engine.addActiveCharacter(ch)
-            } else {
-                engine.removeActiveCharacter(ch)
-            }
-        }
+        engine.studyOrder = settings.studyOrder
         if mode == .characters { summary = charLadder.summary }
     }
 

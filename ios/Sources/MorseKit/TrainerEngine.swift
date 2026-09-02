@@ -65,6 +65,12 @@ public final class TrainerEngine {
 
     public var timing: MorseTiming { MorseTiming(wpm: config.wpm) }
 
+    /// The introduction order for new characters: the Koch order by default,
+    /// with any opted-in punctuation appended by the app so it's introduced
+    /// after the core set. Not part of the snapshot — it's derived from the
+    /// learner's settings on every launch.
+    public var studyOrder: [Character] = MorseCode.kochOrder
+
     /// - Parameters:
     ///   - seedCount: how many characters from the Koch order to start with.
     ///   - rng: injectable randomness so tests are deterministic.
@@ -166,12 +172,12 @@ public final class TrainerEngine {
         public let addedCharacter: Character?
     }
 
-    /// Once every active character is mastered, introduce the next Koch
-    /// character (one at a time). Returns the character added, if any.
+    /// Once every active character is mastered, introduce the next character
+    /// from the `studyOrder` (one at a time). Returns the character added, if any.
     @discardableResult
     public func advanceIfReady() -> Character? {
         guard allActiveMastered else { return nil }
-        guard let next = MorseCode.kochOrder.first(where: { !activeCharacters.contains($0) })
+        guard let next = studyOrder.first(where: { !activeCharacters.contains($0) })
         else { return nil }   // whole alphabet learned 🎉
         activeCharacters.append(next)
         stats[next] = CharacterStats(character: next)
