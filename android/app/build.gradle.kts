@@ -25,8 +25,8 @@ android {
         // app's runtime behaviour on Android 17 devices, which nothing here can
         // test (the smoke test emulator runs API 34). Move it as its own change.
         targetSdk = 36
-        versionCode = 17
-        versionName = "1.12.2"
+        versionCode = 18
+        versionName = "1.13.0"
     }
 
     signingConfigs {
