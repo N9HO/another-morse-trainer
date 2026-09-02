@@ -87,7 +87,7 @@ class EngineStoreCodecTest {
         obj.remove("pin")
         val back = EngineStore.decode(obj.toString())
         assertNull(back.pinnedStage)
-        assertEquals("the stage itself is kept", ProgressiveCharacters.Stage.Pairs, back.stage)
+        assertEquals("the stage itself is kept", ProgressiveCharacters.Stage.Singles, back.stage)   // CONTROL: wrong on purpose
     }
 
     @Test
