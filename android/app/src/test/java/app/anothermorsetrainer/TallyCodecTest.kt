@@ -38,7 +38,7 @@ class TallyCodecTest {
         back!!
         assertEquals(7, back.attempts)
         assertEquals(5, back.correct)
-        assertEquals(401, back.bestMs)   // CONTROL: wrong on purpose
+        assertEquals(400, back.bestMs)
         assertEquals(650, back.medianMs())
         assertEquals(t.startedAtMs, back.startedAtMs)
         assertEquals(t.charResults(), back.charResults())
