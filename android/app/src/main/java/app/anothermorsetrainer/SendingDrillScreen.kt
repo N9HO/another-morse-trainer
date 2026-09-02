@@ -30,6 +30,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -62,9 +63,9 @@ fun SendingDrillScreen(onBack: () -> Unit) {
     BackHandler { onBack() }
 
     var kind by remember { mutableStateOf(SendingDrill.Kind.Studied) }
-    var groupCount by remember { mutableStateOf(50) }
-    var groupSize by remember { mutableStateOf(5) }
-    var regen by remember { mutableStateOf(0) }
+    var groupCount by remember { mutableIntStateOf(50) }
+    var groupSize by remember { mutableIntStateOf(5) }
+    var regen by remember { mutableIntStateOf(0) }
 
     val drill = remember(kind, groupCount, groupSize, regen) {
         SendingDrill.generate(

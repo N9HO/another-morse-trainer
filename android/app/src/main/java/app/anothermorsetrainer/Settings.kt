@@ -3,8 +3,11 @@ package app.anothermorsetrainer
 import android.content.Context
 import android.content.SharedPreferences
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableDoubleStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.core.content.edit
 import app.anothermorsetrainer.morsekit.MorseCode
 import app.anothermorsetrainer.morsekit.MorseData
 import app.anothermorsetrainer.morsekit.MorseItem
@@ -110,12 +113,12 @@ object Settings {
      * [persist] always writes charWpm, so anyone past the first-run screen has
      * an explicit stored value and never falls back to this.
      */
-    var characterWpm by mutableStateOf(33.0)
+    var characterWpm by mutableDoubleStateOf(33.0)
         private set
     /** Equal to the character speed ⇒ standard timing, i.e. Farnsworth off, as on iOS. */
-    var effectiveWpm by mutableStateOf(33.0)
+    var effectiveWpm by mutableDoubleStateOf(33.0)
         private set
-    var sidetoneHz by mutableStateOf(600.0)
+    var sidetoneHz by mutableDoubleStateOf(600.0)
         private set
 
     /**
@@ -145,13 +148,13 @@ object Settings {
     // ---- Practice (drill difficulty / presentation) ----
 
     /** Most answer choices to ever show (grows with what you've met, up to this). */
-    var answerChoices by mutableStateOf(4)
+    var answerChoices by mutableIntStateOf(4)
         private set
     /** "Fast enough" recognition-time bar, in seconds — drives mastery/weighting. */
-    var recognitionTargetSec by mutableStateOf(1.0)
+    var recognitionTargetSec by mutableDoubleStateOf(1.0)
         private set
     /** How big a pool Common Words draws from (Top-N ranked ham words). */
-    var wordCount by mutableStateOf(100)
+    var wordCount by mutableIntStateOf(100)
         private set
     /** When to reveal the correct answer after a response. */
     var revealMode by mutableStateOf(RevealMode.ALWAYS)
@@ -186,7 +189,7 @@ object Settings {
     var headCopyAutoRepeat by mutableStateOf(false)
         private set
     /** Head Copy: reveal automatically this many seconds after the tone (0 = manual). */
-    var headCopyRevealSec by mutableStateOf(0)
+    var headCopyRevealSec by mutableIntStateOf(0)
         private set
 
     /**
@@ -214,9 +217,9 @@ object Settings {
     // Daily practice reminder (a notification to keep the streak alive).
     var remindersEnabled by mutableStateOf(false)
         private set
-    var reminderHour by mutableStateOf(19)     // 7pm default
+    var reminderHour by mutableIntStateOf(19)     // 7pm default
         private set
-    var reminderMinute by mutableStateOf(0)
+    var reminderMinute by mutableIntStateOf(0)
         private set
 
     fun init(context: Context) {
@@ -237,7 +240,7 @@ object Settings {
             if (backgroundNoise == BackgroundNoiseLevel.WHISPER) {
                 backgroundNoise = BackgroundNoiseLevel.KEEP_ALIVE
             }
-            prefs.edit().putBoolean("noiseFloorMigrated", true).apply()
+            prefs.edit { putBoolean("noiseFloorMigrated", true) }
         }
         hapticsEnabled = prefs.getBoolean("haptics", true)
         voiceAnswersEnabled = prefs.getBoolean("voiceAnswers", false)
@@ -493,35 +496,35 @@ object Settings {
     }
 
     private fun persist() {
-        prefs.edit()
-            .putFloat("charWpm", characterWpm.toFloat())
-            .putFloat("effWpm", effectiveWpm.toFloat())
-            .putFloat("sidetone", sidetoneHz.toFloat())
-            .putString("backgroundNoise", backgroundNoise.name)
-            .putBoolean("haptics", hapticsEnabled)
-            .putBoolean("voiceAnswers", voiceAnswersEnabled)
-            .putBoolean("answerByKeying", answerByKeying)
-            .putInt("answerChoices", answerChoices)
-            .putFloat("recogTarget", recognitionTargetSec.toFloat())
-            .putInt("wordCount", wordCount)
-            .putString("revealMode", revealMode.name)
-            .putString("practiceDuration", practiceDuration.name)
-            .putBoolean("slashedZero", slashedZero)
-            .putString("storyContent", storyContent.name)
-            .putString("storySerialId", storySerialId)
-            .putString("newsSource", newsSource.name)
-            .putBoolean("newsFullStory", newsFullStory)
-            .putString("storyBookmarks", encodeBookmarks(storyBookmarks))
-            .putBoolean("hcAutoRepeat", headCopyAutoRepeat)
-            .putInt("hcRevealSec", headCopyRevealSec)
-            .putString("punctuation", punctuationChars.joinToString(""))
-            .putString("customWords", customWordsText)
-            .putBoolean("useCustomWords", useCustomWords)
-            .putString("proficiency", proficiency.name)
-            .putBoolean("onboardingDone", onboardingDone)
-            .putBoolean("reminders", remindersEnabled)
-            .putInt("reminderHour", reminderHour)
-            .putInt("reminderMinute", reminderMinute)
-            .apply()
+        prefs.edit {
+            putFloat("charWpm", characterWpm.toFloat())
+            putFloat("effWpm", effectiveWpm.toFloat())
+            putFloat("sidetone", sidetoneHz.toFloat())
+            putString("backgroundNoise", backgroundNoise.name)
+            putBoolean("haptics", hapticsEnabled)
+            putBoolean("voiceAnswers", voiceAnswersEnabled)
+            putBoolean("answerByKeying", answerByKeying)
+            putInt("answerChoices", answerChoices)
+            putFloat("recogTarget", recognitionTargetSec.toFloat())
+            putInt("wordCount", wordCount)
+            putString("revealMode", revealMode.name)
+            putString("practiceDuration", practiceDuration.name)
+            putBoolean("slashedZero", slashedZero)
+            putString("storyContent", storyContent.name)
+            putString("storySerialId", storySerialId)
+            putString("newsSource", newsSource.name)
+            putBoolean("newsFullStory", newsFullStory)
+            putString("storyBookmarks", encodeBookmarks(storyBookmarks))
+            putBoolean("hcAutoRepeat", headCopyAutoRepeat)
+            putInt("hcRevealSec", headCopyRevealSec)
+            putString("punctuation", punctuationChars.joinToString(""))
+            putString("customWords", customWordsText)
+            putBoolean("useCustomWords", useCustomWords)
+            putString("proficiency", proficiency.name)
+            putBoolean("onboardingDone", onboardingDone)
+            putBoolean("reminders", remindersEnabled)
+            putInt("reminderHour", reminderHour)
+            putInt("reminderMinute", reminderMinute)
+        }
     }
 }

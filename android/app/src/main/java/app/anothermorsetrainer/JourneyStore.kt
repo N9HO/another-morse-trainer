@@ -2,6 +2,7 @@ package app.anothermorsetrainer
 
 import android.content.Context
 import android.content.SharedPreferences
+import androidx.core.content.edit
 import app.anothermorsetrainer.morsekit.JourneyProgress
 
 /**
@@ -26,14 +27,14 @@ object JourneyStore {
     }
 
     fun save(progress: JourneyProgress) {
-        prefs.edit()
-            .putInt("unlockedThrough", progress.unlockedThrough)
-            .putInt("currentLevel", progress.currentLevel)
-            .putStringSet("completed", progress.completed.map { it.toString() }.toSet())
-            .apply()
+        prefs.edit {
+            putInt("unlockedThrough", progress.unlockedThrough)
+            putInt("currentLevel", progress.currentLevel)
+            putStringSet("completed", progress.completed.map { it.toString() }.toSet())
+        }
     }
 
     fun reset() {
-        prefs.edit().clear().apply()
+        prefs.edit { clear() }
     }
 }

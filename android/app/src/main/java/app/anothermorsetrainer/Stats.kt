@@ -3,8 +3,10 @@ package app.anothermorsetrainer
 import android.content.Context
 import android.content.SharedPreferences
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.core.content.edit
 import app.anothermorsetrainer.morsekit.PracticeStreak
 import app.anothermorsetrainer.morsekit.SessionHistory
 import app.anothermorsetrainer.morsekit.SessionRecord
@@ -59,12 +61,12 @@ object Stats {
     private lateinit var prefs: SharedPreferences
     private var streak = PracticeStreak()
 
-    var currentStreak by mutableStateOf(0); private set
-    var longestStreak by mutableStateOf(0); private set
-    var totalSessions by mutableStateOf(0); private set
-    var totalAttempts by mutableStateOf(0); private set
-    var totalCorrect by mutableStateOf(0); private set
-    var totalPracticeSeconds by mutableStateOf(0); private set
+    var currentStreak by mutableIntStateOf(0); private set
+    var longestStreak by mutableIntStateOf(0); private set
+    var totalSessions by mutableIntStateOf(0); private set
+    var totalAttempts by mutableIntStateOf(0); private set
+    var totalCorrect by mutableIntStateOf(0); private set
+    var totalPracticeSeconds by mutableIntStateOf(0); private set
     var bestTtrMs by mutableStateOf<Int?>(null); private set
     var recent by mutableStateOf<List<SessionSummary>>(emptyList()); private set
     /** Lifetime per-character recognition data, keyed by the single character. */
@@ -110,7 +112,7 @@ object Stats {
         val cur = charStats[character] ?: CharAgg(0, 0, emptyList())
         val ttrs = if (correct && ttrMs != null && ttrMs > 0) (cur.ttrsMs + ttrMs).takeLast(12) else cur.ttrsMs
         charStats = charStats + (character to CharAgg(cur.attempts + 1, cur.correct + if (correct) 1 else 0, ttrs))
-        prefs.edit().putString("chars", encodeChars(charStats)).apply()
+        prefs.edit { putString("chars", encodeChars(charStats)) }
     }
 
     /**
@@ -184,7 +186,7 @@ object Stats {
         recent = emptyList()
         charStats = emptyMap()
         history = emptyList()
-        prefs.edit().clear().apply()
+        prefs.edit { clear() }
     }
 
     private fun refreshStreak() {
@@ -193,18 +195,18 @@ object Stats {
     }
 
     private fun persist() {
-        prefs.edit()
-            .putInt("sessions", totalSessions)
-            .putInt("attempts", totalAttempts)
-            .putInt("correct", totalCorrect)
-            .putInt("practiceSecs", totalPracticeSeconds)
-            .putInt("bestTtr", bestTtrMs ?: -1)
-            .putInt("streakCurrent", streak.current)
-            .putInt("streakLongest", streak.longest)
-            .putLong("streakDay", streak.lastPracticeDay?.toEpochDay() ?: -1L)
-            .putString("recent", encodeRecent(recent))
-            .putString("history", encodeHistory(history))
-            .apply()
+        prefs.edit {
+            putInt("sessions", totalSessions)
+            putInt("attempts", totalAttempts)
+            putInt("correct", totalCorrect)
+            putInt("practiceSecs", totalPracticeSeconds)
+            putInt("bestTtr", bestTtrMs ?: -1)
+            putInt("streakCurrent", streak.current)
+            putInt("streakLongest", streak.longest)
+            putLong("streakDay", streak.lastPracticeDay?.toEpochDay() ?: -1L)
+            putString("recent", encodeRecent(recent))
+            putString("history", encodeHistory(history))
+        }
     }
 
     private fun encodeRecent(list: List<SessionSummary>): String {

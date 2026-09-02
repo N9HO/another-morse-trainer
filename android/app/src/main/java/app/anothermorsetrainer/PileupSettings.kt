@@ -3,8 +3,11 @@ package app.anothermorsetrainer
 import android.content.Context
 import android.content.SharedPreferences
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableDoubleStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.core.content.edit
 import app.anothermorsetrainer.morsekit.BustBehavior
 import app.anothermorsetrainer.morsekit.CallsignFormat
 import app.anothermorsetrainer.morsekit.MissedCallerFeedback
@@ -40,13 +43,13 @@ object PileupSettings {
         private set
     var mode by mutableStateOf(QSOContestMode.Pota)
         private set
-    var maxStations by mutableStateOf(4)
+    var maxStations by mutableIntStateOf(4)
         private set
-    var minWpm by mutableStateOf(18.0)
+    var minWpm by mutableDoubleStateOf(18.0)
         private set
-    var maxWpm by mutableStateOf(28.0)
+    var maxWpm by mutableDoubleStateOf(28.0)
         private set
-    var toneSpread by mutableStateOf(250.0)
+    var toneSpread by mutableDoubleStateOf(250.0)
         private set
     var qsbEnabled by mutableStateOf(false)
         private set
@@ -171,25 +174,25 @@ object PileupSettings {
     )
 
     private fun persist() {
-        prefs.edit()
-            .putString("myCall", myCall)
-            .putString("mode", mode.code)
-            .putInt("maxStations", maxStations)
-            .putFloat("minWpm", minWpm.toFloat())
-            .putFloat("maxWpm", maxWpm.toFloat())
-            .putFloat("toneSpread", toneSpread.toFloat())
-            .putBoolean("qsb", qsbEnabled)
-            .putString("qrn", qrn.name)
-            .putBoolean("cutNumbers", cutNumbersEnabled)
-            .putBoolean("rstRequired", rstRequired)
-            .putString("bust", bustBehavior.code)
-            .putBoolean("giveUp", giveUpEnabled)
-            .putString("missedFeedback", missedCallerFeedback.code)
-            .putStringSet("formats", formats.map { it.code }.toSet())
-            .putBoolean("usOnly", usOnly)
-            .putBoolean("keepPartial", keepPartialCall)
-            .putBoolean("keyMySide", keyMySide)
-            .putBoolean("autoRecall", autoRecall)
-            .apply()
+        prefs.edit {
+            putString("myCall", myCall)
+            putString("mode", mode.code)
+            putInt("maxStations", maxStations)
+            putFloat("minWpm", minWpm.toFloat())
+            putFloat("maxWpm", maxWpm.toFloat())
+            putFloat("toneSpread", toneSpread.toFloat())
+            putBoolean("qsb", qsbEnabled)
+            putString("qrn", qrn.name)
+            putBoolean("cutNumbers", cutNumbersEnabled)
+            putBoolean("rstRequired", rstRequired)
+            putString("bust", bustBehavior.code)
+            putBoolean("giveUp", giveUpEnabled)
+            putString("missedFeedback", missedCallerFeedback.code)
+            putStringSet("formats", formats.map { it.code }.toSet())
+            putBoolean("usOnly", usOnly)
+            putBoolean("keepPartial", keepPartialCall)
+            putBoolean("keyMySide", keyMySide)
+            putBoolean("autoRecall", autoRecall)
+        }
     }
 }

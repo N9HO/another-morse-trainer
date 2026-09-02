@@ -1,6 +1,7 @@
 package app.anothermorsetrainer
 
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import app.anothermorsetrainer.morsekit.MorseCode
@@ -44,8 +45,8 @@ object ListenState {
     // Session accounting (the practice-length framework): items completed this
     // session, seconds actually listened (pauses excluded), the configured
     // limit, and a note shown once a timed session finishes itself.
-    var itemsHeard by mutableStateOf(0)
-    var activeSeconds by mutableStateOf(0)
+    var itemsHeard by mutableIntStateOf(0)
+    var activeSeconds by mutableIntStateOf(0)
     var limitSeconds by mutableStateOf<Int?>(null)
     var finishedNote by mutableStateOf<String?>(null)
 }

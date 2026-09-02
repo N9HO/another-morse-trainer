@@ -7,6 +7,7 @@ import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
@@ -30,13 +31,13 @@ class CwDecoderEngine {
 
     var decodedText by mutableStateOf("")
         private set
-    var wpm by mutableStateOf(0f)
+    var wpm by mutableFloatStateOf(0f)
         private set
-    var toneHz by mutableStateOf(0f)
+    var toneHz by mutableFloatStateOf(0f)
         private set
     var tonePresent by mutableStateOf(false)
         private set
-    var inputLevel by mutableStateOf(0f)     // mic RMS, 0…~1
+    var inputLevel by mutableFloatStateOf(0f)     // mic RMS, 0…~1
         private set
     var isListening by mutableStateOf(false)
         private set

@@ -26,7 +26,7 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
-import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -68,7 +68,7 @@ fun SessionSetupSheet(
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     // Pinning a stage mutates the shared track in place, so it has no Compose
     // state of its own — bump a revision to redraw the pills after a pick.
-    var stageRev by remember { mutableStateOf(0) }
+    var stageRev by remember { mutableIntStateOf(0) }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,

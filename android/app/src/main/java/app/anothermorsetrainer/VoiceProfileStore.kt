@@ -2,6 +2,7 @@ package app.anothermorsetrainer
 
 import android.content.Context
 import android.content.SharedPreferences
+import androidx.core.content.edit
 import app.anothermorsetrainer.morsekit.VoiceProfile
 import org.json.JSONObject
 
@@ -41,6 +42,6 @@ object VoiceProfileStore {
             for ((answer, count) in tally) tallyObj.put(answer, count)
             obj.put(heard, tallyObj)
         }
-        prefs.edit().putString("profile", obj.toString()).apply()
+        prefs.edit { putString("profile", obj.toString()) }
     }
 }

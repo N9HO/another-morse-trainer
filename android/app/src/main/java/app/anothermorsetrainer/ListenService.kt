@@ -209,7 +209,7 @@ class ListenService : Service() {
         ListenState.display = ""
         pausedByFocus = false
         AudioFocus.release(this)
-        ServiceCompat_stopForeground()
+        stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
     }
 
@@ -232,14 +232,6 @@ class ListenService : Service() {
             startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK)
         } else {
             startForeground(NOTIFICATION_ID, notification)
-        }
-    }
-
-    private fun ServiceCompat_stopForeground() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            stopForeground(STOP_FOREGROUND_REMOVE)
-        } else {
-            @Suppress("DEPRECATION") stopForeground(true)
         }
     }
 

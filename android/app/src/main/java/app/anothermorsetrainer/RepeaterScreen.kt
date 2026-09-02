@@ -39,6 +39,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -417,7 +418,7 @@ fun RepeaterScreen(onBack: () -> Unit) {
  *  received below, chat as dots, and a live growing bar while keying. */
 @Composable
 private fun ActivityTimeline(repeater: VailRepeater) {
-    var nowMs by remember { mutableStateOf(System.currentTimeMillis()) }
+    var nowMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) { while (true) { withFrameMillis { }; nowMs = System.currentTimeMillis() } }
     val windowMs = 12_000.0
     val chatColor = Color(0xFFFFA000)
