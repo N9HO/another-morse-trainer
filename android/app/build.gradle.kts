@@ -77,7 +77,9 @@ android {
     // rather than walking relative paths out of the module.
     sourceSets {
         getByName("test") {
-            resources.srcDir(rootProject.file("../fixtures"))
+            // `directories` is AGP 9's replacement for the deprecated srcDir();
+            // it takes path strings, evaluated as project.file().
+            resources.directories += rootProject.file("../fixtures").path
         }
     }
 
@@ -88,10 +90,11 @@ android {
         // not before.
         abortOnError = true
         warningsAsErrors = false
-        // Printed in the CI log, and uploaded as a browsable report.
-        textReport = true
-        htmlReport = true
-        xmlReport = true
+        // Printed in the CI log. The HTML and XML reports the workflow uploads
+        // are always written under AGP 9 (textReport/htmlReport/xmlReport are
+        // deprecated no-ops now); printTextReport is what still chooses stdout
+        // over the abbreviated console summary.
+        printTextReport = true
     }
 }
 
