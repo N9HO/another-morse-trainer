@@ -34,6 +34,28 @@
     <string name="common_progress">Progress</string>
     <string name="common_settings">Settings</string>
     <string name="common_cancel">Cancel</string>
+    <string name="common_back">‹ Back</string>
+    <string name="common_end">End</string>
+    <string name="common_recalled_in">✓ recalled in %1$.1f s</string>
+    <string name="common_it_was">✗ it was “%1$s”</string>
+    <string name="common_not_quite">✗ not quite</string>
+    <string name="common_replay">▶ Replay</string>
+    <string name="common_next">Next</string>
+    <string name="common_session_complete">Session complete</string>
+    <string name="common_answered">Answered</string>
+    <string name="common_accuracy">Accuracy</string>
+    <string name="common_fastest">Fastest</string>
+    <string name="common_seconds_2dp">%1$.2f s</string>
+    <string name="common_median">Median</string>
+    <string name="common_streak_milestone">%1$s-day streak!</string>
+    <string name="common_milestone_body">New milestone reached — keep it going.</string>
+    <string name="common_practice_again">Practice again</string>
+    <string name="common_return_home">Return home</string>
+    <string name="common_auto">Auto</string>
+    <string name="common_you_sent">YOU SENT</string>
+    <string name="common_hold_to_key">HOLD TO KEY</string>
+    <string name="common_clear">Clear</string>
+    <string name="common_submit">Submit</string>
 
     <!-- OnboardingScreen -->
     <string name="onboarding_welcome">Welcome to\nAnother Morse Trainer</string>
@@ -74,4 +96,21 @@
     <string name="setup_hands_free_copy">Hands-free copy</string>
     <string name="setup_story">Story</string>
     <string name="setup_read_along_in_morse">Read along in Morse</string>
+
+    <!-- QuizScreen -->
+    <string name="quiz_mic_permission_needed">Microphone permission is needed for voice answers.</string>
+    <string name="quiz_voice_not_caught">Didn\'t catch that — tap an option or try again.</string>
+    <string name="quiz_key_answers_on">⠿ Key answers · on</string>
+    <string name="quiz_key_answers_off">⠿ Key answers · off</string>
+    <string name="quiz_new_character">★ New: %1$s</string>
+    <string name="quiz_listening">"  Listening…"</string>
+    <string name="quiz_speak_answer">"  Speak answer"</string>
+    <string name="quiz_voice_confirm">Did you say “%1$s”?</string>
+    <string name="quiz_yes">Yes</string>
+    <string name="quiz_no">No</string>
+    <string name="quiz_i_said">I said:</string>
+    <string name="quiz_none">None</string>
+    <string name="quiz_stage">Stage</string>
+    <string name="quiz_chars">Chars</string>
+    <string name="quiz_words">Words</string>
 </resources>
