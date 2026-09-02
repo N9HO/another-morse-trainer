@@ -84,7 +84,7 @@
       "recentCount": 5,
       "accuracy": 1.0,
       "medianTTR": 0.4,
-      "isMastered": true
+      "isMastered": false
     },
     {
       "name": "exactly the window, correct but too slow",
@@ -277,7 +277,7 @@
       "keptCount": 4,
       "recentCount": 4,
       "accuracy": 1.0,
-      "medianTTR": 0.5,
+      "medianTTR": 0.4,
       "isMastered": true
     },
     {
