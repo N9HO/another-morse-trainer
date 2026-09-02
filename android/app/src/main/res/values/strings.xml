@@ -84,6 +84,10 @@
     <string name="common_send">Send</string>
     <string name="common_us_calls_only">US calls only</string>
     <string name="common_start">Start</string>
+    <string name="common_bluetooth_permission_needed">Bluetooth permission is needed to find a key.</string>
+    <string name="common_find_bluetooth_key">Find Bluetooth key</string>
+    <string name="common_hz_value">%1$s Hz</string>
+    <string name="common_stop">Stop</string>
 
     <!-- OnboardingScreen -->
     <string name="onboarding_welcome">Welcome to\nAnother Morse Trainer</string>
@@ -286,6 +290,49 @@
     <string name="drills_share_practice_sheet">Share practice sheet</string>
     <string name="drills_share">Share</string>
     <string name="drills_print">Print</string>
+
+    <!-- RepeaterScreen -->
+    <string name="repeater_disconnected">Disconnected</string>
+    <string name="repeater_connecting">Connecting…</string>
+    <string name="repeater_status_connected">Connected · %1$s on channel</string>
+    <string name="repeater_idle_key_to_reconnect">Idle — key to reconnect</string>
+    <string name="repeater_reconnecting">Reconnecting…</string>
+    <string name="repeater_subtitle">Live CW practice over the network (Vail)</string>
+    <string name="repeater_callsign">Callsign</string>
+    <string name="repeater_channel">Channel</string>
+    <string name="repeater_server">Server</string>
+    <string name="repeater_server_url">Server URL</string>
+    <string name="repeater_disconnect">Disconnect</string>
+    <string name="repeater_connect">Connect</string>
+    <string name="repeater_lag">Lag %1$s ms</string>
+    <string name="repeater_break_in_transmit">Break-in (transmit)</string>
+    <string name="repeater_send_your_keying_to_the_channel">Send your keying to the channel</string>
+    <string name="repeater_private_channel">Private channel</string>
+    <string name="repeater_stay_off_the_public_room_list">Stay off the public room list</string>
+    <string name="repeater_tx_tone">TX tone</string>
+    <string name="repeater_rx_delay">RX delay</string>
+    <string name="repeater_ms_value">%1$s ms</string>
+    <string name="repeater_adapter_keyer">ADAPTER KEYER</string>
+    <string name="repeater_wake_adapter">Wake adapter</string>
+    <string name="repeater_connected_to">Connected: %1$s</string>
+    <string name="repeater_no_adapter_connected">No adapter connected</string>
+    <string name="repeater_keyer_speed">Keyer speed</string>
+    <string name="repeater_rx_buzz">RX buzz</string>
+    <string name="repeater_rx_buzz_description">Buzz the adapter\'s piezo for received tones</string>
+    <string name="repeater_on_channel">ON CHANNEL</string>
+    <string name="repeater_you_suffix">"  (you)"</string>
+    <string name="repeater_activity">ACTIVITY</string>
+    <string name="repeater_chat">CHAT</string>
+    <string name="repeater_no_messages_yet">No messages yet.</string>
+    <string name="repeater_message">Message</string>
+
+    <!-- CwDecoderScreen -->
+    <string name="decoder_title">CW Decoder</string>
+    <string name="decoder_listening_its_quiet">Listening — it\'s quiet</string>
+    <string name="decoder_hearing_audio">Hearing audio</string>
+    <string name="decoder_waiting_for_cw">Waiting for CW…</string>
+    <string name="decoder_idle_prompt">Tap Start and hold the phone near the audio you want copied.</string>
+    <string name="decoder_mic_denied">Microphone access is off. Allow it in Settings → Apps → Permissions to decode audio.</string>
 
     <!-- JourneyScreen -->
     <string name="journey_map_button">Map</string>

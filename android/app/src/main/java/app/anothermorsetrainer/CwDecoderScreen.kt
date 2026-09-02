@@ -41,6 +41,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -85,9 +86,9 @@ fun CwDecoderScreen(onBack: () -> Unit) {
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                TextButton(onClick = onBack) { Text("‹ Back") }
+                TextButton(onClick = onBack) { Text(stringResource(R.string.common_back)) }
                 Text(
-                    "CW Decoder",
+                    stringResource(R.string.decoder_title),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
@@ -121,9 +122,9 @@ fun CwDecoderScreen(onBack: () -> Unit) {
                     Spacer(Modifier.width(10.dp))
                     Text(
                         text = when {
-                            !engine.isListening -> "Off"
-                            engine.inputLevel < 0.003f -> "Listening — it's quiet"
-                            else -> "Hearing audio"
+                            !engine.isListening -> stringResource(R.string.common_off)
+                            engine.inputLevel < 0.003f -> stringResource(R.string.decoder_listening_its_quiet)
+                            else -> stringResource(R.string.decoder_hearing_audio)
                         },
                         style = MaterialTheme.typography.bodyMedium,
                         color = Brand.textPrimary
@@ -131,7 +132,7 @@ fun CwDecoderScreen(onBack: () -> Unit) {
                     Spacer(Modifier.weight(1f))
                     if (engine.wpm > 0f) {
                         Text(
-                            "${engine.wpm.roundToInt()} WPM",
+                            stringResource(R.string.common_wpm_value, engine.wpm.roundToInt()),
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.SemiBold,
                             fontFamily = FontFamily.Monospace,
@@ -139,7 +140,7 @@ fun CwDecoderScreen(onBack: () -> Unit) {
                         )
                         Spacer(Modifier.width(10.dp))
                         Text(
-                            "${engine.toneHz.roundToInt()} Hz",
+                            stringResource(R.string.common_hz_value, engine.toneHz.roundToInt()),
                             style = MaterialTheme.typography.bodyMedium,
                             fontFamily = FontFamily.Monospace,
                             color = Brand.textSecondary
@@ -166,8 +167,8 @@ fun CwDecoderScreen(onBack: () -> Unit) {
                     ) {
                         if (engine.decodedText.isEmpty()) {
                             Text(
-                                if (engine.isListening) "Waiting for CW…"
-                                else "Tap Start and hold the phone near the audio you want copied.",
+                                if (engine.isListening) stringResource(R.string.decoder_waiting_for_cw)
+                                else stringResource(R.string.decoder_idle_prompt),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = Brand.textSecondary
                             )
@@ -196,7 +197,7 @@ fun CwDecoderScreen(onBack: () -> Unit) {
                         )
                         Spacer(Modifier.width(10.dp))
                         Text(
-                            "Microphone access is off. Allow it in Settings → Apps → Permissions to decode audio.",
+                            stringResource(R.string.decoder_mic_denied),
                             style = MaterialTheme.typography.bodySmall,
                             color = Brand.textSecondary
                         )
@@ -229,7 +230,7 @@ fun CwDecoderScreen(onBack: () -> Unit) {
                         )
                         Spacer(Modifier.width(8.dp))
                         Text(
-                            if (engine.isListening) "Stop" else "Start",
+                            if (engine.isListening) stringResource(R.string.common_stop) else stringResource(R.string.common_start),
                             fontWeight = FontWeight.SemiBold
                         )
                     }
@@ -241,7 +242,7 @@ fun CwDecoderScreen(onBack: () -> Unit) {
                     ) {
                         Icon(Icons.Filled.Delete, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(6.dp))
-                        Text("Clear")
+                        Text(stringResource(R.string.common_clear))
                     }
                 }
             }

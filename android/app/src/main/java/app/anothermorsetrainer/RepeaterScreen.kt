@@ -4,6 +4,7 @@ import android.content.pm.PackageManager
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.res.stringResource
 import androidx.core.content.ContextCompat
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -85,7 +86,7 @@ fun RepeaterScreen(onBack: () -> Unit) {
         ActivityResultContracts.RequestMultiplePermissions()
     ) { grants ->
         if (grants.values.all { it }) bleMidi.scanAndOpen { bleStatus = it }
-        else bleStatus = "Bluetooth permission is needed to find a key."
+        else bleStatus = context.getString(R.string.common_bluetooth_permission_needed)
     }
     fun findBleKey() {
         val missing = bleMidi.requiredPermissions().filter {
@@ -106,16 +107,16 @@ fun RepeaterScreen(onBack: () -> Unit) {
 
     val connected = repeater.connectionState == ConnectionState.CONNECTED
     val statusText = when (repeater.connectionState) {
-        ConnectionState.DISCONNECTED -> "Disconnected"
-        ConnectionState.CONNECTING -> "Connecting…"
-        ConnectionState.CONNECTED -> "Connected · ${repeater.users.size} on channel"
-        ConnectionState.IDLE_DISCONNECTED -> "Idle — key to reconnect"
-        ConnectionState.RECONNECTING -> "Reconnecting…"
+        ConnectionState.DISCONNECTED -> stringResource(R.string.repeater_disconnected)
+        ConnectionState.CONNECTING -> stringResource(R.string.repeater_connecting)
+        ConnectionState.CONNECTED -> stringResource(R.string.repeater_status_connected, repeater.users.size)
+        ConnectionState.IDLE_DISCONNECTED -> stringResource(R.string.repeater_idle_key_to_reconnect)
+        ConnectionState.RECONNECTING -> stringResource(R.string.repeater_reconnecting)
     }
     val statusColor = if (connected) Color(0xFF2E7D32) else Brand.textSecondary
 
     Column(modifier = Modifier.fillMaxSize()) {
-        TextButton(onClick = onBack, modifier = Modifier.padding(8.dp)) { Text("‹ Back", color = Brand.teal) }
+        TextButton(onClick = onBack, modifier = Modifier.padding(8.dp)) { Text(stringResource(R.string.common_back), color = Brand.teal) }
 
         CenteredContent {
             Column(
@@ -125,26 +126,26 @@ fun RepeaterScreen(onBack: () -> Unit) {
                     .padding(horizontal = 20.dp, vertical = 8.dp)
             ) {
                 Text(
-                    "Repeater",
+                    stringResource(R.string.mode_repeater),
                     style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.Bold,
                     color = Brand.textPrimary
                 )
-                Text("Live CW practice over the network (Vail)", color = Brand.textSecondary, fontSize = 13.sp)
+                Text(stringResource(R.string.repeater_subtitle), color = Brand.textSecondary, fontSize = 13.sp)
 
                 Spacer(Modifier.height(16.dp))
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     OutlinedTextField(
                         value = callsignField,
                         onValueChange = { callsignField = it },
-                        label = { Text("Callsign") },
+                        label = { Text(stringResource(R.string.repeater_callsign)) },
                         singleLine = true,
                         modifier = Modifier.weight(1f)
                     )
                     OutlinedTextField(
                         value = channelField,
                         onValueChange = { channelField = it },
-                        label = { Text("Channel") },
+                        label = { Text(stringResource(R.string.repeater_channel)) },
                         singleLine = true,
                         modifier = Modifier.weight(1f)
                     )
@@ -157,7 +158,7 @@ fun RepeaterScreen(onBack: () -> Unit) {
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("Server", color = Brand.textSecondary, fontSize = 12.sp)
+                    Text(stringResource(R.string.repeater_server), color = Brand.textSecondary, fontSize = 12.sp)
                     VailRepeater.KNOWN_SERVERS.forEach { (label, url) ->
                         val sel = serverField == url
                         Box(
@@ -185,7 +186,7 @@ fun RepeaterScreen(onBack: () -> Unit) {
                 OutlinedTextField(
                     value = serverField,
                     onValueChange = { serverField = it },
-                    label = { Text("Server URL") },
+                    label = { Text(stringResource(R.string.repeater_server_url)) },
                     singleLine = true,
                     textStyle = MaterialTheme.typography.bodySmall,
                     modifier = Modifier.fillMaxWidth()
@@ -208,13 +209,13 @@ fun RepeaterScreen(onBack: () -> Unit) {
                         contentColor = if (connected) Brand.textPrimary else Brand.navy
                     ),
                     modifier = Modifier.fillMaxWidth().height(50.dp)
-                ) { Text(if (connected || repeater.connectionState == ConnectionState.CONNECTING) "Disconnect" else "Connect", fontWeight = FontWeight.Bold) }
+                ) { Text(if (connected || repeater.connectionState == ConnectionState.CONNECTING) stringResource(R.string.repeater_disconnect) else stringResource(R.string.repeater_connect), fontWeight = FontWeight.Bold) }
 
                 Spacer(Modifier.height(10.dp))
                 Text(statusText, color = statusColor, fontWeight = FontWeight.Medium)
                 repeater.midiDevice?.let { Text("🎹 $it", color = Brand.teal, fontSize = 12.sp) }
                 repeater.notice?.let { Text(it, color = Brand.textSecondary, fontSize = 12.sp) }
-                if (repeater.lagMs != 0L) Text("Lag ${repeater.lagMs} ms", color = Brand.textSecondary, fontSize = 12.sp)
+                if (repeater.lagMs != 0L) Text(stringResource(R.string.repeater_lag, repeater.lagMs), color = Brand.textSecondary, fontSize = 12.sp)
 
                 Spacer(Modifier.height(16.dp))
                 Row(
@@ -223,8 +224,8 @@ fun RepeaterScreen(onBack: () -> Unit) {
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Column {
-                        Text("Break-in (transmit)", color = Brand.textPrimary, fontWeight = FontWeight.Medium)
-                        Text("Send your keying to the channel", color = Brand.textSecondary, fontSize = 12.sp)
+                        Text(stringResource(R.string.repeater_break_in_transmit), color = Brand.textPrimary, fontWeight = FontWeight.Medium)
+                        Text(stringResource(R.string.repeater_send_your_keying_to_the_channel), color = Brand.textSecondary, fontSize = 12.sp)
                     }
                     Switch(
                         checked = repeater.breakInEnabled,
@@ -245,8 +246,8 @@ fun RepeaterScreen(onBack: () -> Unit) {
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Column {
-                        Text("Private channel", color = Brand.textPrimary, fontWeight = FontWeight.Medium)
-                        Text("Stay off the public room list", color = Brand.textSecondary, fontSize = 12.sp)
+                        Text(stringResource(R.string.repeater_private_channel), color = Brand.textPrimary, fontWeight = FontWeight.Medium)
+                        Text(stringResource(R.string.repeater_stay_off_the_public_room_list), color = Brand.textSecondary, fontSize = 12.sp)
                     }
                     Switch(
                         checked = repeater.privateChannel,
@@ -288,7 +289,7 @@ fun RepeaterScreen(onBack: () -> Unit) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text("⠿", fontSize = 24.sp, color = if (keyPressed) Brand.navy else Brand.teal)
                         Text(
-                            "HOLD TO KEY",
+                            stringResource(R.string.common_hold_to_key),
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             color = if (keyPressed) Brand.navy else Brand.textSecondary
@@ -301,11 +302,11 @@ fun RepeaterScreen(onBack: () -> Unit) {
 
                 Spacer(Modifier.height(16.dp))
                 Column(modifier = Modifier.fillMaxWidth().brandCard().padding(16.dp)) {
-                    SliderRow("TX tone", repeater.txTone.toString(), repeater.txTone.toFloat(), 48f..96f) {
+                    SliderRow(stringResource(R.string.repeater_tx_tone), repeater.txTone.toString(), repeater.txTone.toFloat(), 48f..96f) {
                         repeater.updateTxTone(it.toInt())
                     }
                     Spacer(Modifier.height(8.dp))
-                    SliderRow("RX delay", "${repeater.rxDelayMs} ms", repeater.rxDelayMs.toFloat(), 0f..5000f) {
+                    SliderRow(stringResource(R.string.repeater_rx_delay), stringResource(R.string.repeater_ms_value, repeater.rxDelayMs), repeater.rxDelayMs.toFloat(), 0f..5000f) {
                         repeater.updateRxDelayMs(it.toInt())
                     }
                 }
@@ -315,12 +316,12 @@ fun RepeaterScreen(onBack: () -> Unit) {
                     Spacer(Modifier.height(16.dp))
                     Column(modifier = Modifier.fillMaxWidth().brandCard().padding(16.dp)) {
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                            Text("ADAPTER KEYER", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Brand.textSecondary)
-                            TextButton(onClick = { repeater.wakeAdapter() }) { Text("Wake adapter", color = Brand.teal) }
+                            Text(stringResource(R.string.repeater_adapter_keyer), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Brand.textSecondary)
+                            TextButton(onClick = { repeater.wakeAdapter() }) { Text(stringResource(R.string.repeater_wake_adapter), color = Brand.teal) }
                         }
                         // Live connected-state for the adapter itself.
                         Text(
-                            repeater.adapterName?.let { "Connected: $it" } ?: "No adapter connected",
+                            repeater.adapterName?.let { stringResource(R.string.repeater_connected_to, it) } ?: stringResource(R.string.repeater_no_adapter_connected),
                             color = if (repeater.adapterName != null) Color(0xFF2E7D32) else Brand.textSecondary,
                             fontSize = 12.sp
                         )
@@ -347,7 +348,7 @@ fun RepeaterScreen(onBack: () -> Unit) {
                             }
                         }
                         Spacer(Modifier.height(10.dp))
-                        SliderRow("Keyer speed", "${repeater.keyerWpm} WPM", repeater.keyerWpm.toFloat(), 5f..50f) {
+                        SliderRow(stringResource(R.string.repeater_keyer_speed), stringResource(R.string.common_wpm_value, repeater.keyerWpm), repeater.keyerWpm.toFloat(), 5f..50f) {
                             repeater.updateKeyerWpm(it.toInt())
                         }
                         Row(
@@ -356,8 +357,8 @@ fun RepeaterScreen(onBack: () -> Unit) {
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Column {
-                                Text("RX buzz", color = Brand.textPrimary, fontWeight = FontWeight.Medium)
-                                Text("Buzz the adapter's piezo for received tones", color = Brand.textSecondary, fontSize = 12.sp)
+                                Text(stringResource(R.string.repeater_rx_buzz), color = Brand.textPrimary, fontWeight = FontWeight.Medium)
+                                Text(stringResource(R.string.repeater_rx_buzz_description), color = Brand.textSecondary, fontSize = 12.sp)
                             }
                             Switch(
                                 checked = repeater.rxBuzzEnabled,
@@ -373,7 +374,7 @@ fun RepeaterScreen(onBack: () -> Unit) {
                         if (bleMidi.isSupported) {
                             Spacer(Modifier.height(8.dp))
                             OutlinedButton(onClick = { findBleKey() }, modifier = Modifier.fillMaxWidth()) {
-                                Text("Find Bluetooth key")
+                                Text(stringResource(R.string.common_find_bluetooth_key))
                             }
                             bleStatus?.let {
                                 Spacer(Modifier.height(4.dp))
@@ -385,7 +386,7 @@ fun RepeaterScreen(onBack: () -> Unit) {
 
                 if (repeater.users.isNotEmpty()) {
                     Spacer(Modifier.height(16.dp))
-                    Text("ON CHANNEL", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Brand.textSecondary)
+                    Text(stringResource(R.string.repeater_on_channel), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Brand.textSecondary)
                     Spacer(Modifier.height(6.dp))
                     Column(modifier = Modifier.fillMaxWidth().brandCard()) {
                         repeater.users.forEachIndexed { i, u ->
@@ -395,7 +396,7 @@ fun RepeaterScreen(onBack: () -> Unit) {
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Text(
-                                    u.callsign + if (u.callsign == repeater.callsign) "  (you)" else "",
+                                    u.callsign + if (u.callsign == repeater.callsign) stringResource(R.string.repeater_you_suffix) else "",
                                     color = Brand.textPrimary,
                                     fontFamily = FontFamily.Monospace
                                 )
@@ -456,19 +457,19 @@ private fun ActivityTimeline(repeater: VailRepeater) {
                 if (x1 > x0) drawRoundRect(Brand.tealBright, Offset(x0, midY - barH - 3), Size(maxOf(2f, x1 - x0), barH), CornerRadius(2f))
             }
         }
-        Text("ACTIVITY", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Brand.textSecondary)
+        Text(stringResource(R.string.repeater_activity), fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Brand.textSecondary)
     }
 }
 
 @Composable
 private fun ChatPanel(repeater: VailRepeater) {
     var input by remember { mutableStateOf("") }
-    Text("CHAT", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Brand.textSecondary)
+    Text(stringResource(R.string.repeater_chat), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Brand.textSecondary)
     Spacer(Modifier.height(6.dp))
     Column(modifier = Modifier.fillMaxWidth().brandCard().heightIn(min = 60.dp).padding(12.dp)) {
         val recent = repeater.chatMessages.takeLast(40)
         if (recent.isEmpty()) {
-            Text("No messages yet.", color = Brand.textSecondary, fontSize = 13.sp)
+            Text(stringResource(R.string.repeater_no_messages_yet), color = Brand.textSecondary, fontSize = 13.sp)
         } else {
             recent.forEach { line ->
                 Row {
@@ -483,13 +484,13 @@ private fun ChatPanel(repeater: VailRepeater) {
         OutlinedTextField(
             value = input,
             onValueChange = { input = it },
-            placeholder = { Text("Message") },
+            placeholder = { Text(stringResource(R.string.repeater_message)) },
             singleLine = true,
             modifier = Modifier.weight(1f)
         )
         OutlinedButton(onClick = {
             if (input.isNotBlank()) { repeater.sendChat(input); input = "" }
-        }) { Text("Send") }
+        }) { Text(stringResource(R.string.common_send)) }
     }
 }
 
