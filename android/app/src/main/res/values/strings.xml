@@ -428,7 +428,7 @@
     <string name="settings_custom_words_footer_off">Practice your own words — a callsign, your name, club abbreviations — in Common Words instead of the ranked pool.</string>
     <string name="settings_punctuation">Punctuation</string>
     <string name="settings_punctuation_footer">Study punctuation too. Opted-in marks join the Characters ladder after the letters and numbers.</string>
-    <string name="settings_starting_level">Starting level</string>
+    <string name="settings_starting_level">Proficiency</string>
     <string name="settings_starting_level_footer">How much Morse you already know — sets where the Characters drill begins. Changing this restarts your active set.</string>
     <string name="settings_feedback">Feedback</string>
     <string name="settings_haptic_feedback">Haptic feedback</string>
