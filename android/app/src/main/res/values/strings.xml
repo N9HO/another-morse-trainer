@@ -88,6 +88,7 @@
     <string name="common_find_bluetooth_key">Find Bluetooth key</string>
     <string name="common_hz_value">%1$s Hz</string>
     <string name="common_stop">Stop</string>
+    <string name="common_play">Play</string>
 
     <!-- OnboardingScreen -->
     <string name="onboarding_welcome">Welcome to\nAnother Morse Trainer</string>
@@ -333,6 +334,44 @@
     <string name="decoder_waiting_for_cw">Waiting for CW…</string>
     <string name="decoder_idle_prompt">Tap Start and hold the phone near the audio you want copied.</string>
     <string name="decoder_mic_denied">Microphone access is off. Allow it in Settings → Apps → Permissions to decode audio.</string>
+
+    <!-- ListenScreen -->
+    <string name="listen_blurb">Hear the code, then the answer spoken aloud — no tapping. Keeps playing with the screen locked.</string>
+    <string name="listen_heard_count">%1$s heard</string>
+    <string name="listen_time_left">" · %1$d:%2$02d left"</string>
+    <string name="listen_tap_play_prompt">Tap play to start a hands-free loop.</string>
+    <string name="listen_status_paused">paused</string>
+    <string name="listen_status_listening">"🎧  listening…"</string>
+    <string name="listen_pause">Pause</string>
+    <string name="listen_status_running">Listening — lock the screen and keep going</string>
+    <string name="listen_paused_tap_to_resume">Paused — tap to resume</string>
+    <string name="listen_ready">Ready</string>
+
+    <!-- ListenService -->
+    <string name="listen_session_complete">Session complete — %1$s heard</string>
+    <string name="listen_notification_paused">Paused</string>
+    <string name="listen_notification_listening">Listening…</string>
+    <string name="listen_hands_free_practice">Hands-free practice</string>
+    <string name="listen_resume">Resume</string>
+    <string name="listen_channel_name">Listen &amp; Learn playback</string>
+    <string name="listen_channel_description">Ongoing hands-free practice playback.</string>
+
+    <!-- ReferenceScreen -->
+    <string name="reference_playback_settings">Playback settings</string>
+    <string name="reference_search_all_tables">Search all tables</string>
+    <string name="reference_clear_search">Clear search</string>
+    <string name="reference_no_matches">No matches for “%1$s”</string>
+    <string name="reference_play_description">Play %1$s in Morse code</string>
+    <string name="reference_playing">Playing…</string>
+    <string name="reference_itu_operational_name">ITU / operational name</string>
+    <string name="reference_also_written">Also written</string>
+    <string name="reference_meaning">Meaning</string>
+    <string name="reference_about">About</string>
+    <string name="reference_playback">Playback</string>
+    <string name="reference_history_and_sources">HISTORY &amp; SOURCES</string>
+    <string name="reference_side_tone">Side tone</string>
+    <string name="reference_farnsworth_spacing">Farnsworth spacing</string>
+    <string name="reference_effective_speed">Effective speed</string>
 
     <!-- JourneyScreen -->
     <string name="journey_map_button">Map</string>

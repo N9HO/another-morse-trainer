@@ -171,7 +171,7 @@ class ListenService : Service() {
                 ListenState.activeSeconds += 1
                 val limit = ListenState.limitSeconds ?: continue
                 if (ListenState.activeSeconds >= limit) {
-                    ListenState.finishedNote = "Session complete — ${ListenState.itemsHeard} heard"
+                    ListenState.finishedNote = getString(R.string.listen_session_complete, ListenState.itemsHeard)
                     stopEverything()
                     break
                 }
@@ -246,21 +246,21 @@ class ListenService : Service() {
 
     private fun buildNotification(): Notification {
         val text = when {
-            ListenState.paused -> "Paused"
-            ListenState.playing -> "Listening…"
+            ListenState.paused -> getString(R.string.listen_notification_paused)
+            ListenState.playing -> getString(R.string.listen_notification_listening)
             ListenState.display.isNotEmpty() -> ListenState.display
-            else -> "Hands-free practice"
+            else -> getString(R.string.listen_hands_free_practice)
         }
-        val toggleLabel = if (ListenState.paused) "Resume" else "Pause"
+        val toggleLabel = if (ListenState.paused) getString(R.string.listen_resume) else getString(R.string.listen_pause)
         val toggleIcon = if (ListenState.paused) android.R.drawable.ic_media_play else android.R.drawable.ic_media_pause
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_stat_morse)
-            .setContentTitle("Listen & Learn")
+            .setContentTitle(getString(R.string.mode_listen_and_learn))
             .setContentText(text)
             .setContentIntent(activityIntent())
             .addAction(toggleIcon, toggleLabel, serviceIntent(ACTION_TOGGLE, 1))
-            .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Stop", serviceIntent(ACTION_STOP, 2))
+            .addAction(android.R.drawable.ic_menu_close_clear_cancel, getString(R.string.common_stop), serviceIntent(ACTION_STOP, 2))
             .setOngoing(!ListenState.paused)
             .setOnlyAlertOnce(true)
             .setSilent(true)
@@ -291,8 +291,8 @@ class ListenService : Service() {
 
         fun ensureChannel(context: Context) {
             val channel = NotificationChannelCompat.Builder(CHANNEL_ID, NotificationManagerCompat.IMPORTANCE_LOW)
-                .setName("Listen & Learn playback")
-                .setDescription("Ongoing hands-free practice playback.")
+                .setName(getString(R.string.listen_channel_name))
+                .setDescription(getString(R.string.listen_channel_description))
                 .build()
             NotificationManagerCompat.from(context).createNotificationChannel(channel)
         }
