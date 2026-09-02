@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  User-facing copy for the Android app, moved out of the composables (issue #132).
+  Every value was extracted from the Kotlin literal it replaced by script, not
+  retyped; format arguments are %n$s because that is what a Kotlin template does
+  (toString), and %d would localise digits.
+-->
+<resources>
+
+    <!-- App -->
+    <string name="app_name">Another Morse Trainer</string>
+
+    <!-- Home menu modes -->
+    <string name="mode_journey">Journey</string>
+    <string name="mode_head_copy">Head Copy</string>
+    <string name="mode_type_it">Type It</string>
+    <string name="mode_qrq_speed">QRQ Speed</string>
+    <string name="mode_rapid_fire">Rapid Fire</string>
+    <string name="mode_sending_practice">Sending Practice</string>
+    <string name="mode_sending_drills">Sending Drills</string>
+    <string name="mode_repeater">Repeater</string>
+    <string name="mode_short_stories">Short Stories</string>
+    <string name="mode_pileup_runner">Pileup Runner</string>
+    <string name="mode_contest">Contest</string>
+    <string name="mode_code_exam">Code Exam</string>
+    <string name="mode_listen_and_learn">Listen &amp; Learn</string>
+    <string name="mode_reference">Reference</string>
+
+    <!-- Shared across screens -->
+    <string name="common_copy_in_your_head">Copy in your head</string>
+    <string name="common_free_recall_typing">Free-recall typing</string>
+    <string name="common_high_speed_copy">High-speed copy</string>
+    <string name="common_key_it_back">Key it back</string>
+    <string name="common_progress">Progress</string>
+    <string name="common_settings">Settings</string>
+
+    <!-- HomeScreen -->
+    <string name="home_core_koch_drill">Core Koch drill</string>
+    <string name="home_whole_ham_words">Whole ham words</string>
+    <string name="home_cw_abbreviations">CW abbreviations</string>
+    <string name="home_q_signal_shorthand">Q-signal shorthand</string>
+    <string name="home_run_together_signals">Run-together signals</string>
+    <string name="home_drill_your_mix_ups">Drill your mix-ups</string>
+    <string name="home_leveled_path">Leveled path</string>
+    <string name="home_back_to_back_copy">Back-to-back copy</string>
+    <string name="home_printable_sheets">Printable sheets</string>
+    <string name="home_live_over_the_network">Live over the network</string>
+    <string name="home_continuous_copy">Continuous copy</string>
+    <string name="home_work_a_cw_pileup">Work a CW pileup</string>
+    <string name="home_timed_contest_runs">Timed contest runs</string>
+    <string name="home_arrl_fcc_code_exam">ARRL/FCC code exam</string>
+    <string name="home_hands_free_eyes_free">Hands-free, eyes-free</string>
+    <string name="home_look_it_up">Look it up</string>
+    <string name="home_cw_decoder_description">CW decoder — turn received Morse audio into text</string>
+    <string name="home_tagline">A proud part of the Carrier Wave ecosystem.</string>
+    <string name="home_streak">"🔥  %1$s day streak"</string>
+</resources>
