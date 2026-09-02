@@ -54,4 +54,10 @@
     <string name="home_cw_decoder_description">CW decoder — turn received Morse audio into text</string>
     <string name="home_tagline">A proud part of the Carrier Wave ecosystem.</string>
     <string name="home_streak">"🔥  %1$s day streak"</string>
+
+    <!-- MainActivity -->
+    <string name="setup_listen">Listen</string>
+    <string name="setup_hands_free_copy">Hands-free copy</string>
+    <string name="setup_story">Story</string>
+    <string name="setup_read_along_in_morse">Read along in Morse</string>
 </resources>
