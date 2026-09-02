@@ -4,8 +4,11 @@ import android.content.Context
 import android.os.Handler
 import android.os.Looper
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.core.content.edit
 import app.anothermorsetrainer.AdapterKeyer
 import app.anothermorsetrainer.MidiKeyInput
 import app.anothermorsetrainer.MidiKeyOutput
@@ -41,14 +44,14 @@ class VailRepeater(context: Context) {
     var channel by mutableStateOf("General"); private set
     var serverUrl by mutableStateOf(DEFAULT_SERVER); private set
     var privateChannel by mutableStateOf(true); private set
-    var txTone by mutableStateOf(72); private set
-    var rxDelayMs by mutableStateOf(2000); private set
+    var txTone by mutableIntStateOf(72); private set
+    var rxDelayMs by mutableIntStateOf(2000); private set
     var breakInEnabled by mutableStateOf(false); private set
     var rxBuzzEnabled by mutableStateOf(true); private set
-    var keyerWpm by mutableStateOf(20); private set
+    var keyerWpm by mutableIntStateOf(20); private set
     var users by mutableStateOf<List<VailMessage.UserInfo>>(emptyList()); private set
     var notice by mutableStateOf<String?>(null); private set
-    var lagMs by mutableStateOf(0L); private set
+    var lagMs by mutableLongStateOf(0L); private set
     var isKeying by mutableStateOf(false); private set
     var midiDevice by mutableStateOf<String?>(null); private set
     /** The MIDI device the outbound (piezo/keyer-config) path is talking to. */
@@ -141,19 +144,19 @@ class VailRepeater(context: Context) {
     fun updateCallsign(value: String) {
         val t = value.trim()
         if (t.isEmpty()) return
-        callsign = t; prefs.edit().putString("callsign", t).apply()
+        callsign = t; prefs.edit { putString("callsign", t) }
         client.updateCallsign(t)
     }
 
     fun updateChannel(value: String) {
         val t = value.trim().ifEmpty { "General" }
-        channel = t; prefs.edit().putString("channel", t).apply()
+        channel = t; prefs.edit { putString("channel", t) }
     }
 
     /** Point at a different Vail server (takes effect on the next connect). */
     fun updateServer(url: String) {
         val t = url.trim().ifEmpty { DEFAULT_SERVER }
-        serverUrl = t; prefs.edit().putString("server", t).apply()
+        serverUrl = t; prefs.edit { putString("server", t) }
         val wasConnected = connectionState == ConnectionState.CONNECTED ||
             connectionState == ConnectionState.CONNECTING
         client.baseUrl = t
@@ -166,13 +169,13 @@ class VailRepeater(context: Context) {
 
     /** Join channels privately (unlisted) or on the public roster. */
     fun updatePrivateChannel(value: Boolean) {
-        privateChannel = value; prefs.edit().putBoolean("private", value).apply()
+        privateChannel = value; prefs.edit { putBoolean("private", value) }
         client.updatePrivate(value && !channel.equals("Decoder", ignoreCase = true))
     }
 
     fun updateTxTone(note: Int) {
         val n = note.coerceIn(48, 96)
-        txTone = n; prefs.edit().putInt("txTone", n).apply()
+        txTone = n; prefs.edit { putInt("txTone", n) }
         client.updateTxTone(n)
         // Sidetone pitch follows the TX tone.
         sidetone?.let { it.stop(); sidetone = SidetoneGenerator(midiToHz(n)).also { s -> s.start() } }
@@ -188,24 +191,24 @@ class VailRepeater(context: Context) {
 
     /** Push the adapter's iambic keyer speed (dit duration) — was stuck at 20 WPM. */
     fun updateKeyerWpm(wpm: Int) {
-        keyerWpm = wpm.coerceIn(5, 50); prefs.edit().putInt("keyerWpm", keyerWpm).apply()
+        keyerWpm = wpm.coerceIn(5, 50); prefs.edit { putInt("keyerWpm", keyerWpm) }
         midiOut.setSpeed(keyerWpm)
     }
 
     /** RX piezo feedback on the adapter, opt-outable. */
     fun updateRxBuzzEnabled(value: Boolean) {
-        rxBuzzEnabled = value; prefs.edit().putBoolean("rxBuzz", value).apply()
+        rxBuzzEnabled = value; prefs.edit { putBoolean("rxBuzz", value) }
     }
 
     /** Re-run the adapter wake/identify sequence (e.g. after plugging it in). */
     fun wakeAdapter() = midiOut.wakeAdapter()
 
     fun updateRxDelayMs(ms: Int) {
-        rxDelayMs = ms.coerceIn(0, 5000); prefs.edit().putInt("rxDelay", rxDelayMs).apply()
+        rxDelayMs = ms.coerceIn(0, 5000); prefs.edit { putInt("rxDelay", rxDelayMs) }
     }
 
     fun setBreakIn(enabled: Boolean) {
-        breakInEnabled = enabled; prefs.edit().putBoolean("breakIn", enabled).apply()
+        breakInEnabled = enabled; prefs.edit { putBoolean("breakIn", enabled) }
     }
 
     fun sendChat(text: String) {

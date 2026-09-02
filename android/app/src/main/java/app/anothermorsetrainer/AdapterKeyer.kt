@@ -5,6 +5,7 @@ import android.content.SharedPreferences
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.core.content.edit
 
 /**
  * Which kind of key is plugged into the Vail Adapter, in one place.
@@ -64,7 +65,7 @@ object AdapterKeyer {
 
     fun setMode(context: Context, mode: MidiKeyOutput.KeyerMode) {
         current = mode
-        prefsFor(context).also { prefs = it }.edit().putInt(KEY_MODE, mode.code).apply()
+        prefsFor(context).also { prefs = it }.edit { putInt(KEY_MODE, mode.code) }
     }
 
     /**

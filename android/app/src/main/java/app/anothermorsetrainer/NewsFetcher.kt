@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.os.Handler
 import android.os.Looper
+import androidx.core.content.edit
 import okhttp3.Call
 import okhttp3.Callback
 import okhttp3.OkHttpClient
@@ -163,7 +164,7 @@ class NewsFetcher(context: Context) {
         val obj = JSONObject()
             .put("fetchedAt", System.currentTimeMillis())
             .put("items", array)
-        prefs.edit().putString("cache-${source.name}", obj.toString()).apply()
+        prefs.edit { putString("cache-${source.name}", obj.toString()) }
     }
 
     // ---- Minimal RSS 2.0 / Atom parsing ----

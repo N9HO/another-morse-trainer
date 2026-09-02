@@ -2,7 +2,7 @@
 <!--
   Lint configuration for the Android app.
 
-  The only rule here is the one that matters: the vendored CW decoder is exempt.
+  The rule that matters: the vendored CW decoder is exempt.
   `morsekit/cw/` is a line-faithful Kotlin port of the C99 core vendored into the
   iOS app, itself byte-identical to the Carrier Wave firmware's host-tested copy
   (see PROVENANCE.md in that directory). Keeping it diffable against its source
@@ -18,5 +18,25 @@
 <lint>
     <issue id="all">
         <ignore path="src/main/java/app/anothermorsetrainer/morsekit/cw" />
+    </issue>
+
+    <!--
+      The Gradle wrapper and the Android Gradle plugin are held back on purpose.
+      Moving them is the AGP 9 upgrade described next to the compose-bom pin in
+      build.gradle.kts — its own piece of work, with a compileSdk bump attached —
+      not a version-string edit, and this check cannot be verified locally
+      because nothing here runs Gradle. Until that project happens the finding
+      is the same line on every run.
+    -->
+    <issue id="AndroidGradlePluginVersion" severity="ignore" />
+
+    <!--
+      compose-bom is pinned at 2026.06.01 for the reason given in
+      build.gradle.kts: the newer BOM pulls a Compose that needs AGP 9.1 and
+      compileSdk 37. Only that one artifact is silenced; every other dependency
+      is still checked for newer versions.
+    -->
+    <issue id="GradleDependency">
+        <ignore regexp="compose-bom" />
     </issue>
 </lint>

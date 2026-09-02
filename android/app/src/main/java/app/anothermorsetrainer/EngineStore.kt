@@ -2,6 +2,7 @@ package app.anothermorsetrainer
 
 import android.content.Context
 import android.content.SharedPreferences
+import androidx.core.content.edit
 import app.anothermorsetrainer.morsekit.CharacterStats
 import app.anothermorsetrainer.morsekit.ProgressiveCharacters
 import app.anothermorsetrainer.morsekit.TrainerEngine
@@ -55,7 +56,7 @@ object EngineStore {
     /** Persist the tracked track's current snapshot (no-op when none is live). */
     fun save() {
         val chars = tracked ?: return
-        prefs.edit().putString("engine", encode(chars.snapshot)).apply()
+        prefs.edit { putString("engine", encode(chars.snapshot)) }
     }
 
     /**
@@ -77,7 +78,7 @@ object EngineStore {
     /** Forget everything (the Settings "Reset all progress" path). */
     fun reset() {
         tracked = null
-        prefs.edit().clear().apply()
+        prefs.edit { clear() }
     }
 
     // ---- Serialization (stand-in for the Swift Codable snapshot) ----

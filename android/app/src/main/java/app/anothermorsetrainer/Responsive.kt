@@ -7,7 +7,8 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
@@ -16,7 +17,12 @@ val CONTENT_MAX_WIDTH: Dp = 640.dp
 
 /** True on tablets / landscape where a two-column menu reads better than one tall column. */
 @Composable
-fun isWideScreen(): Boolean = LocalConfiguration.current.screenWidthDp >= 600
+fun isWideScreen(): Boolean {
+    // The window, not the display: in split screen the app's own width is
+    // the one that decides whether two columns fit.
+    val widthPx = LocalWindowInfo.current.containerSize.width
+    return with(LocalDensity.current) { widthPx.toDp() } >= 600.dp
+}
 
 /**
  * Centre a screen's content and cap it at [maxWidth] so it stays readable on
