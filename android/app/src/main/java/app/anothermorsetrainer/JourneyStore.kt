@@ -34,6 +34,24 @@ object JourneyStore {
         }
     }
 
+    /**
+     * Unlock the Journey as far as the declared starting level reaches, so a
+     * learner who said they know the letters is not made to re-earn K and M
+     * one level at a time (#109). Only ever raises: levels actually cleared are
+     * never clawed back, and "I know nothing" leaves level 1 as it is. The
+     * current level moves up with the unlock so the map opens where they can
+     * start, not on level 1 with the real start somewhere below.
+     */
+    fun unlockForProficiency() {
+        if (Settings.proficiency == Proficiency.NONE) return
+        val level = JourneyCurriculum.firstLevelBeyond(Settings.seedCharacters().toSet())
+        val progress = load()
+        if (level <= progress.unlockedThrough) return
+        progress.unlockedThrough = level
+        progress.currentLevel = maxOf(progress.currentLevel, level)
+        save(progress)
+    }
+
     fun reset() {
         prefs.edit { clear() }
     }

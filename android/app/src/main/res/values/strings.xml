@@ -118,8 +118,6 @@
     <string name="home_streak">"🔥  %1$s day streak"</string>
 
     <!-- SessionSetupSheet -->
-    <string name="setup_where_are_you_starting">Where are you starting?</string>
-    <string name="setup_proficiency_blurb">How much Morse you already know — sets where the drill begins. Changing this restarts your active set.</string>
     <string name="setup_track_stage">Track stage</string>
     <string name="setup_duration_question">How long do you want to practice?</string>
     <string name="setup_start_training">Start Training</string>
@@ -429,7 +427,7 @@
     <string name="settings_punctuation">Punctuation</string>
     <string name="settings_punctuation_footer">Study punctuation too. Opted-in marks join the Characters ladder after the letters and numbers.</string>
     <string name="settings_starting_level">Proficiency</string>
-    <string name="settings_starting_level_footer">How much Morse you already know — sets where the Characters drill begins. Changing this restarts your active set.</string>
+    <string name="settings_starting_level_footer">How much Morse you already know — sets where the Characters drill begins and unlocks the Journey that far. Changing this restarts your active set.</string>
     <string name="settings_feedback">Feedback</string>
     <string name="settings_haptic_feedback">Haptic feedback</string>
     <string name="settings_voice_answers">Voice answers</string>

@@ -102,9 +102,6 @@ val QUIZ_MODES: List<QuizMode> = listOf(
  * the Characters quiz and Sending Practice, which share one track exactly as
  * iOS's AppModel hands both the same charLadder.
  */
-/** The modes drilling the shared, persisted Koch ladder, where a stage pin bites. */
-private val STAGE_PIN_MODES = setOf(SettingsMode.CHARACTERS, SettingsMode.SENDING)
-
 private data class SetupTarget(
     val route: Route,
     val title: String,

@@ -84,7 +84,11 @@ fun OnboardingScreen(onDone: () -> Unit) {
 
             Spacer(Modifier.height(12.dp))
             Button(
-                onClick = { Settings.completeOnboarding(selected); onDone() },
+                onClick = {
+                    Settings.completeOnboarding(selected)
+                    JourneyStore.unlockForProficiency()
+                    onDone()
+                },
                 colors = ButtonDefaults.buttonColors(containerColor = Brand.teal, contentColor = Brand.navy),
                 modifier = Modifier.fillMaxWidth().height(54.dp)
             ) { Text(stringResource(R.string.onboarding_start_practicing), fontWeight = FontWeight.Bold) }

@@ -99,6 +99,19 @@ object JourneyCurriculum {
         return out
     }
 
+    /**
+     * The number of the first level that teaches something outside [known] —
+     * where a learner who already knows those characters should start. Every
+     * level before it introduces only known characters; this one, or any later
+     * one, has something new. Prosigns and words are never "known" this way, so
+     * a learner who knows every character starts at the first prosign level.
+     * Kotlin side only: iOS has no first-run screen to seed from (#109).
+     */
+    fun firstLevelBeyond(known: Set<Char>): Int =
+        levels.firstOrNull { level ->
+            level.newItems.any { it.answer.length != 1 || it.answer[0] !in known }
+        }?.number ?: levels.last().number
+
     private fun levelTitle(section: String, newItems: List<MorseItem>): String {
         val labels = newItems.map { it.display }
         val joined = labels.joinToString(" ")
