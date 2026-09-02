@@ -224,7 +224,13 @@ class MidiKeyOutput(private val context: Context) {
     }
 
     private fun sendNow(port: MidiInputPort, message: ByteArray) {
-        try { port.send(message, 0, message.size) } catch (_: Exception) {}
+        try {
+            port.send(message, 0, message.size)
+        } catch (e: Exception) {
+            // Swallowing this silently left "never sent" and "sent and
+            // ignored by the adapter" indistinguishable from outside (#107).
+            android.util.Log.w("MidiKeyOutput", "send failed: ${message.joinToString(" ") { "%02X".format(it) }}", e)
+        }
     }
 
     // ---- Helpers ----

@@ -151,6 +151,22 @@ fun SettingsScreen(onBack: () -> Unit, scope: SettingsMode? = null) {
         context.packageManager.hasSystemFeature(PackageManager.FEATURE_MIDI)
     }
 
+    // Opened from Home there is no module underneath holding the adapter's
+    // port, so a keyer mode picked here had nowhere to go until the next
+    // module opened (#107; #46 fixed the mid-session sheet, which does have a
+    // module underneath). Hold the port for as long as this screen is up —
+    // Home and the modules are exclusive routes, so nobody else has it — and
+    // push changes down it the way a module does. Mid-session the module
+    // keeps its own key; a second client would race it for the port.
+    val homeKey = if (scope == null && midiSupported) remember { HardwareKey(context) } else null
+    if (homeKey != null) {
+        DisposableEffect(homeKey) {
+            homeKey.start(onKey = {}, onConnected = {})
+            onDispose { homeKey.stop() }
+        }
+        AdapterConfigSync(homeKey)
+    }
+
     // Daily reminder: enabling may need the POST_NOTIFICATIONS runtime permission (API 33+).
     val notifPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) {
@@ -715,10 +731,12 @@ private fun BackgroundNoiseSetting() {
  *
  * It still does not open a MIDI port of its own — one owner per device input
  * port, or two clients race to open it. The change reaches a connected adapter
- * because [AdapterKeyer] is observable and the screen underneath this sheet is
- * still composed, so [AdapterConfigSync] pushes it down the port that screen
- * already holds. Storing it and waiting for the next wake, as this used to do,
- * meant the change did nothing until the operator left the module (issue #46).
+ * because [AdapterKeyer] is observable and whoever holds the port is watching
+ * it through [AdapterConfigSync]: mid-session that is the module underneath
+ * this sheet (issue #46); from Home, where no module is composed, it is the
+ * key [SettingsScreen] itself opens for the duration (#107). Storing it and
+ * waiting for the next wake, as this used to do, meant the change did nothing
+ * until the operator left the module — or, from Home, entered one.
  */
 @Composable
 private fun AdapterKeyerSetting(context: android.content.Context) {
