@@ -239,7 +239,7 @@ object Stats {
      * session is much better than losing a year of them. [parseChars] and
      * [parseHistory] do the same, so all three behave alike.
      */
-    internal fun parseRecent(json: String): List<SessionSummary> = run {
+    internal fun parseRecent(json: String): List<SessionSummary> = runCatching {
         val out = ArrayList<SessionSummary>()
         val arr = JSONArray(json)
         for (i in 0 until arr.length()) {
