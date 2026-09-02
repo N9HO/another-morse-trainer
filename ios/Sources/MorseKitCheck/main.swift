@@ -2069,6 +2069,95 @@ if let fx = loadRenderFixture() {
     check("fixtures/render.json loads and decodes", false)
 }
 
+// MARK: - Shared ladder fixture
+//
+// fixtures/ladder.json, read by this harness and by android MorseLadderTest.
+// This is the divergence that made the item: Android threaded opted-in
+// punctuation through the studyOrder ladder while this side added it straight
+// to the active set, so unlocking singles→pairs took 40 characters there and 37
+// here. The ladder is the intended design and this port now follows it.
+struct LadderFixture: Decodable {
+    struct Case: Decodable {
+        let selectedPunctuation: String
+        let studyOrder: String
+        let length: Int
+    }
+    let kochOrder: String
+    let kochOrderLength: Int
+    let pickablePunctuation: String
+    let cases: [Case]
+}
+
+func loadLadderFixture() -> LadderFixture? {
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent()
+        .deletingLastPathComponent().deletingLastPathComponent()
+    guard let data = try? Data(contentsOf: root.appendingPathComponent("fixtures/ladder.json")) else { return nil }
+    return try? JSONDecoder().decode(LadderFixture.self, from: data)
+}
+
+print("\nShared ladder fixture (fixtures/ladder.json):")
+if let fx = loadLadderFixture() {
+    check("Koch order matches the fixture (\(fx.kochOrderLength) characters)",
+          String(MorseCode.kochOrder) == fx.kochOrder
+              && MorseCode.kochOrder.count == fx.kochOrderLength)
+    // Order matters: this list is the sequence punctuation is *taught* in, and
+    // the two ports used to disagree about it.
+    check("pickable punctuation matches the fixture, in order",
+          String(MorseCode.pickablePunctuation) == fx.pickablePunctuation)
+
+    var ordersOK = true
+    for c in fx.cases {
+        let selection = Set(c.selectedPunctuation)
+        let built = MorseCode.studyOrder(withPunctuation: selection)
+        if String(built) != c.studyOrder || built.count != c.length {
+            print("      ↳ selection '\(c.selectedPunctuation)': \(built.count) long, fixture says \(c.length)")
+            ordersOK = false
+        }
+    }
+    check("study order matches the fixture for all \(fx.cases.count) punctuation selections", ordersOK)
+} else {
+    check("fixtures/ladder.json loads and decodes", false)
+}
+
+// The behaviour the fixture is really about: opting punctuation in must put it
+// on the *ladder*, not straight into the drill. Driving the ladder to its first
+// unlock is what shows the difference — 37 characters with no punctuation
+// opted in, 40 with all three, rather than 37 either way.
+print("\nPunctuation joins the ladder, not the active set:")
+func charactersNeededToUnlockPairs(punctuation: Set<Character>) -> Int? {
+    let eng = TrainerEngine(seedCount: 2, rng: SeededRNG(seed: 11))
+    eng.studyOrder = MorseCode.studyOrder(withPunctuation: punctuation)
+    eng.setActiveCharacters(MorseCode.kochOrder)
+    let ladder = ProgressiveCharacters(engine: eng, rng: SeededRNG(seed: 11))
+    for _ in 0..<20000 {
+        let d = ladder.nextDrill()
+        if ladder.record(choice: d.correct, ttr: 0.4).unlocked == ProgressiveCharacters.Stage.pairs.displayName {
+            return eng.activeCharacters.count
+        }
+    }
+    return nil
+}
+
+do {
+    let bare = charactersNeededToUnlockPairs(punctuation: [])
+    let all = charactersNeededToUnlockPairs(punctuation: [".", ",", "/"])
+    check("with no punctuation opted in, singles completes at the Koch core (37)",
+          bare == MorseCode.kochOrder.count)
+    check("with all three opted in, singles is held open until 40 are learned",
+          all == MorseCode.kochOrder.count + 3)
+    if bare != MorseCode.kochOrder.count || all != MorseCode.kochOrder.count + 3 {
+        print("      ↳ unlocked at \(String(describing: bare)) bare, \(String(describing: all)) with punctuation")
+    }
+
+    // And the marks themselves are earned, not granted: a fresh engine with
+    // punctuation on the ladder starts without it in the active set.
+    let fresh = TrainerEngine(seedCount: 2, rng: SeededRNG(seed: 3))
+    fresh.studyOrder = MorseCode.studyOrder(withPunctuation: [".", ",", "/"])
+    check("opting in does not drop the mark straight into the active set",
+          !fresh.activeCharacters.contains(".") && !fresh.activeCharacters.contains(","))
+}
+
 print("\n────────────────────────────")
 if failures == 0 {
     print("✅ All \(checks) checks passed.\n")

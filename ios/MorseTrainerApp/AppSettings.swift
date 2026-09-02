@@ -606,11 +606,25 @@ struct AppSettings: Codable, Equatable {
     }
 
     /// Optional punctuation offered in Settings: (character, display name).
-    static let availablePunctuation: [(symbol: String, name: String)] = [
-        (",", "Comma"),
-        ("/", "Slash"),
-        (".", "Period")
-    ]
+    ///
+    /// Ordered to match `MorseCode.pickablePunctuation`, which is the order the
+    /// ladder introduces them in — the picker and the teaching sequence used to
+    /// disagree, and on this side both disagreed with the Kotlin port.
+    static let availablePunctuation: [(symbol: String, name: String)] =
+        MorseCode.pickablePunctuation.map { ch in
+            switch ch {
+            case ".": return (".", "Period")
+            case ",": return (",", "Comma")
+            default:  return (String(ch), "Slash")
+            }
+        }
+
+    /// The ladder's introduction order for this learner: the Koch core, then
+    /// whichever punctuation they have opted into. Twin of Kotlin's
+    /// `Settings.studyOrder()`.
+    var studyOrder: [Character] {
+        MorseCode.studyOrder(withPunctuation: Set(selectedPunctuation.compactMap { $0.first }))
+    }
 }
 
 // Resilient decoding: any key missing from older saved data falls back to its

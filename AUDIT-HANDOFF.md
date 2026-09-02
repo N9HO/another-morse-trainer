@@ -161,21 +161,41 @@ Not verified by anything: the `AudioTrack` plumbing on Android, and how any of
 it actually sounds. The fixture proves the samples are unchanged; nobody has
 heard them.
 
+## The punctuation divergence, decided
+
+Resolved by the maintainer in favour of **Android's ladder**: opting a
+punctuation mark in adds it to `studyOrder`, so it is introduced only after the
+Koch core and has to be mastered like any other character. iOS was changed to
+match — it used to call `addActiveCharacter` and drop the mark straight into the
+drill, which is why unlocking singles→pairs took 37 characters there and 40 on
+Android.
+
+`MorseCode.studyOrder(...)` now exists on both sides (Kotlin's
+`Settings.studyOrder()` delegates to it, unchanged in behaviour) so the ladder is
+built one way and `fixtures/ladder.json` can pin it. The fixture covers all eight
+punctuation selections, and both ports additionally drive the ladder to its first
+unlock and assert the count — 37 bare, 40 with all three — which is the
+divergence itself rather than a proxy for it.
+
+A second, smaller divergence turned up while doing this and is also fixed: the
+two ports taught punctuation in **different orders**, `. , /` on Android and
+`, / .` in the iOS picker. Android's order is now canonical in
+`MorseCode.pickablePunctuation` on both sides, and the iOS settings list is
+derived from it so the picker and the ladder agree.
+
+**One quirk was ported faithfully rather than fixed:** opting *out* of a mark you
+have already earned does not remove it from the active set, so it keeps being
+drilled. `removeActiveCharacter` exists on both sides and is called by neither.
+That is Android's behaviour and the instruction was to keep the ladder as-is;
+changing it would create a fresh divergence rather than close one. It is worth a
+decision of its own.
+
 ## Still to do
 
 Ordered by value. Each is self-contained. #7 and #8's tooling, and the two audio
 items above, are done; what follows is the remainder.
 
-**1. The punctuation divergence — a product decision, not a code fix.** Android
-threads opted-in punctuation through a `studyOrder` ladder
-(`TrainerEngine.kt:64,188`, `MorseCode.kt:54`, `Settings.kt:422`); iOS hardcodes
-`kochOrder` (`TrainerEngine.swift:174`) and adds punctuation to the active set
-immediately. Consequence: unlocking singles→pairs takes **40** characters on
-Android and **37** on iOS (`ProgressiveCharacters.kt:128` vs `.swift:110`).
-Decide which is intended, then port or remove. Do not "fix" this by making the
-ports share code.
-
-**2. Android session state through process death.** Rotation is handled — see
+**1. Android session state through process death.** Rotation is handled — see
 below — but a backgrounded app that Android reclaims still loses whatever
 session was running, because every screen holds its tally in plain `remember`
 and `Stats.record` only runs from the explicit exits. Ten screens carry that
@@ -190,7 +210,7 @@ Weigh it against the cost before starting: it is ~12 files touched heavily, and
 the emulator smoke test never gets past onboarding. CI would compile it and tell
 you nothing about whether it works.
 
-**3. Test parity — the mechanism is fixed, the coverage is not.**
+**2. Test parity — the mechanism is fixed, the coverage is not.**
 `fixtures/timing.json` now exists and both trees read it (`MorseTimingTest.kt`
 via `org.json`, `MorseKitCheck/main.swift` via `JSONDecoder`), so timing is
 pinned to one set of numbers instead of two hand-copied test files. The drift it
@@ -207,7 +227,7 @@ cover data tables, the CW decoder and the MIDI parser, none of the engine. And
 already there: derive expected values from the spec rather than from either
 implementation, or the fixture just records whatever both ports happen to do.
 
-**4. The app target's 42 concurrency warnings.** `SWIFT_STRICT_CONCURRENCY` is
+**3. The app target's 42 concurrency warnings.** `SWIFT_STRICT_CONCURRENCY` is
 `targeted` on `MorseTrainerApp/`; the package is already at `complete` and
 pinned there. Complete checking on the app reported 43 distinct warnings across
 10 files — 13 non-`Sendable` captures in `@Sendable` closures, 8
@@ -225,7 +245,7 @@ the rest is the path to Swift 6 language mode. Measure with:
 Use a fresh `-derivedDataPath` — an incremental build silently reports a
 fraction of the warnings and looks like good news.
 
-**5. What Android lint found.** Currently 0 errors, 29 warnings, 69 hints.
+**4. What Android lint found.** Currently 0 errors, 29 warnings, 69 hints.
 Nothing latent. Worth acting on: `ListenService.kt:239` guards
 `stopForeground(STOP_FOREGROUND_REMOVE)` behind `SDK_INT >= N` (API 24) while
 `minSdk` *is* 24, so the branch is dead and its `@Suppress("DEPRECATION")`
@@ -238,7 +258,7 @@ version. **The AGP one is a wall, not a nit:** compose-bom 2026.08.00 needs AGP
 9.1 and compileSdk 37, so the Compose pin cannot move past 2026.06.01 until AGP
 9 lands. That is its own piece of work.
 
-**6. Smaller, verified, not urgent.** `Stats.kt:95-97` — `parseRecent` and
+**5. Smaller, verified, not urgent.** `Stats.kt:95-97` — `parseRecent` and
 `parseChars` are unguarded while `parseHistory` is wrapped in `runCatching`, so
 corrupt prefs are an unrecoverable launch crash. `SidetoneGenerator.kt:90` — an
 overshoot guard of the form `a > b && b > a`, provably always false;

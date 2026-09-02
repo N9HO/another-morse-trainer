@@ -54,6 +54,19 @@ object MorseCode {
     val pickablePunctuation: List<Char> = listOf('.', ',', '/')
 
     /**
+     * The ladder's introduction order: the Koch core, then whichever punctuation
+     * the learner has opted into, appended at the end so it is introduced only
+     * after the core set is done.
+     *
+     * Opting in adds a mark to the *ladder*, not to the active set — it still
+     * has to be reached and mastered like any other character. Moved here from
+     * `Settings.studyOrder()` so both ports build it the same way and
+     * `fixtures/ladder.json` can pin it; the behaviour is unchanged.
+     */
+    fun studyOrder(punctuation: Set<Char>): List<Char> =
+        kochOrder + pickablePunctuation.filter { it in punctuation }
+
+    /**
      * Pattern lookup across both the base table and optional punctuation.
      * (`optionalPunctuation + table` so a base entry wins on any key clash,
      * matching the Swift `merging { base, _ in base }`.)

@@ -1,0 +1,54 @@
+{
+  "$comment": "Shared ladder fixture, consumed by BOTH ports: android MorseLadderTest and ios MorseKitCheck. Data, not code \u2014 see CLAUDE.md's two-ports rule.",
+  "derivation": {
+    "kochOrder": "KMRSUAPTLOWINJEF0YVG5Q9ZH38B?427C1D6X",
+    "pickablePunctuation": ".,/",
+    "studyOrder": "kochOrder, then pickablePunctuation filtered to the opted-in set, in pickable order",
+    "note": "This is the divergence that made the item: Android threaded opted-in punctuation through the studyOrder ladder while iOS added it straight to the active set, so unlocking singles->pairs took 40 characters on one port and 37 on the other. The ladder is the intended design. Opting in adds a mark to the LADDER, not to the active set \u2014 it still has to be reached and mastered."
+  },
+  "kochOrder": "KMRSUAPTLOWINJEF0YVG5Q9ZH38B?427C1D6X",
+  "kochOrderLength": 37,
+  "pickablePunctuation": ".,/",
+  "cases": [
+    {
+      "selectedPunctuation": "",
+      "studyOrder": "KMRSUAPTLOWINJEF0YVG5Q9ZH38B?427C1D6X",
+      "length": 37
+    },
+    {
+      "selectedPunctuation": ".",
+      "studyOrder": "KMRSUAPTLOWINJEF0YVG5Q9ZH38B?427C1D6X.",
+      "length": 38
+    },
+    {
+      "selectedPunctuation": ",",
+      "studyOrder": "KMRSUAPTLOWINJEF0YVG5Q9ZH38B?427C1D6X,",
+      "length": 38
+    },
+    {
+      "selectedPunctuation": "/",
+      "studyOrder": "KMRSUAPTLOWINJEF0YVG5Q9ZH38B?427C1D6X/",
+      "length": 38
+    },
+    {
+      "selectedPunctuation": ",.",
+      "studyOrder": "KMRSUAPTLOWINJEF0YVG5Q9ZH38B?427C1D6X.,",
+      "length": 39
+    },
+    {
+      "selectedPunctuation": "./",
+      "studyOrder": "KMRSUAPTLOWINJEF0YVG5Q9ZH38B?427C1D6X./",
+      "length": 39
+    },
+    {
+      "selectedPunctuation": ",/",
+      "studyOrder": "KMRSUAPTLOWINJEF0YVG5Q9ZH38B?427C1D6X,/",
+      "length": 39
+    },
+    {
+      "selectedPunctuation": ",./",
+      "studyOrder": "KMRSUAPTLOWINJEF0YVG5Q9ZH38B?427C1D6X.,/",
+      "length": 40
+    }
+  ]
+}
