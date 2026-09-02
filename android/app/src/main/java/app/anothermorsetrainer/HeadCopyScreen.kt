@@ -26,6 +26,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -77,10 +78,17 @@ fun HeadCopyScreen(onBack: () -> Unit) {
 
     // Session phase: drills, then a summary once the timer runs out or End is
     // tapped. Back mid-session still records — it just skips the summary.
-    var phase by remember { mutableStateOf(HcPhase.RUNNING) }
-    var tally by remember { mutableStateOf(Tally()) }
-    var remaining by remember { mutableStateOf(Settings.practiceDuration.seconds) }
-    var recorded by remember { mutableStateOf(false) }
+    // These are the session itself, so they ride the saved-instance-state
+    // bundle: a process Android reclaims in the background comes back with the
+    // tally, the clock and the phase intact and a fresh drill, instead of
+    // silently dropping the session. (Rotation never recreates the activity —
+    // see android:configChanges in the manifest — so this is only for that.)
+    var phase by rememberSaveable { mutableStateOf(HcPhase.RUNNING) }
+    var tally by rememberSaveable(stateSaver = TallySaver) { mutableStateOf(Tally()) }
+    var remaining by rememberSaveable(stateSaver = OptionalIntSaver) {
+        mutableStateOf<Int?>(Settings.practiceDuration.seconds)
+    }
+    var recorded by rememberSaveable { mutableStateOf(false) }
     var milestone by remember { mutableStateOf<Int?>(null) }
 
     LaunchedEffect(round) {

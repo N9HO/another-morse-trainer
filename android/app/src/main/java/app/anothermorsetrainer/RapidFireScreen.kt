@@ -45,6 +45,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -92,16 +93,17 @@ fun RapidFireScreen(onBack: () -> Unit) {
     val player = remember { MorsePlayer() }
     val haptics = remember { Haptics(context) }
 
-    var phase by remember { mutableStateOf(RfPhase.SETUP) }
+    var phase by rememberSaveable { mutableStateOf(RfPhase.SETUP) }
 
-    // Setup selections (defaults mirror the iOS RapidFireSettings).
-    var content by remember { mutableStateOf(RapidFireContent.CALLSIGNS) }
-    var response by remember { mutableStateOf(RapidFireResponse.TYPE) }
-    var pace by remember { mutableStateOf(RapidFirePace.STEADY) }
-    var wordMin by remember { mutableStateOf(3) }
-    var wordMax by remember { mutableStateOf(6) }
-    var numberCount by remember { mutableStateOf(5) }
-    var usOnly by remember { mutableStateOf(true) }
+    // Setup selections (defaults mirror the iOS RapidFireSettings). Saved with
+    // the instance state, so a reclaimed process comes back to the same setup.
+    var content by rememberSaveable { mutableStateOf(RapidFireContent.CALLSIGNS) }
+    var response by rememberSaveable { mutableStateOf(RapidFireResponse.TYPE) }
+    var pace by rememberSaveable { mutableStateOf(RapidFirePace.STEADY) }
+    var wordMin by rememberSaveable { mutableStateOf(3) }
+    var wordMax by rememberSaveable { mutableStateOf(6) }
+    var numberCount by rememberSaveable { mutableStateOf(5) }
+    var usOnly by rememberSaveable { mutableStateOf(true) }
 
     // Run state.
     var quiz by remember { mutableStateOf<RapidFireQuiz?>(null) }
@@ -111,7 +113,13 @@ fun RapidFireScreen(onBack: () -> Unit) {
     var toneEndedStep by remember { mutableStateOf(-1) }
     var revealBox by remember { mutableStateOf(false) }
     val transcript = remember { mutableStateListOf<RfResult>() }
-    var startedAtMs by remember { mutableStateOf(0L) }
+    var startedAtMs by rememberSaveable { mutableStateOf(0L) }
+    // The run's score, mirrored out of the transcript on every item so it
+    // rides the saved-instance-state bundle. The quiz and the transcript die
+    // with the process; the phase, the start and these do not.
+    var runAttempts by rememberSaveable { mutableStateOf(0) }
+    var runCorrect by rememberSaveable { mutableStateOf(0) }
+    var lastSeenMs by rememberSaveable { mutableStateOf(0L) }
 
     // "Key each one": the straight key + decoder, live only during a keyed run.
     val keyer = remember { SendingKeyer(wpm = Settings.characterWpm, toneHz = Settings.sidetoneHz) }
@@ -156,6 +164,9 @@ fun RapidFireScreen(onBack: () -> Unit) {
         toneEndedStep = -1
         revealBox = response == RapidFireResponse.TYPE
         startedAtMs = System.currentTimeMillis()
+        runAttempts = 0
+        runCorrect = 0
+        lastSeenMs = startedAtMs
         phase = RfPhase.RUNNING
         step = 1
     }
@@ -175,6 +186,24 @@ fun RapidFireScreen(onBack: () -> Unit) {
         phase = RfPhase.SUMMARY
     }
 
+    // A run the system reclaimed mid-way cannot resume — the quiz and the
+    // transcript died with the process — but its score need not die with it.
+    // Close it out from the saved score, exactly as finishRun would have, and
+    // land on setup. A summary whose transcript is gone goes the same way;
+    // that run was recorded when it finished.
+    LaunchedEffect(Unit) {
+        if (quiz != null) return@LaunchedEffect
+        if (phase == RfPhase.RUNNING && response != RapidFireResponse.REVIEW) {
+            Stats.record(
+                mode = "Rapid Fire", attempts = runAttempts, correct = runCorrect,
+                bestTtrMs = null,
+                durationSeconds = ((lastSeenMs - startedAtMs) / 1000L).toInt().coerceAtLeast(0),
+                characterWpm = Settings.characterWpm.roundToInt()
+            )
+        }
+        if (phase != RfPhase.SETUP) phase = RfPhase.SETUP
+    }
+
     // Grade the current item (type/head-copy/keyed) or just log it (review),
     // then stream the next.
     fun advance() {
@@ -189,6 +218,9 @@ fun RapidFireScreen(onBack: () -> Unit) {
             if (Settings.hapticsEnabled) { if (ok) haptics.success() else haptics.error() }
             transcript.add(RfResult(d.correct, typed, ok))
         }
+        runAttempts = transcript.count { it.correct != null }
+        runCorrect = transcript.count { it.correct == true }
+        lastSeenMs = System.currentTimeMillis()
         drill = q.nextDrill()
         typed = ""
         keyer.clear()

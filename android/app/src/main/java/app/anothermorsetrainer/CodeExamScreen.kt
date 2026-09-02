@@ -27,6 +27,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -62,8 +63,11 @@ fun CodeExamScreen(onBack: () -> Unit) {
     val player = remember { MorsePlayer() }
     val haptics = remember { Haptics(context) }
 
-    var speed by remember { mutableStateOf(ExamSpeed.GENERAL13) }
-    var grading by remember { mutableStateOf(ExamGrading.SOLID_COPY) }
+    // The choices ride the saved-instance-state bundle; the exam itself does
+    // not. An exam only reaches Stats when it is graded, so a process reclaimed
+    // mid-passage has nothing to record — it comes back to setup as chosen.
+    var speed by rememberSaveable { mutableStateOf(ExamSpeed.GENERAL13) }
+    var grading by rememberSaveable { mutableStateOf(ExamGrading.SOLID_COPY) }
     var session by remember { mutableStateOf<ExamSession?>(null) }
 
     // Mid-session Settings, drawn over the exam so its state lives on.

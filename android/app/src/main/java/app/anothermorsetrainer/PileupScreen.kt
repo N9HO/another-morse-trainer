@@ -38,6 +38,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -97,14 +98,20 @@ fun PileupScreen(onBack: () -> Unit) {
     val player = remember { MorsePlayer() }
     val haptics = remember { Haptics(context) }
 
-    var phase by remember { mutableStateOf(PuPhase.SETUP) }
+    var phase by rememberSaveable { mutableStateOf(PuPhase.SETUP) }
     var engine by remember { mutableStateOf<PileupEngine?>(null) }
     var input by remember { mutableStateOf("") }
     var reveal by remember { mutableStateOf(false) }
-    var startedAtMs by remember { mutableStateOf(0L) }
+    var startedAtMs by rememberSaveable { mutableStateOf(0L) }
     var endedAtMs by remember { mutableStateOf(0L) }
     // Engine state isn't Compose-observable; the clock also rides this tick.
     var rev by remember { mutableStateOf(0) }
+    // The run's scoreboard, mirrored out of the engine on every action and
+    // clock tick so it rides the saved-instance-state bundle. The engine and
+    // its callers die with the process; the phase, the start and these do not.
+    var runQsos by rememberSaveable { mutableStateOf(0) }
+    var runBusts by rememberSaveable { mutableStateOf(0) }
+    var lastSeenMs by rememberSaveable { mutableStateOf(0L) }
 
     DisposableEffect(Unit) { onDispose { player.release() } }
 
@@ -112,6 +119,33 @@ fun PileupScreen(onBack: () -> Unit) {
         if (startedAtMs == 0L) return 0
         val end = if (endedAtMs > 0L) endedAtMs else System.currentTimeMillis()
         return ((end - startedAtMs) / 1000L).toInt()
+    }
+
+    /** Mirror the engine's score into the saveable scoreboard (see runQsos). */
+    fun syncRun() {
+        val e = engine ?: return
+        runQsos = e.qsoCount
+        runBusts = e.bustCount
+        lastSeenMs = System.currentTimeMillis()
+    }
+
+    // A run the system reclaimed mid-way cannot resume — the engine and its
+    // callers died with the process — but its score need not die with it.
+    // Close it out from the saved scoreboard, exactly as endRun would have,
+    // and land on setup. A summary whose engine is gone goes the same way;
+    // that run was recorded when it ended.
+    LaunchedEffect(Unit) {
+        if (engine != null) return@LaunchedEffect
+        if (phase == PuPhase.RUNNING) {
+            Stats.record(
+                mode = "Pileup",
+                attempts = runQsos + runBusts,
+                correct = runQsos,
+                bestTtrMs = null,
+                durationSeconds = ((lastSeenMs - startedAtMs) / 1000L).toInt().coerceAtLeast(0)
+            )
+        }
+        if (phase != PuPhase.SETUP) phase = PuPhase.SETUP
     }
 
     // Record the run so pileup practice counts toward stats and the streak: a
@@ -138,6 +172,9 @@ fun PileupScreen(onBack: () -> Unit) {
         reveal = false
         startedAtMs = System.currentTimeMillis()
         endedAtMs = 0L
+        runQsos = 0
+        runBusts = 0
+        lastSeenMs = startedAtMs
         rev++
         phase = PuPhase.RUNNING
     }
@@ -170,11 +207,13 @@ fun PileupScreen(onBack: () -> Unit) {
                             player.playPileup(next.voices.map { it.toMix() }, qrn = PileupSettings.qrn.level) {}
                         }
                         rev++
+                        syncRun()
                     }
                 }
             }
         }
         rev++
+        syncRun()
     }
 
     fun submit() {
@@ -199,6 +238,7 @@ fun PileupScreen(onBack: () -> Unit) {
         while (true) {
             delay(1000)
             rev++
+            syncRun()
         }
     }
 

@@ -27,6 +27,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -87,7 +88,9 @@ fun SendingPracticeScreen(onBack: () -> Unit) {
     var toneFinishedAt by remember { mutableStateOf(0L) }
     var keyPressed by remember { mutableStateOf(false) }
 
-    val tally = remember { Tally() }
+    // Saved with the instance state, so a process reclaimed mid-session still
+    // records what it had on the way out; the ladder itself is in EngineStore.
+    val tally = rememberSaveable(saver = TallySaver) { Tally() }
 
     DisposableEffect(Unit) {
         keyer.scope = scope

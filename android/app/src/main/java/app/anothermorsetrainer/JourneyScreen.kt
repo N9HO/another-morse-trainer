@@ -39,6 +39,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -132,7 +133,9 @@ fun JourneyScreen(onBack: () -> Unit) {
     var lastCorrect by remember { mutableStateOf<Boolean?>(null) }
     var clearedLabel by remember { mutableStateOf<String?>(null) }
 
-    val tally = remember { Tally() }
+    // Saved with the instance state, so a process reclaimed mid-session still
+    // records what it had on the way out; the level itself is in JourneyStore.
+    val tally = rememberSaveable(saver = TallySaver) { Tally() }
     val animatedBar by animateFloatAsState(targetValue = barProgress, label = "journeyBar")
 
     LaunchedEffect(round) {
