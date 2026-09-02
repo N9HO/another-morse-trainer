@@ -5,12 +5,20 @@ import os
 /// Generates and plays the sound of a Morse character/word/prosign.
 ///
 /// Design: a single, persistent `AVAudioSourceNode` is wired into the engine
-/// once and left running. Each time we play something we pre-render its samples
-/// (clean sine tones with short raised-cosine ramps so they don't click) and
-/// hand them to the node's render callback, which streams them out and then
-/// emits silence. Because the node never stops and nothing is allocated or
-/// scheduled per-tone, there's no start-of-tone clipping and no interrupt
-/// clicks.
+/// once and left running. Each time we play something we hand the node a
+/// `MorseSynth` — a segment list plus a cursor — and its render callback
+/// *synthesises* the tones (clean sine, short raised-cosine ramps so they don't
+/// click) one sample at a time, then emits silence. Because the node never
+/// stops and nothing is allocated or scheduled per-tone, there's no
+/// start-of-tone clipping and no interrupt clicks.
+///
+/// It used to pre-render the whole sound into a `[Float]` first. A Code Exam at
+/// novice speed is roughly 22 million samples — ~88 MB — built on the main
+/// thread before a single note was heard, which made Story and Exam at slow
+/// effective speeds the app's memory and main-thread hot spot. Streaming costs
+/// a segment list of a few hundred entries whatever the passage length, and the
+/// synthesis maths now lives in MorseKit where `MorseKitCheck` can actually
+/// test it against `fixtures/render.json`.
 ///
 /// The "finished" signal is **time-based** (scheduled for the exact known
 /// duration of the sound) rather than depending on an audio callback, so the
@@ -29,8 +37,20 @@ final class MorsePlayer {
     // safe Swift wrapper (a raw os_unfair_lock accessed via &self.lock is
     // undefined behavior and was crashing the app).
     private struct Playback {
-        var samples: [Float] = []
-        var cursor: Int = 0
+        /// The streaming path. `MorseSynth` walks a segment list a sample at a
+        /// time, so a long passage costs a few hundred segments instead of tens
+        /// of millions of Floats built on the main thread before playback could
+        /// even start. `.silent` has no segments and emits nothing.
+        var synth = MorseSynth.silent
+        var cursor = MorseSynth.Cursor()
+        /// The pileup path, which still materialises: several voices summed,
+        /// each with its own pitch, speed, QSB envelope and gain, plus band
+        /// noise and a peak normalisation over the finished mix. None of that
+        /// can be decided one sample ahead. Pileup transmissions are callsigns
+        /// and short exchanges, so this is bounded by what a pileup *is* —
+        /// unlike Story and Exam, which is where the hot spot actually was.
+        var buffer: [Float] = []
+        var bufferCursor: Int = 0
         /// Continuous background-noise amplitude (issue #29). Non-zero means the
         /// node emits a faint band hiss instead of digital silence between
         /// tones, which both simulates QRN and — the reason it exists — keeps
@@ -78,14 +98,22 @@ final class MorsePlayer {
             }
             let out = abl[0].mData!.assumingMemoryBound(to: Float.self)
             self.state.withLock { play in
-                let count = play.samples.count
-                var c = play.cursor
+                // Exactly one source is live at a time: setSynth and setBuffer
+                // each clear the other, so this is a choice, not a mix.
+                let streaming = play.buffer.isEmpty
+                let count = play.buffer.count
+                var c = play.bufferCursor
                 let level = play.noise
                 var st = play.noiseState
                 var last = play.noiseLast
                 for i in 0..<frames {
                     var v: Float = 0
-                    if c < count { v = play.samples[c]; c += 1 }
+                    if streaming {
+                        // Allocation-free and lock-free inside; see MorseSynth.
+                        v = play.synth.next(&play.cursor)
+                    } else if c < count {
+                        v = play.buffer[c]; c += 1
+                    }
                     if level > 0 {
                         // Cheap LCG white noise, one-pole lowpassed: raw white
                         // hiss is harsh and fatiguing, real band noise is softer.
@@ -99,7 +127,7 @@ final class MorsePlayer {
                     }
                     out[i] = min(1, max(-1, v))
                 }
-                play.cursor = c
+                play.bufferCursor = c
                 play.noiseState = st
                 play.noiseLast = last
             }
@@ -143,7 +171,12 @@ final class MorsePlayer {
     }
 
     func stop() {
-        setSamples([])
+        state.withLock { play in
+            play.synth = MorseSynth.silent
+            play.cursor = MorseSynth.Cursor()
+            play.buffer = []
+            play.bufferCursor = 0
+        }
     }
 
     /// Set the continuous background-noise floor, 0…1 (issue #29). The engine
@@ -174,14 +207,16 @@ final class MorsePlayer {
               timing: MorseTiming,
               onFinished: @escaping () -> Void) {
         activate()
-        let floats = render(playable: playable, timing: timing, frequency: frequency)
-        guard !floats.isEmpty else { onFinished(); return }
+        // Built here, on the calling thread: a few hundred segments, not
+        // millions of samples. The audio thread does the synthesis.
+        let synth = makeSynth(playable: playable, timing: timing, frequency: frequency)
+        guard synth.totalSamples > 0 else { onFinished(); return }
 
         generation += 1
         let token = generation
-        setSamples(floats)
+        setSynth(synth)
 
-        let duration = Double(floats.count) / sampleRate
+        let duration = Double(synth.totalSamples) / sampleRate
         DispatchQueue.main.asyncAfter(deadline: .now() + duration) { [weak self] in
             guard let self, self.generation == token else { return }
             onFinished()
@@ -197,10 +232,10 @@ final class MorsePlayer {
                      frequency: Double,
                      timing: MorseTiming) -> TimeInterval {
         activate()
-        let floats = render(playable: playable, timing: timing, frequency: frequency)
-        guard !floats.isEmpty else { return 0 }
-        setSamples(floats)
-        return Double(floats.count) / sampleRate
+        let synth = makeSynth(playable: playable, timing: timing, frequency: frequency)
+        guard synth.totalSamples > 0 else { return 0 }
+        setSynth(synth)
+        return Double(synth.totalSamples) / sampleRate
     }
 
     // MARK: - Pileup (multiple simultaneous transmissions)
@@ -227,7 +262,7 @@ final class MorsePlayer {
         guard !mixed.isEmpty else { onFinished(); return }
         generation += 1
         let token = generation
-        setSamples(mixed)
+        setBuffer(mixed)
         let duration = Double(mixed.count) / sampleRate
         DispatchQueue.main.asyncAfter(deadline: .now() + duration) { [weak self] in
             guard let self, self.generation == token else { return }
@@ -237,7 +272,7 @@ final class MorsePlayer {
 
     private func mixPileup(_ voices: [PileupVoice], qrn: Float) -> [Float] {
         let rendered = voices.map { v -> (samples: [Float], offset: Int, gain: Float, qsb: Double?) in
-            (render(playable: .text(v.text), timing: v.timing, frequency: v.frequency),
+            (makeSynth(playable: .text(v.text), timing: v.timing, frequency: v.frequency).renderAll(),
              max(0, Int(v.startDelay * sampleRate)), v.gain, v.qsbRate)
         }
         let total = rendered.map { $0.offset + $0.samples.count }.max() ?? 0
@@ -274,103 +309,32 @@ final class MorsePlayer {
         return out
     }
 
-    private func setSamples(_ new: [Float]) {
+    /// Hand the render callback a new program to synthesise, from the start.
+    private func setSynth(_ new: MorseSynth) {
         state.withLock { play in
-            play.samples = new
-            play.cursor = 0
+            play.synth = new
+            play.cursor = MorseSynth.Cursor()
+            play.buffer = []          // the two sources are exclusive
+            play.bufferCursor = 0
         }
     }
 
-    // MARK: - Rendering to float samples
-
-    private func render(playable: MorseItem.Playable,
-                        timing: MorseTiming,
-                        frequency: Double) -> [Float] {
-        let segments = self.segments(for: playable, timing: timing)
-        let fullRamp = max(1, Int(rampSeconds * sampleRate))
-        let omega = 2.0 * Double.pi * frequency / sampleRate
-
-        // Allocate once and fill by index. The previous form grew the array
-        // with per-segment `reserveCapacity` + `append`, so a long Farnsworth
-        // passage (a Code Exam at novice speed is ~22M samples) reallocated
-        // repeatedly and peaked at roughly twice its final size. The counts
-        // here must match the loops below exactly, so both derive from the
-        // same expressions.
-        // max(0, ..) on both counts, matching the `> 0` guards the append form
-        // had: a non-positive duration must contribute nothing, or the sizing
-        // pass and the fill pass below could disagree.
-        var total = 0
-        for segment in segments {
-            total += max(0, Int(segment.tone * sampleRate))
-            total += max(0, Int(segment.gap * sampleRate))
-        }
-        var out = [Float](repeating: 0, count: total)
-        var i = 0
-
-        for segment in segments {
-            let toneCount = Int(segment.tone * sampleRate)
-            if toneCount > 0 {
-                // Never let the rise and fall overlap: past ~120 WPM a dit is
-                // shorter than two 5 ms ramps, and the `else if` below would
-                // then skip the fall entirely and cut the tone off at full
-                // amplitude — a click. Half a tone each way is the ceiling
-                // (issue #79). At every speed the app offers this is the
-                // unchanged 5 ms.
-                let rampSamples = max(1, min(fullRamp, toneCount / 2))
-                for n in 0..<toneCount {
-                    var amp = Double(amplitude)
-                    if n < rampSamples {
-                        amp *= 0.5 * (1 - cos(Double.pi * Double(n) / Double(rampSamples)))
-                    } else if n >= toneCount - rampSamples {
-                        let m = toneCount - n
-                        amp *= 0.5 * (1 - cos(Double.pi * Double(m) / Double(rampSamples)))
-                    }
-                    out[i] = Float(amp * sin(omega * Double(n)))
-                    i += 1
-                }
-            }
-            // Gap samples are already zero in the pre-filled buffer.
-            i += max(0, Int(segment.gap * sampleRate))
-        }
-        return out
-    }
-
-    private func segments(for playable: MorseItem.Playable,
-                          timing: MorseTiming) -> [(tone: Double, gap: Double)] {
-        switch playable {
-        case .pattern(let pattern):
-            let els = pattern.map { $0 == "." ? MorseCode.Element.dit : .dah }
-            return withGaps(els, timing: timing, interElement: timing.elementGap, trailing: 0)
-
-        case .text(let text):
-            let chars = Array(text)
-            var result: [(tone: Double, gap: Double)] = []
-            for (ci, ch) in chars.enumerated() {
-                // A space is a word gap: stretch the previous character's
-                // trailing gap to a full word gap. Only QSO-style multi-word
-                // transmissions contain spaces — single tokens are unaffected.
-                if ch == " " {
-                    if !result.isEmpty { result[result.count - 1].gap = timing.wordGap }
-                    continue
-                }
-                let els = MorseCode.elements(for: ch)
-                guard !els.isEmpty else { continue }
-                let afterChar = ci == chars.count - 1 ? 0 : timing.characterGap
-                result += withGaps(els, timing: timing,
-                                   interElement: timing.elementGap, trailing: afterChar)
-            }
-            return result
+    /// Hand it a pre-mixed buffer instead — the pileup path, which cannot be
+    /// decided a sample ahead.
+    private func setBuffer(_ new: [Float]) {
+        state.withLock { play in
+            play.buffer = new
+            play.bufferCursor = 0
+            play.synth = MorseSynth.silent
+            play.cursor = MorseSynth.Cursor()
         }
     }
 
-    private func withGaps(_ elements: [MorseCode.Element],
-                          timing: MorseTiming,
-                          interElement: TimeInterval,
-                          trailing: TimeInterval) -> [(tone: Double, gap: Double)] {
-        elements.enumerated().map { i, el in
-            let tone = el == .dit ? timing.dit : timing.dah
-            let gap = i == elements.count - 1 ? trailing : interElement
-            return (tone, gap)
-        }
+    private func makeSynth(playable: MorseItem.Playable,
+                           timing: MorseTiming,
+                           frequency: Double) -> MorseSynth {
+        MorseSynth(playable: playable, timing: timing, sampleRate: sampleRate,
+                   frequency: frequency, amplitude: amplitude, rampSeconds: rampSeconds)
     }
+
 }

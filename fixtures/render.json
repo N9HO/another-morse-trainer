@@ -1,0 +1,1536 @@
+{
+  "$comment": "Shared render fixture, consumed by BOTH ports: android MorseSynthTest and ios MorseKitCheck. Data, not code \u2014 see CLAUDE.md's two-ports rule.",
+  "derivation": {
+    "sampleRate": 44100.0,
+    "amplitude": 0.9,
+    "rampSeconds": 0.005,
+    "segments": "seconds * sampleRate, truncated toward zero, once",
+    "envelope": "raised cosine: 0.5*(1-cos(pi*k/ramp)) over ramp = max(1, min(fullRamp, toneSamples/2))",
+    "tone": "amplitude * envelope(n) * sin(2*pi*frequency/sampleRate * n), phase restarting at each tone",
+    "gap": "silence",
+    "note": "Re-implemented from the documented algorithm, not transcribed from either port. It pins the two ports to identical audio and guards the streaming rewrite against changing the sound; it is not a claim about correctness against any external standard.",
+    "toleranceNote": "absSumRelative is 1e-6 because the ports store samples as 32-bit floats while these values are computed in double precision: ~1e-7 relative per sample, accumulated over up to half a million of them. Observed drift is ~3e-8 relative; a real regression (a wrong ramp, a dropped segment) moves the sum by percent, not by parts per billion."
+  },
+  "tolerance": {
+    "sample": 1e-06,
+    "absSumRelative": 1e-06
+  },
+  "cases": [
+    {
+      "playable": "E",
+      "kind": "text",
+      "characterWpm": 20.0,
+      "effectiveWpm": 20.0,
+      "frequency": 600.0,
+      "note": "single dit",
+      "totalSamples": 2646,
+      "segmentSamples": [
+        [
+          2646,
+          0
+        ]
+      ],
+      "absSum": 1389.944114571167,
+      "probes": [
+        {
+          "index": 0,
+          "value": 0.0
+        },
+        {
+          "index": 1,
+          "value": 3.9173553409727565e-06
+        },
+        {
+          "index": 132,
+          "value": -0.5647106302136701
+        },
+        {
+          "index": 264,
+          "value": -0.4909814110894927
+        },
+        {
+          "index": 396,
+          "value": 0.5834055557770098
+        },
+        {
+          "index": 529,
+          "value": 0.8510710316599664
+        },
+        {
+          "index": 661,
+          "value": -0.03845676925342587
+        },
+        {
+          "index": 793,
+          "value": -0.8729550551505759
+        },
+        {
+          "index": 926,
+          "value": -0.5227631426330063
+        },
+        {
+          "index": 1058,
+          "value": 0.5535899609539254
+        },
+        {
+          "index": 1190,
+          "value": 0.8377863737797842
+        },
+        {
+          "index": 1323,
+          "value": -3.9678556292374245e-15
+        },
+        {
+          "index": 1455,
+          "value": -0.8628010677329964
+        },
+        {
+          "index": 1587,
+          "value": -0.49098141108949744
+        },
+        {
+          "index": 1719,
+          "value": 0.5834055557770177
+        },
+        {
+          "index": 1852,
+          "value": 0.8510710316599631
+        },
+        {
+          "index": 1984,
+          "value": -0.038456769253429834
+        },
+        {
+          "index": 2116,
+          "value": -0.8729550551505799
+        },
+        {
+          "index": 2249,
+          "value": -0.5227631426330135
+        },
+        {
+          "index": 2381,
+          "value": 0.5535899609539285
+        },
+        {
+          "index": 2513,
+          "value": 0.5540139208199275
+        },
+        {
+          "index": 2645,
+          "value": -3.917355340973686e-06
+        }
+      ]
+    },
+    {
+      "playable": "O",
+      "kind": "text",
+      "characterWpm": 20.0,
+      "effectiveWpm": 20.0,
+      "frequency": 600.0,
+      "note": "three dahs, inter-element gaps",
+      "totalSamples": 29106,
+      "segmentSamples": [
+        [
+          7938,
+          2646
+        ],
+        [
+          7938,
+          2646
+        ],
+        [
+          7938,
+          0
+        ]
+      ],
+      "absSum": 13265.76408024235,
+      "probes": [
+        {
+          "index": 0,
+          "value": 0.0
+        },
+        {
+          "index": 1,
+          "value": 3.9173553409727565e-06
+        },
+        {
+          "index": 1455,
+          "value": -0.8628010677329964
+        },
+        {
+          "index": 2910,
+          "value": -0.49098141108948345
+        },
+        {
+          "index": 3969,
+          "value": -2.469333613139408e-14
+        },
+        {
+          "index": 4365,
+          "value": 0.5834055557770237
+        },
+        {
+          "index": 5821,
+          "value": 0.8510710316599551
+        },
+        {
+          "index": 7276,
+          "value": -0.03845676925342013
+        },
+        {
+          "index": 7937,
+          "value": -3.917355340971893e-06
+        },
+        {
+          "index": 7938,
+          "value": 0.0
+        },
+        {
+          "index": 8731,
+          "value": 0.0
+        },
+        {
+          "index": 10187,
+          "value": 0.0
+        },
+        {
+          "index": 10583,
+          "value": 0.0
+        },
+        {
+          "index": 10584,
+          "value": 0.0
+        },
+        {
+          "index": 10585,
+          "value": 3.9173553409727565e-06
+        },
+        {
+          "index": 11642,
+          "value": 0.5535899609539254
+        },
+        {
+          "index": 13097,
+          "value": 0.8377863737797826
+        },
+        {
+          "index": 14553,
+          "value": -2.469333613139408e-14
+        },
+        {
+          "index": 16008,
+          "value": -0.8628010677330034
+        },
+        {
+          "index": 17463,
+          "value": -0.49098141108946275
+        },
+        {
+          "index": 18521,
+          "value": -3.917355340971893e-06
+        },
+        {
+          "index": 18522,
+          "value": 0.0
+        },
+        {
+          "index": 18918,
+          "value": 0.0
+        },
+        {
+          "index": 20374,
+          "value": 0.0
+        },
+        {
+          "index": 21167,
+          "value": 0.0
+        },
+        {
+          "index": 21168,
+          "value": 0.0
+        },
+        {
+          "index": 21169,
+          "value": 3.9173553409727565e-06
+        },
+        {
+          "index": 21829,
+          "value": -0.03845676925342587
+        },
+        {
+          "index": 23284,
+          "value": -0.8729550551505799
+        },
+        {
+          "index": 24740,
+          "value": -0.5227631426329999
+        },
+        {
+          "index": 25137,
+          "value": -2.469333613139408e-14
+        },
+        {
+          "index": 26195,
+          "value": 0.5535899609539348
+        },
+        {
+          "index": 27650,
+          "value": 0.8377863737797924
+        },
+        {
+          "index": 29105,
+          "value": -3.917355340971893e-06
+        }
+      ]
+    },
+    {
+      "playable": "SOS",
+      "kind": "text",
+      "characterWpm": 20.0,
+      "effectiveWpm": 20.0,
+      "frequency": 600.0,
+      "note": "character gaps",
+      "totalSamples": 71442,
+      "segmentSamples": [
+        [
+          2646,
+          2646
+        ],
+        [
+          2646,
+          2646
+        ],
+        [
+          2646,
+          7938
+        ],
+        [
+          7938,
+          2646
+        ],
+        [
+          7938,
+          2646
+        ],
+        [
+          7938,
+          7938
+        ],
+        [
+          2646,
+          2646
+        ],
+        [
+          2646,
+          2646
+        ],
+        [
+          2646,
+          0
+        ]
+      ],
+      "absSum": 21605.428767667636,
+      "probes": [
+        {
+          "index": 0,
+          "value": 0.0
+        },
+        {
+          "index": 1,
+          "value": 3.9173553409727565e-06
+        },
+        {
+          "index": 1323,
+          "value": -3.9678556292374245e-15
+        },
+        {
+          "index": 2645,
+          "value": -3.917355340973686e-06
+        },
+        {
+          "index": 2646,
+          "value": 0.0
+        },
+        {
+          "index": 3572,
+          "value": 0.0
+        },
+        {
+          "index": 5291,
+          "value": 0.0
+        },
+        {
+          "index": 5292,
+          "value": 0.0
+        },
+        {
+          "index": 5293,
+          "value": 3.9173553409727565e-06
+        },
+        {
+          "index": 6615,
+          "value": -3.9678556292374245e-15
+        },
+        {
+          "index": 7144,
+          "value": 0.8510710316599631
+        },
+        {
+          "index": 7937,
+          "value": -3.917355340973686e-06
+        },
+        {
+          "index": 7938,
+          "value": 0.0
+        },
+        {
+          "index": 10583,
+          "value": 0.0
+        },
+        {
+          "index": 10584,
+          "value": 0.0
+        },
+        {
+          "index": 10585,
+          "value": 3.9173553409727565e-06
+        },
+        {
+          "index": 10716,
+          "value": -0.5647106302136701
+        },
+        {
+          "index": 11907,
+          "value": -3.9678556292374245e-15
+        },
+        {
+          "index": 13229,
+          "value": -3.917355340973686e-06
+        },
+        {
+          "index": 13230,
+          "value": 0.0
+        },
+        {
+          "index": 14288,
+          "value": 0.0
+        },
+        {
+          "index": 17860,
+          "value": 0.0
+        },
+        {
+          "index": 21167,
+          "value": 0.0
+        },
+        {
+          "index": 21168,
+          "value": 0.0
+        },
+        {
+          "index": 21169,
+          "value": 3.9173553409727565e-06
+        },
+        {
+          "index": 21432,
+          "value": -0.4909814110894927
+        },
+        {
+          "index": 25004,
+          "value": 0.8377863737797858
+        },
+        {
+          "index": 25137,
+          "value": -2.469333613139408e-14
+        },
+        {
+          "index": 28576,
+          "value": -0.87295505515059
+        },
+        {
+          "index": 29105,
+          "value": -3.917355340971893e-06
+        },
+        {
+          "index": 29106,
+          "value": 0.0
+        },
+        {
+          "index": 31751,
+          "value": 0.0
+        },
+        {
+          "index": 32148,
+          "value": 0.5834055557770098
+        },
+        {
+          "index": 35721,
+          "value": -2.469333613139408e-14
+        },
+        {
+          "index": 39293,
+          "value": -0.5227631426330214
+        },
+        {
+          "index": 42865,
+          "value": 0.8510710316599664
+        },
+        {
+          "index": 46437,
+          "value": -0.8628010677330058
+        },
+        {
+          "index": 50009,
+          "value": 0.5535899609539612
+        },
+        {
+          "index": 53581,
+          "value": 0.0
+        },
+        {
+          "index": 57153,
+          "value": 0.0
+        },
+        {
+          "index": 60725,
+          "value": 0.5540139208199275
+        },
+        {
+          "index": 64297,
+          "value": -0.8729550551505759
+        },
+        {
+          "index": 67869,
+          "value": 0.0
+        }
+      ]
+    },
+    {
+      "playable": "...-.-",
+      "kind": "pattern",
+      "characterWpm": 20.0,
+      "effectiveWpm": 20.0,
+      "frequency": 600.0,
+      "note": "prosign, run together, no trailing gap",
+      "totalSamples": 39690,
+      "segmentSamples": [
+        [
+          2646,
+          2646
+        ],
+        [
+          2646,
+          2646
+        ],
+        [
+          2646,
+          2646
+        ],
+        [
+          7938,
+          2646
+        ],
+        [
+          2646,
+          2646
+        ],
+        [
+          7938,
+          0
+        ]
+      ],
+      "absSum": 14403.619178446479,
+      "probes": [
+        {
+          "index": 0,
+          "value": 0.0
+        },
+        {
+          "index": 1,
+          "value": 3.9173553409727565e-06
+        },
+        {
+          "index": 1323,
+          "value": -3.9678556292374245e-15
+        },
+        {
+          "index": 1984,
+          "value": -0.038456769253429834
+        },
+        {
+          "index": 2645,
+          "value": -3.917355340973686e-06
+        },
+        {
+          "index": 2646,
+          "value": 0.0
+        },
+        {
+          "index": 3969,
+          "value": 0.0
+        },
+        {
+          "index": 5291,
+          "value": 0.0
+        },
+        {
+          "index": 5292,
+          "value": 0.0
+        },
+        {
+          "index": 5293,
+          "value": 3.9173553409727565e-06
+        },
+        {
+          "index": 5953,
+          "value": -0.03845676925342587
+        },
+        {
+          "index": 6615,
+          "value": -3.9678556292374245e-15
+        },
+        {
+          "index": 7937,
+          "value": -3.917355340973686e-06
+        },
+        {
+          "index": 7938,
+          "value": 0.0
+        },
+        {
+          "index": 9922,
+          "value": 0.0
+        },
+        {
+          "index": 10583,
+          "value": 0.0
+        },
+        {
+          "index": 10584,
+          "value": 0.0
+        },
+        {
+          "index": 10585,
+          "value": 3.9173553409727565e-06
+        },
+        {
+          "index": 11907,
+          "value": -3.9678556292374245e-15
+        },
+        {
+          "index": 13229,
+          "value": -3.917355340973686e-06
+        },
+        {
+          "index": 13230,
+          "value": 0.0
+        },
+        {
+          "index": 13891,
+          "value": 0.0
+        },
+        {
+          "index": 15875,
+          "value": 0.0
+        },
+        {
+          "index": 15876,
+          "value": 0.0
+        },
+        {
+          "index": 15877,
+          "value": 3.9173553409727565e-06
+        },
+        {
+          "index": 17860,
+          "value": -0.038456769253429834
+        },
+        {
+          "index": 19845,
+          "value": -2.469333613139408e-14
+        },
+        {
+          "index": 21829,
+          "value": -0.038456769253428946
+        },
+        {
+          "index": 23813,
+          "value": -3.917355340971893e-06
+        },
+        {
+          "index": 23814,
+          "value": 0.0
+        },
+        {
+          "index": 25798,
+          "value": 0.0
+        },
+        {
+          "index": 26459,
+          "value": 0.0
+        },
+        {
+          "index": 27783,
+          "value": -3.9678556292374245e-15
+        },
+        {
+          "index": 29767,
+          "value": 0.0
+        },
+        {
+          "index": 31752,
+          "value": 0.0
+        },
+        {
+          "index": 33736,
+          "value": -0.038456769253429834
+        },
+        {
+          "index": 35721,
+          "value": -2.469333613139408e-14
+        },
+        {
+          "index": 37705,
+          "value": -0.038456769253428946
+        }
+      ]
+    },
+    {
+      "playable": "CQ TEST",
+      "kind": "text",
+      "characterWpm": 20.0,
+      "effectiveWpm": 20.0,
+      "frequency": 700.0,
+      "note": "word gap from a space",
+      "totalSamples": 145530,
+      "segmentSamples": [
+        [
+          7938,
+          2646
+        ],
+        [
+          2646,
+          2646
+        ],
+        [
+          7938,
+          2646
+        ],
+        [
+          2646,
+          7938
+        ],
+        [
+          7938,
+          2646
+        ],
+        [
+          7938,
+          2646
+        ],
+        [
+          2646,
+          2646
+        ],
+        [
+          7938,
+          18522
+        ],
+        [
+          7938,
+          7938
+        ],
+        [
+          2646,
+          7938
+        ],
+        [
+          2646,
+          2646
+        ],
+        [
+          2646,
+          2646
+        ],
+        [
+          2646,
+          7938
+        ],
+        [
+          7938,
+          0
+        ]
+      ],
+      "absSum": 40676.17051633628,
+      "probes": [
+        {
+          "index": 0,
+          "value": 0.0
+        },
+        {
+          "index": 1,
+          "value": 4.568237098252268e-06
+        },
+        {
+          "index": 3969,
+          "value": -4.586191781153549e-14
+        },
+        {
+          "index": 7276,
+          "value": 0.04486129709474087
+        },
+        {
+          "index": 7937,
+          "value": -4.568237098259047e-06
+        },
+        {
+          "index": 7938,
+          "value": 0.0
+        },
+        {
+          "index": 10583,
+          "value": 0.0
+        },
+        {
+          "index": 10584,
+          "value": 0.0
+        },
+        {
+          "index": 10585,
+          "value": 4.568237098252268e-06
+        },
+        {
+          "index": 11907,
+          "value": -2.38138187662997e-14
+        },
+        {
+          "index": 13229,
+          "value": -4.568237098254215e-06
+        },
+        {
+          "index": 13230,
+          "value": 0.0
+        },
+        {
+          "index": 14553,
+          "value": 0.0
+        },
+        {
+          "index": 15875,
+          "value": 0.0
+        },
+        {
+          "index": 15876,
+          "value": 0.0
+        },
+        {
+          "index": 15877,
+          "value": 4.568237098252268e-06
+        },
+        {
+          "index": 19845,
+          "value": -4.586191781153549e-14
+        },
+        {
+          "index": 21829,
+          "value": 0.04486129709464044
+        },
+        {
+          "index": 23813,
+          "value": -4.568237098259047e-06
+        },
+        {
+          "index": 23814,
+          "value": 0.0
+        },
+        {
+          "index": 26459,
+          "value": 0.0
+        },
+        {
+          "index": 26460,
+          "value": 0.0
+        },
+        {
+          "index": 26461,
+          "value": 4.568237098252268e-06
+        },
+        {
+          "index": 27783,
+          "value": -2.38138187662997e-14
+        },
+        {
+          "index": 29105,
+          "value": -4.568237098254215e-06
+        },
+        {
+          "index": 29106,
+          "value": 0.0
+        },
+        {
+          "index": 36382,
+          "value": 0.0
+        },
+        {
+          "index": 37043,
+          "value": 0.0
+        },
+        {
+          "index": 43659,
+          "value": -9.34895553441349e-14
+        },
+        {
+          "index": 50935,
+          "value": 0.044861297094643975
+        },
+        {
+          "index": 58212,
+          "value": 0.0
+        },
+        {
+          "index": 65488,
+          "value": 0.04486129709464573
+        },
+        {
+          "index": 72765,
+          "value": 0.0
+        },
+        {
+          "index": 80041,
+          "value": 0.0
+        },
+        {
+          "index": 87318,
+          "value": 0.0
+        },
+        {
+          "index": 94594,
+          "value": 0.0448612970946933
+        },
+        {
+          "index": 101871,
+          "value": 0.0
+        },
+        {
+          "index": 109147,
+          "value": 0.0
+        },
+        {
+          "index": 116424,
+          "value": 0.0
+        },
+        {
+          "index": 123700,
+          "value": 0.04486129709464573
+        },
+        {
+          "index": 130977,
+          "value": 0.0
+        },
+        {
+          "index": 138253,
+          "value": 0.044861297094634725
+        }
+      ]
+    },
+    {
+      "playable": "PARIS",
+      "kind": "text",
+      "characterWpm": 33.0,
+      "effectiveWpm": 8.0,
+      "frequency": 600.0,
+      "note": "Farnsworth: stretched gaps, full-speed characters",
+      "totalSamples": 227193,
+      "segmentSamples": [
+        [
+          1603,
+          1603
+        ],
+        [
+          4810,
+          1603
+        ],
+        [
+          4810,
+          1603
+        ],
+        [
+          1603,
+          44374
+        ],
+        [
+          1603,
+          1603
+        ],
+        [
+          4810,
+          44374
+        ],
+        [
+          1603,
+          1603
+        ],
+        [
+          4810,
+          1603
+        ],
+        [
+          1603,
+          44374
+        ],
+        [
+          1603,
+          1603
+        ],
+        [
+          1603,
+          44374
+        ],
+        [
+          1603,
+          1603
+        ],
+        [
+          1603,
+          1603
+        ],
+        [
+          1603,
+          0
+        ]
+      ],
+      "absSum": 18442.669650219577,
+      "probes": [
+        {
+          "index": 0,
+          "value": 0.0
+        },
+        {
+          "index": 1,
+          "value": 3.9173553409727565e-06
+        },
+        {
+          "index": 801,
+          "value": -0.538299477442092
+        },
+        {
+          "index": 1602,
+          "value": -4.3984300161895025e-05
+        },
+        {
+          "index": 1603,
+          "value": 0.0
+        },
+        {
+          "index": 3205,
+          "value": 0.0
+        },
+        {
+          "index": 3206,
+          "value": 0.0
+        },
+        {
+          "index": 3207,
+          "value": 3.9173553409727565e-06
+        },
+        {
+          "index": 5611,
+          "value": -0.8851911670894936
+        },
+        {
+          "index": 8015,
+          "value": 1.9906866133314964e-05
+        },
+        {
+          "index": 8016,
+          "value": 0.0
+        },
+        {
+          "index": 9618,
+          "value": 0.0
+        },
+        {
+          "index": 9619,
+          "value": 0.0
+        },
+        {
+          "index": 9620,
+          "value": 3.9173553409727565e-06
+        },
+        {
+          "index": 11359,
+          "value": -0.7979393757357011
+        },
+        {
+          "index": 12024,
+          "value": -0.8851911670894936
+        },
+        {
+          "index": 14428,
+          "value": 1.9906866133314964e-05
+        },
+        {
+          "index": 14429,
+          "value": 0.0
+        },
+        {
+          "index": 16031,
+          "value": 0.0
+        },
+        {
+          "index": 16032,
+          "value": 0.0
+        },
+        {
+          "index": 16033,
+          "value": 3.9173553409727565e-06
+        },
+        {
+          "index": 16833,
+          "value": -0.538299477442092
+        },
+        {
+          "index": 17634,
+          "value": -4.3984300161895025e-05
+        },
+        {
+          "index": 17635,
+          "value": 0.0
+        },
+        {
+          "index": 22719,
+          "value": 0.0
+        },
+        {
+          "index": 34078,
+          "value": 0.0
+        },
+        {
+          "index": 45438,
+          "value": 0.0
+        },
+        {
+          "index": 56798,
+          "value": 0.0
+        },
+        {
+          "index": 62008,
+          "value": 0.0
+        },
+        {
+          "index": 68157,
+          "value": 0.15312537028495588
+        },
+        {
+          "index": 79517,
+          "value": 0.0
+        },
+        {
+          "index": 90877,
+          "value": 0.0
+        },
+        {
+          "index": 102236,
+          "value": 0.0
+        },
+        {
+          "index": 113596,
+          "value": 0.0
+        },
+        {
+          "index": 124956,
+          "value": -0.897483417463062
+        },
+        {
+          "index": 136315,
+          "value": 0.0
+        },
+        {
+          "index": 147675,
+          "value": 0.0
+        },
+        {
+          "index": 159035,
+          "value": 0.0
+        },
+        {
+          "index": 170394,
+          "value": 0.3904953652058034
+        },
+        {
+          "index": 181754,
+          "value": 0.0
+        },
+        {
+          "index": 193114,
+          "value": 0.0
+        },
+        {
+          "index": 204473,
+          "value": 0.0
+        },
+        {
+          "index": 215833,
+          "value": 0.0
+        }
+      ]
+    },
+    {
+      "playable": "HELLO",
+      "kind": "text",
+      "characterWpm": 5.0,
+      "effectiveWpm": 5.0,
+      "frequency": 400.0,
+      "note": "slowest speed the app offers",
+      "totalSamples": 518616,
+      "segmentSamples": [
+        [
+          10584,
+          10584
+        ],
+        [
+          10584,
+          10584
+        ],
+        [
+          10584,
+          10584
+        ],
+        [
+          10584,
+          31752
+        ],
+        [
+          10584,
+          31752
+        ],
+        [
+          10584,
+          10584
+        ],
+        [
+          31752,
+          10584
+        ],
+        [
+          10584,
+          10584
+        ],
+        [
+          10584,
+          31752
+        ],
+        [
+          10584,
+          10584
+        ],
+        [
+          31752,
+          10584
+        ],
+        [
+          10584,
+          10584
+        ],
+        [
+          10584,
+          31752
+        ],
+        [
+          31752,
+          10584
+        ],
+        [
+          31752,
+          10584
+        ],
+        [
+          31752,
+          0
+        ]
+      ],
+      "absSum": 155651.57614489278,
+      "probes": [
+        {
+          "index": 0,
+          "value": 0.0
+        },
+        {
+          "index": 1,
+          "value": 2.6133385554892905e-06
+        },
+        {
+          "index": 5292,
+          "value": -1.0580948344633132e-14
+        },
+        {
+          "index": 10583,
+          "value": -2.613338555491587e-06
+        },
+        {
+          "index": 10584,
+          "value": 0.0
+        },
+        {
+          "index": 21167,
+          "value": 0.0
+        },
+        {
+          "index": 21168,
+          "value": 0.0
+        },
+        {
+          "index": 21169,
+          "value": 2.6133385554892905e-06
+        },
+        {
+          "index": 25930,
+          "value": 0.8423858888569836
+        },
+        {
+          "index": 26460,
+          "value": -1.0580948344633132e-14
+        },
+        {
+          "index": 31751,
+          "value": -2.613338555491587e-06
+        },
+        {
+          "index": 31752,
+          "value": 0.0
+        },
+        {
+          "index": 42335,
+          "value": 0.0
+        },
+        {
+          "index": 42336,
+          "value": 0.0
+        },
+        {
+          "index": 42337,
+          "value": 2.6133385554892905e-06
+        },
+        {
+          "index": 47628,
+          "value": -1.0580948344633132e-14
+        },
+        {
+          "index": 51861,
+          "value": 0.5535899609539279
+        },
+        {
+          "index": 52919,
+          "value": -2.613338555491587e-06
+        },
+        {
+          "index": 52920,
+          "value": 0.0
+        },
+        {
+          "index": 63503,
+          "value": 0.0
+        },
+        {
+          "index": 63504,
+          "value": 0.0
+        },
+        {
+          "index": 63505,
+          "value": 2.6133385554892905e-06
+        },
+        {
+          "index": 68796,
+          "value": -1.0580948344633132e-14
+        },
+        {
+          "index": 74087,
+          "value": -2.613338555491587e-06
+        },
+        {
+          "index": 74088,
+          "value": 0.0
+        },
+        {
+          "index": 77792,
+          "value": 0.0
+        },
+        {
+          "index": 103723,
+          "value": 0.0
+        },
+        {
+          "index": 105839,
+          "value": 0.0
+        },
+        {
+          "index": 129654,
+          "value": 0.0
+        },
+        {
+          "index": 155584,
+          "value": 0.8423858888569817
+        },
+        {
+          "index": 181515,
+          "value": 0.5535899609539723
+        },
+        {
+          "index": 207446,
+          "value": 0.0
+        },
+        {
+          "index": 233377,
+          "value": -0.8590651729933356
+        },
+        {
+          "index": 259308,
+          "value": 0.0
+        },
+        {
+          "index": 285238,
+          "value": 0.8423858888569798
+        },
+        {
+          "index": 311169,
+          "value": 0.5535899609539361
+        },
+        {
+          "index": 337100,
+          "value": 0.0
+        },
+        {
+          "index": 363031,
+          "value": -0.8590651729933343
+        },
+        {
+          "index": 388962,
+          "value": 0.0
+        },
+        {
+          "index": 414892,
+          "value": 0.842385888856996
+        },
+        {
+          "index": 440823,
+          "value": 0.0
+        },
+        {
+          "index": 466754,
+          "value": -0.5122725015807073
+        },
+        {
+          "index": 492685,
+          "value": -0.8590651729933435
+        }
+      ]
+    },
+    {
+      "playable": "E",
+      "kind": "text",
+      "characterWpm": 150.0,
+      "effectiveWpm": 150.0,
+      "frequency": 600.0,
+      "note": "ramp clamped to half the tone (issue #79)",
+      "totalSamples": 352,
+      "segmentSamples": [
+        [
+          352,
+          0
+        ]
+      ],
+      "absSum": 100.83152270706314,
+      "probes": [
+        {
+          "index": 0,
+          "value": 0.0
+        },
+        {
+          "index": 1,
+          "value": 6.120809213181112e-06
+        },
+        {
+          "index": 17,
+          "value": 0.020417970573501917
+        },
+        {
+          "index": 35,
+          "value": 0.012668652191684391
+        },
+        {
+          "index": 52,
+          "value": -0.17392877922258557
+        },
+        {
+          "index": 70,
+          "value": -0.0907522253480458
+        },
+        {
+          "index": 88,
+          "value": 0.42553551582998383
+        },
+        {
+          "index": 105,
+          "value": 0.25359036020047515
+        },
+        {
+          "index": 123,
+          "value": -0.632324396735331
+        },
+        {
+          "index": 140,
+          "value": -0.4564264483725563
+        },
+        {
+          "index": 158,
+          "value": 0.7083817266021947
+        },
+        {
+          "index": 176,
+          "value": 0.5535899609539182
+        },
+        {
+          "index": 193,
+          "value": -0.6251717024827563
+        },
+        {
+          "index": 211,
+          "value": -0.5914794763115094
+        },
+        {
+          "index": 228,
+          "value": 0.4304451660839352
+        },
+        {
+          "index": 246,
+          "value": 0.4856320414673826
+        },
+        {
+          "index": 264,
+          "value": -0.24549070554474628
+        },
+        {
+          "index": 281,
+          "value": -0.282807045379425
+        },
+        {
+          "index": 299,
+          "value": 0.07743359557026162
+        },
+        {
+          "index": 316,
+          "value": 0.08548122096473823
+        },
+        {
+          "index": 334,
+          "value": -0.006315924780045032
+        },
+        {
+          "index": 351,
+          "value": -7.076891369716774e-05
+        }
+      ]
+    }
+  ]
+}

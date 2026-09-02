@@ -1944,6 +1944,131 @@ if let fx = loadTimingFixture() {
     check("fixtures/timing.json loads and decodes", false)
 }
 
+// MARK: - Shared render fixture
+//
+// fixtures/render.json, read by this harness and by android MorseSynthTest.
+// It exists to guard the streaming rewrite: MorseSynth walks a segment list a
+// sample at a time instead of materialising the whole sound, and the one thing
+// that must not change is what it sounds like. The expected values are
+// re-implemented from the documented algorithm rather than captured from either
+// port, so they pin the two together as well as pinning them still.
+struct RenderFixture: Decodable {
+    struct Tolerance: Decodable { let sample: Double; let absSumRelative: Double }
+    struct Probe: Decodable { let index: Int; let value: Double }
+    struct Case: Decodable {
+        let playable: String
+        let kind: String
+        let characterWpm, effectiveWpm, frequency: Double
+        let note: String
+        let totalSamples: Int
+        let segmentSamples: [[Int]]
+        let absSum: Double
+        let probes: [Probe]
+    }
+    struct Derivation: Decodable { let sampleRate: Double; let amplitude: Double; let rampSeconds: Double }
+    let derivation: Derivation
+    let tolerance: Tolerance
+    let cases: [Case]
+}
+
+func loadRenderFixture() -> RenderFixture? {
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent()
+        .deletingLastPathComponent().deletingLastPathComponent()
+    guard let data = try? Data(contentsOf: root.appendingPathComponent("fixtures/render.json")) else { return nil }
+    return try? JSONDecoder().decode(RenderFixture.self, from: data)
+}
+
+print("\nShared render fixture (fixtures/render.json):")
+if let fx = loadRenderFixture() {
+    let sr = fx.derivation.sampleRate
+    var allOK = true
+
+    for c in fx.cases {
+        let playable: MorseItem.Playable = c.kind == "pattern" ? .pattern(c.playable) : .text(c.playable)
+        let timing = c.effectiveWpm < c.characterWpm
+            ? MorseTiming(characterWpm: c.characterWpm, effectiveWpm: c.effectiveWpm)
+            : MorseTiming(wpm: c.characterWpm)
+        let synth = MorseSynth(playable: playable, timing: timing,
+                               sampleRate: sr, frequency: c.frequency,
+                               amplitude: Float(fx.derivation.amplitude),
+                               rampSeconds: fx.derivation.rampSeconds)
+        let label = "\(c.kind) '\(c.playable)' @ \(c.characterWpm)/\(c.effectiveWpm)"
+
+        guard synth.totalSamples == c.totalSamples else {
+            print("      ↳ \(label): \(synth.totalSamples) samples, fixture says \(c.totalSamples)")
+            allOK = false
+            continue
+        }
+        guard synth.segments.count == c.segmentSamples.count else {
+            print("      ↳ \(label): \(synth.segments.count) segments, fixture says \(c.segmentSamples.count)")
+            allOK = false
+            continue
+        }
+        for (i, expected) in c.segmentSamples.enumerated()
+        where synth.segments[i].toneSamples != expected[0] || synth.segments[i].gapSamples != expected[1] {
+            print("      ↳ \(label): segment \(i) is \(synth.segments[i]), fixture says \(expected)")
+            allOK = false
+        }
+
+        // Walk once, checking probes on the way past and accumulating the
+        // whole-signal sum — a probe set can miss a regression between probes,
+        // the sum cannot.
+        var cursor = MorseSynth.Cursor()
+        var probeIndex = 0
+        var absSum = 0.0
+        for i in 0..<synth.totalSamples {
+            let v = synth.next(&cursor)
+            absSum += abs(Double(v))
+            if probeIndex < c.probes.count, c.probes[probeIndex].index == i {
+                if abs(Double(v) - c.probes[probeIndex].value) > fx.tolerance.sample {
+                    print("      ↳ \(label): sample \(i) is \(v), fixture says \(c.probes[probeIndex].value)")
+                    allOK = false
+                }
+                probeIndex += 1
+            }
+        }
+        if probeIndex != c.probes.count {
+            print("      ↳ \(label): only \(probeIndex) of \(c.probes.count) probes were reached")
+            allOK = false
+        }
+        if abs(absSum - c.absSum) > max(1e-6, c.absSum * fx.tolerance.absSumRelative) {
+            print("      ↳ \(label): |sum| \(absSum), fixture says \(c.absSum)")
+            allOK = false
+        }
+        // The cursor must land exactly at the end: not short, not still going.
+        if !synth.isFinished(cursor) {
+            print("      ↳ \(label): cursor did not finish after totalSamples")
+            allOK = false
+        }
+    }
+    check("streaming synthesis matches the fixture across \(fx.cases.count) cases", allOK)
+
+    // Duration is the property the quiz loop's completion timer depends on, so
+    // pin it against the timing model rather than only against the fixture.
+    var durationOK = true
+    for c in fx.cases where c.kind == "text" && !c.playable.contains(" ") {
+        let timing = c.effectiveWpm < c.characterWpm
+            ? MorseTiming(characterWpm: c.characterWpm, effectiveWpm: c.effectiveWpm)
+            : MorseTiming(wpm: c.characterWpm)
+        let synth = MorseSynth(playable: .text(c.playable), timing: timing,
+                               sampleRate: sr, frequency: c.frequency)
+        var expected = 0.0
+        for ch in c.playable { expected += timing.duration(of: ch) }
+        expected += Double(c.playable.count - 1) * timing.characterGap
+        // Every segment truncates twice on the way to samples — its tone and
+        // its gap — so the slack is two samples per segment, not one.
+        let slack = 2 * Double(synth.segments.count) / sr
+        if abs(Double(synth.totalSamples) / sr - expected) > slack {
+            print("      ↳ '\(c.playable)' runs \(Double(synth.totalSamples) / sr)s, timing says \(expected)s")
+            durationOK = false
+        }
+    }
+    check("rendered duration agrees with the timing model", durationOK)
+} else {
+    check("fixtures/render.json loads and decodes", false)
+}
+
 print("\n────────────────────────────")
 if failures == 0 {
     print("✅ All \(checks) checks passed.\n")

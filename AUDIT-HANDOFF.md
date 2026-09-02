@@ -130,20 +130,43 @@ even though the session running there does not. An unrecognised tag restores as
 files instead of twelve, in a codebase nobody can run locally. What it does not
 buy is process death, which is item 3 below.
 
+## Streaming synthesis
+
+The audio is no longer pre-rendered. `MorseSynth` (in `MorseKit` and `morsekit`)
+walks a segment list a sample at a time, so a passage costs a few hundred
+segments instead of ~22 million samples — and on Android that array was also
+blocking-written to a `MODE_STATIC` track from the main thread. iOS synthesises
+in the existing `AVAudioSourceNode` callback; Android runs one persistent
+`MODE_STREAM` track and one feeder thread, the shape `SidetoneGenerator` and
+`BackgroundNoise` already used.
+
+Two things to know before touching it:
+
+- **The pileup path still materialises, on purpose.** Several voices summed,
+  each with its own pitch, speed, QSB envelope and gain, then band noise and a
+  peak normalisation over the finished mix — none decidable one sample ahead.
+  Pileups are callsigns and short exchanges, so it is bounded by what a pileup
+  *is*. Do not "finish the job" by streaming it.
+- **`fixtures/render.json` is what makes this safe to change.** It pins segment
+  lengths, total samples, probe values and a whole-signal sum for 8 cases on
+  both ports. Regenerate it only when you *intend* the sound to change, and say
+  so — otherwise it is the thing standing between a refactor and a silent
+  regression nobody can hear in CI.
+
+Moving the maths into MorseKit/morsekit is also what made it testable at all: in
+the app targets it was unreachable by `MorseKitCheck` and by any Kotlin test,
+which is why it had never been pinned.
+
+Not verified by anything: the `AudioTrack` plumbing on Android, and how any of
+it actually sounds. The fixture proves the samples are unchanged; nobody has
+heard them.
+
 ## Still to do
 
 Ordered by value. Each is self-contained. #7 and #8's tooling, and the two audio
 items above, are done; what follows is the remainder.
 
-**1. Stream the audio instead of pre-rendering it.** The buffers are sized once
-rather than grown, but a long Farnsworth passage is still tens of millions of
-samples materialized on the main thread before playback starts. The real fix is
-to synthesize in the render callback from the segment list (iOS already keeps a
-persistent `AVAudioSourceNode`) or feed a `MODE_STREAM` `AudioTrack` from a
-background thread (Android). Until then, Story and Exam modes at slow effective
-speeds remain the memory and main-thread hot spot. Two edits, one per tree.
-
-**2. The punctuation divergence — a product decision, not a code fix.** Android
+**1. The punctuation divergence — a product decision, not a code fix.** Android
 threads opted-in punctuation through a `studyOrder` ladder
 (`TrainerEngine.kt:64,188`, `MorseCode.kt:54`, `Settings.kt:422`); iOS hardcodes
 `kochOrder` (`TrainerEngine.swift:174`) and adds punctuation to the active set
@@ -152,7 +175,7 @@ Android and **37** on iOS (`ProgressiveCharacters.kt:128` vs `.swift:110`).
 Decide which is intended, then port or remove. Do not "fix" this by making the
 ports share code.
 
-**3. Android session state through process death.** Rotation is handled — see
+**2. Android session state through process death.** Rotation is handled — see
 below — but a backgrounded app that Android reclaims still loses whatever
 session was running, because every screen holds its tally in plain `remember`
 and `Stats.record` only runs from the explicit exits. Ten screens carry that
@@ -167,7 +190,7 @@ Weigh it against the cost before starting: it is ~12 files touched heavily, and
 the emulator smoke test never gets past onboarding. CI would compile it and tell
 you nothing about whether it works.
 
-**4. Test parity — the mechanism is fixed, the coverage is not.**
+**3. Test parity — the mechanism is fixed, the coverage is not.**
 `fixtures/timing.json` now exists and both trees read it (`MorseTimingTest.kt`
 via `org.json`, `MorseKitCheck/main.swift` via `JSONDecoder`), so timing is
 pinned to one set of numbers instead of two hand-copied test files. The drift it
@@ -184,7 +207,7 @@ cover data tables, the CW decoder and the MIDI parser, none of the engine. And
 already there: derive expected values from the spec rather than from either
 implementation, or the fixture just records whatever both ports happen to do.
 
-**5. The app target's 42 concurrency warnings.** `SWIFT_STRICT_CONCURRENCY` is
+**4. The app target's 42 concurrency warnings.** `SWIFT_STRICT_CONCURRENCY` is
 `targeted` on `MorseTrainerApp/`; the package is already at `complete` and
 pinned there. Complete checking on the app reported 43 distinct warnings across
 10 files — 13 non-`Sendable` captures in `@Sendable` closures, 8
@@ -202,7 +225,7 @@ the rest is the path to Swift 6 language mode. Measure with:
 Use a fresh `-derivedDataPath` — an incremental build silently reports a
 fraction of the warnings and looks like good news.
 
-**6. What Android lint found.** Currently 0 errors, 29 warnings, 69 hints.
+**5. What Android lint found.** Currently 0 errors, 29 warnings, 69 hints.
 Nothing latent. Worth acting on: `ListenService.kt:239` guards
 `stopForeground(STOP_FOREGROUND_REMOVE)` behind `SDK_INT >= N` (API 24) while
 `minSdk` *is* 24, so the branch is dead and its `@Suppress("DEPRECATION")`
@@ -215,7 +238,7 @@ version. **The AGP one is a wall, not a nit:** compose-bom 2026.08.00 needs AGP
 9.1 and compileSdk 37, so the Compose pin cannot move past 2026.06.01 until AGP
 9 lands. That is its own piece of work.
 
-**7. Smaller, verified, not urgent.** `Stats.kt:95-97` — `parseRecent` and
+**6. Smaller, verified, not urgent.** `Stats.kt:95-97` — `parseRecent` and
 `parseChars` are unguarded while `parseHistory` is wrapped in `runCatching`, so
 corrupt prefs are an unrecoverable launch crash. `SidetoneGenerator.kt:90` — an
 overshoot guard of the form `a > b && b > a`, provably always false;
