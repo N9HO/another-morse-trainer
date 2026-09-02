@@ -50,6 +50,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.core.content.ContextCompat
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -183,7 +184,7 @@ fun SettingsScreen(onBack: () -> Unit, scope: SettingsMode? = null) {
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        TextButton(onClick = onBack, modifier = Modifier.padding(8.dp)) { Text("‹ Back", color = Brand.teal) }
+        TextButton(onClick = onBack, modifier = Modifier.padding(8.dp)) { Text(stringResource(R.string.common_back), color = Brand.teal) }
 
         CenteredContent {
             Column(
@@ -193,7 +194,7 @@ fun SettingsScreen(onBack: () -> Unit, scope: SettingsMode? = null) {
                     .padding(horizontal = 20.dp)
             ) {
                 Text(
-                    "Settings",
+                    stringResource(R.string.common_settings),
                     style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.Bold,
                     color = Brand.textPrimary,
@@ -201,7 +202,7 @@ fun SettingsScreen(onBack: () -> Unit, scope: SettingsMode? = null) {
                 )
                 if (scope != null) {
                     Text(
-                        "Showing what applies here — the full settings live on the home screen.",
+                        stringResource(R.string.settings_scoped_note),
                         color = Brand.textSecondary,
                         fontSize = 12.sp,
                         modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
@@ -209,13 +210,13 @@ fun SettingsScreen(onBack: () -> Unit, scope: SettingsMode? = null) {
                 }
 
                 if (scope == null || scope !in OWN_SPEED_MODES) {
-                    SectionHeader("Speed")
+                    SectionHeader(stringResource(R.string.common_speed))
                     SettingsGroup {
                         val minWpm = Settings.MIN_CHARACTER_WPM.toFloat()
                         val maxWpm = Settings.MAX_CHARACTER_WPM.toFloat()
                         SliderSetting(
-                            label = "Character speed",
-                            value = "${Settings.characterWpm.roundToInt()} WPM",
+                            label = stringResource(R.string.settings_character_speed),
+                            value = stringResource(R.string.common_wpm_value, Settings.characterWpm.roundToInt()),
                             position = Settings.characterWpm.toFloat(),
                             range = minWpm..maxWpm, steps = wholeWpmSteps(minWpm, maxWpm),
                             onChange = { Settings.updateCharacterWpm(it.toDouble()) }
@@ -227,42 +228,34 @@ fun SettingsScreen(onBack: () -> Unit, scope: SettingsMode? = null) {
                         // (issue #79).
                         val maxFarnsworth = maxOf(minWpm + 1f, Settings.characterWpm.toFloat())
                         SliderSetting(
-                            label = "Farnsworth speed",
-                            value = if (farnsworthOn) "${Settings.effectiveWpm.roundToInt()} WPM" else "Off",
+                            label = stringResource(R.string.settings_farnsworth_speed),
+                            value = if (farnsworthOn) stringResource(R.string.common_wpm_value, Settings.effectiveWpm.roundToInt()) else stringResource(R.string.common_off),
                             position = Settings.effectiveWpm.toFloat(),
                             range = minWpm..maxFarnsworth, steps = wholeWpmSteps(minWpm, maxFarnsworth),
                             onChange = { Settings.updateEffectiveWpm(it.toDouble()) }
                         )
                     }
                     val qrqNote = if (Settings.characterWpm >= 40) {
-                        "\n\nQRQ territory — ${Settings.characterWpm.roundToInt()} WPM. " +
-                            "Great for pushing instant recognition once 30+ feels comfortable."
+                        stringResource(R.string.settings_qrq_note, Settings.characterWpm.roundToInt())
                     } else ""
                     SectionFooter(
-                        "Character speed is how fast the dits and dahs are sent. Farnsworth " +
-                            "stretches the gaps between characters (set it below the character " +
-                            "speed) to give you more time to recognise each one." + qrqNote
+                        stringResource(R.string.settings_speed_footer) + qrqNote
                     )
                     // Twin of the iOS warning: slowing the characters is the one
                     // adjustment that works against the method, so say so rather
                     // than letting it pass silently.
                     if (Settings.characterWpm < KOCH_MIN_WPM) {
                         SpeedWarning(
-                            "Below ${KOCH_MIN_WPM.toInt()} WPM it's easy to start counting the dits and dahs " +
-                                "instead of hearing each character as a single sound. Training at " +
-                                "${KOCH_MIN_WPM.toInt()}+ WPM builds instant, by-ear recognition, which is the " +
-                                "whole point of the Koch method. If you need more time to answer, " +
-                                "raise \"Recognition target\" or lower the Farnsworth speed instead of " +
-                                "slowing the code."
+                            stringResource(R.string.settings_speed_warning, KOCH_MIN_WPM.toInt(), KOCH_MIN_WPM.toInt())
                         )
                     }
                 }
 
-                SectionHeader("Sound")
+                SectionHeader(stringResource(R.string.settings_sound))
                 SettingsGroup {
                     SliderSetting(
-                        label = "Sidetone pitch",
-                        value = "${Settings.sidetoneHz.roundToInt()} Hz",
+                        label = stringResource(R.string.settings_sidetone_pitch),
+                        value = stringResource(R.string.common_hz_value, Settings.sidetoneHz.roundToInt()),
                         position = Settings.sidetoneHz.toFloat(),
                         range = 300f..1000f, steps = 0,
                         onChange = { Settings.updateSidetoneHz(it.toDouble()) }
@@ -273,45 +266,39 @@ fun SettingsScreen(onBack: () -> Unit, scope: SettingsMode? = null) {
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Text("Preview tone", color = Brand.textPrimary, fontWeight = FontWeight.Medium)
+                        Text(stringResource(R.string.settings_preview_tone), color = Brand.textPrimary, fontWeight = FontWeight.Medium)
                         OutlinedButton(onClick = {
                             player.play(MorseItem.Playable.Text("PARIS"), Settings.sidetoneHz, Settings.timing()) {}
                         }) {
                             Icon(Icons.Filled.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Text(" Play")
+                            Text(stringResource(R.string.settings_play_button))
                         }
                     }
                     GroupDivider()
                     BackgroundNoiseSetting()
                 }
                 SectionFooter(
-                    "The frequency of the practice tone you hear.\n\n" +
-                        "Background noise plays a floor under everything. On Bluetooth " +
-                        "earbuds the silence between transmissions lets the link idle, so it " +
-                        "wakes a moment late and clips the first character — costing you the " +
-                        "answer. Keep-alive, the default, holds the link open with a floor too " +
-                        "quiet to hear. Turn it up for band noise (QRN) to copy through. Off " +
-                        "is truly silent, and brings the clipping back."
+                    stringResource(R.string.settings_sound_footer)
                 )
 
                 val showChoiceRows = shown(CHOICE_QUIZ_MODES)
                 val showWordPool = shown(setOf(SettingsMode.WORDS))
                 val showDuration = shown(DURATION_MODES)
                 if (showChoiceRows || showWordPool || showDuration) {
-                    SectionHeader("Practice")
+                    SectionHeader(stringResource(R.string.settings_practice))
                     SettingsGroup {
                         var needDivider = false
                         if (showChoiceRows) {
                             SegmentedSetting(
-                                label = "Answer choices",
+                                label = stringResource(R.string.settings_answer_choices),
                                 options = listOf("4" to 4, "5" to 5, "6" to 6),
                                 selected = Settings.answerChoices,
                                 onSelect = { Settings.updateAnswerChoices(it) }
                             )
                             GroupDivider()
                             SliderSetting(
-                                label = "Recognition target",
-                                value = "%.1f s".format(Settings.recognitionTargetSec),
+                                label = stringResource(R.string.settings_recognition_target),
+                                value = stringResource(R.string.settings_seconds_1dp, Settings.recognitionTargetSec),
                                 position = Settings.recognitionTargetSec.toFloat(),
                                 range = 0.5f..2.5f, steps = 7,
                                 onChange = { Settings.updateRecognitionTargetSec(it.toDouble()) }
@@ -321,7 +308,7 @@ fun SettingsScreen(onBack: () -> Unit, scope: SettingsMode? = null) {
                         if (showWordPool) {
                             if (needDivider) GroupDivider()
                             SegmentedSetting(
-                                label = "Word pool",
+                                label = stringResource(R.string.settings_word_pool),
                                 options = listOf("100" to 100, "300" to 300, "500" to 500),
                                 selected = Settings.wordCount,
                                 onSelect = { Settings.updateWordCount(it) }
@@ -331,7 +318,7 @@ fun SettingsScreen(onBack: () -> Unit, scope: SettingsMode? = null) {
                         if (showChoiceRows) {
                             if (needDivider) GroupDivider()
                             SegmentedSetting(
-                                label = "Reveal answer",
+                                label = stringResource(R.string.settings_reveal_answer),
                                 options = RevealMode.entries.map { it.shortLabel to it },
                                 selected = Settings.revealMode,
                                 onSelect = { Settings.updateRevealMode(it) }
@@ -349,14 +336,14 @@ fun SettingsScreen(onBack: () -> Unit, scope: SettingsMode? = null) {
                 }
 
                 if (showWordPool) {
-                SectionHeader("My words")
+                SectionHeader(stringResource(R.string.settings_my_words))
                 SettingsGroup {
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(16.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Text("Use my word list", color = Brand.textPrimary, fontWeight = FontWeight.Medium)
+                        Text(stringResource(R.string.settings_use_my_word_list), color = Brand.textPrimary, fontWeight = FontWeight.Medium)
                         Switch(
                             checked = Settings.useCustomWords,
                             onCheckedChange = { Settings.updateUseCustomWords(it) },
@@ -368,7 +355,7 @@ fun SettingsScreen(onBack: () -> Unit, scope: SettingsMode? = null) {
                         OutlinedTextField(
                             value = Settings.customWordsText,
                             onValueChange = { Settings.updateCustomWordsText(it) },
-                            placeholder = { Text("CQ DX\nANTENNA\nMORSE …") },
+                            placeholder = { Text(stringResource(R.string.settings_custom_words_placeholder)) },
                             minLines = 3,
                             maxLines = 8,
                             modifier = Modifier.fillMaxWidth().padding(12.dp)
@@ -378,19 +365,18 @@ fun SettingsScreen(onBack: () -> Unit, scope: SettingsMode? = null) {
                 SectionFooter(
                     if (Settings.useCustomWords) {
                         val n = Settings.customWords.size
-                        "One word per line (spaces and commas split too). " + when {
-                            n >= 2 -> "$n words ready — Common Words drills your list."
-                            else -> "Add at least two words; until then the ranked pool is used."
+                        stringResource(R.string.settings_custom_words_footer_lead) + when {
+                            n >= 2 -> stringResource(R.string.settings_words_ready, n)
+                            else -> stringResource(R.string.settings_custom_words_need_two)
                         }
                     } else {
-                        "Practice your own words — a callsign, your name, club abbreviations — " +
-                            "in Common Words instead of the ranked pool."
+                        stringResource(R.string.settings_custom_words_footer_off)
                     }
                 )
                 }
 
                 if (shown(LADDER_MODES)) {
-                SectionHeader("Punctuation")
+                SectionHeader(stringResource(R.string.settings_punctuation))
                 SettingsGroup {
                     MorseCode.pickablePunctuation.forEachIndexed { i, ch ->
                         if (i > 0) GroupDivider()
@@ -413,11 +399,10 @@ fun SettingsScreen(onBack: () -> Unit, scope: SettingsMode? = null) {
                     }
                 }
                 SectionFooter(
-                    "Study punctuation too. Opted-in marks join the Characters ladder " +
-                        "after the letters and numbers."
+                    stringResource(R.string.settings_punctuation_footer)
                 )
 
-                SectionHeader("Starting level")
+                SectionHeader(stringResource(R.string.settings_starting_level))
                 SettingsGroup {
                     Proficiency.entries.forEachIndexed { i, level ->
                         if (i > 0) GroupDivider()
@@ -433,19 +418,19 @@ fun SettingsScreen(onBack: () -> Unit, scope: SettingsMode? = null) {
                         )
                     }
                 }
-                SectionFooter("How much Morse you already know — sets where the Characters drill begins. Changing this restarts your active set.")
+                SectionFooter(stringResource(R.string.settings_starting_level_footer))
                 }
 
                 if (scope == null || scope !in NO_FEEDBACK_MODES) {
                 val showVoiceRow = shown(VOICE_ANSWER_MODES)
-                SectionHeader("Feedback")
+                SectionHeader(stringResource(R.string.settings_feedback))
                 SettingsGroup {
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(16.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Text("Haptic feedback", color = Brand.textPrimary, fontWeight = FontWeight.Medium)
+                        Text(stringResource(R.string.settings_haptic_feedback), color = Brand.textPrimary, fontWeight = FontWeight.Medium)
                         Switch(
                             checked = Settings.hapticsEnabled,
                             onCheckedChange = { Settings.updateHapticsEnabled(it) },
@@ -459,7 +444,7 @@ fun SettingsScreen(onBack: () -> Unit, scope: SettingsMode? = null) {
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Text("Voice answers", color = Brand.textPrimary, fontWeight = FontWeight.Medium)
+                            Text(stringResource(R.string.settings_voice_answers), color = Brand.textPrimary, fontWeight = FontWeight.Medium)
                             Switch(
                                 checked = Settings.voiceAnswersEnabled,
                                 onCheckedChange = { Settings.updateVoiceAnswersEnabled(it) },
@@ -470,32 +455,30 @@ fun SettingsScreen(onBack: () -> Unit, scope: SettingsMode? = null) {
                 }
                 SectionFooter(
                     if (showVoiceRow)
-                        "Buzz on right and wrong answers. Voice answers let you speak instead of tap (uses the microphone)."
+                        stringResource(R.string.settings_feedback_footer)
                     else
-                        "Buzz on right and wrong answers."
+                        stringResource(R.string.settings_feedback_footer_haptics_only)
                 )
                 }
 
                 // The key plugged into a Vail Adapter. Only worth showing where a
                 // key can be attached at all, and only on a device with MIDI.
                 if (shown(KEY_MODES) && midiSupported) {
-                    SectionHeader("Hardware key")
+                    SectionHeader(stringResource(R.string.settings_hardware_key))
                     SettingsGroup { AdapterKeyerSetting(context) }
                     SectionFooter(
-                        "How the adapter should read your key. Straight key is the default; " +
-                        "pick an iambic mode for a paddle. This is your key, not a drill " +
-                        "setting — it applies in Sending Practice and on the Vail screen alike."
+                        stringResource(R.string.settings_hardware_key_footer)
                     )
                 }
 
-                SectionHeader("Display")
+                SectionHeader(stringResource(R.string.settings_display))
                 SettingsGroup {
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(16.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Text("Slashed zero", color = Brand.textPrimary, fontWeight = FontWeight.Medium)
+                        Text(stringResource(R.string.settings_slashed_zero), color = Brand.textPrimary, fontWeight = FontWeight.Medium)
                         Switch(
                             checked = Settings.slashedZero,
                             onCheckedChange = { Settings.updateSlashedZero(it) },
@@ -503,16 +486,16 @@ fun SettingsScreen(onBack: () -> Unit, scope: SettingsMode? = null) {
                         )
                     }
                 }
-                SectionFooter("Show the digit 0 with a line through it — the operator's convention for telling 0 from O.")
+                SectionFooter(stringResource(R.string.settings_slashed_zero_footer))
 
-                SectionHeader("Reminders")
+                SectionHeader(stringResource(R.string.settings_reminders))
                 SettingsGroup {
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(16.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Text("Daily reminder", color = Brand.textPrimary, fontWeight = FontWeight.Medium)
+                        Text(stringResource(R.string.settings_daily_reminder), color = Brand.textPrimary, fontWeight = FontWeight.Medium)
                         Switch(
                             checked = Settings.remindersEnabled,
                             onCheckedChange = { if (it) enableReminders() else disableReminders() },
@@ -526,30 +509,29 @@ fun SettingsScreen(onBack: () -> Unit, scope: SettingsMode? = null) {
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Text("Time", color = Brand.textPrimary, fontWeight = FontWeight.Medium)
+                            Text(stringResource(R.string.common_time), color = Brand.textPrimary, fontWeight = FontWeight.Medium)
                             TextButton(onClick = { pickTime() }) {
                                 Text(formatTime(Settings.reminderHour, Settings.reminderMinute), color = Brand.teal, fontWeight = FontWeight.SemiBold)
                             }
                         }
                     }
                 }
-                SectionFooter("A daily nudge to keep your streak alive.")
+                SectionFooter(stringResource(R.string.settings_reminders_footer))
 
                 // Mid-session the destructive reset stays out of reach — it would
                 // yank the engine out from under the running drill. Home only.
                 if (scope == null) {
-                SectionHeader("Progress")
+                SectionHeader(stringResource(R.string.common_progress))
                 SettingsGroup {
                     Row(
                         modifier = Modifier.fillMaxWidth().clickable { confirmReset = true }.padding(16.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("Reset all progress", color = Color(0xFFF2788F), fontWeight = FontWeight.Medium)
+                        Text(stringResource(R.string.settings_reset_all_progress), color = Color(0xFFF2788F), fontWeight = FontWeight.Medium)
                     }
                 }
                 SectionFooter(
-                    "Clears your learned characters, stats, streak, and Journey progress. " +
-                        "Settings are kept."
+                    stringResource(R.string.settings_reset_footer)
                 )
                 }
 
@@ -562,10 +544,10 @@ fun SettingsScreen(onBack: () -> Unit, scope: SettingsMode? = null) {
         AlertDialog(
             onDismissRequest = { confirmReset = false },
             containerColor = Brand.navyElevated,
-            title = { Text("Reset all progress?", color = Brand.textPrimary) },
+            title = { Text(stringResource(R.string.settings_reset_confirm_title), color = Brand.textPrimary) },
             text = {
                 Text(
-                    "This clears your learned characters and stats. Settings are kept.",
+                    stringResource(R.string.settings_reset_confirm_body),
                     color = Brand.textSecondary
                 )
             },
@@ -575,10 +557,10 @@ fun SettingsScreen(onBack: () -> Unit, scope: SettingsMode? = null) {
                     Stats.reset()
                     JourneyStore.reset()
                     confirmReset = false
-                }) { Text("Reset", color = Color(0xFFF2788F), fontWeight = FontWeight.SemiBold) }
+                }) { Text(stringResource(R.string.settings_reset), color = Color(0xFFF2788F), fontWeight = FontWeight.SemiBold) }
             },
             dismissButton = {
-                TextButton(onClick = { confirmReset = false }) { Text("Cancel", color = Brand.teal) }
+                TextButton(onClick = { confirmReset = false }) { Text(stringResource(R.string.common_cancel), color = Brand.teal) }
             }
         )
     }
@@ -607,7 +589,7 @@ fun SessionSettingsButton(onOpen: () -> Unit) {
     IconButton(onClick = onOpen) {
         Icon(
             Icons.Filled.SettingsGlyph,
-            contentDescription = "Settings",
+            contentDescription = stringResource(R.string.common_settings),
             tint = Brand.textSecondary,
             modifier = Modifier.size(20.dp)
         )
@@ -647,7 +629,7 @@ fun SessionSettingsOverlay(scope: SettingsMode, onClose: () -> Unit) {
 private fun DurationSetting() {
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp)) {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text("Session length", color = Brand.textPrimary, fontWeight = FontWeight.Medium)
+            Text(stringResource(R.string.settings_session_length), color = Brand.textPrimary, fontWeight = FontWeight.Medium)
             Text(Settings.practiceDuration.label, color = Brand.teal, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
         }
         Spacer(Modifier.height(8.dp))
@@ -687,7 +669,7 @@ private fun DurationSetting() {
 private fun BackgroundNoiseSetting() {
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp)) {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text("Background noise", color = Brand.textPrimary, fontWeight = FontWeight.Medium)
+            Text(stringResource(R.string.settings_background_noise), color = Brand.textPrimary, fontWeight = FontWeight.Medium)
             Text(
                 Settings.backgroundNoise.label,
                 color = Brand.teal, fontWeight = FontWeight.SemiBold, fontSize = 13.sp
@@ -743,7 +725,7 @@ private fun AdapterKeyerSetting(context: android.content.Context) {
     var mode by remember { mutableStateOf(AdapterKeyer.mode(context)) }
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp)) {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text("Keyer mode", color = Brand.textPrimary, fontWeight = FontWeight.Medium)
+            Text(stringResource(R.string.settings_keyer_mode), color = Brand.textPrimary, fontWeight = FontWeight.Medium)
             Text(
                 mode.displayName,
                 color = Brand.teal, fontWeight = FontWeight.SemiBold, fontSize = 13.sp
@@ -777,7 +759,7 @@ private fun AdapterKeyerSetting(context: android.content.Context) {
         if (AdapterKeyer.adapterTimesSending(mode)) {
             Spacer(Modifier.height(8.dp))
             Text(
-                "The adapter times the sending in this mode, at the speed you're practising at.",
+                stringResource(R.string.settings_keyer_mode_note),
                 color = Brand.textSecondary,
                 fontSize = 12.sp
             )

@@ -401,11 +401,72 @@
     <string name="stats_characters_this_session_blurb">Median copy time per character — hollow rows were in your active set but not drilled this time.</string>
     <string name="stats_reaction_value">%1$s reaction</string>
 
+    <!-- SettingsScreen -->
+    <string name="settings_scoped_note">Showing what applies here — the full settings live on the home screen.</string>
+    <string name="settings_character_speed">Character speed</string>
+    <string name="settings_farnsworth_speed">Farnsworth speed</string>
+    <string name="settings_qrq_note">\n\nQRQ territory — %1$s WPM. Great for pushing instant recognition once 30+ feels comfortable.</string>
+    <string name="settings_speed_footer">Character speed is how fast the dits and dahs are sent. Farnsworth stretches the gaps between characters (set it below the character speed) to give you more time to recognise each one.</string>
+    <string name="settings_speed_warning">Below %1$s WPM it\'s easy to start counting the dits and dahs instead of hearing each character as a single sound. Training at %2$s+ WPM builds instant, by-ear recognition, which is the whole point of the Koch method. If you need more time to answer, raise \"Recognition target\" or lower the Farnsworth speed instead of slowing the code.</string>
+    <string name="settings_sound">Sound</string>
+    <string name="settings_sidetone_pitch">Sidetone pitch</string>
+    <string name="settings_preview_tone">Preview tone</string>
+    <string name="settings_play_button">" Play"</string>
+    <string name="settings_sound_footer">The frequency of the practice tone you hear.\n\nBackground noise plays a floor under everything. On Bluetooth earbuds the silence between transmissions lets the link idle, so it wakes a moment late and clips the first character — costing you the answer. Keep-alive, the default, holds the link open with a floor too quiet to hear. Turn it up for band noise (QRN) to copy through. Off is truly silent, and brings the clipping back.</string>
+    <string name="settings_practice">Practice</string>
+    <string name="settings_answer_choices">Answer choices</string>
+    <string name="settings_recognition_target">Recognition target</string>
+    <string name="settings_seconds_1dp">%1$.1f s</string>
+    <string name="settings_word_pool">Word pool</string>
+    <string name="settings_reveal_answer">Reveal answer</string>
+    <string name="settings_my_words">My words</string>
+    <string name="settings_use_my_word_list">Use my word list</string>
+    <string name="settings_custom_words_placeholder">CQ DX\nANTENNA\nMORSE …</string>
+    <string name="settings_custom_words_footer_lead">"One word per line (spaces and commas split too). "</string>
+    <string name="settings_words_ready">%1$s words ready — Common Words drills your list.</string>
+    <string name="settings_custom_words_need_two">Add at least two words; until then the ranked pool is used.</string>
+    <string name="settings_custom_words_footer_off">Practice your own words — a callsign, your name, club abbreviations — in Common Words instead of the ranked pool.</string>
+    <string name="settings_punctuation">Punctuation</string>
+    <string name="settings_punctuation_footer">Study punctuation too. Opted-in marks join the Characters ladder after the letters and numbers.</string>
+    <string name="settings_starting_level">Starting level</string>
+    <string name="settings_starting_level_footer">How much Morse you already know — sets where the Characters drill begins. Changing this restarts your active set.</string>
+    <string name="settings_feedback">Feedback</string>
+    <string name="settings_haptic_feedback">Haptic feedback</string>
+    <string name="settings_voice_answers">Voice answers</string>
+    <string name="settings_feedback_footer">Buzz on right and wrong answers. Voice answers let you speak instead of tap (uses the microphone).</string>
+    <string name="settings_feedback_footer_haptics_only">Buzz on right and wrong answers.</string>
+    <string name="settings_hardware_key">Hardware key</string>
+    <string name="settings_hardware_key_footer">How the adapter should read your key. Straight key is the default; pick an iambic mode for a paddle. This is your key, not a drill setting — it applies in Sending Practice and on the Vail screen alike.</string>
+    <string name="settings_display">Display</string>
+    <string name="settings_slashed_zero">Slashed zero</string>
+    <string name="settings_slashed_zero_footer">Show the digit 0 with a line through it — the operator\'s convention for telling 0 from O.</string>
+    <string name="settings_reminders">Reminders</string>
+    <string name="settings_daily_reminder">Daily reminder</string>
+    <string name="settings_reminders_footer">A daily nudge to keep your streak alive.</string>
+    <string name="settings_reset_all_progress">Reset all progress</string>
+    <string name="settings_reset_footer">Clears your learned characters, stats, streak, and Journey progress. Settings are kept.</string>
+    <string name="settings_reset_confirm_title">Reset all progress?</string>
+    <string name="settings_reset_confirm_body">This clears your learned characters and stats. Settings are kept.</string>
+    <string name="settings_reset">Reset</string>
+    <string name="settings_session_length">Session length</string>
+    <string name="settings_background_noise">Background noise</string>
+    <string name="settings_keyer_mode">Keyer mode</string>
+    <string name="settings_keyer_mode_note">The adapter times the sending in this mode, at the speed you\'re practising at.</string>
+
     <!-- JourneyScreen -->
     <string name="journey_map_button">Map</string>
     <string name="journey_level_n">Level %1$s</string>
     <string name="journey_map_title">Journey Map</string>
     <string name="journey_current">Current</string>
+
+    <!-- ReminderReceiver -->
+    <string name="reminder_body_streak">Keep your %1$s-day streak alive — a few minutes of CW is all it takes.</string>
+    <string name="reminder_body_default">A few minutes of code practice keeps your ear sharp. Tap to start.</string>
+    <string name="reminder_title">Time to practice Morse</string>
+
+    <!-- Reminders -->
+    <string name="reminder_channel_name">Practice reminders</string>
+    <string name="reminder_channel_description">A daily nudge to keep your Morse streak alive.</string>
 
     <!-- Plurals -->
     <plurals name="stats_band_sessions">

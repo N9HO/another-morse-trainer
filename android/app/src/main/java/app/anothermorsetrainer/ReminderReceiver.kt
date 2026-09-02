@@ -34,9 +34,9 @@ class ReminderReceiver : BroadcastReceiver() {
         Stats.init(context)
         val streak = Stats.currentStreak
         val text = if (streak > 0) {
-            "Keep your $streak-day streak alive — a few minutes of CW is all it takes."
+            context.getString(R.string.reminder_body_streak, streak)
         } else {
-            "A few minutes of code practice keeps your ear sharp. Tap to start."
+            context.getString(R.string.reminder_body_default)
         }
 
         val tapIntent = Intent(context, MainActivity::class.java)
@@ -48,7 +48,7 @@ class ReminderReceiver : BroadcastReceiver() {
 
         val notification = NotificationCompat.Builder(context, Reminders.CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_stat_morse)
-            .setContentTitle("Time to practice Morse")
+            .setContentTitle(context.getString(R.string.reminder_title))
             .setContentText(text)
             .setStyle(NotificationCompat.BigTextStyle().bigText(text))
             .setContentIntent(contentIntent)
