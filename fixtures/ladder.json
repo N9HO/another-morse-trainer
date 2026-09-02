@@ -8,7 +8,7 @@
   },
   "kochOrder": "KMRSUAPTLOWINJEF0YVG5Q9ZH38B?427C1D6X",
   "kochOrderLength": 37,
-  "pickablePunctuation": ",./",
+  "pickablePunctuation": ".,/",
   "cases": [
     {
       "selectedPunctuation": "",
@@ -48,7 +48,7 @@
     {
       "selectedPunctuation": ",./",
       "studyOrder": "KMRSUAPTLOWINJEF0YVG5Q9ZH38B?427C1D6X.,/",
-      "length": 39
+      "length": 40
     }
   ]
 }
