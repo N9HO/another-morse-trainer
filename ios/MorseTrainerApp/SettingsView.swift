@@ -25,6 +25,8 @@ struct SettingsView: View {
     /// Modes drawing from the progressive character ladder (proficiency,
     /// punctuation opt-ins, and the stage preview shape their drills).
     private static let ladderModes: Set<TrainingMode> = [.characters, .sending, .confusion]
+    /// The modes drilling the shared Characters track, where a stage pin bites.
+    private static let stagePinModes: Set<TrainingMode> = [.characters, .sending]
     /// The choice quizzes governed by the Learning section (recognition time
     /// and the answer-button count).
     private static let choiceQuizModes: Set<TrainingMode> =
@@ -159,6 +161,35 @@ struct SettingsView: View {
                         Text("Proficiency")
                     } footer: {
                         Text("Sets which characters you start with. Changing this restarts your active set.")
+                    }
+                    .listRowBackground(Theme.navyElevated)
+                }
+
+                // The way back from words to characters (#95). The track grows
+                // singles → pairs → triples → words on its own, and until now
+                // the only hold on it mid-session was the Developer jump below,
+                // which clears the pin and widens the active set. The pin lives
+                // on the setup sheet too; here it is one gear-tap from the drill.
+                if shown(for: Self.stagePinModes) {
+                    Section {
+                        Picker("Track stage", selection: stagePinBinding) {
+                            Text("Auto — grow as you improve")
+                                .tag(nil as ProgressiveCharacters.Stage?)
+                            ForEach(ProgressiveCharacters.Stage.allCases, id: \.self) { stage in
+                                Text(stage.displayName).tag(Optional(stage))
+                            }
+                        }
+                        if let previous = previousStage {
+                            Button {
+                                model.setCharacterStagePin(previous)
+                            } label: {
+                                Label("Back to \(previous.displayName)", systemImage: "arrow.uturn.backward")
+                            }
+                        }
+                    } header: {
+                        Text("Track stage")
+                    } footer: {
+                        Text(model.characterStageNote + " Takes effect on the next item.")
                     }
                     .listRowBackground(Theme.navyElevated)
                 }
@@ -375,7 +406,7 @@ struct SettingsView: View {
                     .listRowBackground(Theme.navyElevated)
                 }
 
-                if shown(for: Self.ladderModes) {
+                if shown(for: Self.stagePinModes) {
                     Section {
                         ForEach(ProgressiveCharacters.Stage.allCases, id: \.self) { stage in
                             Button {
@@ -397,7 +428,7 @@ struct SettingsView: View {
                     } header: {
                         Text("Developer · Preview Stage")
                     } footer: {
-                        Text("Jumps the Characters track to a stage for testing (✓ is where the track is now). Stages beyond Characters expand your active set to all letters & numbers. To hold the track at a stage during normal practice, use “Track stage” on the Characters setup screen instead.")
+                        Text("Jumps the Characters track to a stage for testing (✓ is where the track is now). Stages beyond Characters expand your active set to all letters & numbers, and a jump clears any hold. To hold the track at a stage during normal practice, use Track stage above.")
                     }
                     .listRowBackground(Theme.navyElevated)
                 }
@@ -451,6 +482,22 @@ struct SettingsView: View {
                 Text("This clears your learned letters and stats. Settings are kept.")
             }
         }
+    }
+
+    /// The Characters track's learner-chosen stage hold (nil = automatic).
+    private var stagePinBinding: Binding<ProgressiveCharacters.Stage?> {
+        Binding(
+            get: { model.characterStagePin },
+            set: { model.setCharacterStagePin($0) }
+        )
+    }
+
+    /// The stage before the one the track is at — what "go back a step" means
+    /// here. Nil at the first stage, where there is nowhere back to go.
+    private var previousStage: ProgressiveCharacters.Stage? {
+        let stages = ProgressiveCharacters.Stage.allCases
+        guard let i = stages.firstIndex(of: model.characterStage), i > 0 else { return nil }
+        return stages[i - 1]
     }
 
     /// Changing proficiency must reconfigure the engine, so route it through

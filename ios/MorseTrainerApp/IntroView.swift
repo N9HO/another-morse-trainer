@@ -903,16 +903,6 @@ private struct SessionSetupSheet: View {
         )
     }
 
-    private var stageNote: String {
-        if let pinned = model.characterStagePin {
-            return "Holding at \(pinned.displayName) — the track stays here until you switch back to Auto."
-        }
-        if model.characterStage != .singles {
-            return "You've grown past single characters — the track is at \(model.characterStage.displayName). Pick a stage to drill it specifically (Characters brings back singles), or leave on Auto to keep growing."
-        }
-        return "Starts with single characters and grows into pairs, triples, then words & call signs as you improve. Pick a stage to hold the track there instead."
-    }
-
     /// The authentic speed band for the selected contest, shown under the picker.
     private var contestSpeedNote: String {
         let c = model.settings.contest.type
@@ -962,7 +952,7 @@ private struct SessionSetupSheet: View {
                                 }
                                 .pickerStyle(.menu)
                                 .tint(Theme.tealBright)
-                                Text(stageNote)
+                                Text(model.characterStageNote)
                                     .font(.footnote)
                                     .foregroundStyle(Theme.textSecondary)
                                     .fixedSize(horizontal: false, vertical: true)

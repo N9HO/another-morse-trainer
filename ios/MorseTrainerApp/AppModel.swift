@@ -2479,6 +2479,18 @@ final class AppModel: ObservableObject {
     /// The learner-chosen stage hold, or nil for automatic progression.
     var characterStagePin: ProgressiveCharacters.Stage? { charLadder.pinnedStage }
 
+    /// What the track is doing right now, and what pinning would change — the
+    /// footnote under every Track stage control (setup sheet and Settings).
+    var characterStageNote: String {
+        if let pinned = characterStagePin {
+            return "Holding at \(pinned.displayName) — the track stays here until you switch back to Auto."
+        }
+        if characterStage != .singles {
+            return "You've grown past single characters — the track is at \(characterStage.displayName). Pick a stage to drill it specifically (Characters brings back singles), or leave on Auto to keep growing."
+        }
+        return "Starts with single characters and grows into pairs, triples, then words & call signs as you improve. Pick a stage to hold the track there instead."
+    }
+
     /// Pin the Characters track to a stage (nil returns it to automatic
     /// progression). Pinned, the track serves exactly that stage and never
     /// auto-advances — so "Characters" keeps serving single characters even
