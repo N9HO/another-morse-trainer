@@ -31,6 +31,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -79,18 +80,24 @@ fun ContestScreen(onBack: () -> Unit) {
     val player = remember { MorsePlayer() }
     val haptics = remember { Haptics(context) }
 
-    var phase by remember { mutableStateOf(CtPhase.SETUP) }
-    var contest by remember { mutableStateOf(ContestType.Sst) }
-    var length by remember { mutableStateOf(ContestLength.TenMin) }
+    var phase by rememberSaveable { mutableStateOf(CtPhase.SETUP) }
+    var contest by rememberSaveable { mutableStateOf(ContestType.Sst) }
+    var length by rememberSaveable { mutableStateOf(ContestLength.TenMin) }
 
     // Run state.
     var engine by remember { mutableStateOf<PileupEngine?>(null) }
     var input by remember { mutableStateOf("") }
     var reveal by remember { mutableStateOf(false) }
-    var startedAtMs by remember { mutableStateOf(0L) }
+    var startedAtMs by rememberSaveable { mutableStateOf(0L) }
     var endedAtMs by remember { mutableStateOf(0L) }
     // Engine state isn't Compose-observable; the clock also rides this tick.
     var rev by remember { mutableStateOf(0) }
+    // The run's scoreboard, mirrored out of the engine on every action and
+    // clock tick so it rides the saved-instance-state bundle. The engine and
+    // its callers die with the process; the phase, the start and these do not.
+    var runQsos by rememberSaveable { mutableStateOf(0) }
+    var runBusts by rememberSaveable { mutableStateOf(0) }
+    var lastSeenMs by rememberSaveable { mutableStateOf(0L) }
 
     DisposableEffect(Unit) { onDispose { player.release() } }
 
@@ -98,6 +105,34 @@ fun ContestScreen(onBack: () -> Unit) {
         if (startedAtMs == 0L) return 0
         val end = if (endedAtMs > 0L) endedAtMs else System.currentTimeMillis()
         return ((end - startedAtMs) / 1000L).toInt()
+    }
+
+    /** Mirror the engine's score into the saveable scoreboard (see runQsos). */
+    fun syncRun() {
+        val e = engine ?: return
+        runQsos = e.qsoCount
+        runBusts = e.bustCount
+        lastSeenMs = System.currentTimeMillis()
+    }
+
+    // A run the system reclaimed mid-way cannot resume — the engine and its
+    // callers died with the process — but its score need not die with it.
+    // Close it out from the saved scoreboard, exactly as endRun would have,
+    // and land on setup. A summary whose engine is gone goes the same way;
+    // that run was recorded when it ended.
+    LaunchedEffect(Unit) {
+        if (engine != null) return@LaunchedEffect
+        if (phase == CtPhase.RUNNING) {
+            Stats.record(
+                mode = "Contest",
+                attempts = runQsos + runBusts,
+                correct = runQsos,
+                bestTtrMs = null,
+                durationSeconds = ((lastSeenMs - startedAtMs) / 1000L).toInt().coerceAtLeast(0),
+                characterWpm = Settings.characterWpm.roundToInt()
+            )
+        }
+        if (phase != CtPhase.SETUP) phase = CtPhase.SETUP
     }
 
     fun endRun() {
@@ -129,6 +164,9 @@ fun ContestScreen(onBack: () -> Unit) {
         reveal = false
         startedAtMs = System.currentTimeMillis()
         endedAtMs = 0L
+        runQsos = 0
+        runBusts = 0
+        lastSeenMs = startedAtMs
         rev++
         phase = CtPhase.RUNNING
     }
@@ -140,6 +178,7 @@ fun ContestScreen(onBack: () -> Unit) {
             is PileupEngine.Action.Logged -> if (Settings.hapticsEnabled) haptics.success()
         }
         rev++
+        syncRun()
     }
 
     fun submit() {
@@ -160,6 +199,7 @@ fun ContestScreen(onBack: () -> Unit) {
         while (true) {
             delay(1000)
             rev++
+            syncRun()
             val limit = length.seconds ?: continue
             if (elapsedSeconds() >= limit) {
                 endRun()

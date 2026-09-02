@@ -40,6 +40,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -66,65 +67,12 @@ import app.anothermorsetrainer.morsekit.AnswerKeys
 import app.anothermorsetrainer.morsekit.Drill
 import app.anothermorsetrainer.morsekit.ProgressiveCharacters
 import app.anothermorsetrainer.morsekit.QuizSource
-import app.anothermorsetrainer.morsekit.SessionRecord
 import app.anothermorsetrainer.morsekit.VoiceMatcher
 import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
 
 private val OK_GREEN = Color(0xFF2E7D32)
 private val ERR_RED = Color(0xFFC62828)
-
-/** Mutable per-session tally, accumulated as the learner answers. */
-internal class Tally {
-    var attempts = 0
-    var correct = 0
-    var bestMs: Int? = null
-    /** Correct recognition times this session — the median feeds speed-band stats. */
-    private val ttrsMs = mutableListOf<Int>()
-    /** Wall-clock when this session began — Tally is remembered at screen entry. */
-    val startedAtMs: Long = System.currentTimeMillis()
-    /** Whole seconds of practice elapsed since the session began. */
-    fun elapsedSeconds(): Int = ((System.currentTimeMillis() - startedAtMs) / 1000L).toInt()
-
-    /** Note one correct answer's recognition time (and keep the fastest). */
-    fun noteCorrectMs(ms: Int) {
-        if (ms <= 0) return
-        ttrsMs.add(ms)
-        if (bestMs == null || ms < bestMs!!) bestMs = ms
-    }
-
-    /** Median correct recognition time this session, or null if none recorded. */
-    fun medianMs(): Int? {
-        if (ttrsMs.isEmpty()) return null
-        val s = ttrsMs.sorted()
-        val n = s.size
-        return if (n % 2 == 1) s[n / 2] else (s[n / 2 - 1] + s[n / 2]) / 2
-    }
-
-    /** Per-character outcomes this session (single-character drills only). */
-    private val charOutcomes = LinkedHashMap<String, MutableList<Pair<Boolean, Int>>>()
-
-    /** Note one single-character answer for the session's recognition chart. */
-    fun noteChar(character: String, correct: Boolean, ms: Int) {
-        charOutcomes.getOrPut(character) { mutableListOf() }.add(correct to ms)
-    }
-
-    /** This session's per-character results, for the detail record. */
-    fun charResults(): List<SessionRecord.CharResult> = charOutcomes.map { (ch, results) ->
-        val times = results.filter { it.first && it.second > 0 }.map { it.second }.sorted()
-        val medianMs = when {
-            times.isEmpty() -> null
-            times.size % 2 == 1 -> times[times.size / 2]
-            else -> (times[times.size / 2 - 1] + times[times.size / 2]) / 2
-        }
-        SessionRecord.CharResult(
-            character = ch,
-            attempts = results.size,
-            correct = results.count { it.first },
-            medianTTR = medianMs?.let { it / 1000.0 }
-        )
-    }
-}
 
 /** The quiz loop is either running drills or showing the end-of-session summary. */
 private enum class QuizPhase { RUNNING, SUMMARY }
@@ -201,10 +149,17 @@ fun QuizScreen(
 
     // Session phase: drills, then a summary once the timer runs out or End is
     // tapped. Back mid-session still records — it just skips the summary.
-    var phase by remember { mutableStateOf(QuizPhase.RUNNING) }
-    var tally by remember { mutableStateOf(Tally()) }
-    var remaining by remember { mutableStateOf(Settings.practiceDuration.seconds) }
-    var recorded by remember { mutableStateOf(false) }
+    // These are the session itself, so they ride the saved-instance-state
+    // bundle: a process Android reclaims in the background comes back with the
+    // tally, the clock and the phase intact and a fresh drill, instead of
+    // silently dropping the session. (Rotation never recreates the activity —
+    // see android:configChanges in the manifest — so this is only for that.)
+    var phase by rememberSaveable { mutableStateOf(QuizPhase.RUNNING) }
+    var tally by rememberSaveable(stateSaver = TallySaver) { mutableStateOf(Tally()) }
+    var remaining by rememberSaveable(stateSaver = OptionalIntSaver) {
+        mutableStateOf<Int?>(Settings.practiceDuration.seconds)
+    }
+    var recorded by rememberSaveable { mutableStateOf(false) }
     var milestone by remember { mutableStateOf<Int?>(null) }
 
     // Optional spoken answers (microphone). The full iOS flow: fuzzy-match the

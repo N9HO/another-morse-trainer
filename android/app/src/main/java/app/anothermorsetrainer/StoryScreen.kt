@@ -41,6 +41,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -94,8 +95,12 @@ fun StoryScreen(onBack: () -> Unit) {
     // Bumped on every stop/next/content switch so an in-flight completion
     // callback (or a stale news fetch) can't flip state for the wrong passage.
     var generation by remember { mutableStateOf(0) }
-    var passagesCopied by remember { mutableStateOf(0) }
-    var startedAtMs by remember { mutableStateOf(System.currentTimeMillis()) }
+    // The session itself — count, start and (below) phase, clock and whether
+    // it was recorded — rides the saved-instance-state bundle, so a process
+    // Android reclaims in the background comes back mid-session rather than
+    // dropping it. The passage cursor needs no saving: it is bookmarked.
+    var passagesCopied by rememberSaveable { mutableStateOf(0) }
+    var startedAtMs by rememberSaveable { mutableStateOf(System.currentTimeMillis()) }
 
     // News-in-Morse: headlines are fetched, sanitized to the sendable charset,
     // and kept hidden until revealed — decoding is the only way to read them.
@@ -106,9 +111,11 @@ fun StoryScreen(onBack: () -> Unit) {
     var newsFetchedSource by remember { mutableStateOf<NewsSource?>(null) }
     var newsIsFromCache by remember { mutableStateOf(false) }
 
-    var phase by remember { mutableStateOf(StPhase.RUNNING) }
-    var remaining by remember { mutableStateOf(Settings.practiceDuration.seconds) }
-    var recorded by remember { mutableStateOf(false) }
+    var phase by rememberSaveable { mutableStateOf(StPhase.RUNNING) }
+    var remaining by rememberSaveable(stateSaver = OptionalIntSaver) {
+        mutableStateOf<Int?>(Settings.practiceDuration.seconds)
+    }
+    var recorded by rememberSaveable { mutableStateOf(false) }
     var milestone by remember { mutableStateOf<Int?>(null) }
 
     /** Headline (and optionally its clipped summary after a BT break) as a
