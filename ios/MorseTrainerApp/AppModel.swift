@@ -508,6 +508,12 @@ final class AppModel: ObservableObject {
         reconcilePunctuation()
         Haptics.enabled = settings.hapticsEnabled
         applyBackgroundNoise()
+        // A pileup already on the air adopts the new settings too, so lowering
+        // Max callers thins it now rather than on the next session (#143).
+        if qsoActive {
+            pileup.update(config: isContest ? contestConfig() : qsoConfig())
+            refreshQSO()
+        }
     }
 
     /// Whether the app is on screen. The background-noise floor only runs in the

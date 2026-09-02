@@ -315,7 +315,7 @@ struct SettingsView: View {
                     } header: {
                         Text("QSO Simulator")
                     } footer: {
-                        Text("Changes apply to your next QSO session. Tone spread splits callers across the band; zero-beat stacks them all on your pitch.")
+                        Text("Max callers thins a pileup at once; the other settings reach callers as they arrive. Tone spread splits callers across the band; zero-beat stacks them all on your pitch.")
                     }
                     .listRowBackground(Theme.navyElevated)
 

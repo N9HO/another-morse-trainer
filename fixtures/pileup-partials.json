@@ -1,0 +1,30 @@
+{
+  "$comment": "Shared partial-call fixture, consumed by BOTH ports: android PileupPartialCallTest and ios MorseKitCheck. Data, not code \u2014 see CLAUDE.md's two-ports rule.",
+  "derivation": {
+    "fragment": "upper-case the typed text, then drop every space and every '?'",
+    "tight": "the fragment is a run of consecutive characters of the call",
+    "loose": "the fragment's characters occur in the call in that order, with anything at all between them; every tight partial is also loose",
+    "engine": "a non-empty fragment is tried as a tight partial, then as a near miss, then as a loose partial; an empty fragment asks the whole pileup to call again (#85, #143)",
+    "note": "Worked by hand from the rules above, independently of either port. Cases with tight/loose null pin only the fragment."
+  },
+  "cases": [
+    {"typed": "WU?",   "call": "W1ABU", "fragment": "WU",    "tight": false, "loose": true},
+    {"typed": "W?U",   "call": "W1ABU", "fragment": "WU",    "tight": false, "loose": true},
+    {"typed": "?U",    "call": "W1ABU", "fragment": "U",     "tight": true,  "loose": true},
+    {"typed": "1AB",   "call": "W1ABU", "fragment": "1AB",   "tight": true,  "loose": true},
+    {"typed": "w1 ab", "call": "W1ABU", "fragment": "W1AB",  "tight": true,  "loose": true},
+    {"typed": "UW?",   "call": "W1ABU", "fragment": "UW",    "tight": false, "loose": false},
+    {"typed": "WW?",   "call": "W1ABU", "fragment": "WW",    "tight": false, "loose": false},
+    {"typed": "9H?",   "call": "N9HO",  "fragment": "9H",    "tight": true,  "loose": true},
+    {"typed": "9h ?",  "call": "N9HO",  "fragment": "9H",    "tight": true,  "loose": true},
+    {"typed": "NO?",   "call": "N9HO",  "fragment": "NO",    "tight": false, "loose": true},
+    {"typed": "N9HS",  "call": "N9HO",  "fragment": "N9HS",  "tight": false, "loose": false},
+    {"typed": "N9HO",  "call": "N9HO",  "fragment": "N9HO",  "tight": true,  "loose": true},
+    {"typed": "N9HOX", "call": "N9HO",  "fragment": "N9HOX", "tight": false, "loose": false},
+    {"typed": "KC?",   "call": "K1ABC", "fragment": "KC",    "tight": false, "loose": true},
+    {"typed": "AB?",   "call": "K1ABC", "fragment": "AB",    "tight": true,  "loose": true},
+    {"typed": "BA?",   "call": "K1ABC", "fragment": "BA",    "tight": false, "loose": false},
+    {"typed": "??",    "call": "W1ABU", "fragment": "",      "tight": null,  "loose": null},
+    {"typed": " ? ",   "call": "W1ABU", "fragment": "",      "tight": null,  "loose": null}
+  ]
+}
