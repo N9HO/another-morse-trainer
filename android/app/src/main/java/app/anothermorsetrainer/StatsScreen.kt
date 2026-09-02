@@ -113,7 +113,7 @@ fun StatsScreen(onBack: () -> Unit) {
                     style = MaterialTheme.typography.bodyLarge,
                     modifier = Modifier.fillMaxWidth()
                 )
-                return@Column
+                return@CenteredScrollColumn
             }
 
             StreakHero()

@@ -65,9 +65,12 @@ fun CenteredContent(
  *
  * [modifier] goes on the outer, full-width column (imePadding, a tap-anywhere
  * gesture); [contentModifier] on the inner, capped one (the content padding).
+ *
+ * Inline, like [Column] itself, so a `return` inside [content] leaves the
+ * calling screen exactly as it did when the content sat in a bare Column.
  */
 @Composable
-fun CenteredScrollColumn(
+inline fun CenteredScrollColumn(
     modifier: Modifier = Modifier,
     contentModifier: Modifier = Modifier,
     maxWidth: Dp = CONTENT_MAX_WIDTH,
