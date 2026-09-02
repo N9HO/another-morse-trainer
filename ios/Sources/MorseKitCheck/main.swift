@@ -2158,6 +2158,92 @@ do {
           !fresh.activeCharacters.contains(".") && !fresh.activeCharacters.contains(","))
 }
 
+// MARK: - Shared mastery fixture
+//
+// fixtures/mastery.json, read by this harness and by android
+// CharacterStatsTest. Mastery is the gate the whole Koch ladder hangs off, and
+// it is a pure function of an attempt sequence plus a config — which is why it
+// can be shared as data rather than as copied test code. The Kotlin port had no
+// tests over this engine at all; that is the audit's test-parity item.
+struct MasteryFixture: Decodable {
+    struct Case: Decodable {
+        let name: String
+        let window: Int
+        let ttrThreshold: Double
+        let requiredAccuracy: Double
+        let attempts: [[AttemptValue]]
+        let keptCount: Int
+        let recentCount: Int
+        let accuracy: Double
+        let medianTTR: Double?
+        let isMastered: Bool
+    }
+    /// Each attempt is `[correct, ttr]` — a bool and a number in one array.
+    enum AttemptValue: Decodable {
+        case flag(Bool), number(Double)
+        init(from decoder: Decoder) throws {
+            let c = try decoder.singleValueContainer()
+            if let b = try? c.decode(Bool.self) { self = .flag(b) }
+            else { self = .number(try c.decode(Double.self)) }
+        }
+        var boolValue: Bool { if case .flag(let b) = self { return b }; return false }
+        var doubleValue: Double { if case .number(let d) = self { return d }; return 0 }
+    }
+    let historyLimit: Int
+    let tolerance: Double
+    let cases: [Case]
+}
+
+func loadMasteryFixture() -> MasteryFixture? {
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent()
+        .deletingLastPathComponent().deletingLastPathComponent()
+    guard let data = try? Data(contentsOf: root.appendingPathComponent("fixtures/mastery.json")) else { return nil }
+    return try? JSONDecoder().decode(MasteryFixture.self, from: data)
+}
+
+print("\nShared mastery fixture (fixtures/mastery.json):")
+if let fx = loadMasteryFixture() {
+    check("history limit matches the fixture", CharacterStats.historyLimit == fx.historyLimit)
+
+    var allOK = true
+    for c in fx.cases {
+        // Replay through `record` so the history trim is exercised too.
+        var stats = CharacterStats(character: "E")
+        for a in c.attempts where a.count == 2 {
+            stats.record(correct: a[0].boolValue, ttr: a[1].doubleValue)
+        }
+        func fail(_ what: String) {
+            print("      ↳ \(c.name): \(what)")
+            allOK = false
+        }
+        if stats.attempts.count != c.keptCount {
+            fail("kept \(stats.attempts.count), fixture says \(c.keptCount)")
+        }
+        if stats.recent(c.window).count != c.recentCount {
+            fail("recent \(stats.recent(c.window).count), fixture says \(c.recentCount)")
+        }
+        if !approxEqual(stats.accuracy(window: c.window), c.accuracy, fx.tolerance) {
+            fail("accuracy \(stats.accuracy(window: c.window)), fixture says \(c.accuracy)")
+        }
+        let median = stats.medianTTR(window: c.window)
+        switch (median, c.medianTTR) {
+        case (nil, nil): break
+        case let (m?, e?) where approxEqual(m, e, fx.tolerance): break
+        default: fail("median \(String(describing: median)), fixture says \(String(describing: c.medianTTR))")
+        }
+        let mastered = stats.isMastered(ttrThreshold: c.ttrThreshold,
+                                        window: c.window,
+                                        requiredAccuracy: c.requiredAccuracy)
+        if mastered != c.isMastered {
+            fail("isMastered \(mastered), fixture says \(c.isMastered)")
+        }
+    }
+    check("mastery matches the fixture across \(fx.cases.count) attempt sequences", allOK)
+} else {
+    check("fixtures/mastery.json loads and decodes", false)
+}
+
 print("\n────────────────────────────")
 if failures == 0 {
     print("✅ All \(checks) checks passed.\n")
