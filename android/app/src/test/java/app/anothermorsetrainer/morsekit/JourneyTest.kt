@@ -91,7 +91,7 @@ class JourneyTest {
             quiz.record(d.correct, ttr = 0.5)
         }
         val share = fresh.toDouble() / draws
-        assertTrue("new-item share $share", share > 0.7)
+        assertTrue("new-item share $share", share > 0.4 && share < 0.6)
     }
 
     @Test
