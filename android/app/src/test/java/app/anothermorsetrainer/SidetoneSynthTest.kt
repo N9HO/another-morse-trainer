@@ -41,7 +41,7 @@ class SidetoneSynthTest {
         assertTrue("the ramp rises monotonically", rising.zipWithNext().all { (a, b) -> b > a })
 
         step(s, keyDown = true, samples = 1)
-        assertEquals("lands on the target exactly", amplitude * 0.9f, s.gain, 0f)
+        assertEquals("lands on the target exactly", amplitude, s.gain, 0f)
 
         val held = step(s, keyDown = true, samples = 500)
         assertTrue("and stays there, bit for bit", held.all { it == amplitude })
@@ -58,7 +58,7 @@ class SidetoneSynthTest {
         assertTrue("the ramp falls monotonically", falling.zipWithNext().all { (a, b) -> b < a })
 
         step(s, keyDown = false, samples = 1)
-        assertEquals("lands on silence exactly", 0.001f, s.gain, 0f)
+        assertEquals("lands on silence exactly", 0f, s.gain, 0f)
 
         val buf = FloatArray(441)
         s.render(buf, buf.size, keyDown = false)
