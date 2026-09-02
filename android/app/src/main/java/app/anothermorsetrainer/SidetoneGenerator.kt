@@ -3,6 +3,7 @@ package app.anothermorsetrainer
 import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioTrack
+import android.os.Process
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.PI
 import kotlin.math.sin
@@ -15,14 +16,14 @@ import kotlin.math.sin
  *
  * Port of the TX path of the iOS `KeyerEngine` `ToneGenerator` (the RX / received
  * tone scheduling lives with the Vail repeater work). The audio render runs on a
- * dedicated thread; the only shared state is the [keyDown] flag.
+ * dedicated thread; the only shared state is the [keyDown] flag. The samples
+ * themselves come from a [SidetoneSynth], which knows nothing about the track.
  */
-class SidetoneGenerator(frequencyHz: Double = 600.0) {
+class SidetoneGenerator(private val frequencyHz: Double = 600.0) {
 
     private val sampleRate = 44_100
     private val amplitude = 0.5f
     private val rampSeconds = 0.005
-    private val omega = 2.0 * PI * frequencyHz / sampleRate
 
     private val keyDown = AtomicBoolean(false)
     @Volatile private var running = false
@@ -55,7 +56,7 @@ class SidetoneGenerator(frequencyHz: Double = 600.0) {
             .build()
         track = t
         t.play()
-        thread = Thread { renderLoop(t) }.apply { isDaemon = true; start() }
+        thread = Thread { renderLoop(t) }.apply { isDaemon = true; name = "amt-sidetone"; start() }
     }
 
     /** Key down/up — the render loop ramps toward the new target gain. */
@@ -77,30 +78,68 @@ class SidetoneGenerator(frequencyHz: Double = 600.0) {
     }
 
     private fun renderLoop(t: AudioTrack) {
+        // Parked in a blocking write nearly all the time; the priority is for
+        // the moments it wakes, so a 10 ms block is not queued behind a Compose
+        // frame and the key-down is heard when it happens. A refused priority
+        // is the old behaviour, not a failure.
+        try { Process.setThreadPriority(Process.THREAD_PRIORITY_AUDIO) } catch (_: SecurityException) {}
         // ~10 ms blocks: small enough that key-down latency is imperceptible.
         val block = sampleRate / 100
         val buf = FloatArray(block)
-        val rampStep = (amplitude / (rampSeconds * sampleRate)).toFloat()
-        var phase = 0.0
-        var gain = 0f
-        val twoPi = 2.0 * PI
+        val synth = SidetoneSynth(sampleRate, frequencyHz, amplitude, rampSeconds)
         while (running) {
-            val target = if (keyDown.get()) amplitude else 0f
-            for (i in 0 until block) {
-                if (gain != target) {
-                    gain += if (target > gain) rampStep else -rampStep
-                    if ((target > gain && gain > target) || (target < gain && gain < target)) gain = target
-                    gain = gain.coerceIn(0f, amplitude)
-                }
-                buf[i] = (sin(phase) * gain).toFloat()
-                phase += omega
-                if (phase > twoPi) phase -= twoPi
-            }
+            synth.render(buf, block, keyDown.get())
             try {
                 t.write(buf, 0, block, AudioTrack.WRITE_BLOCKING)
             } catch (_: IllegalStateException) {
                 break
             }
         }
+    }
+}
+
+/**
+ * The pure half of [SidetoneGenerator]: a sine gated by a ramped gain, one
+ * block at a time. Holds the oscillator phase and the current gain so
+ * consecutive blocks join seamlessly. Kept apart from the [AudioTrack] so the
+ * ramp can be pinned by a unit test without audio hardware.
+ *
+ * The ramp moves [gain] toward the key's target by at most one step per sample
+ * and lands on it exactly — the same one-liner [BackgroundNoise] uses. It
+ * replaced a step followed by an overshoot guard of the form
+ * `target > gain && gain > target`, which meant to snap a step that crossed the
+ * target back onto it but can never be true, so the ramp never settled on its
+ * own: only the clamp to `0..amplitude` after it stopped the gain wandering,
+ * and only because the two targets happened to be the clamp's two bounds.
+ */
+internal class SidetoneSynth(
+    sampleRate: Int,
+    frequencyHz: Double,
+    /** The gain the envelope sits at while the key is held. */
+    val amplitude: Float,
+    rampSeconds: Double
+) {
+    private val omega = 2.0 * PI * frequencyHz / sampleRate
+    /** Per-sample gain step: the full range in [rampSeconds]. */
+    val rampStep = (amplitude / (rampSeconds * sampleRate)).toFloat()
+    private var phase = 0.0
+
+    /** Where the envelope is now: 0 in silence, [amplitude] with the key held. */
+    var gain = 0f
+        private set
+
+    /** Fill the first [count] samples of [buf], ramping toward [keyDown]'s target. */
+    fun render(buf: FloatArray, count: Int, keyDown: Boolean) {
+        val target = if (keyDown) amplitude else 0f
+        for (i in 0 until count) {
+            gain += (target - gain).coerceIn(-rampStep, rampStep)
+            buf[i] = (sin(phase) * gain).toFloat()
+            phase += omega
+            if (phase > TWO_PI) phase -= TWO_PI
+        }
+    }
+
+    private companion object {
+        const val TWO_PI = 2.0 * PI
     }
 }

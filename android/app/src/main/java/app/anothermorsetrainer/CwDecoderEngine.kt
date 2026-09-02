@@ -6,6 +6,7 @@ import android.content.pm.PackageManager
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
+import android.os.Process
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -103,6 +104,11 @@ class CwDecoderEngine {
 
         running = true
         val t = Thread {
+            // Parked in a blocking read nearly all the time; the priority is
+            // for the moments it wakes, so a buffer is drained before the
+            // record overruns and drops the audio a character was in. A
+            // refused priority is the old behaviour, not a failure.
+            try { Process.setThreadPriority(Process.THREAD_PRIORITY_AUDIO) } catch (_: SecurityException) {}
             val buffer = FloatArray(2048)
             audio.startRecording()
             while (running) {
