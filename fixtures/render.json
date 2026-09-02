@@ -354,7 +354,7 @@
         },
         {
           "index": 3572,
-          "value": 0.01
+          "value": 0.0
         },
         {
           "index": 5291,
@@ -941,7 +941,7 @@
       "effectiveWpm": 8.0,
       "frequency": 600.0,
       "note": "Farnsworth: stretched gaps, full-speed characters",
-      "totalSamples": 227194,
+      "totalSamples": 227193,
       "segmentSamples": [
         [
           1603,
