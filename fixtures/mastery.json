@@ -1,0 +1,553 @@
+{
+  "$comment": "Shared mastery fixture, consumed by BOTH ports: android CharacterStatsTest and ios MorseKitCheck. Data, not code \u2014 see CLAUDE.md's two-ports rule.",
+  "derivation": {
+    "historyLimit": 20,
+    "record": "append; once longer than historyLimit, drop from the front until it fits",
+    "recent": "the last `window` attempts",
+    "accuracy": "correct / size over the recent window; 0.0 when empty",
+    "medianTTR": "median ttr of the CORRECT attempts in the window; null when none; even count averages the two middle",
+    "isMastered": "recent window must be full, accuracy >= requiredAccuracy, median must exist and be <= ttrThreshold",
+    "note": "Re-implemented from the documented rules, independently of either port."
+  },
+  "historyLimit": 20,
+  "tolerance": 1e-09,
+  "cases": [
+    {
+      "name": "no attempts at all",
+      "window": 5,
+      "ttrThreshold": 1.0,
+      "requiredAccuracy": 0.9,
+      "attempts": [],
+      "keptCount": 0,
+      "recentCount": 0,
+      "accuracy": 0.0,
+      "medianTTR": null,
+      "isMastered": false
+    },
+    {
+      "name": "fewer than the window, all perfect",
+      "window": 5,
+      "ttrThreshold": 1.0,
+      "requiredAccuracy": 0.9,
+      "attempts": [
+        [
+          true,
+          0.4
+        ],
+        [
+          true,
+          0.4
+        ],
+        [
+          true,
+          0.4
+        ],
+        [
+          true,
+          0.4
+        ]
+      ],
+      "keptCount": 4,
+      "recentCount": 4,
+      "accuracy": 1.0,
+      "medianTTR": 0.4,
+      "isMastered": false
+    },
+    {
+      "name": "exactly the window, fast and correct",
+      "window": 5,
+      "ttrThreshold": 1.0,
+      "requiredAccuracy": 0.9,
+      "attempts": [
+        [
+          true,
+          0.4
+        ],
+        [
+          true,
+          0.4
+        ],
+        [
+          true,
+          0.4
+        ],
+        [
+          true,
+          0.4
+        ],
+        [
+          true,
+          0.4
+        ]
+      ],
+      "keptCount": 5,
+      "recentCount": 5,
+      "accuracy": 1.0,
+      "medianTTR": 0.4,
+      "isMastered": true
+    },
+    {
+      "name": "exactly the window, correct but too slow",
+      "window": 5,
+      "ttrThreshold": 1.0,
+      "requiredAccuracy": 0.9,
+      "attempts": [
+        [
+          true,
+          1.4
+        ],
+        [
+          true,
+          1.4
+        ],
+        [
+          true,
+          1.4
+        ],
+        [
+          true,
+          1.4
+        ],
+        [
+          true,
+          1.4
+        ]
+      ],
+      "keptCount": 5,
+      "recentCount": 5,
+      "accuracy": 1.0,
+      "medianTTR": 1.4,
+      "isMastered": false
+    },
+    {
+      "name": "one miss in five drops accuracy below 0.9",
+      "window": 5,
+      "ttrThreshold": 1.0,
+      "requiredAccuracy": 0.9,
+      "attempts": [
+        [
+          false,
+          0.4
+        ],
+        [
+          true,
+          0.4
+        ],
+        [
+          true,
+          0.4
+        ],
+        [
+          true,
+          0.4
+        ],
+        [
+          true,
+          0.4
+        ]
+      ],
+      "keptCount": 5,
+      "recentCount": 5,
+      "accuracy": 0.8,
+      "medianTTR": 0.4,
+      "isMastered": false
+    },
+    {
+      "name": "all wrong: no median exists",
+      "window": 5,
+      "ttrThreshold": 1.0,
+      "requiredAccuracy": 0.9,
+      "attempts": [
+        [
+          false,
+          0.4
+        ],
+        [
+          false,
+          0.4
+        ],
+        [
+          false,
+          0.4
+        ],
+        [
+          false,
+          0.4
+        ],
+        [
+          false,
+          0.4
+        ]
+      ],
+      "keptCount": 5,
+      "recentCount": 5,
+      "accuracy": 0.0,
+      "medianTTR": null,
+      "isMastered": false
+    },
+    {
+      "name": "median is taken over correct answers only",
+      "window": 5,
+      "ttrThreshold": 1.0,
+      "requiredAccuracy": 0.4,
+      "attempts": [
+        [
+          true,
+          0.4
+        ],
+        [
+          true,
+          0.4
+        ],
+        [
+          false,
+          10.0
+        ],
+        [
+          false,
+          10.0
+        ],
+        [
+          false,
+          10.0
+        ]
+      ],
+      "keptCount": 5,
+      "recentCount": 5,
+      "accuracy": 0.4,
+      "medianTTR": 0.4,
+      "isMastered": true
+    },
+    {
+      "name": "median exactly on the threshold still counts",
+      "window": 5,
+      "ttrThreshold": 1.0,
+      "requiredAccuracy": 0.9,
+      "attempts": [
+        [
+          true,
+          0.5
+        ],
+        [
+          true,
+          0.8
+        ],
+        [
+          true,
+          1.0
+        ],
+        [
+          true,
+          1.2
+        ],
+        [
+          true,
+          1.5
+        ]
+      ],
+      "keptCount": 5,
+      "recentCount": 5,
+      "accuracy": 1.0,
+      "medianTTR": 1.0,
+      "isMastered": true
+    },
+    {
+      "name": "even window averages the two middle times",
+      "window": 4,
+      "ttrThreshold": 1.0,
+      "requiredAccuracy": 0.9,
+      "attempts": [
+        [
+          true,
+          0.2
+        ],
+        [
+          true,
+          0.4
+        ],
+        [
+          true,
+          0.6
+        ],
+        [
+          true,
+          0.8
+        ]
+      ],
+      "keptCount": 4,
+      "recentCount": 4,
+      "accuracy": 1.0,
+      "medianTTR": 0.5,
+      "isMastered": true
+    },
+    {
+      "name": "older failures outside the window do not count",
+      "window": 5,
+      "ttrThreshold": 1.0,
+      "requiredAccuracy": 0.9,
+      "attempts": [
+        [
+          false,
+          3.0
+        ],
+        [
+          false,
+          3.0
+        ],
+        [
+          false,
+          3.0
+        ],
+        [
+          false,
+          3.0
+        ],
+        [
+          false,
+          3.0
+        ],
+        [
+          false,
+          3.0
+        ],
+        [
+          true,
+          0.4
+        ],
+        [
+          true,
+          0.4
+        ],
+        [
+          true,
+          0.4
+        ],
+        [
+          true,
+          0.4
+        ],
+        [
+          true,
+          0.4
+        ]
+      ],
+      "keptCount": 11,
+      "recentCount": 5,
+      "accuracy": 1.0,
+      "medianTTR": 0.4,
+      "isMastered": true
+    },
+    {
+      "name": "history is bounded: the oldest attempts age out",
+      "window": 5,
+      "ttrThreshold": 1.0,
+      "requiredAccuracy": 0.9,
+      "attempts": [
+        [
+          true,
+          0.4
+        ],
+        [
+          true,
+          0.4
+        ],
+        [
+          true,
+          0.4
+        ],
+        [
+          true,
+          0.4
+        ],
+        [
+          true,
+          0.4
+        ],
+        [
+          true,
+          0.4
+        ],
+        [
+          true,
+          0.4
+        ],
+        [
+          true,
+          0.4
+        ],
+        [
+          true,
+          0.4
+        ],
+        [
+          true,
+          0.4
+        ],
+        [
+          true,
+          0.4
+        ],
+        [
+          true,
+          0.4
+        ],
+        [
+          true,
+          0.4
+        ],
+        [
+          true,
+          0.4
+        ],
+        [
+          true,
+          0.4
+        ],
+        [
+          true,
+          0.4
+        ],
+        [
+          true,
+          0.4
+        ],
+        [
+          true,
+          0.4
+        ],
+        [
+          true,
+          0.4
+        ],
+        [
+          true,
+          0.4
+        ],
+        [
+          true,
+          0.4
+        ],
+        [
+          true,
+          0.4
+        ],
+        [
+          true,
+          0.4
+        ],
+        [
+          true,
+          0.4
+        ],
+        [
+          true,
+          0.4
+        ]
+      ],
+      "keptCount": 20,
+      "recentCount": 5,
+      "accuracy": 1.0,
+      "medianTTR": 0.4,
+      "isMastered": true
+    },
+    {
+      "name": "a looser threshold masters a slower learner",
+      "window": 5,
+      "ttrThreshold": 1.5,
+      "requiredAccuracy": 0.9,
+      "attempts": [
+        [
+          true,
+          1.4
+        ],
+        [
+          true,
+          1.4
+        ],
+        [
+          true,
+          1.4
+        ],
+        [
+          true,
+          1.4
+        ],
+        [
+          true,
+          1.4
+        ]
+      ],
+      "keptCount": 5,
+      "recentCount": 5,
+      "accuracy": 1.0,
+      "medianTTR": 1.4,
+      "isMastered": true
+    },
+    {
+      "name": "accuracy met exactly still counts",
+      "window": 5,
+      "ttrThreshold": 1.0,
+      "requiredAccuracy": 0.8,
+      "attempts": [
+        [
+          false,
+          0.4
+        ],
+        [
+          true,
+          0.4
+        ],
+        [
+          true,
+          0.4
+        ],
+        [
+          true,
+          0.4
+        ],
+        [
+          true,
+          0.4
+        ]
+      ],
+      "keptCount": 5,
+      "recentCount": 5,
+      "accuracy": 0.8,
+      "medianTTR": 0.4,
+      "isMastered": true
+    },
+    {
+      "name": "accuracy just under the bar does not",
+      "window": 5,
+      "ttrThreshold": 1.0,
+      "requiredAccuracy": 0.85,
+      "attempts": [
+        [
+          false,
+          0.4
+        ],
+        [
+          true,
+          0.4
+        ],
+        [
+          true,
+          0.4
+        ],
+        [
+          true,
+          0.4
+        ],
+        [
+          true,
+          0.4
+        ]
+      ],
+      "keptCount": 5,
+      "recentCount": 5,
+      "accuracy": 0.8,
+      "medianTTR": 0.4,
+      "isMastered": false
+    }
+  ]
+}

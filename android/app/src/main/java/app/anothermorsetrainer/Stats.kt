@@ -225,10 +225,25 @@ object Stats {
         return arr.toString()
     }
 
-    private fun parseRecent(json: String): List<SessionSummary> {
+    /**
+     * Parse the recent-sessions list, surviving anything.
+     *
+     * This threw straight out of [init], which runs from `MainActivity.onCreate`,
+     * so a single malformed value in prefs was an unrecoverable launch crash —
+     * the app died on every start with no way back but clearing its data. The
+     * iOS twin never had this: it decodes with `try? JSONDecoder()`, which
+     * yields nil rather than throwing.
+     *
+     * Two layers on purpose. The outer guard catches a wrecked document; the
+     * inner one drops a single bad row and keeps the rest, because losing one
+     * session is much better than losing a year of them. [parseChars] and
+     * [parseHistory] do the same, so all three behave alike.
+     */
+    internal fun parseRecent(json: String): List<SessionSummary> = runCatching {
         val out = ArrayList<SessionSummary>()
         val arr = JSONArray(json)
         for (i in 0 until arr.length()) {
+            runCatching {
             val o = arr.getJSONObject(i)
             out.add(
                 SessionSummary(
@@ -243,9 +258,10 @@ object Stats {
                     recordId = o.optString("id", "").takeIf { it.isNotEmpty() }
                 )
             )
+            }
         }
-        return out
-    }
+        out
+    }.getOrDefault(emptyList())
 
     private fun encodeHistory(list: List<SessionRecord>): String {
         val arr = JSONArray()
@@ -279,10 +295,12 @@ object Stats {
         return arr.toString()
     }
 
-    private fun parseHistory(json: String): List<SessionRecord> = runCatching {
+    /** Full session records, guarded the same way as [parseRecent]. */
+    internal fun parseHistory(json: String): List<SessionRecord> = runCatching {
         val out = ArrayList<SessionRecord>()
         val arr = JSONArray(json)
         for (i in 0 until arr.length()) {
+            runCatching {
             val o = arr.getJSONObject(i)
             val charsArr = o.optJSONArray("chars") ?: JSONArray()
             val chars = ArrayList<SessionRecord.CharResult>(charsArr.length())
@@ -313,6 +331,7 @@ object Stats {
                     activeCharacters = o.optString("active", "").map { it.toString() }
                 )
             )
+            }
         }
         out
     }.getOrDefault(emptyList())
@@ -331,18 +350,21 @@ object Stats {
         return obj.toString()
     }
 
-    private fun parseChars(json: String): Map<String, CharAgg> {
+    /** Lifetime per-character stats, guarded the same way as [parseRecent]. */
+    internal fun parseChars(json: String): Map<String, CharAgg> = runCatching {
         val out = LinkedHashMap<String, CharAgg>()
         val obj = JSONObject(json)
         val keys = obj.keys()
         while (keys.hasNext()) {
             val ch = keys.next()
-            val o = obj.getJSONObject(ch)
-            val arr = o.getJSONArray("ttrs")
-            val ttrs = ArrayList<Int>(arr.length())
-            for (i in 0 until arr.length()) ttrs.add(arr.getInt(i))
-            out[ch] = CharAgg(o.getInt("att"), o.getInt("cor"), ttrs)
+            runCatching {
+                val o = obj.getJSONObject(ch)
+                val arr = o.getJSONArray("ttrs")
+                val ttrs = ArrayList<Int>(arr.length())
+                for (i in 0 until arr.length()) ttrs.add(arr.getInt(i))
+                out[ch] = CharAgg(o.getInt("att"), o.getInt("cor"), ttrs)
+            }
         }
-        return out
-    }
+        out
+    }.getOrDefault(emptyMap())
 }

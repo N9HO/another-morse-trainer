@@ -190,6 +190,24 @@ That is Android's behaviour and the instruction was to keep the ladder as-is;
 changing it would create a fresh divergence rather than close one. It is worth a
 decision of its own.
 
+## The corrupt-prefs launch crash is fixed
+
+`Stats.parseRecent` and `parseChars` threw straight out of `Stats.init`, which
+`MainActivity.onCreate` calls, so one malformed value in SharedPreferences was an
+unrecoverable launch crash — the app died on every start with no way back but
+clearing its data. `parseHistory` alone had been wrapped; nothing had noticed the
+other two because nothing tested any of them. iOS never had this: it decodes with
+`try? JSONDecoder()`, which yields nil rather than throwing. One tree, one fix.
+
+All three are now guarded twice: an outer `runCatching` for a wrecked document,
+and an inner one per row so a single bad record does not discard the whole list.
+That second layer is slightly beyond the reported bug — `parseHistory` used to be
+all-or-nothing too — and it is there because losing one session beats losing a
+year of them.
+
+`StatsParsingTest` covers it, including that a well-formed list still parses and
+that a bad row is skipped rather than taking its neighbours with it.
+
 ## Still to do
 
 Ordered by value. Each is self-contained. #7 and #8's tooling, and the two audio
@@ -210,7 +228,7 @@ Weigh it against the cost before starting: it is ~12 files touched heavily, and
 the emulator smoke test never gets past onboarding. CI would compile it and tell
 you nothing about whether it works.
 
-**2. Test parity — the mechanism is fixed, the coverage is not.**
+**2. Test parity — mechanism fixed, coverage started, not finished.**
 `fixtures/timing.json` now exists and both trees read it (`MorseTimingTest.kt`
 via `org.json`, `MorseKitCheck/main.swift` via `JSONDecoder`), so timing is
 pinned to one set of numbers instead of two hand-copied test files. The drift it
@@ -218,14 +236,23 @@ was written to catch is gone: iOS now pins the Farnsworth clamp, which only the
 Kotlin side did. `CLAUDE.md` records why sharing data is not a crack in the
 two-ports rule.
 
-What remains is coverage, not mechanism. Android's core engine — `TrainerEngine`,
-`ProgressiveCharacters`, `CharacterStats`, `PhraseQuiz`, persistence — still has
-**no tests**, while the Swift twin has ~200 checks; the 12 Kotlin test classes
-cover data tables, the CW decoder and the MIDI parser, none of the engine. And
-`CwDecoderTest.kt` is still a line-for-line transcription of
-`main.swift:1591-1694`, which is the next fixture to write. Follow the pattern
-already there: derive expected values from the spec rather than from either
-implementation, or the fixture just records whatever both ports happen to do.
+`CharacterStats` and `TrainerEngine` now have Kotlin tests — mastery via
+`fixtures/mastery.json` (shared with the harness, since it is a pure function of
+an attempt sequence), the engine's seeding, option-building, scoring, ladder
+advance and confusion recording as behaviour, since those are stateful and
+RNG-driven.
+
+Still uncovered on the Kotlin side: **`ProgressiveCharacters` beyond the ladder
+unlock, `PhraseQuiz`, and persistence** (`EngineStore` / snapshot round-trips —
+note the two ports do *not* share a serialisation format, so that one is
+per-tree, not a fixture). And `CwDecoderTest.kt` is still a line-for-line
+transcription of `main.swift:1591-1694`, which is the obvious next fixture.
+
+Follow the pattern already there: derive expected values from the spec rather
+than from either implementation, or the fixture just records whatever both ports
+happen to do. And run a negative control — a green Gradle build does not
+distinguish "passed" from "never executed", because it prints test names only on
+failure.
 
 **3. The app target's 42 concurrency warnings.** `SWIFT_STRICT_CONCURRENCY` is
 `targeted` on `MorseTrainerApp/`; the package is already at `complete` and
@@ -258,9 +285,7 @@ version. **The AGP one is a wall, not a nit:** compose-bom 2026.08.00 needs AGP
 9.1 and compileSdk 37, so the Compose pin cannot move past 2026.06.01 until AGP
 9 lands. That is its own piece of work.
 
-**5. Smaller, verified, not urgent.** `Stats.kt:95-97` — `parseRecent` and
-`parseChars` are unguarded while `parseHistory` is wrapped in `runCatching`, so
-corrupt prefs are an unrecoverable launch crash. `SidetoneGenerator.kt:90` — an
+**5. Smaller, verified, not urgent.** `SidetoneGenerator.kt:90` — an
 overshoot guard of the form `a > b && b > a`, provably always false;
 `BackgroundNoise.kt:119` already does it correctly. `MorseData.kt:186` — a
 verbatim dead second copy of all ten story texts that nothing reads
