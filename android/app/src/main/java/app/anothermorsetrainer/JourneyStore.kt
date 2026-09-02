@@ -3,6 +3,7 @@ package app.anothermorsetrainer
 import android.content.Context
 import android.content.SharedPreferences
 import androidx.core.content.edit
+import app.anothermorsetrainer.morsekit.JourneyCurriculum
 import app.anothermorsetrainer.morsekit.JourneyProgress
 
 /**
