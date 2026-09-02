@@ -481,4 +481,75 @@
         <item quantity="one">They came back %1$s time and you never got the call.</item>
         <item quantity="other">They came back %1$s times and you never got the call.</item>
     </plurals>
+
+    <!-- Start here (#96): the newcomer's guide, condensed from the website. -->
+    <string name="start_here_title">Start here</string>
+    <string name="start_here_home_button">New to Morse? Start here</string>
+    <string name="start_here_home_button_sub">How to begin, what to expect, and why it sounds so fast</string>
+    <string name="start_here_intro">If you\'ve never copied a character in your life, this is the whole path. It takes about five minutes to get going, and you\'ll be recognizing your first two letters by sound in one sitting.</string>
+    <string name="start_here_steps_title">Getting started</string>
+    <string-array name="start_here_step_leads">
+        <item>Put headphones on.</item>
+        <item>Open Journey.</item>
+        <item>Listen, don\'t look.</item>
+        <item>Don\'t count dots and dashes.</item>
+        <item>Stop after 10–15 minutes.</item>
+    </string-array>
+    <string-array name="start_here_step_bodies">
+        <item>Not required, but Morse is a listening exercise and phone speakers flatten the rhythm.</item>
+        <item>It\'s the first tile, and it\'s the guided path. It decides what to teach you and when.</item>
+        <item>A character plays and answer choices appear. Pick the one you heard. Miss, and the answer is revealed and re-sent so your ear gets a second pass.</item>
+        <item>At 33 WPM you physically can\'t, and that\'s deliberate. Let each character land as one sound, like a syllable. Too fast? Widen the gaps, never slow the characters.</item>
+        <item>Short and daily beats long and occasional. Turn on the daily reminder in Settings and let the streak do the nagging.</item>
+    </string-array>
+    <string name="start_here_tag_tip">TIP</string>
+    <string name="start_here_tag_key">KEY</string>
+    <string name="start_here_tag_check">CHECK</string>
+    <string name="start_here_tip">Feeling lost in the first few sessions is normal and expected. The Koch method starts you at a speed you can\'t decode consciously, because conscious decoding is a dead end that caps you at about 10 WPM. The discomfort is the method working.</string>
+    <string name="start_here_speed_title">Why it sounds so fast</string>
+    <string name="start_here_speed_two">There are two different speeds, and they are set independently.</string>
+    <string name="start_here_speed_char_title">Character speed</string>
+    <string name="start_here_speed_char_what">How fast the dits and dahs inside a letter are sent.</string>
+    <string name="start_here_speed_char_target">33 WPM or above, from day one. Never lower.</string>
+    <string name="start_here_speed_eff_title">Effective speed</string>
+    <string name="start_here_speed_eff_what">How fast text arrives once the silence between characters is counted.</string>
+    <string name="start_here_speed_eff_target">Whatever you can currently handle. 5 WPM is fine.</string>
+    <string name="start_here_speed_key">You are not expected to copy at 33 WPM. You are expected to learn at 33 WPM. A character at 33 WPM with two seconds of silence after it is correct, normal, and exactly how a beginner\'s session should look.</string>
+    <string name="start_here_speed_why">At 33 WPM a character arrives too fast to count, so the only thing your brain can do is take it as a single sound — which is the skill you\'re building. Drop below about 33 and counting becomes possible, your brain takes the shortcut, and you build a habit you\'ll later have to break. When it feels too fast, widen the gaps (Farnsworth spacing) or raise the Recognition target. Never lower the character speed.</string>
+    <string name="start_here_speed_check">Your character speed is currently %1$d WPM, which is slow enough to count dits at. Raise it to 33 in Settings before the counting habit forms, and leave the Farnsworth speed wherever you\'re comfortable.</string>
+    <string name="start_here_method_title">How the app decides what\'s next</string>
+    <string name="start_here_koch">The Koch method: you start with two characters at full speed. When you can reliably recognize them, a third is added, then a fourth. The speed never drops; only the number of characters grows.</string>
+    <string name="start_here_ttr">Time-to-recognize: every answer is timed from the moment the last tone ends. Right in 0.4 seconds is learned; right in 3 seconds means you\'re still decoding it consciously. That timing drives which character comes next, when a new one unlocks, and your weakest-first stats. If you need more time to answer, raise the Recognition target — don\'t slow the code down.</string>
+    <string name="start_here_stages_title">What good looks like</string>
+    <string-array name="start_here_stage_names">
+        <item>First week</item>
+        <item>Weeks 2–6</item>
+        <item>Your call + ? + state</item>
+        <item>Copying letters</item>
+        <item>Copying words</item>
+        <item>Operating</item>
+        <item>Pushing</item>
+    </string-array>
+    <string-array name="start_here_stage_roughly">
+        <item>2–6 characters</item>
+        <item>Full alphabet</item>
+        <item>Any time from week 2</item>
+        <item>All 36, slow</item>
+        <item>~15 WPM effective</item>
+        <item>~18 WPM+</item>
+        <item>35–60 WPM</item>
+    </string-array>
+    <string-array name="start_here_stage_work">
+        <item>Journey. Daily, short. Don\'t chase speed.</item>
+        <item>Journey, plus Confusion Drill when pairs start blurring.</item>
+        <item>Get on the air and hunt POTA. Don\'t wait for the full alphabet.</item>
+        <item>Common Words and Type It. Close the Farnsworth gap.</item>
+        <item>Head Copy, Rapid Fire, Short Stories.</item>
+        <item>Pileup Runner, Contest, Repeater.</item>
+        <item>QRQ Speed and head copy at pace.</item>
+    </string-array>
+    <string name="start_here_aim_title">Aim at a contact</string>
+    <string name="start_here_aim_body">Have a target beyond "learn Morse". The best one is a real contact, and it needs far less than the full alphabet: your own callsign, the question mark, your state, and a handful of exchange words. People who aim at a contact tend to get there; people who aim at finishing the alphabet often stall.</string>
+    <string name="start_here_know_title">Already know some Morse?</string>
+    <string name="start_here_know_body">Open Settings → Proficiency and tell it what you already know. That sets your starting character set instead of making you re-earn A and N. Comfortable with the whole alphabet? Skip Journey and go straight to Common Words, Rapid Fire, or Pileup Runner.</string>
 </resources>

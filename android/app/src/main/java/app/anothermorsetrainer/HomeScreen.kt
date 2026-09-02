@@ -2,6 +2,7 @@ package app.anothermorsetrainer
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -25,6 +26,7 @@ import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.automirrored.filled.ListAlt
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.Podcasts
 import androidx.compose.material.icons.filled.Print
@@ -67,6 +69,7 @@ private data class HomeItem(
 /** The app's landing menu: pick a training mode. Styled to match the iOS IntroView. */
 @Composable
 fun HomeScreen(
+    onPickStartHere: () -> Unit,
     onPickJourney: () -> Unit,
     onPickQuiz: (QuizMode) -> Unit,
     onPickPileup: () -> Unit,
@@ -173,6 +176,12 @@ fun HomeScreen(
                 }
             }
 
+            Spacer(Modifier.height(20.dp))
+            // The newcomer's way in (#96): the site's guide explains how to
+            // begin and why the code is fast, but nothing on the tile grid
+            // said so. Always visible — as useful in week three as on day one.
+            StartHereCard(onPickStartHere)
+
             Spacer(Modifier.height(24.dp))
 
             // Two-column tile grid (matches iOS mode picker).
@@ -184,6 +193,36 @@ fun HomeScreen(
                 Spacer(Modifier.height(14.dp))
             }
         }
+}
+
+@Composable
+private fun StartHereCard(onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .brandCard(cornerRadius = 14.dp)
+            .border(1.5.dp, Brand.teal.copy(alpha = 0.6f), RoundedCornerShape(14.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = null, tint = Brand.teal)
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                stringResource(R.string.start_here_home_button),
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = Brand.textPrimary
+            )
+            Text(
+                stringResource(R.string.start_here_home_button_sub),
+                style = MaterialTheme.typography.labelSmall,
+                color = Brand.textSecondary
+            )
+        }
+        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = Brand.textSecondary)
+    }
 }
 
 @Composable
