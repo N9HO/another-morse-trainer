@@ -56,6 +56,9 @@
     <string name="common_hold_to_key">HOLD TO KEY</string>
     <string name="common_clear">Clear</string>
     <string name="common_submit">Submit</string>
+    <string name="common_wpm_value">%1$s WPM</string>
+    <string name="common_off">Off</string>
+    <string name="common_copy_it_in_your_head">Copy it in your head…</string>
 
     <!-- OnboardingScreen -->
     <string name="onboarding_welcome">Welcome to\nAnother Morse Trainer</string>
@@ -113,4 +116,27 @@
     <string name="quiz_stage">Stage</string>
     <string name="quiz_chars">Chars</string>
     <string name="quiz_words">Words</string>
+
+    <!-- TypedQuizScreen -->
+    <string name="typed_correct">✓ correct</string>
+    <string name="typed_wrong">✗ you typed “%1$s”</string>
+    <string name="typed_type_what_you_hear">Type what you hear</string>
+    <string name="typed_check">Check</string>
+
+    <!-- HeadCopyScreen -->
+    <string name="headcopy_repeat">Repeat</string>
+    <string name="headcopy_reveal">Reveal</string>
+    <string name="headcopy_manual">Manual</string>
+    <string name="headcopy_reveal_2s">2s</string>
+    <string name="headcopy_reveal_4s">4s</string>
+    <string name="headcopy_reveal_6s">6s</string>
+    <string name="headcopy_did_you_copy_it">Did you copy it?</string>
+    <string name="headcopy_missed">✗ Missed</string>
+    <string name="headcopy_got_it">✓ Got it</string>
+
+    <!-- JourneyScreen -->
+    <string name="journey_map_button">Map</string>
+    <string name="journey_level_n">Level %1$s</string>
+    <string name="journey_map_title">Journey Map</string>
+    <string name="journey_current">Current</string>
 </resources>

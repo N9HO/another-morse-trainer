@@ -35,6 +35,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -207,7 +208,7 @@ fun HeadCopyScreen(onBack: () -> Unit) {
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            TextButton(onClick = { if (phase == HcPhase.SUMMARY) onBack() else finish() }) { Text("‹ Back") }
+            TextButton(onClick = { if (phase == HcPhase.SUMMARY) onBack() else finish() }) { Text(stringResource(R.string.common_back)) }
             if (phase == HcPhase.RUNNING) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     remaining?.let {
@@ -218,14 +219,14 @@ fun HeadCopyScreen(onBack: () -> Unit) {
                         )
                     }
                     SessionSettingsButton { showSettings = true }
-                    TextButton(onClick = { endSession() }) { Text("End") }
+                    TextButton(onClick = { endSession() }) { Text(stringResource(R.string.common_end)) }
                 }
             }
         }
 
         if (phase == HcPhase.SUMMARY) {
             SessionSummaryContent(
-                title = "Head Copy",
+                title = stringResource(R.string.mode_head_copy),
                 tally = tally,
                 milestone = milestone,
                 onPracticeAgain = { practiceAgain() },
@@ -237,7 +238,7 @@ fun HeadCopyScreen(onBack: () -> Unit) {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            Text(text = "Head Copy", style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center)
+            Text(text = stringResource(R.string.mode_head_copy), style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center)
             Spacer(Modifier.height(4.dp))
             Text(text = summary, style = MaterialTheme.typography.labelMedium, color = Brand.textSecondary)
 
@@ -247,17 +248,17 @@ fun HeadCopyScreen(onBack: () -> Unit) {
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("Repeat", style = MaterialTheme.typography.labelMedium, color = Brand.textSecondary)
-                HcPill("Off", selected = !Settings.headCopyAutoRepeat) { Settings.updateHeadCopyAutoRepeat(false) }
-                HcPill("Auto", selected = Settings.headCopyAutoRepeat) { Settings.updateHeadCopyAutoRepeat(true) }
+                Text(stringResource(R.string.headcopy_repeat), style = MaterialTheme.typography.labelMedium, color = Brand.textSecondary)
+                HcPill(stringResource(R.string.common_off), selected = !Settings.headCopyAutoRepeat) { Settings.updateHeadCopyAutoRepeat(false) }
+                HcPill(stringResource(R.string.common_auto), selected = Settings.headCopyAutoRepeat) { Settings.updateHeadCopyAutoRepeat(true) }
             }
             Spacer(Modifier.height(6.dp))
             Row(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("Reveal", style = MaterialTheme.typography.labelMedium, color = Brand.textSecondary)
-                listOf(0 to "Manual", 2 to "2s", 4 to "4s", 6 to "6s").forEach { (secs, label) ->
+                Text(stringResource(R.string.headcopy_reveal), style = MaterialTheme.typography.labelMedium, color = Brand.textSecondary)
+                listOf(0 to stringResource(R.string.headcopy_manual), 2 to stringResource(R.string.headcopy_reveal_2s), 4 to stringResource(R.string.headcopy_reveal_4s), 6 to stringResource(R.string.headcopy_reveal_6s)).forEach { (secs, label) ->
                     HcPill(label, selected = Settings.headCopyRevealSec == secs) {
                         Settings.updateHeadCopyRevealSec(secs)
                     }
@@ -275,11 +276,11 @@ fun HeadCopyScreen(onBack: () -> Unit) {
                     textAlign = TextAlign.Center
                 )
                 Spacer(Modifier.height(8.dp))
-                Text("Did you copy it?", color = Brand.textSecondary)
+                Text(stringResource(R.string.headcopy_did_you_copy_it), color = Brand.textSecondary)
             } else {
                 Text(text = "🧠", fontSize = 52.sp)
                 Spacer(Modifier.height(8.dp))
-                Text("Copy it in your head…", fontSize = 18.sp, color = Brand.teal)
+                Text(stringResource(R.string.common_copy_it_in_your_head), fontSize = 18.sp, color = Brand.teal)
             }
 
             Spacer(Modifier.height(36.dp))
@@ -290,24 +291,24 @@ fun HeadCopyScreen(onBack: () -> Unit) {
                         onClick = { grade(false) },
                         colors = ButtonDefaults.buttonColors(containerColor = ERR_RED, contentColor = Color.White),
                         modifier = Modifier.weight(1f).heightIn(min = 64.dp)
-                    ) { Text("✗ Missed", fontWeight = FontWeight.SemiBold) }
+                    ) { Text(stringResource(R.string.headcopy_missed), fontWeight = FontWeight.SemiBold) }
                     Button(
                         onClick = { grade(true) },
                         colors = ButtonDefaults.buttonColors(containerColor = OK_GREEN, contentColor = Color.White),
                         modifier = Modifier.weight(1f).heightIn(min = 64.dp)
-                    ) { Text("✓ Got it", fontWeight = FontWeight.SemiBold) }
+                    ) { Text(stringResource(R.string.headcopy_got_it), fontWeight = FontWeight.SemiBold) }
                 }
             } else {
                 Button(
                     onClick = { doReveal() },
                     colors = ButtonDefaults.buttonColors(containerColor = Brand.teal, contentColor = Brand.navy),
                     modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)
-                ) { Text("Reveal", fontWeight = FontWeight.SemiBold) }
+                ) { Text(stringResource(R.string.headcopy_reveal), fontWeight = FontWeight.SemiBold) }
                 Spacer(Modifier.height(12.dp))
                 OutlinedButton(
                     onClick = { player.replaySound(drill.playable, Settings.sidetoneHz, Settings.timing()) },
                     modifier = Modifier.fillMaxWidth()
-                ) { Text("▶ Replay") }
+                ) { Text(stringResource(R.string.common_replay)) }
             }
         }
         }
