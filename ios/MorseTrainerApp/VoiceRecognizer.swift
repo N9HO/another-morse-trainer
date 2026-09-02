@@ -42,7 +42,7 @@ final class VoiceRecognizer: NSObject, ObservableObject {
     private var preparedLMConfigBox: Any?
 
     /// "They started talking" energy threshold for onset detection.
-    private static let onsetRMSThreshold: Float = 0.015
+    nonisolated private static let onsetRMSThreshold: Float = 0.015
     /// How long after the last partial result to treat speech as finished.
     private let settleSeconds: TimeInterval = 0.9
 

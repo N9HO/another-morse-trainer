@@ -23,6 +23,12 @@ import os
 /// The "finished" signal is **time-based** (scheduled for the exact known
 /// duration of the sound) rather than depending on an audio callback, so the
 /// quiz loop can never get stuck waiting on the audio system.
+///
+/// Main-actor isolated: every caller (AppModel, the reference views) already
+/// is, `generation` and the engine are only ever touched from there, and the
+/// finished timers land on the main queue. The one thing that crosses to
+/// another thread is `state`, which the render callback reads under its lock.
+@MainActor
 final class MorsePlayer {
 
     /// `var` rather than `let` so it can be replaced wholesale after a
@@ -60,7 +66,9 @@ final class MorsePlayer {
         var noiseState: UInt64 = 0x2545F4914F6CDD1D
         var noiseLast: Float = 0
     }
-    private let state = OSAllocatedUnfairLock(initialState: Playback())
+    /// `nonisolated` because the render thread reaches it from outside the
+    /// main actor; the lock, not the actor, is what serialises access.
+    nonisolated private let state = OSAllocatedUnfairLock(initialState: Playback())
 
     /// Distinguishes completion callbacks so a previous tone's timer can't
     /// fire for the current one.
@@ -97,7 +105,14 @@ final class MorsePlayer {
                 return noErr
             }
             let out = abl[0].mData!.assumingMemoryBound(to: Float.self)
-            self.state.withLock { play in
+            // `withLockUnchecked`, not `withLock`: the closure has to write
+            // through `out`, a raw pointer the audio system owns for the
+            // length of this call, and a raw pointer is not `Sendable`. The
+            // checked variant would refuse the capture. Nothing escapes — the
+            // closure runs synchronously on this thread and `out` is not
+            // referenced after it returns — which is exactly the case the
+            // unchecked variant exists for.
+            self.state.withLockUnchecked { play in
                 // Exactly one source is live at a time: setSynth and setBuffer
                 // each clear the other, so this is a choice, not a mix.
                 let streaming = play.buffer.isEmpty
@@ -195,7 +210,7 @@ final class MorsePlayer {
     func play(character: Character,
               frequency: Double,
               timing: MorseTiming,
-              onFinished: @escaping () -> Void) {
+              onFinished: @escaping @MainActor () -> Void) {
         play(playable: .text(String(character)), frequency: frequency,
              timing: timing, onFinished: onFinished)
     }
@@ -205,7 +220,7 @@ final class MorsePlayer {
     func play(playable: MorseItem.Playable,
               frequency: Double,
               timing: MorseTiming,
-              onFinished: @escaping () -> Void) {
+              onFinished: @escaping @MainActor () -> Void) {
         activate()
         // Built here, on the calling thread: a few hundred segments, not
         // millions of samples. The audio thread does the synthesis.
@@ -256,7 +271,7 @@ final class MorsePlayer {
     /// hiss across the whole band. `onFinished` fires after the longest voice.
     func playPileup(_ voices: [PileupVoice],
                     qrn: Float = 0,
-                    onFinished: @escaping () -> Void) {
+                    onFinished: @escaping @MainActor () -> Void) {
         activate()
         let mixed = mixPileup(voices, qrn: qrn)
         guard !mixed.isEmpty else { onFinished(); return }

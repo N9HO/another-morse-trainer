@@ -53,7 +53,13 @@ enum NewsSource: String, Codable, CaseIterable, Identifiable {
 /// Downloads a news source's feed and hands back its headlines. Results are
 /// cached (most recent successful fetch per source) so a dead radio — er,
 /// network — still leaves something to decode.
-final class NewsFetcher {
+///
+/// `Sendable` for real: the only stored state is the `URLSession`, which is
+/// itself `Sendable`, and the cache lives in `UserDefaults`. The fetch
+/// completion is typed `@MainActor` because that is where it is delivered,
+/// and `@Sendable` because it is carried there from the session's callback
+/// thread.
+final class NewsFetcher: Sendable {
 
     /// One feed entry, still in plain English (sanitizing to sendable Morse
     /// text is the caller's job so display and keying stay in one place).
@@ -89,13 +95,13 @@ final class NewsFetcher {
     /// Fetch `source`, trying its candidate URLs in order. Calls `completion`
     /// on the main queue with the parsed items or the last error.
     func fetch(_ source: NewsSource,
-               completion: @escaping (Result<[Item], FetchError>) -> Void) {
+               completion: @escaping @MainActor @Sendable (Result<[Item], FetchError>) -> Void) {
         attempt(urls: source.feedURLs, source: source, completion: completion)
     }
 
     private func attempt(urls: [URL],
                          source: NewsSource,
-                         completion: @escaping (Result<[Item], FetchError>) -> Void) {
+                         completion: @escaping @MainActor @Sendable (Result<[Item], FetchError>) -> Void) {
         guard let url = urls.first else {
             DispatchQueue.main.async { completion(.failure(.network("no feed URL"))) }
             return

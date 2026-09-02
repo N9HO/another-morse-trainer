@@ -1592,23 +1592,40 @@ struct ContentView: View {
 /// one) via GameController, so the choice grid can show its 1–9 answer hints
 /// only when they can actually be typed (issue #69). The shortcuts themselves
 /// are always installed — they're inert without a keyboard.
+@MainActor
 final class HardwareKeyboardObserver: ObservableObject {
     @Published private(set) var isConnected = GCKeyboard.coalesced != nil
-    private var tokens: [NSObjectProtocol] = []
+    /// Released with the observer, which is when the registrations go away.
+    /// Held through a wrapper rather than as raw tokens because this class is
+    /// main-actor isolated and its `deinit` is not, so it may not touch a
+    /// non-`Sendable` token itself; the wrapper's plain `deinit` can.
+    private var observations: [NotificationObservation] = []
 
     init() {
+        // Both observers are registered on `.main`, so the blocks already run
+        // on the main thread; `assumeIsolated` just tells the checker what the
+        // queue argument guarantees (it traps if that ever stops being true).
         let center = NotificationCenter.default
-        tokens.append(center.addObserver(forName: .GCKeyboardDidConnect,
-                                         object: nil, queue: .main) { [weak self] _ in
-            self?.isConnected = true
-        })
-        tokens.append(center.addObserver(forName: .GCKeyboardDidDisconnect,
-                                         object: nil, queue: .main) { [weak self] _ in
-            self?.isConnected = GCKeyboard.coalesced != nil
-        })
+        observations.append(NotificationObservation(
+            center.addObserver(forName: .GCKeyboardDidConnect,
+                               object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.isConnected = true }
+            }))
+        observations.append(NotificationObservation(
+            center.addObserver(forName: .GCKeyboardDidDisconnect,
+                               object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.isConnected = GCKeyboard.coalesced != nil }
+            }))
     }
+}
 
-    deinit { tokens.forEach(NotificationCenter.default.removeObserver) }
+/// Owns one block-based `NotificationCenter` registration and removes it when
+/// released. Deliberately not isolated to any actor: its whole job is a
+/// `deinit` that hands the token back, and `NotificationCenter` is thread-safe.
+private final class NotificationObservation {
+    private let token: NSObjectProtocol
+    init(_ token: NSObjectProtocol) { self.token = token }
+    deinit { NotificationCenter.default.removeObserver(token) }
 }
 
 #Preview {

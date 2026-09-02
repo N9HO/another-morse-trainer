@@ -3,6 +3,11 @@ import UIKit
 /// Lightweight wrapper around UIKit's feedback generators so the UI can add
 /// tactile confirmation without sprinkling generator boilerplate everywhere.
 /// All calls are no-ops on devices without a Taptic Engine.
+///
+/// Main-actor because the generators are, and because `enabled` is a global
+/// that AppModel writes and every view reads — isolating it is what makes
+/// that a plain `static var` rather than shared mutable state.
+@MainActor
 enum Haptics {
     /// The user's "Haptic feedback" setting, mirrored here by AppModel so every
     /// call site stays a one-liner. Off silences all four feedbacks.

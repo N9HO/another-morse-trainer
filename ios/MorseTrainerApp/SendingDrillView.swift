@@ -158,6 +158,8 @@ struct SendingDrillView: View {
 
 /// Sends plain text to the system print panel (AirPrint / Save to PDF), using a
 /// monospaced font so the character groups stay column-aligned on paper.
+/// Main-actor because `UIPrintInteractionController` is.
+@MainActor
 enum SheetPrinter {
     static func print(_ text: String, jobName: String) {
         let info = UIPrintInfo.printInfo()
