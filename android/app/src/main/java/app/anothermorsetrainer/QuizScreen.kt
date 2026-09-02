@@ -60,6 +60,7 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.key.utf16CodePoint
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.core.content.ContextCompat
 import androidx.compose.ui.text.font.FontFamily
@@ -126,6 +127,7 @@ fun QuizScreen(
     onFinish: () -> Unit = onBack
 ) {
     val context = LocalContext.current
+    val resources = LocalResources.current
     val player = remember { MorsePlayer() }
     val haptics = remember { Haptics(context) }
     val source = remember { makeSource() }
@@ -179,7 +181,7 @@ fun QuizScreen(
     var voiceChoices by remember { mutableStateOf<List<String>>(emptyList()) }
     var listenTick by remember { mutableIntStateOf(0) }
     val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) listenTick++ else voiceNote = context.getString(R.string.quiz_mic_permission_needed)
+        if (granted) listenTick++ else voiceNote = resources.getString(R.string.quiz_mic_permission_needed)
     }
 
     fun clearVoicePrompts() {
@@ -384,12 +386,12 @@ fun QuizScreen(
                 when {
                     token != null && res.isConfident -> answer(token)
                     token != null -> voiceGuess = token
-                    else -> voiceNote = context.getString(R.string.quiz_voice_not_caught)
+                    else -> voiceNote = resources.getString(R.string.quiz_voice_not_caught)
                 }
             },
             onError = {
                 listening = false
-                voiceNote = context.getString(R.string.quiz_voice_not_caught)
+                voiceNote = resources.getString(R.string.quiz_voice_not_caught)
             }
         )
     }

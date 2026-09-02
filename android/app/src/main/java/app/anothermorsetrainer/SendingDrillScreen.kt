@@ -37,6 +37,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -61,6 +62,7 @@ private val SHEET_DATE: DateTimeFormatter = DateTimeFormatter.ofPattern("MMM d, 
 @Composable
 fun SendingDrillScreen(onBack: () -> Unit) {
     val context = LocalContext.current
+    val resources = LocalResources.current
     BackHandler { onBack() }
 
     var kind by remember { mutableStateOf(SendingDrill.Kind.Studied) }
@@ -148,15 +150,15 @@ fun SendingDrillScreen(onBack: () -> Unit) {
                     onClick = {
                         val send = Intent(Intent.ACTION_SEND).apply {
                             type = "text/plain"
-                            putExtra(Intent.EXTRA_SUBJECT, context.getString(R.string.drills_cw_sending_practice))
+                            putExtra(Intent.EXTRA_SUBJECT, resources.getString(R.string.drills_cw_sending_practice))
                             putExtra(Intent.EXTRA_TEXT, sheetText)
                         }
-                        context.startActivity(Intent.createChooser(send, context.getString(R.string.drills_share_practice_sheet)))
+                        context.startActivity(Intent.createChooser(send, resources.getString(R.string.drills_share_practice_sheet)))
                     },
                     modifier = Modifier.weight(1f)
                 ) { Text(stringResource(R.string.drills_share)) }
                 Button(
-                    onClick = { SheetPrinter.print(context, sheetText, context.getString(R.string.drills_cw_sending_practice)) },
+                    onClick = { SheetPrinter.print(context, sheetText, resources.getString(R.string.drills_cw_sending_practice)) },
                     modifier = Modifier.weight(1f)
                 ) { Text(stringResource(R.string.drills_print)) }
             }

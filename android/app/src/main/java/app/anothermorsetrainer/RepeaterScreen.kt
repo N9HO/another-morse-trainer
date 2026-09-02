@@ -4,6 +4,7 @@ import android.content.pm.PackageManager
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.core.content.ContextCompat
 import androidx.compose.foundation.Canvas
@@ -74,6 +75,7 @@ import app.anothermorsetrainer.vail.VailRepeater
 @Composable
 fun RepeaterScreen(onBack: () -> Unit) {
     val context = LocalContext.current
+    val resources = LocalResources.current
     val repeater = remember { VailRepeater(context) }
     val bleMidi = remember { BleMidi(context) }
 
@@ -86,7 +88,7 @@ fun RepeaterScreen(onBack: () -> Unit) {
         ActivityResultContracts.RequestMultiplePermissions()
     ) { grants ->
         if (grants.values.all { it }) bleMidi.scanAndOpen { bleStatus = it }
-        else bleStatus = context.getString(R.string.common_bluetooth_permission_needed)
+        else bleStatus = resources.getString(R.string.common_bluetooth_permission_needed)
     }
     fun findBleKey() {
         val missing = bleMidi.requiredPermissions().filter {

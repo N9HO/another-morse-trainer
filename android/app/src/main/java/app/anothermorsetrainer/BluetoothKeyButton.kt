@@ -18,6 +18,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -41,6 +42,7 @@ import androidx.core.content.ContextCompat
 @Composable
 fun BluetoothKeyButton(modifier: Modifier = Modifier) {
     val context = LocalContext.current
+    val resources = LocalResources.current
     val bleMidi = remember { BleMidi(context) }
     var status by remember { mutableStateOf<String?>(null) }
 
@@ -48,7 +50,7 @@ fun BluetoothKeyButton(modifier: Modifier = Modifier) {
         ActivityResultContracts.RequestMultiplePermissions()
     ) { grants ->
         if (grants.values.all { it }) bleMidi.scanAndOpen { status = it }
-        else status = context.getString(R.string.common_bluetooth_permission_needed)
+        else status = resources.getString(R.string.common_bluetooth_permission_needed)
     }
 
     // Releasing stops the scan and closes the BLE link, so the key is handed

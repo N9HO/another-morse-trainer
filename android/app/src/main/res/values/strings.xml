@@ -348,7 +348,7 @@
     <string name="listen_ready">Ready</string>
 
     <!-- ListenService -->
-    <string name="listen_session_complete">Session complete — %1$s heard</string>
+    <string name="listen_session_complete">Session complete — %1$d heard</string>
     <string name="listen_notification_paused">Paused</string>
     <string name="listen_notification_listening">Listening…</string>
     <string name="listen_hands_free_practice">Hands-free practice</string>
@@ -460,7 +460,7 @@
     <string name="journey_current">Current</string>
 
     <!-- ReminderReceiver -->
-    <string name="reminder_body_streak">Keep your %1$s-day streak alive — a few minutes of CW is all it takes.</string>
+    <string name="reminder_body_streak">Keep your %1$d-day streak alive — a few minutes of CW is all it takes.</string>
     <string name="reminder_body_default">A few minutes of code practice keeps your ear sharp. Tap to start.</string>
     <string name="reminder_title">Time to practice Morse</string>
 
