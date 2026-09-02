@@ -1509,6 +1509,52 @@ do {
         check("K and <K> never appear together as options", !offeredTwin)
         check("answering K for a heard <K> counts as correct", twinAccepted)
     }
+
+    // #110: a level exists to teach its new items, so they get at least half
+    // its prompts however big the pool has grown. The old 4:1 weight was
+    // against the whole cumulative pool, and by the prosign levels — two new
+    // items among forty — a level cleared in nine prompts having drawn its
+    // new items under once. And a prosign is drilled against other prosigns
+    // once the pool has them, not against three plain letters.
+    let knLevelIndex = levels.firstIndex { lvl in lvl.newItems.contains { $0.id == "<KN>" } }
+    check("curriculum has a level introducing the <KN> prosign", knLevelIndex != nil)
+    if let knLevelIndex {
+        let newAnswers = Set(levels[knLevelIndex].newItems.map { $0.answer })
+        let prosignAnswers = Set(MorseData.prosignItems.map { $0.answer })
+        let poolProsigns = levels[knLevelIndex].pool.filter { prosignAnswers.contains($0.answer) }.count
+        check("the <KN> level's pool holds enough prosigns to fill its options", poolProsigns >= 4)
+        let q = JourneyQuiz(levels: levels, startIndex: knLevelIndex, rng: SeededRNG(seed: 5))
+        let draws = 2000
+        var fresh = 0, prosignDrills = 0, prosignOnly = 0
+        for _ in 0..<draws {
+            q.select(levelIndex: knLevelIndex)   // pin the level; drills never clear it
+            let d = q.nextDrill()
+            if newAnswers.contains(d.correct) { fresh += 1 }
+            if prosignAnswers.contains(d.correct) {
+                prosignDrills += 1
+                if d.options.allSatisfy({ prosignAnswers.contains($0) }) { prosignOnly += 1 }
+            }
+            _ = q.record(choice: d.correct, ttr: 0.5)
+        }
+        let share = Double(fresh) / Double(draws)
+        check("a late level's new items get about half its prompts (#110)", share > 0.4 && share < 0.6)
+        check("a prosign is drilled against other prosigns (#110)",
+              prosignDrills > 0 && prosignOnly == prosignDrills)
+    }
+    // The floor is a floor: level 2's two new letters already outweigh its two
+    // old ones, and stay ahead.
+    do {
+        let q = JourneyQuiz(levels: levels, startIndex: 1, rng: SeededRNG(seed: 5))
+        let newAnswers = Set(levels[1].newItems.map { $0.answer })
+        var fresh = 0
+        for _ in 0..<2000 {
+            q.select(levelIndex: 1)
+            let d = q.nextDrill()
+            if newAnswers.contains(d.correct) { fresh += 1 }
+            _ = q.record(choice: d.correct, ttr: 0.5)
+        }
+        check("an early level's new items keep more than half its prompts", Double(fresh) / 2000 > 0.5)
+    }
 }
 
 // Q-codes: QRL is the statement, QRL? the question — the two must never be

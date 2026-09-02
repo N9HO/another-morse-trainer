@@ -1,5 +1,6 @@
 package app.anothermorsetrainer.morsekit
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import kotlin.random.Random
@@ -9,6 +10,11 @@ import kotlin.random.Random
  * lone -.- — audibly identical to the letter K — and both live in the pool at
  * the prosign levels. The two must never compete in one drill's options, and
  * hearing -.- either answer is accepted.
+ *
+ * And the new-item share (#110): a level exists to teach its new items, so
+ * they get at least half its prompts however big the pool has grown, and a
+ * prosign is drilled against other prosigns once the pool has them. Twin of
+ * the `#110` checks in the iOS harness, MorseKitCheck/main.swift.
  */
 class JourneyTest {
 
@@ -60,5 +66,64 @@ class JourneyTest {
             }
         }
         assertTrue("target <K> never drawn — weaken the seed check", tested)
+    }
+
+    private val knLevelIndex = levels.indexOfFirst { lvl -> lvl.newItems.any { it.id == "<KN>" } }
+    private val prosignAnswers = MorseData.prosignItems.map { it.answer }.toSet()
+
+    @Test
+    fun curriculumIntroducesTheProsignKN() {
+        assertTrue(knLevelIndex >= 0)
+        val poolProsigns = levels[knLevelIndex].pool.count { it.answer in prosignAnswers }
+        assertTrue("the <KN> level's pool should hold enough prosigns to fill its options", poolProsigns >= 4)
+    }
+
+    @Test
+    fun aLateLevelsNewItemsGetAboutHalfItsPrompts() {
+        val quiz = JourneyQuiz(levels, startIndex = knLevelIndex, rng = Random(5))
+        val newAnswers = levels[knLevelIndex].newItems.map { it.answer }.toSet()
+        val draws = 2000
+        var fresh = 0
+        repeat(draws) {
+            quiz.select(knLevelIndex)   // pin the level; drills never clear it
+            val d = quiz.nextDrill()
+            if (d.correct in newAnswers) fresh += 1
+            quiz.record(d.correct, ttr = 0.5)
+        }
+        val share = fresh.toDouble() / draws
+        assertTrue("new-item share $share", share > 0.4 && share < 0.6)
+    }
+
+    @Test
+    fun aProsignIsDrilledAgainstOtherProsigns() {
+        val quiz = JourneyQuiz(levels, startIndex = knLevelIndex, rng = Random(5))
+        var prosignDrills = 0
+        var prosignOnly = 0
+        repeat(2000) {
+            quiz.select(knLevelIndex)
+            val d = quiz.nextDrill()
+            if (d.correct in prosignAnswers) {
+                prosignDrills += 1
+                if (d.options.all { it in prosignAnswers }) prosignOnly += 1
+            }
+            quiz.record(d.correct, ttr = 0.5)
+        }
+        assertTrue("no prosign drawn — weaken the seed check", prosignDrills > 0)
+        assertEquals("prosign drills with only prosign options", prosignDrills, prosignOnly)
+    }
+
+    /** The floor is a floor: level 2's two new letters already outweigh its two old ones. */
+    @Test
+    fun anEarlyLevelsNewItemsKeepMoreThanHalfItsPrompts() {
+        val quiz = JourneyQuiz(levels, startIndex = 1, rng = Random(5))
+        val newAnswers = levels[1].newItems.map { it.answer }.toSet()
+        var fresh = 0
+        repeat(2000) {
+            quiz.select(1)
+            val d = quiz.nextDrill()
+            if (d.correct in newAnswers) fresh += 1
+            quiz.record(d.correct, ttr = 0.5)
+        }
+        assertTrue("new-item share ${fresh / 2000.0}", fresh / 2000.0 > 0.5)
     }
 }
