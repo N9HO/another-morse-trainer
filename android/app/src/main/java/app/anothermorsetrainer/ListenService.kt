@@ -291,8 +291,8 @@ class ListenService : Service() {
 
         fun ensureChannel(context: Context) {
             val channel = NotificationChannelCompat.Builder(CHANNEL_ID, NotificationManagerCompat.IMPORTANCE_LOW)
-                .setName(getString(R.string.listen_channel_name))
-                .setDescription(getString(R.string.listen_channel_description))
+                .setName(context.getString(R.string.listen_channel_name))
+                .setDescription(context.getString(R.string.listen_channel_description))
                 .build()
             NotificationManagerCompat.from(context).createNotificationChannel(channel)
         }
