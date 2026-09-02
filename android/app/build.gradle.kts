@@ -2,7 +2,8 @@ import java.util.Properties
 
 plugins {
     id("com.android.application")
-    id("org.jetbrains.kotlin.android")
+    // No org.jetbrains.kotlin.android: AGP 9 compiles Kotlin itself (see the
+    // root build.gradle.kts). Only the Compose compiler plugin is applied.
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
@@ -14,11 +15,15 @@ val keystoreProps = Properties().apply {
 
 android {
     namespace = "app.anothermorsetrainer"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "app.anothermorsetrainer"
         minSdk = 24
+        // Left at 36 on purpose: the toolchain upgrade that took compileSdk to
+        // 37 does not need targetSdk to follow, and raising it changes the
+        // app's runtime behaviour on Android 17 devices, which nothing here can
+        // test (the smoke test emulator runs API 34). Move it as its own change.
         targetSdk = 36
         versionCode = 17
         versionName = "1.12.2"
@@ -57,9 +62,8 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
         isCoreLibraryDesugaringEnabled = true   // java.time on minSdk 24
     }
-    kotlinOptions {
-        jvmTarget = "17"
-    }
+    // No kotlinOptions { jvmTarget } block: AGP 9 removed it, and under built-in
+    // Kotlin jvmTarget defaults to compileOptions.targetCompatibility (17).
     buildFeatures {
         compose = true
     }
@@ -93,12 +97,10 @@ android {
 
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
-    // 2026.06.01, not the newest (2026.08.00). That one pulls Compose 1.12.0,
-    // which requires Android Gradle plugin 9.1 and compileSdk 37; this project is
-    // on AGP 8.10.1 and compileSdk 36, so it fails at dependency resolution. The
-    // AGP 9 upgrade is its own piece of work. 1.11.4 needs only compileSdk 35 and
-    // declares no minimum AGP, which is the whole gap minus the last two months.
-    implementation(platform("androidx.compose:compose-bom:2026.06.01"))
+    // 2026.08.00 pulls Compose 1.12.0, which requires AGP 9.2+ and compileSdk
+    // 37 — both satisfied above. (It was held at 2026.06.01 / Compose 1.11.4
+    // until the AGP 9 upgrade landed.)
+    implementation(platform("androidx.compose:compose-bom:2026.08.00"))
     implementation("androidx.activity:activity-compose:1.13.0")
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.material3:material3")
