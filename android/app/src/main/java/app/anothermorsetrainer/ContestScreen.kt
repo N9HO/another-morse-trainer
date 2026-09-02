@@ -18,7 +18,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -291,9 +290,8 @@ private fun ContestSetup(
             TextButton(onClick = onBack) { Text(stringResource(R.string.common_back), color = Brand.teal) }
             Text(stringResource(R.string.mode_contest), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         }
-      CenteredContent {
-        Column(
-            modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp),
+        CenteredScrollColumn(
+            contentModifier = Modifier.padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             CtSectionLabel(stringResource(R.string.contest_which_contest))
@@ -320,7 +318,6 @@ private fun ContestSetup(
             ) { Text(stringResource(R.string.contest_start_button, contest.shortName), fontWeight = FontWeight.Bold, fontSize = 17.sp) }
             Spacer(Modifier.height(16.dp))
         }
-      }
     }
 }
 

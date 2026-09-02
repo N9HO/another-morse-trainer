@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.Bookmark
@@ -346,7 +345,6 @@ fun StoryScreen(onBack: () -> Unit) {
     // The Box lets the mid-session Settings draw over the running session
     // without unmounting it (playback and the timer live on underneath).
     Box(modifier = Modifier.fillMaxSize()) {
-    CenteredContent {
         Column(modifier = Modifier.fillMaxSize()) {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(8.dp),
@@ -370,18 +368,18 @@ fun StoryScreen(onBack: () -> Unit) {
             }
 
             if (phase == StPhase.SUMMARY) {
-                StorySummaryContent(
-                    passages = passagesCopied,
-                    elapsedSeconds = elapsedSeconds(),
-                    milestone = milestone,
-                    onPracticeAgain = { practiceAgain() },
-                    onDone = onBack
-                )
+                CenteredContent {
+                    StorySummaryContent(
+                        passages = passagesCopied,
+                        elapsedSeconds = elapsedSeconds(),
+                        milestone = milestone,
+                        onPracticeAgain = { practiceAgain() },
+                        onDone = onBack
+                    )
+                }
             } else {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .verticalScroll(rememberScrollState())
+                CenteredScrollColumn(
+                    contentModifier = Modifier
                         .padding(horizontal = 24.dp)
                         .padding(bottom = 24.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
@@ -570,7 +568,6 @@ fun StoryScreen(onBack: () -> Unit) {
                 }
             }
         }
-    }
 
     if (showSettings) {
         SessionSettingsOverlay(scope = SettingsMode.STORY, onClose = { showSettings = false })

@@ -22,7 +22,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
@@ -186,12 +185,8 @@ fun SettingsScreen(onBack: () -> Unit, scope: SettingsMode? = null) {
     Column(modifier = Modifier.fillMaxSize()) {
         TextButton(onClick = onBack, modifier = Modifier.padding(8.dp)) { Text(stringResource(R.string.common_back), color = Brand.teal) }
 
-        CenteredContent {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 20.dp)
+            CenteredScrollColumn(
+                contentModifier = Modifier.padding(horizontal = 20.dp)
             ) {
                 Text(
                     stringResource(R.string.common_settings),
@@ -537,7 +532,6 @@ fun SettingsScreen(onBack: () -> Unit, scope: SettingsMode? = null) {
 
                 Spacer(Modifier.height(24.dp))
             }
-        }
     }
 
     if (confirmReset) {

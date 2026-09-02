@@ -25,7 +25,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
@@ -120,12 +119,8 @@ fun RepeaterScreen(onBack: () -> Unit) {
     Column(modifier = Modifier.fillMaxSize()) {
         TextButton(onClick = onBack, modifier = Modifier.padding(8.dp)) { Text(stringResource(R.string.common_back), color = Brand.teal) }
 
-        CenteredContent {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 20.dp, vertical = 8.dp)
+            CenteredScrollColumn(
+                contentModifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
             ) {
                 Text(
                     stringResource(R.string.mode_repeater),
@@ -413,7 +408,6 @@ fun RepeaterScreen(onBack: () -> Unit) {
 
                 Spacer(Modifier.height(24.dp))
             }
-        }
     }
 }
 
