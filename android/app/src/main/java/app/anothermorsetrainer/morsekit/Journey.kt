@@ -238,12 +238,16 @@ class JourneyQuiz(
         }
         val optionsToShow = minOf(cap, others.size + 1)
         val needed = maxOf(0, optionsToShow - 1)
+        // The target's own kind first, then by sound (#110): a prosign drilled
+        // against three plain letters was answerable from the labels alone —
+        // one long meaning among three single letters.
+        val targetKind = kindOf(target)
         val sorted = others
-            .map { it.answer to MorseDistance.distance(target.soundKey, it.soundKey) }
-            .sortedWith(compareBy({ it.second }, { it.first }))
+            .map { Triple(it.answer, kindOf(it) != targetKind, MorseDistance.distance(target.soundKey, it.soundKey)) }
+            .sortedWith(compareBy({ it.second }, { it.third }, { it.first }))
 
         val distractors = mutableListOf<String>()
-        for ((answer, _) in sorted) {
+        for ((answer, _, _) in sorted) {
             if (distractors.size >= needed) break
             if (answer !in distractors) distractors.add(answer)
         }
@@ -252,6 +256,25 @@ class JourneyQuiz(
 
     private fun pickTarget(): MorseItem {
         val pool = level.pool
+        val fresh = pool.filter { item -> level.newItems.any { it.id == item.id } }
+        val review = pool.filter { item -> level.newItems.none { it.id == item.id } }
+        if (fresh.isEmpty() || review.isEmpty()) return weightedPick(pool)
+        val freshWeight = fresh.sumOf { weight(it) }
+        val total = freshWeight + review.sumOf { weight(it) }
+        if (total > 0 && freshWeight / total >= NEW_ITEM_SHARE_FLOOR) return weightedPick(pool)
+        return weightedPick(if (rng.nextDouble() < NEW_ITEM_SHARE_FLOOR) fresh else review)
+    }
+
+    /**
+     * What sort of thing an item is to a learner: a lone character, a
+     * prosign, or a multi-character token (word, abbreviation, Q-code, call).
+     */
+    private fun kindOf(item: MorseItem): Int = when (val p = item.playable) {
+        is MorseItem.Playable.Pattern -> 1
+        is MorseItem.Playable.Text -> if (p.value.length == 1) 0 else 2
+    }
+
+    private fun weightedPick(pool: List<MorseItem>): MorseItem {
         val weights = pool.map { weight(it) }
         val total = weights.sum()
         if (total <= 0) return pool.random(rng)
@@ -283,6 +306,21 @@ class JourneyQuiz(
         return w
     }
 }
+
+/**
+ * The least share of a level's prompts its new items get, however big the
+ * pool has grown.
+ *
+ * [JourneyQuiz.weight] favours a level's new items 4:1 over each item that
+ * came before — a bias that carried the early levels and had faded to nothing
+ * by the prosigns, where two new items sat in a pool of forty: a level cleared
+ * in about nine prompts having drawn its new items under once, and "?" had
+ * its own level go by unheard (#110). A level exists to teach its new items,
+ * so when the weights alone would give them less than this, the roll is split
+ * at it: new or review first, then the weights choose within each side. Early
+ * levels, where the weights already give the new items more, are untouched.
+ */
+const val NEW_ITEM_SHARE_FLOOR = 0.5
 
 /**
  * Persisted journey progress: how far the player has unlocked and where they

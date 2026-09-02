@@ -273,9 +273,19 @@ public final class JourneyQuiz: QuizSource {
         }
         let optionsToShow = min(cap, others.count + 1)
         let needed = max(0, optionsToShow - 1)
+        // The target's own kind first, then by sound (#110): a prosign drilled
+        // against three plain letters was answerable from the labels alone —
+        // one long meaning among three single letters.
+        let targetKind = Self.kind(of: target)
         let sorted = others
-            .map { (answer: $0.answer, dist: MorseDistance.distance(target.soundKey, $0.soundKey)) }
-            .sorted { $0.dist != $1.dist ? $0.dist < $1.dist : $0.answer < $1.answer }
+            .map { (answer: $0.answer,
+                    otherKind: Self.kind(of: $0) != targetKind,
+                    dist: MorseDistance.distance(target.soundKey, $0.soundKey)) }
+            .sorted {
+                if $0.otherKind != $1.otherKind { return !$0.otherKind }
+                if $0.dist != $1.dist { return $0.dist < $1.dist }
+                return $0.answer < $1.answer
+            }
 
         var distractors: [String] = []
         for candidate in sorted where distractors.count < needed {
@@ -286,8 +296,44 @@ public final class JourneyQuiz: QuizSource {
         return options
     }
 
+    /// The least share of a level's prompts its new items get, however big
+    /// the pool has grown.
+    ///
+    /// The weights below favour a level's new items 4:1 over each item that
+    /// came before — a bias that carried the early levels and had faded to
+    /// nothing by the prosigns, where two new items sat in a pool of forty:
+    /// a level cleared in about nine prompts having drawn its new items under
+    /// once, and "?" had its own level go by unheard (#110). A level exists
+    /// to teach its new items, so when the weights alone would give them less
+    /// than this, the roll is split at it: new or review first, then the
+    /// weights choose within each side. Early levels, where the weights
+    /// already give the new items more, are untouched.
+    public static let newItemShareFloor = 0.5
+
     private func pickTarget() -> MorseItem {
         let pool = level.pool
+        let fresh = pool.filter { item in level.newItems.contains { $0.id == item.id } }
+        let review = pool.filter { item in !level.newItems.contains { $0.id == item.id } }
+        guard !fresh.isEmpty, !review.isEmpty else { return weightedPick(from: pool) }
+        let freshWeight = fresh.map { weight(for: $0) }.reduce(0, +)
+        let total = freshWeight + review.map { weight(for: $0) }.reduce(0, +)
+        if total > 0, freshWeight / total >= Self.newItemShareFloor {
+            return weightedPick(from: pool)
+        }
+        let roll = Double.random(in: 0..<1, using: &rng)
+        return weightedPick(from: roll < Self.newItemShareFloor ? fresh : review)
+    }
+
+    /// What sort of thing an item is to a learner: a lone character, a
+    /// prosign, or a multi-character token (word, abbreviation, Q-code, call).
+    private static func kind(of item: MorseItem) -> Int {
+        switch item.playable {
+        case .pattern: return 1
+        case .text(let s): return s.count == 1 ? 0 : 2
+        }
+    }
+
+    private func weightedPick(from pool: [MorseItem]) -> MorseItem {
         let weights = pool.map { weight(for: $0) }
         let total = weights.reduce(0, +)
         guard total > 0 else { return pool.randomElement(using: &rng)! }
