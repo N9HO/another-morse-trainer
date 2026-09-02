@@ -87,7 +87,9 @@ object EngineStore {
         return runCatching { decode(json) }.getOrNull()
     }
 
-    private fun encode(snap: ProgressiveCharacters.Snapshot): String {
+    // `internal`, not `private`: EngineStoreCodecTest round-trips these without
+    // a Context, which is the only way the format gets tested at all.
+    internal fun encode(snap: ProgressiveCharacters.Snapshot): String {
         val statsArr = JSONArray()
         for (s in snap.engine.stats) {
             val attempts = JSONArray()
@@ -108,7 +110,7 @@ object EngineStore {
         return obj.toString()
     }
 
-    private fun decode(json: String): ProgressiveCharacters.Snapshot {
+    internal fun decode(json: String): ProgressiveCharacters.Snapshot {
         val obj = JSONObject(json)
         val stats = ArrayList<CharacterStats>()
         val statsArr = obj.getJSONArray("stats")

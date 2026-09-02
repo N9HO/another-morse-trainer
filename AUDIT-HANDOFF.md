@@ -24,12 +24,13 @@ Everything in the next section exists because of that.
 
 This is the part worth reading even if you skip the rest.
 
-**1. Put shared expectations in `fixtures/`, as data.** Four exist:
+**1. Put shared expectations in `fixtures/`, as data.** Five exist:
 
     fixtures/timing.json    WPM → dit/dah/gap durations, PARIS, Farnsworth
     fixtures/render.json    segment lengths, probe samples, whole-signal sums
     fixtures/ladder.json    Koch order, punctuation teaching order, study order
     fixtures/mastery.json   attempt sequences → accuracy, median, isMastered
+    fixtures/decoder.json   CW bench scenarios → rendered PCM size, decoded text
 
 Both trees read them in their own idiom — `JSONDecoder` in
 `MorseKitCheck/main.swift`, `org.json` in the Kotlin tests. That shares *data*,
@@ -72,6 +73,7 @@ the baseline in `git worktree` and diff the two warning lists.
 | [#121](https://github.com/N9HO/another-morse-trainer/pull/121) | `MorseSynth` — streaming synthesis, no more ~22M samples on the main thread |
 | [#122](https://github.com/N9HO/another-morse-trainer/pull/122) | Punctuation taught through the ladder on both ports |
 | [#123](https://github.com/N9HO/another-morse-trainer/pull/123) | Corrupt-prefs launch crash fixed; `CharacterStats` and `TrainerEngine` get their first tests |
+| [#126](https://github.com/N9HO/another-morse-trainer/pull/126) | `fixtures/decoder.json` — the decoder bench shared as data, the last copied test gone; `ProgressiveCharacters`, `PhraseQuiz` and the `EngineStore` codec get their first tests. Test parity done |
 
 CI runs seven jobs. `merge-gate.yml` is the single required check and derives
 what a PR needs from its own diff — read its header before touching any `paths:`
@@ -101,19 +103,12 @@ onboarding, so it covers launch and that one screen; going deeper needs
 
 ## Still to do
 
-Ordered by value. Each is self-contained.
+Ordered by value. Each is self-contained. Test parity, which led this list,
+is done as of #126: every fixture is read by both ports, no test code is
+copied between the trees, and nothing the Swift harness covers is untested on
+the Kotlin side. What remains is the work that parity was meant to make safe.
 
-**1. Finish test parity.** 17 Kotlin test classes now exist, against 433 harness
-checks on the Swift side. Still uncovered on the Kotlin side:
-`ProgressiveCharacters` beyond the ladder unlock, `PhraseQuiz`, and persistence
-(`EngineStore` / snapshot round-trips — the two ports do **not** share a
-serialisation format, so that is per-tree work, not a fixture).
-
-`CwDecoderTest.kt` is still a line-for-line transcription of
-`main.swift:1591-1694`. That is the obvious next fixture, and the last remaining
-instance of the copied-test-code habit that `fixtures/` was built to replace.
-
-**2. Android session state through process death.** Rotation is handled; a
+**1. Android session state through process death.** Rotation is handled; a
 backgrounded app that Android reclaims still loses the running session, because
 every screen holds its tally in plain `remember` and `Stats.record` only runs
 from the explicit exits. Ten screens carry that shape: `QuizScreen`,
@@ -129,7 +124,7 @@ smoke test never gets past onboarding. CI would compile it and tell you nothing
 about whether it works. That is why rotation was fixed with a manifest attribute
 instead — read #119 before deciding this is worth it.
 
-**3. The app target's 42 concurrency warnings.** `SWIFT_STRICT_CONCURRENCY` is
+**2. The app target's 42 concurrency warnings.** `SWIFT_STRICT_CONCURRENCY` is
 `targeted` on `MorseTrainerApp/`; the package is already at `complete` and pinned
 there. Complete checking on the app reports 42 warnings across 10 files —
 non-`Sendable` captures in `@Sendable` closures, sending-risks-data-races, and
@@ -144,7 +139,7 @@ language mode. Measure with:
 
 Fresh `-derivedDataPath`, and diff against a clean worktree at `HEAD`.
 
-**4. What Android lint found.** Currently 0 errors, 29 warnings, 69 hints — read
+**3. What Android lint found.** Currently 0 errors, 29 warnings, 69 hints — read
 the count off a run, not off this file; the number quoted here was stale once
 already. Worth acting on: `ListenService.kt:239` guards
 `stopForeground(STOP_FOREGROUND_REMOVE)` behind `SDK_INT >= N` (API 24) while
@@ -158,7 +153,7 @@ Lint also flags `activity-compose`, `desugar_jdk_libs` and the AGP version.
 compileSdk 37, so the Compose pin cannot move past 2026.06.01 until AGP 9 lands.
 Its own piece of work.
 
-**5. Smaller, verified, not urgent.** `SidetoneGenerator.kt:90` — an overshoot
+**4. Smaller, verified, not urgent.** `SidetoneGenerator.kt:90` — an overshoot
 guard of the form `a > b && b > a`, provably always false; `BackgroundNoise.kt`
 already does it correctly. `MorseData.kt:186` — a verbatim dead second copy of
 all ten story texts that nothing reads (`MorseDataStories.kt` is the live one).
