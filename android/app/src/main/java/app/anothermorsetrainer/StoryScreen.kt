@@ -39,6 +39,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -87,27 +89,27 @@ fun StoryScreen(onBack: () -> Unit) {
     }
 
     // The passage cursor for the active shelf, restored from its bookmark.
-    var index by remember { mutableStateOf(0) }
+    var index by remember { mutableIntStateOf(0) }
     var playing by remember { mutableStateOf(false) }
     var revealed by remember { mutableStateOf(false) }
     // Mid-session Settings, drawn over the session so its state lives on.
     var showSettings by remember { mutableStateOf(false) }
     // Bumped on every stop/next/content switch so an in-flight completion
     // callback (or a stale news fetch) can't flip state for the wrong passage.
-    var generation by remember { mutableStateOf(0) }
+    var generation by remember { mutableIntStateOf(0) }
     // The session itself — count, start and (below) phase, clock and whether
     // it was recorded — rides the saved-instance-state bundle, so a process
     // Android reclaims in the background comes back mid-session rather than
     // dropping it. The passage cursor needs no saving: it is bookmarked.
-    var passagesCopied by rememberSaveable { mutableStateOf(0) }
-    var startedAtMs by rememberSaveable { mutableStateOf(System.currentTimeMillis()) }
+    var passagesCopied by rememberSaveable { mutableIntStateOf(0) }
+    var startedAtMs by rememberSaveable { mutableLongStateOf(System.currentTimeMillis()) }
 
     // News-in-Morse: headlines are fetched, sanitized to the sendable charset,
     // and kept hidden until revealed — decoding is the only way to read them.
     var newsItems by remember { mutableStateOf<List<NewsFetcher.Item>>(emptyList()) }
     var newsFetching by remember { mutableStateOf(false) }
     var newsError by remember { mutableStateOf<String?>(null) }
-    var newsFetchedAt by remember { mutableStateOf(0L) }
+    var newsFetchedAt by remember { mutableLongStateOf(0L) }
     var newsFetchedSource by remember { mutableStateOf<NewsSource?>(null) }
     var newsIsFromCache by remember { mutableStateOf(false) }
 

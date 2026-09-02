@@ -25,6 +25,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -341,7 +342,7 @@ private fun QuestionsExam(
     // Drive display off a LOCAL index: ExamSession.record() advances its own
     // questionIndex when we score, so reading it back during the reveal would
     // jump to the next question. qIndex stays put until the user taps Next.
-    var qIndex by remember { mutableStateOf(0) }
+    var qIndex by remember { mutableIntStateOf(0) }
     var chosen by remember { mutableStateOf<String?>(null) }
     var revealed by remember { mutableStateOf(false) }
     var playing by remember { mutableStateOf(false) }

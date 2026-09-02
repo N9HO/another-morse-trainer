@@ -24,6 +24,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableDoubleStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -66,15 +69,15 @@ fun HeadCopyScreen(onBack: () -> Unit) {
 
     var drill by remember { mutableStateOf(source.nextDrill()) }
     // Monotonic counter drives play/reset — never key on the Drill value. See #43.
-    var round by remember { mutableStateOf(0) }
+    var round by remember { mutableIntStateOf(0) }
     var revealed by remember { mutableStateOf(false) }
     var summary by remember { mutableStateOf(source.summary) }
     // Mid-session Settings, drawn over the session so its state lives on.
     var showSettings by remember { mutableStateOf(false) }
     // When the tone finished, so recall time (tone end → Reveal) feeds stats
     // like every other mode instead of a flat zero.
-    var toneFinishedAt by remember { mutableStateOf(0L) }
-    var lastRecallSec by remember { mutableStateOf(0.0) }
+    var toneFinishedAt by remember { mutableLongStateOf(0L) }
+    var lastRecallSec by remember { mutableDoubleStateOf(0.0) }
 
     // Session phase: drills, then a summary once the timer runs out or End is
     // tapped. Back mid-session still records — it just skips the summary.
