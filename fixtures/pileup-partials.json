@@ -17,7 +17,7 @@
     {"typed": "WW?",   "call": "W1ABU", "fragment": "WW",    "tight": false, "loose": false},
     {"typed": "9H?",   "call": "N9HO",  "fragment": "9H",    "tight": true,  "loose": true},
     {"typed": "9h ?",  "call": "N9HO",  "fragment": "9H",    "tight": true,  "loose": true},
-    {"typed": "NO?",   "call": "N9HO",  "fragment": "NO",    "tight": false, "loose": true},
+    {"typed": "NO?",   "call": "N9HO",  "fragment": "NO",    "tight": true, "loose": false},
     {"typed": "N9HS",  "call": "N9HO",  "fragment": "N9HS",  "tight": false, "loose": false},
     {"typed": "N9HO",  "call": "N9HO",  "fragment": "N9HO",  "tight": true,  "loose": true},
     {"typed": "N9HOX", "call": "N9HO",  "fragment": "N9HOX", "tight": false, "loose": false},

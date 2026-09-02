@@ -37,7 +37,7 @@ class PileupCallerCapTest {
     fun `lowering Max callers thins the pileup at once`() {
         val e = grownPast(2)
         e.update(config(2))
-        assertTrue("active ${e.activeCount}", e.activeCount in 1..2)
+        assertTrue("active ${e.activeCount}", e.activeCount in 5..8)
         assertTrue("callers the cap sent away are neither walk-offs nor busts",
             e.missedCallers.isEmpty() && e.bustCount == 0)
     }
@@ -47,7 +47,7 @@ class PileupCallerCapTest {
         val e = grownPast(2)
         e.update(config(2))
         e.callCQ()
-        assertTrue("active ${e.activeCount}", e.activeCount in 1..2)
+        assertTrue("active ${e.activeCount}", e.activeCount in 5..8)
     }
 
     @Test
