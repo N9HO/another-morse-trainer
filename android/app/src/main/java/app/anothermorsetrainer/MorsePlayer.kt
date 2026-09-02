@@ -5,6 +5,7 @@ import android.media.AudioFormat
 import android.media.AudioTrack
 import android.os.Handler
 import android.os.Looper
+import android.os.Process
 import app.anothermorsetrainer.morsekit.MorseItem
 import app.anothermorsetrainer.morsekit.MorseSynth
 import app.anothermorsetrainer.morsekit.MorseTiming
@@ -249,6 +250,11 @@ class MorsePlayer {
      * drills.
      */
     private fun feed(t: AudioTrack) {
+        // Parked in a blocking write nearly all the time; the priority is for
+        // the moments it wakes, so a chunk is not queued behind a Compose frame
+        // and the track never runs dry mid-character. A refused priority is
+        // the old behaviour, not a failure.
+        try { Process.setThreadPriority(Process.THREAD_PRIORITY_AUDIO) } catch (_: SecurityException) {}
         val buf = FloatArray(CHUNK)
         val rampSamples = maxOf(1, (rampSeconds * sampleRate).toInt())
 

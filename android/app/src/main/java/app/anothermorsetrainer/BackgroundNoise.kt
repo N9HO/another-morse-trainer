@@ -3,6 +3,7 @@ package app.anothermorsetrainer
 import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioTrack
+import android.os.Process
 import kotlin.concurrent.thread
 
 /**
@@ -113,6 +114,11 @@ object BackgroundNoise {
      * spends nearly all of its time parked.
      */
     private fun feed(mine: Int) {
+        // Parked in a blocking write nearly all the time; the priority is for
+        // the moments it wakes, so a chunk is not queued behind a Compose frame
+        // and the floor never drops out — which is the one thing it is for. A
+        // refused priority is the old behaviour, not a failure.
+        try { Process.setThreadPriority(Process.THREAD_PRIORITY_AUDIO) } catch (_: SecurityException) {}
         val track = openTrack()
         if (track == null) {
             // No audio route, or the device refused the format. The floor is a
