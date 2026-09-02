@@ -97,7 +97,7 @@
       "passes": 2,
       "renderedSamples": 35040,
       "absSum": 53749344,
-      "expectedText": "PARIS",
+      "expectedText": "PARIS|PARIS",
       "note": "the same PCM twice with a reset between; both passes must copy cleanly"
     }
   ]

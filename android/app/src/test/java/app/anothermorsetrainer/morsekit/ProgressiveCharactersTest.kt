@@ -54,7 +54,7 @@ class ProgressiveCharactersTest {
     @Test
     fun `starts at singles`() {
         val (_, ladder) = fullLadder()
-        assertEquals(ProgressiveCharacters.Stage.Pairs, ladder.stage)   // CONTROL: wrong on purpose
+        assertEquals(ProgressiveCharacters.Stage.Singles, ladder.stage)
         assertNull("a fresh track is on automatic progression", ladder.pinnedStage)
     }
 

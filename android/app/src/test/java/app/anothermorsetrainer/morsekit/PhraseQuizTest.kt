@@ -118,7 +118,7 @@ class PhraseQuizTest {
     @Test
     fun `an unheard item weighs four`() {
         val (q, item) = single()
-        assertEquals(5.0, q.weight(item), 0.0)   // CONTROL: wrong on purpose
+        assertEquals(4.0, q.weight(item), 0.0)
     }
 
     @Test
