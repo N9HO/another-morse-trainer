@@ -219,9 +219,32 @@ class TrainerEngine(
         if (stats[character] == null) stats[character] = CharacterStats(character)
     }
 
-    /** Remove one character from the active set (e.g. opting back out). */
+    /**
+     * Remove one character from the active set (e.g. opting back out). The
+     * character's stats are kept, so it comes back with its history intact.
+     */
     fun removeActiveCharacter(character: Char) {
         activeCharacters = activeCharacters.filter { it != character }
+    }
+
+    /**
+     * Set the introduction order and reconcile the active set with it: any
+     * pickable punctuation mark the learner has already earned but has now
+     * opted back out of is removed, so it stops being drilled (issue #133).
+     * Returns the characters removed, in active-set order.
+     *
+     * Only [MorseCode.pickablePunctuation] is ever removed — the Koch core
+     * (including `?`) is never touched, and a mark that was never earned is
+     * simply not there to remove. Opting back *in* changes nothing here: the
+     * mark rejoins the ladder to be earned again, and its [CharacterStats]
+     * entry (kept by [removeActiveCharacter]) is waiting for it. Pinned by
+     * `fixtures/ladder.json`'s `optOutCases` on both ports.
+     */
+    fun applyStudyOrder(order: List<Char>): List<Char> {
+        studyOrder = order
+        val removed = activeCharacters.filter { it in MorseCode.pickablePunctuation && it !in order }
+        for (c in removed) removeActiveCharacter(c)
+        return removed
     }
 
     val allActiveMastered: Boolean

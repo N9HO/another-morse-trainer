@@ -4,7 +4,9 @@
     "kochOrder": "KMRSUAPTLOWINJEF0YVG5Q9ZH38B?427C1D6X",
     "pickablePunctuation": ".,/",
     "studyOrder": "kochOrder, then pickablePunctuation filtered to the opted-in set, in pickable order",
-    "note": "This is the divergence that made the item: Android threaded opted-in punctuation through the studyOrder ladder while iOS added it straight to the active set, so unlocking singles->pairs took 40 characters on one port and 37 on the other. The ladder is the intended design. Opting in adds a mark to the LADDER, not to the active set \u2014 it still has to be reached and mastered."
+    "note": "This is the divergence that made the item: Android threaded opted-in punctuation through the studyOrder ladder while iOS added it straight to the active set, so unlocking singles->pairs took 40 characters on one port and 37 on the other. The ladder is the intended design. Opting in adds a mark to the LADDER, not to the active set \u2014 it still has to be reached and mastered.",
+    "optOut": "activeAfter = activeBefore with every pickablePunctuation character NOT in selectedPunctuation removed, relative order preserved; removed = those characters, in activeBefore order. Only pickable punctuation is ever removed: '?' is Koch core and stays, and a mark that was never earned is simply not there to remove. Opting back IN changes nothing here - the mark goes back on the studyOrder ladder (cases above), not into the active set. The mark's CharacterStats entry is kept on both ports (behavioural check, not fixture data).",
+    "optOutNote": "Issue #133: opting out used to leave an earned mark in the drill. Decided: it is removed from the active set and its stats are kept, so opting back in and re-earning it loses no history."
   },
   "kochOrder": "KMRSUAPTLOWINJEF0YVG5Q9ZH38B?427C1D6X",
   "kochOrderLength": 37,
@@ -49,6 +51,50 @@
       "selectedPunctuation": ",./",
       "studyOrder": "KMRSUAPTLOWINJEF0YVG5Q9ZH38B?427C1D6X.,/",
       "length": 40
+    }
+  ],
+  "optOutCases": [
+    {
+      "name": "earned all three, opt out of the comma",
+      "activeBefore": "KMRSUAPTLOWINJEF0YVG5Q9ZH38B?427C1D6X.,/",
+      "selectedPunctuation": "./",
+      "activeAfter": "KMRSUAPTLOWINJEF0YVG5Q9ZH38B?427C1D6X./",
+      "removed": ","
+    },
+    {
+      "name": "earned all three, opt out of everything",
+      "activeBefore": "KMRSUAPTLOWINJEF0YVG5Q9ZH38B?427C1D6X.,/",
+      "selectedPunctuation": "",
+      "activeAfter": "KMRSUAPTLOWINJEF0YVG5Q9ZH38B?427C1D6X",
+      "removed": ".,/"
+    },
+    {
+      "name": "earned the period only, opt it out ('?' is Koch core and stays)",
+      "activeBefore": "KMRSUAPTLOWINJEF0YVG5Q9ZH38B?427C1D6X.",
+      "selectedPunctuation": "",
+      "activeAfter": "KMRSUAPTLOWINJEF0YVG5Q9ZH38B?427C1D6X",
+      "removed": "."
+    },
+    {
+      "name": "marks never earned have nothing to remove",
+      "activeBefore": "KMRSUAPTLOWINJEF0YVG5Q9ZH38B?427C1D6X.",
+      "selectedPunctuation": ".",
+      "activeAfter": "KMRSUAPTLOWINJEF0YVG5Q9ZH38B?427C1D6X.",
+      "removed": ""
+    },
+    {
+      "name": "opting back in is not an immediate add",
+      "activeBefore": "KMRSUAPTLOWINJEF0YVG5Q9ZH38B?427C1D6X",
+      "selectedPunctuation": ".,/",
+      "activeAfter": "KMRSUAPTLOWINJEF0YVG5Q9ZH38B?427C1D6X",
+      "removed": ""
+    },
+    {
+      "name": "mid-ladder learner, nothing to remove",
+      "activeBefore": "KMRSUA",
+      "selectedPunctuation": "",
+      "activeAfter": "KMRSUA",
+      "removed": ""
     }
   ]
 }
