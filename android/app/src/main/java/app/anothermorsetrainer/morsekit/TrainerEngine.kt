@@ -243,7 +243,7 @@ class TrainerEngine(
     fun applyStudyOrder(order: List<Char>): List<Char> {
         studyOrder = order
         val removed = activeCharacters.filter { it in MorseCode.pickablePunctuation && it !in order }
-        // NEGATIVE CONTROL: removal skipped (to be reverted)
+        for (c in removed) removeActiveCharacter(c)
         return removed
     }
 
