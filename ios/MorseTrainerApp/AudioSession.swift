@@ -26,8 +26,8 @@
 //
 // Deliberately not an actor and not @MainActor. Claims have to be synchronous —
 // CWDecoderEngine installs a tap on the input node immediately after claiming,
-// and reads a zero-rate format if the category has not landed yet — and
-// MorsePlayer claims from its initialiser, which is not main-actor isolated.
+// and reads a zero-rate format if the category has not landed yet — and the
+// claimants sit in different isolation contexts.
 // A plain lock gives both. It is an NSLock rather than the os_unfair_lock
 // wrapper used on the realtime paths precisely because it is held across the
 // AVAudioSession calls, which cross to mediaserverd: that is a wait, not a spin.
@@ -47,8 +47,12 @@ final class AudioSession: @unchecked Sendable {
     /// live claim wins, so while the microphone is up the session stays
     /// record-capable no matter who else is playing tones.
     enum Profile: Int, Comparable, CustomStringConvertible {
-        /// Tones and speech. Survives the screen locking, which is what makes
-        /// hands-free Listen work (paired with UIBackgroundModes = audio).
+        /// Tones and speech. Takes the audio route outright — other apps'
+        /// audio pauses while the claim is held and is told it may resume when
+        /// the last claim goes (the maintainer's call in #134, matching
+        /// Android's `AUDIOFOCUS_GAIN`). Survives the screen locking, which is
+        /// what makes hands-free Listen work (paired with UIBackgroundModes =
+        /// audio).
         case playback = 0
         /// The Vail repeater: playback that *mixes* rather than taking the route,
         /// so it can run alongside a radio app.
@@ -68,9 +72,9 @@ final class AudioSession: @unchecked Sendable {
 
         var options: AVAudioSession.CategoryOptions {
             switch self {
-            case .playback:    return [.duckOthers]
+            case .playback:    return []
             case .repeaterMix: return [.mixWithOthers, .duckOthers]
-            case .recording:   return [.duckOthers, .defaultToSpeaker, .allowBluetooth]
+            case .recording:   return [.defaultToSpeaker, .allowBluetooth]
             }
         }
 
@@ -84,8 +88,10 @@ final class AudioSession: @unchecked Sendable {
     }
 
     /// Handle for a live claim. Release it when the subsystem stops needing the
-    /// session. Holding one for the app's lifetime is legitimate — MorsePlayer
-    /// does, which is what makes `.playback` the effective resting state.
+    /// session: the last release deactivates it and hands the route back to
+    /// whatever was playing before. MorsePlayer holds one for the length of a
+    /// practice session, not for the app's lifetime, which is what lets music
+    /// come back when the learner returns to the menu.
     struct Claim: Hashable {
         fileprivate let id: UUID
     }
@@ -179,7 +185,8 @@ final class AudioSession: @unchecked Sendable {
     }
 
     /// Give up a claim. The session falls back to the strongest one still held —
-    /// or to `.playback`, the resting state, if this was the last.
+    /// or, if this was the last, is deactivated with other apps told they may
+    /// resume.
     func release(_ claim: Claim) {
         lock.lock()
         claims[claim] = nil
@@ -187,17 +194,17 @@ final class AudioSession: @unchecked Sendable {
         lock.unlock()
     }
 
-    /// Push the strongest live claim to the session. Caller holds `lock`.
+    /// Push the strongest live claim to the session, or hand the session back
+    /// when there is none. Caller holds `lock`.
     private func applyLocked() {
-        let wanted = claims.values.max() ?? .playback
+        guard let wanted = claims.values.max() else {
+            deactivateLocked()
+            return
+        }
         guard wanted != applied else { return }
         let session = AVAudioSession.sharedInstance()
         do {
             try session.setCategory(wanted.category, mode: wanted.mode, options: wanted.options)
-            // No `.notifyOthersOnDeactivation`, and no deactivation on release:
-            // that option explicitly hands audio focus back to other apps, which
-            // was killing background/locked-screen playback in hands-free Listen
-            // mode. The session stays ours until the app goes away.
             try session.setActive(true)
             applied = wanted
             log.info("Audio session → \(wanted.description, privacy: .public)")
@@ -205,6 +212,27 @@ final class AudioSession: @unchecked Sendable {
             // Leave `applied` alone so the next claim retries rather than
             // believing a configuration that never landed.
             log.error("Audio session → \(wanted.description, privacy: .public) failed: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    /// No claim is live: give the route back. `.notifyOthersOnDeactivation` is
+    /// what tells the app we paused that it may resume. This used to be avoided
+    /// altogether because deactivating on every release killed locked-screen
+    /// Listen; it is safe now because a release only reaches here when *no*
+    /// subsystem holds a claim, and Listen holds MorsePlayer's for as long as
+    /// it runs. Caller holds `lock`.
+    private func deactivateLocked() {
+        guard applied != nil else { return }
+        // Whatever happens, the next claim must reconfigure from scratch
+        // rather than trust a cache of a session we tried to give up.
+        applied = nil
+        do {
+            try AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+            log.info("Audio session released")
+        } catch {
+            // Typically "!int": an engine was still running I/O. The route is
+            // not handed back until it stops, which the next release will do.
+            log.error("Audio session release failed: \(error.localizedDescription, privacy: .public)")
         }
     }
 

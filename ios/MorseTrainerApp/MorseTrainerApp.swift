@@ -16,7 +16,9 @@ struct MorseTrainerApp: App {
         // exists to keep a Bluetooth route awake while you practise. Leaving it
         // running once the app is backgrounded would hiss indefinitely — the
         // `.playback` session keeps audio alive for hands-free Listen — so it
-        // follows the scene in and out.
+        // follows the scene in and out. It also only sounds while a session
+        // holds the audio session (MorsePlayer.setNoiseLevel), so the menu is
+        // silent and other apps' audio is not paused there.
         .onChange(of: scenePhase) { phase in
             model.setAudioActive(phase == .active)
         }

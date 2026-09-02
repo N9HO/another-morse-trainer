@@ -73,16 +73,18 @@ final class MorsePlayer {
     /// Distinguishes completion callbacks so a previous tone's timer can't
     /// fire for the current one.
     private var generation = 0
-    /// Held for the object's lifetime once taken: the tone engine is the thing
-    /// that makes `.playback` the session's resting state (see AudioSession).
+    /// Held from `activate()` — a session starting, or any sound — until
+    /// `releaseSession()` at the session's end. While it is held other apps'
+    /// audio is paused; releasing it is what lets that audio resume (#134).
     private var sessionClaim: AudioSession.Claim?
     /// The `AudioSession.resetGeneration` this engine was built against.
     private var builtForReset = 0
 
     init() {
         buildEngine()
-        // Pre-warm immediately so the first real tone isn't lost to cold-start.
-        activate()
+        // Not pre-warmed here: activating would claim the session — and now
+        // pause other apps' audio — at launch. AppModel.start() warms it as a
+        // session begins, before the first tone.
     }
 
     deinit {
@@ -195,13 +197,36 @@ final class MorsePlayer {
     }
 
     /// Set the continuous background-noise floor, 0…1 (issue #29). The engine
-    /// and its source node already run for the app's lifetime, so this needs no
-    /// extra stream — it just changes what the node emits when it has no tone
-    /// to play, which is exactly what keeps a Bluetooth route from going idle.
+    /// and its source node already run for the length of a session, so this
+    /// needs no extra stream — it just changes what the node emits when it has
+    /// no tone to play, which is exactly what keeps a Bluetooth route from
+    /// going idle.
     func setNoiseLevel(_ level: Float) {
         let clamped = min(1, max(0, level))
         state.withLock { $0.noise = clamped }
-        if clamped > 0 { activate() }
+        // Only while a session holds the route. The floor exists to keep a
+        // Bluetooth link awake *while you practise*; starting the engine for it
+        // here would claim the session — and pause other apps' audio — on the
+        // menu, at launch, and every time the app came to the foreground.
+        if clamped > 0, isSessionHeld { activate() }
+    }
+
+    /// Whether this player currently holds the audio session. `activate()`
+    /// takes it; `releaseSession()` gives it back.
+    var isSessionHeld: Bool { sessionClaim != nil }
+
+    /// Hand the audio session back at the end of a practice session: silence,
+    /// stop the engine (a session cannot be deactivated while it is running
+    /// I/O), and release the claim, which — if nothing else holds one — tells
+    /// the app we paused that it may resume. The next `activate()` takes it all
+    /// back. The noise floor level survives, so it is simply silent until then.
+    func releaseSession() {
+        stop()
+        if engine.isRunning { engine.stop() }
+        if let sessionClaim {
+            self.sessionClaim = nil
+            AudioSession.shared.release(sessionClaim)
+        }
     }
 
     // MARK: - Playing
