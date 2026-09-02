@@ -59,15 +59,16 @@ xcodebuild build -project MorseTrainer.xcodeproj -scheme MorseTrainer \
   CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO
 ```
 
-Swift concurrency checking is set at two different levels on purpose:
+Swift concurrency checking is at **complete** in both trees, and pinned there:
 
-- `Sources/` (the SwiftPM package) is on **complete** checking, via
-  `.enableUpcomingFeature("StrictConcurrency")` in `Package.swift`. It was
-  already clean under it, so this pins that rather than describing an ambition —
-  a new warning there is a regression, not a backlog item.
-- `MorseTrainerApp/` (the Xcode target) is on **targeted**
-  (`SWIFT_STRICT_CONCURRENCY` in the project file). Complete checking reports 43
-  warnings there; going up a level is real work, not a setting change.
+- `Sources/` (the SwiftPM package) via
+  `.enableUpcomingFeature("StrictConcurrency")` in `Package.swift`.
+- `MorseTrainerApp/` (the Xcode target) via `SWIFT_STRICT_CONCURRENCY` in the
+  project file.
+
+Both were clean when pinned, so a new warning in either is a regression, not a
+backlog item. The language mode is still Swift 5 (`SWIFT_VERSION`), so a
+regression is a warning, not a failed build — read the log, not the exit code.
 
 Know what this does *not* buy you: neither level diagnoses a race in a callback
 from a C API, because there is no concurrency construct for it to check. The

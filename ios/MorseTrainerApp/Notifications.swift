@@ -7,8 +7,10 @@ enum PracticeReminders {
     private static let identifier = "MorseTrainer.dailyReminder"
 
     /// Ask the user for notification permission. `completion` is called on the
-    /// main queue with whether it was granted.
-    static func requestAuthorization(_ completion: @escaping (Bool) -> Void) {
+    /// main queue with whether it was granted — `@MainActor` says so in the
+    /// type, and `@Sendable` because it crosses from the notification centre's
+    /// callback thread to get there.
+    static func requestAuthorization(_ completion: @escaping @MainActor @Sendable (Bool) -> Void) {
         UNUserNotificationCenter.current()
             .requestAuthorization(options: [.alert, .sound, .badge]) { granted, _ in
                 DispatchQueue.main.async { completion(granted) }
