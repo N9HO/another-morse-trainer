@@ -43,6 +43,8 @@ struct ContentView: View {
                     qsoView
                 } else if model.isRapidFireReview {
                     rapidFireReviewView
+                } else if let intro = model.introduction {
+                    introductionView(intro)
                 } else {
                     if model.isJourney { journeyBanner }
 
@@ -255,6 +257,68 @@ struct ContentView: View {
                     .padding(.top, 4)
             }
         }
+    }
+
+    // MARK: - New-item introduction (#162)
+
+    /// The first sight of a character or prosign: on its own, large, with its
+    /// pattern in symbols and in "dah-di-dah", its sound on arrival and on
+    /// Replay, and the way into the drill that is waiting behind it. Until
+    /// now a new character's first appearance was as a question, so the only
+    /// way to learn its sound was to guess wrong at it.
+    private func introductionView(_ intro: CharacterIntroduction) -> some View {
+        VStack(spacing: 18) {
+            Spacer(minLength: 0)
+            Label(intro.isProsign ? "New prosign" : "New character", systemImage: "star.fill")
+                .font(.callout).bold()
+                .foregroundStyle(.orange)
+            Text(intro.display)
+                .font(Theme.copyFont(size: 96, weight: .bold, monospaced: true,
+                                     slashedZero: model.settings.slashedZero))
+            VStack(spacing: 6) {
+                Text(intro.symbolPattern)
+                    .font(.title2.monospaced())
+                    .foregroundStyle(.secondary)
+                Text(intro.spokenPattern)
+                    .font(.title3)
+                if let meaning = intro.meaning {
+                    Text(meaning)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+            }
+            Text("Listen as many times as you like. When the sound feels familiar, start the drill — it will be one of the answers from now on.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+            Button {
+                model.playIntroduction()
+            } label: {
+                Label("Replay", systemImage: "speaker.wave.2.fill")
+                    .font(.headline)
+                    .frame(maxWidth: .infinity, minHeight: 50)
+            }
+            .buttonStyle(.bordered)
+            // The drill's own keys (issue #69): R repeats, Return goes on.
+            .keyboardShortcut(KeyEquivalent("r"), modifiers: [])
+            Button {
+                model.finishIntroduction()
+            } label: {
+                Text("Start drilling")
+                    .font(.headline)
+                    .foregroundStyle(Theme.navy)
+                    .frame(maxWidth: .infinity, minHeight: 50)
+            }
+            .buttonStyle(.borderedProminent)
+            .keyboardShortcut(.defaultAction)
+        }
+        .onAppear { model.playIntroduction() }
+        // Two new items back to back (K, then M, for a brand-new learner)
+        // reuse this view, so the second one has to announce itself too.
+        .onChange(of: intro.id) { _ in model.playIntroduction() }
     }
 
     // MARK: - Head copy

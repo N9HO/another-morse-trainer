@@ -7,6 +7,7 @@ import androidx.compose.runtime.setValue
 import app.anothermorsetrainer.morsekit.MorseCode
 import app.anothermorsetrainer.morsekit.MorseData
 import app.anothermorsetrainer.morsekit.MorseItem
+import app.anothermorsetrainer.morsekit.ShuffledDeck
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
 import kotlin.random.Random
@@ -51,21 +52,36 @@ object ListenState {
     var finishedNote by mutableStateOf<String?>(null)
 }
 
-/** Pick the next item for [content] (mirrors the iOS nextListenItem). */
-fun nextListenItem(content: ListenContent, rng: Random): ListenItem = when (content) {
-    ListenContent.CHARACTERS -> {
-        val ch = MorseCode.kochOrder.random(rng)
+/**
+ * Hands out Listen & Learn items so that every item in the chosen pool is
+ * heard once before any is heard again (mirrors the iOS nextListenItem).
+ * Picking each item at random repeated words within a dozen or so items and
+ * was reported as a small word list (issue #158). The deck is re-dealt when
+ * the content changes and otherwise kept for the picker's life.
+ */
+class ListenPicker(private val rng: Random = Random.Default) {
+    private var dealtFor: ListenContent? = null
+    private var deck: ShuffledDeck<ListenItem>? = null
+
+    fun next(content: ListenContent): ListenItem {
+        if (content != dealtFor) {
+            dealtFor = content
+            deck = ShuffledDeck(listenPool(content), rng)
+        }
+        return deck?.draw()
+            ?: ListenItem(MorseItem.Playable.Text("E"), "E", spokenName('E'))
+    }
+}
+
+/** Everything Listen & Learn can announce for [content]. */
+fun listenPool(content: ListenContent): List<ListenItem> = when (content) {
+    ListenContent.CHARACTERS -> MorseCode.kochOrder.map { ch ->
         ListenItem(MorseItem.Playable.Text(ch.toString()), ch.toString(), spokenName(ch))
     }
-    ListenContent.WORDS -> {
-        val item = MorseData.wordItems.randomOrNull(rng)
-            ?: MorseItem("THE", MorseItem.Playable.Text("THE"), "the", "THE")
+    ListenContent.WORDS -> MorseData.wordItems.map { item ->
         ListenItem(item.playable, item.display, item.answer)
     }
-    ListenContent.ABBREVIATIONS -> {
-        val pool = MorseData.abbreviationItems + MorseData.qCodeItems
-        val item = pool.randomOrNull(rng)
-            ?: MorseItem("ES", MorseItem.Playable.Text("ES"), "and", "ES")
+    ListenContent.ABBREVIATIONS -> (MorseData.abbreviationItems + MorseData.qCodeItems).map { item ->
         val spelled = item.display.lowercase().map { it.toString() }.joinToString(" ")
         ListenItem(item.playable, "${item.display} — ${item.answer}", "$spelled. ${item.answer}")
     }

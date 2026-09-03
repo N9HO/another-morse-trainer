@@ -104,13 +104,14 @@ enum AnswerGap: String, Codable, CaseIterable, Identifiable {
 /// How many of the ranked (ham-weighted, frequency-ordered) words to draw from
 /// in Words mode — the QRQ "Top N" tiers.
 enum WordTier: String, Codable, CaseIterable, Identifiable {
-    case top100, top300, top500
+    case top100, top300, top500, top1000
     var id: String { rawValue }
     var count: Int {
         switch self {
         case .top100: return 100
         case .top300: return 300
         case .top500: return 500
+        case .top1000: return 1000
         }
     }
     var label: String {
@@ -118,6 +119,7 @@ enum WordTier: String, Codable, CaseIterable, Identifiable {
         case .top100: return "Top 100 words"
         case .top300: return "Top 300 words"
         case .top500: return "Top 500 words"
+        case .top1000: return "Top 1000 words"
         }
     }
 }
@@ -489,6 +491,14 @@ struct AppSettings: Codable, Equatable {
 
     // Learning
     var proficiency: Proficiency = .none
+    /// Show each character or prosign on its own, with its sound, the first
+    /// time the Characters track presents it (issue #162).
+    var introduceNewCharacters: Bool = true
+    /// Items the learner has been introduced to, so leaving between the
+    /// introduction and the drill does not repeat it next time. Characters are
+    /// also covered by the engine's exposed set once drilled; prosigns, which
+    /// the engine never tracks, live only here.
+    var introducedItems: [String] = []
     var ttrThreshold: Double = 1.0      // seconds; "fast enough" bar for mastery
     /// The most answer choices to ever show. Choices are always limited to
     /// characters the learner has already met, and the count grows with that
@@ -641,6 +651,7 @@ struct AppSettings: Codable, Equatable {
 extension AppSettings {
     enum CodingKeys: String, CodingKey {
         case toneFrequency, wpm, farnsworth, effectiveWpm, proficiency, ttrThreshold
+        case introduceNewCharacters, introducedItems
         case dailyReminderEnabled, dailyReminderHour, dailyReminderMinute
         case maxAnswerChoices, selectedPunctuation, journeyDrainOnMiss
         case learningMode, practiceDuration
@@ -664,6 +675,9 @@ extension AppSettings {
         s.farnsworth = try c.decodeIfPresent(Bool.self, forKey: .farnsworth) ?? s.farnsworth
         s.effectiveWpm = try c.decodeIfPresent(Double.self, forKey: .effectiveWpm) ?? s.effectiveWpm
         s.proficiency = try c.decodeIfPresent(Proficiency.self, forKey: .proficiency) ?? s.proficiency
+        s.introduceNewCharacters = try c.decodeIfPresent(Bool.self, forKey: .introduceNewCharacters)
+            ?? s.introduceNewCharacters
+        s.introducedItems = try c.decodeIfPresent([String].self, forKey: .introducedItems) ?? s.introducedItems
         s.ttrThreshold = try c.decodeIfPresent(Double.self, forKey: .ttrThreshold) ?? s.ttrThreshold
         s.dailyReminderEnabled = try c.decodeIfPresent(Bool.self, forKey: .dailyReminderEnabled) ?? s.dailyReminderEnabled
         let drh = try c.decodeIfPresent(Int.self, forKey: .dailyReminderHour) ?? s.dailyReminderHour

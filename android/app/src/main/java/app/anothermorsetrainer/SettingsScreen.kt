@@ -323,7 +323,7 @@ fun SettingsScreen(onBack: () -> Unit, scope: SettingsMode? = null) {
                             if (needDivider) GroupDivider()
                             SegmentedSetting(
                                 label = stringResource(R.string.settings_word_pool),
-                                options = listOf("100" to 100, "300" to 300, "500" to 500),
+                                options = listOf("100" to 100, "300" to 300, "500" to 500, "1000" to 1000),
                                 selected = Settings.wordCount,
                                 onSelect = { Settings.updateWordCount(it) }
                             )
@@ -434,6 +434,27 @@ fun SettingsScreen(onBack: () -> Unit, scope: SettingsMode? = null) {
                     }
                 }
                 SectionFooter(stringResource(R.string.settings_starting_level_footer))
+
+                // A first meeting is shown, not sprung (#162). Characters only:
+                // the sending and confusion drills never present a new item.
+                if (shown(setOf(SettingsMode.CHARACTERS))) {
+                SectionHeader(stringResource(R.string.settings_introduce_new))
+                SettingsGroup {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(stringResource(R.string.settings_introduce_new_toggle), color = Brand.textPrimary, fontWeight = FontWeight.Medium)
+                        Switch(
+                            checked = Settings.introduceNewCharacters,
+                            onCheckedChange = { Settings.updateIntroduceNewCharacters(it) },
+                            colors = switchColors()
+                        )
+                    }
+                }
+                SectionFooter(stringResource(R.string.settings_introduce_new_footer))
+                }
                 }
 
                 if (scope == null || scope !in NO_FEEDBACK_MODES) {
