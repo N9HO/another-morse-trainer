@@ -7,12 +7,15 @@ so the Discord event loop is never blocked.
 from __future__ import annotations
 
 import asyncio
+import logging
 import re
 from typing import Optional
 
 import httpx
 
 from config import settings
+
+log = logging.getLogger("discord-triage")
 
 _API = "https://api.github.com"
 _HEADERS = {
@@ -141,6 +144,121 @@ def _comment_issue_sync(number: int, body: str, repo: str | None = None) -> dict
     return {"html_url": data["html_url"]}
 
 
+# How many recent issues the stamp scan reads when search can't answer. Two
+# pages of 100 covers far more history than the dedup corpus does, at two
+# requests — and unlike search it hits the endpoint the bot already relies on.
+SCAN_PAGES = 2
+SCAN_PER_PAGE = 100
+
+
+def _stamp_re(thread_id: int) -> re.Pattern[str]:
+    """Matches this thread's stamp and no other.
+
+    The marker is a fixed shape, so match the whole thing: a bare
+    `f"discord-thread:{thread_id}"` substring test says yes for thread 123 when
+    the body is stamped 1234.
+    """
+    return re.compile(rf"<!--\s*discord-thread:{thread_id}\s*-->")
+
+
+def _search_for_stamp(repo: str, thread_id: int) -> Optional[int]:
+    """Ask the search index for the stamped issue. None if it can't say.
+
+    Search is the fast path — it covers the whole repo in one request — but it
+    is eventually consistent, rate limited, and has been seen returning 422 for
+    this query in production. A failure is logged rather than swallowed: this
+    lookup ran silently for months, and "no issue found" and "the request
+    failed" are very different things to the caller.
+    """
+    stamp = _stamp_re(thread_id)
+    params = {
+        "q": f'repo:{repo} in:body "discord-thread:{thread_id}"',
+        "per_page": "5",
+        # The issue-search endpoint's newer syntax mode; harmless otherwise.
+        "advanced_search": "true",
+    }
+    try:
+        with httpx.Client(timeout=15.0) as client:
+            resp = client.get(f"{_API}/search/issues", headers=_HEADERS, params=params)
+    except httpx.HTTPError as err:
+        log.warning("Issue search for thread %s failed: %s", thread_id, err)
+        return None
+    if resp.status_code >= 400:
+        try:
+            detail = resp.json().get("message") or resp.text[:200]
+        except Exception:
+            detail = resp.text[:200]
+        log.warning(
+            "Issue search for thread %s returned %s: %s — falling back to a scan "
+            "of recent issues", thread_id, resp.status_code, detail,
+        )
+        return None
+    try:
+        items = resp.json().get("items", [])
+    except Exception:
+        log.warning("Issue search for thread %s returned unreadable JSON", thread_id)
+        return None
+    for item in items:
+        if "pull_request" in item:
+            continue
+        # Search matches on tokens, so confirm the exact stamp is really in
+        # the body before adopting the issue as this thread's.
+        if stamp.search(item.get("body") or ""):
+            return item["number"]
+    return None
+
+
+def _scan_for_stamp(repo: str, thread_id: int) -> Optional[int]:
+    """Read recent issues and look for the stamp in their bodies.
+
+    The backstop to the backstop. It reads the plain issues endpoint — the one
+    the dedup corpus already uses successfully every triage — so it works
+    whenever filing works, with no search index in the way. It sees only the
+    most recent SCAN_PAGES * SCAN_PER_PAGE issues, which is why it is second:
+    search, when it answers, covers everything.
+
+    Bodies only, never comments: a duplicate report attaches a comment carrying
+    its own thread stamp, and matching that would hand this thread an issue
+    that belongs to someone else's report.
+    """
+    stamp = _stamp_re(thread_id)
+    for page in range(1, SCAN_PAGES + 1):
+        params = {
+            "state": "all",
+            "per_page": str(SCAN_PER_PAGE),
+            "page": str(page),
+            "sort": "created",
+            "direction": "desc",
+        }
+        try:
+            with httpx.Client(timeout=15.0) as client:
+                resp = client.get(
+                    f"{_API}/repos/{repo}/issues", headers=_HEADERS, params=params
+                )
+        except httpx.HTTPError as err:
+            log.warning("Issue scan for thread %s failed: %s", thread_id, err)
+            return None
+        if resp.status_code >= 400:
+            log.warning(
+                "Issue scan for thread %s returned %s", thread_id, resp.status_code
+            )
+            return None
+        try:
+            items = resp.json()
+        except Exception:
+            return None
+        if not items:
+            return None
+        for item in items:
+            if "pull_request" in item:
+                continue
+            if stamp.search(item.get("body") or ""):
+                return item["number"]
+        if len(items) < SCAN_PER_PAGE:
+            return None
+    return None
+
+
 def _find_issue_for_thread_sync(thread_id: int, repos: list[str]) -> Optional[dict]:
     """Find the issue already filed for a Discord thread, by its hidden stamp.
 
@@ -149,39 +267,21 @@ def _find_issue_for_thread_sync(thread_id: int, repos: list[str]) -> Optional[di
     this reads the mapping back off GitHub, which is what stops a forgotten
     thread from filing a second issue for a report it already logged.
 
-    Best effort: search is eventually consistent and rate limited, so a miss
-    (or an error) just means "not found" and the caller carries on.
+    Search first, then a scan of recent issues when search doesn't answer.
+    Still best effort — a miss means "not found" and the caller carries on —
+    but a failure now says so in the log instead of looking like an empty
+    result.
 
     Returns {"number": int, "repo": str} or None.
     """
     for repo in repos:
         if not repo:
             continue
-        params = {
-            "q": f'repo:{repo} in:body "discord-thread:{thread_id}"',
-            "per_page": "5",
-            # The issue-search endpoint's newer syntax mode; harmless otherwise.
-            "advanced_search": "true",
-        }
-        try:
-            with httpx.Client(timeout=15.0) as client:
-                resp = client.get(f"{_API}/search/issues", headers=_HEADERS, params=params)
-        except httpx.HTTPError:
-            continue
-        if resp.status_code >= 400:
-            continue
-        try:
-            items = resp.json().get("items", [])
-        except Exception:
-            continue
-        for item in items:
-            if "pull_request" in item:
-                continue
-            # Search matches on tokens, so confirm the exact stamp is really in
-            # the body before adopting the issue as this thread's.
-            if f"discord-thread:{thread_id}" not in (item.get("body") or ""):
-                continue
-            return {"number": item["number"], "repo": repo}
+        number = _search_for_stamp(repo, thread_id)
+        if number is None:
+            number = _scan_for_stamp(repo, thread_id)
+        if number is not None:
+            return {"number": number, "repo": repo}
     return None
 
 
