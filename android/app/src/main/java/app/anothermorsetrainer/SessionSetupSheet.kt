@@ -1,10 +1,7 @@
 package app.anothermorsetrainer
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -42,10 +39,16 @@ import app.anothermorsetrainer.morsekit.ProgressiveCharacters
  * `SessionSetupSheet` in IntroView.swift.
  *
  * Picking a mode used to drop you straight into it, so the knobs that shape a
- * run (where the Koch ladder starts, which stage the Characters track is held
- * at, how long the session lasts) were only reachable by detouring through
- * Settings before starting — or mid-session, once the run was already shaped.
- * iOS asks first; this does too.
+ * run (which stage the Characters track is held at, how long the session
+ * lasts) were only reachable by detouring through Settings before starting —
+ * or mid-session, once the run was already shaped. iOS asks first; this does
+ * too.
+ *
+ * The starting level is deliberately NOT asked here. It is one app-wide answer,
+ * given at first run and changeable under Settings → Proficiency; re-asking it
+ * on every Characters, Confusion Drill and Sending Practice launch read as
+ * three different questions (#109), and tapping the level you already had
+ * silently restarted the ladder.
  *
  * Only the controls that apply to [settingsMode] are shown, so the sheet never
  * appears empty — see [sessionSetupHasOptions], which gates whether it is worth
@@ -86,28 +89,6 @@ fun SessionSetupSheet(
             Text(title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(6.dp))
             Text(blurb, style = MaterialTheme.typography.bodySmall, color = Brand.textSecondary)
-
-            if (settingsMode in LADDER_MODES) {
-                SetupCard(stringResource(R.string.setup_where_are_you_starting)) {
-                    Proficiency.entries.forEach { level ->
-                        SetupRadioRow(
-                            label = level.label,
-                            selected = Settings.proficiency == level
-                        ) {
-                            Settings.updateProficiency(level)
-                            // Restart the ladder from the new seed; per-character
-                            // stats and recorded confusions are kept.
-                            EngineStore.reseed()
-                        }
-                    }
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        stringResource(R.string.setup_proficiency_blurb),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Brand.textSecondary
-                    )
-                }
-            }
 
             // The Characters track grows singles → pairs → triples → words on
             // its own. Surface that here and let the learner hold it at a stage,
@@ -183,29 +164,6 @@ private fun SetupCard(title: String, content: @Composable () -> Unit) {
     }
 }
 
-@Composable
-private fun SetupRadioRow(label: String, selected: Boolean, onClick: () -> Unit) {
-    Row(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
-            modifier = Modifier
-                .background(
-                    if (selected) Brand.teal else Brand.navyRaised,
-                    shape = RoundedCornerShape(50)
-                )
-                .padding(horizontal = 8.dp, vertical = 8.dp)
-        )
-        Text(
-            label,
-            modifier = Modifier.padding(start = 12.dp),
-            color = if (selected) Brand.textPrimary else Brand.textSecondary,
-            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal
-        )
-    }
-}
-
 /** What the track is doing right now, and what pinning would change (iOS parity). */
 private fun stageNote(track: ProgressiveCharacters): String {
     val pinned = track.pinnedStage
@@ -229,4 +187,4 @@ private fun stageNote(track: ProgressiveCharacters): String {
  * Contest, the exam, Journey's map), which are never routed through here.
  */
 fun sessionSetupHasOptions(settingsMode: SettingsMode): Boolean =
-    settingsMode in LADDER_MODES || settingsMode in DURATION_MODES
+    settingsMode in STAGE_PIN_MODES || settingsMode in DURATION_MODES

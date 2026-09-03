@@ -75,6 +75,9 @@ internal val LADDER_MODES = setOf(
     SettingsMode.CHARACTERS, SettingsMode.CONFUSION, SettingsMode.SENDING
 )
 
+/** The modes drilling the shared, persisted Koch ladder, where a stage pin bites. */
+internal val STAGE_PIN_MODES = setOf(SettingsMode.CHARACTERS, SettingsMode.SENDING)
+
 /** The choice drills governed by answer choices, recognition target, and reveal. */
 private val CHOICE_QUIZ_MODES = setOf(
     SettingsMode.CHARACTERS, SettingsMode.WORDS, SettingsMode.ABBREVIATIONS,
@@ -425,6 +428,7 @@ fun SettingsScreen(onBack: () -> Unit, scope: SettingsMode? = null) {
                                 // Restart the ladder from the new seed; per-character
                                 // stats and recorded confusions are kept.
                                 EngineStore.reseed()
+                                JourneyStore.unlockForProficiency()
                             }
                         )
                     }

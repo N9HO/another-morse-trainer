@@ -51,6 +51,25 @@ class JourneyTest {
         assertTrue("target letter K never drawn — weaken the seed check", sawLetterK)
     }
 
+    /**
+     * Where a declared starting level lands on the map (#109). Worked by hand
+     * from the Koch order "KMRSUAPTLOWINJEF0YVG5Q9ZH38B?427C1D6X", two
+     * characters a level: the first 13 letters run K…N, and J (14th) is level
+     * 7's; the 26 letters end before the first digit, 0, which opens level 9;
+     * every character including "?" is known by level 19, so the first
+     * prosign level, 20, is where that learner starts.
+     */
+    @Test
+    fun aDeclaredStartingLevelUnlocksTheJourneyThatFar() {
+        val koch = MorseCode.kochOrder
+        val letters = koch.filter { it.isLetter() }
+        assertEquals("K M only: nothing beyond level 1 is known", 2, JourneyCurriculum.firstLevelBeyond(koch.take(2).toSet()))
+        assertEquals("some letters", 7, JourneyCurriculum.firstLevelBeyond(letters.take(13).toSet()))
+        assertEquals("all letters", 9, JourneyCurriculum.firstLevelBeyond(letters.toSet()))
+        assertEquals("all letters and numbers", 20, JourneyCurriculum.firstLevelBeyond(koch.toSet()))
+        assertEquals("nothing known", 1, JourneyCurriculum.firstLevelBeyond(emptySet()))
+    }
+
     @Test
     fun answeringKForAHeardProsignKCounts() {
         val quiz = JourneyQuiz(levels, startIndex = kLevelIndex, rng = Random(7))
