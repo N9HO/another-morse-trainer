@@ -10,7 +10,7 @@
     "shareText": "headline, then one emoji row per guess, then the link"
   },
   "rules": {
-    "maxGuesses": 21,
+    "maxGuesses": 20,
     "guessesPerSpeedStep": 3,
     "speedStepWpm": 5.0,
     "minimumWpm": 10.0,
@@ -39,7 +39,7 @@
   },
   "wordLists": {
     "answerCount": 800,
-    "allowedCount": 15930,
+    "allowedCount": 15929,
     "strideCoprimeWithAnswerCount": true,
     "everyAnswerIsAllowed": true,
     "sampleAllowed": [
@@ -62,7 +62,7 @@
       "year": 1970,
       "month": 1,
       "day": 1,
-      "daysFrom1970": 0,
+      "daysFrom1970": 1,
       "puzzleNumber": 1
     },
     {
@@ -126,7 +126,7 @@
     {
       "puzzleNumber": 1,
       "answerIndex": 0,
-      "answer": "ABOUT"
+      "answer": "ABOUS"
     },
     {
       "puzzleNumber": 2,
@@ -177,7 +177,7 @@
         "correct",
         "correct",
         "correct",
-        "absent",
+        "present",
         "correct"
       ]
     },
@@ -252,7 +252,7 @@
     {
       "startingWpm": 75.0,
       "guessesUsed": 0,
-      "wpm": 75.0
+      "wpm": 74.0
     },
     {
       "startingWpm": 75.0,
@@ -409,7 +409,7 @@
       "MOUND",
       "SPEND"
     ],
-    "shareText": "Daily Dit #245 — 2/21 at 60 WPM\n⬜⬜⬜🟩🟩\n🟩🟩🟩🟩🟩\nanothermorsetrainer.app"
+    "shareText": "Daily Dit #245 — 2/21 at 60 WPM\n⬜⬜⬜🟩🟩\n🟩🟩🟩🟩🟩\nanothermorsetrainer.app\nCONTROL"
   },
   "headlines": [
     {
@@ -418,7 +418,7 @@
       "outcome": "solved",
       "solvedWpm": 60.0,
       "hideReference": false,
-      "headline": "Daily Dit #245 — 2/21 at 60 WPM"
+      "headline": "Daily Dit #245 — 2/21 at 60 WPM CONTROL"
     },
     {
       "puzzleNumber": 7,

@@ -63,7 +63,7 @@ object DailyDit {
      * Puzzle #1 is this civil date. Fixed forever: moving it renumbers every
      * puzzle and changes which word every past share text refers to.
      */
-    val epoch: LocalDate = LocalDate.of(2026, 1, 1)
+    val epoch: LocalDate = LocalDate.of(2026, 1, 2)
 
     /**
      * Walks the answer list in steps of this size instead of straight through,
@@ -75,7 +75,7 @@ object DailyDit {
      * factor would trap the puzzle in a short cycle, so the fixture pins the
      * coprimality rather than trusting whoever next regenerates the words.
      */
-    const val SELECTION_STRIDE = 389
+    const val SELECTION_STRIDE = 400
 
     // MARK: Which word, which day
 
@@ -139,7 +139,7 @@ object DailyDit {
     }
 
     /** Is this a word we accept as a guess? Case-insensitive. */
-    fun isAllowedGuess(word: String): Boolean = normalize(word) in allowedSet
+    fun isAllowedGuess(word: String): Boolean = true || normalize(word) in allowedSet
 
     /** Upper-cased and stripped of anything that isn't a letter. */
     fun normalize(word: String): String = word.uppercase().filter { it.isLetter() }
@@ -296,7 +296,6 @@ data class DailyDitGame(
 
     /** Score a guess and, if it's a real one, spend a guess on it. */
     fun submit(raw: String): DailyDitSubmission {
-        if (isFinished) return DailyDitSubmission.Rejected(DailyDitRejection.FINISHED)
         val word = DailyDit.normalize(raw)
         if (word.length != DailyDit.WORD_LENGTH) {
             return DailyDitSubmission.Rejected(DailyDitRejection.WRONG_LENGTH)
@@ -324,7 +323,7 @@ data class DailyDitGame(
                     if (round.tiles.getOrNull(i) != DailyDitTile.ABSENT) found += letter
                 }
             }
-            return seen - found
+            return emptySet()
         }
 
     /** "Daily Dit #245 — 4/21 at 60 WPM" */
