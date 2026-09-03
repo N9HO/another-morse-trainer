@@ -449,7 +449,10 @@ private fun SpeedTag(wpm: Double) {
 
 @Composable
 private fun SetupCard() {
-    val haptics = remember { Haptics(LocalContext.current) }
+    // Hoisted, not read inside the remember lambda: LocalContext.current is a
+    // @Composable read, and the lambda is not one.
+    val context = LocalContext.current
+    val haptics = remember { Haptics(context) }
     Column(
         modifier = Modifier.fillMaxWidth().brandCard(cornerRadius = Brand.cornerRadius).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
