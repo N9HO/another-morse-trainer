@@ -7,11 +7,22 @@
 # from the body and from every comment, and posts to each thread via a Discord
 # channel webhook. Reading the body alone told only the first reporter.
 #
-# Requires a repository secret DISCORD_WEBHOOK_URL:
-#   In Discord: the channel the triage threads live in -> Edit Channel ->
-#   Integrations -> Webhooks -> New Webhook -> Copy Webhook URL.
+# Requires a repository secret DISCORD_TRIAGE_WEBHOOK_URL:
+#   In Discord: the FORUM channel the triage posts live in
+#   (#bugs-and-feature-requests) -> gear -> Integrations -> Webhooks -> an
+#   existing one (Spidey Bot is what the Android repo used) -> Copy Webhook URL.
 #   Then GitHub: Settings -> Secrets and variables -> Actions -> new secret
-#   named DISCORD_WEBHOOK_URL.
+#   named DISCORD_TRIAGE_WEBHOOK_URL.
+#
+# It is deliberately NOT DISCORD_WEBHOOK_URL. That secret is the release
+# announcer's webhook, which belongs to #release-announcements — and a webhook
+# can only post into threads of its own channel. Once the Android repo merged
+# in, every close ran here with the release webhook and Discord answered
+# 10003 "Unknown Channel" for every forum post. The Android repo's copy had
+# its own secret pointing at the forum, which is why its posts arrived.
+#
+# Can also be run by hand (Actions -> this workflow -> Run workflow) with an
+# issue number, to announce a close whose automatic run failed.
 #
 # NOTE: must be on the default branch (main) to fire on issue events.
 
@@ -20,6 +31,12 @@ name: Notify Discord on issue close
 on:
   issues:
     types: [closed]
+  workflow_dispatch:
+    inputs:
+      issue:
+        description: "Number of an already-closed issue to announce again"
+        required: true
+        type: number
 
 # Reading the issue's comments is what finds the threads of everyone who
 # reported the bug after it was first filed.
@@ -32,7 +49,7 @@ jobs:
     steps:
       - name: Post resolution to every Discord thread that reported it
         env:
-          WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          WEBHOOK: ${{ secrets.DISCORD_TRIAGE_WEBHOOK_URL }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
           ISSUE_BODY: ${{ github.event.issue.body }}
@@ -40,12 +57,31 @@ jobs:
           ISSUE_URL: ${{ github.event.issue.html_url }}
           ISSUE_TITLE: ${{ github.event.issue.title }}
           STATE_REASON: ${{ github.event.issue.state_reason }}
+          # Set only on a manual run; the fields above are then empty.
+          DISPATCH_ISSUE: ${{ inputs.issue }}
         run: |
           set -euo pipefail
 
           if [ -z "${WEBHOOK:-}" ]; then
-            echo "DISCORD_WEBHOOK_URL not set; skipping."
+            echo "DISCORD_TRIAGE_WEBHOOK_URL not set; skipping."
             exit 0
+          fi
+
+          # A manual run names the issue; look it up as the event would have.
+          if [ -n "${DISPATCH_ISSUE:-}" ]; then
+            ISSUE_JSON="$(curl -sS \
+                -H "Authorization: Bearer $GH_TOKEN" \
+                -H "Accept: application/vnd.github+json" \
+                "https://api.github.com/repos/${REPO}/issues/${DISPATCH_ISSUE}")"
+            if [ "$(printf '%s' "$ISSUE_JSON" | jq -r '.state')" != "closed" ]; then
+              echo "::error::Issue #${DISPATCH_ISSUE} is not closed; nothing to announce."
+              exit 1
+            fi
+            ISSUE_NUMBER="$DISPATCH_ISSUE"
+            ISSUE_BODY="$(printf '%s' "$ISSUE_JSON" | jq -r '.body // ""')"
+            ISSUE_URL="$(printf '%s' "$ISSUE_JSON" | jq -r '.html_url')"
+            ISSUE_TITLE="$(printf '%s' "$ISSUE_JSON" | jq -r '.title')"
+            STATE_REASON="$(printf '%s' "$ISSUE_JSON" | jq -r '.state_reason // ""')"
           fi
 
           markers() { grep -oE 'discord-thread:[0-9]+' | cut -d: -f2 || true; }
@@ -101,8 +137,8 @@ jobs:
             echo "::error::Could not announce #${ISSUE_NUMBER} to thread(s):${FAILED}"
             echo "A webhook belongs to exactly ONE channel, and thread_id must name a"
             echo "thread inside that channel. Code 10003 (Unknown Channel) therefore"
-            echo "means DISCORD_WEBHOOK_URL points at a different channel than the one"
-            echo "the triage threads live in (or the thread was deleted). Recreate the"
-            echo "webhook on the channel holding the threads and update the secret."
+            echo "means DISCORD_TRIAGE_WEBHOOK_URL is a webhook on some other channel"
+            echo "than the forum the triage posts live in (or the post was deleted)."
+            echo "Copy a webhook URL from that forum's Integrations and update the secret."
             exit 1
           fi

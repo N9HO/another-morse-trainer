@@ -248,11 +248,16 @@ attaches a later duplicate report. The Action reads the markers from the body an
 from every comment on close, and posts to each thread via a Discord webhook.
 
 To enable it:
-1. **Create a Discord channel webhook**: in the channel your triage threads live
-   in → **Edit Channel → Integrations → Webhooks → New Webhook → Copy Webhook URL**.
+1. **Get a webhook on the forum your triage posts live in**: that channel's gear →
+   **Integrations → Webhooks** → an existing one, or **New Webhook** → **Copy
+   Webhook URL**. A webhook can only post into threads of its own channel, so it
+   must be a webhook *on the forum* — not the release announcer's.
 2. **Add it as a GitHub repo secret**: Settings → Secrets and variables → Actions →
-   new secret named **`DISCORD_WEBHOOK_URL`**.
+   new secret named **`DISCORD_TRIAGE_WEBHOOK_URL`** (`DISCORD_WEBHOOK_URL` is the
+   release announcer's, on a different channel).
 3. The workflow must be on the **default branch (`main`)** to fire on issue events.
+4. A close whose run failed can be announced again by hand: Actions → *Notify
+   Discord on issue close* → Run workflow → the issue number.
 
 (Only issues filed *after* this is deployed carry the marker, and posting targets
 the thread, which Discord keeps for the thread's auto-archive window.)
