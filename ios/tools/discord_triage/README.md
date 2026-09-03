@@ -296,6 +296,23 @@ To enable it:
 (Only issues filed *after* this is deployed carry the marker, and posting targets
 the thread, which Discord keeps for the thread's auto-archive window.)
 
+**Say what changed.** The message carries an explanation, because "this is
+fixed" on its own left a reporter unable to find the fix or tell whether it was
+what they asked for (#161). It is taken, in order of preference, from:
+
+1. **The closing comment** — the last comment by a collaborator that is not one
+   of the bot's own Discord relays, posted within the hour before the close.
+   GitHub's *Close with comment* posts the two together, so closing an issue
+   that way with one or two sentences on what changed and where to find it in
+   the app is all it takes. Write it for the reporter, who has never seen the
+   code.
+2. **The merged pull request that closed the issue**, by title and link.
+
+With neither, the message says only that the issue is closed. It always ends
+with where to look — the next TestFlight or Play build, from the issue's
+`platform:` label — since a close happens at merge time and the fix reaches
+testers with the next release, announced separately by `discord-release.yml`.
+
 ## Files
 
 | File | Purpose |

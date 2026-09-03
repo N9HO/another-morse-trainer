@@ -416,14 +416,18 @@ do {
 
 // Word tiers (ham-weighted Top N words)
 print("\nWord tiers:")
-check("ranked word list has at least 500 entries", MorseData.rankedWords.count >= 500)
+check("ranked word list has at least 1000 entries (#158)", MorseData.rankedWords.count >= 1000)
 check("ranked words are unique", Set(MorseData.rankedWords).count == MorseData.rankedWords.count)
 check("Top 100 returns 100 items", MorseData.topWordItems(100).count == 100)
 check("Top 300 returns 300 items", MorseData.topWordItems(300).count == 300)
 check("Top 500 returns 500 items", MorseData.topWordItems(500).count == 500)
-check("word item ids are unique", Set(MorseData.topWordItems(500).map { $0.id }).count == 500)
+check("Top 1000 returns 1000 items", MorseData.topWordItems(1000).count == 1000)
+check("word item ids are unique", Set(MorseData.topWordItems(1000).map { $0.id }).count == 1000)
 check("a smaller tier is a prefix of a larger tier",
-      Array(MorseData.topWordItems(500).prefix(100)) == MorseData.topWordItems(100))
+      Array(MorseData.topWordItems(1000).prefix(100)) == MorseData.topWordItems(100))
+// The general corpus counts every letter as a word; only A and I are.
+check("no single letters but A and I are words",
+      MorseData.rankedWords.filter { $0.count == 1 }.allSatisfy { $0 == "A" || $0 == "I" })
 check("ham vocabulary ranks first (CQ in Top 100)",
       MorseData.topWordItems(100).contains { $0.answer == "CQ" })
 
@@ -2760,6 +2764,105 @@ if let fx = loadDailyDitFixture() {
     }
 } else {
     check("fixtures/daily-dit.json loads and decodes", false)
+}
+
+// ---------------------------------------------------------------------------
+// ShuffledDeck — the no-repeat draw behind Listen & Learn (#158). RNG-driven,
+// so invariants over many draws rather than fixture data.
+print("\nShuffled deck (no repeats until the pool is spent):")
+do {
+    let pool = Array(1...10)
+    var deck = ShuffledDeck(pool, rng: SeededRNG(seed: 3))
+    let pass = (0..<pool.count).compactMap { _ in deck.draw() }
+    check("a pass is every element exactly once", pass.sorted() == pool)
+    check("the pass is spent after a full draw", deck.remainingInPass == 0)
+    var later = true
+    for _ in 0..<6 {
+        let p = (0..<pool.count).compactMap { _ in deck.draw() }
+        if p.sorted() != pool { later = false }
+    }
+    check("every later pass is also the whole pool", later)
+
+    var clean = true
+    for seed in 1...25 {
+        var d = ShuffledDeck(["A", "B", "C"], rng: SeededRNG(seed: UInt64(seed)))
+        var previous = d.draw()
+        for _ in 0..<600 {
+            let next = d.draw()
+            if next == previous { clean = false }
+            previous = next
+        }
+    }
+    check("no two consecutive draws are the same, across pass boundaries", clean)
+
+    var counting = ShuffledDeck(pool, rng: SeededRNG(seed: 5))
+    check("nothing is dealt until the first draw", counting.remainingInPass == 0)
+    _ = counting.draw()
+    check("remainingInPass counts down through the pass", counting.remainingInPass == pool.count - 1)
+
+    var empty = ShuffledDeck([String](), rng: SeededRNG(seed: 1))
+    check("an empty pool draws nothing", empty.draw() == nil)
+    var single = ShuffledDeck(["E"], rng: SeededRNG(seed: 1))
+    check("a single element keeps coming back",
+          (0..<5).allSatisfy { _ in single.draw() == "E" })
+}
+
+// ---------------------------------------------------------------------------
+// CharacterIntroduction (#162), against fixtures/introduction.json — read by
+// this harness and by android CharacterIntroductionTest.
+struct IntroductionFixture: Decodable {
+    struct Case: Decodable { let pattern: String; let prosign: Bool }
+    let spoken: [String: String]
+    let symbols: [String: String]
+    let introduces: [String: Case?]
+}
+func loadIntroductionFixture() -> IntroductionFixture? {
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent()
+        .deletingLastPathComponent().deletingLastPathComponent()
+    guard let data = try? Data(contentsOf: root.appendingPathComponent("fixtures/introduction.json")) else { return nil }
+    return try? JSONDecoder().decode(IntroductionFixture.self, from: data)
+}
+print("\nNew-item introduction (fixtures/introduction.json):")
+if let fx = loadIntroductionFixture() {
+    func drill(_ correct: String) -> Drill {
+        Drill(playable: .text(correct), options: [correct], correct: correct,
+              revealPrimary: correct, revealSecondary: "")
+    }
+    check("fixture has spoken patterns", !fx.spoken.isEmpty)
+    for (pattern, spoken) in fx.spoken.sorted(by: { $0.key < $1.key }) {
+        check("\(pattern) is spoken \(spoken)", CharacterIntroduction.spokenPattern(pattern) == spoken)
+    }
+    for (pattern, symbols) in fx.symbols.sorted(by: { $0.key < $1.key }) {
+        check("\(pattern) is written \(symbols)", CharacterIntroduction.symbolPattern(pattern) == symbols)
+    }
+    for (correct, expected) in fx.introduces.sorted(by: { $0.key < $1.key }) where !correct.hasPrefix("$") {
+        let intro = CharacterIntroduction.forDrill(drill(correct), isMet: { _ in false })
+        if let expected {
+            check("\(correct) is introduced with \(expected.pattern)",
+                  intro?.id == correct && intro?.pattern == expected.pattern && intro?.isProsign == expected.prosign)
+        } else {
+            check("\(correct) is not introduced", intro == nil)
+        }
+    }
+    let metK = CharacterIntroduction.forDrill(drill("K"), isMet: { $0 == "K" })
+    let metM = CharacterIntroduction.forDrill(drill("K"), isMet: { $0 == "M" })
+    check("an item already met is not introduced again", metK == nil && metM != nil)
+    let ar = CharacterIntroduction.forDrill(drill("<AR>"), isMet: { _ in false })
+    let arMeaning = MorseData.prosigns.first(where: { $0.name == "<AR>" })?.meaning
+    check("a prosign plays its run-together pattern and carries its meaning",
+          ar?.playable == MorseItem.Playable.pattern(".-.-.") && ar?.meaning == arMeaning)
+    let k = CharacterIntroduction.forDrill(drill("K"), isMet: { _ in false })
+    check("a character plays as text", k?.playable == MorseItem.Playable.text("K"))
+
+    let introEngine = TrainerEngine(seedCount: 2, rng: SeededRNG(seed: 4))
+    let first = introEngine.nextDrill()
+    let met: (String) -> Bool = { id in id.count == 1 && introEngine.exposedCharacters.contains(id.first!) }
+    check("the engine's first drill introduces its target", CharacterIntroduction.forDrill(first, isMet: met)?.id == first.correct)
+    _ = introEngine.record(choice: first.correct, ttr: 0.3)
+    check("once drilled, the target is not introduced again", CharacterIntroduction.forDrill(first, isMet: met) == nil)
+} else {
+    check("fixtures/introduction.json loads and decodes", false)
 }
 
 print("\n────────────────────────────")

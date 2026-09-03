@@ -69,6 +69,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.anothermorsetrainer.morsekit.AnswerKeys
+import app.anothermorsetrainer.morsekit.CharacterIntroduction
 import app.anothermorsetrainer.morsekit.Drill
 import app.anothermorsetrainer.morsekit.ProgressiveCharacters
 import app.anothermorsetrainer.morsekit.QuizSource
@@ -134,7 +135,23 @@ fun QuizScreen(
     // The Characters track exposes its learner-pinnable stage; other sources don't.
     val progressive = source as? ProgressiveCharacters
 
+    /**
+     * A character or prosign the track is about to drill for the first time
+     * (issue #162): shown on its own with its sound before the drill plays.
+     * Only the Characters track, only with the setting on, and only an item
+     * the learner has neither drilled nor been shown before.
+     */
+    fun introductionFor(d: Drill): CharacterIntroduction? {
+        val engine = progressive?.engine ?: return null
+        if (!Settings.introduceNewCharacters) return null
+        return CharacterIntroduction.forDrill(d) { id ->
+            id in Settings.introducedItems || (id.length == 1 && id[0] in engine.exposedCharacters)
+        }
+    }
+
     var drill by remember { mutableStateOf(source.nextDrill()) }
+    /** The introduction the current drill is waiting behind, or null while a drill is under way. */
+    var intro by remember { mutableStateOf(introductionFor(drill)) }
     // Monotonic round counter drives the play/reset effect. We must NOT key that
     // effect on `drill` itself: `Drill` is a data class, so when nextDrill()
     // happens to return a value-equal round (common with small option sets like a
@@ -256,10 +273,21 @@ fun QuizScreen(
      */
     fun advance() {
         drill = source.nextDrill()
+        // A first meeting is shown, not sprung: the drill waits until the
+        // learner has heard the new item on its own and started it (#162).
+        intro = introductionFor(drill)
         revealed = false
         chosen = null
         unlockedNote = null
         round++
+    }
+
+    /** The learner has heard enough: remember the item as met and play the drill that was waiting. */
+    fun startIntroducedDrill() {
+        val shown = intro ?: return
+        Settings.markIntroduced(shown.id)
+        intro = null
+        round++   // re-runs the round effect, which now plays the drill
     }
 
     /** Start a fresh session from the summary screen. */
@@ -284,7 +312,13 @@ fun QuizScreen(
         voiceHeard = emptyList()
         recognizer.cancel()
         keyer.clear()
-        player.play(drill.playable, Settings.sidetoneHz, Settings.timing()) { toneFinishedAt = System.nanoTime() }
+        val introducing = intro
+        if (introducing != null) {
+            // The new item on its own; the drill plays once it is started.
+            player.replaySound(introducing.playable, Settings.sidetoneHz, Settings.timing())
+        } else {
+            player.play(drill.playable, Settings.sidetoneHz, Settings.timing()) { toneFinishedAt = System.nanoTime() }
+        }
     }
 
     LaunchedEffect(revealed) {
@@ -322,7 +356,7 @@ fun QuizScreen(
     BackHandler { if (phase == QuizPhase.SUMMARY) onBack() else finish() }
 
     fun answer(choice: String) {
-        if (revealed || phase != QuizPhase.RUNNING) return
+        if (revealed || intro != null || phase != QuizPhase.RUNNING) return
         val ttr = if (toneFinishedAt == 0L) 0.0
                   else (System.nanoTime() - toneFinishedAt) / 1_000_000_000.0
         lastTtr = ttr
@@ -363,7 +397,7 @@ fun QuizScreen(
     // Keyed answers auto-submit once the decoded copy reaches the answer's
     // length and the key has gone idle (the Sending Practice rhythm).
     LaunchedEffect(keyer.decodedText, keyer.isKeying, revealed, round) {
-        if (!Settings.answerByKeying || revealed || phase != QuizPhase.RUNNING || keyer.isKeying) return@LaunchedEffect
+        if (!Settings.answerByKeying || revealed || intro != null || phase != QuizPhase.RUNNING || keyer.isKeying) return@LaunchedEffect
         if (!drill.isKeyable) return@LaunchedEffect
         val sent = keyer.decodedText.trim()
         if (sent.isNotEmpty() && sent.length >= drill.correct.length) answer(sent.uppercase())
@@ -371,7 +405,7 @@ fun QuizScreen(
 
     // Listen for a spoken answer when the mic is tapped (listenTick bumps).
     LaunchedEffect(listenTick) {
-        if (listenTick == 0 || revealed || phase != QuizPhase.RUNNING) return@LaunchedEffect
+        if (listenTick == 0 || revealed || intro != null || phase != QuizPhase.RUNNING) return@LaunchedEffect
         listening = true
         clearVoicePrompts()
         recognizer.start(
@@ -405,6 +439,14 @@ fun QuizScreen(
         if (event.type != KeyEventType.KeyDown) return false
         if (showSettings) return false
         if (phase != QuizPhase.RUNNING) return false
+        if (intro != null) {
+            // Enter starts the introduced drill; nothing else answers during an introduction.
+            if (event.key == Key.Enter) {
+                startIntroducedDrill()
+                return true
+            }
+            return false
+        }
         if (revealed) {
             // Enter leaves the held correction (issue #77).
             if (event.key == Key.Enter && chosen != drill.correct) {
@@ -486,6 +528,16 @@ fun QuizScreen(
                     }
                 }
             }
+
+            val introducing = intro
+            if (introducing != null) {
+                Spacer(Modifier.height(28.dp))
+                IntroductionContent(
+                    intro = introducing,
+                    onReplay = { player.replaySound(introducing.playable, Settings.sidetoneHz, Settings.timing()) },
+                    onStart = { startIntroducedDrill() }
+                )
+            } else {
 
             // Answer by keying, where the heard text is the answer (iOS parity).
             if (drill.isKeyable) {
@@ -660,6 +712,7 @@ fun QuizScreen(
                     Text(it, style = MaterialTheme.typography.labelMedium, color = Brand.textSecondary, textAlign = TextAlign.Center)
                 }
             }
+            }   // introduction / drill
         }
         }
 
@@ -667,6 +720,52 @@ fun QuizScreen(
             SessionSettingsOverlay(scope = settingsMode, onClose = { showSettings = false })
         }
     }
+}
+
+/**
+ * The first sight of a character or prosign (issue #162): on its own, large,
+ * with its pattern in symbols and in "dah-di-dah", its sound on Replay, and
+ * the way into the drill that is waiting behind it. Until now a new
+ * character's first appearance was as a question, so the only way to learn
+ * its sound was to guess wrong at it.
+ */
+@Composable
+private fun IntroductionContent(intro: CharacterIntroduction, onReplay: () -> Unit, onStart: () -> Unit) {
+    Text(
+        stringResource(if (intro.isProsign) R.string.quiz_intro_new_prosign else R.string.quiz_intro_new_character),
+        color = Brand.teal,
+        fontWeight = FontWeight.SemiBold
+    )
+    Spacer(Modifier.height(12.dp))
+    SlashableText(
+        text = intro.display,
+        fontSize = 88.sp,
+        fontWeight = FontWeight.Bold,
+        fontFamily = FontFamily.Monospace,
+        textAlign = TextAlign.Center
+    )
+    Spacer(Modifier.height(8.dp))
+    Text(intro.symbolPattern, fontSize = 24.sp, fontFamily = FontFamily.Monospace, color = Brand.textSecondary)
+    Text(intro.spokenPattern, fontSize = 20.sp, color = Brand.textPrimary)
+    intro.meaning?.let {
+        Spacer(Modifier.height(4.dp))
+        Text(it, style = MaterialTheme.typography.bodyMedium, color = Brand.textSecondary, textAlign = TextAlign.Center)
+    }
+    Spacer(Modifier.height(20.dp))
+    Text(
+        stringResource(R.string.quiz_intro_hint),
+        style = MaterialTheme.typography.bodyMedium,
+        color = Brand.textSecondary,
+        textAlign = TextAlign.Center
+    )
+    Spacer(Modifier.height(24.dp))
+    OutlinedButton(onClick = onReplay) { Text(stringResource(R.string.common_replay)) }
+    Spacer(Modifier.height(10.dp))
+    Button(
+        onClick = onStart,
+        colors = ButtonDefaults.buttonColors(containerColor = Brand.teal, contentColor = Brand.navy),
+        modifier = Modifier.fillMaxWidth()
+    ) { Text(stringResource(R.string.quiz_intro_start), fontWeight = FontWeight.SemiBold) }
 }
 
 /**

@@ -165,6 +165,17 @@ struct SettingsView: View {
                     .listRowBackground(Theme.navyElevated)
                 }
 
+                if shown(for: [.characters]) {
+                    Section {
+                        Toggle("Introduce new characters", isOn: $model.settings.introduceNewCharacters)
+                    } header: {
+                        Text("New characters")
+                    } footer: {
+                        Text("Before a character or prosign joins the drill for the first time, show it on its own with its sound and a Replay button.")
+                    }
+                    .listRowBackground(Theme.navyElevated)
+                }
+
                 // The way back from words to characters (#95). The track grows
                 // singles → pairs → triples → words on its own, and until now
                 // the only hold on it mid-session was the Developer jump below,

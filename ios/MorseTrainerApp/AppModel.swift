@@ -187,6 +187,10 @@ final class AppModel: ObservableObject {
     @Published private(set) var lastSelected: String?
     @Published private(set) var lastTTR: TimeInterval?
     @Published private(set) var justUnlocked: String?
+    /// A character or prosign the Characters track is about to drill for the
+    /// first time (issue #162), shown on its own with its sound before the
+    /// drill plays. Nil while a drill is under way.
+    @Published private(set) var introduction: CharacterIntroduction?
     @Published private(set) var summary: String = ""
 
     // Journey mode: the live level + progress-bar state the UI renders.
@@ -1488,11 +1492,18 @@ final class AppModel: ObservableObject {
 
     // MARK: - Listen & Learn (hands-free)
 
-    private struct ListenItem {
+    private struct ListenItem: Equatable {
         let playable: MorseItem.Playable
         let display: String   // shown on screen
         let spoken: String    // announced via TTS
     }
+
+    /// The items still to be heard before any repeats (issue #158). Rebuilt
+    /// whenever the pool it was dealt from changes — the content picker, or
+    /// the active character set — and otherwise kept across sessions, so a
+    /// word heard yesterday is not the first one heard today.
+    private var listenDeck = ShuffledDeck<ListenItem>([])
+    private var listenDeckKey = ""
 
     /// Begin the hands-free loop: play code → wait the chosen gap → speak the
     /// answer → repeat. Keeps going with the screen locked (background audio).
@@ -1570,26 +1581,47 @@ final class AppModel: ObservableObject {
         }
     }
 
+    /// Every item is heard once before any is heard again: the pool for the
+    /// chosen content is dealt into a `ShuffledDeck` and drawn down. Picking
+    /// each item at random repeated words within a dozen or so items and was
+    /// reported as a small word list (issue #158).
     private func nextListenItem() -> ListenItem {
+        let (key, pool) = listenPool()
+        if key != listenDeckKey {
+            listenDeckKey = key
+            listenDeck = ShuffledDeck(pool)
+        }
+        return listenDeck.draw()
+            ?? ListenItem(playable: .text("E"), display: "E", spoken: spokenName(for: "E"))
+    }
+
+    /// The items Listen & Learn draws from, with a key that changes when the
+    /// pool does so the deck can be re-dealt.
+    private func listenPool() -> (key: String, items: [ListenItem]) {
         switch settings.listenContent {
         case .characters:
-            let ch = engine.activeCharacters.randomElement() ?? "E"
-            return ListenItem(playable: .text(String(ch)),
-                              display: String(ch),
-                              spoken: spokenName(for: ch))
+            let chars = engine.activeCharacters
+            return ("characters:" + String(chars), chars.map { ch -> ListenItem in
+                ListenItem(playable: .text(String(ch)),
+                           display: String(ch),
+                           spoken: spokenName(for: ch))
+            })
         case .words:
-            let item = MorseData.topWordItems(settings.wordTier.count).randomElement()
-                ?? MorseItem(id: "THE", playable: .text("THE"), answer: "THE", display: "THE")
-            return ListenItem(playable: item.playable, display: item.display, spoken: item.answer)
+            // The whole ranked list, as on Android — Listen & Learn is the
+            // hands-free mode, and the tier that scopes the Words quiz's
+            // answer buttons has no buttons to scope here.
+            return ("words", MorseData.wordItems.map { item in
+                ListenItem(playable: item.playable, display: item.display, spoken: item.answer)
+            })
         case .abbreviations:
-            let item = (MorseData.abbreviationItems + MorseData.qCodeItems).randomElement()
-                ?? MorseItem(id: "ES", playable: .text("ES"), answer: "and", display: "ES")
-            // Spell the token in lowercase letters so TTS says "q t h", not
-            // "capital Q…", then the meaning.
-            let spelled = item.display.lowercased().map(String.init).joined(separator: " ")
-            return ListenItem(playable: item.playable,
-                              display: "\(item.display) — \(item.answer)",
-                              spoken: "\(spelled). \(item.answer)")
+            return ("abbreviations", (MorseData.abbreviationItems + MorseData.qCodeItems).map { item -> ListenItem in
+                // Spell the token in lowercase letters so TTS says "q t h", not
+                // "capital Q…", then the meaning.
+                let spelled = item.display.lowercased().map(String.init).joined(separator: " ")
+                return ListenItem(playable: item.playable,
+                                  display: "\(item.display) — \(item.answer)",
+                                  spoken: "\(spelled). \(item.answer)")
+            })
         }
     }
 
@@ -1914,6 +1946,7 @@ final class AppModel: ObservableObject {
         advanceGeneration += 1   // cancel any pending auto-advance
         cancelHeadCopyAuto()     // cancel any pending repeat/reveal from the last item
         resetVoiceRound()
+        introduction = nil
         justUnlocked = nil
         lastCorrect = nil
         lastSelected = nil
@@ -1921,6 +1954,48 @@ final class AppModel: ObservableObject {
         if isJourney { journeyLevelCleared = nil; syncJourneyState() }
         summary = source.summary
         drill = source.nextDrill()
+        // A first meeting is shown, not sprung: the drill waits until the
+        // learner has heard the new item on its own and started it (#162).
+        if let intro = pendingIntroduction() {
+            introduction = intro
+            phase = .idle
+            return
+        }
+        playCurrentTone()
+    }
+
+    // MARK: - New-item introduction (#162)
+
+    /// What the current drill needs introducing, if anything: only the
+    /// Characters track, only when the setting is on, and only an item the
+    /// learner has neither drilled nor been shown before.
+    private func pendingIntroduction() -> CharacterIntroduction? {
+        guard mode == .characters, settings.introduceNewCharacters, let drill else { return nil }
+        let introduced = Set(settings.introducedItems)
+        return CharacterIntroduction.forDrill(drill) { id in
+            if introduced.contains(id) { return true }
+            if let ch = id.first, id.count == 1 { return engine.exposedCharacters.contains(ch) }
+            return false
+        }
+    }
+
+    /// Sound the introduced item (again). Returns the sound's duration.
+    @discardableResult
+    func playIntroduction() -> TimeInterval {
+        guard let introduction else { return 0 }
+        return player.replaySound(playable: introduction.playable,
+                                  frequency: settings.toneFrequency,
+                                  timing: timing)
+    }
+
+    /// The learner has heard enough: remember the item as met and start the
+    /// drill that was waiting behind the introduction.
+    func finishIntroduction() {
+        guard let introduction else { return }
+        if !settings.introducedItems.contains(introduction.id) {
+            settings.introducedItems.append(introduction.id)
+        }
+        self.introduction = nil
         playCurrentTone()
     }
 

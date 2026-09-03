@@ -38,6 +38,7 @@ class ListenService : Service() {
     private var tickJob: Job? = null
     private var sessionRecorded = false
     private val rng = Random(SystemClock.elapsedRealtimeNanos())
+    private val picker = ListenPicker(rng)
     private var focusObservation: AudioFocus.Observation? = null
     /**
      * Set when focus — not the user — paused the loop, so regaining focus
@@ -124,7 +125,7 @@ class ListenService : Service() {
             // Cancellation propagates through the suspend points below (they throw
             // CancellationException), exiting the loop and running the finally.
             while (true) {
-                val item = nextListenItem(ListenState.contentSel, rng)
+                val item = picker.next(ListenState.contentSel)
                 ListenState.display = ""
                 ListenState.playing = true
                 updateNotification()

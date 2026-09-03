@@ -1,0 +1,41 @@
+{
+  "$comment": "Shared fixture for the new-item introduction (issue #162), consumed by BOTH ports: android CharacterIntroductionTest and ios MorseKitCheck. Data, not code — see CLAUDE.md's two-ports rule. Values written by hand from the convention below, not captured from either port.",
+  "derivation": {
+    "spoken": "Each '-' is 'dah'. Each '.' is 'di', except the final element of the pattern, which is 'dit'. Elements are joined with '-'.",
+    "symbols": "Each '-' is U+2212 MINUS SIGN, each '.' is U+00B7 MIDDLE DOT, joined with a single space.",
+    "introduces": "What forDrill answers for a drill whose correct answer is the key, with nothing yet met. A single character or a prosign is introduced with its pattern; anything else (a pair, a word) is not."
+  },
+  "spoken": {
+    ".": "dit",
+    "-": "dah",
+    ".-": "di-dah",
+    "-.-": "dah-di-dah",
+    "...": "di-di-dit",
+    "-----": "dah-dah-dah-dah-dah",
+    ".-.-.": "di-dah-di-dah-dit",
+    "...-.-": "di-di-di-dah-di-dah",
+    "-...-": "dah-di-di-di-dah"
+  },
+  "symbols": {
+    ".": "·",
+    "-": "−",
+    "-.-": "− · −",
+    ".-.-.": "· − · − ·"
+  },
+  "introduces": {
+    "K": {
+      "pattern": "-.-",
+      "prosign": false
+    },
+    "0": {
+      "pattern": "-----",
+      "prosign": false
+    },
+    "<AR>": {
+      "pattern": ".-.-.",
+      "prosign": true
+    },
+    "KM": null,
+    "THE": null
+  }
+}

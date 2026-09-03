@@ -7,6 +7,18 @@
 # from the body and from every comment, and posts to each thread via a Discord
 # channel webhook. Reading the body alone told only the first reporter.
 #
+# The message says WHAT CHANGED, not just that the issue closed (#161): a bare
+# "this is fixed" left a reporter unable to find the fix or tell whether it was
+# what they asked for. The explanation is taken, in order of preference, from
+#   1. the closing comment — the last comment by a collaborator that is not one
+#      of the bot's Discord relays, posted within the hour before the close
+#      (GitHub's "Close with comment" posts the two together), then
+#   2. the merged pull request that closed the issue, by title and link;
+# with neither, the message says only that the issue is closed, as before. So
+# to tell the reporter something useful, close the issue with a comment that
+# says what changed and where to find it — one or two sentences, written for
+# someone who has never seen the code.
+#
 # Requires a repository secret DISCORD_TRIAGE_WEBHOOK_URL:
 #   In Discord: the FORUM channel the triage posts live in
 #   (#bugs-and-feature-requests) -> gear -> Integrations -> Webhooks -> an
@@ -39,9 +51,11 @@ on:
         type: number
 
 # Reading the issue's comments is what finds the threads of everyone who
-# reported the bug after it was first filed.
+# reported the bug after it was first filed, and the closing comment. The
+# pull-request read is for naming the PR that closed the issue.
 permissions:
   issues: read
+  pull-requests: read
 
 jobs:
   notify:
@@ -57,6 +71,8 @@ jobs:
           ISSUE_URL: ${{ github.event.issue.html_url }}
           ISSUE_TITLE: ${{ github.event.issue.title }}
           STATE_REASON: ${{ github.event.issue.state_reason }}
+          CLOSED_AT: ${{ github.event.issue.closed_at }}
+          ISSUE_LABELS: ${{ join(github.event.issue.labels.*.name, ',') }}
           # Set only on a manual run; the fields above are then empty.
           DISPATCH_ISSUE: ${{ inputs.issue }}
         run: |
@@ -67,12 +83,16 @@ jobs:
             exit 0
           fi
 
+          gh_api() {
+            curl -sS \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              "$@"
+          }
+
           # A manual run names the issue; look it up as the event would have.
           if [ -n "${DISPATCH_ISSUE:-}" ]; then
-            ISSUE_JSON="$(curl -sS \
-                -H "Authorization: Bearer $GH_TOKEN" \
-                -H "Accept: application/vnd.github+json" \
-                "https://api.github.com/repos/${REPO}/issues/${DISPATCH_ISSUE}")"
+            ISSUE_JSON="$(gh_api "https://api.github.com/repos/${REPO}/issues/${DISPATCH_ISSUE}")"
             if [ "$(printf '%s' "$ISSUE_JSON" | jq -r '.state')" != "closed" ]; then
               echo "::error::Issue #${DISPATCH_ISSUE} is not closed; nothing to announce."
               exit 1
@@ -82,6 +102,8 @@ jobs:
             ISSUE_URL="$(printf '%s' "$ISSUE_JSON" | jq -r '.html_url')"
             ISSUE_TITLE="$(printf '%s' "$ISSUE_JSON" | jq -r '.title')"
             STATE_REASON="$(printf '%s' "$ISSUE_JSON" | jq -r '.state_reason // ""')"
+            CLOSED_AT="$(printf '%s' "$ISSUE_JSON" | jq -r '.closed_at // ""')"
+            ISSUE_LABELS="$(printf '%s' "$ISSUE_JSON" | jq -r '[.labels[].name] | join(",")')"
           fi
 
           markers() { grep -oE 'discord-thread:[0-9]+' | cut -d: -f2 || true; }
@@ -91,12 +113,10 @@ jobs:
 
           # …and the threads of anyone who reported it again afterwards, which
           # the bot records as a comment carrying the same stamp. One page of
-          # 100 comments is far more than this project's issues attract.
-          COMMENT_IDS="$(curl -sS \
-              -H "Authorization: Bearer $GH_TOKEN" \
-              -H "Accept: application/vnd.github+json" \
-              "https://api.github.com/repos/${REPO}/issues/${ISSUE_NUMBER}/comments?per_page=100" \
-            | jq -r '.[].body // empty' | markers)"
+          # 100 comments is far more than this project's issues attract. The
+          # same page yields the closing comment below.
+          COMMENTS_JSON="$(gh_api "https://api.github.com/repos/${REPO}/issues/${ISSUE_NUMBER}/comments?per_page=100")"
+          COMMENT_IDS="$(printf '%s' "$COMMENTS_JSON" | jq -r '.[].body // empty' | markers)"
 
           THREAD_IDS="$(printf '%s\n%s\n' "$BODY_IDS" "$COMMENT_IDS" \
             | grep -E '^[0-9]+$' | sort -u || true)"
@@ -105,10 +125,66 @@ jobs:
             exit 0
           fi
 
+          # ---- What changed (#161) --------------------------------------------
+          # The closing comment: by a collaborator, not a relay the bot posted
+          # from Discord (those carry a thread stamp or a "via Discord" line),
+          # and within the hour before the close. Older comments are questions
+          # and notes from the investigation, not the resolution.
+          EXPLANATION=""
+          if [ -n "${CLOSED_AT:-}" ]; then
+            EXPLANATION="$(printf '%s' "$COMMENTS_JSON" | jq -r --arg closed "$CLOSED_AT" '
+              [ .[]
+                | select(.author_association | IN("OWNER", "MEMBER", "COLLABORATOR"))
+                | select(.body != null)
+                | select(.body | test("discord-thread:[0-9]+") | not)
+                | select(.body | test("via Discord") | not)
+                | select(.created_at <= $closed)
+                | select((($closed | fromdateiso8601) - (.created_at | fromdateiso8601)) <= 3600)
+              ] | last | .body // empty')"
+          fi
+
+          # The pull request that closed it, when one did.
+          PR_LINE=""
+          GRAPHQL="$(jq -n --arg owner "${REPO%/*}" --arg name "${REPO#*/}" --argjson number "$ISSUE_NUMBER" \
+            '{query: "query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){issue(number:$number){closedByPullRequestsReferences(first:5,includeClosedPrs:true){nodes{title url merged}}}}}",
+              variables: {owner: $owner, name: $name, number: $number}}')"
+          PR_LINE="$(gh_api -X POST "https://api.github.com/graphql" --data "$GRAPHQL" \
+            | jq -r '[.data.repository.issue.closedByPullRequestsReferences.nodes[]? | select(.merged)]
+                     | first | if . == null then empty else "\(.title) — \(.url)" end' \
+            || true)"
+
+          # Where to look for it, from the platform label the bot applies.
+          case ",${ISSUE_LABELS:-}," in
+            *"platform: ios,"*|*"platform: ipados,"*|*"platform: macos,"*)
+              NEXT="the next TestFlight build" ;;
+            *"platform: android,"*)
+              NEXT="the next Play build" ;;
+            *)
+              NEXT="the next release" ;;
+          esac
+
+          # Discord caps a message at 2000 characters; a closing comment is
+          # one or two sentences, but a long one is cut rather than dropped.
+          EXPLANATION="${EXPLANATION:0:900}"
+          QUOTED=""
+          if [ -n "$EXPLANATION" ]; then
+            QUOTED="$(printf '%s\n' "$EXPLANATION" | sed 's/^/> /')"
+          fi
+
           if [ "${STATE_REASON:-}" = "not_planned" ]; then
             MSG="🗑️ Issue #${ISSUE_NUMBER} (\"${ISSUE_TITLE}\") was closed as not planned: ${ISSUE_URL}"
+            if [ -n "$QUOTED" ]; then
+              MSG="${MSG}"$'\n\n'"${QUOTED}"
+            fi
           else
             MSG="✅ Good news — this is fixed! Issue #${ISSUE_NUMBER} (\"${ISSUE_TITLE}\") has been closed: ${ISSUE_URL}"
+            if [ -n "$QUOTED" ]; then
+              MSG="${MSG}"$'\n\n'"**What changed:**"$'\n'"${QUOTED}"
+            fi
+            if [ -n "$PR_LINE" ]; then
+              MSG="${MSG}"$'\n\n'"Change: ${PR_LINE}"
+            fi
+            MSG="${MSG}"$'\n\n'"Look for it in ${NEXT} — releases are announced here as they go out."
           fi
 
           # curl exits 0 on an HTTP error as long as the request itself worked, so

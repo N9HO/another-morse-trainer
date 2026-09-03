@@ -210,6 +210,20 @@ object Settings {
     /** How much the learner already knows — seeds the Characters Koch ladder. */
     var proficiency by mutableStateOf(Proficiency.NONE)
         private set
+    /**
+     * Show each character or prosign on its own, with its sound, the first
+     * time the Characters track presents it (issue #162).
+     */
+    var introduceNewCharacters by mutableStateOf(true)
+        private set
+    /**
+     * Items the learner has been introduced to, so leaving between the
+     * introduction and the drill does not repeat it next time. Characters are
+     * also covered by the engine's exposed set once drilled; prosigns, which
+     * the engine never tracks, live only here.
+     */
+    var introducedItems by mutableStateOf(emptySet<String>())
+        private set
     /** False until the first-run onboarding (comfort-level pick) is completed. */
     var onboardingDone by mutableStateOf(false)
         private set
@@ -268,6 +282,8 @@ object Settings {
         useCustomWords = prefs.getBoolean("useCustomWords", false)
         proficiency = runCatching { Proficiency.valueOf(prefs.getString("proficiency", null) ?: "NONE") }
             .getOrDefault(Proficiency.NONE)
+        introduceNewCharacters = prefs.getBoolean("introduceNew", true)
+        introducedItems = prefs.getStringSet("introducedItems", null)?.toSet() ?: emptySet()
         onboardingDone = prefs.getBoolean("onboardingDone", false)
         remindersEnabled = prefs.getBoolean("reminders", false)
         reminderHour = prefs.getInt("reminderHour", 19)
@@ -414,6 +430,18 @@ object Settings {
         persist()
     }
 
+    fun updateIntroduceNewCharacters(value: Boolean) {
+        introduceNewCharacters = value
+        persist()
+    }
+
+    /** Remember that [id] ("K", "<AR>") has had its introduction. */
+    fun markIntroduced(id: String) {
+        if (id in introducedItems) return
+        introducedItems = introducedItems + id
+        persist()
+    }
+
     /** Toggle one punctuation character in or out of the study ladder. */
     fun togglePunctuation(ch: Char) {
         if (ch !in MorseCode.pickablePunctuation) return
@@ -521,6 +549,8 @@ object Settings {
             putString("customWords", customWordsText)
             putBoolean("useCustomWords", useCustomWords)
             putString("proficiency", proficiency.name)
+            putBoolean("introduceNew", introduceNewCharacters)
+            putStringSet("introducedItems", introducedItems)
             putBoolean("onboardingDone", onboardingDone)
             putBoolean("reminders", remindersEnabled)
             putInt("reminderHour", reminderHour)

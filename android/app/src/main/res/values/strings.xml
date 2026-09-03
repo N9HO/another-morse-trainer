@@ -134,6 +134,10 @@
     <string name="quiz_key_answers_on">⠿ Key answers · on</string>
     <string name="quiz_key_answers_off">⠿ Key answers · off</string>
     <string name="quiz_new_character">★ New: %1$s</string>
+    <string name="quiz_intro_new_character">★ New character</string>
+    <string name="quiz_intro_new_prosign">★ New prosign</string>
+    <string name="quiz_intro_hint">Listen as many times as you like. When the sound feels familiar, start the drill — it will be one of the answers from now on.</string>
+    <string name="quiz_intro_start">Start drilling</string>
     <string name="quiz_listening">"  Listening…"</string>
     <string name="quiz_speak_answer">"  Speak answer"</string>
     <string name="quiz_voice_confirm">Did you say “%1$s”?</string>
@@ -428,6 +432,9 @@
     <string name="settings_punctuation_footer">Study punctuation too. Opted-in marks join the Characters ladder after the letters and numbers.</string>
     <string name="settings_starting_level">Proficiency</string>
     <string name="settings_starting_level_footer">How much Morse you already know — sets where the Characters drill begins and unlocks the Journey that far. Changing this restarts your active set.</string>
+    <string name="settings_introduce_new">New characters</string>
+    <string name="settings_introduce_new_toggle">Introduce new characters</string>
+    <string name="settings_introduce_new_footer">Before a character or prosign joins the drill for the first time, show it on its own with its sound and a Replay button.</string>
     <string name="settings_feedback">Feedback</string>
     <string name="settings_haptic_feedback">Haptic feedback</string>
     <string name="settings_voice_answers">Voice answers</string>
