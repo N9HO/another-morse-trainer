@@ -43,7 +43,10 @@ Discord message ──▶ Claude triage ──▶ GitHub issue ──▶ reply i
 - **Closes the loop**: replies with the issue link, a duplicate pointer, or a
   follow-up question.
 
-Structured outputs (a Pydantic schema) guarantee Claude's verdict always parses.
+Structured outputs (a Pydantic schema) mean a verdict arrives in the shape the
+bot asked for. They do not guarantee one arrives: an answer that runs out of
+output budget is truncated JSON, which fails validation and takes the report
+with it — see *Troubleshooting: "I hit an error analyzing that report"* below.
 
 ## Thread memory
 
@@ -166,9 +169,10 @@ python bot.py
 ```bash
 python3 test_conversation.py   # pure helpers — no dependencies, no tokens
 python3 test_bot_flow.py       # thread memory, with fake Discord/GitHub/Claude
+python3 test_triage_call.py    # the Anthropic call: budget + failure handling
 ```
 
-Both also run under `pytest`, which is what CI does:
+They also run under `pytest`, which is what CI does:
 
 ```bash
 pip install -r requirements-dev.txt   # requirements.txt + pytest
@@ -179,10 +183,13 @@ pytest
 that file into the production image, and `.dockerignore` keeps `test_*.py` out
 of it, so a test runner in there would have nothing to run.
 
-No live tokens are used: `test_bot_flow.py` fills in dummy environment variables
-and swaps in fakes for Discord, GitHub, and the model. `.github/workflows/triage-bot.yml`
-runs the suite on every pull request that touches this directory, on Python 3.12
-to match the Dockerfile.
+No live tokens are used: `test_bot_flow.py` and `test_triage_call.py` fill in
+dummy environment variables and swap in fakes for Discord, GitHub, and the
+model — the first faking the triage call wholesale to test what the bot does
+with a verdict, the second faking only the Anthropic client to test the call
+that produces one. `.github/workflows/triage-bot.yml` runs the suite on every
+pull request that touches this directory, on Python 3.12 to match the
+Dockerfile.
 
 ## Deploy on Fly.io
 
@@ -209,15 +216,42 @@ single always-on machine holding the Discord gateway connection. On a
 
 ## Cost note (model choice)
 
-`ANTHROPIC_MODEL` defaults to `claude-opus-4-8` (most capable). Triage is a
+`ANTHROPIC_MODEL` defaults to `claude-opus-5` (most capable). Triage is a
 high-volume, low-complexity task, so if you want to cut cost set:
 
 - `claude-haiku-4-5` — cheapest, fast, fine for classification.
-- `claude-sonnet-4-6` — middle ground.
+- `claude-sonnet-5` — middle ground.
 
 Each triage is a single short request, and the instruction prompt is cached, so
 even on Opus the per-message cost is small — but Haiku is the economical default
 for a busy server.
+
+`ANTHROPIC_MAX_TOKENS` (default 16000, hard ceiling 16000) is **not** a cost
+knob and turning it down does not save money — only tokens actually generated
+are billed, and a verdict for a thin report is a few hundred of them. What it
+does control is whether the verdict has room to finish; see below.
+
+## Troubleshooting: "I hit an error analyzing that report"
+
+That reply (or, on a thread, "I hit an error analyzing that") means triage
+itself failed — the report never reached GitHub, so there is nothing to look for
+there. `fly logs` has the reason. The one that has actually bitten:
+
+- **`the model's answer did not parse as a verdict`** — the verdict is a
+  structured output whose `body` field is a whole Markdown issue write-up, so an
+  answer that hits the output budget does not come back as a shorter issue: it
+  comes back as JSON that stops mid-string, which fails validation and fails the
+  triage. Every triage of that thread fails the same way, so the report sits in
+  Discord and nothing is filed. The budget is `ANTHROPIC_MAX_TOKENS` (default
+  16000, which is also the ceiling — above that the SDK requires streaming). It
+  was a hardcoded 2048 until this was fixed, which was enough for a one-line
+  report and not for a real one; on a model that thinks by default, the thinking
+  came out of the same 2048 and nothing ever parsed.
+- **`the model returned no verdict`** — a refusal, logged with its
+  `stop_reason`. Rare, and it says so rather than filing the report as noise:
+  a report that quietly becomes noise is one the maintainer never hears about.
+- Anything else (a 401 from Anthropic, a rate limit, a network error) arrives as
+  the SDK's own exception with the status in the log.
 
 ## Troubleshooting: "hit an error filing the issue"
 
@@ -273,5 +307,6 @@ the thread, which Discord keeps for the thread's auto-archive window.)
 | `config.py` | Environment-variable configuration. |
 | `test_conversation.py` | Transcript + issue-recovery tests (no deps needed). |
 | `test_bot_flow.py` | Thread-memory tests against fake Discord/GitHub/Claude. |
+| `test_triage_call.py` | The model call itself: output budget, and the two ways a verdict fails to arrive. |
 | `Dockerfile` / `fly.toml` | Container + Fly.io deployment. |
 | `.env.example` | Template for the required environment variables. |
