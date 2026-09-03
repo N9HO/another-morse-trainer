@@ -17,35 +17,38 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Chat
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.filled.ListAlt
+import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.Abc
+import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.FlashOn
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.Map
-import androidx.compose.material.icons.automirrored.filled.ListAlt
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.Podcasts
 import androidx.compose.material.icons.filled.Print
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.QuestionAnswer
-import androidx.compose.material.icons.filled.SwapHoriz
-import androidx.compose.material.icons.filled.Vibration
-import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.TextFields
+import androidx.compose.material.icons.filled.Vibration
+import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material.icons.filled.WorkspacePremium
-import androidx.compose.material.icons.automirrored.filled.Chat
-import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -57,6 +60,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.anothermorsetrainer.morsekit.DailyDit
+import app.anothermorsetrainer.morsekit.DailyDitOutcome
+import kotlin.math.roundToInt
 
 /** A tappable home-menu tile. */
 private data class HomeItem(
@@ -70,6 +76,7 @@ private data class HomeItem(
 @Composable
 fun HomeScreen(
     onPickStartHere: () -> Unit,
+    onPickDailyDit: () -> Unit,
     onPickJourney: () -> Unit,
     onPickQuiz: (QuizMode) -> Unit,
     onPickPileup: () -> Unit,
@@ -177,6 +184,12 @@ fun HomeScreen(
             }
 
             Spacer(Modifier.height(20.dp))
+            // The day's puzzle (#155). It sits above even "Start here" because
+            // unlike everything else on this screen it expires: a daily
+            // challenge you have to go looking for is one nobody plays.
+            DailyDitCard(onPickDailyDit)
+
+            Spacer(Modifier.height(12.dp))
             // The newcomer's way in (#96): the site's guide explains how to
             // begin and why the code is fast, but nothing on the tile grid
             // said so. Always visible — as useful in week three as on day one.
@@ -193,6 +206,75 @@ fun HomeScreen(
                 Spacer(Modifier.height(14.dp))
             }
         }
+}
+
+@Composable
+private fun DailyDitCard(onClick: () -> Unit) {
+    // The app can sit open across midnight; don't advertise yesterday's puzzle.
+    LaunchedEffect(Unit) { DailyDitStore.refresh() }
+    val game = DailyDitStore.game
+    val done = game.isFinished
+    val subtitle = when (game.outcome) {
+        DailyDitOutcome.SOLVED -> stringResource(
+            R.string.daily_dit_home_sub_solved,
+            game.puzzleNumber,
+            game.guessesUsed,
+            game.solvedWpm?.let { DailyDit.formatWpm(it) } ?: ""
+        )
+        DailyDitOutcome.LOST ->
+            stringResource(R.string.daily_dit_home_sub_lost, game.puzzleNumber)
+        DailyDitOutcome.PLAYING -> if (game.guessesUsed > 0) {
+            stringResource(
+                R.string.daily_dit_home_sub_progress,
+                game.puzzleNumber,
+                game.guessesUsed,
+                DailyDit.MAX_GUESSES
+            )
+        } else {
+            stringResource(
+                R.string.daily_dit_home_sub_new,
+                (DailyDit.startingSpeeds.maxOrNull() ?: 75.0).roundToInt()
+            )
+        }
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .brandCard(cornerRadius = 14.dp)
+            .border(
+                1.5.dp,
+                Brand.tealBright.copy(alpha = if (done) 0.35f else 0.7f),
+                RoundedCornerShape(14.dp)
+            )
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Icon(
+            if (done) Icons.Filled.CheckCircle else Icons.Filled.CalendarMonth,
+            contentDescription = null,
+            tint = if (done) Brand.tealBright else Brand.teal
+        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                stringResource(R.string.daily_dit_title),
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = Brand.textPrimary
+            )
+            Text(
+                subtitle,
+                style = MaterialTheme.typography.labelSmall,
+                color = Brand.textSecondary
+            )
+        }
+        Icon(
+            Icons.AutoMirrored.Filled.KeyboardArrowRight,
+            contentDescription = null,
+            tint = Brand.textSecondary
+        )
+    }
 }
 
 @Composable

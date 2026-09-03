@@ -550,4 +550,37 @@
     <string name="start_here_aim_body">Have a target beyond "learn Morse". The best one is a real contact, and it needs far less than the full alphabet: your own callsign, the question mark, your state, and a handful of exchange words. People who aim at a contact tend to get there; people who aim at finishing the alphabet often stall.</string>
     <string name="start_here_know_title">Already know some Morse?</string>
     <string name="start_here_know_body">Open Settings → Proficiency and tell it what you already know. That sets your starting character set instead of making you re-earn A and N. Comfortable with the whole alphabet? Skip Journey and go straight to Common Words, Rapid Fire, or Pileup Runner.</string>
+    <!-- Daily Dit: the shared daily puzzle (#155) -->
+    <string name="daily_dit_title">Daily Dit</string>
+    <string name="daily_dit_home_sub_new">Today\'s word in Morse — your speed, up to %1$d WPM</string>
+    <string name="daily_dit_home_sub_progress">#%1$d · %2$d of %3$d guesses used</string>
+    <string name="daily_dit_home_sub_solved">#%1$d copied in %2$d at %3$s WPM</string>
+    <string name="daily_dit_home_sub_lost">#%1$d — out of guesses</string>
+    <string name="daily_dit_puzzle_number">Puzzle #%1$d</string>
+    <string name="daily_dit_status_playing">%1$s WPM · %2$d guesses left</string>
+    <string name="daily_dit_status_solved">Copied in %1$d at %2$s WPM</string>
+    <string name="daily_dit_status_lost">Out of guesses — it was %1$s</string>
+    <string name="daily_dit_play">Play the word</string>
+    <string name="daily_dit_hear_again">Hear it again</string>
+    <string name="daily_dit_five_letters">Five letters</string>
+    <string name="daily_dit_guess">Guess</string>
+    <string name="daily_dit_ruled_out">Ruled out</string>
+    <string name="daily_dit_starting_speed">Starting speed</string>
+    <string name="daily_dit_ladder_explainer">Drops %1$d WPM every %2$d guesses, down to %3$d. Locked once you guess.</string>
+    <string name="daily_dit_started_at">Started at %1$s WPM</string>
+    <string name="daily_dit_no_reference_suffix"> · no reference</string>
+    <string name="daily_dit_hide_chart">Hide the chart</string>
+    <string name="daily_dit_hide_chart_sub">No dit-dah reference — your share text says so.</string>
+    <string name="daily_dit_chart">Dit-dah chart</string>
+    <string name="daily_dit_solid_copy">Solid copy</string>
+    <string name="daily_dit_tomorrow">Tomorrow, then</string>
+    <string name="daily_dit_copy">Copy</string>
+    <string name="daily_dit_copied">Copied.</string>
+    <string name="daily_dit_next_tomorrow">Next puzzle tomorrow.</string>
+    <string name="daily_dit_how_it_works">One five-letter word a day, the same for everyone. Replay it as often as you like — only guesses count, and every %1$d of them slow the code by %2$d WPM. Green is the right letter in the right place, amber is the right letter somewhere else.</string>
+    <string name="daily_dit_tile_empty">Empty</string>
+    <string name="daily_dit_tile_correct">%1$s, right place</string>
+    <string name="daily_dit_tile_present">%1$s, in the word, wrong place</string>
+    <string name="daily_dit_tile_absent">%1$s, not in the word</string>
+    <string name="daily_dit_tile_pending">%1$s, not guessed yet</string>
 </resources>

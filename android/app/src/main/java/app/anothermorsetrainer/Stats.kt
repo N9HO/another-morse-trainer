@@ -189,6 +189,22 @@ object Stats {
         prefs.edit { clear() }
     }
 
+    /**
+     * Count today toward the practice streak without logging a session (#155).
+     *
+     * Daily Dit is practice — a guess on the day's puzzle is showing up — but
+     * it is one puzzle, not a session. Pushing a synthetic session through
+     * [record] to move the streak would put a row in the history list and skew
+     * every lifetime average the stats screen draws from, so the streak moves
+     * on its own here. Idempotent within a day, so it is cheap to call on every
+     * guess.
+     */
+    fun recordPracticeDay(today: LocalDate = LocalDate.now()) {
+        if (!streak.record(today)) return   // already counted today
+        refreshStreak()
+        persist()
+    }
+
     private fun refreshStreak() {
         currentStreak = streak.display()
         longestStreak = streak.longest

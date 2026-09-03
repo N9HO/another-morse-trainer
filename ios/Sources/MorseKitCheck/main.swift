@@ -2508,6 +2508,260 @@ do {
     }
 }
 
+// MARK: - Shared Daily Dit fixture
+//
+// fixtures/daily-dit.json, consumed by this harness AND by android
+// DailyDitTest. Same bargain as the timing fixture: shared *data*, never shared
+// code, so the two ports can't quietly disagree about which word today is.
+//
+// The stakes are higher here than in a normal drill. Daily Dit is a *shared*
+// puzzle — an iOS player and an Android player comparing share texts on the
+// same day must be talking about the same word, and a share text posted today
+// has to still mean what it said. So the fixture pins the real words, not just
+// the arithmetic: regenerating the answer list fails here first, which is the
+// announcement CLAUDE.md asks for.
+struct DailyDitFixture: Decodable {
+    struct Rules: Decodable {
+        let maxGuesses, guessesPerSpeedStep, wordLength, selectionStride: Int
+        let speedStepWpm, minimumWpm: Double
+        let startingSpeeds: [Double]
+        let shareLink: String
+        struct Epoch: Decodable { let year, month, day: Int }
+        let epoch: Epoch
+        struct Emoji: Decodable { let correct, present, absent: String }
+        let emoji: Emoji
+    }
+    struct WordLists: Decodable {
+        let answerCount, allowedCount: Int
+        let strideCoprimeWithAnswerCount, everyAnswerIsAllowed: Bool
+        let sampleAllowed, sampleRejected: [String]
+    }
+    struct CivilDate: Decodable { let year, month, day, daysFrom1970, puzzleNumber: Int }
+    struct Puzzle: Decodable { let puzzleNumber, answerIndex: Int; let answer: String }
+    struct Scoring: Decodable { let guess, answer: String; let tiles: [String] }
+    struct Ladder: Decodable { let startingWpm: Double; let guessesUsed: Int; let wpm: Double }
+    struct Share: Decodable {
+        let puzzleNumber: Int
+        let answer: String
+        let startingWpm: Double
+        let hideReference: Bool
+        let guesses: [String]
+        let shareText: String
+    }
+    struct Headline: Decodable {
+        let puzzleNumber, guessesUsed: Int
+        let outcome: String
+        let solvedWpm: Double?
+        let hideReference: Bool
+        let headline: String
+    }
+    let rules: Rules
+    let wordLists: WordLists
+    let civilDates: [CivilDate]
+    let puzzles: [Puzzle]
+    let scoring: [Scoring]
+    let ladder: [Ladder]
+    let share: Share
+    let headlines: [Headline]
+}
+
+func loadDailyDitFixture() -> DailyDitFixture? {
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+    let url = root.appendingPathComponent("fixtures/daily-dit.json")
+    guard let data = try? Data(contentsOf: url) else { return nil }
+    return try? JSONDecoder().decode(DailyDitFixture.self, from: data)
+}
+
+print("\nDaily Dit, against fixtures/daily-dit.json:")
+if let fx = loadDailyDitFixture() {
+    // Rules
+    check("rule constants match the fixture",
+          DailyDit.maxGuesses == fx.rules.maxGuesses
+          && DailyDit.guessesPerSpeedStep == fx.rules.guessesPerSpeedStep
+          && DailyDit.wordLength == fx.rules.wordLength
+          && DailyDit.selectionStride == fx.rules.selectionStride
+          && DailyDit.speedStepWpm == fx.rules.speedStepWpm
+          && DailyDit.minimumWpm == fx.rules.minimumWpm
+          && DailyDit.startingSpeeds == fx.rules.startingSpeeds
+          && DailyDit.shareLink == fx.rules.shareLink
+          && DailyDit.epoch.year == fx.rules.epoch.year
+          && DailyDit.epoch.month == fx.rules.epoch.month
+          && DailyDit.epoch.day == fx.rules.epoch.day)
+
+    check("the brief's top speed is on the dial", DailyDit.startingSpeeds.contains(75))
+
+    check("tile emoji match the fixture",
+          DailyDit.Tile.correct.emoji == fx.rules.emoji.correct
+          && DailyDit.Tile.present.emoji == fx.rules.emoji.present
+          && DailyDit.Tile.absent.emoji == fx.rules.emoji.absent)
+
+    // Word lists
+    check("answer pool is the size the fixture pins (\(fx.wordLists.answerCount))",
+          MorseData.dailyDitAnswers.count == fx.wordLists.answerCount)
+    check("allowed pool is the size the fixture pins (\(fx.wordLists.allowedCount))",
+          MorseData.dailyDitAllowed.count == fx.wordLists.allowedCount)
+    check("every word is exactly \(DailyDit.wordLength) letters, A–Z",
+          MorseData.dailyDitAllowed.allSatisfy { w in
+              w.count == DailyDit.wordLength && w.allSatisfy { $0.isLetter && $0.isUppercase }
+          })
+    // Stride and pool size must stay coprime or the puzzle falls into a short
+    // cycle, repeating words long before the pool is used up.
+    check("stride is coprime with the answer count, so all \(MorseData.dailyDitAnswers.count) are used before any repeat",
+          fx.wordLists.strideCoprimeWithAnswerCount
+          && Set((0..<MorseData.dailyDitAnswers.count).map {
+              DailyDit.answer(forPuzzle: $0 + 1)
+          }).count == Set(MorseData.dailyDitAnswers).count)
+    check("every answer is a legal guess", fx.wordLists.everyAnswerIsAllowed
+          && MorseData.dailyDitAnswers.allSatisfy { DailyDit.isAllowedGuess($0) })
+    check("the fixture's sample words are accepted",
+          fx.wordLists.sampleAllowed.allSatisfy { DailyDit.isAllowedGuess($0) })
+    check("the fixture's non-words are rejected",
+          fx.wordLists.sampleRejected.allSatisfy { !DailyDit.isAllowedGuess($0) })
+
+    // Calendar
+    var civilOK = true
+    for c in fx.civilDates {
+        let days = DailyDit.daysFromCivil(year: c.year, month: c.month, day: c.day)
+        let number = DailyDit.puzzleNumber(year: c.year, month: c.month, day: c.day)
+        if days != c.daysFrom1970 || number != c.puzzleNumber {
+            civilOK = false
+            print("      ↳ \(c.year)-\(c.month)-\(c.day): days \(days)/\(c.daysFrom1970), puzzle \(number)/\(c.puzzleNumber)")
+        }
+    }
+    check("civil-date arithmetic matches the fixture across \(fx.civilDates.count) dates", civilOK)
+
+    // The puzzle number comes from the player's *local* date, so the same
+    // instant is a different puzzle either side of midnight somewhere.
+    var comps = DateComponents()
+    comps.year = 2026; comps.month = 9; comps.day = 2; comps.hour = 12
+    comps.timeZone = TimeZone(identifier: "UTC")
+    var utcCal = Calendar(identifier: .gregorian)
+    utcCal.timeZone = TimeZone(identifier: "UTC")!
+    if let noonUTC = utcCal.date(from: comps) {
+        check("a Date resolves through its time zone to the local day's puzzle",
+              DailyDit.puzzleNumber(for: noonUTC, timeZone: TimeZone(identifier: "UTC")!) == 245)
+        // 23:00 UTC on the 2nd is already the 3rd in Auckland (UTC+12/13).
+        var late = comps; late.hour = 23
+        if let lateUTC = utcCal.date(from: late),
+           let auckland = TimeZone(identifier: "Pacific/Auckland") {
+            check("the day rolls over on the player's own clock, not UTC",
+                  DailyDit.puzzleNumber(for: lateUTC, timeZone: auckland) == 246)
+        }
+    }
+
+    // Which word, which day
+    var puzzleOK = true
+    for p in fx.puzzles {
+        let answer = DailyDit.answer(forPuzzle: p.puzzleNumber)
+        if answer != p.answer || answer != MorseData.dailyDitAnswers[p.answerIndex] {
+            puzzleOK = false
+            print("      ↳ puzzle #\(p.puzzleNumber) is \"\(answer)\", fixture says \"\(p.answer)\"")
+        }
+    }
+    check("the daily word matches the fixture across \(fx.puzzles.count) puzzles", puzzleOK)
+
+    // Scoring
+    var scoreOK = true
+    for c in fx.scoring {
+        let tiles = DailyDit.score(guess: c.guess, answer: c.answer).map(\.rawValue)
+        if tiles != c.tiles {
+            scoreOK = false
+            print("      ↳ \(c.guess)/\(c.answer): \(tiles) vs fixture \(c.tiles)")
+        }
+    }
+    check("guess scoring matches the fixture across \(fx.scoring.count) cases (doubled letters included)", scoreOK)
+
+    // Ladder
+    var ladderOK = true
+    for c in fx.ladder where DailyDit.wpm(startingAt: c.startingWpm, guessesUsed: c.guessesUsed) != c.wpm {
+        ladderOK = false
+        print("      ↳ \(c.startingWpm) WPM after \(c.guessesUsed) guesses should be \(c.wpm)")
+    }
+    check("the speed ladder matches the fixture across \(fx.ladder.count) points", ladderOK)
+    check("the ladder never falls below the floor",
+          DailyDit.wpm(startingAt: 20, guessesUsed: 500) == DailyDit.minimumWpm)
+
+    // A whole game, played to the share text
+    var game = DailyDitGame(puzzleNumber: fx.share.puzzleNumber,
+                            answer: fx.share.answer,
+                            startingWpm: fx.share.startingWpm,
+                            hideReference: fx.share.hideReference)
+    var played = true
+    for g in fx.share.guesses {
+        if case .rejected = game.submit(g) { played = false }
+    }
+    check("the fixture's guesses are all accepted", played)
+    check("the game ends solved", game.outcome == .solved)
+    check("it reports the speed the winning guess was made at",
+          game.solvedWpm == fx.share.startingWpm)
+    check("the share text matches the fixture", game.shareText == fx.share.shareText)
+    check("the share text carries the link home",
+          game.shareText.hasSuffix(DailyDit.shareLink))
+
+    // Headlines for the outcomes a full game is tedious to reach
+    let miss: [DailyDit.Tile] = Array(repeating: .absent, count: DailyDit.wordLength)
+    let hit: [DailyDit.Tile] = Array(repeating: .correct, count: DailyDit.wordLength)
+    var headlineOK = true
+    for h in fx.headlines {
+        var rounds = (0..<max(0, h.guessesUsed - (h.outcome == "solved" ? 1 : 0)))
+            .map { _ in DailyDitRound(guess: "MOUND", tiles: miss, wpm: 0) }
+        if h.outcome == "solved" {
+            rounds.append(DailyDitRound(guess: "SPEND", tiles: hit, wpm: h.solvedWpm ?? 0))
+        }
+        let g = DailyDitGame(puzzleNumber: h.puzzleNumber,
+                             answer: "SPEND",
+                             startingWpm: 60,
+                             hideReference: h.hideReference,
+                             rounds: rounds)
+        if g.headline != h.headline || g.outcome.rawValue != h.outcome {
+            headlineOK = false
+            print("      ↳ \"\(g.headline)\" (\(g.outcome.rawValue)) vs fixture \"\(h.headline)\" (\(h.outcome))")
+        }
+    }
+    check("headlines match the fixture across \(fx.headlines.count) outcomes", headlineOK)
+
+    // Rules the fixture can't express as a table
+    var rules = DailyDitGame(puzzleNumber: 1, answer: "SPEND", startingWpm: 40)
+    check("a four-letter guess is rejected without spending a guess",
+          rules.submit("SPEN") == .rejected(.wrongLength) && rules.guessesUsed == 0)
+    check("a non-word is rejected without spending a guess",
+          rules.submit("ZZZZZ") == .rejected(.notAWord) && rules.guessesUsed == 0)
+    check("lower case is fine", { if case .scored = rules.submit("mound") { return true }; return false }())
+    // Repeating a guess is legal: guesses buy speed steps, so spending one to
+    // drag the code slower is a tactic, not a mistake.
+    check("a repeated guess is legal and still spends a guess",
+          { if case .scored = rules.submit("mound") { return rules.guessesUsed == 2 }; return false }())
+    check("the speed steps down only after a full step's worth of guesses",
+          rules.currentWpm == 40)
+    _ = rules.submit("MOUND")
+    check("…and does step down on the third", rules.currentWpm == 35)
+    check("eliminated letters are the ones no guess ever placed",
+          rules.eliminatedLetters == Set("MOU"))
+
+    var over = DailyDitGame(puzzleNumber: 1, answer: "SPEND", startingWpm: 40,
+                            rounds: (0..<DailyDit.maxGuesses).map { _ in
+                                DailyDitRound(guess: "MOUND", tiles: miss, wpm: 40)
+                            })
+    check("a lost game is over", over.outcome == .lost && over.guessesLeft == 0)
+    check("a finished game takes no more guesses",
+          over.submit("SPEND") == .rejected(.finished) && over.guessesUsed == DailyDit.maxGuesses)
+
+    // Saved and restored, since the day's game outlives the app process.
+    if let data = try? JSONEncoder().encode(game),
+       let back = try? JSONDecoder().decode(DailyDitGame.self, from: data) {
+        check("a game round-trips through Codable with its share text intact",
+              back == game && back.shareText == game.shareText)
+    } else {
+        check("a game round-trips through Codable with its share text intact", false)
+    }
+} else {
+    check("fixtures/daily-dit.json loads and decodes", false)
+}
+
 print("\n────────────────────────────")
 if failures == 0 {
     print("✅ All \(checks) checks passed.\n")

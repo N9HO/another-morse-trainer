@@ -525,6 +525,14 @@ struct AppSettings: Codable, Equatable {
     /// Character speed for QRQ high-speed copy practice (35–60 WPM).
     var qrqSpeed: QrqSpeed = .wpm35
 
+    /// The speed Daily Dit starts a puzzle at, before the ladder steps it down.
+    /// Defaults to 40 WPM: fast enough that the ladder is the point, slow enough
+    /// that a first-timer isn't just staring at noise.
+    var dailyDitStartingWpm: Double = 40
+    /// Play Daily Dit without the dit-dah chart on screen — the harder way, and
+    /// it says so on the share text.
+    var dailyDitHideReference: Bool = false
+
     /// Continuous background noise under everything (issue #29). Defaults to
     /// `.whisper`: the Bluetooth clipping it prevents is a silent accuracy tax
     /// nobody would think to go looking for a setting about, and at ~56 dB under
@@ -638,6 +646,7 @@ extension AppSettings {
         case learningMode, practiceDuration
         case listenContent, listenGap, wordTier, customWords, voiceResponse, keyingResponse
         case qrqSpeed, backgroundNoise, didMigrateNoiseFloor
+        case dailyDitStartingWpm, dailyDitHideReference
         case examSpeed, examGrading, examUseBundled
         case qso
         case contest
@@ -673,6 +682,10 @@ extension AppSettings {
         s.wordTier = try c.decodeIfPresent(WordTier.self, forKey: .wordTier) ?? s.wordTier
         s.customWords = try c.decodeIfPresent([String].self, forKey: .customWords) ?? s.customWords
         s.qrqSpeed = try c.decodeIfPresent(QrqSpeed.self, forKey: .qrqSpeed) ?? s.qrqSpeed
+        s.dailyDitStartingWpm = try c.decodeIfPresent(Double.self,
+                                                      forKey: .dailyDitStartingWpm) ?? s.dailyDitStartingWpm
+        s.dailyDitHideReference = try c.decodeIfPresent(Bool.self,
+                                                       forKey: .dailyDitHideReference) ?? s.dailyDitHideReference
         s.backgroundNoise = try c.decodeIfPresent(BackgroundNoiseLevel.self,
                                                   forKey: .backgroundNoise) ?? s.backgroundNoise
         // One-time move off the old Whisper default (issue #92). Whisper was
