@@ -28,6 +28,7 @@ class MainActivity : ComponentActivity() {
         AdapterKeyer.init(this)
         PileupSettings.init(this)
         Stats.init(this)
+        DailyDitStore.init(this)
         JourneyStore.init(this)
         EngineStore.init(this)
         VoiceProfileStore.init(this)
@@ -130,6 +131,7 @@ private sealed interface Route {
     data object CwDecoder : Route
     data object Reference : Route
     data object StartHere : Route
+    data object DailyDit : Route
     data object Settings : Route
     data object Stats : Route
 }
@@ -255,6 +257,7 @@ private fun AppRoot() {
         Route.Journey -> JourneyScreen(onBack = { route = Route.Home })
         Route.Home -> HomeScreen(
             onPickStartHere = { route = Route.StartHere },
+            onPickDailyDit = { route = Route.DailyDit },
             onPickJourney = { route = Route.Journey },
             onPickQuiz = { launch(quizTarget(it)) },
             onPickPileup = { route = Route.Pileup },
@@ -323,6 +326,7 @@ private fun AppRoot() {
         Route.CwDecoder -> CwDecoderScreen(onBack = { route = Route.Home })
         Route.Reference -> ReferenceScreen(onBack = { route = Route.Home })
         Route.StartHere -> StartHereScreen(onBack = { route = Route.Home })
+        Route.DailyDit -> DailyDitScreen(onBack = { route = Route.Home })
         Route.Settings -> SettingsScreen(onBack = { route = Route.Home })
         Route.Stats -> StatsScreen(onBack = { route = Route.Home })
     }

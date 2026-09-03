@@ -16,6 +16,7 @@ struct IntroView: View {
     @State private var showingStats = false
     @State private var showingReference = false
     @State private var showingStartHere = false
+    @State private var showingDailyDit = false
     @State private var showingSendingDrill = false
     @State private var showingCWDecoder = false
     @State private var showingRepeater = false
@@ -31,6 +32,8 @@ struct IntroView: View {
             ScrollView {
                 VStack(spacing: 28) {
                     header
+
+                    dailyDitCard
 
                     startHereButton
 
@@ -59,6 +62,9 @@ struct IntroView: View {
         .sheet(isPresented: $showingStartHere) {
             StartHereView().environmentObject(model)
         }
+        .sheet(isPresented: $showingDailyDit) {
+            DailyDitView().environmentObject(model)
+        }
         .sheet(isPresented: $showingSendingDrill) {
             SendingDrillView().environmentObject(model)
         }
@@ -69,6 +75,9 @@ struct IntroView: View {
             RepeaterView().environmentObject(repeater)
         }
         .onAppear {
+            // The app can sit open across midnight; the card must not still be
+            // advertising yesterday's puzzle.
+            model.refreshDailyDit()
             if openSetup {
                 openSetup = false
                 showingSetup = true
@@ -201,6 +210,55 @@ struct IntroView: View {
         if let m = AppModel.milestoneTier(forDay: days) { label += " \(m.day)-day milestone reached." }
         if model.longestStreak > days { label += " Best ever \(model.longestStreak) days." }
         return label
+    }
+
+    /// The day's puzzle (#155). It sits at the top of Home, above even "Start
+    /// here", because unlike everything else on this screen it expires: a daily
+    /// challenge you have to go looking for is a daily challenge nobody plays.
+    private var dailyDitCard: some View {
+        let game = model.dailyDit
+        let done = game.isFinished
+        return Button { showingDailyDit = true } label: {
+            HStack(spacing: 12) {
+                Image(systemName: done ? "checkmark.seal.fill" : "calendar.badge.clock")
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(done ? Theme.tealBright : Theme.teal)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Daily Dit")
+                        .font(.subheadline.weight(.semibold))
+                    Text(dailyDitSubtitle)
+                        .font(.caption)
+                        .foregroundStyle(Theme.textSecondary)
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Theme.textSecondary)
+            }
+            .foregroundStyle(.white)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(Theme.navyElevated, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(Theme.tealBright.opacity(done ? 0.35 : 0.7), lineWidth: 1.5))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Daily Dit. \(dailyDitSubtitle)")
+    }
+
+    private var dailyDitSubtitle: String {
+        let game = model.dailyDit
+        switch game.outcome {
+        case .solved:
+            let at = game.solvedWpm.map { " at \(DailyDit.format(wpm: $0)) WPM" } ?? ""
+            return "#\(game.puzzleNumber) copied in \(game.guessesUsed)\(at)"
+        case .lost:
+            return "#\(game.puzzleNumber) — out of guesses"
+        case .playing where game.guessesUsed > 0:
+            return "#\(game.puzzleNumber) · \(game.guessesUsed) of \(DailyDit.maxGuesses) guesses used"
+        case .playing:
+            return "Today's word in Morse — your speed, up to \(Int(DailyDit.startingSpeeds.max() ?? 75)) WPM"
+        }
     }
 
     /// The newcomer's way in (#96): the site's guide explains how to begin and

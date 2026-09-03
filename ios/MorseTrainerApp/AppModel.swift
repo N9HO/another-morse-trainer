@@ -337,6 +337,7 @@ final class AppModel: ObservableObject {
         restoreVoiceProfile()
         streak = AppModel.loadStreak()    // assigning in init doesn't fire didSet
         history = AppModel.loadHistory()
+        refreshDailyDit()                 // today's puzzle, restored or started
         summary = charLadder.summary
         Haptics.enabled = loaded.hapticsEnabled   // didSet doesn't fire in init
         applyBackgroundNoise()                    // ditto
@@ -2619,6 +2620,92 @@ final class AppModel: ObservableObject {
                                            streak: s.display(on: Date()))
             }
         }
+    }
+
+    // MARK: - Daily Dit (issue #155)
+
+    /// Today's puzzle. Starts empty (puzzle 0) and is filled in by
+    /// `refreshDailyDit()`, because the saved game can only be reconciled once
+    /// `settings` exists — a stored property can't read another one.
+    @Published private(set) var dailyDit = DailyDitGame(puzzleNumber: 0, answer: "", startingWpm: 40)
+    private static let dailyDitKey = "MorseTrainer.dailyDit"
+
+    /// Bring `dailyDit` up to date with the calendar: restore today's saved
+    /// game, or start a fresh one.
+    ///
+    /// Called on launch *and* every time the screen appears, because the app
+    /// can sit open across midnight — coming back to yesterday's finished grid
+    /// at breakfast is the bug this prevents. Yesterday's game is not migrated:
+    /// the day's word is gone, and a share text belongs to the day it was won.
+    func refreshDailyDit(now: Date = Date()) {
+        let number = DailyDit.puzzleNumber(for: now)
+        guard dailyDit.puzzleNumber != number else { return }
+        if let saved = AppModel.loadDailyDit(), saved.puzzleNumber == number {
+            dailyDit = saved
+        } else {
+            dailyDit = DailyDitGame.today(startingWpm: settings.dailyDitStartingWpm,
+                                          hideReference: settings.dailyDitHideReference,
+                                          date: now)
+            saveDailyDit()
+        }
+    }
+
+    /// Set the starting speed and reference preference.
+    ///
+    /// The speed only takes effect while the day is still untouched: once a
+    /// guess is spent the ladder is running, and re-basing it would let a
+    /// player rewrite the speed their share text claims. Hiding the reference
+    /// is presentational, so that one can change at any point — but flipping it
+    /// on mid-game does not un-say that you had the chart, so it only reaches
+    /// the share text if it was set before the first guess.
+    func configureDailyDit(startingWpm: Double, hideReference: Bool) {
+        settings.dailyDitStartingWpm = startingWpm
+        settings.dailyDitHideReference = hideReference
+        guard dailyDit.guessesUsed == 0 else { return }
+        dailyDit = DailyDitGame(puzzleNumber: dailyDit.puzzleNumber,
+                                answer: dailyDit.answer,
+                                startingWpm: startingWpm,
+                                hideReference: hideReference)
+        saveDailyDit()
+    }
+
+    /// Send the day's word at whatever the ladder is on now. Returns its
+    /// duration so the UI can hold the play button lit for exactly that long.
+    ///
+    /// Deliberately `replaySound`: Daily Dit is not a drill and has no
+    /// time-to-recognize clock to disturb, and replays are free by design.
+    @discardableResult
+    func playDailyDit() -> TimeInterval {
+        guard !dailyDit.answer.isEmpty else { return 0 }
+        return player.replaySound(playable: .text(dailyDit.answer),
+                                  frequency: settings.toneFrequency,
+                                  timing: MorseTiming(wpm: dailyDit.currentWpm))
+    }
+
+    func stopDailyDit() { player.stop() }
+
+    /// Offer a guess. A rejected guess costs nothing and is not saved.
+    @discardableResult
+    func submitDailyDit(_ word: String) -> DailyDitSubmission {
+        var game = dailyDit
+        let result = game.submit(word)
+        if case .scored = result {
+            dailyDit = game
+            saveDailyDit()
+            markPracticedToday()   // showing up for the daily puzzle is showing up
+        }
+        return result
+    }
+
+    private func saveDailyDit() {
+        if let data = try? JSONEncoder().encode(dailyDit) {
+            UserDefaults.standard.set(data, forKey: Self.dailyDitKey)
+        }
+    }
+
+    private static func loadDailyDit() -> DailyDitGame? {
+        guard let data = UserDefaults.standard.data(forKey: dailyDitKey) else { return nil }
+        return try? JSONDecoder().decode(DailyDitGame.self, from: data)
     }
 
     // MARK: - Daily reminder (issue #20 follow-up)

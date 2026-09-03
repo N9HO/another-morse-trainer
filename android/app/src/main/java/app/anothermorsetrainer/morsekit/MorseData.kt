@@ -179,6 +179,16 @@ object MorseData {
     /** 500 words, most useful first, for the Top N word tiers (see MorseDataWords.kt). */
     val rankedWords: List<String> = rankedWordsData
 
+    /** Daily Dit's answer pool, most common first (see DailyDitWords.kt). */
+    val dailyDitAnswers: List<String> = dailyDitAnswersData
+
+    /**
+     * Every five-letter word Daily Dit accepts as a guess (see DailyDitWords.kt).
+     * Split from a blob on first touch, so this stays untouched until someone
+     * actually plays.
+     */
+    val dailyDitAllowed: List<String> by lazy { dailyDitAllowedData }
+
     // ---- Item builders for each quiz mode ----
 
     /**

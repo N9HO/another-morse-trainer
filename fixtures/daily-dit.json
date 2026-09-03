@@ -1,0 +1,448 @@
+{
+  "$comment": "Shared Daily Dit fixture, consumed by BOTH ports: android DailyDitTest and ios MorseKitCheck. Data, not code — see CLAUDE.md's two-ports rule. Expected values are derived from the rules below, not captured from either implementation. The puzzles[] block pins real words: regenerating the answer list changes what every player gets on every future day, so it must fail here first.",
+  "derivation": {
+    "daysFromCivil": "Howard Hinnant days_from_civil; days from 1970-01-01, proleptic Gregorian",
+    "puzzleNumber": "max(1, daysFromCivil(date) - daysFromCivil(2026-01-01) + 1), from the LOCAL civil date",
+    "answerIndex": "((puzzleNumber - 1) % answerCount) * selectionStride % answerCount",
+    "stride": "coprime with answerCount, so every answer is used once before any repeats",
+    "score": "pass 1 claims exact matches; pass 2 marks 'present' only while an unclaimed copy of that letter remains in the answer",
+    "wpm": "max(minimumWpm, startingWpm - speedStepWpm * floor(guessesUsed / guessesPerSpeedStep))",
+    "shareText": "headline, then one emoji row per guess, then the link"
+  },
+  "rules": {
+    "maxGuesses": 21,
+    "guessesPerSpeedStep": 3,
+    "speedStepWpm": 5.0,
+    "minimumWpm": 10.0,
+    "wordLength": 5,
+    "selectionStride": 389,
+    "startingSpeeds": [
+      20.0,
+      25.0,
+      30.0,
+      40.0,
+      50.0,
+      60.0,
+      75.0
+    ],
+    "epoch": {
+      "year": 2026,
+      "month": 1,
+      "day": 1
+    },
+    "shareLink": "anothermorsetrainer.app",
+    "emoji": {
+      "correct": "🟩",
+      "present": "🟨",
+      "absent": "⬜"
+    }
+  },
+  "wordLists": {
+    "answerCount": 800,
+    "allowedCount": 15930,
+    "strideCoprimeWithAnswerCount": true,
+    "everyAnswerIsAllowed": true,
+    "sampleAllowed": [
+      "ABOUT",
+      "SPEND",
+      "RADAR",
+      "LEVEL",
+      "CRANE",
+      "SLATE",
+      "MOUND",
+      "GEESE"
+    ],
+    "sampleRejected": [
+      "ZZZZZ",
+      "QWXYB"
+    ]
+  },
+  "civilDates": [
+    {
+      "year": 1970,
+      "month": 1,
+      "day": 1,
+      "daysFrom1970": 0,
+      "puzzleNumber": 1
+    },
+    {
+      "year": 2000,
+      "month": 2,
+      "day": 29,
+      "daysFrom1970": 11016,
+      "puzzleNumber": 1
+    },
+    {
+      "year": 2025,
+      "month": 12,
+      "day": 31,
+      "daysFrom1970": 20453,
+      "puzzleNumber": 1
+    },
+    {
+      "year": 2026,
+      "month": 1,
+      "day": 1,
+      "daysFrom1970": 20454,
+      "puzzleNumber": 1
+    },
+    {
+      "year": 2026,
+      "month": 1,
+      "day": 2,
+      "daysFrom1970": 20455,
+      "puzzleNumber": 2
+    },
+    {
+      "year": 2026,
+      "month": 9,
+      "day": 2,
+      "daysFrom1970": 20698,
+      "puzzleNumber": 245
+    },
+    {
+      "year": 2028,
+      "month": 2,
+      "day": 29,
+      "daysFrom1970": 21243,
+      "puzzleNumber": 790
+    },
+    {
+      "year": 2028,
+      "month": 3,
+      "day": 1,
+      "daysFrom1970": 21244,
+      "puzzleNumber": 791
+    },
+    {
+      "year": 2030,
+      "month": 12,
+      "day": 25,
+      "daysFrom1970": 22273,
+      "puzzleNumber": 1820
+    }
+  ],
+  "puzzles": [
+    {
+      "puzzleNumber": 1,
+      "answerIndex": 0,
+      "answer": "ABOUT"
+    },
+    {
+      "puzzleNumber": 2,
+      "answerIndex": 389,
+      "answer": "CODES"
+    },
+    {
+      "puzzleNumber": 3,
+      "answerIndex": 778,
+      "answer": "ATLAS"
+    },
+    {
+      "puzzleNumber": 4,
+      "answerIndex": 367,
+      "answer": "MOUNT"
+    },
+    {
+      "puzzleNumber": 245,
+      "answerIndex": 516,
+      "answer": "EXACT"
+    },
+    {
+      "puzzleNumber": 800,
+      "answerIndex": 411,
+      "answer": "ALERT"
+    },
+    {
+      "puzzleNumber": 801,
+      "answerIndex": 0,
+      "answer": "ABOUT"
+    },
+    {
+      "puzzleNumber": 802,
+      "answerIndex": 389,
+      "answer": "CODES"
+    },
+    {
+      "puzzleNumber": 1601,
+      "answerIndex": 0,
+      "answer": "ABOUT"
+    }
+  ],
+  "scoring": [
+    {
+      "guess": "SPEED",
+      "answer": "SPEND",
+      "tiles": [
+        "correct",
+        "correct",
+        "correct",
+        "absent",
+        "correct"
+      ]
+    },
+    {
+      "guess": "ARRAY",
+      "answer": "RADAR",
+      "tiles": [
+        "present",
+        "present",
+        "present",
+        "correct",
+        "absent"
+      ]
+    },
+    {
+      "guess": "LEVEL",
+      "answer": "REBEL",
+      "tiles": [
+        "absent",
+        "correct",
+        "absent",
+        "correct",
+        "correct"
+      ]
+    },
+    {
+      "guess": "GEESE",
+      "answer": "THESE",
+      "tiles": [
+        "absent",
+        "absent",
+        "correct",
+        "correct",
+        "correct"
+      ]
+    },
+    {
+      "guess": "MOUND",
+      "answer": "TRICK",
+      "tiles": [
+        "absent",
+        "absent",
+        "absent",
+        "absent",
+        "absent"
+      ]
+    },
+    {
+      "guess": "ABOUT",
+      "answer": "ABOUT",
+      "tiles": [
+        "correct",
+        "correct",
+        "correct",
+        "correct",
+        "correct"
+      ]
+    },
+    {
+      "guess": "about",
+      "answer": "ABOUT",
+      "tiles": [
+        "correct",
+        "correct",
+        "correct",
+        "correct",
+        "correct"
+      ]
+    }
+  ],
+  "ladder": [
+    {
+      "startingWpm": 75.0,
+      "guessesUsed": 0,
+      "wpm": 75.0
+    },
+    {
+      "startingWpm": 75.0,
+      "guessesUsed": 1,
+      "wpm": 75.0
+    },
+    {
+      "startingWpm": 75.0,
+      "guessesUsed": 2,
+      "wpm": 75.0
+    },
+    {
+      "startingWpm": 75.0,
+      "guessesUsed": 3,
+      "wpm": 70.0
+    },
+    {
+      "startingWpm": 75.0,
+      "guessesUsed": 5,
+      "wpm": 70.0
+    },
+    {
+      "startingWpm": 75.0,
+      "guessesUsed": 6,
+      "wpm": 65.0
+    },
+    {
+      "startingWpm": 75.0,
+      "guessesUsed": 9,
+      "wpm": 60.0
+    },
+    {
+      "startingWpm": 75.0,
+      "guessesUsed": 18,
+      "wpm": 45.0
+    },
+    {
+      "startingWpm": 75.0,
+      "guessesUsed": 20,
+      "wpm": 45.0
+    },
+    {
+      "startingWpm": 75.0,
+      "guessesUsed": 21,
+      "wpm": 40.0
+    },
+    {
+      "startingWpm": 40.0,
+      "guessesUsed": 0,
+      "wpm": 40.0
+    },
+    {
+      "startingWpm": 40.0,
+      "guessesUsed": 1,
+      "wpm": 40.0
+    },
+    {
+      "startingWpm": 40.0,
+      "guessesUsed": 2,
+      "wpm": 40.0
+    },
+    {
+      "startingWpm": 40.0,
+      "guessesUsed": 3,
+      "wpm": 35.0
+    },
+    {
+      "startingWpm": 40.0,
+      "guessesUsed": 5,
+      "wpm": 35.0
+    },
+    {
+      "startingWpm": 40.0,
+      "guessesUsed": 6,
+      "wpm": 30.0
+    },
+    {
+      "startingWpm": 40.0,
+      "guessesUsed": 9,
+      "wpm": 25.0
+    },
+    {
+      "startingWpm": 40.0,
+      "guessesUsed": 18,
+      "wpm": 10.0
+    },
+    {
+      "startingWpm": 40.0,
+      "guessesUsed": 20,
+      "wpm": 10.0
+    },
+    {
+      "startingWpm": 40.0,
+      "guessesUsed": 21,
+      "wpm": 10.0
+    },
+    {
+      "startingWpm": 20.0,
+      "guessesUsed": 0,
+      "wpm": 20.0
+    },
+    {
+      "startingWpm": 20.0,
+      "guessesUsed": 1,
+      "wpm": 20.0
+    },
+    {
+      "startingWpm": 20.0,
+      "guessesUsed": 2,
+      "wpm": 20.0
+    },
+    {
+      "startingWpm": 20.0,
+      "guessesUsed": 3,
+      "wpm": 15.0
+    },
+    {
+      "startingWpm": 20.0,
+      "guessesUsed": 5,
+      "wpm": 15.0
+    },
+    {
+      "startingWpm": 20.0,
+      "guessesUsed": 6,
+      "wpm": 10.0
+    },
+    {
+      "startingWpm": 20.0,
+      "guessesUsed": 9,
+      "wpm": 10.0
+    },
+    {
+      "startingWpm": 20.0,
+      "guessesUsed": 18,
+      "wpm": 10.0
+    },
+    {
+      "startingWpm": 20.0,
+      "guessesUsed": 20,
+      "wpm": 10.0
+    },
+    {
+      "startingWpm": 20.0,
+      "guessesUsed": 21,
+      "wpm": 10.0
+    }
+  ],
+  "share": {
+    "puzzleNumber": 245,
+    "answer": "SPEND",
+    "startingWpm": 60.0,
+    "hideReference": false,
+    "guesses": [
+      "MOUND",
+      "SPEND"
+    ],
+    "shareText": "Daily Dit #245 — 2/21 at 60 WPM\n⬜⬜⬜🟩🟩\n🟩🟩🟩🟩🟩\nanothermorsetrainer.app"
+  },
+  "headlines": [
+    {
+      "puzzleNumber": 245,
+      "guessesUsed": 2,
+      "outcome": "solved",
+      "solvedWpm": 60.0,
+      "hideReference": false,
+      "headline": "Daily Dit #245 — 2/21 at 60 WPM"
+    },
+    {
+      "puzzleNumber": 7,
+      "guessesUsed": 11,
+      "outcome": "solved",
+      "solvedWpm": 45.0,
+      "hideReference": true,
+      "headline": "Daily Dit #7 — 11/21 at 45 WPM (no reference)"
+    },
+    {
+      "puzzleNumber": 99,
+      "guessesUsed": 21,
+      "outcome": "lost",
+      "solvedWpm": null,
+      "hideReference": false,
+      "headline": "Daily Dit #99 — X/21"
+    },
+    {
+      "puzzleNumber": 99,
+      "guessesUsed": 4,
+      "outcome": "playing",
+      "solvedWpm": null,
+      "hideReference": false,
+      "headline": "Daily Dit #99 — 4/21 so far"
+    }
+  ]
+}
