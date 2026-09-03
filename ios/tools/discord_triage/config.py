@@ -12,6 +12,13 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 
+# Triage calls the Messages API without streaming, and the SDK rejects a
+# non-streaming request whose max_tokens implies more than ten minutes of
+# generation (3600 * max_tokens / 128000 > 600). 16000 is the largest budget
+# that clears that bar, so it is both the default and the ceiling.
+MAX_OUTPUT_TOKENS = 16_000
+
+
 def _required(name: str) -> str:
     value = os.environ.get(name)
     if not value:
@@ -37,6 +44,19 @@ def _float(name: str, default: float) -> float:
         return max(0.0, float(raw))
     except ValueError:
         raise RuntimeError(f"{name} must be a number of seconds, got {raw!r}")
+
+
+def _int(name: str, default: int, maximum: int) -> int:
+    raw = os.environ.get(name, "").strip()
+    if not raw:
+        return default
+    try:
+        value = int(raw)
+    except ValueError:
+        raise RuntimeError(f"{name} must be a whole number of tokens, got {raw!r}")
+    if not 1 <= value <= maximum:
+        raise RuntimeError(f"{name} must be between 1 and {maximum}, got {value}")
+    return value
 
 
 def _emoji_set(raw: str) -> frozenset[str]:
@@ -93,8 +113,17 @@ class Settings:
     anthropic_api_key: str
     # Defaults to the most capable model. For lower cost on this high-volume,
     # low-complexity task, set ANTHROPIC_MODEL=claude-haiku-4-5 (cheapest) or
-    # claude-sonnet-4-6 (mid). Your call — see the README cost note.
+    # claude-sonnet-5 (mid). Your call — see the README cost note.
     model: str
+    # Output budget for one triage call. It has to hold the WHOLE verdict — a
+    # full Markdown issue body with Steps/Expected/Actual, a follow-up comment,
+    # a title and a Discord reply — because a structured output that runs out of
+    # room comes back as truncated JSON, which does not parse and takes the
+    # report down with it (see triage.TriageError). On a model that thinks by
+    # default the thinking is drawn from this same budget, so a small value is
+    # not a saving: it is an outage. Only tokens actually generated are billed,
+    # so a generous ceiling costs nothing on a short verdict.
+    max_tokens: int
 
     # --- GitHub ---
     github_token: str
@@ -131,7 +160,9 @@ class Settings:
             trigger_emojis=_emoji_set(os.environ.get("TRIGGER_EMOJI", "🐛")),
             settle_seconds=_float("TRIAGE_SETTLE_SECONDS", 8.0),
             anthropic_api_key=_required("ANTHROPIC_API_KEY"),
-            model=os.environ.get("ANTHROPIC_MODEL", "claude-opus-4-8"),
+            model=os.environ.get("ANTHROPIC_MODEL", "claude-opus-5"),
+            max_tokens=_int("ANTHROPIC_MAX_TOKENS", MAX_OUTPUT_TOKENS,
+                            MAX_OUTPUT_TOKENS),
             github_token=_required("GITHUB_TOKEN"),
             github_repo=_required("GITHUB_REPO"),
             github_repo_android=_deprecated_android_repo(),

@@ -1,9 +1,14 @@
 """Claude-powered triage of a Discord message into a structured verdict.
 
 Uses the Anthropic Messages API with structured outputs (a Pydantic schema), so
-the response is guaranteed to parse — no fragile string scraping. The triage
-instructions live in a cached system prompt; the volatile per-message content
-(the report text + the current open-issue list for dedup) goes in the user turn.
+a verdict that arrives comes in the shape we asked for — no fragile string
+scraping. It is not a guarantee that one arrives: an answer cut short by the
+output budget is truncated JSON, which the SDK rejects, and a refusal carries no
+verdict at all. Both raise TriageError so the caller can say so out loud.
+
+The triage instructions live in a cached system prompt; the volatile per-message
+content (the report text + the current open-issue list for dedup) goes in the
+user turn.
 """
 
 from __future__ import annotations
@@ -12,13 +17,24 @@ import asyncio
 from typing import Literal, Optional
 
 import anthropic
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
-from config import settings
+from config import MAX_OUTPUT_TOKENS, settings
 
 # One shared sync client; calls are dispatched off the event loop via asyncio.to_thread
 # so they never block discord.py's loop.
 _client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+
+
+class TriageError(RuntimeError):
+    """The model did not come back with a verdict we can act on.
+
+    Raised rather than swallowed: a verdict we never got is not the same thing
+    as a report that is noise, and quietly calling it noise is how a real bug
+    disappears without anyone hearing about it. The caller logs this and (on an
+    explicit trigger) says so in the thread, so a failure is visible instead of
+    looking like the bot ignored the report.
+    """
 
 
 class Verdict(BaseModel):
@@ -345,33 +361,45 @@ def _triage_sync(
             }
         )
 
-    response = _client.messages.parse(
-        model=settings.model,
-        max_tokens=2048,
-        system=[
-            {
-                "type": "text",
-                "text": SYSTEM_PROMPT,
-                # Cache the stable instructions; the per-message turn stays uncached.
-                "cache_control": {"type": "ephemeral"},
-            }
-        ],
-        messages=[{"role": "user", "content": blocks}],
-        output_format=Verdict,
-    )
+    try:
+        response = _client.messages.parse(
+            model=settings.model,
+            # The whole verdict has to fit here — see Settings.max_tokens. A
+            # budget too small for it does not truncate the issue body, it
+            # truncates the JSON carrying it, and the SDK validates that JSON
+            # on the way out: parse() raises instead of returning a verdict,
+            # and the report is lost. This used to be a hardcoded 2048.
+            max_tokens=settings.max_tokens,
+            system=[
+                {
+                    "type": "text",
+                    "text": SYSTEM_PROMPT,
+                    # Cache the stable instructions; the per-message turn stays uncached.
+                    "cache_control": {"type": "ephemeral"},
+                }
+            ],
+            messages=[{"role": "user", "content": blocks}],
+            output_format=Verdict,
+        )
+    except ValidationError as err:
+        # A structured output that does not validate is almost always a reply
+        # that ran out of room mid-JSON. Say so, with the number to raise:
+        # "invalid JSON" alone sends whoever reads the log looking at the
+        # schema instead of at the budget.
+        raise TriageError(
+            "the model's answer did not parse as a verdict — usually its reply "
+            f"was cut off by ANTHROPIC_MAX_TOKENS ({settings.max_tokens}); "
+            f"raise it (max {MAX_OUTPUT_TOKENS}) or shorten the transcript"
+        ) from err
 
     verdict = response.parsed_output
     if verdict is None:
-        # Refusal or schema miss — treat as non-actionable rather than crashing.
-        return Verdict(
-            kind="noise",
-            should_file=False,
-            is_duplicate=False,
-            title="",
-            body="",
-            labels=[],
-            severity="n/a",
-            reply="",
+        # No text block at all: a refusal, or an answer that was nothing but
+        # thinking. Either way there is no verdict, which is a failure to
+        # report — not a report to classify as noise.
+        raise TriageError(
+            "the model returned no verdict "
+            f"(stop_reason={response.stop_reason!r}, model={response.model!r})"
         )
     return _postprocess_platform(verdict, ask_platform)
 
