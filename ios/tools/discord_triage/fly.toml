@@ -16,7 +16,10 @@ primary_region = "iad"  # pick the region closest to you: fly platform regions
   # Seconds to let a thread settle so a burst of messages (or of 🐛 reactions)
   # is read as one report and answered once.
   TRIAGE_SETTLE_SECONDS = "8"
-  ANTHROPIC_MODEL = "claude-opus-4-8"
+  # Overrides the code default in config.py, so this line is what production
+  # actually runs. Thinking is on by default here (it was not on 4.8) and bills
+  # as output — see the README cost note.
+  ANTHROPIC_MODEL = "claude-opus-5"
   GITHUB_REPO = "n9ho/another-morse-trainer"
   TRIAGE_LABEL = "from-discord"
 
