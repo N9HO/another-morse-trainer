@@ -99,7 +99,10 @@ one message that triggered it:
   issue body with the thread id, so a forgotten thread recovers its issue from
   its own transcript — or, if that message is gone, by finding the
   `discord-thread:<id>` stamp on GitHub. A forgotten thread keeps commenting on
-  the issue it already has instead of filing a second one.
+  the issue it already has instead of filing a second one. That GitHub lookup
+  tries the search index first and falls back to scanning recent issue bodies,
+  because search has been observed returning 422 for this query in production —
+  and a scan of the plain issues endpoint works whenever filing does.
 
 ## Trigger modes
 
@@ -170,6 +173,7 @@ python bot.py
 python3 test_conversation.py   # pure helpers — no dependencies, no tokens
 python3 test_bot_flow.py       # thread memory, with fake Discord/GitHub/Claude
 python3 test_triage_call.py    # the Anthropic call: budget + failure handling
+python3 test_github_client.py  # stamp recovery, with a fake GitHub
 ```
 
 They also run under `pytest`, which is what CI does:
@@ -235,8 +239,30 @@ does control is whether the verdict has room to finish; see below.
 
 That reply (or, on a thread, "I hit an error analyzing that") means triage
 itself failed — the report never reached GitHub, so there is nothing to look for
-there. `fly logs` has the reason. The one that has actually bitten:
+there. `fly logs` has the reason. In the order they have actually bitten:
 
+- **`Your credit balance is too low to access the Anthropic API`** (a 400 from
+  the Anthropic API) — the account behind `ANTHROPIC_API_KEY` is out of
+  credits, so no request reaches the model at all. This has taken the bot down
+  once, and from Discord it looks identical to every other analysis failure.
+  Top up at [Plans & Billing](https://platform.claude.com/settings/billing),
+  and turn auto-reload on so it doesn't recur. Watch for the trap that cost an
+  afternoon: **credits have to be on the account that owns the key the bot
+  uses**. Fly secrets are write-only, so check the key itself rather than
+  assuming —
+
+  ```bash
+  fly ssh console -a morse-discord-triage
+  python -c 'import anthropic; c=anthropic.Anthropic(); print(c.messages.create(model="claude-opus-5", max_tokens=16, messages=[{"role":"user","content":"ping"}]).usage)'
+  ```
+
+  A `Usage(...)` line means the key can reach the API and the fault is
+  elsewhere; the same 400 means it genuinely has no credit. `python -c 'import
+  os; k=os.environ["ANTHROPIC_API_KEY"]; print(k[:14], "...", k[-4:])'` prints
+  enough to match the key against Console → API keys and find which account it
+  belongs to. To repoint it: `fly secrets import -a morse-discord-triage`, then
+  paste `ANTHROPIC_API_KEY=...` and Ctrl-D (stdin, so it stays out of shell
+  history).
 - **`the model's answer did not parse as a verdict`** — the verdict is a
   structured output whose `body` field is a whole Markdown issue write-up, so an
   answer that hits the output budget does not come back as a shorter issue: it
@@ -308,5 +334,6 @@ the thread, which Discord keeps for the thread's auto-archive window.)
 | `test_conversation.py` | Transcript + issue-recovery tests (no deps needed). |
 | `test_bot_flow.py` | Thread-memory tests against fake Discord/GitHub/Claude. |
 | `test_triage_call.py` | The model call itself: output budget, and the two ways a verdict fails to arrive. |
+| `test_github_client.py` | Recovering a thread's issue from its stamp, against a fake GitHub. |
 | `Dockerfile` / `fly.toml` | Container + Fly.io deployment. |
 | `.env.example` | Template for the required environment variables. |
