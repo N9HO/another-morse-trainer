@@ -79,7 +79,7 @@ class CharacterIntroductionTest {
     @Test
     fun `a prosign plays its run-together pattern, a character its text`() {
         val k = CharacterIntroduction.forDrill(drill("K")) { false }!!
-        assertEquals(MorseItem.Playable.Text("X"), k.playable)
+        assertEquals(MorseItem.Playable.Text("K"), k.playable)
         assertNull(k.meaning)
         assertFalse(k.isProsign)
 

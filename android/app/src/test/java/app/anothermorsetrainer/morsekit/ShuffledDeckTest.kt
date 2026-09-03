@@ -67,6 +67,6 @@ class ShuffledDeckTest {
     @Test
     fun `a single element keeps coming back`() {
         val deck = ShuffledDeck(listOf("E"), Random(1))
-        repeat(5) { assertEquals("X", deck.draw()) }
+        repeat(5) { assertEquals("E", deck.draw()) }
     }
 }
