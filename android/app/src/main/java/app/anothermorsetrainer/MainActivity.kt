@@ -170,6 +170,7 @@ private fun routeTag(route: Route): String = when (route) {
     Route.CwDecoder -> "cwDecoder"
     Route.Reference -> "reference"
     Route.StartHere -> "startHere"
+    Route.DailyDit -> "dailyDit"
     Route.Settings -> "settings"
     Route.Stats -> "stats"
 }
@@ -193,6 +194,7 @@ private fun routeFrom(tag: String): Route? = when (tag) {
     "cwDecoder" -> Route.CwDecoder
     "reference" -> Route.Reference
     "startHere" -> Route.StartHere
+    "dailyDit" -> Route.DailyDit
     "settings" -> Route.Settings
     "stats" -> Route.Stats
     // Keyed by title rather than list index: a mode reordered in QUIZ_MODES

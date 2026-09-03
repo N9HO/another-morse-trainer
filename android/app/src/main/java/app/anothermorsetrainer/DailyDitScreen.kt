@@ -89,6 +89,7 @@ fun DailyDitScreen(onBack: () -> Unit) {
     BackHandler { onBack() }
 
     val player = remember { MorsePlayer() }
+    val haptics = remember { Haptics(context) }
     // The typed guess survives rotation; the game itself is in the store, which
     // is where it has to be anyway to outlive the process.
     var entry by rememberSaveable { mutableStateOf("") }
@@ -228,7 +229,7 @@ fun DailyDitScreen(onBack: () -> Unit) {
                             imeAction = ImeAction.Done
                         ),
                         keyboardActions = KeyboardActions(onDone = {
-                            message = submit(entry) { entry = "" }
+                            message = submit(entry, haptics) { entry = "" }
                         }),
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedTextColor = Brand.textPrimary,
@@ -240,7 +241,7 @@ fun DailyDitScreen(onBack: () -> Unit) {
                         modifier = Modifier.weight(1f)
                     )
                     Button(
-                        onClick = { message = submit(entry) { entry = "" } },
+                        onClick = { message = submit(entry, haptics) { entry = "" } },
                         enabled = entry.length == DailyDit.WORD_LENGTH,
                         colors = ButtonDefaults.buttonColors(
                             containerColor = Brand.tealBright,
@@ -379,15 +380,15 @@ fun DailyDitScreen(onBack: () -> Unit) {
 }
 
 /** Offer a guess; returns the message to show, or null when it was accepted. */
-private fun submit(entry: String, onAccepted: () -> Unit): String? =
+private fun submit(entry: String, haptics: Haptics, onAccepted: () -> Unit): String? =
     when (val result = DailyDitStore.submit(entry)) {
         is DailyDitSubmission.Scored -> {
             onAccepted()
-            Haptics.selection()
+            if (Settings.hapticsEnabled) haptics.selection()
             null
         }
         is DailyDitSubmission.Rejected -> {
-            Haptics.error()
+            if (Settings.hapticsEnabled) haptics.error()
             result.reason.message
         }
     }
@@ -448,6 +449,7 @@ private fun SpeedTag(wpm: Double) {
 
 @Composable
 private fun SetupCard() {
+    val haptics = remember { Haptics(LocalContext.current) }
     Column(
         modifier = Modifier.fillMaxWidth().brandCard(cornerRadius = Brand.cornerRadius).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -484,7 +486,7 @@ private fun SetupCard() {
                                 .clip(CircleShape)
                                 .background(if (selected) Brand.teal else Brand.navyRaised)
                                 .clickable {
-                                    Haptics.selection()
+                                    if (Settings.hapticsEnabled) haptics.selection()
                                     DailyDitStore.configure(speed, DailyDitStore.game.hideReference)
                                 }
                                 .padding(vertical = 8.dp),

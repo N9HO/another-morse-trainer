@@ -86,9 +86,12 @@ object DailyDitStore {
     /**
      * Set the starting speed and reference preference.
      *
-     * The speed only takes effect while the day is still untouched: once a
-     * guess is spent the ladder is running, and re-basing it would let a player
-     * rewrite the speed their share text claims.
+     * Both are always stored as the preference for next time, but they only
+     * reach *today's* game while it is still untouched. Once a guess is spent
+     * the ladder is running, and re-basing it would let a player rewrite the
+     * speed their share text claims; the same goes for turning the chart back
+     * on after playing half a puzzle without it. The UI matches this — the card
+     * carrying these controls is only composed before the first guess.
      */
     fun configure(startingWpm: Double, hideReference: Boolean) {
         this.startingWpm = startingWpm
