@@ -20,7 +20,7 @@ class ShuffledDeckTest {
     @Test
     fun `a pass is every element exactly once`() {
         val deck = ShuffledDeck(pool, Random(3))
-        val pass = List(pool.size) { deck.draw() }
+        val pass = List(pool.size) { requireNotNull(deck.draw()) }
         assertEquals(pool, pass.sorted())
         assertEquals(0, deck.remainingInPass)
     }
@@ -29,7 +29,7 @@ class ShuffledDeckTest {
     fun `every later pass is also the whole pool`() {
         val deck = ShuffledDeck(pool, Random(11))
         repeat(6) {
-            val pass = List(pool.size) { deck.draw() }
+            val pass = List(pool.size) { requireNotNull(deck.draw()) }
             assertEquals("pass $it", pool, pass.sorted())
         }
     }
