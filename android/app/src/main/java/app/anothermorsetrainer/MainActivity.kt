@@ -47,6 +47,10 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         BackgroundNoise.onForeground()
+        // The app can sit open across midnight, and a resumed activity re-runs
+        // no composition-scoped effect, so coming back the next morning would
+        // otherwise still show yesterday's Daily Dit.
+        DailyDitStore.refresh()
     }
 
     override fun onStop() {

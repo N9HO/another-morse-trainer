@@ -21,6 +21,7 @@ struct IntroView: View {
     @State private var showingCWDecoder = false
     @State private var showingRepeater = false
     @StateObject private var repeater = RepeaterModel()
+    @Environment(\.scenePhase) private var scenePhase
 
     private let tileColumns = [GridItem(.flexible(), spacing: 14),
                                GridItem(.flexible(), spacing: 14)]
@@ -75,13 +76,18 @@ struct IntroView: View {
             RepeaterView().environmentObject(repeater)
         }
         .onAppear {
-            // The app can sit open across midnight; the card must not still be
-            // advertising yesterday's puzzle.
             model.refreshDailyDit()
             if openSetup {
                 openSetup = false
                 showingSetup = true
             }
+        }
+        // Not just onAppear: the app can sit open across midnight, and coming
+        // back to it the next morning does not re-run onAppear for a view
+        // already on screen. Without this the card would still be advertising
+        // yesterday's puzzle until something else redrew it.
+        .onChange(of: scenePhase) { phase in
+            if phase == .active { model.refreshDailyDit() }
         }
     }
 
