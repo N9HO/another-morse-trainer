@@ -139,7 +139,7 @@ object DailyDitStore {
                 JSONObject()
                     .put("guess", round.guess)
                     .put("wpm", round.wpm)
-                    .put("tiles", JSONArray(round.tiles.map { it.ordinal.toString() }))
+                    .put("tiles", JSONArray(round.tiles.map { it.key }))
             )
         }
         return JSONObject()
@@ -161,12 +161,12 @@ object DailyDitStore {
             val tiles = (0 until tilesJson.length()).mapNotNull {
                 DailyDitTile.fromKey(tilesJson.getString(it))
             }
-            rounds += DailyDitRound(r.getString("guess"), tiles, 0.0)
+            rounds += DailyDitRound(r.getString("guess"), tiles, r.getDouble("wpm"))
         }
         return DailyDitGame(
             puzzleNumber = json.getInt("puzzleNumber"),
             answer = json.getString("answer"),
-            startingWpm = 0.0,
+            startingWpm = json.getDouble("startingWpm"),
             hideReference = json.optBoolean("hideReference", false),
             rounds = rounds
         )
