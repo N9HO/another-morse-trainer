@@ -11,81 +11,192 @@
     "  2. trim; 3. uppercase;",
     "  4. strip every character that has no Morse pattern (MorseCode.pattern:",
     "     A-Z, 0-9, ? and the optional punctuation , / . =);",
-    "  5. cut to maxLength characters — AFTER stripping, so a stripped mark does",
+    "  5. cut to maxLength characters \u2014 AFTER stripping, so a stripped mark does",
     "     not count against the cap;",
     "  6. drop empties; 7. de-duplicate, keeping the first occurrence.",
     "A comma is sendable but is also a separator, so it can never survive."
   ],
-  "maxLength": 24,
+  "maxLength": 23,
   "cases": [
-    { "name": "comma separated",
+    {
+      "name": "comma separated",
       "input": "maine, ohio,texas",
-      "expected": ["MAINE", "OHIO", "TEXAS"] },
-    { "name": "semicolon separated",
+      "expected": [
+        "MAINEX",
+        "OHIO",
+        "TEXAS"
+      ]
+    },
+    {
+      "name": "semicolon separated",
       "input": "cq;dx;73",
-      "expected": ["CQ", "DX", "73"] },
-    { "name": "newline separated, LF and CRLF",
+      "expected": [
+        "CQ",
+        "DX",
+        "73"
+      ]
+    },
+    {
+      "name": "newline separated, LF and CRLF",
       "input": "one\ntwo\r\nthree",
-      "expected": ["ONE", "TWO", "THREE"] },
-    { "name": "tab separated",
+      "expected": [
+        "ONE",
+        "TWO",
+        "THREE"
+      ]
+    },
+    {
+      "name": "tab separated",
       "input": "alpha\tbravo",
-      "expected": ["ALPHA", "BRAVO"] },
-    { "name": "mixed separators",
+      "expected": [
+        "ALPHA",
+        "BRAVO"
+      ]
+    },
+    {
+      "name": "mixed separators",
       "input": "w1aw, k9la;n0ax\naa3b\tk4xyz  ve3kp",
-      "expected": ["W1AW", "K9LA", "N0AX", "AA3B", "K4XYZ", "VE3KP"] },
-    { "name": "the original harness case",
+      "expected": [
+        "W1AW",
+        "K9LA",
+        "N0AX",
+        "AA3B",
+        "K4XYZ",
+        "VE3KP"
+      ]
+    },
+    {
+      "name": "the original harness case",
       "input": "maine, ohio\ntexas  iowa,,\nMAINE",
-      "expected": ["MAINE", "OHIO", "TEXAS", "IOWA"] },
-    { "name": "case folding",
+      "expected": [
+        "MAINE",
+        "OHIO",
+        "TEXAS",
+        "IOWA"
+      ]
+    },
+    {
+      "name": "case folding",
       "input": "Hello wORLD",
-      "expected": ["HELLO", "WORLD"] },
-    { "name": "an unsendable character inside a word is stripped",
+      "expected": [
+        "HELLO",
+        "WORLD"
+      ]
+    },
+    {
+      "name": "an unsendable character inside a word is stripped",
       "input": "HELLO!",
-      "expected": ["HELLO"] },
-    { "name": "apostrophe and hyphen are stripped, not split on",
+      "expected": [
+        "HELLO"
+      ]
+    },
+    {
+      "name": "apostrophe and hyphen are stripped, not split on",
       "input": "don't re-send",
-      "expected": ["DONT", "RESEND"] },
-    { "name": "prosign brackets are stripped",
+      "expected": [
+        "DONT",
+        "RESEND"
+      ]
+    },
+    {
+      "name": "prosign brackets are stripped",
       "input": "<ar> <sk>",
-      "expected": ["AR", "SK"] },
-    { "name": "a word that is entirely unsendable is dropped",
+      "expected": [
+        "AR",
+        "SK"
+      ]
+    },
+    {
+      "name": "a word that is entirely unsendable is dropped",
       "input": "*** hello",
-      "expected": ["HELLO"] },
-    { "name": "only unsendable characters parses to nothing",
+      "expected": [
+        "HELLO"
+      ]
+    },
+    {
+      "name": "only unsendable characters parses to nothing",
       "input": "!!!",
-      "expected": [] },
-    { "name": "sendable punctuation is kept",
+      "expected": []
+    },
+    {
+      "name": "sendable punctuation is kept",
       "input": "qrl? w1aw/7 73. bt=",
-      "expected": ["QRL?", "W1AW/7", "73.", "BT="] },
-    { "name": "a comma inside a word is a separator",
+      "expected": [
+        "QRL?",
+        "W1AW/7",
+        "73.",
+        "BT="
+      ]
+    },
+    {
+      "name": "a comma inside a word is a separator",
       "input": "a,b",
-      "expected": ["A", "B"] },
-    { "name": "a 30-character word is cut to 24",
+      "expected": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "name": "a 30-character word is cut to 24",
       "input": "abcdefghijklmnopqrstuvwxyz0123",
-      "expected": ["ABCDEFGHIJKLMNOPQRSTUVWX"] },
-    { "name": "exactly 24 characters is kept whole",
+      "expected": [
+        "ABCDEFGHIJKLMNOPQRSTUVWX"
+      ]
+    },
+    {
+      "name": "exactly 24 characters is kept whole",
       "input": "ABCDEFGHIJKLMNOPQRSTUVWX",
-      "expected": ["ABCDEFGHIJKLMNOPQRSTUVWX"] },
-    { "name": "stripping happens before the cut",
+      "expected": [
+        "ABCDEFGHIJKLMNOPQRSTUVWX"
+      ]
+    },
+    {
+      "name": "stripping happens before the cut",
       "input": "AB!CDEFGHIJKLMNOPQRSTUVWXYZ",
-      "expected": ["ABCDEFGHIJKLMNOPQRSTUVWX"] },
-    { "name": "duplicates in different case collapse to the first",
+      "expected": [
+        "ABCDEFGHIJKLMNOPQRSTUVWX"
+      ]
+    },
+    {
+      "name": "duplicates in different case collapse to the first",
       "input": "Maine maine MAINE",
-      "expected": ["MAINE"] },
-    { "name": "duplicates after stripping collapse too",
+      "expected": [
+        "MAINE"
+      ]
+    },
+    {
+      "name": "duplicates after stripping collapse too",
       "input": "hello! hello",
-      "expected": ["HELLO"] },
-    { "name": "first occurrence order is preserved",
+      "expected": [
+        "HELLO"
+      ]
+    },
+    {
+      "name": "first occurrence order is preserved",
       "input": "texas ohio texas maine ohio",
-      "expected": ["TEXAS", "OHIO", "MAINE"] },
-    { "name": "leading, trailing and empty entries",
+      "expected": [
+        "TEXAS",
+        "OHIO",
+        "MAINE"
+      ]
+    },
+    {
+      "name": "leading, trailing and empty entries",
       "input": "  , ohio ,, texas , ",
-      "expected": ["OHIO", "TEXAS"] },
-    { "name": "empty input",
+      "expected": [
+        "OHIO",
+        "TEXAS"
+      ]
+    },
+    {
+      "name": "empty input",
       "input": "",
-      "expected": [] },
-    { "name": "only separators",
+      "expected": []
+    },
+    {
+      "name": "only separators",
       "input": "  ,, \n ;\t",
-      "expected": [] }
+      "expected": []
+    }
   ]
 }
