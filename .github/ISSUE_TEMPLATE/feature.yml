@@ -1,0 +1,31 @@
+name: Feature request
+description: Something the apps should do. Features ship on both apps, so one issue tracks both sides.
+labels: ["enhancement", "platform: multiple"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Every feature lands on both apps ([PARITY.md](https://github.com/N9HO/another-morse-trainer/blob/main/PARITY.md)).
+        This issue is done when both boxes below are ticked, or when a platform
+        limitation is written down in `PARITY.md` and the box for that side is
+        ticked with a note saying so.
+  - type: textarea
+    id: what
+    attributes:
+      label: What should the apps do
+      description: The behaviour a user would see, not the implementation.
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why
+      description: The situation this helps with. A Discord thread link is fine.
+  - type: checkboxes
+    id: parity
+    attributes:
+      label: Shipped on
+      description: Tick as each side merges. A single pull request may tick both.
+      options:
+        - label: iOS / iPadOS / macOS
+        - label: Android

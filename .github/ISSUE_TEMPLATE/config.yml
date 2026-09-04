@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Discord
+    url: https://discord.gg/qgyk3TPUd9
+    about: Bug reports and feature chat from testers. The triage bot files issues from the forum there.
+  - name: User guide
+    url: https://anothermorsetrainer.app/guide/
+    about: Every mode, setting and hardware option, for both apps.

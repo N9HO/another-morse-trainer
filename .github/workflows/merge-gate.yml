@@ -12,6 +12,17 @@ name: Merge gate
 #
 # It mirrors how GitHub evaluates a paths filter on `pull_request`: against the
 # full base...head diff of the PR, not against the latest push.
+#
+# It also enforces the parity rule (PARITY.md, #171): a pull request whose diff
+# touches only one of ios/ (minus ios/tools/) and android/ (minus
+# android/store-assets/), Markdown excluded, must say why in the
+# Parity section of its description — a paired issue for the other side, a
+# platform limitation recorded in PARITY.md, or a platform-internal change with
+# nothing user-visible. That check runs first and fails fast, before any wait
+# on the builds. Bot-authored PRs (dependabot) cannot tick a box and are
+# exempt. The accepted lines are the ones in .github/pull_request_template.md;
+# the bold token at the start of each line is what the grep below keys on, so
+# rename them in both places or not at all.
 
 on:
   pull_request:
@@ -39,6 +50,9 @@ jobs:
           REPO: ${{ github.repository }}
           PR: ${{ github.event.pull_request.number }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          PR_AUTHOR_TYPE: ${{ github.event.pull_request.user.type }}
         run: |
           set -euo pipefail
 
@@ -64,6 +78,64 @@ jobs:
 
           echo "── files changed in this PR ──"
           printf '%s' "$FILES" | sed 's/^/  /'
+
+          # ---- 1b. Parity: does a single-platform PR say why? ----
+          # The two lists below are the user-facing trees. ios/tools/ is the
+          # triage bot and release scripts, android/store-assets is Play
+          # listing copy, and a Markdown file is documentation; none of those
+          # is the app, so a change there is not a platform change. fixtures/
+          # counts for both by construction.
+          IOS_TOUCHED=0; ANDROID_TOUCHED=0
+          if printf '%s' "$FILES" | grep -vE '^ios/tools/|\.md$' | grep -qE '^ios/'; then
+            IOS_TOUCHED=1
+          fi
+          if printf '%s' "$FILES" | grep -vE '^android/store-assets/|\.md$' | grep -qE '^android/'; then
+            ANDROID_TOUCHED=1
+          fi
+
+          if [ $((IOS_TOUCHED + ANDROID_TOUCHED)) -eq 1 ]; then
+            side=ios; other=Android
+            [ "$ANDROID_TOUCHED" -eq 1 ] && { side=android; other=iOS; }
+            echo
+            echo "── parity: this PR touches only $side/ ──"
+
+            if [ "${PR_AUTHOR_TYPE:-}" = "Bot" ]; then
+              echo "  Author ${PR_AUTHOR:-?} is a bot — parity declaration not required."
+            else
+              # One checked box from the template's Parity section. The
+              # "Both platforms" box is not accepted here: the diff says
+              # otherwise, so ticking it is a mistake, not a declaration.
+              # PR bodies arrive with CRLF line ends; the patterns anchor at
+              # the start of a line and ignore what follows the token.
+              body_has() { printf '%s\n' "${PR_BODY:-}" | grep -qiE "$1"; }
+              BOX='^[[:space:]]*[-*][[:space:]]*\[x\][[:space:]]*\*\*'
+              declared=""
+              if body_has "${BOX}paired issue\*\*.*#[0-9]+"; then
+                declared="paired issue"
+              elif body_has "${BOX}platform limitation\*\*"; then
+                declared="platform limitation"
+                if ! printf '%s' "$FILES" | grep -qxE 'PARITY\.md'; then
+                  echo "::error::Parity: the PR declares a platform limitation but does not change PARITY.md. Record the exception there in this PR — that file is the one place they live."
+                  exit 1
+                fi
+              elif body_has "${BOX}platform-internal\*\*"; then
+                declared="platform-internal"
+              fi
+
+              if [ -n "$declared" ]; then
+                echo "  Declared: $declared."
+              else
+                echo "::error::Parity: this PR changes only $side/ and its description does not say what happens on $other. Tick one box in the Parity section (see .github/pull_request_template.md): a paired issue with its #number, a platform limitation recorded in PARITY.md in this PR, or platform-internal (nothing user-visible)."
+                if body_has "${BOX}both platforms\*\*"; then
+                  echo "::error::Parity: 'Both platforms' is ticked, but the diff touches only $side/."
+                fi
+                if body_has "${BOX}paired issue\*\*"; then
+                  echo "::error::Parity: 'Paired issue' is ticked but names no issue — add the #number on that line."
+                fi
+                exit 1
+              fi
+            fi
+          fi
 
           # ---- 2. Which builds must therefore pass? ----
           # These conditions must stay in step with the `paths:` filters in

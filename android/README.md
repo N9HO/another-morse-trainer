@@ -47,7 +47,8 @@ the iOS app's navy/teal look.
   output (keyer mode + speed, sidetone, opt-out RX piezo buzz), Bluetooth LE
   MIDI keys, and unplug detection
 - **Reference**: browsable, tap-to-hear chart of prosigns, Q-codes,
-  abbreviations, cut numbers, and the full alphabet, with per-signal detail
+  abbreviations, ham lingo, cut numbers, and the full alphabet, with
+  per-signal detail
 - **Short Stories**: continuous copy of a fable (32 bundled), a longer classic
   (Sherlock Holmes and friends) sent in parts with a bookmark that keeps your
   place, or todays news: real RSS headlines sanitized to sendable Morse and
