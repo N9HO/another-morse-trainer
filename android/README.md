@@ -20,13 +20,16 @@ the iOS app's navy/teal look.
 
 - **Journey**: gamified, level-based path (letters → numbers → punctuation →
   prosigns → Q-codes → abbreviations → words → call signs) with a progress bar
-  that fills on a hit and drains on a miss, an unlock map, and saved progress
+  that fills on a hit and drains on a miss (toggleable), an unlock map, and
+  saved progress
 - **Characters**: Koch-method ladder (A-Z, 0-9) with a user-pinnable
   "Track stage" (characters, pairs, triples, words & call signs)
-- **Common Words**, **Abbreviations**, **Q-Codes**, **Prosigns**: phrase drills
+- **Common Words**, **Abbreviations**, **Q-Codes**, **Prosigns**: phrase
+  drills, with custom word lists and optional punctuation extras
 - **Confusion Drill**: targeted review of the pairs you mix up
-- **Head Copy**, **Type It**, **QRQ Speed**: copy in your head, free-recall
-  typing, and high-speed copy at 35 / 40 / 50 / 60 WPM on its own setting
+- **Head Copy**, **Type It**, **QRQ Speed**: copy in your head with
+  auto-repeats and a timed reveal, free-recall typing, and high-speed copy at
+  35 / 40 / 50 / 60 WPM on its own setting
 - **Rapid Fire**: a stream of call signs / words / number groups / states sent
   back to back at your chosen pace; type as you hear it, head-copy then type,
   key each one back, or just listen and review the transmitted list
@@ -40,7 +43,8 @@ the iOS app's navy/teal look.
 - **Contest**: timed runs of the weekly CW events (K1USN SST, ICWC MST, CWops
   CWT, NCCC Sprint, ARRL Field Day) with authentic exchanges, speeds, live
   score/rate, and an end-of-run scorecard
-- **Code Exam**: FCC/ARRL-style copy test at 5 / 13 / 20 WPM
+- **Code Exam**: FCC/ARRL-style copy test at 5 / 13 / 20 WPM (solid copy or
+  content questions, random or a bundled passage)
 - **Sending Practice**: key it back (touch or MIDI key); quizzes can also be
   answered by keying
 - **Repeater**: live CW over the Vail network with a server picker and
@@ -65,9 +69,14 @@ the iOS app's navy/teal look.
 - **Sending Drills**: printable practice sheets of random character groups
   drawn from what you've studied (even, personalized, or numbers & punctuation),
   ready to share or print
-- **Progress**: daily streak, accuracy, best copy, per-character recognition
-  chart, performance by 5-WPM speed band, and per-session detail screens with
-  each session's own recognition chart
+- **Progress**: daily streak with milestone celebrations, session history
+  with per-session recognition charts, per-character stats, most-confused
+  pairs, performance by 5-WPM speed band, and a shareable Brag Sheet
+- Timed practice sessions (1-30 min or open-ended) with mid-session timer
+  controls and an end-of-session summary, and a mode switcher that jumps
+  between drills without going home
+- Daily practice reminders (streak-aware; inexact by a few minutes, see
+  [PARITY.md](../PARITY.md))
 - **Settings**: character speed to 60 WPM, Farnsworth, sidetone pitch, a
   background noise floor (Whisper by default, so Bluetooth earbuds don't sleep
   through the first character), haptics, daily reminders, session length,

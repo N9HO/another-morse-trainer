@@ -67,6 +67,7 @@ changes and the gap is closed.
 |---|---|---|---|
 | Pairing a Bluetooth LE MIDI key by scanning from inside the app | iOS | CoreMIDI only exposes a BLE MIDI peripheral once it has been connected through the system `CABTMIDICentralViewController` sheet; there is no app-level scan API. | Opens that system sheet from Settings (`BluetoothMIDISheet.swift`). Same outcome: a paired key. |
 | Hardware-key section always visible in Settings | Android | Some Android devices ship without `FEATURE_MIDI`; showing MIDI controls there would offer a feature the device cannot use. | The section is hidden on devices without the feature (`SettingsScreen.kt`, `FEATURE_MIDI` check). On devices that have it, the section matches iOS. |
+| Voice answers: listening starts by itself when the tone ends, and the time-to-recognize clock starts at speech onset | Android | Android's `SpeechRecognizer` is one-shot: each invocation plays the system start sound and takes audio focus, so auto-listening after every prompt would chime over every character; it also owns the microphone, so the app gets no audio to detect onset from. | A "Speak answer" button starts one recognition per prompt (`QuizScreen.kt`); the clock runs from the tap. |
 | Daily reminder at exactly the chosen minute | Android | The app deliberately does not request `SCHEDULE_EXACT_ALARM`, which Android 12+ gates behind a special permission; an inexact alarm may fire minutes late when the OS batches it. | `setInexactRepeating` at the chosen time; the reminder still arrives, at minute precision only on iOS. |
 
 ### Same feature, platform mechanism (not gaps)
@@ -78,6 +79,11 @@ missing feature.
   runtime permission, so the Android app asks for it when the reminder is
   switched on; iOS asks through `UNUserNotificationCenter` at the same
   moment. Same outcome.
+- **Streak count in the reminder text.** Android reads the streak when the
+  alarm fires (`ReminderReceiver.kt`); iOS cannot run code at delivery, so
+  it bakes the count in and re-schedules whenever the streak can change:
+  the day's first practice, a lapse noticed on foreground, a reset
+  (`AppModel.refreshReminderIfStreakChanged`).
 - **Reminder after a reboot.** `UNCalendarNotificationTrigger` survives a
   reboot on its own; `AlarmManager` alarms do not, so the Android app re-arms
   on `BOOT_COMPLETED` (`ReminderReceiver.kt`).
@@ -104,213 +110,98 @@ missing feature.
   `mediaServicesWereReset` (`AudioSession.swift`); Android has no such
   event and catches `IllegalStateException` instead.
 
-## Audit of 2026-09-04
+## Audit of 2026-09-04, and what closed it
 
 The audit compared the two trees file by file in five slices: every mode and
 its options, settings and defaults, progress and sharing, the hardware,
 audio, voice, decoder and repeater layers, and the MorseKit logic layer with
-its data tables. The headline: **every mode, every data table and every
-engine constant is on both apps.** The gaps are in options a mode offers,
-defaults and ranges, what the Stats screens show, and the repeater's
-secondary features. What follows is everything found that is **not** a
-platform limitation — accidental divergence, in the issue's words. Each row
-is a gap to close, in the direction that makes the two apps agree; where one
-side is plainly better, that side is the target. The tables are the backlog:
-a row leaves this file when a pull request closes it on the side that lacks
-it (see *Closing an item* at the end).
+its data tables. Every mode, every data table and every engine constant was
+already on both apps; the divergences were in options a mode offered,
+defaults and ranges, what the Stats screens showed, and the repeater's
+secondary features. **All of them were closed in the same change that
+recorded them**, on the side that lacked each behaviour, in that tree's
+idiom. This section keeps the list so the next audit can start from it, and
+so a regression of any row is recognisable.
 
-A behaviour listed as "iOS only" is missing on Android, and the reverse.
-File references are to the side that has the behaviour.
+Closed on Android (behaviour iOS had): the Journey "misses drain the bar"
+toggle; Code Exam's built-in-passage option; Rapid Fire call-sign shape
+chips; mid-session timer controls (add 5 min, add 1 min, remove the limit);
+the mid-session mode switcher; Head Copy's repeat count, 0–10 s reveal and
+live "Revealing in N…" countdown; the fourth Listen & Learn gap tier; show
+right / wrong and show replay button; copy diagnostic info; Developer ·
+Preview Stage; QSO wait-between-callers, per-caller Farnsworth and
+which-digits-are-cut settings; mode setup remembered across launches (Rapid
+Fire, QRQ speed, Contest, Exam); an explicit Farnsworth switch; the
+most-confused-pairs section; the per-character table with pattern, attempts
+and mastered seal; the Stats header; the session chart's goal line, gridlines
+and axis; the stage name on the share card; the streak badge's milestone
+emoji and best; the mastered count computed with a minimum-attempt gate;
+speed bands over the full history; the repeater's unread-chat badge with a
+per-channel read watermark and 60-second roster expiry; a repeater sidetone
+that ducks other audio instead of taking it; and the "MIDI unavailable"
+readout distinct from "no key connected".
 
-### Modes and screens
+Closed on iOS (behaviour Android had): first-run onboarding that asks the
+proficiency once, seeds the ladder and unlocks the Journey that far
+(`JourneyCurriculum.firstLevelBeyond`, now on both), with the per-mode
+"Where are you starting?" card dropped from the setup sheet for the reason
+in #151; keyed answers in every keyable drill, with an in-quiz toggle; the
+QSO "Key my side in Morse" and "re-calls after TU" toggles; an explicit "Use
+my word list" switch with the two-word minimum; session detail's duration,
+fastest copy and speed; the share button hidden until a first session; a
+history decoder that drops one corrupt row instead of the whole history;
+lifetime totals as monotonic counters (seeded once from the existing history
+so nobody's numbers drop); a reset that clears the streak, history and stats
+its dialog promises; the three-tier session chart colours; Reset all
+progress hidden mid-session; live adapter reconfiguration from Settings on
+every screen; a stuck key released when the key is unplugged; the key held
+while any paddle note is held; a lone connected MIDI device taken as the
+adapter for RX buzz; and the note under the keyer picker saying which modes
+the adapter clocks.
 
-Every mode exists on both apps. Where the two home screens differ (iOS puts
-Reference, Sending Drills, CW Decoder and Vail in the top bar, Android makes
-them tiles) that is layout, not a gap. The gaps are in what a mode offers.
+Values the two apps now agree on (the iOS value, the original app's, unless
+Android's was plainly safer): character speed floor 15 WPM; Farnsworth off
+by default with an effective-speed floor of 8; recognize-within 0.5–3.0 s;
+reveal the answer on a miss; five-minute sessions; Head Copy two repeats and
+a 5 s reveal; Listen gaps 1.3 / 1.0 / 0.5 / 0.2 s; exam grading by
+questions; your call W1AW; caller speed floor 12; tone spread to 500 Hz;
+QRN Off / Normal / Moderate / Heavy at 0 / 0.04 / 0.10 / 0.20; keep partial
+call off; RX piezo buzz on; RX delay 0–4000 ms in 250 ms steps; TX tone
+48–96; 5000 signal events; the pileup QRN, keep-partial and Listen-gap
+values stored by earlier Android builds are mapped to the nearest new value
+on load.
 
-| Behaviour | Has it | Lacks it | Evidence |
-|---|---|---|---|
-| Journey: "misses drain the bar" toggle | iOS | Android | `IntroView.swift:436`, `AppSettings.swift:513`. Android has `JourneyScoring.FillOnly` in `Journey.kt:140` but hardwires `Default` at `JourneyScreen.kt:98`. |
-| Code Exam: "use a built-in passage" option | iOS | Android | `IntroView.swift:552`, `AppModel.swift:959`. Android bundles the passages (`MorseDataExam.kt:62`) but `CodeExamScreen.kt:97` only ever calls `forRandom`. |
-| Rapid Fire: call-sign shape chips | iOS | Android | `IntroView.swift:757`. Android pins `CallsignFormat.commonDefaults` at `RapidFireScreen.kt:154`. |
-| Mid-session timer controls (add 5 min, add 1 min, remove limit) | iOS | Android | `ContentView.swift:1364`, `AppModel.swift:1788`. Android shows a read-only countdown, `QuizScreen.kt:487`. |
-| Mid-session mode switcher in the toolbar | iOS | Android | `ContentView.swift:1146`. Android routes every mode change through Home (`MainActivity.kt:300`). Plausibly deliberate given one-screen-per-mode routing; decide, then either port or list as an exception. |
-| Head Copy: live "Revealing in N…" countdown | iOS | Android | `ContentView.swift:345`. |
-| Listen & Learn: four answer-gap tiers (1.3 / 1.0 / 0.5 / 0.2 s) | iOS | Android | `AppSettings.swift:81`; Android has three (1.3 / 0.7 / 0.3 s) at `Listen.kt:23`. The iOS comment already names iOS as canonical. |
-| First-run onboarding that asks proficiency once and seeds the ladder | Android | iOS | `OnboardingScreen.kt:39`, `MainActivity.kt:242`. iOS asks per mode on the setup sheet instead (`IntroView.swift:985`); Android removed that from its sheet on purpose (`SessionSetupSheet.kt:43`, #109). The two apps ask the same question in different places; pick one model. |
-| Keying answers in every keyable drill, with an in-quiz toggle | Android | iOS | `QuizScreen.kt:544`. iOS allows it for Characters and Words only, from the setup sheet (`IntroView.swift:687`, `AppModel.swift:466`). |
+MorseKit: one custom-word parser on both ports (split on comma, semicolon
+and whitespace; trim; uppercase; strip characters with no Morse pattern; cap
+at 24; drop empties; de-duplicate), pinned by `fixtures/custom-words.json`
+in the Swift harness and `CustomWordsTest`; the contest multiplier drops
+empty pieces on both; `MorseCode.characterForPattern` is public on Android;
+the Rapid Fire response blurbs match.
 
-Checked and at parity, README wording notwithstanding: the eight pileup
-exchange flavours, Reference's ham-lingo section, story kinds and the four
-news sources, exam speeds and grading, Rapid Fire content and response
-modes, the Track-stage pin, Start Here, Daily Dit, contest types, and voice
-answers in the same six quizzes.
+Three audited rows turned out not to be gaps and are recorded here so they
+are not re-audited: the repeater's room list, deterministic private-QSO
+channel name and decoder-room flag are model state on iOS that no view
+reads, and Android now carries the same state; the Vail in-app log ring
+buffer is a debugging aid with no user-visible surface on either app.
 
-### Settings, defaults and ranges
-
-Present on one app only:
-
-| Setting | Has it | Lacks it | Evidence |
-|---|---|---|---|
-| Show right / wrong | iOS | Android | `AppSettings.swift:585`, `SettingsView.swift:275` |
-| Show replay button | iOS | Android | `AppSettings.swift:587`, `SettingsView.swift:281` |
-| QSO: min / max wait between callers | iOS | Android | `AppSettings.swift:408`, `SettingsView.swift:369` |
-| QSO: per-caller Farnsworth | iOS | Android | `AppSettings.swift:403`, `SettingsView.swift:353` |
-| QSO: which digits get cut | iOS | Android | `AppSettings.swift:413`, `SettingsView.swift:395`. Android has on/off only (`PileupScreen.kt:422`) and passes no `cutDigits` (`PileupSettings.kt:160`). |
-| Copy diagnostic info to the clipboard | iOS | Android | `SettingsView.swift:449`, `:595` |
-| Developer: preview stage | iOS | Android | `SettingsView.swift:422`. Developer affordance; port or drop. |
-| QSO: "key my side in Morse" on/off | Android | iOS | `PileupSettings.kt:77`. iOS always keys your side. |
-| QSO: "recall after TU" on/off | Android | iOS | `PileupSettings.kt:80`. iOS always re-calls. |
-| Mode setup remembered across launches (Rapid Fire, QRQ speed, Contest, Exam) | iOS | Android | iOS persists in `AppSettings.swift:202`, `:536`, `:470`, `:566`; Android keeps them in `rememberSaveable` / `remember` (`RapidFireScreen.kt:103`, `TypedQuizScreen.kt:379`, `ContestScreen.kt:86`, `CodeExamScreen.kt:69`) and resets on relaunch. |
-
-Present on both, but a user moving between phones would notice:
-
-| Setting | iOS | Android | Evidence |
-|---|---|---|---|
-| Character speed floor | 15 WPM | 5 WPM | `SettingsView.swift:110`; `Settings.kt:102` |
-| Farnsworth | explicit on/off switch, effective speed floor 8 | always-visible slider, "Off" at character speed, floor 5 | `AppSettings.swift:481`, `SettingsView.swift:141`; `SettingsScreen.kt:244` |
-| Recognize-within range | 0.5–3.0 s | 0.5–2.5 s | `AppSettings.swift:502`; `Settings.kt:154` |
-| Reveal-the-answer default | on a miss | always | `AppSettings.swift:586`; `Settings.kt:160` |
-| Session length default | 5 minutes | until I stop | `AppSettings.swift:519`; `Settings.kt:163` |
-| Head Copy defaults | 2 auto-repeats, reveal at 5 s (0–10 s slider) | auto-repeat off, manual reveal (0/2/4/6 s) | `AppSettings.swift:598`; `Settings.kt:189` |
-| Custom word list | used whenever non-empty; hides the tier picker | separate "use my list" switch; needs at least 2 words | `IntroView.swift:622`; `Settings.kt:485` |
-| Voice answers and keyed answers | mutually exclusive | both can be on | `IntroView.swift:400`; `QuizScreen.kt:544` |
-| Code Exam grading default | questions | solid copy | `AppSettings.swift:568`; `CodeExamScreen.kt:70` |
-| QSO: your call default | W1AW | blank, sent as N0CALL | `AppSettings.swift:396`; `PileupSettings.kt:157` |
-| QSO: caller speed floor | 12 WPM | 10 WPM | `PileupSettings.kt:39` |
-| QSO: tone spread maximum | 500 Hz | 400 Hz | `PileupSettings.kt:136` |
-| QSO: QRN levels and labels | Off / Normal / Moderate / Heavy = 0 / 0.04 / 0.10 / 0.20 | Off / Light / Medium / Heavy = 0 / 0.04 / 0.09 / 0.16 | `AppSettings.swift:323`; `PileupSettings.kt:18` |
-| QSO: keep partial call default | off | on | `AppSettings.swift:421`; `PileupSettings.kt:74` |
-| Reset all progress | always in Settings | Home only, hidden mid-session | `SettingsView.swift:467`; `SettingsScreen.kt:559` |
-
-### Progress, statistics and sharing
-
-| Behaviour | Has it | Lacks it | Evidence |
-|---|---|---|---|
-| Most-confused pairs section on Stats | iOS | Android | `StatsView.swift:67`, `AppModel.swift:2310`. Android records and persists the same matrix (`ConfusionMatrix.kt`, `EngineStore.kt:111`) and shows it nowhere but the Confusion drill. |
-| Ideal time-to-recognize line and gridlines on the session chart | iOS | Android | `SessionDetailView.swift:144`; Android bars at `StatsScreen.kt:443` have no goal line. |
-| Per-character table: pattern, attempts, mastered seal, weakest first | iOS | Android | `StatsView.swift:145`, `AppModel.swift:2292`. Android shows an A–Z bar chart only (`StatsScreen.kt:135`). |
-| Stats header: current stage, active characters, recognize-within goal | iOS | Android | `StatsView.swift:12` |
-| Stage name on the share card | iOS | Android | `BragSheetView.swift:289`; `ShareCard.kt:54` omits it. |
-| Home streak badge shows milestone emoji and best streak | iOS | Android | `IntroView.swift:187`; Android shows the count only (`HomeScreen.kt:319`). |
-| Session detail shows duration, fastest copy and speed | Android | iOS | `StatsScreen.kt:395`. iOS stores them (`SessionHistory.swift:18`) and never shows them (`SessionDetailView.swift:45`). |
-| Share button hidden until the first session | Android | iOS | `StatsScreen.kt:90`; iOS can share a zero-session card (`BragSheetView.swift:50`). |
-| A corrupt history row is dropped, not the whole history | Android | iOS | `Stats.kt:260`; iOS `loadHistory` drops everything on one bad byte (`AppModel.swift:2824`). |
-
-Same feature, different numbers:
-
-| What | iOS | Android | Evidence |
-|---|---|---|---|
-| Lifetime totals | summed from a history capped at 100 sessions, so they shrink after the 100th | monotonic counters | `AppModel.swift:2350`, `SessionHistory.swift:109`; `Stats.kt:142` |
-| "Mastered" on the share card | 5-attempt window, ≥90 %, minimum attempts | lifetime ≥90 % and median under target, no minimum | `Stats.swift:71`, `AppModel.swift:2356`; `ShareCard.kt:101` |
-| Per-character stats window | active characters, last 20 attempts | every character ever drilled, last 12 correct | `AppModel.swift:2281`; `Stats.kt:113` |
-| Speed-band input | full history | the 50-row summary list | `SessionHistory.swift:173`; `StatsScreen.kt:155` |
-| Reset all progress | clears the ladder and Journey only, while the dialog says "learned letters and stats" | clears streak, history, per-character data, ladder and Journey | `AppModel.swift:2833`, `SettingsView.swift:492`; `Stats.kt:189` |
-| Session chart colour | green / red at 0.9 | three tiers at 0.9 / 0.7 | `SessionDetailView.swift:182`; `StatsScreen.kt:459` |
-| Streak count in the reminder | baked in when scheduled, re-armed on the day's first practice | read when the alarm fires | `Notifications.swift:30`; `ReminderReceiver.kt:34`. Android's cannot go stale. |
-
-At parity: streak model and milestones (3 / 7 / 14 / 30 / 60 / 100 / 365),
-celebrations, week strip, totals grid, personal bests, session list and
-detail, per-session chart, speed bands, history cap, share caption, Daily Dit
-share, printable drill sheet, reminders, and every persistence store.
-
-### Hardware keys, audio, voice, decoder and repeater
-
-| Behaviour | Has it | Lacks it | Evidence |
-|---|---|---|---|
-| Repeater: unread-chat badge with a per-channel read watermark | iOS | Android | `RepeaterModel.swift:59`, `:440`; Android only dedupes (`VailRepeater.kt:289`). |
-| Repeater: roster entries expire after 60 s | iOS | Android | `RepeaterModel.swift:161`, `:692`; Android sets the list and stops (`VailRepeater.kt:286`). |
-| Repeater: room list surfaced | iOS | Android | `RepeaterModel.swift:54`; Android parses rooms (`VailMessage.kt:111`) and drops them at `VailRepeater.kt:286`. |
-| Repeater: deterministic private QSO channel name from both callsigns | iOS | Android | `RepeaterModel.swift:389` |
-| Repeater: the server's "decoder" room flag honoured | iOS | Android | `RepeaterModel.swift:98`; Android no-ops at `VailRepeater.kt:298`. |
-| Repeater audio mixes with other apps (a radio app can run alongside) | iOS | Android | `AudioSession.swift:76`; Android's repeater sidetone takes full focus (`SidetoneGenerator.kt:36`). |
-| Sending Practice tells "MIDI unavailable" from "nothing plugged in" | iOS | Android | `SendingKeyer.swift:25`, `SendingKeyerView.swift:130`; Android reports a name or null (`MidiKeyInput.kt:64`). |
-| In-app Vail log ring buffer | iOS | Android | `VailLog.swift:24`. Debug affordance; port or drop. |
-| Adapter re-configured live mid-session from Settings, on every screen | Android | iOS | `MidiKeyOutput.kt:105`, `HardwareKey.kt:97`; iOS pushes live only from the repeater (`RepeaterModel.swift:117`) and configures Sending Practice once at start (`SendingKeyer.swift:99`). |
-| Unplugging the key releases a stuck key-down | Android | iOS | `MidiKeyInput.kt:110`; iOS updates the source list only (`MIDIInput.swift:145`). |
-| Key is "down" while any paddle note is held | Android | iOS | `MidiKeyInput.kt:119`; iOS ends transmit on the first release (`SendingKeyer.swift:146`, `RepeaterModel.swift:514`), cutting overlapping paddle presses short. |
-| A lone connected MIDI device is assumed to be the adapter for RX buzz | Android | iOS | `MidiKeyOutput.kt:80`; iOS name-matches only (`MIDIOutput.swift:244`). |
-| Settings note saying which keyer modes the adapter clocks | Android | iOS | `AdapterKeyer.kt:77`, `SettingsScreen.kt:796`; iOS says it in prose (`RepeaterView.swift:337`). Minor. |
-
-Same feature, different numbers:
-
-| What | iOS | Android | Evidence |
-|---|---|---|---|
-| RX piezo buzz default | off | on | `RepeaterModel.swift:136`; `VailRepeater.kt:50` |
-| RX delay range | 0–4000 ms in 250 ms steps | 0–5000 ms slider | `RepeaterView.swift:323`; `RepeaterScreen.kt:306` |
-| TX tone clamp | 0–127 | 48–96 | `RepeaterModel.swift:406`; `VailRepeater.kt:177` |
-| Signal-event cap | 5000 | 2000 | `RepeaterModel.swift:67`; `VailRepeater.kt:80` |
-
-Voice answers: iOS starts listening when the tone ends and meters speech
-onset for the time-to-recognize clock (`AppModel.swift:2113`,
-`VoiceRecognizer.swift:239`); Android waits for a tap on "Speak answer"
-(`QuizScreen.kt:659`) and leaves `onBeginningOfSpeech` empty
-(`VoiceRecognizer.kt:51`). Android's one-shot recogniser owns the microphone
-and plays its own start tone, so the auto-start is platform-shaped, but
-`onRmsChanged` could approximate the onset clock. Decide, then port or add to
-the exceptions.
-
-At parity: MIDI input and the wire parser, hot-plug, MIDI output and the
-adapter wake, keyer modes 0–9 and speed, sidetone, RX buzz scheduling,
-touch and physical-keyboard answers, the sidetone ramp, playback, the pileup
-mix, audio focus, background playback, noise-floor levels and amplitudes,
-haptics, speech voices, the voice tables, matcher, profile and confirm flow,
-the decoder engine, its constants, telemetry, two-core rescue and screen,
-the Vail client, sender attribution, message envelope, break-in, server
-picker with custom URL, private channel, signal timeline and roster.
-
-### MorseKit logic layer
-
-Every file in `ios/Sources/MorseKit/` has a twin under `android/…/morsekit/`
-(`Distance` ↔ `MorseDistance`, `Timing` ↔ `MorseTiming`, `MorseDataSerials`
-↔ `MorseSerials`, `Stats` ↔ `CharacterStats`, `TrainerEngine+Quiz` folded
-into `TrainerEngine.kt`), and every data table was compared element by
-element: common and ham words, abbreviations, Q-codes, call signs, names,
-QTHs, RSTs, states, prosigns, the 1000 ranked words, the 800 Daily Dit
-answers and their allowed list, the 32 fables, 5 serials, 6 exam passages,
-the contest sections and Field Day categories, cut numbers, lingo, and the
-voice-matching tables. All identical. So are the enums (contests and their
-speed bands, exam speeds, Rapid Fire kinds and paces, the eight pileup
-flavours, callsign shapes, Journey sections and per-level counts, Daily Dit
-rules) and the tunables (Farnsworth formula and clamp, decoder WPM and
-adaptation clamps, pileup timing). Both sides read all eight fixtures.
-
-What differs:
-
-| What | iOS | Android | Evidence |
-|---|---|---|---|
-| Custom word containing an unsendable character | kept whole if any character is sendable (`HELLO!` stays `HELLO!`) | stripped per character in the app layer (`HELLO!` becomes `HELLO`) | `MorseData.swift:206`; `Settings.kt:472` |
-| Custom word list parsing | in MorseKit: splits on comma and whitespace, trims, uppercases, de-dupes | in the app: also splits on `;` and caps a word at 24 characters | `MorseData.swift:215`; `Settings.kt:469`. Only the iOS version is fixture-testable. |
-| Contest multiplier from an exchange with a trailing space | counted | dropped | `Contest.swift:140`; `Contest.kt:141`. Not reachable with today's exchanges; latent. |
-| `MorseCode.character(forPattern:)` string overload | public | private reverse map, element-list overload only | `MorseCode.swift:93`; `MorseCode.kt:102` |
-| `JourneyCurriculum.firstLevelBeyond(known:)` | — | present, feeds the onboarding screen | `Journey.kt:110`. Goes with the onboarding item under Modes. |
-| Rapid Fire response blurbs | one wording | another | `AppSettings.swift:172`; `RapidFire.kt:23`. Copy only. |
-
-Layering differences that are not gaps: `ContestLength`, `RapidFireResponse`
-and `RapidFirePace` live in MorseKit on Android and in the app on iOS with
-identical values; `MorseReference.morseString` and `rhythm` live in MorseKit
-on Android and in `ReferenceView.swift` on iOS; Kotlin `snapshot`/`restore`,
-`copy`, `equals` and factory functions stand in for Swift `Codable`, value
-semantics and initialisers.
-
-**Test coverage is not at parity, and that is a parity risk.** The iOS
-harness runs 508 checks over 50 sections; Android has about 131 JUnit tests
-in 22 classes. Sections with no Android twin: voice matching and profile,
-exam speeds, passage generation and solid-copy grading, contest practice,
-practice streak, session history and the recognition chart, Rapid Fire, the
-story and serial libraries, Q-codes, custom word lists, word tiers, confusion
-pairs, MorseKit's own `MorseDecoder`, and save/load. Neither side tests
+**Test coverage is still not at parity, and that is a parity risk.** The
+iOS harness runs about 520 checks over 50 sections; Android has about 150
+JUnit tests in 25 classes. Sections with no Android twin: voice matching
+and profile, exam speeds, passage generation and solid-copy grading, contest
+practice, practice streak, session history and the recognition chart, Rapid
+Fire, the story and serial libraries, Q-codes, word tiers, confusion pairs,
+MorseKit's own `MorseDecoder`, and save/load. Neither side tests
 `SendingDrill`. The way to close these is the one `CLAUDE.md` prescribes: a
 fixture derived from the spec, read by both.
 
 ## Closing an item
 
-Fix it on the side that lacks it, in that tree's idiom, and delete the row
-here in the same pull request. If, on inspection, the behaviour turns out to
-be one the platform cannot provide, move the row to *Documented exceptions*
-instead, with the reason. If the two apps disagree on a default or a range,
-pick the value the user guide documents (or the better one, and update the
-guide), and change the other side. A pull request that closes an item is a
-single-platform PR by nature; tick "Paired issue" and name this file's issue
-(#171) or the item's own issue, or tick "Both platforms" when both sides
-change.
+When an audit, a bug report or a review finds a divergence, add it as a row
+here first, then fix it on the side that lacks it, in that tree's idiom, and
+delete the row in the same pull request. If, on inspection, the behaviour
+turns out to be one the platform cannot provide, move the row to *Documented
+exceptions* instead, with the reason. If the two apps disagree on a default
+or a range, pick the value the user guide documents (or the better one, and
+update the guide), and change the other side. A pull request that closes a
+row is a single-platform PR by nature; tick "Paired issue" and name the row's
+issue, or tick "Both platforms" when both sides change.

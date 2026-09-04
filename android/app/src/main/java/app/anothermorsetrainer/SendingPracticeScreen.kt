@@ -63,7 +63,7 @@ private val ERR_RED = Color(0xFFC62828)
  * at least as long as the answer and the key is idle.
  */
 @Composable
-fun SendingPracticeScreen(onBack: () -> Unit) {
+fun SendingPracticeScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) {
     val context = LocalContext.current
     val player = remember { MorsePlayer() }
     val haptics = remember { Haptics(context) }
@@ -179,12 +179,16 @@ fun SendingPracticeScreen(onBack: () -> Unit) {
         }
     }
 
-    fun finish() {
+    fun recordRun() {
         Stats.record(
             mode = "Sending", attempts = tally.attempts, correct = tally.correct,
             bestTtrMs = null, durationSeconds = tally.elapsedSeconds(),
             characterWpm = Settings.characterWpm.roundToInt()
         )
+    }
+
+    fun finish() {
+        recordRun()
         onBack()
     }
     BackHandler { finish() }
@@ -199,7 +203,15 @@ fun SendingPracticeScreen(onBack: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             TextButton(onClick = { finish() }) { Text(stringResource(R.string.common_back)) }
-            SessionSettingsButton { showSettings = true }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                // Switching records the run the way Back does, then lands on
+                // the picked mode's setup (iOS #42).
+                SwitchModeButton(TrainingMode.SENDING) { mode ->
+                    recordRun()
+                    onSwitchMode(mode)
+                }
+                SessionSettingsButton { showSettings = true }
+            }
         }
 
         Column(

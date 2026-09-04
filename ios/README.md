@@ -55,7 +55,8 @@ testers, bug reports and feature chat live on
 - **Answer by keying**: key the answer on a touch or hardware Morse key
 - **Sending Practice**: a dedicated hear-it, key-it-back mode on the adaptive
   ladder, with live decode, always-on replay, and a connected-MIDI-key
-  readout; plus printable drill sheets built from what you've studied
+  readout; plus printable drill sheets built from what you've studied (even,
+  personalized, or numbers & punctuation)
 - **Vail repeater**: live CW over the [Vail](https://vail.woozle.org) network
   with a server picker and private-channel option, plus Vail Adapter support:
   MIDI key input *and* output (keyer modes, speed, sidetone, RX piezo buzz),
@@ -70,7 +71,10 @@ testers, bug reports and feature chat live on
   pairs, performance by 5-WPM speed band, and a shareable Brag Sheet
 - Character speed adjustable to 60 WPM, with Farnsworth spacing tracking it
 - Timed practice sessions (1-30 min or open-ended) with mid-session timer
-  controls and an end-of-session summary
+  controls and an end-of-session summary, and a mode switcher that jumps
+  between drills without going home
+- A first-run question about how much Morse you already know, which seeds
+  the Characters ladder and unlocks the Journey that far
 - Daily practice reminders (minute precision, streak-aware)
 
 ## Project layout

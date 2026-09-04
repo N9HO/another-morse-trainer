@@ -47,7 +47,7 @@ import androidx.compose.ui.unit.sp
  * Listen mode when you leave it).
  */
 @Composable
-fun ListenScreen(onBack: () -> Unit) {
+fun ListenScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) {
     val context = LocalContext.current
 
     fun leave() {
@@ -71,7 +71,15 @@ fun ListenScreen(onBack: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             TextButton(onClick = { leave() }) { Text(stringResource(R.string.common_back), color = Brand.teal) }
-            SessionSettingsButton { showSettings = true }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                // Switching stops the loop the way Back does, then lands on
+                // the picked mode's setup (iOS #42).
+                SwitchModeButton(TrainingMode.LISTEN) { mode ->
+                    ListenService.stop(context)
+                    onSwitchMode(mode)
+                }
+                SessionSettingsButton { showSettings = true }
+            }
         }
 
         CenteredContent {

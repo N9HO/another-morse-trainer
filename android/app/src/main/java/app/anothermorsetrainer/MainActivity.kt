@@ -343,7 +343,7 @@ private fun AppRoot() {
         Route.Pileup -> PileupScreen(onBack = { route = Route.Home }, onSwitchMode = { switchTo(it) })
         Route.Contest -> ContestScreen(onBack = { route = Route.Home }, onSwitchMode = { switchTo(it) })
         Route.Exam -> CodeExamScreen(onBack = { route = Route.Home }, onSwitchMode = { switchTo(it) })
-        Route.Listen -> ListenScreen(onBack = { route = Route.Home })
+        Route.Listen -> ListenScreen(onBack = { route = Route.Home }, onSwitchMode = { switchTo(it) })
         Route.HeadCopy -> HeadCopyScreen(onBack = { route = Route.Home }, onSwitchMode = { switchTo(it) })
         Route.TypeIt -> TypedQuizScreen(
             title = stringResource(R.string.mode_type_it),
@@ -355,7 +355,7 @@ private fun AppRoot() {
         Route.Qrq -> QrqScreen(onBack = { route = Route.Home }, onSwitchMode = { switchTo(it) })
         Route.RapidFire -> RapidFireScreen(onBack = { route = Route.Home }, onSwitchMode = { switchTo(it) })
         Route.Story -> StoryScreen(onBack = { route = Route.Home }, onSwitchMode = { switchTo(it) })
-        Route.Sending -> SendingPracticeScreen(onBack = { route = Route.Home })
+        Route.Sending -> SendingPracticeScreen(onBack = { route = Route.Home }, onSwitchMode = { switchTo(it) })
         Route.SendingDrills -> SendingDrillScreen(onBack = { route = Route.Home })
         Route.Repeater -> RepeaterScreen(onBack = { route = Route.Home })
         Route.CwDecoder -> CwDecoderScreen(onBack = { route = Route.Home })
