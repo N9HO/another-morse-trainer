@@ -258,39 +258,66 @@ private fun AppRoot() {
         wantsStage = mode.settingsMode in STAGE_PIN_MODES
     )
 
+    // The pre-flight targets, shared by the home tiles and the mid-session
+    // mode switcher so both open the same sheet with the same words.
+    fun journeyTarget() = SetupTarget(Route.Journey, resources.getString(R.string.mode_journey), resources.getString(R.string.home_leveled_path), SettingsMode.JOURNEY)
+    fun listenTarget() = SetupTarget(Route.Listen, resources.getString(R.string.setup_listen), resources.getString(R.string.setup_hands_free_copy), SettingsMode.LISTEN)
+    fun headCopyTarget() = SetupTarget(Route.HeadCopy, resources.getString(R.string.mode_head_copy), resources.getString(R.string.common_copy_in_your_head), SettingsMode.HEAD_COPY)
+    fun typeItTarget() = SetupTarget(Route.TypeIt, resources.getString(R.string.mode_type_it), resources.getString(R.string.common_free_recall_typing), SettingsMode.TYPE_IT)
+    fun qrqTarget() = SetupTarget(Route.Qrq, resources.getString(R.string.mode_qrq_speed), resources.getString(R.string.common_high_speed_copy), SettingsMode.QRQ)
+    fun storyTarget() = SetupTarget(Route.Story, resources.getString(R.string.setup_story), resources.getString(R.string.setup_read_along_in_morse), SettingsMode.STORY)
+    fun sendingTarget() = SetupTarget(
+        Route.Sending, resources.getString(R.string.mode_sending_practice), resources.getString(R.string.common_key_it_back), SettingsMode.SENDING,
+        wantsStage = true
+    )
+
+    /**
+     * The mid-session mode switcher (iOS ContentView `modeMenu`, issue #42).
+     * The screen has already closed its run out by the time this is called;
+     * the picked mode then opens the way its home tile does — its pre-flight
+     * sheet over Home, or its own setup screen — so the next session begins
+     * only on an explicit start, never straight into a drill.
+     */
+    fun switchTo(mode: TrainingMode) {
+        route = Route.Home
+        when (mode) {
+            TrainingMode.JOURNEY -> launch(journeyTarget())
+            TrainingMode.CHARACTERS, TrainingMode.WORDS, TrainingMode.ABBREVIATIONS,
+            TrainingMode.QCODES, TrainingMode.PROSIGNS, TrainingMode.CONFUSION ->
+                mode.quizMode?.let { launch(quizTarget(it)) }
+            TrainingMode.HEAD_COPY -> launch(headCopyTarget())
+            TrainingMode.TYPE_IT -> launch(typeItTarget())
+            TrainingMode.SENDING -> launch(sendingTarget())
+            TrainingMode.LISTEN -> launch(listenTarget())
+            TrainingMode.PILEUP -> route = Route.Pileup
+            TrainingMode.CONTEST -> route = Route.Contest
+            TrainingMode.STORY -> launch(storyTarget())
+            TrainingMode.EXAM -> route = Route.Exam
+            TrainingMode.QRQ -> launch(qrqTarget())
+            TrainingMode.RAPID_FIRE -> route = Route.RapidFire
+        }
+    }
+
     when (val r = route) {
         Route.Onboarding -> OnboardingScreen(onDone = { route = Route.Home })
-        Route.Journey -> JourneyScreen(onBack = { route = Route.Home })
+        Route.Journey -> JourneyScreen(onBack = { route = Route.Home }, onSwitchMode = { switchTo(it) })
         Route.Home -> HomeScreen(
             onPickStartHere = { route = Route.StartHere },
             onPickDailyDit = { route = Route.DailyDit },
-            onPickJourney = { route = Route.Journey },
+            // Journey asks about its scoring first (the iOS setup card's
+            // "Misses drain the bar" toggle), so it goes through the sheet.
+            onPickJourney = { launch(journeyTarget()) },
             onPickQuiz = { launch(quizTarget(it)) },
             onPickPileup = { route = Route.Pileup },
             onPickContest = { route = Route.Contest },
             onPickExam = { route = Route.Exam },
-            onPickListen = {
-                launch(SetupTarget(Route.Listen, resources.getString(R.string.setup_listen), resources.getString(R.string.setup_hands_free_copy), SettingsMode.LISTEN))
-            },
-            onPickHeadCopy = {
-                launch(SetupTarget(Route.HeadCopy, resources.getString(R.string.mode_head_copy), resources.getString(R.string.common_copy_in_your_head), SettingsMode.HEAD_COPY))
-            },
-            onPickTypeIt = {
-                launch(SetupTarget(Route.TypeIt, resources.getString(R.string.mode_type_it), resources.getString(R.string.common_free_recall_typing), SettingsMode.TYPE_IT))
-            },
-            onPickQrq = {
-                launch(SetupTarget(Route.Qrq, resources.getString(R.string.mode_qrq_speed), resources.getString(R.string.common_high_speed_copy), SettingsMode.QRQ))
-            },
+            onPickListen = { launch(listenTarget()) },
+            onPickHeadCopy = { launch(headCopyTarget()) },
+            onPickTypeIt = { launch(typeItTarget()) },
+            onPickQrq = { launch(qrqTarget()) },
             onPickRapidFire = { route = Route.RapidFire },
-            onPickStory = {
-                launch(SetupTarget(Route.Story, resources.getString(R.string.setup_story), resources.getString(R.string.setup_read_along_in_morse), SettingsMode.STORY))
-            },
-            onPickSending = {
-                launch(SetupTarget(
-                    Route.Sending, resources.getString(R.string.mode_sending_practice), resources.getString(R.string.common_key_it_back), SettingsMode.SENDING,
-                    wantsStage = true
-                ))
-            },
+            onPickStory = { launch(storyTarget()) },
+            onPickSending = { launch(sendingTarget()) },
             onPickSendingDrills = { route = Route.SendingDrills },
             onPickRepeater = { route = Route.Repeater },
             onPickCwDecoder = { route = Route.CwDecoder },
@@ -310,22 +337,24 @@ private fun AppRoot() {
             onFinish = {
                 route = Route.Home
                 setup = quizTarget(r.mode)
-            }
+            },
+            onSwitchMode = { switchTo(it) }
         )
-        Route.Pileup -> PileupScreen(onBack = { route = Route.Home })
-        Route.Contest -> ContestScreen(onBack = { route = Route.Home })
-        Route.Exam -> CodeExamScreen(onBack = { route = Route.Home })
+        Route.Pileup -> PileupScreen(onBack = { route = Route.Home }, onSwitchMode = { switchTo(it) })
+        Route.Contest -> ContestScreen(onBack = { route = Route.Home }, onSwitchMode = { switchTo(it) })
+        Route.Exam -> CodeExamScreen(onBack = { route = Route.Home }, onSwitchMode = { switchTo(it) })
         Route.Listen -> ListenScreen(onBack = { route = Route.Home })
-        Route.HeadCopy -> HeadCopyScreen(onBack = { route = Route.Home })
+        Route.HeadCopy -> HeadCopyScreen(onBack = { route = Route.Home }, onSwitchMode = { switchTo(it) })
         Route.TypeIt -> TypedQuizScreen(
             title = stringResource(R.string.mode_type_it),
             onBack = { route = Route.Home },
             makeSource = { PhraseQuiz("Type It", MorseData.wordAndCallSignItems, summaryNoun = "words & calls") },
-            settingsMode = SettingsMode.TYPE_IT
+            settingsMode = SettingsMode.TYPE_IT,
+            onSwitchMode = { switchTo(it) }
         )
-        Route.Qrq -> QrqScreen(onBack = { route = Route.Home })
-        Route.RapidFire -> RapidFireScreen(onBack = { route = Route.Home })
-        Route.Story -> StoryScreen(onBack = { route = Route.Home })
+        Route.Qrq -> QrqScreen(onBack = { route = Route.Home }, onSwitchMode = { switchTo(it) })
+        Route.RapidFire -> RapidFireScreen(onBack = { route = Route.Home }, onSwitchMode = { switchTo(it) })
+        Route.Story -> StoryScreen(onBack = { route = Route.Home }, onSwitchMode = { switchTo(it) })
         Route.Sending -> SendingPracticeScreen(onBack = { route = Route.Home })
         Route.SendingDrills -> SendingDrillScreen(onBack = { route = Route.Home })
         Route.Repeater -> RepeaterScreen(onBack = { route = Route.Home })
@@ -333,7 +362,15 @@ private fun AppRoot() {
         Route.Reference -> ReferenceScreen(onBack = { route = Route.Home })
         Route.StartHere -> StartHereScreen(onBack = { route = Route.Home })
         Route.DailyDit -> DailyDitScreen(onBack = { route = Route.Home })
-        Route.Settings -> SettingsScreen(onBack = { route = Route.Home })
+        Route.Settings -> SettingsScreen(
+            onBack = { route = Route.Home },
+            // Developer Preview Stage: the track has been jumped and saved;
+            // start drilling it (iOS previewStage switches to Characters).
+            onPreviewStage = {
+                QUIZ_MODES.firstOrNull { it.settingsMode == SettingsMode.CHARACTERS }
+                    ?.let { route = Route.Quiz(it) } ?: run { route = Route.Home }
+            }
+        )
         Route.Stats -> StatsScreen(onBack = { route = Route.Home })
     }
 

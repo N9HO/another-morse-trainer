@@ -224,9 +224,25 @@ fun SendingPracticeScreen(onBack: () -> Unit) {
                     advanceNow()
                 }
             }
-            midiDevice?.let {
-                Spacer(Modifier.height(2.dp))
-                Text("🎹 $it", style = MaterialTheme.typography.labelSmall, color = Brand.teal)
+            Spacer(Modifier.height(2.dp))
+            val connectedKey = midiDevice
+            if (connectedKey != null) {
+                Text("🎹 $connectedKey", style = MaterialTheme.typography.labelSmall, color = Brand.teal)
+            } else {
+                // "MIDI unavailable" used to cover both the setup failing and
+                // nothing being plugged in, which read as a dead end. Only the
+                // first is a fault; the second just needs a key connected —
+                // and a BLE-MIDI key paired in Android's Bluetooth settings
+                // still has to be connected here before MidiManager will show
+                // it to any app. Same two readouts as the iOS SendingKeyerView.
+                val midiUnavailable = remember { midi.isUnavailable }
+                Text(
+                    if (midiUnavailable) stringResource(R.string.sending_midi_unavailable)
+                    else stringResource(R.string.sending_no_hardware_key),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (midiUnavailable) Color(0xFFEF6C00) else Brand.textSecondary,
+                    textAlign = TextAlign.Center
+                )
             }
             // A BLE-MIDI key has to be scanned for and opened before MidiManager
             // will show it here at all — pairing it in Android's Bluetooth

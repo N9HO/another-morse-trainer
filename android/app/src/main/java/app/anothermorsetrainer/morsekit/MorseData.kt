@@ -201,19 +201,41 @@ object MorseData {
 
     /**
      * A learner-supplied pool (the custom word list editor): the answer is the
-     * word itself. Deduplicated and uppercased; assumed pre-filtered to
-     * sendable characters by the editor.
+     * word itself. Takes the list exactly as [parseWordList] produced it —
+     * already uppercased, stripped to sendable characters, capped and
+     * de-duplicated — so this does no filtering of its own. Both ports agree
+     * on that split.
      */
-    fun customWordItems(words: List<String>): List<MorseItem> {
-        val seen = mutableSetOf<String>()
-        val items = mutableListOf<MorseItem>()
-        for (raw in words) {
-            val w = raw.trim().uppercase()
-            if (w.isEmpty() || !seen.add(w)) continue
-            items.add(MorseItem(id = "custom-$w", playable = MorseItem.Playable.Text(w), answer = w, display = w))
+    fun customWordItems(words: List<String>): List<MorseItem> =
+        words.map { w ->
+            MorseItem(id = "custom-$w", playable = MorseItem.Playable.Text(w), answer = w, display = w)
         }
-        return items
+
+    /** The longest word [parseWordList] keeps; anything longer is cut here. */
+    const val CUSTOM_WORD_MAX_LENGTH = 24
+
+    /**
+     * Parse a pasted blob into a clean word list for the custom pool. The
+     * rules, pinned for both ports by `fixtures/custom-words.json`: split on
+     * comma, semicolon and any whitespace; trim; uppercase; strip every
+     * character with no Morse pattern ([MorseCode.pattern]); cut to
+     * [CUSTOM_WORD_MAX_LENGTH]; drop empties; de-duplicate keeping the first
+     * occurrence. Stripping happens before the cut, so "AB!CDE…" loses the
+     * "!" and keeps 24 letters, not 23.
+     */
+    fun parseWordList(raw: String): List<String> {
+        val seen = LinkedHashSet<String>()
+        for (token in raw.split(WORD_LIST_SEPARATORS)) {
+            val upper = token.trim().uppercase()
+            val sendable = upper.filter { MorseCode.pattern(it) != null }
+            val w = sendable.take(CUSTOM_WORD_MAX_LENGTH)
+            if (w.isNotEmpty()) seen.add(w)
+        }
+        return seen.toList()
     }
+
+    /** Comma, semicolon, or any run of whitespace (space, tab, CR, LF, …). */
+    private val WORD_LIST_SEPARATORS = Regex("[,;\\s]+")
 
     /** The most-useful [limit] words (the QRQ "Top N" tiers), deduplicated. */
     fun topWordItems(limit: Int): List<MorseItem> {

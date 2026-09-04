@@ -36,13 +36,28 @@ import android.os.Looper
  *
  * **A note on the gain type, because it is a real difference from the Apple
  * side.** The iOS app configures `.duckOthers`, which turns other audio down
- * rather than off. This asks for [AudioManager.AUDIOFOCUS_GAIN] — others pause.
+ * rather than off. Drills ask for [AudioManager.AUDIOFOCUS_GAIN] — others pause.
  * That is the Android idiom for a media-playback foreground service, and it is
  * also the better answer for what this app does: copying Morse under music is
  * measurably harder, so ducking would leave the reported problem half-fixed. The
  * two ports differ here on purpose.
+ *
+ * **The repeater is the one exception, and it is the same on both ports.** iOS
+ * claims a `repeaterMix` session (`mixWithOthers` + `duckOthers`) for the Vail
+ * repeater so a radio app can keep running alongside it; here the repeater's
+ * sidetone acquires with [Gain.DUCK], which asks for
+ * [AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK] — other audio turns down,
+ * not off. Only the repeater path passes it; every drill keeps the default.
  */
 object AudioFocus {
+
+    /** How much to take from other apps while a holder is making sound. */
+    enum class Gain {
+        /** Others pause — the drills. */
+        EXCLUSIVE,
+        /** Others turn down and carry on — the repeater, so a radio app survives. */
+        DUCK,
+    }
 
     /** What happened to focus. Delivered on the main thread. */
     enum class Event {
@@ -63,6 +78,8 @@ object AudioFocus {
     /** Identity set: an owner acquiring twice still only counts once. */
     private val holders = mutableSetOf<Any>()
     private var held = false
+    /** The gain the current request was made with; meaningless while not [held]. */
+    private var heldGain = Gain.EXCLUSIVE
     /** API 26+ only; the pre-26 path abandons by listener instead. */
     private var request: AudioFocusRequest? = null
     private val listeners = mutableMapOf<Int, (Event) -> Unit>()
@@ -101,11 +118,20 @@ object AudioFocus {
      * Say that [owner] is about to make sound. Idempotent per owner. Returns
      * whether focus is currently held — callers may play regardless (a denied
      * request is not a reason to break practice), but it is worth logging.
+     *
+     * [gain] is what to ask of other apps; the default pauses them. A holder
+     * asking for [Gain.EXCLUSIVE] while focus is held with [Gain.DUCK] upgrades
+     * the request in place; the reverse never downgrades a drill mid-run.
      */
     @Synchronized
-    fun acquire(owner: Any): Boolean {
+    fun acquire(owner: Any, gain: Gain = Gain.EXCLUSIVE): Boolean {
         holders.add(owner)
-        if (!held) requestFocus()
+        if (!held) {
+            requestFocus(gain)
+        } else if (gain == Gain.EXCLUSIVE && heldGain == Gain.DUCK) {
+            abandonFocus()
+            requestFocus(gain)
+        }
         return held
     }
 
@@ -128,10 +154,14 @@ object AudioFocus {
         listeners.remove(observation.id)
     }
 
-    private fun requestFocus() {
+    private fun requestFocus(gain: Gain) {
         val manager = audioManager ?: return
+        val focusGain = when (gain) {
+            Gain.EXCLUSIVE -> AudioManager.AUDIOFOCUS_GAIN
+            Gain.DUCK -> AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK
+        }
         val result = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val built = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+            val built = AudioFocusRequest.Builder(focusGain)
                 .setAudioAttributes(attributes)
                 .setOnAudioFocusChangeListener(focusListener, mainHandler)
                 .setWillPauseWhenDucked(false)
@@ -142,10 +172,11 @@ object AudioFocus {
             // minSdk is 24, so two versions still need the pre-O call.
             @Suppress("DEPRECATION")
             manager.requestAudioFocus(
-                focusListener, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN
+                focusListener, AudioManager.STREAM_MUSIC, focusGain
             )
         }
         held = result == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
+        heldGain = gain
     }
 
     private fun abandonFocus() {

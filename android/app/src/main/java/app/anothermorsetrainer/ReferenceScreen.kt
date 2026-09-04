@@ -385,7 +385,9 @@ fun ReferenceAudioControls(modifier: Modifier = Modifier) {
         ) {
             Settings.updateCharacterWpm(it.toDouble())
         }
-        val farnsworth = Settings.effectiveWpm < Settings.characterWpm
+        // Farnsworth is an explicit switch with its own remembered effective
+        // speed (iOS parity); the slider only shows while it is on.
+        val farnsworth = Settings.farnsworthEnabled
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
@@ -394,17 +396,14 @@ fun ReferenceAudioControls(modifier: Modifier = Modifier) {
             Text(stringResource(R.string.reference_farnsworth_spacing), style = MaterialTheme.typography.bodyMedium, color = Brand.textPrimary)
             Switch(
                 checked = farnsworth,
-                onCheckedChange = { on ->
-                    // On → ease the effective speed below the character speed; off → lock them together.
-                    if (on) Settings.updateEffectiveWpm((Settings.characterWpm - 5.0).coerceAtLeast(5.0))
-                    else Settings.updateEffectiveWpm(Settings.characterWpm)
-                },
+                onCheckedChange = { on -> Settings.updateFarnsworthEnabled(on) },
                 colors = SwitchDefaults.colors(checkedThumbColor = Brand.navy, checkedTrackColor = Brand.teal)
             )
         }
         if (farnsworth) {
+            val minEffective = Settings.MIN_EFFECTIVE_WPM.toFloat()
             RefSlider(stringResource(R.string.reference_effective_speed), stringResource(R.string.common_wpm_value, Settings.effectiveWpm.toInt()),
-                Settings.effectiveWpm.toFloat(), 5f..Settings.characterWpm.toFloat().coerceAtLeast(6f)) {
+                Settings.effectiveWpm.toFloat(), minEffective..Settings.characterWpm.toFloat().coerceAtLeast(minEffective + 1f)) {
                 Settings.updateEffectiveWpm(it.toDouble())
             }
         }

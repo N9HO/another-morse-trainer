@@ -18,6 +18,8 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -52,6 +54,9 @@ private val ERR_RED = Color(0xFFC62828)
 /** A guaranteed non-match, so a self-graded miss never scores as correct. */
 private const val MISS_SENTINEL = "miss"
 
+/** Pause before each auto-repeat (the iOS model's `headCopyRepeatGap`, 1.5 s). */
+private const val HC_REPEAT_GAP_MS = 1500L
+
 private enum class HcPhase { RUNNING, SUMMARY }
 
 /**
@@ -62,7 +67,7 @@ private enum class HcPhase { RUNNING, SUMMARY }
  * configured session length and ends with the standard summary.
  */
 @Composable
-fun HeadCopyScreen(onBack: () -> Unit) {
+fun HeadCopyScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) {
     val context = LocalContext.current
     val player = remember { MorsePlayer() }
     val haptics = remember { Haptics(context) }
@@ -95,23 +100,24 @@ fun HeadCopyScreen(onBack: () -> Unit) {
     var recorded by rememberSaveable { mutableStateOf(false) }
     var milestone by remember { mutableStateOf<Int?>(null) }
 
+    // Head Copy's structured re-hearing, as the iOS model runs it: once the
+    // first play finishes, replay the item `headCopyRepeats` times with a
+    // short gap, then count down to the reveal — "Revealing in N…" — when a
+    // reveal delay is set. A manual Repeat drops the remaining auto-repeats
+    // and restarts the countdown once its sound is over; `autoGen` is what
+    // re-launches the chain for it.
+    var autoGen by remember { mutableIntStateOf(0) }
+    var autoRepeatsLeft by remember { mutableIntStateOf(0) }
+    var manualWaitMs by remember { mutableLongStateOf(0L) }
+    var countdown by remember { mutableStateOf<Int?>(null) }
+
     LaunchedEffect(round) {
         revealed = false
         toneFinishedAt = 0L
         lastRecallSec = 0.0
+        autoRepeatsLeft = Settings.headCopyRepeats
+        manualWaitMs = 0L
         player.play(drill.playable, Settings.sidetoneHz, Settings.timing()) { toneFinishedAt = System.nanoTime() }
-    }
-
-    // Auto-repeat: once the tone has finished, replay the item every couple of
-    // seconds until the reveal (or the round moves on).
-    LaunchedEffect(round, revealed, toneFinishedAt) {
-        if (!Settings.headCopyAutoRepeat || revealed || phase != HcPhase.RUNNING || toneFinishedAt == 0L) return@LaunchedEffect
-        while (true) {
-            delay(2000)
-            if (revealed || phase != HcPhase.RUNNING) break
-            val dur = player.replaySound(drill.playable, Settings.sidetoneHz, Settings.timing())
-            delay((dur * 1000).toLong())
-        }
     }
 
     fun doReveal() {
@@ -122,12 +128,42 @@ fun HeadCopyScreen(onBack: () -> Unit) {
         revealed = true
     }
 
-    // Timed reveal: show the answer automatically N seconds after the tone.
-    LaunchedEffect(round, toneFinishedAt) {
-        val secs = Settings.headCopyRevealSec
-        if (secs <= 0 || toneFinishedAt == 0L) return@LaunchedEffect
-        delay(secs * 1000L)
-        if (phase == HcPhase.RUNNING) doReveal()
+    // Keyed on `revealed` too, so a manual reveal cancels a pending repeat or
+    // countdown the moment it happens rather than a tick later.
+    LaunchedEffect(round, toneFinishedAt, autoGen, revealed) {
+        countdown = null
+        if (revealed || phase != HcPhase.RUNNING || toneFinishedAt == 0L) return@LaunchedEffect
+        if (manualWaitMs > 0L) {
+            delay(manualWaitMs)
+            manualWaitMs = 0L
+        }
+        while (autoRepeatsLeft > 0) {
+            delay(HC_REPEAT_GAP_MS)
+            autoRepeatsLeft -= 1
+            val dur = player.replaySound(drill.playable, Settings.sidetoneHz, Settings.timing())
+            delay((dur * 1000).toLong())
+        }
+        var n = Settings.headCopyRevealSec
+        if (n <= 0) return@LaunchedEffect   // manual reveal only
+        while (n > 0) {
+            countdown = n
+            delay(1000)
+            n -= 1
+        }
+        countdown = null
+        doReveal()
+    }
+
+    /** Replay now: skip the remaining auto-repeats, then restart the reveal countdown after the sound. */
+    fun repeatNow() {
+        if (revealed || phase != HcPhase.RUNNING) return
+        autoRepeatsLeft = 0
+        val dur = player.replaySound(drill.playable, Settings.sidetoneHz, Settings.timing())
+        manualWaitMs = (dur * 1000).toLong()
+        // A repeat before the first play finished: its callback never fires
+        // once the player is restarted, so mark the tone finished here.
+        if (toneFinishedAt == 0L) toneFinishedAt = System.nanoTime()
+        autoGen++
     }
 
     DisposableEffect(Unit) { onDispose { player.release() } }
@@ -167,7 +203,9 @@ fun HeadCopyScreen(onBack: () -> Unit) {
     }
 
     // Session countdown: ticks only while running and only when a length is set.
-    LaunchedEffect(phase) {
+    // Also keyed on whether a limit exists, so the timer menu starting a
+    // countdown on an open-ended run (or dropping one) restarts the loop.
+    LaunchedEffect(phase, remaining == null) {
         if (phase != HcPhase.RUNNING) return@LaunchedEffect
         while (true) {
             val r = remaining ?: return@LaunchedEffect
@@ -209,16 +247,23 @@ fun HeadCopyScreen(onBack: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             TextButton(onClick = { if (phase == HcPhase.SUMMARY) onBack() else finish() }) { Text(stringResource(R.string.common_back)) }
-            if (phase == HcPhase.RUNNING) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    remaining?.let {
-                        Text(
-                            "%d:%02d".format(it / 60, it % 60),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = Brand.textSecondary
-                        )
-                    }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (phase == HcPhase.RUNNING) {
+                    SessionTimerMenu(
+                        remaining = remaining,
+                        onAddSeconds = { remaining = (remaining ?: 0) + it },
+                        onRemoveLimit = { remaining = null }
+                    )
                     SessionSettingsButton { showSettings = true }
+                }
+                // Switching records the run the way Back does, then lands on
+                // the picked mode's setup (iOS #42).
+                SwitchModeButton(TrainingMode.HEAD_COPY) { mode ->
+                    player.stop()
+                    recordSession()
+                    onSwitchMode(mode)
+                }
+                if (phase == HcPhase.RUNNING) {
                     TextButton(onClick = { endSession() }) { Text(stringResource(R.string.common_end)) }
                 }
             }
@@ -242,30 +287,62 @@ fun HeadCopyScreen(onBack: () -> Unit) {
             Spacer(Modifier.height(4.dp))
             Text(text = summary, style = MaterialTheme.typography.labelMedium, color = Brand.textSecondary)
 
-            // How each item plays out: repeats until reveal, and when to reveal.
+            // How each item plays out: how many auto-repeats, and how long
+            // after them the answer reveals itself. The same two controls as
+            // the Head Copy section of Settings (iOS parity), kept on the
+            // drill so they can be tuned without leaving it.
             Spacer(Modifier.height(10.dp))
             Row(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(stringResource(R.string.headcopy_repeat), style = MaterialTheme.typography.labelMedium, color = Brand.textSecondary)
-                HcPill(stringResource(R.string.common_off), selected = !Settings.headCopyAutoRepeat) { Settings.updateHeadCopyAutoRepeat(false) }
-                HcPill(stringResource(R.string.common_auto), selected = Settings.headCopyAutoRepeat) { Settings.updateHeadCopyAutoRepeat(true) }
+                (0..Settings.MAX_HEAD_COPY_REPEATS).forEach { n ->
+                    val label = if (n == 0) stringResource(R.string.common_off) else stringResource(R.string.settings_repeat_times, n)
+                    HcPill(label, selected = Settings.headCopyRepeats == n) { Settings.updateHeadCopyRepeats(n) }
+                }
             }
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(2.dp))
             Row(
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(stringResource(R.string.headcopy_reveal), style = MaterialTheme.typography.labelMedium, color = Brand.textSecondary)
-                listOf(0 to stringResource(R.string.headcopy_manual), 2 to stringResource(R.string.headcopy_reveal_2s), 4 to stringResource(R.string.headcopy_reveal_4s), 6 to stringResource(R.string.headcopy_reveal_6s)).forEach { (secs, label) ->
-                    HcPill(label, selected = Settings.headCopyRevealSec == secs) {
-                        Settings.updateHeadCopyRevealSec(secs)
-                    }
-                }
+                Slider(
+                    value = Settings.headCopyRevealSec.toFloat(),
+                    onValueChange = { Settings.updateHeadCopyRevealSec(it.roundToInt()) },
+                    valueRange = 0f..Settings.MAX_HEAD_COPY_REVEAL_SEC.toFloat(),
+                    steps = Settings.MAX_HEAD_COPY_REVEAL_SEC - 1,
+                    colors = SliderDefaults.colors(
+                        thumbColor = Brand.teal,
+                        activeTrackColor = Brand.teal,
+                        inactiveTrackColor = Brand.navyRaised,
+                        activeTickColor = Color.Transparent,
+                        inactiveTickColor = Color.Transparent
+                    ),
+                    modifier = Modifier.weight(1f).height(28.dp)
+                )
+                Text(
+                    if (Settings.headCopyRevealSec < 1) stringResource(R.string.headcopy_manual)
+                    else stringResource(R.string.settings_seconds_whole, Settings.headCopyRevealSec),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = Brand.teal,
+                    fontWeight = FontWeight.SemiBold
+                )
             }
 
-            Spacer(Modifier.height(36.dp))
+            Spacer(Modifier.height(28.dp))
+
+            // The live reveal countdown, as on iOS ("Revealing in N…").
+            countdown?.let { n ->
+                Text(
+                    stringResource(R.string.headcopy_revealing_in, n),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = Brand.textSecondary
+                )
+            }
+            Spacer(Modifier.height(8.dp))
 
             if (revealed) {
                 SlashableText(
@@ -306,7 +383,7 @@ fun HeadCopyScreen(onBack: () -> Unit) {
                 ) { Text(stringResource(R.string.headcopy_reveal), fontWeight = FontWeight.SemiBold) }
                 Spacer(Modifier.height(12.dp))
                 OutlinedButton(
-                    onClick = { player.replaySound(drill.playable, Settings.sidetoneHz, Settings.timing()) },
+                    onClick = { repeatNow() },
                     modifier = Modifier.fillMaxWidth()
                 ) { Text(stringResource(R.string.common_replay)) }
             }

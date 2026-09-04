@@ -8,6 +8,11 @@ struct SendingKeyerView: View {
     @StateObject private var sender: SendingKeyer
     @State private var keyPressed = false
     @State private var showingBluetoothMIDI = false
+    /// The operator's keyer mode, read from the value Settings and the Vail
+    /// screen share (issue #43), so a change made in the Settings sheet drawn
+    /// over this drill is pushed to the adapter at once.
+    @AppStorage(RepeaterModel.keyerModeDefaultsKey) private var adapterKeyerMode: Int =
+        MIDIOutput.KeyerMode.straightKey.rawValue
 
     init(wpm: Double, toneHz: Double) {
         _sender = StateObject(wrappedValue: SendingKeyer(wpm: wpm, toneHz: toneHz))
@@ -29,6 +34,17 @@ struct SendingKeyerView: View {
         // and the operator has stopped keying.
         .onChange(of: sender.decodedText) { _ in maybeAutoSubmit() }
         .onChange(of: sender.isKeying) { _ in maybeAutoSubmit() }
+        // The Settings sheet is drawn *over* this drill, so the keyer mode,
+        // speed and tone can all move while the adapter is awake. Push each
+        // change down the output we already hold rather than waiting for the
+        // next wake (Android `AdapterConfigSync`).
+        .onChange(of: adapterKeyerMode) { _ in applyAdapterConfig() }
+        .onChange(of: model.settings.wpm) { _ in applyAdapterConfig() }
+        .onChange(of: model.settings.toneFrequency) { _ in applyAdapterConfig() }
+    }
+
+    private func applyAdapterConfig() {
+        sender.applyConfig(wpm: model.settings.wpm, toneHz: model.settings.toneFrequency)
     }
 
     // MARK: - Display

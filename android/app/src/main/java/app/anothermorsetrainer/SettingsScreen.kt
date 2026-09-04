@@ -2,6 +2,9 @@ package app.anothermorsetrainer
 
 import android.Manifest
 import android.app.TimePickerDialog
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.activity.compose.BackHandler
@@ -24,6 +27,8 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.Settings as SettingsGlyph
@@ -40,6 +45,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -51,11 +57,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.core.content.ContextCompat
+import androidx.core.content.pm.PackageInfoCompat
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.anothermorsetrainer.morsekit.MorseCode
 import app.anothermorsetrainer.morsekit.MorseItem
+import app.anothermorsetrainer.morsekit.ProgressiveCharacters
+import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
 
 /**
@@ -137,7 +146,18 @@ private val VOICE_ANSWER_MODES = setOf(
  * irrelevant to that mode are hidden, matching iOS issue #66.
  */
 @Composable
-fun SettingsScreen(onBack: () -> Unit, scope: SettingsMode? = null) {
+fun SettingsScreen(
+    onBack: () -> Unit,
+    scope: SettingsMode? = null,
+    /**
+     * Where to go once the developer Preview Stage row has jumped the
+     * Characters track (iOS `previewStage`: jump, switch to Characters, save,
+     * start). From Home the caller navigates into the Characters drill; a
+     * Characters session underneath restarts its drill. Null falls back to
+     * [onBack], the track already jumped and saved for the next start.
+     */
+    onPreviewStage: (() -> Unit)? = null
+) {
     val context = LocalContext.current
     val player = remember { MorsePlayer() }
     DisposableEffect(Unit) { onDispose { player.release() } }
@@ -145,8 +165,17 @@ fun SettingsScreen(onBack: () -> Unit, scope: SettingsMode? = null) {
 
     fun shown(modes: Set<SettingsMode>): Boolean = scope == null || scope in modes
 
-    val farnsworthOn = Settings.effectiveWpm < Settings.characterWpm
     var confirmReset by remember { mutableStateOf(false) }
+
+    // "Copy diagnostic info" (iOS issue #31): a two-second "Copied" confirmation.
+    val haptics = remember { Haptics(context) }
+    var copiedDiagnostics by remember { mutableStateOf(false) }
+    LaunchedEffect(copiedDiagnostics) {
+        if (copiedDiagnostics) {
+            delay(2000)
+            copiedDiagnostics = false
+        }
+    }
 
     // A hardware key can only be attached where the device speaks MIDI at all.
     val midiSupported = remember(context) {
@@ -236,18 +265,36 @@ fun SettingsScreen(onBack: () -> Unit, scope: SettingsMode? = null) {
                             onChange = { Settings.updateCharacterWpm(it.toDouble()) }
                         )
                         GroupDivider()
-                        // Farnsworth only ever *slows* the spacing, so its top is
-                        // the character speed itself — and it has to follow that
-                        // speed up, or a 60 WPM session couldn't be spaced at 45
-                        // (issue #79).
-                        val maxFarnsworth = maxOf(minWpm + 1f, Settings.characterWpm.toFloat())
-                        SliderSetting(
-                            label = stringResource(R.string.settings_farnsworth_speed),
-                            value = if (farnsworthOn) stringResource(R.string.common_wpm_value, Settings.effectiveWpm.roundToInt()) else stringResource(R.string.common_off),
-                            position = Settings.effectiveWpm.toFloat(),
-                            range = minWpm..maxFarnsworth, steps = wholeWpmSteps(minWpm, maxFarnsworth),
-                            onChange = { Settings.updateEffectiveWpm(it.toDouble()) }
-                        )
+                        // Farnsworth is a switch with its own effective speed
+                        // (iOS parity): the slider only appears while it is on.
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(stringResource(R.string.settings_farnsworth_spacing), color = Brand.textPrimary, fontWeight = FontWeight.Medium)
+                            Switch(
+                                checked = Settings.farnsworthEnabled,
+                                onCheckedChange = { Settings.updateFarnsworthEnabled(it) },
+                                colors = switchColors()
+                            )
+                        }
+                        if (Settings.farnsworthEnabled) {
+                            GroupDivider()
+                            // Farnsworth only ever *slows* the spacing, so its top is
+                            // the character speed itself — and it has to follow that
+                            // speed up, or a 60 WPM session couldn't be spaced at 45
+                            // (issue #79). The floor is iOS's 8 WPM.
+                            val minEffective = Settings.MIN_EFFECTIVE_WPM.toFloat()
+                            val maxFarnsworth = maxOf(minEffective + 1f, Settings.characterWpm.toFloat())
+                            SliderSetting(
+                                label = stringResource(R.string.settings_effective_speed),
+                                value = stringResource(R.string.common_wpm_value, Settings.effectiveWpm.roundToInt()),
+                                position = Settings.effectiveWpm.toFloat().coerceIn(minEffective, maxFarnsworth),
+                                range = minEffective..maxFarnsworth, steps = wholeWpmSteps(minEffective, maxFarnsworth),
+                                onChange = { Settings.updateEffectiveWpm(it.toDouble()) }
+                            )
+                        }
                     }
                     val qrqNote = if (Settings.characterWpm >= 40) {
                         stringResource(R.string.settings_qrq_note, Settings.characterWpm.roundToInt())
@@ -314,7 +361,8 @@ fun SettingsScreen(onBack: () -> Unit, scope: SettingsMode? = null) {
                                 label = stringResource(R.string.settings_recognition_target),
                                 value = stringResource(R.string.settings_seconds_1dp, Settings.recognitionTargetSec),
                                 position = Settings.recognitionTargetSec.toFloat(),
-                                range = 0.5f..2.5f, steps = 7,
+                                // 0.5–3.0 s in tenths, the iOS range and step.
+                                range = 0.5f..3.0f, steps = 24,
                                 onChange = { Settings.updateRecognitionTargetSec(it.toDouble()) }
                             )
                             needDivider = true
@@ -461,6 +509,34 @@ fun SettingsScreen(onBack: () -> Unit, scope: SettingsMode? = null) {
                 val showVoiceRow = shown(VOICE_ANSWER_MODES)
                 SectionHeader(stringResource(R.string.settings_feedback))
                 SettingsGroup {
+                    // The iOS Feedback section's two toggles: right/wrong
+                    // colouring, and a Replay button before answering.
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(stringResource(R.string.settings_show_correctness), color = Brand.textPrimary, fontWeight = FontWeight.Medium)
+                        Switch(
+                            checked = Settings.showCorrectness,
+                            onCheckedChange = { Settings.updateShowCorrectness(it) },
+                            colors = switchColors()
+                        )
+                    }
+                    GroupDivider()
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(stringResource(R.string.settings_show_replay), color = Brand.textPrimary, fontWeight = FontWeight.Medium)
+                        Switch(
+                            checked = Settings.allowReplay,
+                            onCheckedChange = { Settings.updateAllowReplay(it) },
+                            colors = switchColors()
+                        )
+                    }
+                    GroupDivider()
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(16.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -524,6 +600,33 @@ fun SettingsScreen(onBack: () -> Unit, scope: SettingsMode? = null) {
                 }
                 SectionFooter(stringResource(R.string.settings_slashed_zero_footer))
 
+                // Head Copy's re-hearing: auto-repeat count and reveal countdown
+                // (iOS parity). The drill screen carries the same two controls.
+                if (shown(setOf(SettingsMode.HEAD_COPY))) {
+                    SectionHeader(stringResource(R.string.settings_head_copy))
+                    SettingsGroup {
+                        SegmentedSetting(
+                            label = stringResource(R.string.settings_head_copy_repeats),
+                            options = (0..Settings.MAX_HEAD_COPY_REPEATS).map { n ->
+                                (if (n == 0) stringResource(R.string.common_off) else stringResource(R.string.settings_repeat_times, n)) to n
+                            },
+                            selected = Settings.headCopyRepeats,
+                            onSelect = { Settings.updateHeadCopyRepeats(it) }
+                        )
+                        GroupDivider()
+                        SliderSetting(
+                            label = stringResource(R.string.settings_head_copy_reveal),
+                            value = if (Settings.headCopyRevealSec < 1) stringResource(R.string.settings_head_copy_manual)
+                                    else stringResource(R.string.settings_seconds_whole, Settings.headCopyRevealSec),
+                            position = Settings.headCopyRevealSec.toFloat(),
+                            range = 0f..Settings.MAX_HEAD_COPY_REVEAL_SEC.toFloat(),
+                            steps = Settings.MAX_HEAD_COPY_REVEAL_SEC - 1,
+                            onChange = { Settings.updateHeadCopyRevealSec(it.roundToInt()) }
+                        )
+                    }
+                    SectionFooter(stringResource(R.string.settings_head_copy_footer))
+                }
+
                 SectionHeader(stringResource(R.string.settings_reminders))
                 SettingsGroup {
                     Row(
@@ -553,6 +656,69 @@ fun SettingsScreen(onBack: () -> Unit, scope: SettingsMode? = null) {
                     }
                 }
                 SectionFooter(stringResource(R.string.settings_reminders_footer))
+
+                // Developer aid (iOS `previewStage`): jump the Characters track
+                // to a stage and start drilling it. Shown where the Track-stage
+                // pin is, since both act on the same shared ladder.
+                if (shown(STAGE_PIN_MODES)) {
+                    SectionHeader(stringResource(R.string.settings_preview_stage))
+                    SettingsGroup {
+                        val track = remember { EngineStore.current() }
+                        ProgressiveCharacters.Stage.entries.forEachIndexed { i, stage ->
+                            if (i > 0) GroupDivider()
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        track.jumpToStage(stage)
+                                        EngineStore.save()
+                                        onPreviewStage?.invoke() ?: onBack()
+                                    }
+                                    .padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Text(stage.displayName, color = Brand.textPrimary, fontWeight = FontWeight.Medium)
+                                    if (track.stage == stage) Text("✓", color = Brand.tealBright, fontWeight = FontWeight.Bold)
+                                }
+                                Icon(Icons.Filled.PlayArrow, contentDescription = null, tint = Brand.textSecondary, modifier = Modifier.size(18.dp))
+                            }
+                        }
+                    }
+                    SectionFooter(stringResource(R.string.settings_preview_stage_footer))
+                }
+
+                // Bug reports (iOS issue #31): build, OS, device and the
+                // settings most likely to matter, onto the clipboard.
+                SectionHeader(stringResource(R.string.settings_bug_reports))
+                SettingsGroup {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                                clipboard?.setPrimaryClip(ClipData.newPlainText("Diagnostics", diagnosticInfo(context, scope)))
+                                copiedDiagnostics = true
+                                if (Settings.hapticsEnabled) haptics.success()
+                            }
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            if (copiedDiagnostics) Icons.Filled.CheckCircle else Icons.Filled.ContentCopy,
+                            contentDescription = null,
+                            tint = Brand.teal,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Text(
+                            stringResource(if (copiedDiagnostics) R.string.settings_copied_diagnostics else R.string.settings_copy_diagnostics),
+                            color = Brand.teal, fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+                SectionFooter(stringResource(R.string.settings_bug_reports_footer))
 
                 // Mid-session the destructive reset stays out of reach — it would
                 // yank the engine out from under the running drill. Home only.
@@ -637,7 +803,7 @@ fun SessionSettingsButton(onOpen: () -> Unit) {
  * and picks the changed settings up when this closes. Back closes it too.
  */
 @Composable
-fun SessionSettingsOverlay(scope: SettingsMode, onClose: () -> Unit) {
+fun SessionSettingsOverlay(scope: SettingsMode, onClose: () -> Unit, onPreviewStage: (() -> Unit)? = null) {
     BackHandler { onClose() }
     Box(
         modifier = Modifier
@@ -652,8 +818,46 @@ fun SessionSettingsOverlay(scope: SettingsMode, onClose: () -> Unit) {
                 indication = null
             ) {}
     ) {
-        SettingsScreen(onBack = onClose, scope = scope)
+        SettingsScreen(onBack = onClose, scope = scope, onPreviewStage = onPreviewStage)
     }
+}
+
+/**
+ * A compact, copy-pasteable snapshot for bug reports — the twin of the iOS
+ * `diagnosticInfo()`: build, OS, device, and the settings most likely to
+ * matter when reproducing an issue. [scope] is the mode Settings was opened
+ * from, so the mode-specific line matches what the reporter was doing.
+ */
+private fun diagnosticInfo(context: Context, scope: SettingsMode?): String {
+    val info = runCatching { context.packageManager.getPackageInfo(context.packageName, 0) }.getOrNull()
+    val version = info?.versionName ?: "?"
+    val build = info?.let { PackageInfoCompat.getLongVersionCode(it).toString() } ?: "?"
+    val lines = mutableListOf(
+        "AMT $version (build $build)",
+        "Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT}) · ${Build.MANUFACTURER} ${Build.MODEL}",
+        "Mode: ${scope?.name ?: "Home"}",
+        "WPM: ${Settings.characterWpm.roundToInt()}" +
+            (if (Settings.farnsworthEnabled) " · Farnsworth ${Settings.effectiveWpm.roundToInt()}" else ""),
+        "Tone: ${Settings.sidetoneHz.roundToInt()} Hz"
+    )
+    when (scope) {
+        SettingsMode.WORDS -> lines.add(
+            if (Settings.useCustomWords && Settings.customWords.size >= 2) "Word pool: custom (${Settings.customWords.size} words)"
+            else "Word pool: Top ${Settings.wordCount}"
+        )
+        SettingsMode.LISTEN -> lines.add("Listen: ${Settings.listenContent.label} · ${Settings.listenGap.label}")
+        SettingsMode.HEAD_COPY -> lines.add("Head Copy: repeats ${Settings.headCopyRepeats} · reveal ${Settings.headCopyRevealSec} s")
+        else -> {}
+    }
+    lines.add("Session: ${Settings.practiceDuration.label} · reveal ${Settings.revealMode.label} · " +
+        "choices ${Settings.answerChoices} · recognise ${"%.1f".format(Settings.recognitionTargetSec)} s")
+    if (Settings.backgroundNoise != BackgroundNoiseLevel.OFF) {
+        lines.add("Background noise: ${Settings.backgroundNoise.label}")
+    }
+    if (Settings.punctuationChars.isNotEmpty()) {
+        lines.add("Punctuation: ${Settings.punctuationChars.sorted().joinToString("")}")
+    }
+    return lines.joinToString("\n")
 }
 
 /**

@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -18,6 +19,8 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -26,7 +29,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -38,6 +40,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.anothermorsetrainer.morsekit.ExamData
 import app.anothermorsetrainer.morsekit.ExamGrading
 import app.anothermorsetrainer.morsekit.ExamSession
 import app.anothermorsetrainer.morsekit.ExamSpeed
@@ -58,20 +61,45 @@ private const val EXAM_SIDETONE_HZ = 600.0
  * questions about what was sent. Both drive the fully-ported [ExamSession].
  */
 @Composable
-fun CodeExamScreen(onBack: () -> Unit) {
+fun CodeExamScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) {
     val context = LocalContext.current
     val player = remember { MorsePlayer() }
     val haptics = remember { Haptics(context) }
 
-    // The choices ride the saved-instance-state bundle; the exam itself does
-    // not. An exam only reaches Stats when it is graded, so a process reclaimed
-    // mid-passage has nothing to record — it comes back to setup as chosen.
-    var speed by rememberSaveable { mutableStateOf(ExamSpeed.GENERAL13) }
-    var grading by rememberSaveable { mutableStateOf(ExamGrading.SOLID_COPY) }
+    // The choices persist in Settings across launches (iOS examSpeed /
+    // examGrading / examUseBundled); the exam itself does not. An exam only
+    // reaches Stats when it is graded, so a process reclaimed mid-passage has
+    // nothing to record — it comes back to setup as chosen.
+    val speed = Settings.examSpeed
+    val grading = Settings.examGrading
+    val useBundled = Settings.examUseBundled
     var session by remember { mutableStateOf<ExamSession?>(null) }
 
     // Mid-session Settings, drawn over the exam so its state lives on.
     var showSettings by remember { mutableStateOf(false) }
+
+    /**
+     * A fresh session at the chosen speed and grading (iOS makeExamSession):
+     * the next bundled passage for that speed when "Use a built-in passage"
+     * is on and one exists, otherwise a freshly generated one.
+     */
+    fun makeSession(): ExamSession {
+        if (useBundled) {
+            val samples = ExamData.examSamples(speed)
+            if (samples.isNotEmpty()) {
+                val n = samples.size
+                val sample = samples[((Settings.examSampleIndex % n) + n) % n]
+                return ExamSession(speed = speed, grading = grading, passage = sample.passage)
+            }
+        }
+        return ExamSession.forRandom(speed = speed, grading = grading)
+    }
+
+    /** "New passage" / "New exam": step to the next bundled sample, then rebuild (iOS newExam). */
+    fun newSession() {
+        Settings.advanceExamSample()
+        session = makeSession()
+    }
 
     DisposableEffect(Unit) { onDispose { player.release() } }
     BackHandler { player.stop(); onBack() }
@@ -84,7 +112,14 @@ fun CodeExamScreen(onBack: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             TextButton(onClick = onBack) { Text(stringResource(R.string.common_back)) }
-            SessionSettingsButton { showSettings = true }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                SessionSettingsButton { showSettings = true }
+                // Nothing to record on the way out: an exam reaches Stats only when graded.
+                SwitchModeButton(TrainingMode.EXAM) { mode ->
+                    player.stop()
+                    onSwitchMode(mode)
+                }
+            }
         }
 
         val s = session
@@ -92,9 +127,11 @@ fun CodeExamScreen(onBack: () -> Unit) {
             ExamSetup(
                 speed = speed,
                 grading = grading,
-                onSpeed = { speed = it },
-                onGrading = { grading = it },
-                onStart = { session = ExamSession.forRandom(speed = speed, grading = grading) }
+                useBundled = useBundled,
+                onSpeed = { Settings.updateExamSpeed(it) },
+                onGrading = { Settings.updateExamGrading(it) },
+                onUseBundled = { Settings.updateExamUseBundled(it) },
+                onStart = { session = makeSession() }
             )
         } else {
             when (s.grading) {
@@ -102,14 +139,14 @@ fun CodeExamScreen(onBack: () -> Unit) {
                     session = s,
                     player = player,
                     haptics = haptics,
-                    onNew = { session = ExamSession.forRandom(speed = speed, grading = grading) },
+                    onNew = { newSession() },
                     onQuit = { player.stop(); session = null }
                 )
                 ExamGrading.QUESTIONS -> QuestionsExam(
                     session = s,
                     player = player,
                     haptics = haptics,
-                    onNew = { session = ExamSession.forRandom(speed = speed, grading = grading) },
+                    onNew = { newSession() },
                     onQuit = { player.stop(); session = null }
                 )
             }
@@ -128,8 +165,10 @@ fun CodeExamScreen(onBack: () -> Unit) {
 private fun ExamSetup(
     speed: ExamSpeed,
     grading: ExamGrading,
+    useBundled: Boolean,
     onSpeed: (ExamSpeed) -> Unit,
     onGrading: (ExamGrading) -> Unit,
+    onUseBundled: (Boolean) -> Unit,
     onStart: () -> Unit
 ) {
     CenteredScrollColumn(
@@ -166,6 +205,35 @@ private fun ExamSetup(
                 onClick = { onGrading(option) }
             )
             Spacer(Modifier.height(8.dp))
+        }
+
+        // "Use a built-in passage" (iOS IntroView's exam setup card): a
+        // ready-made text for the chosen speed instead of a generated one.
+        Spacer(Modifier.height(8.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(stringResource(R.string.exam_use_bundled), style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    stringResource(R.string.exam_use_bundled_note),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Brand.textSecondary
+                )
+            }
+            Spacer(Modifier.width(12.dp))
+            Switch(
+                checked = useBundled,
+                onCheckedChange = onUseBundled,
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = Brand.navy,
+                    checkedTrackColor = Brand.teal,
+                    uncheckedThumbColor = Brand.textSecondary,
+                    uncheckedTrackColor = Brand.navyRaised
+                )
+            )
         }
 
         Spacer(Modifier.height(24.dp))

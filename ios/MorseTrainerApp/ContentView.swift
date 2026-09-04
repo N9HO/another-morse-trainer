@@ -69,6 +69,26 @@ struct ContentView: View {
                         .buttonStyle(.bordered)
                     }
 
+                    // Answer by keying, flipped without leaving the drill
+                    // (Android's in-quiz toggle). Offered only where the text
+                    // you heard is the answer — a meaning or a prosign glyph
+                    // cannot be keyed, and those drills show the choices.
+                    if model.mode.supportsKeyedAnswers,
+                       let drill = model.drill, drill.isKeyable {
+                        Button {
+                            Haptics.selection()
+                            model.setKeyingResponse(!model.settings.keyingResponse)
+                        } label: {
+                            Label(model.settings.keyingResponse ? "Key answers · on" : "Key answers · off",
+                                  systemImage: "dot.radiowaves.left.and.right")
+                                .font(.footnote.weight(.medium))
+                                .foregroundStyle(model.settings.keyingResponse ? Theme.teal : Theme.textSecondary)
+                        }
+                        .accessibilityLabel(model.settings.keyingResponse
+                                            ? "Key answers on. Switch to tapping the choices."
+                                            : "Key answers off. Switch to keying your answer.")
+                    }
+
                     if model.isHeadCopy {
                         headCopyControls
                     } else if model.usesTypedEntry {

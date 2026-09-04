@@ -15,6 +15,17 @@ struct SettingsView: View {
     /// else was overwritten with Straight Key the moment practice started.
     @AppStorage(RepeaterModel.keyerModeDefaultsKey) private var adapterKeyerMode: Int =
         MIDIOutput.KeyerMode.straightKey.rawValue
+    /// Holds an adapter output for as long as this sheet is up, so a mode or
+    /// speed picked here reaches a connected adapter at once — from the intro,
+    /// where no drill is underneath to push it, as well as mid-session. Woken
+    /// on the first change; released with the sheet. See `AdapterSettingsSync`.
+    @StateObject private var adapterSync = AdapterSettingsSync()
+
+    private func syncAdapter() {
+        adapterSync.apply(keyerMode: adapterKeyerMode,
+                          wpm: model.settings.wpm,
+                          toneHz: model.settings.toneFrequency)
+    }
 
     /// When opened from inside a session, the running mode: sections that only
     /// matter to *other* modes are hidden, so Q-Codes practice never scrolls
@@ -25,6 +36,9 @@ struct SettingsView: View {
     /// Modes drawing from the progressive character ladder (proficiency,
     /// punctuation opt-ins, and the stage preview shape their drills).
     private static let ladderModes: Set<TrainingMode> = [.characters, .sending, .confusion]
+    /// Where the proficiency answer bites: the ladder modes it seeds, and the
+    /// Journey it unlocks as far as that answer reaches (#151).
+    private static let proficiencyModes: Set<TrainingMode> = ladderModes.union([.journey])
     /// The modes drilling the shared Characters track, where a stage pin bites.
     private static let stagePinModes: Set<TrainingMode> = [.characters, .sending]
     /// The choice quizzes governed by the Learning section (recognition time
@@ -38,7 +52,8 @@ struct SettingsView: View {
     /// its `SendingKeyer`, which wakes the adapter. (The Vail repeater carries
     /// its own copy of this control.)
     private static let hardwareKeyModes: Set<TrainingMode> =
-        [.sending, .characters, .words, .rapidFire]
+        [.sending, .characters, .words, .abbreviations, .qCodes, .prosigns,
+         .confusion, .rapidFire]
     /// Modes with a play → answer → reveal loop the Feedback section controls.
     private static let feedbackModes: Set<TrainingMode> =
         [.journey, .characters, .words, .abbreviations, .qCodes, .prosigns,
@@ -150,7 +165,7 @@ struct SettingsView: View {
                     .listRowBackground(Theme.navyElevated)
                 }
 
-                if shown(for: Self.ladderModes) {
+                if shown(for: Self.proficiencyModes) {
                     Section {
                         Picker("I already know…", selection: proficiencyBinding) {
                             ForEach(Proficiency.allCases) { level in
@@ -160,7 +175,7 @@ struct SettingsView: View {
                     } header: {
                         Text("Proficiency")
                     } footer: {
-                        Text("Sets which characters you start with. Changing this restarts your active set.")
+                        Text("How much Morse you already know — sets where the Characters drill begins and unlocks the Journey that far. Changing this restarts your active set.")
                     }
                     .listRowBackground(Theme.navyElevated)
                 }
@@ -291,6 +306,17 @@ struct SettingsView: View {
                                 Text(mode.displayName).tag(mode.rawValue)
                             }
                         }
+                        // Push every change to a connected adapter as it is
+                        // made: from the intro there is no drill underneath
+                        // holding an output, and mid-session the drill's own
+                        // push is diff-based, so the overlap is harmless.
+                        .onChange(of: adapterKeyerMode) { _ in syncAdapter() }
+                        .onChange(of: model.settings.wpm) { _ in syncAdapter() }
+                        .onChange(of: model.settings.toneFrequency) { _ in syncAdapter() }
+                        if (MIDIOutput.KeyerMode(rawValue: adapterKeyerMode) ?? .straightKey).adapterTimesSending {
+                            Text("The adapter times the sending in this mode, at the speed you're practising at.")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
                     } header: {
                         Text("Hardware key")
                     } footer: {
@@ -381,6 +407,8 @@ struct SettingsView: View {
                             Toggle("Copy RST too", isOn: $model.settings.qso.rstRequired)
                         }
                         Toggle("Keep partial call in box", isOn: $model.settings.qso.keepPartialCall)
+                        Toggle("Key my side in Morse", isOn: $model.settings.qso.keyMySide)
+                        Toggle("Pileup re-calls after TU", isOn: $model.settings.qso.autoRecall)
                         Picker("On a busted call", selection: $model.settings.qso.bustBehavior) {
                             ForEach(BustBehavior.allCases) { Text($0.label).tag($0) }
                         }
@@ -400,7 +428,7 @@ struct SettingsView: View {
                     } header: {
                         Text("QSO · Realism")
                     } footer: {
-                        Text("Keep partial call: a partly-copied call stays in the box so you can send “?” and add to it instead of retyping. Give-up: a station you keep busting drops out after a few misses, but the pileup continues — “Tell me who got away” then names the call you lost and what you had it as, either as it happens or in the end-of-run summary. Cut numbers send numerals as letters (0→T, 9→N) — you can type either form.")
+                        Text("Keep partial call: a partly-copied call stays in the box so you can send “?” and add to it instead of retyping. Key my side: your CQ, calls and TU go out in Morse at your tone and speed before the stations reply; off, they are logged silently. Re-calls after TU: the stations still waiting call again on their own once you log a contact; off, send AGN or CQ yourself. Give-up: a station you keep busting drops out after a few misses, but the pileup continues — “Tell me who got away” then names the call you lost and what you had it as, either as it happens or in the end-of-run summary. Cut numbers send numerals as letters (0→T, 9→N) — you can type either form.")
                     }
                     .listRowBackground(Theme.navyElevated)
 
@@ -463,14 +491,19 @@ struct SettingsView: View {
                 }
                 .listRowBackground(Theme.navyElevated)
 
-                Section {
-                    Button(role: .destructive) {
-                        confirmReset = true
-                    } label: {
-                        Label("Reset all progress", systemImage: "trash")
+                // Mid-session the destructive reset stays out of reach — it
+                // would yank the engine out from under the running drill. Only
+                // from the intro's app-wide entry (Android parity).
+                if activeMode == nil {
+                    Section {
+                        Button(role: .destructive) {
+                            confirmReset = true
+                        } label: {
+                            Label("Reset all progress", systemImage: "trash")
+                        }
                     }
+                    .listRowBackground(Theme.navyElevated)
                 }
-                .listRowBackground(Theme.navyElevated)
             }
             .scrollContentBackground(.hidden)
             .readableWidth()
@@ -608,9 +641,9 @@ struct SettingsView: View {
         ]
         switch model.learningMode {
         case .words:
-            lines.append(s.customWords.isEmpty
-                ? "Word pool: \(s.wordTier.label)"
-                : "Word pool: custom (\(s.customWords.count) words)")
+            lines.append(s.customWordsActive
+                ? "Word pool: custom (\(s.customWords.count) words)"
+                : "Word pool: \(s.wordTier.label)")
         case .qrq:
             lines.append("QRQ speed: \(s.qrqSpeed.label)")
         case .exam:

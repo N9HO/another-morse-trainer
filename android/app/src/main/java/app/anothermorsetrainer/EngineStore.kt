@@ -49,6 +49,14 @@ object EngineStore {
     }
 
     /**
+     * The track as it stands now: the live one when a module is composed
+     * (Settings drawn over Characters or Sending Practice), otherwise the one
+     * restored from the last save — which then becomes the tracked one, so a
+     * change made to it from Home is what [save] snapshots.
+     */
+    fun current(): ProgressiveCharacters = tracked ?: characters()
+
+    /**
      * Re-derive the introduction order (Koch core + opted-in punctuation) on
      * the live engine after a settings change. The order itself is derived
      * state, so nothing to save — but opting *out* of a mark already earned
@@ -60,6 +68,21 @@ object EngineStore {
     fun applyStudyOrder() {
         val engine = tracked?.engine ?: return
         if (engine.applyStudyOrder(Settings.studyOrder()).isNotEmpty()) save()
+    }
+
+    /**
+     * A read-only snapshot of the Characters track — the live one when a
+     * track is out, otherwise the last save, otherwise a fresh seed from the
+     * declared proficiency. Unlike [characters] this hands nothing out and
+     * tracks nothing, so a screen that only *reads* progress (Stats, the share
+     * card) cannot displace a live quiz's track from [save].
+     */
+    fun snapshot(): ProgressiveCharacters.Snapshot {
+        tracked?.let { return it.snapshot }
+        load()?.let { return it }
+        val engine = TrainerEngine(Settings.engineConfig())
+        Settings.applyProficiency(engine)
+        return ProgressiveCharacters(engine).snapshot
     }
 
     /** Persist the tracked track's current snapshot (no-op when none is live). */

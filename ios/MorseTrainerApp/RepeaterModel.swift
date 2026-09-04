@@ -132,8 +132,9 @@ public final class RepeaterModel: ObservableObject {
         }
     }
 
-    /// When enabled, received tones also buzz the adapter's piezo.
-    @Published public var adapterRxFeedbackEnabled: Bool = false {
+    /// When enabled, received tones also buzz the adapter's piezo. On by
+    /// default, as on Android; a stored choice wins over the default.
+    @Published public var adapterRxFeedbackEnabled: Bool = true {
         didSet { UserDefaults.standard.set(adapterRxFeedbackEnabled, forKey: Self.adapterRxFeedbackDefaultsKey) }
     }
 
@@ -172,6 +173,20 @@ public final class RepeaterModel: ObservableObject {
         .dit: KeyState(),
         .dah: KeyState(),
     ]
+
+    /// True while any paddle is down. The per-key states above are the
+    /// edges; this is the one logical key they aggregate into (Android
+    /// `MidiKeyInput.updateHeld`): sidetone and the transmitted tone start
+    /// when the first paddle goes down and stop when the *last* one comes
+    /// up, so a squeeze or an overlapping release is not cut short.
+    private var anyKeyDown: Bool {
+        keyState.values.contains { $0.isDown }
+    }
+
+    /// When the first of the currently held paddles went down — the start of
+    /// the tone being keyed; the tone is finalized from here on the last
+    /// release.
+    private var toneBeginLocalMs: Int64?
     private var stuckKeyTask: Task<Void, Never>?
 
     /// The channel of the most recent successful connection. Used on
@@ -219,9 +234,11 @@ public final class RepeaterModel: ObservableObject {
         let storedChannel = defaults.string(forKey: Self.channelDefaultsKey)
         let resolvedChannel = (storedChannel?.isEmpty == false) ? storedChannel! : "General"
 
-        let resolvedTxTone = defaults.object(forKey: Self.txToneDefaultsKey) != nil
-            ? defaults.integer(forKey: Self.txToneDefaultsKey)
-            : 72
+        let resolvedTxTone = Self.clampTxTone(
+            defaults.object(forKey: Self.txToneDefaultsKey) != nil
+                ? defaults.integer(forKey: Self.txToneDefaultsKey)
+                : 72
+        )
         let resolvedRxDelay = defaults.object(forKey: Self.rxDelayDefaultsKey) != nil
             ? defaults.integer(forKey: Self.rxDelayDefaultsKey)
             : 2000
@@ -247,7 +264,7 @@ public final class RepeaterModel: ObservableObject {
             : 20
         adapterRxFeedbackEnabled = defaults.object(forKey: Self.adapterRxFeedbackDefaultsKey) != nil
             ? defaults.bool(forKey: Self.adapterRxFeedbackDefaultsKey)
-            : false
+            : true
         privateMode = defaults.object(forKey: Self.privateModeDefaultsKey) != nil
             ? defaults.bool(forKey: Self.privateModeDefaultsKey)
             : true
@@ -402,8 +419,16 @@ public final class RepeaterModel: ObservableObject {
         Task { await client.setCallsign(trimmed) }
     }
 
+    /// The TX tone range offered by the repeater settings (C3–C7), the same
+    /// clamp Android's `VailRepeater.updateTxTone` applies.
+    public static let txToneRange: ClosedRange<Int> = 48 ... 96
+
+    private static func clampTxTone(_ note: Int) -> Int {
+        max(txToneRange.lowerBound, min(txToneRange.upperBound, note))
+    }
+
     public func setTxTone(_ note: Int) {
-        let clamped = max(0, min(127, note))
+        let clamped = Self.clampTxTone(note)
         txTone = clamped
         keyer.localTxToneMIDI = clamped
         Task { await client.setTxTone(clamped) }
@@ -493,8 +518,13 @@ public final class RepeaterModel: ObservableObject {
     }
 
     private func handleKeyDown(_ event: MIDIInput.Event) {
+        let wasHeld = anyKeyDown
         keyState[event.key]?.isDown = true
         keyState[event.key]?.beginLocalMs = event.timestampMs
+        // A second paddle joining a press keeps the tone that is already
+        // sounding; only the first edge starts one.
+        guard !wasHeld else { return }
+        toneBeginLocalMs = event.timestampMs
 
         // Local sidetone fires immediately, regardless of break-in.
         keyer.beginTx()
@@ -507,9 +537,11 @@ public final class RepeaterModel: ObservableObject {
     }
 
     private func handleKeyUp(_ event: MIDIInput.Event) {
-        guard let begin = keyState[event.key]?.beginLocalMs else { return }
-        let durationMs = max(0, event.timestampMs - begin)
         keyState[event.key]?.isDown = false
+        // Still held on another paddle: the tone carries on until it releases.
+        guard !anyKeyDown, let begin = toneBeginLocalMs else { return }
+        toneBeginLocalMs = nil
+        let durationMs = max(0, event.timestampMs - begin)
 
         keyer.endTx()
 
@@ -537,11 +569,9 @@ public final class RepeaterModel: ObservableObject {
             }
         }
 
-        // If no keys are down, cancel the stuck-key watchdog.
-        if keyState.values.allSatisfy({ !$0.isDown }) {
-            stuckKeyTask?.cancel()
-            stuckKeyTask = nil
-        }
+        // No keys are down here, so cancel the stuck-key watchdog.
+        stuckKeyTask?.cancel()
+        stuckKeyTask = nil
     }
 
     private func startStuckKeyWatchdog() {
@@ -560,6 +590,7 @@ public final class RepeaterModel: ObservableObject {
         for key in keyState.keys {
             keyState[key]?.isDown = false
         }
+        toneBeginLocalMs = nil
         keyer.endTx()
         keyer.panic()
         liveOwnKeyStarts.removeAll()

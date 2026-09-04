@@ -194,30 +194,34 @@ public enum MorseData {
         return items
     }
 
-    /// Build quiz items from a user-supplied word list (issue #32). Words are
-    /// uppercased, trimmed, de-duplicated, and limited to characters the trainer
-    /// can actually sound out.
+    /// Build quiz items from a user-supplied word list (issue #32). Takes the
+    /// list exactly as `parseWordList` produced it — already uppercased,
+    /// stripped to sendable characters, capped and de-duplicated — so this
+    /// does no filtering of its own. Both ports agree on that split.
     public static func customWordItems(_ words: [String]) -> [MorseItem] {
-        var seen = Set<String>()
-        var items: [MorseItem] = []
-        for raw in words {
-            let w = raw.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-            guard !w.isEmpty, seen.insert(w).inserted else { continue }
-            // Keep only words with at least one sendable character.
-            guard w.contains(where: { MorseCode.pattern(for: $0) != nil }) else { continue }
-            items.append(MorseItem(id: "custom-\(w)", playable: .text(w), answer: w, display: w))
+        words.map { w in
+            MorseItem(id: "custom-\(w)", playable: .text(w), answer: w, display: w)
         }
-        return items
     }
 
-    /// Parse a pasted blob (newline-, comma-, or whitespace-separated) into a
-    /// clean, de-duplicated, uppercased word list for `customWords` (issue #32).
-    public static func parseWordList(_ text: String) -> [String] {
-        let separators = CharacterSet(charactersIn: ",\n\r\t ")
+    /// The longest word `parseWordList` keeps; anything longer is cut here.
+    public static let customWordMaxLength = 24
+
+    /// Parse a pasted blob into a clean word list for `customWords` (issue #32).
+    /// The rules, pinned for both ports by `fixtures/custom-words.json`:
+    /// split on comma, semicolon and any whitespace; trim; uppercase; strip
+    /// every character with no Morse pattern (`MorseCode.pattern`); cut to
+    /// `customWordMaxLength`; drop empties; de-duplicate keeping the first
+    /// occurrence. Stripping happens before the cut, so "AB!CDE…" loses the
+    /// "!" and keeps 24 letters, not 23.
+    public static func parseWordList(_ raw: String) -> [String] {
+        let separators = CharacterSet(charactersIn: ",;").union(.whitespacesAndNewlines)
         var seen = Set<String>()
         var out: [String] = []
-        for token in text.components(separatedBy: separators) {
-            let w = token.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        for token in raw.components(separatedBy: separators) {
+            let upper = token.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+            let sendable = upper.filter { MorseCode.pattern(for: $0) != nil }
+            let w = String(sendable.prefix(customWordMaxLength))
             guard !w.isEmpty, seen.insert(w).inserted else { continue }
             out.append(w)
         }

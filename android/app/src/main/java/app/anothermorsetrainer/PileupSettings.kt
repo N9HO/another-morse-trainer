@@ -10,16 +10,21 @@ import androidx.compose.runtime.setValue
 import androidx.core.content.edit
 import app.anothermorsetrainer.morsekit.BustBehavior
 import app.anothermorsetrainer.morsekit.CallsignFormat
+import app.anothermorsetrainer.morsekit.CutNumbers
 import app.anothermorsetrainer.morsekit.MissedCallerFeedback
 import app.anothermorsetrainer.morsekit.PileupConfig
 import app.anothermorsetrainer.morsekit.QSOContestMode
 
-/** Atmospheric-noise presets for the pileup mix (the [PileupConfig.qrnLevel] gain). */
+/**
+ * Atmospheric-noise presets for the pileup mix (the [PileupConfig.qrnLevel]
+ * gain). Levels and labels are the iOS `QRNLevel` ones; the older Android
+ * Light/Medium (0.04/0.09/0.16) installs are mapped onto these on load.
+ */
 enum class QrnPreset(val level: Float, val label: String) {
     OFF(0f, "Off"),
-    LIGHT(0.04f, "Light"),
-    MEDIUM(0.09f, "Medium"),
-    HEAVY(0.16f, "Heavy")
+    NORMAL(0.04f, "Normal"),
+    MODERATE(0.10f, "Moderate"),
+    HEAVY(0.20f, "Heavy")
 }
 
 /**
@@ -32,14 +37,22 @@ enum class QrnPreset(val level: Float, val label: String) {
 object PileupSettings {
     private lateinit var prefs: SharedPreferences
 
+    /** The station keyed when no call has been entered — the iOS default. */
+    const val DEFAULT_CALL = "W1AW"
+
     /** Slowest and fastest a simulated caller may send. The top matches the
      *  global character-speed ceiling so QRQ practice carries into a pileup
      *  (issue #79). */
-    const val MIN_CALLER_WPM = 10.0
+    const val MIN_CALLER_WPM = 12.0
     const val MAX_CALLER_WPM = 60.0
+    /** Widest pitch spread across callers, in Hz (the iOS slider tops out at 500). */
+    const val MAX_TONE_SPREAD = 500.0
+    /** Longest "min wait" / "max wait" before a caller answers, in seconds (iOS 0…3 / 0…4). */
+    const val MAX_MIN_DELAY = 3.0
+    const val MAX_MAX_DELAY = 4.0
 
-    /** Your station callsign, keyed on your side of the QSO ("" falls back to N0CALL). */
-    var myCall by mutableStateOf("")
+    /** Your station callsign, keyed on your side of the QSO (iOS default W1AW; "" falls back to it). */
+    var myCall by mutableStateOf(DEFAULT_CALL)
         private set
     var mode by mutableStateOf(QSOContestMode.Pota)
         private set
@@ -49,13 +62,24 @@ object PileupSettings {
         private set
     var maxWpm by mutableDoubleStateOf(28.0)
         private set
+    /** Callers send with Farnsworth spacing, stretched to your effective speed (iOS qso.farnsworth). */
+    var callerFarnsworth by mutableStateOf(false)
+        private set
     var toneSpread by mutableDoubleStateOf(250.0)
+        private set
+    /** Shortest and longest pause before a caller answers, in seconds (iOS minDelay/maxDelay). */
+    var minDelay by mutableDoubleStateOf(0.2)
+        private set
+    var maxDelay by mutableDoubleStateOf(1.5)
         private set
     var qsbEnabled by mutableStateOf(false)
         private set
     var qrn by mutableStateOf(QrnPreset.OFF)
         private set
     var cutNumbersEnabled by mutableStateOf(false)
+        private set
+    /** Which digits are sent as cut letters when cut numbers are on (iOS cutDigits, default 0 and 9). */
+    var cutDigits by mutableStateOf(CutNumbers.commonDefaults)
         private set
     var rstRequired by mutableStateOf(false)
         private set
@@ -70,8 +94,8 @@ object PileupSettings {
         private set
     var usOnly by mutableStateOf(true)
         private set
-    /** Keep the partial call in the entry box after a typed repeat request ("W1?"). */
-    var keepPartialCall by mutableStateOf(true)
+    /** Keep the partial call in the entry box after a typed repeat request ("W1?"). Off by default, as on iOS. */
+    var keepPartialCall by mutableStateOf(false)
         private set
     /** Key your own transmissions (CQ, sends, TU) in Morse at the sidetone pitch. */
     var keyMySide by mutableStateOf(true)
@@ -82,17 +106,28 @@ object PileupSettings {
 
     fun init(context: Context) {
         prefs = context.applicationContext.getSharedPreferences("amt_pileup", Context.MODE_PRIVATE)
-        myCall = prefs.getString("myCall", "") ?: ""
+        myCall = prefs.getString("myCall", DEFAULT_CALL) ?: DEFAULT_CALL
         mode = QSOContestMode.allCases.firstOrNull { it.code == prefs.getString("mode", null) }
             ?: QSOContestMode.Pota
         maxStations = prefs.getInt("maxStations", 4).coerceIn(1, 8)
-        minWpm = prefs.getFloat("minWpm", 18f).toDouble()
-        maxWpm = prefs.getFloat("maxWpm", 28f).toDouble()
-        toneSpread = prefs.getFloat("toneSpread", 250f).toDouble()
+        minWpm = prefs.getFloat("minWpm", 18f).toDouble().coerceIn(MIN_CALLER_WPM, MAX_CALLER_WPM)
+        maxWpm = prefs.getFloat("maxWpm", 28f).toDouble().coerceIn(minWpm, MAX_CALLER_WPM)
+        callerFarnsworth = prefs.getBoolean("farnsworth", false)
+        toneSpread = prefs.getFloat("toneSpread", 250f).toDouble().coerceIn(0.0, MAX_TONE_SPREAD)
+        minDelay = prefs.getFloat("minDelay", 0.2f).toDouble().coerceIn(0.0, MAX_MIN_DELAY)
+        maxDelay = prefs.getFloat("maxDelay", 1.5f).toDouble().coerceIn(minDelay, MAX_MAX_DELAY)
         qsbEnabled = prefs.getBoolean("qsb", false)
-        qrn = runCatching { QrnPreset.valueOf(prefs.getString("qrn", null) ?: "OFF") }
-            .getOrDefault(QrnPreset.OFF)
+        // The pre-iOS-parity presets were Off/Light/Medium/Heavy at
+        // 0/0.04/0.09/0.16; an install still on one of the renamed names lands
+        // on the nearest iOS level (0.09 → 0.10, 0.16 → 0.20).
+        qrn = when (val stored = prefs.getString("qrn", null) ?: "OFF") {
+            "LIGHT" -> QrnPreset.NORMAL
+            "MEDIUM" -> QrnPreset.MODERATE
+            else -> runCatching { QrnPreset.valueOf(stored) }.getOrDefault(QrnPreset.OFF)
+        }
         cutNumbersEnabled = prefs.getBoolean("cutNumbers", false)
+        cutDigits = (prefs.getString("cutDigits", null) ?: CutNumbers.commonDefaults.joinToString(""))
+            .filter { it in CutNumbers.cuttableDigits }.toSet()
         rstRequired = prefs.getBoolean("rstRequired", false)
         bustBehavior = BustBehavior.allCases.firstOrNull { it.code == prefs.getString("bust", null) }
             ?: BustBehavior.Forgiving
@@ -106,7 +141,7 @@ object PileupSettings {
                 .ifEmpty { CallsignFormat.commonDefaults.toSet() }
         }
         usOnly = prefs.getBoolean("usOnly", true)
-        keepPartialCall = prefs.getBoolean("keepPartial", true)
+        keepPartialCall = prefs.getBoolean("keepPartial", false)
         keyMySide = prefs.getBoolean("keyMySide", true)
         autoRecall = prefs.getBoolean("autoRecall", true)
     }
@@ -133,10 +168,32 @@ object PileupSettings {
         persist()
     }
 
-    fun updateToneSpread(value: Double) { toneSpread = value.coerceIn(0.0, 400.0); persist() }
+    fun updateCallerFarnsworth(value: Boolean) { callerFarnsworth = value; persist() }
+    fun updateToneSpread(value: Double) { toneSpread = value.coerceIn(0.0, MAX_TONE_SPREAD); persist() }
+
+    /** Reply-delay edges keep min ≤ max by dragging the other edge along, like the speed band. */
+    fun updateMinDelay(value: Double) {
+        minDelay = value.coerceIn(0.0, MAX_MIN_DELAY)
+        if (maxDelay < minDelay) maxDelay = minDelay
+        persist()
+    }
+
+    fun updateMaxDelay(value: Double) {
+        maxDelay = value.coerceIn(0.0, MAX_MAX_DELAY)
+        if (minDelay > maxDelay) minDelay = maxDelay
+        persist()
+    }
+
     fun updateQsbEnabled(value: Boolean) { qsbEnabled = value; persist() }
     fun updateQrn(value: QrnPreset) { qrn = value; persist() }
     fun updateCutNumbersEnabled(value: Boolean) { cutNumbersEnabled = value; persist() }
+
+    /** Toggle one digit in or out of the cut set (an empty set is allowed, as on iOS). */
+    fun toggleCutDigit(digit: Char) {
+        if (digit !in CutNumbers.cuttableDigits) return
+        cutDigits = if (digit in cutDigits) cutDigits - digit else cutDigits + digit
+        persist()
+    }
     fun updateRstRequired(value: Boolean) { rstRequired = value; persist() }
     fun updateBustBehavior(value: BustBehavior) { bustBehavior = value; persist() }
     fun updateGiveUpEnabled(value: Boolean) { giveUpEnabled = value; persist() }
@@ -154,7 +211,7 @@ object PileupSettings {
     fun updateAutoRecall(value: Boolean) { autoRecall = value; persist() }
 
     /** The callsign to key on-air, never blank. */
-    val effectiveCall: String get() = myCall.ifBlank { "N0CALL" }
+    val effectiveCall: String get() = myCall.ifBlank { DEFAULT_CALL }
 
     /** The engine config the current settings imply. */
     fun config(): PileupConfig = PileupConfig(
@@ -163,9 +220,12 @@ object PileupSettings {
         minWPM = minWpm,
         maxWPM = maxWpm,
         toneSpread = toneSpread,
+        minDelay = minDelay,
+        maxDelay = maxDelay,
         qsbEnabled = qsbEnabled,
         qrnLevel = qrn.level,
         cutNumbersEnabled = cutNumbersEnabled,
+        cutDigits = cutDigits,
         rstRequired = rstRequired,
         bustBehavior = bustBehavior,
         giveUpEnabled = giveUpEnabled,
@@ -180,10 +240,14 @@ object PileupSettings {
             putInt("maxStations", maxStations)
             putFloat("minWpm", minWpm.toFloat())
             putFloat("maxWpm", maxWpm.toFloat())
+            putBoolean("farnsworth", callerFarnsworth)
             putFloat("toneSpread", toneSpread.toFloat())
+            putFloat("minDelay", minDelay.toFloat())
+            putFloat("maxDelay", maxDelay.toFloat())
             putBoolean("qsb", qsbEnabled)
             putString("qrn", qrn.name)
             putBoolean("cutNumbers", cutNumbersEnabled)
+            putString("cutDigits", cutDigits.joinToString(""))
             putBoolean("rstRequired", rstRequired)
             putString("bust", bustBehavior.code)
             putBoolean("giveUp", giveUpEnabled)

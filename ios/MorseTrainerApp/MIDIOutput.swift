@@ -52,6 +52,16 @@ public actor MIDIOutput {
             case .keyahead: "Keyahead"
             }
         }
+
+        /// Whether the adapter times the sending itself in this mode. A
+        /// straight key and passthrough key from the contact directly; the
+        /// rest are the adapter's own keyer, sending at whatever speed the
+        /// screen pushed — the practice speed in a drill, the keyer slider on
+        /// the repeater screen. Mirrors `AdapterKeyer.adapterTimesSending` on
+        /// Android, which drives the same note under the Settings picker.
+        public var adapterTimesSending: Bool {
+            self != .straightKey && self != .passthrough
+        }
     }
 
     /// Adapter configuration mirrored locally so it can be (re)applied whenever
@@ -123,6 +133,23 @@ public actor MIDIOutput {
         config.keyerMode = keyerMode
         config.ditDurationMs = Self.ditDurationMs(forWPM: wpm)
         config.sidetoneMIDINote = max(0, min(127, sidetoneMIDINote))
+    }
+
+    /// Apply settings to an adapter that is already connected, sending only
+    /// what actually changed. This is the live counterpart to `configure`: the
+    /// wake sequence pushes the whole config once, and this keeps it current
+    /// while the destination stays known, so a mode or speed picked
+    /// mid-session in Settings reaches the adapter instead of waiting for the
+    /// next wake (Android `MidiKeyOutput.applyConfig`, issue #46 there).
+    ///
+    /// The mirrored `config` is the comparison, so a repeated call with
+    /// unchanged values costs nothing on the wire, and a change made before
+    /// anything is connected still lands — it updates the mirror the next
+    /// wake will send.
+    public func applyConfig(keyerMode: KeyerMode, wpm: Int, sidetoneMIDINote: Int) {
+        if keyerMode != config.keyerMode { setKeyerMode(keyerMode) }
+        if Self.ditDurationMs(forWPM: wpm) != config.ditDurationMs { setSpeed(wpm: wpm) }
+        if max(0, min(127, sidetoneMIDINote)) != config.sidetoneMIDINote { setSidetone(midiNote: sidetoneMIDINote) }
     }
 
     public func setKeyerMode(_ mode: KeyerMode) {
@@ -241,15 +268,17 @@ public actor MIDIOutput {
         return result
     }
 
+    /// The destination whose piezo we may buzz: a recognized Vail Adapter —
+    /// or, when nothing identifies itself as one, a single connected device is
+    /// assumed to be it (the adapter enumerates under names our heuristics
+    /// miss on some firmwares). Never an arbitrary pick from several, so an
+    /// unrelated synth stays silent. Same rule as Android's
+    /// `MidiKeyOutput.buzzTargets`.
     private func findVailAdapterDestination() -> MIDIEndpointRef? {
-        let count = MIDIGetNumberOfDestinations()
-        for i in 0 ..< count {
-            let dest = MIDIGetDestination(i)
+        let candidates = nonNetworkDestinations()
+        for dest in candidates {
             let name = endpointStringProperty(dest, kMIDIPropertyDisplayName).lowercased()
             let manufacturer = endpointStringProperty(dest, kMIDIPropertyManufacturer).lowercased()
-
-            // Skip CoreMIDI network sessions.
-            if name.contains("network"), name.contains("session") { continue }
 
             // The adapter may appear as "Vail" or as the raw board it's built on
             // (Adafruit QT Py M0). Match either. See CLAUDE.md §4.
@@ -259,7 +288,7 @@ public actor MIDIOutput {
                 return dest
             }
         }
-        return nil
+        return candidates.count == 1 ? candidates[0] : nil
     }
 
     private func endpointStringProperty(_ endpoint: MIDIEndpointRef, _ property: CFString) -> String {

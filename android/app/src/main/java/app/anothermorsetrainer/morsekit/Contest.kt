@@ -138,8 +138,10 @@ enum class ContestType(val code: String) {
         when (multiplierKind) {
             MultiplierKind.NONE -> 0
             MultiplierKind.CALLS -> calls.toSet().size
+            // The last non-empty piece: Swift's `split(separator: " ")` drops
+            // empty pieces, so "599 OH " still yields "OH" rather than nothing.
             MultiplierKind.SPC -> exchanges
-                .mapNotNull { it.split(" ").lastOrNull()?.takeIf { t -> t.isNotEmpty() } }
+                .mapNotNull { it.split(" ").lastOrNull { t -> t.isNotEmpty() } }
                 .toSet().size
         }
 

@@ -133,15 +133,18 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         }
     }
 
-    /// Whether a Koch starting-level ("what do you already know") choice changes
-    /// this mode's drill. Only the modes that draw from the progressive character
-    /// ladder care — the rest use fixed content pools, so asking would be noise.
-    var usesStartingLevel: Bool {
-        switch self {
-        case .characters, .sending, .confusion: return true
-        default:                                return false
-        }
-    }
+    // The Koch starting level ("what do you already know") is deliberately not
+    // a per-mode question any more (#151): it is one app-wide answer, given at
+    // first run (`OnboardingView`) and changed under Settings → Proficiency.
+    // Re-asking it on every Characters, Confusion Drill and Sending Practice
+    // launch read as three different questions, and tapping the level you
+    // already had silently restarted the ladder.
+
+    /// Modes where the learner can answer by *keying* instead of tapping: the
+    /// same choice quizzes voice covers (Android offers "Key answers" on every
+    /// QuizScreen mode). Honoured per drill — see `Drill.isKeyable`: a meaning
+    /// or a prosign glyph cannot be keyed, so those drills show the choices.
+    var supportsKeyedAnswers: Bool { supportsVoiceAnswers }
 
     /// Modes where the learner can answer by speaking instead of tapping: every
     /// choice quiz with a bounded answer pool (Android offers voice in all six).
@@ -166,6 +169,16 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         }
     }
 
+}
+
+extension Drill {
+    /// A drill can be answered by keying when the text you heard IS the answer
+    /// — characters, groups, and words, but not meaning-answers (abbreviations,
+    /// Q-codes) or prosign glyphs the decoder can't produce. Twin of the Kotlin
+    /// `Drill.isKeyable` in QuizScreen.kt.
+    var isKeyable: Bool {
+        correct == revealPrimary && !correct.contains("<")
+    }
 }
 
 /// The app's single source of truth. Connects the tested MorseKit quiz engines
@@ -318,8 +331,25 @@ final class AppModel: ObservableObject {
     private var sessionCharCorrect: [Character: Int] = [:]
     private var sessionCharTTRs: [Character: [TimeInterval]] = [:]
 
+    /// Whether this install predates the first-run screen (#151): anyone with
+    /// saved ladder or Journey progress, a saved settings blob, or a declared
+    /// proficiency has already answered the question one way or another and
+    /// must not be walked through onboarding. Read before anything in `init`
+    /// can write, so a genuinely fresh install still sees it.
+    private static func isExistingInstall(_ loaded: AppSettings) -> Bool {
+        let defaults = UserDefaults.standard
+        return defaults.data(forKey: progressKey) != nil
+            || defaults.data(forKey: journeyKey) != nil
+            || defaults.data(forKey: AppSettings.storageKey) != nil
+            || loaded.proficiency != .none
+    }
+
     init() {
-        let loaded = AppSettings.load()
+        var loaded = AppSettings.load()
+        if !loaded.onboardingDone, AppModel.isExistingInstall(loaded) {
+            loaded.onboardingDone = true
+            loaded.save()
+        }
         self.settings = loaded
         self.engine = TrainerEngine(config: AppModel.config(from: loaded), seedCount: 2)
         self.charLadder = ProgressiveCharacters(engine: engine)
@@ -460,13 +490,28 @@ final class AppModel: ObservableObject {
             || isRapidFireLiveType || isRapidFireHeadType
     }
     /// Whether the learner answers by *sending* (keying the answer on a physical
-    /// or on-screen Morse key) this session: the standalone Sending Practice
-    /// mode, the Characters & Words option, or Rapid Fire's "key each one".
-    /// Takes precedence over voice when both happen to be enabled.
+    /// or on-screen Morse key) right now: the standalone Sending Practice mode,
+    /// the "Answer by keying" option on any choice quiz, or Rapid Fire's "key
+    /// each one". The option is honoured per drill (Android parity): a drill
+    /// whose answer is a meaning or a prosign glyph cannot be keyed, so it falls
+    /// back to the choice grid while the setting stays on. Takes precedence
+    /// over voice when both happen to be enabled.
     var usesKeyingResponse: Bool {
         isSending
-            || (settings.keyingResponse && (mode == .characters || mode == .words))
+            || (settings.keyingResponse && mode.supportsKeyedAnswers
+                && (drill?.isKeyable ?? true))
             || (isRapidFire && settings.rapidFire.response == .key)
+    }
+
+    /// Flip "answer by keying" — from the setup sheet or mid-drill (Android's
+    /// in-quiz toggle). Keyed and voice answers are mutually exclusive, so
+    /// turning keying on turns voice off and abandons any voice round in flight.
+    func setKeyingResponse(_ on: Bool) {
+        settings.keyingResponse = on
+        if on, settings.voiceResponse {
+            settings.voiceResponse = false
+            resetVoiceRound()
+        }
     }
     /// Whether the learner answers by voice this session (all six choice quizzes).
     var usesVoiceResponse: Bool {
@@ -491,10 +536,11 @@ final class AppModel: ObservableObject {
 
     private func applyPhraseConfig(from s: AppSettings) {
         // Rebuild the Words quiz when its source changes: a custom list (issue
-        // #32) takes precedence over the built-in "Top N" tier.
-        let desiredWordItems = s.customWords.isEmpty
-            ? MorseData.topWordItems(s.wordTier.count)
-            : MorseData.customWordItems(s.customWords)
+        // #32) takes precedence over the built-in "Top N" tier — but only while
+        // its switch is on and it holds enough words to offer a distractor.
+        let desiredWordItems = s.customWordsActive
+            ? MorseData.customWordItems(s.customWords)
+            : MorseData.topWordItems(s.wordTier.count)
         if wordsQuiz.items.map(\.id) != desiredWordItems.map(\.id) {
             wordsQuiz = PhraseQuiz(name: "Words", items: desiredWordItems)
         }
@@ -1274,12 +1320,17 @@ final class AppModel: ObservableObject {
         if case .play(let v) = action { response = v.map(mapVoice) } else { response = [] }
         // After logging a contact, keep the run going: any stations still waiting
         // in the pileup call again on their own, right after your TU, so you can
-        // work the next one without having to send AGN first (issue #35).
-        if loggedContact, pileup.activeCount > 0,
+        // work the next one without having to send AGN first (issue #35). With
+        // "Pileup re-calls after TU" off the run waits for you instead.
+        if loggedContact, settings.qso.autoRecall, pileup.activeCount > 0,
            case .play(let v) = pileup.repeatRequest() {
             response = v.map(mapVoice)
         }
-        let mine = selfText.flatMap { $0.isEmpty ? nil : selfVoice($0) }
+        // "Key my side in Morse" off: your CQ, calls and TU still drive the
+        // engine and the log, they just never sound (Android parity).
+        let mine = settings.qso.keyMySide
+            ? selfText.flatMap { $0.isEmpty ? nil : selfVoice($0) }
+            : nil
 
         guard mine != nil || !response.isEmpty else { qsoBusy = false; return }
         qsoGeneration += 1
@@ -2329,9 +2380,12 @@ final class AppModel: ObservableObject {
         let isFuture: Bool
     }
 
-    /// Aggregated lifetime totals and personal bests for the Brag Sheet, derived
-    /// from the same persisted session history and per-character stats the rest
-    /// of the app uses so the numbers can never drift from reality.
+    /// Aggregated lifetime totals and personal bests for the Brag Sheet. The
+    /// lifetime figures come from `SessionHistory`'s monotonic counters — the
+    /// session list itself is capped at `SessionHistory.limit`, so summing it
+    /// made the totals *shrink* after the hundredth session — and the bests
+    /// and mastery from the same persisted history and per-character stats the
+    /// rest of the app uses, so nothing here can drift from reality.
     struct BragStats {
         var currentStreak: Int
         var longestStreak: Int
@@ -2348,9 +2402,6 @@ final class AppModel: ObservableObject {
 
     var bragStats: BragStats {
         let sessions = history.sessions
-        let answered = sessions.reduce(0) { $0 + $1.attempts }
-        let correct  = sessions.reduce(0) { $0 + $1.correct }
-        let seconds  = sessions.reduce(0.0) { $0 + ($1.durationSeconds ?? 0) }
         // A best-accuracy badge from a 3-question session is meaningless, so only
         // count sessions with a meaningful number of drills behind them.
         let realSessions = sessions.filter { $0.attempts >= 10 }
@@ -2360,11 +2411,11 @@ final class AppModel: ObservableObject {
         return BragStats(
             currentStreak: currentStreak,
             longestStreak: longestStreak,
-            totalSessions: sessions.count,
-            totalAnswered: answered,
-            accuracy: answered == 0 ? 0 : Double(correct) / Double(answered),
-            practiceSeconds: seconds,
-            fastestCopy: sessions.compactMap(\.fastestTTR).min(),
+            totalSessions: history.totalSessions,
+            totalAnswered: history.totalAnswered,
+            accuracy: history.lifetimeAccuracy,
+            practiceSeconds: history.totalPracticeSeconds,
+            fastestCopy: history.bestTTR,
             bestSessionAccuracy: realSessions.map(\.accuracy).max(),
             biggestSession: sessions.map(\.attempts).max(),
             charactersMastered: mastered,
@@ -2529,12 +2580,41 @@ final class AppModel: ObservableObject {
         charLadder.resetToSingles()   // changing the set restarts the ladder
         reconcilePunctuation()
         saveProgress()
+        unlockJourneyForProficiency()
         summary = charLadder.summary
     }
 
     func setProficiency(_ proficiency: Proficiency) {
         configureProficiency(proficiency)
         if mode == .characters { start() }
+    }
+
+    /// The first-run answer (#151): seed the ladder, unlock the Journey that
+    /// far, and never ask again. Settings → Proficiency changes it later.
+    func completeOnboarding(_ proficiency: Proficiency) {
+        configureProficiency(proficiency)
+        settings.onboardingDone = true
+    }
+
+    /// Unlock the Journey as far as the declared proficiency reaches, so a
+    /// learner who said they know the letters is not made to re-earn K and M
+    /// one level at a time (#151). Only ever raises: levels actually cleared
+    /// are never clawed back, and "I know nothing" leaves level 1 as it is.
+    /// The current level moves up with the unlock so the map opens where they
+    /// can start, not on level 1 with the real start somewhere below. Twin of
+    /// Kotlin's `JourneyStore.unlockForProficiency`.
+    private func unlockJourneyForProficiency() {
+        guard settings.proficiency != .none else { return }
+        let known = Set(AppModel.characters(for: settings.proficiency))
+        let level = JourneyCurriculum.firstLevelBeyond(known: known)
+        guard level > journeyProgress.unlockedThrough else { return }
+        journeyProgress.unlockedThrough = min(journeyTotalLevels, level)
+        let target = max(journeyProgress.currentLevel, level)
+        if target != journeyProgress.currentLevel {
+            selectJourneyLevel(target)   // moves the quiz, syncs the map, saves
+        } else {
+            saveProgress()
+        }
     }
 
     /// Developer aid: jump the Characters track to a stage and start drilling it.
@@ -2689,11 +2769,7 @@ final class AppModel: ObservableObject {
             }
             // The reminder body carries the streak count, baked in at schedule
             // time — refresh it so tomorrow's nudge names today's number.
-            if settings.dailyReminderEnabled {
-                PracticeReminders.schedule(hour: settings.dailyReminderHour,
-                                           minute: settings.dailyReminderMinute,
-                                           streak: s.display(on: Date()))
-            }
+            refreshReminderIfStreakChanged()
         }
     }
 
@@ -2713,6 +2789,11 @@ final class AppModel: ObservableObject {
     /// at breakfast is the bug this prevents. Yesterday's game is not migrated:
     /// the day's word is gone, and a share text belongs to the day it was won.
     func refreshDailyDit(now: Date = Date()) {
+        // Same midnight problem, other feature: this is the app's "the day may
+        // have changed" hook (launch, and every return to the foreground), so
+        // it also checks whether a streak that lapsed overnight left the
+        // pending reminder promising yesterday's count.
+        refreshReminderIfStreakChanged(now: now)
         let number = DailyDit.puzzleNumber(for: now)
         guard dailyDit.puzzleNumber != number else { return }
         if let saved = AppModel.loadDailyDit(), saved.puzzleNumber == number {
@@ -2797,6 +2878,7 @@ final class AppModel: ObservableObject {
         } else {
             settings.dailyReminderEnabled = false
             PracticeReminders.cancel()
+            scheduledReminderStreak = nil
         }
     }
 
@@ -2807,10 +2889,33 @@ final class AppModel: ObservableObject {
         if settings.dailyReminderEnabled { rescheduleReminder() }
     }
 
-    private func rescheduleReminder() {
+    /// The streak count the pending reminder's body was last written with, so
+    /// `refreshReminderIfStreakChanged` can tell a stale request from a fresh
+    /// one without re-adding it on every foreground. nil = nothing recorded
+    /// (before the first reschedule, or after a cancel).
+    private var scheduledReminderStreak: Int?
+
+    private func rescheduleReminder(now: Date = Date()) {
+        let count = streak.display(on: now)
         PracticeReminders.schedule(hour: settings.dailyReminderHour,
                                    minute: settings.dailyReminderMinute,
-                                   streak: streak.display(on: Date()))
+                                   streak: count)
+        scheduledReminderStreak = count
+    }
+
+    /// Re-arm the daily reminder whenever the streak it names has moved.
+    ///
+    /// Android reads the streak when the alarm fires, so its text can't go
+    /// stale; iOS bakes the body in at schedule time and can't recompute it
+    /// at delivery without an extension. The next best thing is to reschedule
+    /// at every point the count can change: the day's first practice (extends
+    /// it), a progress reset (zeroes it), launch and each return to the
+    /// foreground via `refreshDailyDit` (a streak that lapsed overnight must
+    /// not still promise yesterday's number). Idempotent: nothing is touched
+    /// while the pending request already carries the current count.
+    func refreshReminderIfStreakChanged(now: Date = Date()) {
+        guard settings.dailyReminderEnabled else { return }
+        if scheduledReminderStreak != streak.display(on: now) { rescheduleReminder(now: now) }
     }
 
     // MARK: - Persistence (session history)
@@ -2821,6 +2926,11 @@ final class AppModel: ObservableObject {
         }
     }
 
+    /// `SessionHistory.init(from:)` is row-tolerant — a corrupt session is
+    /// dropped and the rest kept — and seeds the lifetime counters from the
+    /// rows when the file predates them, so only a wrecked document (not JSON,
+    /// or `sessions` not an array) falls back to an empty history, as on
+    /// Android. The seed is persisted by the `didSet` on the first assignment.
     private static func loadHistory() -> SessionHistory {
         guard let data = UserDefaults.standard.data(forKey: historyKey),
               let h = try? JSONDecoder().decode(SessionHistory.self, from: data) else {
@@ -2829,6 +2939,13 @@ final class AppModel: ObservableObject {
         return h
     }
 
+    /// Everything the Settings dialog promises ("learned letters and stats"):
+    /// the character ladder — whose snapshot carries the per-character stats
+    /// and the confusion matrix — the Journey, the practice streak, and the
+    /// session history with the lifetime counters inside it; the brag sheet
+    /// is derived from those, so it clears with them. Settings, the voice
+    /// profile and today's Daily Dit stay, matching Android, whose reset wipes
+    /// `amt_engine` / `amt_stats` / `amt_journey` and leaves `amt_voice` alone.
     func resetProgress() {
         UserDefaults.standard.removeObject(forKey: Self.progressKey)
         UserDefaults.standard.removeObject(forKey: Self.journeyKey)
@@ -2841,5 +2958,11 @@ final class AppModel: ObservableObject {
         reconcilePunctuation()
         phase = .idle
         drill = nil
+        streak = PracticeStreak()        // didSet persists the blank record
+        history = SessionHistory()       // ditto; the counters live inside it
+        lastSessionRecord = nil
+        newMilestone = nil
+        // The pending reminder must not keep promising the streak just wiped.
+        refreshReminderIfStreakChanged()
     }
 }

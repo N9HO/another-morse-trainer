@@ -17,6 +17,8 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -53,7 +55,9 @@ import app.anothermorsetrainer.morsekit.ProgressiveCharacters
  * Only the controls that apply to [settingsMode] are shown, so the sheet never
  * appears empty — see [sessionSetupHasOptions], which gates whether it is worth
  * presenting at all. Modes that own a fuller setup step of their own (Rapid
- * Fire, Pileup, Contest, the exam, Journey's map) are deliberately left alone.
+ * Fire, Pileup, Contest, the exam) are deliberately left alone; Journey has no
+ * setup screen of its own, so its one option — whether a miss drains the level
+ * bar, the iOS Journey setup card's toggle — lives here.
  *
  * Every control writes through to the same persisted [Settings] the mid-session
  * overlay edits, so this is a shortcut to those knobs rather than a second,
@@ -129,6 +133,38 @@ fun SessionSetupSheet(
                 }
             }
 
+            if (settingsMode == SettingsMode.JOURNEY) {
+                SetupCard(stringResource(R.string.setup_journey_scoring)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            stringResource(R.string.journey_drain_on_miss),
+                            color = Brand.textPrimary,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Switch(
+                            checked = Settings.journeyDrainOnMiss,
+                            onCheckedChange = { Settings.updateJourneyDrainOnMiss(it) },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Brand.navy,
+                                checkedTrackColor = Brand.teal,
+                                uncheckedThumbColor = Brand.textSecondary,
+                                uncheckedTrackColor = Brand.navyRaised
+                            )
+                        )
+                    }
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        stringResource(R.string.journey_drain_on_miss_note),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Brand.textSecondary
+                    )
+                }
+            }
+
             Spacer(Modifier.height(24.dp))
             Button(
                 onClick = onStart,
@@ -184,7 +220,9 @@ private fun stageNote(track: ProgressiveCharacters): String {
  * Presenting an empty sheet would be a pure extra tap between the menu and the
  * drill, so modes with no applicable control skip it and launch directly — as
  * do the modes that already own a fuller setup step (Rapid Fire, Pileup,
- * Contest, the exam, Journey's map), which are never routed through here.
+ * Contest, the exam), which are never routed through here. Journey has its
+ * scoring toggle to ask about.
  */
 fun sessionSetupHasOptions(settingsMode: SettingsMode): Boolean =
-    settingsMode in STAGE_PIN_MODES || settingsMode in DURATION_MODES
+    settingsMode in STAGE_PIN_MODES || settingsMode in DURATION_MODES ||
+        settingsMode == SettingsMode.JOURNEY

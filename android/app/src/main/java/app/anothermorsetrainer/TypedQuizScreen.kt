@@ -27,7 +27,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableDoubleStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -75,7 +74,9 @@ fun TypedQuizScreen(
     makeSource: () -> QuizSource,
     timing: () -> MorseTiming = { Settings.timing() },
     speedControl: (@Composable () -> Unit)? = null,
-    settingsMode: SettingsMode = SettingsMode.TYPE_IT
+    settingsMode: SettingsMode = SettingsMode.TYPE_IT,
+    /** Mid-session mode switcher (iOS #42); the run is recorded before this fires. */
+    onSwitchMode: (TrainingMode) -> Unit = {}
 ) {
     val context = LocalContext.current
     val player = remember { MorsePlayer() }
@@ -182,7 +183,9 @@ fun TypedQuizScreen(
     }
 
     // Session countdown: ticks only while running and only when a length is set.
-    LaunchedEffect(phase) {
+    // Also keyed on whether a limit exists, so the timer menu starting a
+    // countdown on an open-ended run (or dropping one) restarts the loop.
+    LaunchedEffect(phase, remaining == null) {
         if (phase != TqPhase.RUNNING) return@LaunchedEffect
         while (true) {
             val r = remaining ?: return@LaunchedEffect
@@ -231,16 +234,23 @@ fun TypedQuizScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             TextButton(onClick = { if (phase == TqPhase.SUMMARY) onBack() else finish() }) { Text(stringResource(R.string.common_back)) }
-            if (phase == TqPhase.RUNNING) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    remaining?.let {
-                        Text(
-                            "%d:%02d".format(it / 60, it % 60),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = Brand.textSecondary
-                        )
-                    }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (phase == TqPhase.RUNNING) {
+                    SessionTimerMenu(
+                        remaining = remaining,
+                        onAddSeconds = { remaining = (remaining ?: 0) + it },
+                        onRemoveLimit = { remaining = null }
+                    )
                     SessionSettingsButton { showSettings = true }
+                }
+                // Switching records the run the way Back does, then lands on
+                // the picked mode's setup (iOS #42).
+                SwitchModeButton(trainingModeFor(settingsMode)) { mode ->
+                    player.stop()
+                    recordSession()
+                    onSwitchMode(mode)
+                }
+                if (phase == TqPhase.RUNNING) {
                     TextButton(onClick = { endSession() }) { Text(stringResource(R.string.common_end)) }
                 }
             }
@@ -293,11 +303,14 @@ fun TypedQuizScreen(
                     textAlign = TextAlign.Center
                 )
                 Spacer(Modifier.height(6.dp))
-                Text(
-                    text = if (lastCorrect) stringResource(R.string.typed_correct) else stringResource(R.string.typed_wrong, input.trim().uppercase()),
-                    color = if (lastCorrect) OK_GREEN else ERR_RED,
-                    fontWeight = FontWeight.Medium
-                )
+                // Right/wrong is its own setting (iOS showCorrectness).
+                if (Settings.showCorrectness) {
+                    Text(
+                        text = if (lastCorrect) stringResource(R.string.typed_correct) else stringResource(R.string.typed_wrong, input.trim().uppercase()),
+                        color = if (lastCorrect) OK_GREEN else ERR_RED,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
             } else {
                 Text(text = stringResource(R.string.typed_type_what_you_hear), fontSize = 18.sp, color = Brand.teal)
             }
@@ -349,11 +362,14 @@ fun TypedQuizScreen(
                     colors = ButtonDefaults.buttonColors(containerColor = Brand.teal, contentColor = Brand.navy),
                     modifier = Modifier.fillMaxWidth()
                 ) { Text(stringResource(R.string.typed_check), fontWeight = FontWeight.SemiBold) }
-                Spacer(Modifier.height(12.dp))
-                OutlinedButton(
-                    onClick = { player.replaySound(drill.playable, Settings.sidetoneHz, timing()) },
-                    modifier = Modifier.fillMaxWidth()
-                ) { Text(stringResource(R.string.common_replay)) }
+                // Replay before answering is the opt-in feedback setting (iOS allowReplay).
+                if (Settings.allowReplay) {
+                    Spacer(Modifier.height(12.dp))
+                    OutlinedButton(
+                        onClick = { player.replaySound(drill.playable, Settings.sidetoneHz, timing()) },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text(stringResource(R.string.common_replay)) }
+                }
             }
         }
         }
@@ -374,14 +390,16 @@ fun TypedQuizScreen(
  * already work QRQ (issue #79); the same presets are offered on Apple platforms.
  */
 @Composable
-fun QrqScreen(onBack: () -> Unit) {
-    var wpm by remember { mutableDoubleStateOf(35.0) }
+fun QrqScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) {
+    // The preset persists across launches (iOS qrqSpeed), local to this mode.
+    val wpm = Settings.qrqWpm
     TypedQuizScreen(
         title = stringResource(R.string.mode_qrq_speed),
         onBack = onBack,
         makeSource = { PhraseQuiz("QRQ", MorseData.wordAndCallSignItems, summaryNoun = "words & calls") },
-        timing = { MorseTiming(wpm) },
+        timing = { MorseTiming(Settings.qrqWpm) },
         settingsMode = SettingsMode.QRQ,
+        onSwitchMode = onSwitchMode,
         speedControl = {
             // Four presets no longer fit a narrow phone side by side, so the row
             // scrolls rather than clipping the fastest one off the edge.
@@ -393,11 +411,11 @@ fun QrqScreen(onBack: () -> Unit) {
                     val selected = wpm == speed
                     if (selected) {
                         Button(
-                            onClick = { wpm = speed },
+                            onClick = { Settings.updateQrqWpm(speed) },
                             colors = ButtonDefaults.buttonColors(containerColor = Brand.teal, contentColor = Brand.navy)
                         ) { Text(stringResource(R.string.common_wpm_value, speed.toInt()), fontWeight = FontWeight.SemiBold) }
                     } else {
-                        OutlinedButton(onClick = { wpm = speed }) { Text(stringResource(R.string.common_wpm_value, speed.toInt())) }
+                        OutlinedButton(onClick = { Settings.updateQrqWpm(speed) }) { Text(stringResource(R.string.common_wpm_value, speed.toInt())) }
                     }
                 }
             }

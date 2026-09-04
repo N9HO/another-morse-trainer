@@ -309,6 +309,10 @@ private fun StartHereCard(onClick: () -> Unit) {
 
 @Composable
 private fun StreakBadge(days: Int) {
+    // The milestone emoji appears only once a milestone is reached, and the
+    // best streak only when it beats the current one — as the iOS badge does.
+    val atMilestone = app.anothermorsetrainer.morsekit.PracticeStreak.milestone(forDay = days) != null
+    val best = Stats.longestStreak
     Row(
         modifier = Modifier
             .clip(CircleShape)
@@ -317,6 +321,17 @@ private fun StreakBadge(days: Int) {
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(stringResource(R.string.home_streak, days), color = Brand.textPrimary, fontWeight = FontWeight.SemiBold)
+        if (atMilestone) {
+            Text(milestoneEmoji(days), modifier = Modifier.padding(start = 6.dp), color = Brand.textPrimary)
+        }
+        if (best > days) {
+            Text(
+                stringResource(R.string.home_streak_best, best),
+                modifier = Modifier.padding(start = 6.dp),
+                style = MaterialTheme.typography.labelSmall,
+                color = Brand.textSecondary
+            )
+        }
     }
 }
 

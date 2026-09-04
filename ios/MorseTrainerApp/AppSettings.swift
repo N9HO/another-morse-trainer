@@ -421,6 +421,13 @@ struct QSOSettings: Codable, Equatable {
     var keepPartialCall: Bool = false
     /// Whether — and when — to say who gave up on you, and what you had them as.
     var missedCallerFeedback: MissedCallerFeedback = .endOfRun
+    /// Key your own transmissions (CQ, sends, TU) in Morse at the sidetone
+    /// pitch before the stations reply. Off, your side is logged but not
+    /// sounded (Android parity).
+    var keyMySide: Bool = true
+    /// After a logged QSO, the remaining pileup calls again unprompted (#35).
+    /// Off, the run waits for you to send AGN or CQ yourself.
+    var autoRecall: Bool = true
 }
 
 // Resilient decoding so adding new QSO fields never wipes a user's saved
@@ -431,6 +438,7 @@ extension QSOSettings {
         case minVolume, maxVolume, minDelay, maxDelay, qsbEnabled, qrn
         case cutNumbersEnabled, cutDigits, rstRequired, bustBehavior, giveUpEnabled
         case formats, usOnly, keepPartialCall, missedCallerFeedback
+        case keyMySide, autoRecall
     }
 
     init(from decoder: Decoder) throws {
@@ -458,6 +466,8 @@ extension QSOSettings {
         s.usOnly = try c.decodeIfPresent(Bool.self, forKey: .usOnly) ?? s.usOnly
         s.keepPartialCall = try c.decodeIfPresent(Bool.self, forKey: .keepPartialCall) ?? s.keepPartialCall
         s.missedCallerFeedback = try c.decodeIfPresent(MissedCallerFeedback.self, forKey: .missedCallerFeedback) ?? s.missedCallerFeedback
+        s.keyMySide = try c.decodeIfPresent(Bool.self, forKey: .keyMySide) ?? s.keyMySide
+        s.autoRecall = try c.decodeIfPresent(Bool.self, forKey: .autoRecall) ?? s.autoRecall
         self = s
     }
 }
@@ -491,6 +501,11 @@ struct AppSettings: Codable, Equatable {
 
     // Learning
     var proficiency: Proficiency = .none
+    /// False until the first-run onboarding (the proficiency pick) has been
+    /// answered, so `RootView` shows it once (#151). Installs that predate the
+    /// screen are marked done on launch from their saved progress — see
+    /// `AppModel.init`.
+    var onboardingDone: Bool = false
     /// Show each character or prosign on its own, with its sound, the first
     /// time the Characters track presents it (issue #162).
     var introduceNewCharacters: Bool = true
@@ -527,10 +542,16 @@ struct AppSettings: Codable, Equatable {
     /// How big a word pool Words mode (and Listen words) draws from.
     var wordTier: WordTier = .top100
 
-    /// An optional user-supplied word list for Words mode. When non-empty, Words
-    /// practice draws from this instead of the built-in "Top N" pool (issue #32).
-    /// Stored uppercased and de-duplicated.
+    /// An optional user-supplied word list for Words mode (issue #32). Stored
+    /// uppercased and de-duplicated. Drawn from instead of the built-in "Top N"
+    /// pool only while `useCustomWords` is on and it holds at least
+    /// `customWordsMinimum` words — see `customWordsActive`.
     var customWords: [String] = []
+    /// Whether Words mode draws from `customWords` instead of the ranked pool.
+    /// An explicit switch, as on Android, so the tier picker stays reachable
+    /// and a saved list can be parked without deleting it. Decodes to *on* for
+    /// installs that already had a list, so nobody loses theirs.
+    var useCustomWords: Bool = false
 
     /// Character speed for QRQ high-speed copy practice (35–60 WPM).
     var qrqSpeed: QrqSpeed = .wpm35
@@ -553,12 +574,14 @@ struct AppSettings: Codable, Equatable {
     /// inaudible keep-alive floor (issue #92). Runs once; see `init(from:)`.
     var didMigrateNoiseFloor: Bool = false
 
-    /// Answer by speaking instead of tapping (Characters & Words modes). A
-    /// per-session choice made on the setup screen.
+    /// Answer by speaking instead of tapping (every choice quiz). A per-session
+    /// choice made on the setup screen.
     var voiceResponse: Bool = false
 
     /// Answer by *sending* — keying the answer on a physical (Vail Adapter / BLE
-    /// MIDI) or on-screen Morse key, decoded back to text (Characters & Words).
+    /// MIDI) or on-screen Morse key, decoded back to text. Offered on every
+    /// choice quiz and honoured per drill: only where the text you heard IS the
+    /// answer (`Drill.isKeyable`), never for a meaning or a prosign glyph.
     var keyingResponse: Bool = false
 
     // Code Exam (ARRL/FCC-style proficiency exam)
@@ -608,6 +631,17 @@ struct AppSettings: Codable, Equatable {
     static let headCopyRepeatRange: ClosedRange<Int> = 0...3
     static let headCopyRevealRange: ClosedRange<Double> = 0...10
 
+    /// The fewest words a custom list needs before Words mode will draw from
+    /// it — one word cannot offer a distractor (Android parity).
+    static let customWordsMinimum = 2
+
+    /// Whether Words mode is drawing from the learner's own list right now:
+    /// the switch is on and the list is big enough. Twin of the check inside
+    /// Kotlin's `Settings.wordPoolItems()`.
+    var customWordsActive: Bool {
+        useCustomWords && customWords.count >= Self.customWordsMinimum
+    }
+
     static let storageKey = "MorseTrainer.settings"
 
     static func load() -> AppSettings {
@@ -651,11 +685,13 @@ struct AppSettings: Codable, Equatable {
 extension AppSettings {
     enum CodingKeys: String, CodingKey {
         case toneFrequency, wpm, farnsworth, effectiveWpm, proficiency, ttrThreshold
+        case onboardingDone
         case introduceNewCharacters, introducedItems
         case dailyReminderEnabled, dailyReminderHour, dailyReminderMinute
         case maxAnswerChoices, selectedPunctuation, journeyDrainOnMiss
         case learningMode, practiceDuration
-        case listenContent, listenGap, wordTier, customWords, voiceResponse, keyingResponse
+        case listenContent, listenGap, wordTier, customWords, useCustomWords
+        case voiceResponse, keyingResponse
         case qrqSpeed, backgroundNoise, didMigrateNoiseFloor
         case dailyDitStartingWpm, dailyDitHideReference
         case examSpeed, examGrading, examUseBundled
@@ -675,6 +711,7 @@ extension AppSettings {
         s.farnsworth = try c.decodeIfPresent(Bool.self, forKey: .farnsworth) ?? s.farnsworth
         s.effectiveWpm = try c.decodeIfPresent(Double.self, forKey: .effectiveWpm) ?? s.effectiveWpm
         s.proficiency = try c.decodeIfPresent(Proficiency.self, forKey: .proficiency) ?? s.proficiency
+        s.onboardingDone = try c.decodeIfPresent(Bool.self, forKey: .onboardingDone) ?? s.onboardingDone
         s.introduceNewCharacters = try c.decodeIfPresent(Bool.self, forKey: .introduceNewCharacters)
             ?? s.introduceNewCharacters
         s.introducedItems = try c.decodeIfPresent([String].self, forKey: .introducedItems) ?? s.introducedItems
@@ -695,6 +732,9 @@ extension AppSettings {
         s.listenGap = try c.decodeIfPresent(AnswerGap.self, forKey: .listenGap) ?? s.listenGap
         s.wordTier = try c.decodeIfPresent(WordTier.self, forKey: .wordTier) ?? s.wordTier
         s.customWords = try c.decodeIfPresent([String].self, forKey: .customWords) ?? s.customWords
+        // Before the switch existed a non-empty list was simply in use, so a
+        // save without the key keeps drawing from it (issue #32 installs).
+        s.useCustomWords = try c.decodeIfPresent(Bool.self, forKey: .useCustomWords) ?? !s.customWords.isEmpty
         s.qrqSpeed = try c.decodeIfPresent(QrqSpeed.self, forKey: .qrqSpeed) ?? s.qrqSpeed
         s.dailyDitStartingWpm = try c.decodeIfPresent(Double.self,
                                                       forKey: .dailyDitStartingWpm) ?? s.dailyDitStartingWpm

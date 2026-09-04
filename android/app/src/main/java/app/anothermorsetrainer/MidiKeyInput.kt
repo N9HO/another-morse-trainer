@@ -50,6 +50,17 @@ class MidiKeyInput(private val context: Context) {
         get() = context.packageManager.hasSystemFeature(PackageManager.FEATURE_MIDI)
 
     /**
+     * True when MIDI cannot be used on this device at all — no
+     * [PackageManager.FEATURE_MIDI], or no [MidiManager] behind it — so a
+     * hardware key will never work here. Distinct from simply having nothing
+     * plugged in yet, which [start]'s `onConnected` reports as null. The
+     * counterpart of the iOS `SendingKeyer.midiUnavailable`, which is set when
+     * CoreMIDI setup itself throws.
+     */
+    val isUnavailable: Boolean
+        get() = !isSupported || context.getSystemService(Context.MIDI_SERVICE) !is MidiManager
+
+    /**
      * Begin listening. [onKey] fires (on the main thread) with `true` on key-down
      * and `false` on key-up; [onConnected] reports the connected device's name —
      * null when none is attached yet, and again when the last one unplugs.

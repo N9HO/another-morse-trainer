@@ -91,22 +91,24 @@ private data class RfResult(val sent: String, val typed: String?, val correct: B
  * The AppModel-driven stream loop becomes a step-counter state machine here.
  */
 @Composable
-fun RapidFireScreen(onBack: () -> Unit) {
+fun RapidFireScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) {
     val context = LocalContext.current
     val player = remember { MorsePlayer() }
     val haptics = remember { Haptics(context) }
 
     var phase by rememberSaveable { mutableStateOf(RfPhase.SETUP) }
 
-    // Setup selections (defaults mirror the iOS RapidFireSettings). Saved with
-    // the instance state, so a reclaimed process comes back to the same setup.
-    var content by rememberSaveable { mutableStateOf(RapidFireContent.CALLSIGNS) }
-    var response by rememberSaveable { mutableStateOf(RapidFireResponse.TYPE) }
-    var pace by rememberSaveable { mutableStateOf(RapidFirePace.STEADY) }
-    var wordMin by rememberSaveable { mutableIntStateOf(3) }
-    var wordMax by rememberSaveable { mutableIntStateOf(6) }
-    var numberCount by rememberSaveable { mutableIntStateOf(5) }
-    var usOnly by rememberSaveable { mutableStateOf(true) }
+    // Setup selections persist across launches in Settings, field for field
+    // with the iOS RapidFireSettings — so a reclaimed process and the next
+    // launch alike come back to the same setup.
+    val content = Settings.rapidFireContent
+    val response = Settings.rapidFireResponse
+    val pace = Settings.rapidFirePace
+    val wordMin = Settings.rapidFireWordMin
+    val wordMax = Settings.rapidFireWordMax
+    val numberCount = Settings.rapidFireNumberCount
+    val usOnly = Settings.rapidFireUsOnly
+    val formats = Settings.rapidFireFormats
 
     // Run state.
     var quiz by remember { mutableStateOf<RapidFireQuiz?>(null) }
@@ -151,7 +153,8 @@ fun RapidFireScreen(onBack: () -> Unit) {
 
     fun buildConfig() = RapidFireQuiz.Config(
         content = content,
-        callsignFormats = CallsignFormat.commonDefaults,
+        // In enum order so the same selection always yields the same list.
+        callsignFormats = CallsignFormat.entries.filter { it in formats },
         callsignUSOnly = usOnly,
         wordMinLength = wordMin,
         wordMaxLength = wordMax,
@@ -174,7 +177,8 @@ fun RapidFireScreen(onBack: () -> Unit) {
         step = 1
     }
 
-    fun finishRun() {
+    /** Stop the stream and record the run; the caller decides where to land. */
+    fun recordRun() {
         player.stop()
         val attempts = transcript.count { it.correct != null }
         val correct = transcript.count { it.correct == true }
@@ -186,7 +190,17 @@ fun RapidFireScreen(onBack: () -> Unit) {
                 characterWpm = Settings.characterWpm.roundToInt()
             )
         }
+    }
+
+    fun finishRun() {
+        recordRun()
         phase = RfPhase.SUMMARY
+    }
+
+    /** The mode switcher (iOS #42): close a running stream out as Done would, then go. */
+    fun switchTo(mode: TrainingMode) {
+        if (phase == RfPhase.RUNNING) recordRun() else player.stop()
+        onSwitchMode(mode)
     }
 
     // A run the system reclaimed mid-way cannot resume — the quiz and the
@@ -267,16 +281,18 @@ fun RapidFireScreen(onBack: () -> Unit) {
         RfPhase.SETUP -> {
             BackHandler { onBack() }
             RapidFireSetup(
-                content = content, onContent = { content = it },
-                response = response, onResponse = { response = it },
-                pace = pace, onPace = { pace = it },
+                content = content, onContent = { Settings.updateRapidFireContent(it) },
+                response = response, onResponse = { Settings.updateRapidFireResponse(it) },
+                pace = pace, onPace = { Settings.updateRapidFirePace(it) },
                 wordMin = wordMin, wordMax = wordMax,
-                onWordMin = { wordMin = it.coerceIn(2, wordMax) },
-                onWordMax = { wordMax = it.coerceIn(wordMin, 12) },
-                numberCount = numberCount, onNumberCount = { numberCount = it.coerceIn(1, 10) },
-                usOnly = usOnly, onUsOnly = { usOnly = it },
+                onWordMin = { Settings.updateRapidFireWordMin(it) },
+                onWordMax = { Settings.updateRapidFireWordMax(it) },
+                numberCount = numberCount, onNumberCount = { Settings.updateRapidFireNumberCount(it) },
+                usOnly = usOnly, onUsOnly = { Settings.updateRapidFireUsOnly(it) },
+                formats = formats, onToggleFormat = { Settings.toggleRapidFireFormat(it) },
                 onStart = { startRun() },
-                onBack = onBack
+                onBack = onBack,
+                onSwitchMode = ::switchTo
             )
         }
 
@@ -286,6 +302,7 @@ fun RapidFireScreen(onBack: () -> Unit) {
                 summary = quiz?.summary ?: "",
                 count = transcript.size,
                 onSettings = { showSettings = true },
+                onSwitchMode = ::switchTo,
                 response = response,
                 revealBox = revealBox,
                 typed = typed,
@@ -331,12 +348,16 @@ private fun RapidFireSetup(
     wordMin: Int, wordMax: Int, onWordMin: (Int) -> Unit, onWordMax: (Int) -> Unit,
     numberCount: Int, onNumberCount: (Int) -> Unit,
     usOnly: Boolean, onUsOnly: (Boolean) -> Unit,
-    onStart: () -> Unit, onBack: () -> Unit
+    formats: Set<CallsignFormat>, onToggleFormat: (CallsignFormat) -> Unit,
+    onStart: () -> Unit, onBack: () -> Unit,
+    onSwitchMode: (TrainingMode) -> Unit
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         Row(modifier = Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
             TextButton(onClick = onBack) { Text(stringResource(R.string.common_back), color = Brand.teal) }
             Text(stringResource(R.string.mode_rapid_fire), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.weight(1f))
+            SwitchModeButton(TrainingMode.RAPID_FIRE, onSwitchMode)
         }
         Column(
             modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp),
@@ -350,7 +371,33 @@ private fun RapidFireSetup(
                     Stepper(stringResource(R.string.rapidfire_max_length), wordMax, onWordMax)
                 }
                 RapidFireContent.NUMBERS -> Stepper(stringResource(R.string.rapidfire_digits_per_group), numberCount, onNumberCount)
-                RapidFireContent.CALLSIGNS, RapidFireContent.MIXED -> ToggleRow(stringResource(R.string.common_us_calls_only), usOnly, onUsOnly)
+                RapidFireContent.CALLSIGNS, RapidFireContent.MIXED -> {
+                    ToggleRow(stringResource(R.string.common_us_calls_only), usOnly, onUsOnly)
+                    // Call-sign shapes (iOS rapidFireFormatChip): one chip per
+                    // format; at least one always stays on.
+                    SectionLabel(stringResource(R.string.rapidfire_callsign_shapes))
+                    Row(
+                        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        CallsignFormat.entries.forEach { fmt ->
+                            val sel = fmt in formats
+                            Box(
+                                modifier = Modifier
+                                    .background(if (sel) Brand.teal else Brand.navyRaised, RoundedCornerShape(8.dp))
+                                    .clickable { onToggleFormat(fmt) }
+                                    .padding(horizontal = 14.dp, vertical = 8.dp)
+                            ) {
+                                Text(
+                                    fmt.label,
+                                    color = if (sel) Brand.navy else Brand.textSecondary,
+                                    fontWeight = if (sel) FontWeight.Bold else FontWeight.Medium,
+                                    fontSize = 13.sp
+                                )
+                            }
+                        }
+                    }
+                }
                 else -> {}
             }
 
@@ -400,6 +447,7 @@ private fun RapidFireRun(
     midiDevice: String?,
     onNext: () -> Unit,
     onSettings: () -> Unit,
+    onSwitchMode: (TrainingMode) -> Unit,
     onDone: () -> Unit
 ) {
     // Same IME occlusion as the QRQ drill (issue #44): edge-to-edge, so the
@@ -412,6 +460,7 @@ private fun RapidFireRun(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(stringResource(R.string.rapidfire_count_sent, count), style = MaterialTheme.typography.bodySmall, color = Brand.textSecondary)
                 SessionSettingsButton(onOpen = onSettings)
+                SwitchModeButton(TrainingMode.RAPID_FIRE, onSwitchMode)
             }
         }
         if (response == RapidFireResponse.KEY) {

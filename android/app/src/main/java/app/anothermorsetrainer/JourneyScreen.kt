@@ -85,19 +85,26 @@ private val ERR_RED = Color(0xFFC62828)
  * screen; progress persists through [JourneyStore].
  */
 @Composable
-fun JourneyScreen(onBack: () -> Unit) {
+fun JourneyScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) {
     val context = LocalContext.current
     val player = remember { MorsePlayer() }
     val haptics = remember { Haptics(context) }
 
+    // "Misses drain the bar" (iOS journeyDrainOnMiss, picked on the setup
+    // sheet): the default scoring drains on a miss, FillOnly never does.
+    val drainOnMiss = Settings.journeyDrainOnMiss
     val progress = remember { JourneyStore.load() }
     val quiz = remember {
         val startIndex = JourneyCurriculum.levels.indexOfFirst { it.number == progress.currentLevel }
         JourneyQuiz(
             startIndex = if (startIndex >= 0) startIndex else 0,
-            scoring = JourneyScoring.Default,
+            scoring = if (drainOnMiss) JourneyScoring.Default else JourneyScoring.FillOnly,
             config = Settings.phraseConfig()
         )
+    }
+    // Follows a change made mid-session too, as iOS's applySettings does.
+    LaunchedEffect(drainOnMiss) {
+        quiz.scoring = if (drainOnMiss) JourneyScoring.Default else JourneyScoring.FillOnly
     }
 
     var showMap by remember { mutableStateOf(false) }
@@ -181,7 +188,8 @@ fun JourneyScreen(onBack: () -> Unit) {
 
     DisposableEffect(Unit) { onDispose { player.release() } }
 
-    fun finish() {
+    /** Close the session out — save the level, record the tally — without leaving. */
+    fun close() {
         progress.currentLevel = quiz.levelNumber
         JourneyStore.save(progress)
         Stats.record(
@@ -189,6 +197,10 @@ fun JourneyScreen(onBack: () -> Unit) {
             bestTtrMs = tally.bestMs, durationSeconds = tally.elapsedSeconds(),
             characterWpm = Settings.characterWpm.roundToInt(), medianTtrMs = tally.medianMs()
         )
+    }
+
+    fun finish() {
+        close()
         onBack()
     }
 
@@ -278,6 +290,11 @@ fun JourneyScreen(onBack: () -> Unit) {
             TextButton(onClick = { finish() }) { Text(stringResource(R.string.common_back), color = Brand.teal) }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 SessionSettingsButton { showSettings = true }
+                SwitchModeButton(TrainingMode.JOURNEY) { mode ->
+                    player.stop()
+                    close()
+                    onSwitchMode(mode)
+                }
                 OutlinedButton(onClick = { player.stop(); showMap = true }) {
                     Icon(Icons.Filled.Map, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(6.dp))
@@ -336,15 +353,18 @@ fun JourneyScreen(onBack: () -> Unit) {
                         }
                         Spacer(Modifier.height(4.dp))
                     }
-                    Text(
-                        text = when {
-                            ok -> stringResource(R.string.common_recalled_in, lastTtr)
-                            showAnswer -> stringResource(R.string.common_it_was, drill.correct)
-                            else -> stringResource(R.string.common_not_quite)
-                        },
-                        color = if (ok) OK_GREEN else ERR_RED,
-                        fontWeight = FontWeight.Medium
-                    )
+                    // Right/wrong is its own setting (iOS showCorrectness).
+                    if (Settings.showCorrectness) {
+                        Text(
+                            text = when {
+                                ok -> stringResource(R.string.common_recalled_in, lastTtr)
+                                showAnswer -> stringResource(R.string.common_it_was, drill.correct)
+                                else -> stringResource(R.string.common_not_quite)
+                            },
+                            color = if (ok) OK_GREEN else ERR_RED,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
                     if (!ok) {
                         // The held correction (issue #77): re-hear it as often
                         // as needed, move on when ready.
@@ -362,8 +382,11 @@ fun JourneyScreen(onBack: () -> Unit) {
                 } else {
                     Text("?", fontSize = 52.sp, fontWeight = FontWeight.Bold, color = Brand.teal)
                     Spacer(Modifier.height(4.dp))
-                    OutlinedButton(onClick = { player.replaySound(drill.playable, Settings.sidetoneHz, Settings.timing()) }) {
-                        Text(stringResource(R.string.common_replay))
+                    // Replay before answering is the opt-in feedback setting (iOS allowReplay).
+                    if (Settings.allowReplay) {
+                        OutlinedButton(onClick = { player.replaySound(drill.playable, Settings.sidetoneHz, Settings.timing()) }) {
+                            Text(stringResource(R.string.common_replay))
+                        }
                     }
                 }
             }
@@ -390,9 +413,10 @@ private fun JourneyOptionsGrid(
         drill.options.chunked(2).forEach { rowOpts ->
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                 rowOpts.forEach { option ->
+                    // The iOS tint rule: green only with "Show right / wrong" on; a wrong pick red regardless.
                     val colors = when {
-                        revealed && option == drill.correct -> ButtonDefaults.buttonColors(containerColor = OK_GREEN, contentColor = Color.White)
-                        revealed && option == chosen -> ButtonDefaults.buttonColors(containerColor = ERR_RED, contentColor = Color.White)
+                        revealed && option == drill.correct && Settings.showCorrectness -> ButtonDefaults.buttonColors(containerColor = OK_GREEN, contentColor = Color.White)
+                        revealed && option == chosen && option != drill.correct -> ButtonDefaults.buttonColors(containerColor = ERR_RED, contentColor = Color.White)
                         revealed -> ButtonDefaults.buttonColors(containerColor = Brand.navyRaised, contentColor = Brand.textSecondary)
                         else -> ButtonDefaults.buttonColors(containerColor = Brand.teal, contentColor = Brand.navy)
                     }

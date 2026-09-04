@@ -19,11 +19,17 @@ enum class ListenContent(val label: String) {
     ABBREVIATIONS("Abbreviations")
 }
 
-/** Gap between the code and the spoken answer (matches the iOS AnswerGap choices). */
+/**
+ * Gap between the code and the spoken answer. The four tiers and their labels
+ * are the iOS `AnswerGap` set (Morse Code Ninja's Standard → ICR-Territory),
+ * which is the canonical one for both platforms. The old three-tier set
+ * (Standard / Fast 0.7 s / ICR 0.3 s) is migrated in [Settings.init].
+ */
 enum class ListenGap(val label: String, val ms: Long) {
-    STANDARD("Standard", 1300),
-    FAST("Fast", 700),
-    ICR("ICR", 300)
+    STANDARD("Standard (1.3 s)", 1300),
+    RAPID_FIRE("Rapid Fire (1.0 s)", 1000),
+    WARP("Warp (0.5 s)", 500),
+    ICR("ICR-Territory (0.2 s)", 200)
 }
 
 /** One loop item: what to key, what to show, and what to say. */
@@ -36,8 +42,15 @@ data class ListenItem(val playable: MorseItem.Playable, val display: String, val
  * process, so a singleton of Compose state is the simplest reliable bridge.
  */
 object ListenState {
-    var contentSel by mutableStateOf(ListenContent.CHARACTERS)
-    var gapSel by mutableStateOf(ListenGap.STANDARD)
+    // The content and gap choices persist (iOS keeps them in its settings),
+    // so they live in [Settings]; these are the loop's view of them. Both are
+    // Compose state there, so readers here recompose the same way.
+    var contentSel: ListenContent
+        get() = Settings.listenContent
+        set(value) = Settings.updateListenContent(value)
+    var gapSel: ListenGap
+        get() = Settings.listenGap
+        set(value) = Settings.updateListenGap(value)
     var running by mutableStateOf(false)
     var paused by mutableStateOf(false)
     var playing by mutableStateOf(false)   // true while the code sounds, false while the answer shows

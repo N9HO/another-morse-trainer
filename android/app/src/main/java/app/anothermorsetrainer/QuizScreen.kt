@@ -125,7 +125,9 @@ fun QuizScreen(
      * mid-run. Defaults to [onBack]; the caller overrides it to reopen this
      * mode's setup sheet on the way home (iOS issue #67).
      */
-    onFinish: () -> Unit = onBack
+    onFinish: () -> Unit = onBack,
+    /** Mid-session mode switcher (iOS #42); the run is recorded before this fires. */
+    onSwitchMode: (TrainingMode) -> Unit = {}
 ) {
     val context = LocalContext.current
     val resources = LocalResources.current
@@ -240,7 +242,7 @@ fun QuizScreen(
             mode = title, attempts = tally.attempts, correct = tally.correct,
             bestTtrMs = tally.bestMs, durationSeconds = tally.elapsedSeconds(),
             characterWpm = Settings.characterWpm.roundToInt(), medianTtrMs = tally.medianMs(),
-            effectiveWpm = Settings.effectiveWpm.roundToInt(),
+            effectiveWpm = Settings.effectiveWpmInUse.roundToInt(),
             charResults = tally.charResults(),
             // The Characters track supplies its active set so the session chart
             // can show a row per learned character, drilled or not.
@@ -337,7 +339,9 @@ fun QuizScreen(
     }
 
     // Session countdown: ticks only while running and only when a length is set.
-    LaunchedEffect(phase) {
+    // Also keyed on whether a limit exists, so the timer menu starting a
+    // countdown on an open-ended run (or dropping one) restarts the loop.
+    LaunchedEffect(phase, remaining == null) {
         if (phase != QuizPhase.RUNNING) return@LaunchedEffect
         while (true) {
             val r = remaining ?: return@LaunchedEffect
@@ -482,16 +486,23 @@ fun QuizScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             TextButton(onClick = { if (phase == QuizPhase.SUMMARY) onBack() else finish() }) { Text(stringResource(R.string.common_back)) }
-            if (phase == QuizPhase.RUNNING) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    remaining?.let {
-                        Text(
-                            "%d:%02d".format(it / 60, it % 60),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = Brand.textSecondary
-                        )
-                    }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (phase == QuizPhase.RUNNING) {
+                    SessionTimerMenu(
+                        remaining = remaining,
+                        onAddSeconds = { remaining = (remaining ?: 0) + it },
+                        onRemoveLimit = { remaining = null }
+                    )
                     SessionSettingsButton { showSettings = true }
+                }
+                // Switching records the run the way Back does, then lands on
+                // the picked mode's setup (iOS #42).
+                SwitchModeButton(trainingModeFor(settingsMode)) { mode ->
+                    player.stop()
+                    recordSession()
+                    onSwitchMode(mode)
+                }
+                if (phase == QuizPhase.RUNNING) {
                     TextButton(onClick = { endSession() }) { Text(stringResource(R.string.common_end)) }
                 }
             }
@@ -599,15 +610,19 @@ fun QuizScreen(
                     }
                     Spacer(Modifier.height(4.dp))
                 }
-                Text(
-                    text = when {
-                        ok -> stringResource(R.string.common_recalled_in, lastTtr)
-                        showAnswer -> stringResource(R.string.common_it_was, drill.correct)
-                        else -> stringResource(R.string.common_not_quite)
-                    },
-                    color = if (ok) OK_GREEN else ERR_RED,
-                    fontWeight = FontWeight.Medium
-                )
+                // Right/wrong is its own setting (iOS showCorrectness): off,
+                // only the reveal above says anything about the answer.
+                if (Settings.showCorrectness) {
+                    Text(
+                        text = when {
+                            ok -> stringResource(R.string.common_recalled_in, lastTtr)
+                            showAnswer -> stringResource(R.string.common_it_was, drill.correct)
+                            else -> stringResource(R.string.common_not_quite)
+                        },
+                        color = if (ok) OK_GREEN else ERR_RED,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
                 unlockedNote?.let {
                     Spacer(Modifier.height(4.dp))
                     Text(stringResource(R.string.quiz_new_character, it), color = Brand.teal, fontWeight = FontWeight.SemiBold)
@@ -629,8 +644,12 @@ fun QuizScreen(
             } else {
                 Text(text = "?", fontSize = 52.sp, fontWeight = FontWeight.Bold, color = Brand.teal)
                 Spacer(Modifier.height(4.dp))
-                OutlinedButton(onClick = { player.replaySound(drill.playable, Settings.sidetoneHz, Settings.timing()) }) {
-                    Text(stringResource(R.string.common_replay))
+                // Replay before answering is the opt-in feedback setting (iOS
+                // allowReplay); a miss offers it above regardless (issue #77).
+                if (Settings.allowReplay) {
+                    OutlinedButton(onClick = { player.replaySound(drill.playable, Settings.sidetoneHz, Settings.timing()) }) {
+                        Text(stringResource(R.string.common_replay))
+                    }
                 }
             }
 
@@ -650,7 +669,7 @@ fun QuizScreen(
                     onSubmit = { answer(keyer.submit().uppercase()) }
                 )
             } else {
-                OptionsGrid(drill = drill, revealed = revealed, chosen = chosen, onPick = ::answer)
+                OptionsGrid(drill = drill, revealed = revealed, chosen = chosen, showCorrectness = Settings.showCorrectness, onPick = ::answer)
             }
 
             // Voice answers: a mic to speak instead of tap (options stay as fallback).
@@ -717,7 +736,20 @@ fun QuizScreen(
         }
 
         if (showSettings) {
-            SessionSettingsOverlay(scope = settingsMode, onClose = { showSettings = false })
+            SessionSettingsOverlay(
+                scope = settingsMode,
+                onClose = { showSettings = false },
+                // The developer Preview Stage row jumped the shared track
+                // underneath: start drilling the new stage, as iOS does.
+                onPreviewStage = if (progressive != null) {
+                    {
+                        showSettings = false
+                        summary = source.summary
+                        stageRev++
+                        advance()
+                    }
+                } else null
+            )
         }
     }
 }
@@ -980,7 +1012,7 @@ private fun KeyedAnswerPanel(
 }
 
 @Composable
-private fun OptionsGrid(drill: Drill, revealed: Boolean, chosen: String?, onPick: (String) -> Unit) {
+private fun OptionsGrid(drill: Drill, revealed: Boolean, chosen: String?, showCorrectness: Boolean, onPick: (String) -> Unit) {
     // Two-column grid of bold teal buttons (matches the iOS choice grid).
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -989,9 +1021,11 @@ private fun OptionsGrid(drill: Drill, revealed: Boolean, chosen: String?, onPick
         drill.options.chunked(2).forEach { row ->
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                 row.forEach { option ->
+                    // The iOS tint rule: the correct option goes green only with
+                    // "Show right / wrong" on; a wrong pick goes red regardless.
                     val colors = when {
-                        revealed && option == drill.correct -> ButtonDefaults.buttonColors(containerColor = OK_GREEN, contentColor = Color.White)
-                        revealed && option == chosen -> ButtonDefaults.buttonColors(containerColor = ERR_RED, contentColor = Color.White)
+                        revealed && option == drill.correct && showCorrectness -> ButtonDefaults.buttonColors(containerColor = OK_GREEN, contentColor = Color.White)
+                        revealed && option == chosen && option != drill.correct -> ButtonDefaults.buttonColors(containerColor = ERR_RED, contentColor = Color.White)
                         revealed -> ButtonDefaults.buttonColors(containerColor = Brand.navyRaised, contentColor = Brand.textSecondary)
                         else -> ButtonDefaults.buttonColors(containerColor = Brand.teal, contentColor = Brand.navy)
                     }
