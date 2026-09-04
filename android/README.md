@@ -21,7 +21,8 @@ the iOS app's navy/teal look.
 - **Journey**: gamified, level-based path (letters → numbers → punctuation →
   prosigns → Q-codes → abbreviations → words → call signs) with a progress bar
   that fills on a hit and drains on a miss, an unlock map, and saved progress
-- **Characters**: Koch-method ladder (A-Z, 0-9)
+- **Characters**: Koch-method ladder (A-Z, 0-9) with a user-pinnable
+  "Track stage" (characters, pairs, triples, words & call signs)
 - **Common Words**, **Abbreviations**, **Q-Codes**, **Prosigns**: phrase drills
 - **Confusion Drill**: targeted review of the pairs you mix up
 - **Head Copy**, **Type It**, **QRQ Speed**: copy in your head, free-recall

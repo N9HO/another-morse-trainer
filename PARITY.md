@@ -68,21 +68,56 @@ changes and the gap is closed.
 | Pairing a Bluetooth LE MIDI key by scanning from inside the app | iOS | CoreMIDI only exposes a BLE MIDI peripheral once it has been connected through the system `CABTMIDICentralViewController` sheet; there is no app-level scan API. | Opens that system sheet from Settings (`BluetoothMIDISheet.swift`). Same outcome: a paired key. |
 | Hardware-key section always visible in Settings | Android | Some Android devices ship without `FEATURE_MIDI`; showing MIDI controls there would offer a feature the device cannot use. | The section is hidden on devices without the feature (`SettingsScreen.kt`, `FEATURE_MIDI` check). On devices that have it, the section matches iOS. |
 | Daily reminder at exactly the chosen minute | Android | The app deliberately does not request `SCHEDULE_EXACT_ALARM`, which Android 12+ gates behind a special permission; an inexact alarm may fire minutes late when the OS batches it. | `setInexactRepeating` at the chosen time; the reminder still arrives, at minute precision only on iOS. |
-| A notification-permission prompt before the first reminder | iOS | None needed beyond the standard authorisation request; on Android 13+ `POST_NOTIFICATIONS` is a runtime permission the user has to grant separately. | Android asks for it when the reminder is switched on. iOS asks through `UNUserNotificationCenter` at the same moment. Same user-facing outcome. |
-| Reminder survives a reboot without the app being opened | iOS | Not a gap: `UNCalendarNotificationTrigger` survives reboot on its own. Android's `AlarmManager` alarms do not, so the Android app re-arms on `BOOT_COMPLETED`. | Listed so nobody "ports" the Android receiver to iOS. |
-| In-flight drill restored after the OS kills the process mid-session | iOS | iOS does not kill a foreground app mid-session the way Android reclaims a backgrounded Activity, so there is no state to restore. | Android mirrors the tally, phase and clock into saveable state and closes a reclaimed run out to Stats (`CLAUDE.md`, "Session state on Android"). |
-| Listen & Learn keeps playing with the screen locked | — | Both do; the mechanism differs (Android foreground service `ListenService.kt`, iOS background audio session). | Listed as a same-feature example, not a gap. |
+
+### Same feature, platform mechanism (not gaps)
+
+Listed so nobody "ports" one side's plumbing to the other, or reads it as a
+missing feature.
+
+- **Notification permission.** Android 13+ makes `POST_NOTIFICATIONS` a
+  runtime permission, so the Android app asks for it when the reminder is
+  switched on; iOS asks through `UNUserNotificationCenter` at the same
+  moment. Same outcome.
+- **Reminder after a reboot.** `UNCalendarNotificationTrigger` survives a
+  reboot on its own; `AlarmManager` alarms do not, so the Android app re-arms
+  on `BOOT_COMPLETED` (`ReminderReceiver.kt`).
+- **Session state across process death.** Android reclaims a backgrounded
+  Activity, so the Android app mirrors the tally, phase and clock into
+  saveable state and closes a reclaimed run out to Stats (`CLAUDE.md`,
+  "Session state on Android"). iOS keeps the model alive; nothing to
+  restore.
+- **Listen & Learn with the screen locked.** Android: a foreground service
+  (`ListenService.kt`). iOS: the background audio session and `.playback`
+  claim (`MorsePlayer.swift`).
+- **Background noise floor.** Android runs it as a separate always-on stream
+  (`BackgroundNoise.kt`); iOS folds it into the player's render callback
+  (`MorsePlayer.swift`). Same six levels, same amplitudes.
+- **Decoder microphone path.** Android asks for the `UNPROCESSED` source
+  with a sample-rate fallback chain (`CwDecoderEngine.kt`); iOS sets the
+  session to `.measurement` mode (`AudioSession.swift`). Both bypass the
+  OS's gain control and noise suppression.
+- **Voice recognition biasing.** iOS uses a custom language model and
+  on-device recognition (`VoiceRecognizer.swift`, iOS 17+); Android has only
+  `EXTRA_BIASING_STRINGS` (`VoiceRecognizer.kt`, API 33+), the nearest
+  equivalent.
+- **Audio-stack reset recovery.** iOS rebuilds the engine on
+  `mediaServicesWereReset` (`AudioSession.swift`); Android has no such
+  event and catches `IllegalStateException` instead.
 
 ## Audit of 2026-09-04
 
-The audit compared the two trees file by file: settings and defaults, every
-mode and its options, the MorseKit logic layer and its data tables, progress
-and sharing, and the hardware, audio and repeater layers. What follows is
-everything found that is **not** a platform limitation — accidental
-divergence, in the issue's words. Each line is a gap to close, in the
-direction that makes the two apps agree; where one side is plainly better,
-that side is the target. The tables are the backlog: an item leaves this file
-when a pull request closes it on the side that lacks it.
+The audit compared the two trees file by file in five slices: every mode and
+its options, settings and defaults, progress and sharing, the hardware,
+audio, voice, decoder and repeater layers, and the MorseKit logic layer with
+its data tables. The headline: **every mode, every data table and every
+engine constant is on both apps.** The gaps are in options a mode offers,
+defaults and ranges, what the Stats screens show, and the repeater's
+secondary features. What follows is everything found that is **not** a
+platform limitation — accidental divergence, in the issue's words. Each row
+is a gap to close, in the direction that makes the two apps agree; where one
+side is plainly better, that side is the target. The tables are the backlog:
+a row leaves this file when a pull request closes it on the side that lacks
+it (see *Closing an item* at the end).
 
 A behaviour listed as "iOS only" is missing on Android, and the reverse.
 File references are to the side that has the behaviour.
@@ -223,3 +258,59 @@ haptics, speech voices, the voice tables, matcher, profile and confirm flow,
 the decoder engine, its constants, telemetry, two-core rescue and screen,
 the Vail client, sender attribution, message envelope, break-in, server
 picker with custom URL, private channel, signal timeline and roster.
+
+### MorseKit logic layer
+
+Every file in `ios/Sources/MorseKit/` has a twin under `android/…/morsekit/`
+(`Distance` ↔ `MorseDistance`, `Timing` ↔ `MorseTiming`, `MorseDataSerials`
+↔ `MorseSerials`, `Stats` ↔ `CharacterStats`, `TrainerEngine+Quiz` folded
+into `TrainerEngine.kt`), and every data table was compared element by
+element: common and ham words, abbreviations, Q-codes, call signs, names,
+QTHs, RSTs, states, prosigns, the 1000 ranked words, the 800 Daily Dit
+answers and their allowed list, the 32 fables, 5 serials, 6 exam passages,
+the contest sections and Field Day categories, cut numbers, lingo, and the
+voice-matching tables. All identical. So are the enums (contests and their
+speed bands, exam speeds, Rapid Fire kinds and paces, the eight pileup
+flavours, callsign shapes, Journey sections and per-level counts, Daily Dit
+rules) and the tunables (Farnsworth formula and clamp, decoder WPM and
+adaptation clamps, pileup timing). Both sides read all eight fixtures.
+
+What differs:
+
+| What | iOS | Android | Evidence |
+|---|---|---|---|
+| Custom word containing an unsendable character | kept whole if any character is sendable (`HELLO!` stays `HELLO!`) | stripped per character in the app layer (`HELLO!` becomes `HELLO`) | `MorseData.swift:206`; `Settings.kt:472` |
+| Custom word list parsing | in MorseKit: splits on comma and whitespace, trims, uppercases, de-dupes | in the app: also splits on `;` and caps a word at 24 characters | `MorseData.swift:215`; `Settings.kt:469`. Only the iOS version is fixture-testable. |
+| Contest multiplier from an exchange with a trailing space | counted | dropped | `Contest.swift:140`; `Contest.kt:141`. Not reachable with today's exchanges; latent. |
+| `MorseCode.character(forPattern:)` string overload | public | private reverse map, element-list overload only | `MorseCode.swift:93`; `MorseCode.kt:102` |
+| `JourneyCurriculum.firstLevelBeyond(known:)` | — | present, feeds the onboarding screen | `Journey.kt:110`. Goes with the onboarding item under Modes. |
+| Rapid Fire response blurbs | one wording | another | `AppSettings.swift:172`; `RapidFire.kt:23`. Copy only. |
+
+Layering differences that are not gaps: `ContestLength`, `RapidFireResponse`
+and `RapidFirePace` live in MorseKit on Android and in the app on iOS with
+identical values; `MorseReference.morseString` and `rhythm` live in MorseKit
+on Android and in `ReferenceView.swift` on iOS; Kotlin `snapshot`/`restore`,
+`copy`, `equals` and factory functions stand in for Swift `Codable`, value
+semantics and initialisers.
+
+**Test coverage is not at parity, and that is a parity risk.** The iOS
+harness runs 508 checks over 50 sections; Android has about 131 JUnit tests
+in 22 classes. Sections with no Android twin: voice matching and profile,
+exam speeds, passage generation and solid-copy grading, contest practice,
+practice streak, session history and the recognition chart, Rapid Fire, the
+story and serial libraries, Q-codes, custom word lists, word tiers, confusion
+pairs, MorseKit's own `MorseDecoder`, and save/load. Neither side tests
+`SendingDrill`. The way to close these is the one `CLAUDE.md` prescribes: a
+fixture derived from the spec, read by both.
+
+## Closing an item
+
+Fix it on the side that lacks it, in that tree's idiom, and delete the row
+here in the same pull request. If, on inspection, the behaviour turns out to
+be one the platform cannot provide, move the row to *Documented exceptions*
+instead, with the reason. If the two apps disagree on a default or a range,
+pick the value the user guide documents (or the better one, and update the
+guide), and change the other side. A pull request that closes an item is a
+single-platform PR by nature; tick "Paired issue" and name this file's issue
+(#171) or the item's own issue, or tick "Both platforms" when both sides
+change.

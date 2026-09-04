@@ -57,8 +57,9 @@ testers, bug reports and feature chat live on
   ladder, with live decode, always-on replay, and a connected-MIDI-key
   readout; plus printable drill sheets built from what you've studied
 - **Vail repeater**: live CW over the [Vail](https://vail.woozle.org) network
-  with Vail Adapter support: MIDI key input *and* output (keyer modes,
-  speed, sidetone, RX piezo buzz), chat, and a signal timeline
+  with a server picker and private-channel option, plus Vail Adapter support:
+  MIDI key input *and* output (keyer modes, speed, sidetone, RX piezo buzz),
+  unplug detection, chat, and a signal timeline
 - **Bluetooth LE MIDI keys**: paired from inside the app via the system MIDI
   sheet, which is the only thing on iOS that makes a BLE key visible to apps
 - **Background noise**: an optional low noise floor under everything (Whisper by
