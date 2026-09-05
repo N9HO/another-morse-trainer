@@ -172,6 +172,17 @@ class TrainerEngine(
     }
 
     /**
+     * Record a target that was presented and never answered — a Morse Invaders
+     * invader that reached the ground. A miss for the character's stats with no
+     * confusion partner, since nothing was chosen in its place; like
+     * [noteAttempt], it never advances the Koch ladder.
+     */
+    fun noteMiss(target: Char) {
+        exposedCharacters.add(target)
+        stats.getOrPut(target) { CharacterStats(target) }.record(false, 0.0)
+    }
+
+    /**
      * Ease a confused pairing after a correct recognition (used by the
      * confusion-pair drill so sorted-out pairs fade from rotation).
      */

@@ -24,9 +24,10 @@ import java.time.LocalDate
  * like [Stats] and [EngineStore], and exposed as Compose state so the home
  * card and the screen both recompose off one source.
  *
- * The whole game is saved on every accepted guess, not just at the end: a
- * puzzle abandoned halfway through and reopened must not hand back a fresh 21
- * guesses, which is exactly what "save on completion" would do.
+ * The whole game is saved on every accepted guess and every listen, not just
+ * at the end: a puzzle abandoned halfway through and reopened must not hand
+ * back a fresh ladder and a clean share text, which is exactly what "save on
+ * completion" would do.
  */
 object DailyDitStore {
     private lateinit var prefs: SharedPreferences
@@ -87,11 +88,17 @@ object DailyDitStore {
      * Set the starting speed and reference preference.
      *
      * Both are always stored as the preference for next time, but they only
-     * reach *today's* game while it is still untouched. Once a guess is spent
+     * reach *today's* game while no guess has been made. Once a guess is spent
      * the ladder is running, and re-basing it would let a player rewrite the
      * speed their share text claims; the same goes for turning the chart back
      * on after playing half a puzzle without it. The UI matches this — the card
      * carrying these controls is only composed before the first guess.
+     *
+     * Listens made before that first guess are kept (#168) — `copy` leaves
+     * [DailyDitGame.heard] alone: they already stepped the ladder and were
+     * heard at a speed, and the share text reports the *slowest* speed heard,
+     * so raising the dial after a few listens can speed the next play up but
+     * can never improve the brag.
      */
     fun configure(startingWpm: Double, hideReference: Boolean) {
         this.startingWpm = startingWpm
@@ -103,6 +110,21 @@ object DailyDitStore {
         if (game.guessesUsed > 0) return
         game = game.copy(startingWpm = startingWpm, hideReference = hideReference)
         save()
+    }
+
+    /**
+     * Play the word. Every play counts (#168): the listen is recorded at the
+     * speed it is sent at — and saved, since a relaunch must not forget it —
+     * and that speed comes back for the player. Replays after the win are
+     * free; [DailyDitGame.listen] leaves a finished game alone.
+     */
+    fun listen(): Double {
+        val play = game.listen()
+        if (play.game != game) {
+            game = play.game
+            save()
+        }
+        return play.wpm
     }
 
     /** Offer a guess. A rejected guess costs nothing and is not saved. */
@@ -148,6 +170,7 @@ object DailyDitStore {
             .put("startingWpm", game.startingWpm)
             .put("hideReference", game.hideReference)
             .put("rounds", rounds)
+            .put("heard", JSONArray(game.heard))
             .toString()
     }
 
@@ -163,12 +186,17 @@ object DailyDitStore {
             }
             rounds += DailyDitRound(r.getString("guess"), tiles, r.getDouble("wpm"))
         }
+        // A game saved before #168 has no "heard": it restores as a game that
+        // was never listened to, not as a failed decode and a fresh day.
+        val heardJson = json.optJSONArray("heard") ?: JSONArray()
+        val heard = (0 until heardJson.length()).map { heardJson.getDouble(it) }
         return DailyDitGame(
             puzzleNumber = json.getInt("puzzleNumber"),
             answer = json.getString("answer"),
             startingWpm = json.getDouble("startingWpm"),
             hideReference = json.optBoolean("hideReference", false),
-            rounds = rounds
+            rounds = rounds,
+            heard = heard
         )
     }
 }

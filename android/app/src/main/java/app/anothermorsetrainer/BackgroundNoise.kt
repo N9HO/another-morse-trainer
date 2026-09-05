@@ -83,7 +83,11 @@ object BackgroundNoise {
         refresh()
     }
 
-    /** Re-read [Settings.backgroundNoise] — call after the user changes it. */
+    /**
+     * Re-read [Settings.backgroundNoise] — the level derived from the keep-alive
+     * switch and the band-noise picker (issue #169) — call after the user
+     * changes either.
+     */
     @Synchronized
     fun refresh() {
         val level = if (foreground && !yielded) Settings.backgroundNoise.amplitude else 0f

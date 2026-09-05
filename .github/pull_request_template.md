@@ -15,6 +15,16 @@ touches only one of `ios/` and `android/`.
 - [ ] **Platform limitation** — the other platform cannot do this; the exception is added to `PARITY.md` in this pull request.
 - [ ] **Platform-internal** — no user-visible behaviour changes (build, CI, lint, refactor, version bump, crash fix in platform-only code).
 
+## Guide
+
+The user guide at [anothermorsetrainer.app/guide](https://anothermorsetrainer.app/guide/)
+describes every mode and setting, and it changes in the same release as the
+app (#172). Tick one. The merge gate reads this on any pull request that
+changes app code without ticking "Platform-internal" above.
+
+- [ ] **Guide updated** — the section(s) covering what changed are updated; say which:
+- [ ] **No guide change needed** — nothing the guide describes changed; say why:
+
 ## Verified how
 
 <!--

@@ -109,6 +109,8 @@ fun RapidFireScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {
     val numberCount = Settings.rapidFireNumberCount
     val usOnly = Settings.rapidFireUsOnly
     val formats = Settings.rapidFireFormats
+    val sections = Settings.rapidFireSections
+    val serialCut = Settings.rapidFireSerialCut
 
     // Run state.
     var quiz by remember { mutableStateOf<RapidFireQuiz?>(null) }
@@ -158,7 +160,9 @@ fun RapidFireScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {
         callsignUSOnly = usOnly,
         wordMinLength = wordMin,
         wordMaxLength = wordMax,
-        numberCount = numberCount
+        numberCount = numberCount,
+        statesIncludeSections = sections,
+        serialCutNumbers = serialCut
     )
 
     fun startRun() {
@@ -290,6 +294,8 @@ fun RapidFireScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {
                 numberCount = numberCount, onNumberCount = { Settings.updateRapidFireNumberCount(it) },
                 usOnly = usOnly, onUsOnly = { Settings.updateRapidFireUsOnly(it) },
                 formats = formats, onToggleFormat = { Settings.toggleRapidFireFormat(it) },
+                sections = sections, onSections = { Settings.updateRapidFireSections(it) },
+                serialCut = serialCut, onSerialCut = { Settings.updateRapidFireSerialCut(it) },
                 onStart = { startRun() },
                 onBack = onBack,
                 onSwitchMode = ::switchTo
@@ -349,6 +355,8 @@ private fun RapidFireSetup(
     numberCount: Int, onNumberCount: (Int) -> Unit,
     usOnly: Boolean, onUsOnly: (Boolean) -> Unit,
     formats: Set<CallsignFormat>, onToggleFormat: (CallsignFormat) -> Unit,
+    sections: Boolean, onSections: (Boolean) -> Unit,
+    serialCut: Boolean, onSerialCut: (Boolean) -> Unit,
     onStart: () -> Unit, onBack: () -> Unit,
     onSwitchMode: (TrainingMode) -> Unit
 ) {
@@ -365,13 +373,25 @@ private fun RapidFireSetup(
         ) {
             SectionLabel(stringResource(R.string.rapidfire_what_to_copy))
             Pills(RapidFireContent.entries.map { it to it.label }, content, onContent)
+            Text(content.blurb, style = MaterialTheme.typography.bodySmall, color = Brand.textSecondary)
             when (content) {
+                // The 71 ARRL/RAC sections (ContestData.arrlSections) join the
+                // state pool: EPA, STX, SDG beside OH (#173).
+                RapidFireContent.STATES ->
+                    ToggleRow(stringResource(R.string.rapidfire_include_sections), sections, onSections)
+                // Sent as the pileup sends them (T for 0, N for 9 …); "TTA",
+                // "001" and "1" all copy 001 (#173).
+                RapidFireContent.SERIALS ->
+                    ToggleRow(stringResource(R.string.rapidfire_cut_numbers), serialCut, onSerialCut)
                 RapidFireContent.WORDS -> {
                     Stepper(stringResource(R.string.rapidfire_min_length), wordMin, onWordMin)
                     Stepper(stringResource(R.string.rapidfire_max_length), wordMax, onWordMax)
                 }
                 RapidFireContent.NUMBERS -> Stepper(stringResource(R.string.rapidfire_digits_per_group), numberCount, onNumberCount)
                 RapidFireContent.CALLSIGNS, RapidFireContent.MIXED -> {
+                    if (content == RapidFireContent.MIXED) {
+                        ToggleRow(stringResource(R.string.rapidfire_include_sections), sections, onSections)
+                    }
                     ToggleRow(stringResource(R.string.common_us_calls_only), usOnly, onUsOnly)
                     // Call-sign shapes (iOS rapidFireFormatChip): one chip per
                     // format; at least one always stays on.

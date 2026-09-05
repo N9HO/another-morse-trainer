@@ -30,9 +30,14 @@ the iOS app's navy/teal look.
 - **Head Copy**, **Type It**, **QRQ Speed**: copy in your head with
   auto-repeats and a timed reveal, free-recall typing, and high-speed copy at
   35 / 40 / 50 / 60 WPM on its own setting
-- **Rapid Fire**: a stream of call signs / words / number groups / states sent
-  back to back at your chosen pace; type as you hear it, head-copy then type,
-  key each one back, or just listen and review the transmitted list
+- **Rapid Fire**: a stream of call signs / words / number groups / states
+  (optionally with ARRL/RAC Field Day sections) / contest serials (cut
+  numbers optional) / names / power sent back to back at your chosen pace;
+  type as you hear it, head-copy then type, key each one back, or just listen
+  and review the transmitted list
+- **Morse Invaders**: an arcade game — invaders descend carrying characters;
+  hear one and type it, or see one and key it, before it lands. Waves,
+  lives, combos, three difficulties, and every hit and miss feeds your stats
 - **Pileup Runner**: a full QSO simulator: your callsign, eight exchange
   flavours (single caller → POTA → contests), realism controls (caller count,
   speed band, tone spread, QSB, QRN, cut numbers, bust behavior, callsign
@@ -78,9 +83,10 @@ the iOS app's navy/teal look.
 - Daily practice reminders (streak-aware; inexact by a few minutes, see
   [PARITY.md](../PARITY.md))
 - **Settings**: character speed to 60 WPM, Farnsworth, sidetone pitch, a
-  background noise floor (Whisper by default, so Bluetooth earbuds don't sleep
-  through the first character), haptics, daily reminders, session length,
-  custom word lists, punctuation opt-ins, and a slashed-zero display option
+  Bluetooth keep-alive floor (on by default, so earbuds don't sleep through
+  the first character) and a separate band-noise level to copy through,
+  haptics, daily reminders, session length, custom word lists, punctuation
+  opt-ins, and a slashed-zero display option
 - Dark navy/teal theme, adaptive icon, phone + tablet responsive layout
 
 ## Build

@@ -4,7 +4,7 @@ import MediaPlayer
 
 /// The ways to practice.
 enum TrainingMode: String, CaseIterable, Identifiable {
-    case journey, characters, words, abbreviations, qCodes, prosigns, headCopy, typed, sending, confusion, listen, qso, contest, story, exam, qrq, rapidFire
+    case journey, characters, words, abbreviations, qCodes, prosigns, headCopy, typed, sending, confusion, listen, qso, contest, story, exam, qrq, rapidFire, invaders
     var id: String { rawValue }
     var title: String {
         switch self {
@@ -25,6 +25,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .exam:         return "Code Exam"
         case .qrq:          return "QRQ Speed"
         case .rapidFire:    return "Rapid Fire"
+        case .invaders:     return "Morse Invaders"
         }
     }
     var icon: String {
@@ -46,6 +47,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .exam:          return "checkmark.seal"
         case .qrq:           return "hare"
         case .rapidFire:     return "bolt.fill"
+        case .invaders:      return "gamecontroller.fill"
         }
     }
     /// In meaning-based modes the question is "what are they saying?"
@@ -66,6 +68,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .exam:               return "Copy the exam transmission"
         case .qrq:                return "Type what you hear"
         case .rapidFire:          return "Copy what you hear"
+        case .invaders:           return "Shoot the character you hear"
         }
     }
     /// A very short descriptor shown on the mode-selection tiles (intro screen).
@@ -89,6 +92,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .exam:          return "ARRL/FCC code exam"
         case .qrq:           return "High-speed copy"
         case .rapidFire:     return "Back-to-back copy"
+        case .invaders:      return "Arcade recognition"
         }
     }
 
@@ -130,6 +134,8 @@ enum TrainingMode: String, CaseIterable, Identifiable {
             return "Push your speed: hear whole words and call signs at 35 or 40 WPM and type what you copy. Too fast to count dits — this trains instant, whole-word recognition (QRQ = “send faster”)."
         case .rapidFire:
             return "Real-world copy drill: a stream of call signs, words, number groups, or state abbreviations sent back to back at whatever pace you choose. Type each one as it lands, send it back on a key, or just copy along and review the full list of what was transmitted at the end."
+        case .invaders:
+            return "Characters fall from the top in columns. Hear one and type it, or see one and key it, to shoot the lowest invader carrying it before it reaches the ground. Three lives; every wave comes faster. Misses feed your confusion drill."
         }
     }
 
@@ -164,8 +170,9 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         switch self {
         // Contest picks its own length (the real one-hour event or a sprint) in
         // its setup card, so the generic duration picker would be redundant.
-        case .exam, .story, .contest: return false
-        default:                      return true
+        // Morse Invaders ends when the last life is lost, not on a clock.
+        case .exam, .story, .contest, .invaders: return false
+        default:                                 return true
         }
     }
 
@@ -456,6 +463,7 @@ final class AppModel: ObservableObject {
         case .exam:         return (examSession as QuizSource?) ?? charLadder   // exam runs its own flow
         case .qrq:          return qrqQuiz
         case .rapidFire:    return rapidFireQuiz
+        case .invaders:     return charLadder   // unused: Invaders runs its own game loop (InvadersView)
         }
     }
 
@@ -475,6 +483,8 @@ final class AppModel: ObservableObject {
     var isExam: Bool { mode == .exam }
     var isQRQ: Bool { mode == .qrq }
     var isRapidFire: Bool { mode == .rapidFire }
+    /// Morse Invaders (#170): the arcade game, run by `InvadersView` on its own frame clock.
+    var isInvaders: Bool { mode == .invaders }
     /// Rapid Fire's hands-off "just listen, review the list at the end" variant,
     /// which streams items on its own loop instead of waiting for an answer.
     var isRapidFireReview: Bool { isRapidFire && settings.rapidFire.response == .review }
@@ -634,6 +644,14 @@ final class AppModel: ObservableObject {
             stopListening()
             startStory(active: false)
             startRapidFire()
+        } else if mode == .invaders {
+            stopListening()
+            startStory(active: false)
+            // The game itself lives in InvadersView; the session here only
+            // holds the audio route and the tally the view feeds it.
+            introduction = nil
+            drill = nil
+            phase = .idle
         } else {
             stopListening()
             startStory(active: false)
@@ -1490,7 +1508,9 @@ final class AppModel: ObservableObject {
             callsignUSOnly: r.callsignUSOnly,
             wordMinLength: r.wordMinLength,
             wordMaxLength: r.wordMaxLength,
-            numberCount: r.numberCount)
+            numberCount: r.numberCount,
+            statesIncludeSections: r.statesIncludeSections,
+            serialCutNumbers: r.serialCutNumbers)
     }
 
     /// Set up a Rapid Fire session: rebuild the generator from current settings,
@@ -1899,7 +1919,7 @@ final class AppModel: ObservableObject {
         qsoBusy = false
         qsoActive = false
         rapidFireGeneration += 1   // cancel any pending Rapid Fire stream
-        if isRapidFire { player.stop() }
+        if isRapidFire || isInvaders { player.stop() }
         phase = .idle
         if let record = buildSessionRecord() {
             history.add(record)            // triggers saveHistory()
@@ -2809,11 +2829,16 @@ final class AppModel: ObservableObject {
     /// Set the starting speed and reference preference.
     ///
     /// Both are always stored as the preference for next time, but they only
-    /// reach *today's* game while it is still untouched. Once a guess is spent
+    /// reach *today's* game while no guess has been made. Once a guess is spent
     /// the ladder is running, and re-basing it would let a player rewrite the
     /// speed their share text claims; the same goes for turning the chart back
     /// on after playing half a puzzle without it. The UI matches this — the
     /// card carrying these controls is only on screen before the first guess.
+    ///
+    /// Listens made before that first guess are kept (#168): they already
+    /// stepped the ladder and were heard at a speed, and the share text reports
+    /// the *slowest* speed heard, so raising the dial after a few listens can
+    /// speed the next play up but can never improve the brag.
     func configureDailyDit(startingWpm: Double, hideReference: Bool) {
         settings.dailyDitStartingWpm = startingWpm
         settings.dailyDitHideReference = hideReference
@@ -2821,24 +2846,71 @@ final class AppModel: ObservableObject {
         dailyDit = DailyDitGame(puzzleNumber: dailyDit.puzzleNumber,
                                 answer: dailyDit.answer,
                                 startingWpm: startingWpm,
-                                hideReference: hideReference)
+                                hideReference: hideReference,
+                                heard: dailyDit.heard)
         saveDailyDit()
     }
 
     /// Send the day's word at whatever the ladder is on now. Returns its
     /// duration so the UI can hold the play button lit for exactly that long.
     ///
+    /// Every play counts (#168): the listen is recorded at the speed it is
+    /// sent at — and saved, since a relaunch must not forget it. Replays after
+    /// the win are free; `listen()` leaves a finished game alone.
+    ///
     /// Deliberately `replaySound`: Daily Dit is not a drill and has no
-    /// time-to-recognize clock to disturb, and replays are free by design.
+    /// time-to-recognize clock to disturb.
     @discardableResult
     func playDailyDit() -> TimeInterval {
         guard !dailyDit.answer.isEmpty else { return 0 }
+        let wpm = dailyDit.listen()
+        saveDailyDit()
         return player.replaySound(playable: .text(dailyDit.answer),
                                   frequency: settings.toneFrequency,
-                                  timing: MorseTiming(wpm: dailyDit.currentWpm))
+                                  timing: MorseTiming(wpm: wpm))
     }
 
     func stopDailyDit() { player.stop() }
+
+    // MARK: - Morse Invaders (#170)
+
+    /// The characters a game draws from: the Koch ladder's active set, or every
+    /// letter and digit. Twin of `InvadersScreen.characterPool` on Android.
+    func invadersCharacters(_ set: InvadersCharacterSet) -> [Character] {
+        switch set {
+        case .active: return engine.activeCharacters
+        case .full:   return MorseCode.kochOrder.filter { $0.isLetter || $0.isNumber }
+        }
+    }
+
+    /// Send one invader's character on the session's player at the session
+    /// speed; returns the sound's duration so the view can date its tone end.
+    @discardableResult
+    func playInvader(_ character: Character) -> TimeInterval {
+        player.replaySound(playable: .text(String(character)),
+                           frequency: settings.toneFrequency, timing: timing)
+    }
+
+    func stopInvaders() { player.stop() }
+
+    /// One shot at `target` — the invader hit, or the lowest one on the field
+    /// when the key matched nothing. A hit is a correct recognition with its
+    /// time; a wrong key is a miss confused with `chosen`, so the pair feeds
+    /// the Confusion Drill. The session tally and the per-character chart
+    /// take it the way a Characters answer would.
+    func noteInvadersShot(target: Character, chosen: Character, ttr: TimeInterval) {
+        let correct = engine.noteAttempt(answer: chosen, target: target, ttr: ttr)
+        noteSessionResult(correct: correct, ttr: ttr, target: String(target))
+        saveProgress()
+    }
+
+    /// An invader reached the ground unanswered: a miss for its character
+    /// with no confusion partner.
+    func noteInvadersEscape(target: Character) {
+        engine.noteMiss(target: target)
+        noteSessionResult(correct: false, ttr: 0, target: String(target))
+        saveProgress()
+    }
 
     /// Offer a guess. A rejected guess costs nothing and is not saved.
     @discardableResult

@@ -6,11 +6,14 @@
     "answerIndex": "((puzzleNumber - 1) % answerCount) * selectionStride % answerCount",
     "stride": "coprime with answerCount, so every answer is used once before any repeats",
     "score": "pass 1 claims exact matches; pass 2 marks 'present' only while an unclaimed copy of that letter remains in the answer",
-    "wpm": "max(minimumWpm, startingWpm - speedStepWpm * floor(guessesUsed / guessesPerSpeedStep))",
-    "shareText": "headline, then one emoji row per guess, then the link"
+    "wpm": "max(minimumWpm, startingWpm - speedStepWpm * (floor(listens / listensPerSpeedStep) + floor(wrongGuesses / guessesPerSpeedStep))) — listens and wrong guesses step the speed independently and the steps add; there is no cap on either",
+    "shareText": "headline, then one emoji row per guess, then the link",
+    "listens": "every play of the word before the win — the first and every replay — recorded at the speed in effect when it was played; the step lands on the play after it, as with guesses. Replays after the win are free and not recorded",
+    "solvedWpm": "the lowest speed the word was heard at before the correct guess (min of heard); a word never listened to reports the speed the winning guess was made at",
+    "headline": "solved: 'Daily Dit #N — <solvedWpm> WPM · <g> guess(es) · <l> listen(s)'; playing: 'Daily Dit #N — <g> guess(es) · <l> listen(s) so far'; ' (no reference)' appended when hideReference. Singular at exactly 1. No guess cap, so no lost outcome"
   },
   "rules": {
-    "maxGuesses": 21,
+    "listensPerSpeedStep": 3,
     "guessesPerSpeedStep": 3,
     "speedStepWpm": 5.0,
     "minimumWpm": 10.0,
@@ -251,152 +254,152 @@
   "ladder": [
     {
       "startingWpm": 75.0,
-      "guessesUsed": 0,
+      "listens": 0,
+      "wrongGuesses": 0,
       "wpm": 75.0
     },
     {
       "startingWpm": 75.0,
-      "guessesUsed": 1,
+      "listens": 1,
+      "wrongGuesses": 0,
       "wpm": 75.0
     },
     {
       "startingWpm": 75.0,
-      "guessesUsed": 2,
+      "listens": 2,
+      "wrongGuesses": 0,
       "wpm": 75.0
     },
     {
       "startingWpm": 75.0,
-      "guessesUsed": 3,
+      "listens": 3,
+      "wrongGuesses": 0,
       "wpm": 70.0
     },
     {
       "startingWpm": 75.0,
-      "guessesUsed": 5,
+      "listens": 0,
+      "wrongGuesses": 3,
       "wpm": 70.0
     },
     {
       "startingWpm": 75.0,
-      "guessesUsed": 6,
+      "listens": 2,
+      "wrongGuesses": 2,
+      "wpm": 75.0
+    },
+    {
+      "startingWpm": 75.0,
+      "listens": 3,
+      "wrongGuesses": 3,
       "wpm": 65.0
     },
     {
       "startingWpm": 75.0,
-      "guessesUsed": 9,
-      "wpm": 60.0
+      "listens": 5,
+      "wrongGuesses": 4,
+      "wpm": 65.0
     },
     {
       "startingWpm": 75.0,
-      "guessesUsed": 18,
+      "listens": 6,
+      "wrongGuesses": 0,
+      "wpm": 65.0
+    },
+    {
+      "startingWpm": 75.0,
+      "listens": 9,
+      "wrongGuesses": 9,
       "wpm": 45.0
     },
     {
       "startingWpm": 75.0,
-      "guessesUsed": 20,
-      "wpm": 45.0
+      "listens": 0,
+      "wrongGuesses": 21,
+      "wpm": 40.0
     },
     {
       "startingWpm": 75.0,
-      "guessesUsed": 21,
+      "listens": 20,
+      "wrongGuesses": 21,
+      "wpm": 10.0
+    },
+    {
+      "startingWpm": 40.0,
+      "listens": 0,
+      "wrongGuesses": 0,
       "wpm": 40.0
     },
     {
       "startingWpm": 40.0,
-      "guessesUsed": 0,
-      "wpm": 40.0
-    },
-    {
-      "startingWpm": 40.0,
-      "guessesUsed": 1,
-      "wpm": 40.0
-    },
-    {
-      "startingWpm": 40.0,
-      "guessesUsed": 2,
-      "wpm": 40.0
-    },
-    {
-      "startingWpm": 40.0,
-      "guessesUsed": 3,
+      "listens": 3,
+      "wrongGuesses": 0,
       "wpm": 35.0
     },
     {
       "startingWpm": 40.0,
-      "guessesUsed": 5,
+      "listens": 0,
+      "wrongGuesses": 3,
       "wpm": 35.0
     },
     {
       "startingWpm": 40.0,
-      "guessesUsed": 6,
+      "listens": 3,
+      "wrongGuesses": 3,
       "wpm": 30.0
     },
     {
       "startingWpm": 40.0,
-      "guessesUsed": 9,
-      "wpm": 25.0
-    },
-    {
-      "startingWpm": 40.0,
-      "guessesUsed": 18,
+      "listens": 9,
+      "wrongGuesses": 9,
       "wpm": 10.0
     },
     {
       "startingWpm": 40.0,
-      "guessesUsed": 20,
+      "listens": 18,
+      "wrongGuesses": 0,
       "wpm": 10.0
     },
     {
       "startingWpm": 40.0,
-      "guessesUsed": 21,
+      "listens": 20,
+      "wrongGuesses": 20,
       "wpm": 10.0
     },
     {
       "startingWpm": 20.0,
-      "guessesUsed": 0,
+      "listens": 0,
+      "wrongGuesses": 0,
       "wpm": 20.0
     },
     {
       "startingWpm": 20.0,
-      "guessesUsed": 1,
-      "wpm": 20.0
-    },
-    {
-      "startingWpm": 20.0,
-      "guessesUsed": 2,
-      "wpm": 20.0
-    },
-    {
-      "startingWpm": 20.0,
-      "guessesUsed": 3,
+      "listens": 3,
+      "wrongGuesses": 0,
       "wpm": 15.0
     },
     {
       "startingWpm": 20.0,
-      "guessesUsed": 5,
+      "listens": 0,
+      "wrongGuesses": 3,
       "wpm": 15.0
     },
     {
       "startingWpm": 20.0,
-      "guessesUsed": 6,
+      "listens": 3,
+      "wrongGuesses": 3,
       "wpm": 10.0
     },
     {
       "startingWpm": 20.0,
-      "guessesUsed": 9,
+      "listens": 6,
+      "wrongGuesses": 0,
       "wpm": 10.0
     },
     {
       "startingWpm": 20.0,
-      "guessesUsed": 18,
-      "wpm": 10.0
-    },
-    {
-      "startingWpm": 20.0,
-      "guessesUsed": 20,
-      "wpm": 10.0
-    },
-    {
-      "startingWpm": 20.0,
-      "guessesUsed": 21,
+      "listens": 100,
+      "wrongGuesses": 100,
       "wpm": 10.0
     }
   ],
@@ -405,44 +408,144 @@
     "answer": "SPEND",
     "startingWpm": 60.0,
     "hideReference": false,
-    "guesses": [
-      "MOUND",
-      "SPEND"
+    "plays": [
+      {
+        "action": "listen"
+      },
+      {
+        "action": "listen"
+      },
+      {
+        "action": "listen"
+      },
+      {
+        "action": "guess",
+        "word": "CRANE"
+      },
+      {
+        "action": "guess",
+        "word": "MOUND"
+      },
+      {
+        "action": "guess",
+        "word": "ATLAS"
+      },
+      {
+        "action": "listen"
+      },
+      {
+        "action": "guess",
+        "word": "SPEND"
+      }
     ],
-    "shareText": "Daily Dit #245 — 2/21 at 60 WPM\n⬜⬜⬜🟩🟩\n🟩🟩🟩🟩🟩\nanothermorsetrainer.app"
+    "heard": [
+      60.0,
+      60.0,
+      60.0,
+      50.0
+    ],
+    "roundWpms": [
+      55.0,
+      55.0,
+      55.0,
+      50.0
+    ],
+    "listens": 4,
+    "guessesUsed": 4,
+    "solvedWpm": 50.0,
+    "shareText": "Daily Dit #245 — 50 WPM · 4 guesses · 4 listens\n⬜⬜⬜🟩🟨\n⬜⬜⬜🟩🟩\n⬜⬜⬜⬜🟨\n🟩🟩🟩🟩🟩\nanothermorsetrainer.app"
   },
   "headlines": [
     {
       "puzzleNumber": 245,
       "guessesUsed": 2,
+      "listens": 5,
       "outcome": "solved",
       "solvedWpm": 60.0,
       "hideReference": false,
-      "headline": "Daily Dit #245 — 2/21 at 60 WPM"
+      "headline": "Daily Dit #245 — 60 WPM · 2 guesses · 5 listens"
     },
     {
       "puzzleNumber": 7,
       "guessesUsed": 11,
+      "listens": 3,
       "outcome": "solved",
       "solvedWpm": 45.0,
       "hideReference": true,
-      "headline": "Daily Dit #7 — 11/21 at 45 WPM (no reference)"
+      "headline": "Daily Dit #7 — 45 WPM · 11 guesses · 3 listens (no reference)"
     },
     {
       "puzzleNumber": 99,
-      "guessesUsed": 21,
-      "outcome": "lost",
-      "solvedWpm": null,
+      "guessesUsed": 101,
+      "listens": 40,
+      "outcome": "solved",
+      "solvedWpm": 10.0,
       "hideReference": false,
-      "headline": "Daily Dit #99 — X/21"
+      "headline": "Daily Dit #99 — 10 WPM · 101 guesses · 40 listens"
+    },
+    {
+      "puzzleNumber": 12,
+      "guessesUsed": 1,
+      "listens": 1,
+      "outcome": "solved",
+      "solvedWpm": 75.0,
+      "hideReference": false,
+      "headline": "Daily Dit #12 — 75 WPM · 1 guess · 1 listen"
     },
     {
       "puzzleNumber": 99,
       "guessesUsed": 4,
+      "listens": 7,
       "outcome": "playing",
       "solvedWpm": null,
       "hideReference": false,
-      "headline": "Daily Dit #99 — 4/21 so far"
+      "headline": "Daily Dit #99 — 4 guesses · 7 listens so far"
+    },
+    {
+      "puzzleNumber": 99,
+      "guessesUsed": 0,
+      "listens": 1,
+      "outcome": "playing",
+      "solvedWpm": null,
+      "hideReference": true,
+      "headline": "Daily Dit #99 — 0 guesses · 1 listen so far (no reference)"
+    }
+  ],
+  "solvedSpeeds": [
+    {
+      "heard": [
+        40.0,
+        35.0,
+        35.0,
+        75.0
+      ],
+      "winningGuessWpm": 70.0,
+      "solvedWpm": 35.0
+    },
+    {
+      "heard": [
+        60.0,
+        60.0,
+        60.0,
+        55.0,
+        55.0
+      ],
+      "winningGuessWpm": 55.0,
+      "solvedWpm": 55.0
+    },
+    {
+      "heard": [
+        75.0,
+        70.0,
+        20.0
+      ],
+      "winningGuessWpm": 20.0,
+      "solvedWpm": 20.0
+    },
+    {
+      "heard": [],
+      "winningGuessWpm": 40.0,
+      "solvedWpm": 40.0
     }
   ]
 }

@@ -336,10 +336,25 @@ fun SettingsScreen(
                         }
                     }
                     GroupDivider()
-                    BackgroundNoiseSetting()
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(stringResource(R.string.settings_keep_bluetooth_awake), color = Brand.textPrimary, fontWeight = FontWeight.Medium)
+                        Switch(
+                            checked = Settings.bluetoothKeepAlive,
+                            onCheckedChange = { Settings.updateBluetoothKeepAlive(it) },
+                            colors = switchColors()
+                        )
+                    }
+                    GroupDivider()
+                    BandNoiseSetting()
                 }
                 SectionFooter(
-                    stringResource(R.string.settings_sound_footer)
+                    stringResource(R.string.settings_sound_footer) + "\n\n" +
+                        stringResource(R.string.settings_keep_bluetooth_awake_footer) + "\n\n" +
+                        stringResource(R.string.settings_band_noise_footer)
                 )
 
                 val showChoiceRows = shown(CHOICE_QUIZ_MODES)
@@ -851,8 +866,9 @@ private fun diagnosticInfo(context: Context, scope: SettingsMode?): String {
     }
     lines.add("Session: ${Settings.practiceDuration.label} · reveal ${Settings.revealMode.label} · " +
         "choices ${Settings.answerChoices} · recognise ${"%.1f".format(Settings.recognitionTargetSec)} s")
-    if (Settings.backgroundNoise != BackgroundNoiseLevel.OFF) {
-        lines.add("Background noise: ${Settings.backgroundNoise.label}")
+    lines.add("Bluetooth keep-alive: ${if (Settings.bluetoothKeepAlive) "on" else "off"}")
+    if (Settings.bandNoise != BackgroundNoiseLevel.OFF) {
+        lines.add("Band noise: ${Settings.bandNoise.label}")
     }
     if (Settings.punctuationChars.isNotEmpty()) {
         lines.add("Punctuation: ${Settings.punctuationChars.sorted().joinToString("")}")
@@ -900,17 +916,18 @@ private fun DurationSetting() {
 }
 
 /**
- * Background-noise picker (issue #29): five options with word labels, so it
+ * Band-noise picker (issues #29, #169): five options with word labels, so it
  * stacks the label above a scrollable pill row like [DurationSetting] rather
- * than crowding them beside the label as [SegmentedSetting] does.
+ * than crowding them beside the label as [SegmentedSetting] does. The
+ * inaudible keep-alive floor is the switch above it, not a level here.
  */
 @Composable
-private fun BackgroundNoiseSetting() {
+private fun BandNoiseSetting() {
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp)) {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(stringResource(R.string.settings_background_noise), color = Brand.textPrimary, fontWeight = FontWeight.Medium)
+            Text(stringResource(R.string.settings_band_noise), color = Brand.textPrimary, fontWeight = FontWeight.Medium)
             Text(
-                Settings.backgroundNoise.label,
+                Settings.bandNoise.label,
                 color = Brand.teal, fontWeight = FontWeight.SemiBold, fontSize = 13.sp
             )
         }
@@ -919,15 +936,15 @@ private fun BackgroundNoiseSetting() {
             modifier = Modifier.horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            BackgroundNoiseLevel.entries.forEach { option ->
-                val isSel = option == Settings.backgroundNoise
+            BackgroundNoiseLevel.bandLevels.forEach { option ->
+                val isSel = option == Settings.bandNoise
                 Box(
                     modifier = Modifier
                         .background(
                             if (isSel) Brand.teal else Brand.navyRaised,
                             shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp)
                         )
-                        .clickable { Settings.updateBackgroundNoise(option) }
+                        .clickable { Settings.updateBandNoise(option) }
                         .padding(horizontal = 12.dp, vertical = 6.dp)
                 ) {
                     Text(

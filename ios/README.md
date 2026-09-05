@@ -28,8 +28,13 @@ testers, bug reports and feature chat live on
 - **Head Copy**: copy in your head with auto-repeats and a timed reveal
 - **Type It / QRQ Speed**: free-recall typing, plus high-speed copy at
   35 / 40 / 50 / 60 WPM on its own speed setting
-- **Rapid Fire**: call signs / words / number groups / states sent back to
-  back at your pace; type, head-copy, key each one back, or just listen
+- **Rapid Fire**: call signs / words / number groups / states (optionally
+  with ARRL/RAC Field Day sections) / contest serials (cut numbers optional)
+  / names / power, sent back to back at your pace; type, head-copy, key each
+  one back, or just listen
+- **Morse Invaders**: an arcade game — invaders descend carrying characters;
+  hear one and type it, or see one and key it, before it lands. Waves,
+  lives, combos, three difficulties, and every hit and miss feeds your stats
 - **QSO Simulator**: call CQ and work a simulated pileup, with your own side
   keyed on the air: adjustable callers, speeds, QSB/QRN, cut numbers, bust
   behavior, callsign shapes, and a live log
@@ -63,9 +68,9 @@ testers, bug reports and feature chat live on
   unplug detection, chat, and a signal timeline
 - **Bluetooth LE MIDI keys**: paired from inside the app via the system MIDI
   sheet, which is the only thing on iOS that makes a BLE key visible to apps
-- **Background noise**: an optional low noise floor under everything (Whisper by
+- **Bluetooth keep-alive and band noise**: a near-silent floor (on by
   default) that stops Bluetooth earbuds sleeping through the first character,
-  and doubles as band noise to copy through
+  and a separate band-noise level to copy through
 - **Progress**: daily streak with milestone celebrations, session history
   with per-session recognition charts, per-character stats, most-confused
   pairs, performance by 5-WPM speed band, and a shareable Brag Sheet

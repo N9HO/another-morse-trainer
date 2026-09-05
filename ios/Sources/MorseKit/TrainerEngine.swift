@@ -160,6 +160,15 @@ public final class TrainerEngine {
         return correct
     }
 
+    /// Record a target that was presented and never answered — a Morse
+    /// Invaders invader that reached the ground. A miss for the character's
+    /// stats with no confusion partner, since nothing was chosen in its place;
+    /// like `noteAttempt`, it never advances the Koch ladder.
+    public func noteMiss(target: Character) {
+        exposedCharacters.insert(target)
+        stats[target, default: CharacterStats(character: target)].record(correct: false, ttr: 0)
+    }
+
     /// Ease a confused pairing after a correct recognition (used by the
     /// confusion-pair drill so sorted-out pairs fade from rotation).
     public func easeConfusion(target: Character, chosen: Character) {

@@ -37,6 +37,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 
 /**
@@ -144,15 +145,14 @@ fun ListenScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) 
                         )
                         paused -> Text(stringResource(R.string.listen_status_paused), color = Brand.textSecondary, fontSize = 20.sp)
                         ListenState.playing -> Text(stringResource(R.string.listen_status_listening), color = Brand.teal, fontSize = 22.sp)
-                        else -> Text(
-                            ListenState.display,
-                            color = Brand.textPrimary,
-                            fontSize = 40.sp,
-                            fontWeight = FontWeight.Bold,
-                            fontFamily = FontFamily.Monospace,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.padding(16.dp)
-                        )
+                        // #167: an abbreviation answer carries its meaning
+                        // ("RPT — repeat / report") and wraps to three lines.
+                        // The theme's body line height (24.sp) is shorter than a
+                        // 40.sp glyph, so wrapped lines overlapped; the line
+                        // height is pinned to the font in em so it scales with
+                        // it, and the size steps down until the text fits the
+                        // card. Short answers still land at 40.sp.
+                        else -> FittedAnswer(ListenState.display)
                     }
                 }
 
@@ -216,4 +216,29 @@ private fun <T> ChipRow(options: List<T>, selected: T, label: (T) -> String, onS
             )
         }
     }
+}
+
+/**
+ * The revealed answer at 40.sp, stepping down (to no less than 18.sp) only
+ * when the laid-out text would overflow the card, so single characters and
+ * words keep their size while "RPT — repeat / report" shrinks and wraps
+ * legibly (#167). Measured with onTextLayout rather than a text auto-size
+ * API so it compiles against any Compose version the app has shipped on.
+ */
+@Composable
+private fun FittedAnswer(text: String) {
+    var size by remember(text) { mutableStateOf(40f) }
+    Text(
+        text,
+        color = Brand.textPrimary,
+        fontSize = size.sp,
+        lineHeight = 1.2.em,
+        fontWeight = FontWeight.Bold,
+        fontFamily = FontFamily.Monospace,
+        textAlign = TextAlign.Center,
+        modifier = Modifier.padding(16.dp),
+        onTextLayout = { result ->
+            if (result.didOverflowHeight && size > 18f) size = (size - 2f).coerceAtLeast(18f)
+        }
+    )
 }

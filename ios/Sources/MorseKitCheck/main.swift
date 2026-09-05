@@ -1743,6 +1743,110 @@ do {
     let sd = src.nextDrill()
     check("Rapid Fire drill exposes its answer as the lone option",
           sd.options == [sd.correct] && !src.summary.isEmpty)
+
+    // #173: contest exchange elements. Twin of RapidFireTest.kt.
+    // States + ARRL/RAC sections: the toggle widens the pool to the 3-letter
+    // sections, each abbreviation once; off, no section appears.
+    let widened = RapidFireQuiz.statePool(includeSections: true)
+    check("section toggle widens the state pool to the 3-letter sections (EPA, STX)",
+          widened.contains("EPA") && widened.contains("STX")
+          && ContestData.arrlSections.allSatisfy { widened.contains($0) }
+          && MorseData.usStates.allSatisfy { widened.contains($0) }
+          && Set(widened).count == widened.count)
+    let secQ = RapidFireQuiz(config: .init(content: .states, statesIncludeSections: true),
+                             rng: SeededRNG(seed: 12))
+    var sawSection = false, allInWidened = true
+    for _ in 0..<200 {
+        let t = secQ.nextDrill().correct
+        if t.count == 3 { sawSection = true }
+        if !widened.contains(t) { allInWidened = false }
+    }
+    check("states with sections sends a 3-letter section and nothing outside the pool",
+          sawSection && allInWidened && secQ.summary == "States & sections")
+    check("state pool without sections is exactly the state list",
+          RapidFireQuiz.statePool(includeSections: false) == MorseData.usStates)
+    let noSecQ = RapidFireQuiz(config: .init(content: .states), rng: SeededRNG(seed: 13))
+    var noSection = true
+    for _ in 0..<200 { if noSecQ.nextDrill().correct.count != 2 { noSection = false; break } }
+    check("no section appears with the toggle off", noSection)
+
+    // Serials: 001–999, sent as cut letters when asked, the answer staying the digits.
+    let allCut = Set(CutNumbers.cuttableDigits)
+    check("cut numbers render 001 as TTA (4 and 6 have no cut form)",
+          CutNumbers.encode("001", enabled: allCut) == "TTA"
+          && CutNumbers.encode("496", enabled: allCut) == "4N6")
+    let plainSerial = RapidFireQuiz(config: .init(content: .serials), rng: SeededRNG(seed: 14))
+    var serialsOK = true
+    for _ in 0..<100 {
+        let d = plainSerial.nextDrill()
+        guard case .text(let sent) = d.playable, sent == d.correct,
+              d.correct.count == 3, let n = Int(d.correct), (1...999).contains(n)
+        else { serialsOK = false; break }
+    }
+    check("serials are three zero-padded digits 001–999, sent as-is without the toggle", serialsOK)
+    let cutSerial = RapidFireQuiz(config: .init(content: .serials, serialCutNumbers: true),
+                                  rng: SeededRNG(seed: 15))
+    var cutOK = true, sawCutLetter = false
+    for _ in 0..<100 {
+        let d = cutSerial.nextDrill()
+        let expected = CutNumbers.encode(d.correct, enabled: allCut)
+        guard case .text(let sent) = d.playable, sent == expected,
+              d.revealPrimary == d.correct,
+              d.revealSecondary == (expected == d.correct ? "" : "sent as \(expected)")
+        else { cutOK = false; break }
+        if expected != d.correct { sawCutLetter = true }
+    }
+    check("cut serials are sent as the cut letters while the answer stays the digits",
+          cutOK && sawCutLetter && cutSerial.summary == "Serial numbers (cut)")
+    // Graded correct in either form — digits, cut letters, unpadded — as the pileup accepts them.
+    var gradedOK = true
+    for cut in [true, false] {
+        let q = RapidFireQuiz(config: .init(content: .serials, serialCutNumbers: cut),
+                              rng: SeededRNG(seed: 16))
+        for _ in 0..<60 {
+            let digits = q.nextDrill().correct
+            let letters = CutNumbers.encode(digits, enabled: allCut)
+            let wrong = String(format: "%03d", (Int(digits)! % 999) + 1)
+            if !q.record(choice: digits, ttr: 0).correct
+                || !q.record(choice: letters, ttr: 0).correct
+                || !q.record(choice: letters.lowercased(), ttr: 0).correct
+                || !q.record(choice: String(Int(digits)!), ttr: 0).correct
+                || q.record(choice: wrong, ttr: 0).correct
+                || q.record(choice: "", ttr: 0).correct { gradedOK = false; break }
+        }
+    }
+    check("a serial copy is graded correct as digits, cut letters or unpadded, and wrong otherwise", gradedOK)
+    let grpQ = RapidFireQuiz(config: .init(content: .numbers, numberCount: 3), rng: SeededRNG(seed: 17))
+    var group = grpQ.nextDrill().correct
+    while group.allSatisfy({ $0 == "4" || $0 == "6" }) { group = grpQ.nextDrill().correct }
+    check("a number group is still graded as text, not as cut letters",
+          grpQ.record(choice: CutNumbers.encode(group, enabled: allCut), ttr: 0).correct == false)
+
+    // Names and power draw from the shared lists.
+    let nameQ = RapidFireQuiz(config: .init(content: .names), rng: SeededRNG(seed: 18))
+    var nameSet = Set<String>(), namesOK = true
+    for _ in 0..<200 {
+        let t = nameQ.nextDrill().correct
+        nameSet.insert(t)
+        if !MorseData.opNames.contains(t) { namesOK = false }
+    }
+    check("names draw from MorseData.opNames", namesOK && nameSet.count > 1 && nameQ.summary == "Names")
+    let powQ = RapidFireQuiz(config: .init(content: .power), rng: SeededRNG(seed: 19))
+    var powSet = Set<String>(), powOK = true
+    for _ in 0..<200 {
+        let t = powQ.nextDrill().correct
+        powSet.insert(t)
+        if !MorseData.powers.contains(t) { powOK = false }
+    }
+    check("power draws from MorseData.powers", powOK && powSet.count > 1 && powQ.summary == "Power levels")
+    check("a lower-cased power copy grades correct",
+          { let q = RapidFireQuiz(config: .init(content: .power), rng: SeededRNG(seed: 20))
+            let a = q.nextDrill().correct
+            return q.record(choice: a.lowercased(), ttr: 0).correct }())
+    check("every Rapid Fire kind has a label and a one-line blurb",
+          RapidFireContent.allCases.allSatisfy { !$0.label.isEmpty && !$0.blurb.isEmpty && !$0.blurb.contains("\n") }
+          && RapidFireContent.allCases.map(\.label)
+             == ["Call signs", "Words", "Number groups", "State abbreviations", "Serial numbers", "Names", "Power", "Mixed"])
 }
 
 // Short Stories library
@@ -2598,7 +2702,9 @@ do {
 // announcement CLAUDE.md asks for.
 struct DailyDitFixture: Decodable {
     struct Rules: Decodable {
-        let maxGuesses, guessesPerSpeedStep, wordLength, selectionStride: Int
+        let listensPerSpeedStep, guessesPerSpeedStep, wordLength, selectionStride: Int
+        // #168: no guess cap. Optional so the check can assert it is *absent*.
+        let maxGuesses: Int?
         let speedStepWpm, minimumWpm: Double
         let startingSpeeds: [Double]
         let shareLink: String
@@ -2615,22 +2721,31 @@ struct DailyDitFixture: Decodable {
     struct CivilDate: Decodable { let year, month, day, daysFrom1970, puzzleNumber: Int }
     struct Puzzle: Decodable { let puzzleNumber, answerIndex: Int; let answer: String }
     struct Scoring: Decodable { let guess, answer: String; let tiles: [String] }
-    struct Ladder: Decodable { let startingWpm: Double; let guessesUsed: Int; let wpm: Double }
+    struct Ladder: Decodable {
+        let startingWpm: Double
+        let listens, wrongGuesses: Int
+        let wpm: Double
+    }
+    struct Play: Decodable { let action: String; let word: String? }
     struct Share: Decodable {
         let puzzleNumber: Int
         let answer: String
         let startingWpm: Double
         let hideReference: Bool
-        let guesses: [String]
+        let plays: [Play]
+        let heard, roundWpms: [Double]
+        let listens, guessesUsed: Int
+        let solvedWpm: Double
         let shareText: String
     }
     struct Headline: Decodable {
-        let puzzleNumber, guessesUsed: Int
+        let puzzleNumber, guessesUsed, listens: Int
         let outcome: String
         let solvedWpm: Double?
         let hideReference: Bool
         let headline: String
     }
+    struct SolvedSpeed: Decodable { let heard: [Double]; let winningGuessWpm, solvedWpm: Double }
     let rules: Rules
     let wordLists: WordLists
     let civilDates: [CivilDate]
@@ -2639,6 +2754,7 @@ struct DailyDitFixture: Decodable {
     let ladder: [Ladder]
     let share: Share
     let headlines: [Headline]
+    let solvedSpeeds: [SolvedSpeed]
 }
 
 func loadDailyDitFixture() -> DailyDitFixture? {
@@ -2656,7 +2772,7 @@ print("\nDaily Dit, against fixtures/daily-dit.json:")
 if let fx = loadDailyDitFixture() {
     // Rules
     check("rule constants match the fixture",
-          DailyDit.maxGuesses == fx.rules.maxGuesses
+          DailyDit.listensPerSpeedStep == fx.rules.listensPerSpeedStep
           && DailyDit.guessesPerSpeedStep == fx.rules.guessesPerSpeedStep
           && DailyDit.wordLength == fx.rules.wordLength
           && DailyDit.selectionStride == fx.rules.selectionStride
@@ -2669,6 +2785,7 @@ if let fx = loadDailyDitFixture() {
           && DailyDit.epoch.day == fx.rules.epoch.day)
 
     check("the brief's top speed is on the dial", DailyDit.startingSpeeds.contains(75))
+    check("there is no guess cap (#168): the fixture carries none", fx.rules.maxGuesses == nil)
 
     check("tile emoji match the fixture",
           DailyDit.Tile.correct.emoji == fx.rules.emoji.correct
@@ -2751,30 +2868,45 @@ if let fx = loadDailyDitFixture() {
     }
     check("guess scoring matches the fixture across \(fx.scoring.count) cases (doubled letters included)", scoreOK)
 
-    // Ladder
+    // Ladder: two independent counters (#168) — listens alone, wrong guesses
+    // alone, both, and partials of each that must *not* combine into a step.
     var ladderOK = true
-    for c in fx.ladder where DailyDit.wpm(startingAt: c.startingWpm, guessesUsed: c.guessesUsed) != c.wpm {
+    for c in fx.ladder
+    where DailyDit.wpm(startingAt: c.startingWpm, listens: c.listens, wrongGuesses: c.wrongGuesses) != c.wpm {
         ladderOK = false
-        print("      ↳ \(c.startingWpm) WPM after \(c.guessesUsed) guesses should be \(c.wpm)")
+        print("      ↳ \(c.startingWpm) WPM after \(c.listens) listens and \(c.wrongGuesses) wrong guesses should be \(c.wpm)")
     }
     check("the speed ladder matches the fixture across \(fx.ladder.count) points", ladderOK)
     check("the ladder never falls below the floor",
-          DailyDit.wpm(startingAt: 20, guessesUsed: 500) == DailyDit.minimumWpm)
+          DailyDit.wpm(startingAt: 20, listens: 500, wrongGuesses: 0) == DailyDit.minimumWpm
+          && DailyDit.wpm(startingAt: 20, listens: 0, wrongGuesses: 500) == DailyDit.minimumWpm)
 
-    // A whole game, played to the share text
+    // A whole game, played to the share text: the fixture's script of listens
+    // and guesses, checked step by step and then as the brag sheet.
     var game = DailyDitGame(puzzleNumber: fx.share.puzzleNumber,
                             answer: fx.share.answer,
                             startingWpm: fx.share.startingWpm,
                             hideReference: fx.share.hideReference)
     var played = true
-    for g in fx.share.guesses {
-        if case .rejected = game.submit(g) { played = false }
+    for p in fx.share.plays {
+        switch p.action {
+        case "listen": game.listen()
+        case "guess": if case .rejected = game.submit(p.word ?? "") { played = false }
+        default: played = false
+        }
     }
-    check("the fixture's guesses are all accepted", played)
+    check("the fixture's plays are all accepted", played)
     check("the game ends solved", game.outcome == .solved)
-    check("it reports the speed the winning guess was made at",
-          game.solvedWpm == fx.share.startingWpm)
-    check("the share text matches the fixture", game.shareText == fx.share.shareText)
+    check("each listen was heard at the speed in effect before it counted",
+          game.heard == fx.share.heard)
+    check("each guess was made at the speed the listens and wrong guesses had reached",
+          game.rounds.map(\.wpm) == fx.share.roundWpms)
+    check("listens and guesses are both counted",
+          game.listens == fx.share.listens && game.guessesUsed == fx.share.guessesUsed)
+    check("it reports the slowest speed the word was heard at",
+          game.solvedWpm == fx.share.solvedWpm)
+    check("the share text matches the fixture, listens and guesses included",
+          game.shareText == fx.share.shareText)
     check("the share text carries the link home",
           game.shareText.hasSuffix(DailyDit.shareLink))
 
@@ -2792,13 +2924,29 @@ if let fx = loadDailyDitFixture() {
                              answer: "SPEND",
                              startingWpm: 60,
                              hideReference: h.hideReference,
-                             rounds: rounds)
+                             rounds: rounds,
+                             heard: Array(repeating: h.solvedWpm ?? 0, count: h.listens))
         if g.headline != h.headline || g.outcome.rawValue != h.outcome {
             headlineOK = false
             print("      ↳ \"\(g.headline)\" (\(g.outcome.rawValue)) vs fixture \"\(h.headline)\" (\(h.outcome))")
         }
     }
-    check("headlines match the fixture across \(fx.headlines.count) outcomes", headlineOK)
+    check("headlines match the fixture across \(fx.headlines.count) outcomes (singulars and a 101-guess day included)", headlineOK)
+
+    // The reported speed is the slowest the word was *heard* at, not the speed
+    // at the winning guess. The dial can be raised before the first guess, so
+    // a later listen can be faster than an earlier one; the minimum still wins.
+    var solvedOK = true
+    for s in fx.solvedSpeeds {
+        let g = DailyDitGame(puzzleNumber: 1, answer: "SPEND", startingWpm: 75,
+                             rounds: [DailyDitRound(guess: "SPEND", tiles: hit, wpm: s.winningGuessWpm)],
+                             heard: s.heard)
+        if g.solvedWpm != s.solvedWpm {
+            solvedOK = false
+            print("      ↳ heard \(s.heard), won at \(s.winningGuessWpm): reports \(String(describing: g.solvedWpm)), fixture says \(s.solvedWpm)")
+        }
+    }
+    check("the reported speed is the lowest heard across \(fx.solvedSpeeds.count) cases (a later faster listen and a blind guess included)", solvedOK)
 
     // Rules the fixture can't express as a table
     var rules = DailyDitGame(puzzleNumber: 1, answer: "SPEND", startingWpm: 40)
@@ -2811,28 +2959,78 @@ if let fx = loadDailyDitFixture() {
     // drag the code slower is a tactic, not a mistake.
     check("a repeated guess is legal and still spends a guess",
           { if case .scored = rules.submit("mound") { return rules.guessesUsed == 2 }; return false }())
-    check("the speed steps down only after a full step's worth of guesses",
+    check("the speed steps down only after a full step's worth of wrong guesses",
           rules.currentWpm == 40)
     _ = rules.submit("MOUND")
     check("…and does step down on the third", rules.currentWpm == 35)
     check("eliminated letters are the ones no guess ever placed",
           rules.eliminatedLetters == Set("MOU"))
 
-    var over = DailyDitGame(puzzleNumber: 1, answer: "SPEND", startingWpm: 40,
-                            rounds: (0..<DailyDit.maxGuesses).map { _ in
-                                DailyDitRound(guess: "MOUND", tiles: miss, wpm: 40)
-                            })
-    check("a lost game is over", over.outcome == .lost && over.guessesLeft == 0)
-    check("a finished game takes no more guesses",
-          over.submit("SPEND") == .rejected(.finished) && over.guessesUsed == DailyDit.maxGuesses)
+    // Listens step the speed too (#168): three at the starting speed, the
+    // fourth feels the step, and the record is what was actually sent.
+    var ears = DailyDitGame(puzzleNumber: 1, answer: "SPEND", startingWpm: 40)
+    let sentAt = (0..<4).map { _ in ears.listen() }
+    check("listens step the speed down, the step landing on the play after the third",
+          sentAt == [40, 40, 40, 35] && ears.heard == sentAt && ears.listens == 4
+          && ears.currentWpm == 35 && ears.guessesUsed == 0)
+    // …independently of guesses, and the steps add: two of each is no step.
+    var both = DailyDitGame(puzzleNumber: 1, answer: "SPEND", startingWpm: 40)
+    both.listen(); both.listen()
+    _ = both.submit("MOUND"); _ = both.submit("MOUND")
+    let twoOfEach = both.currentWpm == 40
+    both.listen()
+    let threeListens = both.currentWpm == 35
+    _ = both.submit("MOUND")
+    check("listens and wrong guesses step independently and the steps add",
+          twoOfEach && threeListens && both.currentWpm == 30
+          && both.listens == 3 && both.wrongGuesses == 3)
+
+    // No guess cap (#168): the hundredth wrong guess is as welcome as the first.
+    var long = DailyDitGame(puzzleNumber: 1, answer: "SPEND", startingWpm: 40)
+    var everyGuessTaken = true
+    for _ in 0..<100 {
+        if case .rejected = long.submit("MOUND") { everyGuessTaken = false }
+    }
+    check("a game never runs out of guesses", everyGuessTaken && long.outcome == .playing
+          && long.guessesUsed == 100 && long.currentWpm == DailyDit.minimumWpm)
+    _ = long.submit("SPEND")
+    check("…and is won on the 101st", long.outcome == .solved && long.guessesUsed == 101
+          && long.wrongGuesses == 100)
+
+    var won = DailyDitGame(puzzleNumber: 1, answer: "SPEND", startingWpm: 40)
+    won.listen()
+    _ = won.submit("SPEND")
+    let before = won
+    check("a solved game takes no more guesses",
+          won.submit("MOUND") == .rejected(.finished) && won.guessesUsed == 1)
+    check("replays after the win are free and not counted",
+          won.listen() == 40 && won == before && won.listens == 1)
+
+    var blind = DailyDitGame(puzzleNumber: 1, answer: "SPEND", startingWpm: 40)
+    _ = blind.submit("SPEND")
+    check("a word guessed without listening reports the guess speed",
+          blind.listens == 0 && blind.solvedWpm == 40
+          && blind.headline == "Daily Dit #1 — 40 WPM · 1 guess · 0 listens")
 
     // Saved and restored, since the day's game outlives the app process.
     if let data = try? JSONEncoder().encode(game),
        let back = try? JSONDecoder().decode(DailyDitGame.self, from: data) {
         check("a game round-trips through Codable with its share text intact",
-              back == game && back.shareText == game.shareText)
+              back == game && back.shareText == game.shareText && back.heard == game.heard)
     } else {
         check("a game round-trips through Codable with its share text intact", false)
+    }
+    // A game saved before #168 has no `heard` key; it must restore as a game
+    // that was never listened to, not fail to decode and hand out a fresh day.
+    let legacy = Data("""
+        {"puzzleNumber":245,"answer":"SPEND","startingWpm":60,"hideReference":false,
+         "rounds":[{"guess":"MOUND","tiles":["absent","absent","absent","correct","correct"],"wpm":60}]}
+        """.utf8)
+    if let old = try? JSONDecoder().decode(DailyDitGame.self, from: legacy) {
+        check("a pre-#168 saved game decodes with no listens",
+              old.listens == 0 && old.guessesUsed == 1 && old.currentWpm == 60)
+    } else {
+        check("a pre-#168 saved game decodes with no listens", false)
     }
 } else {
     check("fixtures/daily-dit.json loads and decodes", false)
@@ -2935,6 +3133,128 @@ if let fx = loadIntroductionFixture() {
     check("once drilled, the target is not introduced again", CharacterIntroduction.forDrill(first, isMet: met) == nil)
 } else {
     check("fixtures/introduction.json loads and decodes", false)
+}
+
+// Morse Invaders (#170) — the same expectations as the Kotlin InvadersTest.
+print("\nMorse Invaders:")
+do {
+    let pool: [Character] = ["K", "M", "R", "S"]
+    func game(hitsPerWave: Int = 10, seed: UInt64 = 1) -> InvadersGame {
+        InvadersGame(config: .init(characters: pool, hitsPerWave: hitsPerWave), rng: SeededRNG(seed: seed))
+    }
+
+    // A spawn appears at the configured interval.
+    let g1 = game()
+    let interval = g1.spawnInterval
+    check("wave 1 spawn interval is the base", approxEqual(interval, InvadersGame.baseSpawnInterval))
+    check("nothing spawns before the interval", g1.advance(by: interval - 0.01).isEmpty && g1.invaders.isEmpty)
+    let spawnEvents = g1.advance(by: 0.02)
+    check("one spawn lands on the interval", spawnEvents.count == 1 && g1.invaders.count == 1)
+    if case .spawned(let inv)? = spawnEvents.first {
+        check("spawned invader carries a pool character", pool.contains(inv.character))
+        check("spawn is born by the overshoot", approxEqual(inv.progress, 0.01 / g1.fallTime))
+    } else {
+        check("first event is a spawn", false)
+    }
+    check("second spawn waits a full interval",
+          !g1.advance(by: interval - 0.02).contains { if case .spawned = $0 { return true } else { return false } }
+          && g1.advance(by: 0.02).count == 1 && g1.invaders.count == 2)
+
+    // A correct answer removes the lowest matching invader and scores.
+    let g2 = InvadersGame(config: .init(characters: ["K"]), rng: SeededRNG(seed: 3))
+    g2.advance(by: g2.spawnInterval)
+    g2.advance(by: g2.spawnInterval)
+    let lowest = g2.lowest!
+    let hit = g2.shoot("k")
+    check("hit removes the lowest matching invader (case-insensitive)", hit.isHit && hit.invader?.id == lowest.id && g2.invaders.count == 1)
+    check("hit scores pointsPerHit at ×1", hit.points == InvadersGame.pointsPerHit && g2.score == InvadersGame.pointsPerHit && g2.combo == 1)
+    check("the higher invader stays", (g2.invaders.first?.progress ?? 1) < lowest.progress)
+    check("multiplier steps ×1/×2/×3/×4",
+          InvadersGame.multiplier(combo: 1) == 1 && InvadersGame.multiplier(combo: 3) == 1
+          && InvadersGame.multiplier(combo: 4) == 2 && InvadersGame.multiplier(combo: 7) == 3
+          && InvadersGame.multiplier(combo: 10) == 4 && InvadersGame.multiplier(combo: 40) == 4)
+
+    // A wrong answer breaks the combo and counts a miss.
+    let g3 = InvadersGame(config: .init(characters: ["K"]), rng: SeededRNG(seed: 3))
+    g3.advance(by: g3.spawnInterval); _ = g3.shoot("K")
+    g3.advance(by: g3.spawnInterval); _ = g3.shoot("K")
+    g3.advance(by: g3.spawnInterval)
+    let miss = g3.shoot("Z")
+    check("wrong answer is a miss with no points", !miss.isHit && miss.points == 0 && g3.invaders.count == 1)
+    check("wrong answer breaks the combo, keeps the best", g3.combo == 0 && g3.bestCombo == 2 && g3.misses == 1 && g3.hits == 2)
+    check("accuracy counts hits over hits + misses", approxEqual(g3.accuracy, 2.0 / 3.0))
+
+    // An invader reaching 1.0 costs a life.
+    let g4 = game()
+    g4.advance(by: g4.spawnInterval)
+    let first = g4.invaders[0]
+    check("wave 1 fall time is the base", approxEqual(first.fallTime, InvadersGame.baseFallTime))
+    var t = 0.0
+    var earlyEscape = false
+    while t + 0.25 < first.fallTime - 1e-9 {
+        let events = g4.advance(by: 0.25)
+        t += 0.25
+        if events.contains(where: { if case .escaped = $0 { return true } else { return false } }) { earlyEscape = true }
+        for inv in g4.invaders where inv.id != first.id { _ = g4.shoot(inv.character) }
+    }
+    check("no escape before the fall time", !earlyEscape && g4.lives == 3)
+    let landing = g4.advance(by: 0.25)
+    if case .escaped(let e)? = landing.first(where: { if case .escaped = $0 { return true } else { return false } }) {
+        check("the first invader lands at progress 1.0", e.id == first.id && approxEqual(e.progress, 1.0))
+    } else {
+        check("landing reports an escape", false)
+    }
+    check("a landing costs a life, breaks the combo, counts a miss", g4.lives == 2 && g4.combo == 0 && g4.misses == 1 && !g4.isOver)
+
+    // The third lost life ends the game.
+    let g5 = game()
+    var over = false
+    var escapes = 0
+    var steps = 0
+    while !over && steps < 100_000 {
+        for ev in g5.advance(by: 0.1) {
+            if case .escaped = ev { escapes += 1 }
+            if case .gameOver = ev { over = true }
+        }
+        steps += 1
+    }
+    check("three landings end the game", over && g5.isOver && g5.lives == 0 && escapes == 3 && g5.invaders.isEmpty)
+    check("a finished game ignores time and shots", g5.advance(by: 10).isEmpty && !g5.shoot("K").isHit && g5.misses == 3)
+
+    // A wave advance tightens the interval.
+    let g6 = InvadersGame(config: .init(characters: ["K"], hitsPerWave: 3), rng: SeededRNG(seed: 5))
+    let wave1 = g6.spawnInterval, fall1 = g6.fallTime
+    var earlyClear = false
+    for _ in 0..<2 { g6.advance(by: g6.spawnInterval); if g6.shoot("K").waveCleared { earlyClear = true } }
+    g6.advance(by: g6.spawnInterval)
+    let clearing = g6.shoot("K")
+    check("the Nth hit clears the wave", !earlyClear && clearing.waveCleared && g6.wave == 2)
+    check("wave 2 tightens interval by 12% and fall by 10%",
+          approxEqual(g6.spawnInterval, wave1 * 0.88) && approxEqual(g6.fallTime, fall1 * 0.9))
+    check("timings floor at the minimums",
+          approxEqual(InvadersGame.spawnInterval(wave: 60, difficulty: .normal), InvadersGame.minSpawnInterval)
+          && approxEqual(InvadersGame.fallTime(wave: 60, difficulty: .normal), InvadersGame.minFallTime))
+    check("difficulty scales the timings",
+          approxEqual(InvadersGame.spawnInterval(wave: 1, difficulty: .relaxed), wave1 * 1.35)
+          && approxEqual(InvadersGame.spawnInterval(wave: 1, difficulty: .fast), wave1 * 0.75)
+          && approxEqual(InvadersGame.fallTime(wave: 1, difficulty: .fast), InvadersGame.baseFallTime * 0.75))
+
+    // The same seed gives the same spawn sequence.
+    func sequence(seed: UInt64) -> [String] {
+        let g = game(seed: seed)
+        var out: [String] = []
+        for _ in 0..<12 {
+            g.advance(by: g.spawnInterval)
+            if let last = g.invaders.last { out.append("\(last.character)\(last.column)") }
+            for inv in g.invaders { _ = g.shoot(inv.character) }
+        }
+        return out
+    }
+    let seq = sequence(seed: 42)
+    check("same seed, same spawn sequence", seq == sequence(seed: 42) && seq.count == 12)
+    check("different seed, different sequence", seq != sequence(seed: 43))
+    check("consecutive spawns never share a column",
+          zip(seq, seq.dropFirst()).allSatisfy { $0.last != $1.last })
 }
 
 print("\n────────────────────────────")
