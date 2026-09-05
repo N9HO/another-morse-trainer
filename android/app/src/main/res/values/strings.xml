@@ -686,7 +686,7 @@
     <string name="invaders_score">Score</string>
     <string name="invaders_wave">Wave</string>
     <string name="invaders_lives">Lives</string>
-    <string name="invaders_combo">Combo ×%1$d</string>
+    <string name="invaders_combo_label">Combo</string>
     <string name="invaders_game_over">Game over</string>
     <string name="invaders_best_combo">Best combo</string>
     <string name="invaders_accuracy">Accuracy</string>
