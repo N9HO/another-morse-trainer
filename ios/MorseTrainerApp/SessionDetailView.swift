@@ -2,7 +2,8 @@ import SwiftUI
 
 /// A completed session, with the per-character "Instant Character Recognition"
 /// chart (#19): one bar per learned character, length = median recognition time,
-/// a dashed "ideal" reference line, green when accurate / red when it needs work.
+/// a dashed "ideal" reference line, coloured in three accuracy tiers (teal at
+/// 90%+, bright teal at 70%+, orange below — the same cut-offs as Android).
 struct SessionDetailView: View {
     let record: SessionRecord
     /// The learner's recognize-within goal, in milliseconds (the dashed line).
@@ -54,12 +55,36 @@ struct SessionDetailView: View {
                     stat("Mode", modeTitle)
                     stat("Answered", "\(record.attempts)")
                     stat("Accuracy", record.attempts == 0 ? "—" : "\(Int((record.accuracy * 100).rounded()))%")
-                    stat("Median", record.medianTTR.map { String(format: "%.2fs", $0) } ?? "—")
+                    stat("Median", record.medianTTR.map { String(format: "%.2f s", $0) } ?? "—")
                 }
                 .padding(.top, 2)
+                // The rows Android's session detail also shows (StatsScreen.kt):
+                // fastest copy, wall-clock duration and the speed it was sent at.
+                HStack(spacing: 18) {
+                    stat("Fastest", record.fastestTTR.map { String(format: "%.2f s", $0) } ?? "—")
+                    stat("Duration", record.durationSeconds.map(BragSheetView.duration) ?? "—")
+                    stat("Speed", speedText)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+    }
+
+    /// "25 WPM", or "25 WPM (eff 7)" when Farnsworth spacing slowed the
+    /// effective rate — Android's `stats_speed_value` / `stats_eff_suffix`.
+    /// Sessions persisted before the speed field carry 0 and show a dash.
+    private var speedText: String {
+        guard record.characterWPM > 0 else { return "—" }
+        let eff = (1..<record.characterWPM).contains(record.effectiveWPM)
+            ? " (eff \(record.effectiveWPM))" : ""
+        return "\(record.characterWPM) WPM\(eff)"
+    }
+
+    /// Bar / value colour by accuracy: the three tiers Android's chart uses.
+    static func accuracyColor(_ accuracy: Double) -> Color {
+        if accuracy >= 0.9 { return Theme.teal }
+        if accuracy >= 0.7 { return Theme.tealBright }
+        return .orange
     }
 
     private func stat(_ label: String, _ value: String) -> some View {
@@ -95,7 +120,7 @@ struct SessionDetailView: View {
                     .frame(width: 44, alignment: .leading)
                     Text(c.medianMS.map { "\($0)ms" } ?? "—")
                         .font(.body.monospacedDigit())
-                        .foregroundStyle(c.accuracy >= 0.9 ? .green : .red)
+                        .foregroundStyle(SessionDetailView.accuracyColor(c.accuracy))
                         .frame(width: 80, alignment: .leading)
                     Spacer()
                     Text("\(Int((c.accuracy * 100).rounded()))%")
@@ -119,7 +144,6 @@ private struct RecognitionTimeChart: View {
     private let rowHeight: CGFloat = 24
     private let topInset: CGFloat = 18     // room for the "ideal" label
     private let axisHeight: CGFloat = 20
-    private let goodAccuracy = 0.9
 
     private var maxMS: Int {
         let observed = rows.compactMap { $0.result?.medianMS }.max() ?? 0
@@ -179,7 +203,7 @@ private struct RecognitionTimeChart: View {
         let attempts = row.result?.attempts ?? 0
         let accuracy = row.result?.accuracy ?? 0
         let barW = ms.map { max(2, xFrac($0) * plotW) } ?? 0
-        let color: Color = accuracy >= goodAccuracy ? .green : .red
+        let color = SessionDetailView.accuracyColor(accuracy)
         return ZStack(alignment: .topLeading) {
             Text(row.character)
                 .font(.system(.footnote, design: .monospaced))

@@ -1,17 +1,21 @@
 package app.anothermorsetrainer
 
+import android.content.Context
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -23,6 +27,7 @@ import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.IosShare
 import androidx.compose.material.icons.filled.LocalFireDepartment
+import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.TrackChanges
 import androidx.compose.material.icons.filled.WorkspacePremium
 import androidx.compose.material3.Icon
@@ -39,16 +44,23 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.anothermorsetrainer.morsekit.CharacterStats
+import app.anothermorsetrainer.morsekit.ConfusionMatrix
+import app.anothermorsetrainer.morsekit.ConfusionPair
 import app.anothermorsetrainer.morsekit.MorseCode
+import app.anothermorsetrainer.morsekit.ProgressiveCharacters
 import app.anothermorsetrainer.morsekit.SessionRecord
 import app.anothermorsetrainer.morsekit.WPMBandSummary
 import app.anothermorsetrainer.morsekit.WPMBands
@@ -64,10 +76,11 @@ private val MASTERED = Color(0xFFEF9F27)
 private val GOOD = Color(0xFF5DCAA5)
 
 /**
- * The Brag Sheet: your progress at a glance — daily streak with this week's
- * practice strip, lifetime totals, personal bests, the per-character recognition
- * chart, and recent sessions. A share button renders a card you can post. Reads
- * the persisted [Stats] singleton.
+ * The Brag Sheet: your progress at a glance — the Characters stage and goal,
+ * daily streak with this week's practice strip, lifetime totals, personal
+ * bests, the per-character table (weakest first), performance by speed, recent
+ * sessions and most-confused pairs. A share button renders a card you can post.
+ * Reads the persisted [Stats] singleton and the [EngineStore] snapshot.
  */
 @Composable
 fun StatsScreen(onBack: () -> Unit) {
@@ -80,6 +93,10 @@ fun StatsScreen(onBack: () -> Unit) {
         return
     }
     val context = LocalContext.current
+    // The Characters track as last saved: stage, active set, the 20-attempt
+    // per-character window and the confusion matrix. Read once per visit —
+    // nothing on this screen records an answer.
+    val snapshot = remember { EngineStore.snapshot() }
     Column(modifier = Modifier.fillMaxSize()) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
@@ -104,6 +121,8 @@ fun StatsScreen(onBack: () -> Unit) {
                 modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
                 textAlign = TextAlign.Center
             )
+
+            StageHeader(snapshot)
 
             if (Stats.totalSessions == 0) {
                 Spacer(Modifier.height(40.dp))
@@ -130,30 +149,34 @@ fun StatsScreen(onBack: () -> Unit) {
             }
 
             SectionLabel(stringResource(R.string.stats_personal_bests))
-            PersonalBests()
+            PersonalBests(snapshot)
 
-            val charRows = Stats.charStats.entries
-                .mapNotNull { e -> e.value.medianMs?.let { CharBar(e.key, it, e.value.accuracy) } }
-                .sortedWith(compareBy(SessionRecord.characterOrder) { it.character })
+            // Per-character performance over the engine's 20-attempt window,
+            // weakest first (unmastered, then slowest) — the iOS StatsView
+            // "Characters" table. Every active character gets a row, even one
+            // never drilled, so the learner sees the whole ladder.
+            val charRows = characterRows(snapshot)
             if (charRows.isNotEmpty()) {
-                SectionLabel(stringResource(R.string.stats_recognition_speed))
-                Text(
-                    stringResource(R.string.stats_recognition_speed_blurb),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Brand.textSecondary,
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
-                )
-                val axisMax = SessionRecord.axisCeilingMS(charRows.maxOf { it.medianMs })
-                Column(modifier = Modifier.fillMaxWidth().brandCard(14.dp).padding(14.dp)) {
+                SectionLabel(stringResource(R.string.stats_characters))
+                Column(modifier = Modifier.fillMaxWidth().brandCard(14.dp)) {
                     charRows.forEachIndexed { i, row ->
-                        RecognitionBar(row = row, axisMaxMs = axisMax)
-                        if (i < charRows.size - 1) Spacer(Modifier.height(8.dp))
+                        CharacterRow(row)
+                        if (i < charRows.size - 1) HairlineDivider()
                     }
                 }
             }
 
+            // Every stored session, not the 50-row summary list: the iOS twin
+            // summarises the whole SessionHistory.
             val bands = WPMBands.summarize(
-                Stats.recent.map { WPMBands.Entry(it.characterWpm, it.attempts, it.correct, it.medianTtrMs) }
+                Stats.history.map { r ->
+                    WPMBands.Entry(
+                        wpm = r.characterWPM,
+                        attempts = r.attempts,
+                        correct = r.correct,
+                        medianTtrMs = r.medianTTR?.let { (it * 1000).roundToInt() }
+                    )
+                }
             )
             if (bands.isNotEmpty()) {
                 SectionLabel(stringResource(R.string.stats_performance_by_speed))
@@ -188,8 +211,192 @@ fun StatsScreen(onBack: () -> Unit) {
                     if (i < recent.size - 1) HairlineDivider()
                 }
             }
+
+            // Both error directions summed, strongest first, top eight — the
+            // same data the Confusion Drill trains on.
+            val pairs = ConfusionMatrix().apply { restore(snapshot.engine.confusions) }
+                .pairs(minCount = 1)
+                .take(8)
+            if (pairs.isNotEmpty()) {
+                SectionLabel(stringResource(R.string.stats_most_confused_pairs))
+                Text(
+                    stringResource(R.string.stats_most_confused_pairs_blurb),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Brand.textSecondary,
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
+                )
+                Column(modifier = Modifier.fillMaxWidth().brandCard(14.dp)) {
+                    pairs.forEachIndexed { i, pair ->
+                        ConfusionRow(pair)
+                        if (i < pairs.size - 1) HairlineDivider()
+                    }
+                }
+            }
             Spacer(Modifier.height(24.dp))
         }
+    }
+}
+
+// MARK: - Stage header
+
+/** The stage's full name, as the iOS `stageName` shows it (not the quiz's short pill labels). */
+internal fun stageDisplayName(context: Context, stage: ProgressiveCharacters.Stage): String =
+    context.getString(
+        when (stage) {
+            ProgressiveCharacters.Stage.Singles -> R.string.stats_stage_singles
+            ProgressiveCharacters.Stage.Pairs -> R.string.stats_stage_pairs
+            ProgressiveCharacters.Stage.Triples -> R.string.stats_stage_triples
+            ProgressiveCharacters.Stage.Phrases -> R.string.stats_stage_phrases
+        }
+    )
+
+/** Current stage, active character count and the recognize-within goal (iOS StatsView header). */
+@Composable
+private fun StageHeader(snapshot: ProgressiveCharacters.Snapshot) {
+    val context = LocalContext.current
+    Column(modifier = Modifier.fillMaxWidth().brandCard(14.dp).padding(horizontal = 14.dp, vertical = 4.dp)) {
+        DetailRow(stringResource(R.string.stats_current_stage), stageDisplayName(context, snapshot.stage))
+        HairlineDivider()
+        DetailRow(stringResource(R.string.stats_active_characters), "${snapshot.engine.activeCharacters.size}")
+        HairlineDivider()
+        DetailRow(
+            stringResource(R.string.stats_recognize_within_goal),
+            stringResource(R.string.stats_goal_value, Settings.recognitionTargetSec)
+        )
+    }
+    Text(
+        stringResource(R.string.stats_header_footer),
+        style = MaterialTheme.typography.bodySmall,
+        color = Brand.textSecondary,
+        modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+    )
+}
+
+// MARK: - Per-character table
+
+/** One row of the Characters table — the iOS `AppModel.CharStat`. */
+private data class CharRow(
+    val character: Char,
+    val pattern: String,
+    val attempts: Int,
+    val accuracy: Double,
+    val medianTTR: Double?,
+    val mastered: Boolean
+)
+
+/**
+ * Per-character performance for the active set over the engine's own
+ * [CharacterStats.historyLimit]-attempt window, weakest first: unmastered
+ * before mastered, then slowest first, never-copied at the top.
+ */
+private fun characterRows(snapshot: ProgressiveCharacters.Snapshot): List<CharRow> {
+    val window = CharacterStats.historyLimit
+    val threshold = Settings.recognitionTargetSec
+    val byChar = snapshot.engine.stats.associateBy { it.character }
+    return snapshot.engine.activeCharacters.map { ch ->
+        val s = byChar[ch] ?: CharacterStats(ch)
+        CharRow(
+            character = ch,
+            pattern = MorseCode.pattern(ch) ?: "",
+            attempts = s.attempts.size,
+            accuracy = s.accuracy(window),
+            medianTTR = s.medianTTR(window),
+            mastered = s.isMastered(threshold)
+        )
+    }.sortedWith(
+        compareBy<CharRow> { it.mastered }
+            .thenByDescending { it.medianTTR ?: Double.POSITIVE_INFINITY }
+    )
+}
+
+@Composable
+private fun CharacterRow(row: CharRow) {
+    val ttr = row.medianTTR
+    val ttrColor = when {
+        ttr == null -> Brand.textSecondary
+        row.mastered -> GOOD
+        ttr > Settings.recognitionTargetSec -> MASTERED
+        else -> Brand.textPrimary
+    }
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.width(56.dp)) {
+            Text(row.character.toString(), fontWeight = FontWeight.Bold, fontSize = 18.sp, fontFamily = FontFamily.Monospace, color = Brand.textPrimary)
+            Text(row.pattern, style = MaterialTheme.typography.labelSmall, fontFamily = FontFamily.Monospace, color = Brand.textSecondary)
+        }
+        Column(modifier = Modifier.width(90.dp)) {
+            Text(
+                row.medianTTR?.let { stringResource(R.string.common_seconds_2dp, it) } ?: "—",
+                fontWeight = FontWeight.Medium,
+                color = ttrColor
+            )
+            Text(stringResource(R.string.stats_median_ttr), style = MaterialTheme.typography.labelSmall, color = Brand.textSecondary)
+        }
+        Column(modifier = Modifier.width(70.dp)) {
+            Text(
+                if (row.attempts == 0) "—" else "${(row.accuracy * 100).roundToInt()}%",
+                fontWeight = FontWeight.Medium,
+                color = Brand.textPrimary
+            )
+            Text(stringResource(R.string.stats_tries, row.attempts), style = MaterialTheme.typography.labelSmall, color = Brand.textSecondary)
+        }
+        Spacer(Modifier.weight(1f))
+        MasterySeal(row.mastered)
+    }
+}
+
+/** The "mastered" seal: a filled check for mastered, a hollow ring otherwise (iOS checkmark.seal / circle.dashed). */
+@Composable
+private fun MasterySeal(mastered: Boolean) {
+    Box(
+        modifier = Modifier
+            .size(22.dp)
+            .clip(CircleShape)
+            .then(
+                if (mastered) Modifier.background(GOOD)
+                else Modifier.border(1.5.dp, Brand.textSecondary.copy(alpha = 0.5f), CircleShape)
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        if (mastered) {
+            Icon(
+                Icons.Filled.Check,
+                contentDescription = stringResource(R.string.stats_mastered),
+                tint = Brand.navy,
+                modifier = Modifier.size(14.dp)
+            )
+        }
+    }
+}
+
+// MARK: - Most-confused pairs
+
+@Composable
+private fun ConfusionRow(pair: ConfusionPair) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        CharBadge(pair.a)
+        Icon(Icons.Filled.SwapHoriz, contentDescription = null, tint = Brand.textSecondary, modifier = Modifier.size(16.dp))
+        CharBadge(pair.b)
+        Spacer(Modifier.weight(1f))
+        Text(
+            stringResource(R.string.stats_confusion_count, pair.count),
+            fontWeight = FontWeight.Medium,
+            color = MASTERED
+        )
+    }
+}
+
+@Composable
+private fun CharBadge(ch: Char) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(ch.toString(), fontWeight = FontWeight.Bold, fontSize = 18.sp, fontFamily = FontFamily.Monospace, color = Brand.textPrimary)
+        Text(MorseCode.pattern(ch) ?: "", style = MaterialTheme.typography.labelSmall, fontFamily = FontFamily.Monospace, color = Brand.textSecondary)
     }
 }
 
@@ -272,12 +479,11 @@ private fun WeekStrip() {
 // MARK: - Personal bests
 
 @Composable
-private fun PersonalBests() {
-    val context = LocalContext.current
+private fun PersonalBests(snapshot: ProgressiveCharacters.Snapshot) {
     val realSessions = Stats.recent.filter { it.attempts >= 10 }
     val bestAcc = realSessions.maxOfOrNull { it.accuracy }
     val biggest = Stats.recent.maxOfOrNull { it.attempts }
-    val mastered = ShareCard.masteredCount()
+    val mastered = ShareCard.masteredCount(snapshot)
     val total = MorseCode.kochOrder.size
 
     Column(modifier = Modifier.fillMaxWidth().brandCard(14.dp).padding(horizontal = 14.dp, vertical = 4.dp)) {
@@ -413,15 +619,79 @@ private fun SessionDetail(record: SessionRecord, onBack: () -> Unit) {
                     color = Brand.textSecondary,
                     modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
                 )
-                val axisMax = SessionRecord.axisCeilingMS(rows.mapNotNull { it.result?.medianMS }.maxOrNull() ?: 1000)
                 Column(modifier = Modifier.fillMaxWidth().brandCard(14.dp).padding(14.dp)) {
-                    rows.forEachIndexed { i, row ->
-                        SessionCharRow(row = row, axisMaxMs = axisMax)
-                        if (i < rows.size - 1) Spacer(Modifier.height(8.dp))
-                    }
+                    SessionChart(rows = rows, idealMs = (Settings.recognitionTargetSec * 1000).roundToInt())
                 }
             }
             Spacer(Modifier.height(24.dp))
+        }
+    }
+}
+
+/**
+ * The per-character recognition chart with its scaffolding — the iOS
+ * `RecognitionTimeChart`: hairline gridlines every 250 ms, a millisecond axis
+ * along the bottom, and a dashed reference line at the recognize-within goal
+ * labelled "ideal". The axis ceiling always includes the goal so the line is
+ * on the chart even when every bar beats it.
+ *
+ * Laid out from fixed column widths rather than measured: the character
+ * gutter and the trailing value column are constant, so the plot area is the
+ * remaining width and every x can be a plain Dp.
+ */
+@Composable
+private fun SessionChart(rows: List<SessionRecord.ChartRow>, idealMs: Int) {
+    val observed = rows.mapNotNull { it.result?.medianMS }.maxOrNull() ?: 0
+    val axisMax = SessionRecord.axisCeilingMS(maxOf(observed, idealMs))
+    val gridValues = (250..axisMax step 250).toList()
+    val gutter = 28.dp          // character-label column (SessionCharRow)
+    val trailing = 60.dp        // value column: 52.dp + 8.dp start padding
+    val rowHeight = 22.dp
+    val rowGap = 8.dp
+    val topInset = 18.dp        // room for the "ideal" label
+    val axisHeight = 20.dp
+    val rowsHeight = rowHeight * rows.size + rowGap * (rows.size - 1).coerceAtLeast(0)
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+        val plotW = (maxWidth - gutter - trailing).coerceAtLeast(1.dp)
+        fun xOf(ms: Int) = gutter + plotW * (ms.toFloat() / axisMax)
+
+        Column(modifier = Modifier.fillMaxWidth().padding(top = topInset, bottom = axisHeight)) {
+            rows.forEachIndexed { i, row ->
+                SessionCharRow(row = row, axisMaxMs = axisMax)
+                if (i < rows.size - 1) Spacer(Modifier.height(rowGap))
+            }
+        }
+        // Gridlines and the dashed goal line, drawn over the bar tracks so they
+        // stay visible against the filled navy pills.
+        Canvas(modifier = Modifier.matchParentSize()) {
+            val top = topInset.toPx()
+            val bottom = top + rowsHeight.toPx()
+            for (v in gridValues) {
+                val x = xOf(v).toPx()
+                drawLine(Brand.hairline, Offset(x, top), Offset(x, bottom), 1f)
+            }
+            val ix = xOf(idealMs).toPx()
+            drawLine(
+                color = Color.White.copy(alpha = 0.45f),
+                start = Offset(ix, top),
+                end = Offset(ix, bottom),
+                strokeWidth = 1.5f,
+                pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 4.dp.toPx()))
+            )
+        }
+        Text(
+            stringResource(R.string.stats_ideal_label, idealMs),
+            style = MaterialTheme.typography.labelSmall,
+            color = Brand.textSecondary,
+            modifier = Modifier.offset(x = (xOf(idealMs) - 28.dp).coerceAtLeast(gutter), y = 0.dp)
+        )
+        for (v in listOf(0) + gridValues) {
+            Text(
+                "$v",
+                style = MaterialTheme.typography.labelSmall,
+                color = Brand.textSecondary,
+                modifier = Modifier.offset(x = xOf(v) - 8.dp, y = topInset + rowsHeight + 2.dp)
+            )
         }
     }
 }
@@ -520,28 +790,6 @@ private fun SpeedBandRow(band: WPMBandSummary) {
                 color = Brand.textSecondary
             )
         }
-    }
-}
-
-/** One row of the recognition chart: a character, its median copy time, and accuracy. */
-private data class CharBar(val character: String, val medianMs: Int, val accuracy: Double)
-
-@Composable
-private fun RecognitionBar(row: CharBar, axisMaxMs: Int) {
-    val fraction = (row.medianMs.toFloat() / axisMaxMs).coerceIn(0.04f, 1f)
-    val barColor = when {
-        row.accuracy >= 0.9 -> Brand.teal
-        row.accuracy >= 0.7 -> Brand.tealBright
-        else -> MASTERED
-    }
-    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Text(row.character, modifier = Modifier.width(28.dp), fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Brand.textPrimary)
-        Box(
-            modifier = Modifier.weight(1f).height(22.dp).clip(RoundedCornerShape(11.dp)).background(Brand.navy)
-        ) {
-            Box(modifier = Modifier.fillMaxWidth(fraction).height(22.dp).clip(RoundedCornerShape(11.dp)).background(barColor))
-        }
-        Text(fmtMs(row.medianMs), modifier = Modifier.width(52.dp).padding(start = 8.dp), style = MaterialTheme.typography.labelMedium, color = Brand.textSecondary)
     }
 }
 

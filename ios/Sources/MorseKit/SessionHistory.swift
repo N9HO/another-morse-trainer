@@ -102,21 +102,92 @@ public struct SessionRecord: Codable, Sendable, Identifiable, Equatable {
     }
 }
 
-/// A bounded, newest-first list of completed sessions, persisted between launches.
+/// Wraps a `Decodable` so a malformed element decodes to `nil` instead of
+/// throwing. Decoding a persisted array as `[FailableDecodable<T>]` drops the
+/// bad rows and keeps the rest; decoding it as `[T]` loses the whole array on
+/// the first bad byte. The Kotlin port's `parseHistory` guards row by row the
+/// same way.
+struct FailableDecodable<Wrapped: Decodable>: Decodable {
+    let value: Wrapped?
+    init(from decoder: Decoder) {
+        value = try? Wrapped(from: decoder)
+    }
+}
+
+/// A bounded, newest-first list of completed sessions, persisted between
+/// launches — plus the lifetime totals, which are *not* bounded.
+///
+/// The list is capped at `limit`, so anything summed from it shrinks once the
+/// oldest session ages out. The totals below are monotonic counters bumped in
+/// `add`, the same four the Android port keeps in `Stats.kt`, so the brag
+/// sheet's "1,204 answered" keeps growing after the hundredth session.
 public struct SessionHistory: Codable, Sendable, Equatable {
     public private(set) var sessions: [SessionRecord]
     /// Keep history from growing without bound; oldest sessions age out.
     public static let limit = 100
 
-    public init(sessions: [SessionRecord] = []) { self.sessions = sessions }
+    /// Sessions ever recorded (the list holds at most the newest `limit`).
+    public private(set) var totalSessions: Int
+    /// Drills ever answered, and how many were right.
+    public private(set) var totalAnswered: Int
+    public private(set) var totalCorrect: Int
+    /// Seconds ever spent in a session that logged a duration.
+    public private(set) var totalPracticeSeconds: TimeInterval
+    /// Fastest single correct recognition ever recorded (nil until one is).
+    public private(set) var bestTTR: TimeInterval?
+
+    /// A history whose counters are seeded from `sessions` — what a file
+    /// written before the counters existed decodes to, so nobody's lifetime
+    /// numbers drop on the first launch after they were introduced.
+    public init(sessions: [SessionRecord] = []) {
+        self.sessions = sessions
+        self.totalSessions = sessions.count
+        self.totalAnswered = sessions.reduce(0) { $0 + $1.attempts }
+        self.totalCorrect = sessions.reduce(0) { $0 + $1.correct }
+        self.totalPracticeSeconds = sessions.reduce(0.0) { $0 + max(0, $1.durationSeconds ?? 0) }
+        self.bestTTR = sessions.compactMap(\.fastestTTR).min()
+    }
 
     /// Add a freshly-completed session to the front, trimming the oldest beyond
-    /// the cap.
+    /// the cap, and fold it into the lifetime counters.
     public mutating func add(_ record: SessionRecord) {
         sessions.insert(record, at: 0)
         if sessions.count > Self.limit {
             sessions.removeLast(sessions.count - Self.limit)
         }
+        totalSessions += 1
+        totalAnswered += record.attempts
+        totalCorrect += record.correct
+        totalPracticeSeconds += max(0, record.durationSeconds ?? 0)
+        if let fastest = record.fastestTTR, bestTTR.map({ fastest < $0 }) ?? true {
+            bestTTR = fastest
+        }
+    }
+
+    /// Lifetime accuracy, 0…1 over every drill ever answered.
+    public var lifetimeAccuracy: Double {
+        totalAnswered == 0 ? 0 : Double(totalCorrect) / Double(totalAnswered)
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case sessions, totalSessions, totalAnswered, totalCorrect, totalPracticeSeconds, bestTTR
+    }
+
+    /// Row-tolerant decode: one corrupt session is dropped, the rest survive
+    /// (a whole-array decode returned nothing on one bad byte, which showed as
+    /// a year of history vanishing). A file that predates the lifetime
+    /// counters has no `totalSessions`; the seed from `init(sessions:)` stands
+    /// and is written back on the next save. Encoding stays synthesized.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let rows = try c.decodeIfPresent([FailableDecodable<SessionRecord>].self, forKey: .sessions) ?? []
+        self.init(sessions: rows.compactMap(\.value))
+        guard let total = try c.decodeIfPresent(Int.self, forKey: .totalSessions) else { return }
+        totalSessions = total
+        totalAnswered = try c.decodeIfPresent(Int.self, forKey: .totalAnswered) ?? totalAnswered
+        totalCorrect = try c.decodeIfPresent(Int.self, forKey: .totalCorrect) ?? totalCorrect
+        totalPracticeSeconds = try c.decodeIfPresent(TimeInterval.self, forKey: .totalPracticeSeconds) ?? totalPracticeSeconds
+        bestTTR = try c.decodeIfPresent(TimeInterval.self, forKey: .bestTTR) ?? bestTTR
     }
 }
 

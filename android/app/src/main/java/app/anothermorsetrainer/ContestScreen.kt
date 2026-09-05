@@ -77,14 +77,15 @@ private fun PileupEngine.Voice.toMix() = MorsePlayer.PileupVoice(
  * exchange, speed band, run length, and scoring rule.
  */
 @Composable
-fun ContestScreen(onBack: () -> Unit) {
+fun ContestScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) {
     val context = LocalContext.current
     val player = remember { MorsePlayer() }
     val haptics = remember { Haptics(context) }
 
     var phase by rememberSaveable { mutableStateOf(CtPhase.SETUP) }
-    var contest by rememberSaveable { mutableStateOf(ContestType.Sst) }
-    var length by rememberSaveable { mutableStateOf(ContestLength.TenMin) }
+    // The contest and its length persist across launches (iOS ContestSettings).
+    val contest = Settings.contestType
+    val length = Settings.contestLength
 
     // Run state.
     var engine by remember { mutableStateOf<PileupEngine?>(null) }
@@ -137,7 +138,8 @@ fun ContestScreen(onBack: () -> Unit) {
         if (phase != CtPhase.SETUP) phase = CtPhase.SETUP
     }
 
-    fun endRun() {
+    /** Stop the clock and record the run; the caller decides where to land. */
+    fun recordRun() {
         val e = engine ?: return
         player.stop()
         endedAtMs = System.currentTimeMillis()
@@ -151,7 +153,18 @@ fun ContestScreen(onBack: () -> Unit) {
             durationSeconds = elapsedSeconds(),
             characterWpm = Settings.characterWpm.roundToInt()
         )
+    }
+
+    fun endRun() {
+        if (engine == null) return
+        recordRun()
         phase = CtPhase.SUMMARY
+    }
+
+    /** The mode switcher (iOS #42): close a running contest out as End would, then go. */
+    fun switchTo(mode: TrainingMode) {
+        if (phase == CtPhase.RUNNING) recordRun() else player.stop()
+        onSwitchMode(mode)
     }
 
     fun startRun() {
@@ -224,10 +237,11 @@ fun ContestScreen(onBack: () -> Unit) {
     Box(modifier = Modifier.fillMaxSize()) {
     when (phase) {
         CtPhase.SETUP -> ContestSetup(
-            contest = contest, onContest = { contest = it },
-            length = length, onLength = { length = it },
+            contest = contest, onContest = { Settings.updateContestType(it) },
+            length = length, onLength = { Settings.updateContestLength(it) },
             onStart = ::startRun,
-            onBack = { player.stop(); onBack() }
+            onBack = { player.stop(); onBack() },
+            onSwitchMode = ::switchTo
         )
         CtPhase.RUNNING -> engine?.let { e ->
             // rev rides in as a plain parameter, NOT a key(): keying the subtree
@@ -248,6 +262,7 @@ fun ContestScreen(onBack: () -> Unit) {
                 onRepeat = { perform(e.repeatRequest()) },
                 onLog = { perform(e.logCurrent()) },
                 onSettings = { showSettings = true },
+                onSwitchMode = ::switchTo,
                 onEnd = ::endRun
             )
         }
@@ -283,12 +298,15 @@ private fun contestClock(length: ContestLength, elapsed: Int): String {
 private fun ContestSetup(
     contest: ContestType, onContest: (ContestType) -> Unit,
     length: ContestLength, onLength: (ContestLength) -> Unit,
-    onStart: () -> Unit, onBack: () -> Unit
+    onStart: () -> Unit, onBack: () -> Unit,
+    onSwitchMode: (TrainingMode) -> Unit
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         Row(modifier = Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
             TextButton(onClick = onBack) { Text(stringResource(R.string.common_back), color = Brand.teal) }
             Text(stringResource(R.string.mode_contest), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.weight(1f))
+            SwitchModeButton(TrainingMode.CONTEST, onSwitchMode)
         }
         CenteredScrollColumn(
             contentModifier = Modifier.padding(horizontal = 16.dp),
@@ -342,6 +360,7 @@ private fun ContestRun(
     onRepeat: () -> Unit,
     onLog: () -> Unit,
     onSettings: () -> Unit,
+    onSwitchMode: (TrainingMode) -> Unit,
     onEnd: () -> Unit
 ) {
     // The in-run Send box sits behind the IME on an edge-to-edge window too
@@ -361,6 +380,7 @@ private fun ContestRun(
                 color = Brand.textSecondary
             )
             SessionSettingsButton(onOpen = onSettings)
+            SwitchModeButton(TrainingMode.CONTEST, onSwitchMode)
         }
 
       CenteredContent {

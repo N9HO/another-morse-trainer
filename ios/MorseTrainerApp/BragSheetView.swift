@@ -32,7 +32,10 @@ struct BragSheetView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    if let url = shareURL {
+                    // Nothing to brag about until a session has been logged —
+                    // Android hides its share button on the same condition
+                    // (`Stats.totalSessions > 0`), so a blank card can't be posted.
+                    if stats.totalSessions > 0, let url = shareURL {
                         // The caption travels with the image wherever the share
                         // lands (Android attaches the same EXTRA_TEXT).
                         ShareLink(item: url,

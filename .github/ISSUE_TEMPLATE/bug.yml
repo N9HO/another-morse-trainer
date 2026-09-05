@@ -1,0 +1,42 @@
+name: Bug report
+description: Something an app does wrong. One issue covers both apps; say which one you saw it on.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Both apps are meant to behave the same ([PARITY.md](https://github.com/N9HO/another-morse-trainer/blob/main/PARITY.md)).
+        A bug seen on one is checked on the other before this issue is closed,
+        so say where you saw it, not where you think it lives.
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Seen on
+      multiple: true
+      options:
+        - iOS
+        - iPadOS
+        - macOS
+        - Android
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: App version / build
+      description: Settings → About on either app, or the TestFlight / Play build number.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: Steps, what you expected, what you got. Mode and settings in use help most.
+    validations:
+      required: true
+  - type: checkboxes
+    id: parity
+    attributes:
+      label: Parity
+      description: Filled in by whoever fixes it. Both boxes, or a note in PARITY.md, before the issue closes.
+      options:
+        - label: Fixed or confirmed absent on iOS
+        - label: Fixed or confirmed absent on Android

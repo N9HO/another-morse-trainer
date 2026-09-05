@@ -315,7 +315,7 @@ private struct RepeaterSettingsSheet: View {
                     Stepper("TX tone: \(midiNoteName(model.txTone)) (\(model.txTone))",
                             value: Binding(get: { model.txTone },
                                            set: { model.setTxTone($0) }),
-                            in: 48...96)
+                            in: RepeaterModel.txToneRange)
                 }
 
                 Section("Receive") {

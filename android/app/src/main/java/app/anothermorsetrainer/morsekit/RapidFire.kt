@@ -18,9 +18,10 @@ enum class RapidFireContent(val label: String) {
 
 /** How the learner copies a Rapid Fire stream. */
 enum class RapidFireResponse(val label: String, val blurb: String) {
-    TYPE("Type as you hear it", "Type into the box as each item is sent — the field stays live while it plays."),
-    HEAD_COPY("Head copy, then type", "Hold each item in your head, then type it once the code finishes. Builds true head copy."),
-    KEY("Key each one", "Send each item back on the key — your keying is decoded and graded as you go."),
+    // Blurbs are the iOS wording (AppSettings.swift, `RapidFireResponse.blurb`), word for word.
+    TYPE("Type as you hear it", "Type into the box as each item is sent — the field stays live while it plays, like the QSO simulator."),
+    HEAD_COPY("Head copy, then type", "Hold each item in your head, then type it once the code finishes — the box stays hidden until then. Builds true head copy."),
+    KEY("Key each one", "Send each item back on a hardware or on-screen key; it’s decoded and checked."),
     REVIEW("Just listen", "Copy on paper or in your head — then review the full list of what was sent when you finish.")
 }
 

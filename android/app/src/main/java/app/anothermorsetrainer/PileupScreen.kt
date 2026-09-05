@@ -58,6 +58,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.anothermorsetrainer.morsekit.BustBehavior
 import app.anothermorsetrainer.morsekit.CallsignFormat
+import app.anothermorsetrainer.morsekit.CutNumbers
 import app.anothermorsetrainer.morsekit.MorseItem
 import app.anothermorsetrainer.morsekit.MorseTiming
 import app.anothermorsetrainer.morsekit.MissedCallerFeedback
@@ -75,7 +76,13 @@ private enum class PuPhase { SETUP, RUNNING, SUMMARY }
 private fun PileupEngine.Voice.toMix() = MorsePlayer.PileupVoice(
     text = text,
     frequency = Settings.sidetoneHz + toneOffset,
-    timing = MorseTiming(wpm),
+    // Per-caller Farnsworth (iOS AppModel.mapVoice): characters at the
+    // caller's own speed, spacing stretched down to your effective speed.
+    timing = if (PileupSettings.callerFarnsworth) {
+        MorseTiming.farnsworth(characterWpm = wpm, effectiveWpm = minOf(wpm, Settings.effectiveWpm))
+    } else {
+        MorseTiming(wpm)
+    },
     gain = volume,
     startDelay = delay,
     qsbRate = if (qsb) 0.3 else null
@@ -97,7 +104,7 @@ private fun cqText(mode: QSOContestMode, call: String): String = when (mode) {
  * side keyed in Morse. Mirrors the iOS QSO Simulator surface.
  */
 @Composable
-fun PileupScreen(onBack: () -> Unit) {
+fun PileupScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) {
     val context = LocalContext.current
     val player = remember { MorsePlayer() }
     val haptics = remember { Haptics(context) }
@@ -156,7 +163,7 @@ fun PileupScreen(onBack: () -> Unit) {
     // pileup answer is a whole worked exchange — clean contacts are correct,
     // busts are misses (same accounting as Contest). Mixed caller speeds, so no
     // single WPM is recorded (keeps it out of the speed-band table).
-    fun endRun() {
+    fun recordRun() {
         val e = engine ?: return
         player.stop()
         endedAtMs = System.currentTimeMillis()
@@ -167,7 +174,18 @@ fun PileupScreen(onBack: () -> Unit) {
             bestTtrMs = null,
             durationSeconds = elapsedSeconds()
         )
+    }
+
+    fun endRun() {
+        if (engine == null) return
+        recordRun()
         phase = PuPhase.SUMMARY
+    }
+
+    /** The mode switcher (iOS #42): close a running pileup out as End would, then go. */
+    fun switchTo(mode: TrainingMode) {
+        if (phase == PuPhase.RUNNING) recordRun() else player.stop()
+        onSwitchMode(mode)
     }
 
     fun startRun() {
@@ -261,7 +279,8 @@ fun PileupScreen(onBack: () -> Unit) {
     when (phase) {
         PuPhase.SETUP -> PileupSetup(
             onStart = ::startRun,
-            onBack = { player.stop(); onBack() }
+            onBack = { player.stop(); onBack() },
+            onSwitchMode = ::switchTo
         )
         PuPhase.RUNNING -> engine?.let { e ->
             // rev rides in as a plain parameter, NOT a key(): keying the subtree
@@ -280,6 +299,7 @@ fun PileupScreen(onBack: () -> Unit) {
                 onRepeat = { perform(e.repeatRequest()) },
                 onLog = { perform(e.logCurrent()) },
                 onSettings = { showSettings = true },
+                onSwitchMode = ::switchTo,
                 // The engine isn't Compose-observable, so clearing it has to
                 // ride the same rev bump everything else does or the banner
                 // would sit there until the next clock tick.
@@ -306,12 +326,14 @@ fun PileupScreen(onBack: () -> Unit) {
 // MARK: - Setup
 
 @Composable
-private fun PileupSetup(onStart: () -> Unit, onBack: () -> Unit) {
+private fun PileupSetup(onStart: () -> Unit, onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit) {
     val focusManager = LocalFocusManager.current
     Column(modifier = Modifier.fillMaxSize()) {
         Row(modifier = Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
             TextButton(onClick = onBack) { Text(stringResource(R.string.common_back), color = Brand.teal) }
             Text(stringResource(R.string.mode_pileup_runner), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.weight(1f))
+            SwitchModeButton(TrainingMode.PILEUP, onSwitchMode)
         }
         CenteredScrollColumn(
             // imePadding keeps the whole setup list above the soft keyboard
@@ -335,7 +357,7 @@ private fun PileupSetup(onStart: () -> Unit, onBack: () -> Unit) {
                 value = PileupSettings.myCall,
                 onValueChange = { PileupSettings.updateMyCall(it) },
                 singleLine = true,
-                placeholder = { Text("N0CALL") },
+                placeholder = { Text(PileupSettings.DEFAULT_CALL) },
                 // A call sign is one field, so the IME's action key closes the
                 // keyboard rather than offering a newline you cannot use (#40).
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
@@ -362,12 +384,15 @@ private fun PileupSetup(onStart: () -> Unit, onBack: () -> Unit) {
                 onChange = { PileupSettings.updateMaxStations(it.roundToInt()) },
                 enabled = PileupSettings.mode.isPileup
             )
+            // Whole-WPM stops: Compose counts `steps` as the stops between the
+            // two ends, so a 12…60 band has 47 of them.
+            val wpmSteps = (PileupSettings.MAX_CALLER_WPM - PileupSettings.MIN_CALLER_WPM).roundToInt() - 1
             PuSlider(
                 label = stringResource(R.string.pileup_slowest_caller),
                 value = stringResource(R.string.common_wpm_value, PileupSettings.minWpm.roundToInt()),
                 position = PileupSettings.minWpm.toFloat(),
                 range = PileupSettings.MIN_CALLER_WPM.toFloat()..PileupSettings.MAX_CALLER_WPM.toFloat(),
-                steps = 49,
+                steps = wpmSteps,
                 onChange = { PileupSettings.updateMinWpm(it.toDouble()) }
             )
             PuSlider(
@@ -375,14 +400,17 @@ private fun PileupSetup(onStart: () -> Unit, onBack: () -> Unit) {
                 value = stringResource(R.string.common_wpm_value, PileupSettings.maxWpm.roundToInt()),
                 position = PileupSettings.maxWpm.toFloat(),
                 range = PileupSettings.MIN_CALLER_WPM.toFloat()..PileupSettings.MAX_CALLER_WPM.toFloat(),
-                steps = 49,
+                steps = wpmSteps,
                 onChange = { PileupSettings.updateMaxWpm(it.toDouble()) }
             )
+            PuToggle(stringResource(R.string.pileup_farnsworth_spacing), PileupSettings.callerFarnsworth) {
+                PileupSettings.updateCallerFarnsworth(it)
+            }
             PuSlider(
                 label = stringResource(R.string.pileup_tone_spread),
                 value = if (PileupSettings.toneSpread <= 0.0) stringResource(R.string.pileup_zero_beat) else stringResource(R.string.pileup_tone_spread_value, PileupSettings.toneSpread.roundToInt()),
                 position = PileupSettings.toneSpread.toFloat(),
-                range = 0f..400f, steps = 0,
+                range = 0f..PileupSettings.MAX_TONE_SPREAD.toFloat(), steps = 0,
                 onChange = { PileupSettings.updateToneSpread(it.toDouble()) }
             )
             PuToggle(stringResource(R.string.pileup_qsb_fading), PileupSettings.qsbEnabled) { PileupSettings.updateQsbEnabled(it) }
@@ -392,6 +420,24 @@ private fun PileupSetup(onStart: () -> Unit, onBack: () -> Unit) {
                     PileupSettings.updateQrn(it)
                 }
             }
+            // How long callers wait before answering (iOS "Min wait" / "Max
+            // wait", in tenths of a second).
+            PuSlider(
+                label = stringResource(R.string.pileup_min_wait),
+                value = stringResource(R.string.pileup_wait_seconds, PileupSettings.minDelay),
+                position = PileupSettings.minDelay.toFloat(),
+                range = 0f..PileupSettings.MAX_MIN_DELAY.toFloat(),
+                steps = (PileupSettings.MAX_MIN_DELAY * 10).roundToInt() - 1,
+                onChange = { PileupSettings.updateMinDelay((it * 10).roundToInt() / 10.0) }
+            )
+            PuSlider(
+                label = stringResource(R.string.pileup_max_wait),
+                value = stringResource(R.string.pileup_wait_seconds, PileupSettings.maxDelay),
+                position = PileupSettings.maxDelay.toFloat(),
+                range = 0f..PileupSettings.MAX_MAX_DELAY.toFloat(),
+                steps = (PileupSettings.MAX_MAX_DELAY * 10).roundToInt() - 1,
+                onChange = { PileupSettings.updateMaxDelay((it * 10).roundToInt() / 10.0) }
+            )
 
             PuSectionLabel(stringResource(R.string.pileup_callsigns))
             Row(
@@ -420,6 +466,34 @@ private fun PileupSetup(onStart: () -> Unit, onBack: () -> Unit) {
             PuSectionLabel(stringResource(R.string.pileup_operating))
             PuToggle(stringResource(R.string.pileup_cut_numbers), PileupSettings.cutNumbersEnabled) {
                 PileupSettings.updateCutNumbersEnabled(it)
+            }
+            if (PileupSettings.cutNumbersEnabled) {
+                // Which digits are cut (iOS "0 → T" toggles): one chip per
+                // cuttable digit, showing the letter it is sent as.
+                Column {
+                    PuSectionLabel(stringResource(R.string.pileup_cut_digits))
+                    Row(
+                        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        CutNumbers.cuttableDigits.forEach { digit ->
+                            val sel = digit in PileupSettings.cutDigits
+                            Box(
+                                modifier = Modifier
+                                    .background(if (sel) Brand.teal else Brand.navyRaised, RoundedCornerShape(8.dp))
+                                    .clickable { PileupSettings.toggleCutDigit(digit) }
+                                    .padding(horizontal = 14.dp, vertical = 8.dp)
+                            ) {
+                                Text(
+                                    stringResource(R.string.pileup_cut_digit_chip, digit, CutNumbers.map[digit] ?: ""),
+                                    color = if (sel) Brand.navy else Brand.textSecondary,
+                                    fontWeight = if (sel) FontWeight.Bold else FontWeight.Medium,
+                                    fontSize = 13.sp
+                                )
+                            }
+                        }
+                    }
+                }
             }
             if (PileupSettings.mode.includesRST) {
                 PuToggle(stringResource(R.string.pileup_require_the_rst_copied), PileupSettings.rstRequired) {
@@ -484,6 +558,7 @@ private fun PileupRun(
     onRepeat: () -> Unit,
     onLog: () -> Unit,
     onSettings: () -> Unit,
+    onSwitchMode: (TrainingMode) -> Unit,
     onDismissMissed: () -> Unit,
     onEnd: () -> Unit
 ) {
@@ -504,6 +579,7 @@ private fun PileupRun(
                 color = Brand.textSecondary
             )
             SessionSettingsButton(onOpen = onSettings)
+            SwitchModeButton(TrainingMode.PILEUP, onSwitchMode)
         }
 
       CenteredContent {

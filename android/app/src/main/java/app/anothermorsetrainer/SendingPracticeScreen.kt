@@ -63,7 +63,7 @@ private val ERR_RED = Color(0xFFC62828)
  * at least as long as the answer and the key is idle.
  */
 @Composable
-fun SendingPracticeScreen(onBack: () -> Unit) {
+fun SendingPracticeScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) {
     val context = LocalContext.current
     val player = remember { MorsePlayer() }
     val haptics = remember { Haptics(context) }
@@ -179,12 +179,16 @@ fun SendingPracticeScreen(onBack: () -> Unit) {
         }
     }
 
-    fun finish() {
+    fun recordRun() {
         Stats.record(
             mode = "Sending", attempts = tally.attempts, correct = tally.correct,
             bestTtrMs = null, durationSeconds = tally.elapsedSeconds(),
             characterWpm = Settings.characterWpm.roundToInt()
         )
+    }
+
+    fun finish() {
+        recordRun()
         onBack()
     }
     BackHandler { finish() }
@@ -199,7 +203,15 @@ fun SendingPracticeScreen(onBack: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             TextButton(onClick = { finish() }) { Text(stringResource(R.string.common_back)) }
-            SessionSettingsButton { showSettings = true }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                // Switching records the run the way Back does, then lands on
+                // the picked mode's setup (iOS #42).
+                SwitchModeButton(TrainingMode.SENDING) { mode ->
+                    recordRun()
+                    onSwitchMode(mode)
+                }
+                SessionSettingsButton { showSettings = true }
+            }
         }
 
         Column(
@@ -224,9 +236,25 @@ fun SendingPracticeScreen(onBack: () -> Unit) {
                     advanceNow()
                 }
             }
-            midiDevice?.let {
-                Spacer(Modifier.height(2.dp))
-                Text("🎹 $it", style = MaterialTheme.typography.labelSmall, color = Brand.teal)
+            Spacer(Modifier.height(2.dp))
+            val connectedKey = midiDevice
+            if (connectedKey != null) {
+                Text("🎹 $connectedKey", style = MaterialTheme.typography.labelSmall, color = Brand.teal)
+            } else {
+                // "MIDI unavailable" used to cover both the setup failing and
+                // nothing being plugged in, which read as a dead end. Only the
+                // first is a fault; the second just needs a key connected —
+                // and a BLE-MIDI key paired in Android's Bluetooth settings
+                // still has to be connected here before MidiManager will show
+                // it to any app. Same two readouts as the iOS SendingKeyerView.
+                val midiUnavailable = remember { midi.isUnavailable }
+                Text(
+                    if (midiUnavailable) stringResource(R.string.sending_midi_unavailable)
+                    else stringResource(R.string.sending_no_hardware_key),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (midiUnavailable) Color(0xFFEF6C00) else Brand.textSecondary,
+                    textAlign = TextAlign.Center
+                )
             }
             // A BLE-MIDI key has to be scanned for and opened before MidiManager
             // will show it here at all — pairing it in Android's Bluetooth

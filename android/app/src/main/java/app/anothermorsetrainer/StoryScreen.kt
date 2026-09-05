@@ -78,7 +78,7 @@ private const val NEWS_FRESH_WINDOW_MS = 30L * 60L * 1000L
  * read them is to copy the code.
  */
 @Composable
-fun StoryScreen(onBack: () -> Unit) {
+fun StoryScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) {
     val context = LocalContext.current
     val player = remember { MorsePlayer() }
     val fetcher = remember { NewsFetcher(context) }
@@ -293,7 +293,10 @@ fun StoryScreen(onBack: () -> Unit) {
         phase = StPhase.RUNNING
     }
 
-    LaunchedEffect(phase) {
+    // Session countdown; also keyed on whether a limit exists, so the timer
+    // menu starting a countdown on an open-ended run (or dropping one)
+    // restarts the loop.
+    LaunchedEffect(phase, remaining == null) {
         if (phase != StPhase.RUNNING) return@LaunchedEffect
         while (true) {
             val r = remaining ?: return@LaunchedEffect
@@ -352,16 +355,23 @@ fun StoryScreen(onBack: () -> Unit) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 TextButton(onClick = { if (phase == StPhase.SUMMARY) onBack() else finish() }) { Text(stringResource(R.string.common_back)) }
-                if (phase == StPhase.RUNNING) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        remaining?.let {
-                            Text(
-                                "%d:%02d".format(it / 60, it % 60),
-                                style = MaterialTheme.typography.labelMedium,
-                                color = Brand.textSecondary
-                            )
-                        }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (phase == StPhase.RUNNING) {
+                        SessionTimerMenu(
+                            remaining = remaining,
+                            onAddSeconds = { remaining = (remaining ?: 0) + it },
+                            onRemoveLimit = { remaining = null }
+                        )
                         SessionSettingsButton { showSettings = true }
+                    }
+                    // Switching records the session the way Back does, then
+                    // lands on the picked mode's setup (iOS #42).
+                    SwitchModeButton(TrainingMode.STORY) { mode ->
+                        stopPlayback()
+                        recordSession()
+                        onSwitchMode(mode)
+                    }
+                    if (phase == StPhase.RUNNING) {
                         TextButton(onClick = { endSession() }) { Text(stringResource(R.string.common_end)) }
                     }
                 }

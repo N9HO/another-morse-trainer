@@ -36,10 +36,18 @@ final class SendingKeyer: ObservableObject {
     private var midiOutput: MIDIOutput?
     private let decoder: MorseDecoder
 
-    /// Kept so the adapter can be woken with the speed and tone in use.
-    private let keyerWPM: Double
-    private let toneMIDINote: Int
+    /// Kept so the adapter can be woken with the speed and tone in use, and
+    /// re-pushed when Settings changes either mid-session (`applyConfig`).
+    private var keyerWPM: Double
+    private var toneMIDINote: Int
 
+    /// Paddles currently held. The key is "down" while *any* of them is: a
+    /// dit and dah squeezed together, or a release that overlaps the next
+    /// press, must not cut the tone short on the first note-off (Android
+    /// `MidiKeyInput.updateHeld`). The on-screen key counts as `.straight`.
+    private var heldKeys = Set<MIDIInput.Key>()
+    /// When the first of the held paddles went down; the burst is timed from
+    /// here to the release of the last one.
     private var keyDownAtMs: Int64?
     private var idleTask: Task<Void, Never>?
 
@@ -61,7 +69,7 @@ final class SendingKeyer: ObservableObject {
                 // Straight key, dit, and dah paddles are all measured as bursts;
                 // the adapter does any iambic timing, so we just time key-down.
                 Task { @MainActor in
-                    self?.handle(isDown: event.isDown, atMs: event.timestampMs)
+                    self?.handle(key: event.key, isDown: event.isDown, atMs: event.timestampMs)
                 }
             }
             input.onSourcesChanged = { [weak self] names in
@@ -119,6 +127,29 @@ final class SendingKeyer: ObservableObject {
         }
     }
 
+    /// Re-push the key and practice settings to an adapter that is already
+    /// awake.
+    ///
+    /// `start()` configures the adapter once, from the settings as they stood
+    /// when the screen opened. Everything reachable from the mid-session
+    /// Settings sheet can move afterwards — the keyer mode itself (read back
+    /// from the shared stored value), and the speed the adapter's own keyer
+    /// sends at in the modes where `KeyerMode.adapterTimesSending` holds —
+    /// and until this existed none of it reached the adapter until the next
+    /// wake, i.e. not until the operator left the drill and came back. Only
+    /// differences go on the wire, so calling this is cheap. Mirrors
+    /// `HardwareKey.applyConfig` on Android.
+    func applyConfig(wpm: Double, toneHz: Double) {
+        keyerWPM = wpm
+        toneMIDINote = Self.midiNote(forHz: toneHz)
+        keyer.localTxToneMIDI = toneMIDINote
+        let mode = MIDIOutput.KeyerMode(rawValue: RepeaterModel.storedKeyerMode) ?? .straightKey
+        let wpmInt = Int(wpm.rounded())
+        let tone = toneMIDINote
+        guard let out = midiOutput else { return }
+        Task { await out.applyConfig(keyerMode: mode, wpm: wpmInt, sidetoneMIDINote: tone) }
+    }
+
     func stop() {
         idleTask?.cancel()
         idleTask = nil
@@ -129,7 +160,7 @@ final class SendingKeyer: ObservableObject {
 
     /// On-screen key press/release.
     func touchKey(isDown: Bool) {
-        handle(isDown: isDown, atMs: Int64(Date().timeIntervalSince1970 * 1000))
+        handle(key: .straight, isDown: isDown, atMs: Int64(Date().timeIntervalSince1970 * 1000))
     }
 
     func clear() {
@@ -143,9 +174,14 @@ final class SendingKeyer: ObservableObject {
 
     // MARK: - Key handling
 
-    private func handle(isDown: Bool, atMs ms: Int64) {
-        if isDown {
-            guard keyDownAtMs == nil else { return }
+    private func handle(key: MIDIInput.Key, isDown: Bool, atMs ms: Int64) {
+        // Aggregate per-paddle state into one logical key: down while ANY
+        // paddle is held, up only when the last one releases.
+        let wasHeld = !heldKeys.isEmpty
+        if isDown { heldKeys.insert(key) } else { heldKeys.remove(key) }
+        let nowHeld = !heldKeys.isEmpty
+        guard nowHeld != wasHeld else { return }
+        if nowHeld {
             keyDownAtMs = ms
             isKeying = true
             idleTask?.cancel()
@@ -183,6 +219,57 @@ final class SendingKeyer: ObservableObject {
 
     /// Nearest MIDI note to a frequency in Hz (A4 = 69 = 440 Hz), so the
     /// sidetone roughly matches the user's chosen tone frequency.
+    private static func midiNote(forHz hz: Double) -> Int {
+        guard hz > 0 else { return 72 }
+        return Int((69 + 12 * log2(hz / 440)).rounded())
+    }
+}
+
+/// Keeps a connected adapter in step with Settings when no keyer screen is
+/// underneath to do it.
+///
+/// Opened from the intro there is no `SendingKeyer` or `RepeaterModel`
+/// holding an output, so a keyer mode picked there had nowhere to go until
+/// the next screen woke the adapter. This holds one `MIDIOutput` for as long
+/// as the Settings sheet is up and pushes changes down it the way a drill
+/// does. Mid-session the drill underneath pushes too; `MIDIOutput.applyConfig`
+/// only sends differences, so the overlap is harmless. Mirrors the `homeKey`
+/// + `AdapterConfigSync` pair in Android's `SettingsScreen`.
+///
+/// The output is created on the first change rather than when the sheet
+/// opens, so merely reading Settings never touches the adapter; the first
+/// push is the full wake sequence (`connectToAdapter`), which both carries
+/// the change and identifies the destination later diffs go to. The output
+/// is released with the holder — no explicit stop.
+@MainActor
+final class AdapterSettingsSync: ObservableObject {
+    private var output: MIDIOutput?
+    private var triedInit = false
+
+    /// Push whatever changed since the last call; wake the adapter first if
+    /// this is the first change since the sheet opened.
+    func apply(keyerMode: Int, wpm: Double, toneHz: Double) {
+        let mode = MIDIOutput.KeyerMode(rawValue: keyerMode) ?? .straightKey
+        let wpmInt = Int(wpm.rounded())
+        let tone = Self.midiNote(forHz: toneHz)
+        if let out = output {
+            Task { await out.applyConfig(keyerMode: mode, wpm: wpmInt, sidetoneMIDINote: tone) }
+            return
+        }
+        guard !triedInit else { return }
+        triedInit = true
+        do {
+            let out = try MIDIOutput()
+            output = out
+            Task {
+                await out.configure(keyerMode: mode, wpm: wpmInt, sidetoneMIDINote: tone)
+                await out.connectToAdapter()
+            }
+        } catch {
+            log.error("MIDIOutput init failed for Settings adapter sync: \(error.localizedDescription)")
+        }
+    }
+
     private static func midiNote(forHz hz: Double) -> Int {
         guard hz > 0 else { return 72 }
         return Int((69 + 12 * log2(hz / 440)).rounded())

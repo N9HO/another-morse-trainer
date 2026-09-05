@@ -116,6 +116,22 @@ public enum JourneyCurriculum {
         return levels
     }
 
+    /// The number of the first level that teaches something outside `known` —
+    /// where a learner who already knows those characters should start. Every
+    /// level before it introduces only known characters; this one, or any later
+    /// one, has something new. Prosigns and words are never "known" this way, so
+    /// a learner who knows every character starts at the first prosign level.
+    /// Twin of the Kotlin `JourneyCurriculum.firstLevelBeyond` (#151).
+    public static func firstLevelBeyond(known: Set<Character>) -> Int {
+        let first = levels.first { level in
+            level.newItems.contains { item in
+                guard item.answer.count == 1, let ch = item.answer.first else { return true }
+                return !known.contains(ch)
+            }
+        }
+        return first?.number ?? (levels.last?.number ?? 1)
+    }
+
     private static func levelTitle(section: String, newItems: [MorseItem]) -> String {
         // For short tokens (characters, prosigns) show them directly; for long
         // ones (Q-code meanings, words) the display label reads better.

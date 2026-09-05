@@ -1349,6 +1349,40 @@ do {
     for _ in 0..<(SessionHistory.limit + 10) { capped.add(older) }
     check("history is bounded to the cap", capped.sessions.count == SessionHistory.limit)
 
+    // Lifetime counters outlive the cap: the list is trimmed, the totals are
+    // not (twin of Stats.kt's totalSessions / totalAttempts / totalCorrect /
+    // totalPracticeSeconds / bestTtrMs).
+    check("lifetime session count is not capped",
+          capped.totalSessions == SessionHistory.limit + 10)
+    check("lifetime answered count sums every session ever",
+          capped.totalAnswered == SessionHistory.limit + 10)
+    check("lifetime practice time sums logged durations",
+          hist.totalPracticeSeconds == 300 && hist.totalAnswered == 14 && hist.totalCorrect == 10)
+    check("best recognition time is the fastest ever seen", hist.bestTTR == 0.219)
+
+    // One corrupt row is dropped, not the whole history (Android parses row by
+    // row; Swift used to lose everything). And a file saved before the
+    // lifetime counters existed seeds them from the rows that survive.
+    do {
+        var doc = try JSONSerialization.jsonObject(with: JSONEncoder().encode(hist)) as? [String: Any] ?? [:]
+        var rows = doc["sessions"] as? [Any] ?? []
+        rows.append(["id": "not-a-uuid", "mode": 7])
+        doc["sessions"] = rows
+        for key in ["totalSessions", "totalAnswered", "totalCorrect", "totalPracticeSeconds", "bestTTR"] {
+            doc.removeValue(forKey: key)
+        }
+        let data = try JSONSerialization.data(withJSONObject: doc)
+        let restored = try JSONDecoder().decode(SessionHistory.self, from: data)
+        check("a corrupt session row is dropped and the rest kept",
+              restored.sessions.count == hist.sessions.count)
+        check("lifetime counters are seeded from the rows when the file predates them",
+              restored.totalSessions == hist.sessions.count
+                && restored.totalAnswered == hist.totalAnswered
+                && abs((restored.bestTTR ?? 0) - 0.219) < 1e-9)
+    } catch {
+        check("tolerant history decode does not throw", false)
+    }
+
     // WPM bands: sessions persisted before the speed field carry
     // characterWPM == 0 and must not form a phantom "0-4" band. The Kotlin
     // port has filtered these since it gained the field; Swift did not, and
@@ -1418,9 +1452,47 @@ do {
     check("parse de-duplicates", parsed.filter { $0 == "MAINE" }.count == 1)
     check("empty input parses to no words", MorseData.parseWordList("  ,, \n ").isEmpty)
 
-    let items = MorseData.customWordItems(["ohio", "ohio", "  "])
-    check("custom items de-duplicate and drop blanks", items.count == 1)
-    check("custom item plays the word as text", items.first?.answer == "OHIO")
+    // customWordItems takes the parsed list as-is: one item per word, in order.
+    let items = MorseData.customWordItems(["OHIO", "TEXAS"])
+    check("custom items map the clean list one-to-one", items.map(\.id) == ["custom-OHIO", "custom-TEXAS"])
+    check("custom item plays the word as text",
+          items.first?.playable == MorseItem.Playable.text("OHIO") && items.first?.answer == "OHIO")
+}
+
+// Custom word-list parser, against fixtures/custom-words.json — read by this
+// harness AND by android CustomWordsTest. The parser used to differ between
+// the ports (iOS kept unsendable characters and had no cap; Android had no
+// MorseKit parser at all), so the fixture pins the one rule set for both.
+struct CustomWordsFixture: Decodable {
+    struct Case: Decodable { let name: String; let input: String; let expected: [String] }
+    let maxLength: Int
+    let cases: [Case]
+}
+
+func loadCustomWordsFixture() -> CustomWordsFixture? {
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+    guard let data = try? Data(contentsOf: root.appendingPathComponent("fixtures/custom-words.json")) else { return nil }
+    return try? JSONDecoder().decode(CustomWordsFixture.self, from: data)
+}
+
+print("\nShared custom word-list fixture (fixtures/custom-words.json):")
+if let fx = loadCustomWordsFixture() {
+    check("the word cap is the fixture's", MorseData.customWordMaxLength == fx.maxLength)
+    var casesOK = true
+    for c in fx.cases {
+        let got = MorseData.parseWordList(c.input)
+        if got != c.expected {
+            casesOK = false
+            print("      ↳ \(c.name): got \(got), fixture says \(c.expected)")
+        }
+    }
+    check("parseWordList matches the fixture across \(fx.cases.count) cases", casesOK)
+} else {
+    check("fixtures/custom-words.json loads and decodes", false)
 }
 
 // Journey mode (gamified level ladder)

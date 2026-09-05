@@ -18,8 +18,17 @@ import kotlin.math.sin
  * tone scheduling lives with the Vail repeater work). The audio render runs on a
  * dedicated thread; the only shared state is the [keyDown] flag. The samples
  * themselves come from a [SidetoneSynth], which knows nothing about the track.
+ *
+ * [focusGain] is what the generator asks of other apps' audio for as long as it
+ * runs. Drills leave the default, which pauses them; the Vail repeater passes
+ * [AudioFocus.Gain.DUCK] so a radio app keeps running alongside — the split
+ * [AudioFocus] documents, and the same one iOS makes with its `repeaterMix`
+ * session.
  */
-class SidetoneGenerator(private val frequencyHz: Double = 600.0) {
+class SidetoneGenerator(
+    private val frequencyHz: Double = 600.0,
+    private val focusGain: AudioFocus.Gain = AudioFocus.Gain.EXCLUSIVE
+) {
 
     private val sampleRate = 44_100
     private val amplitude = 0.5f
@@ -33,7 +42,7 @@ class SidetoneGenerator(private val frequencyHz: Double = 600.0) {
     fun start() {
         if (running) return
         running = true
-        AudioFocus.acquire(this)
+        AudioFocus.acquire(this, focusGain)
         val minBytes = AudioTrack.getMinBufferSize(
             sampleRate, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_FLOAT
         ).coerceAtLeast(2048)

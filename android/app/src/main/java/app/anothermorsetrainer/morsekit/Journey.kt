@@ -105,7 +105,7 @@ object JourneyCurriculum {
      * level before it introduces only known characters; this one, or any later
      * one, has something new. Prosigns and words are never "known" this way, so
      * a learner who knows every character starts at the first prosign level.
-     * Kotlin side only: iOS has no first-run screen to seed from (#109).
+     * Both ports seed from it at first-run onboarding and on a Proficiency change (#151).
      */
     fun firstLevelBeyond(known: Set<Char>): Int =
         levels.firstOrNull { level ->

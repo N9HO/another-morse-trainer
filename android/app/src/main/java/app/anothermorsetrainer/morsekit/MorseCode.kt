@@ -102,6 +102,13 @@ object MorseCode {
     private val charForPattern: Map<String, Char> =
         allPatterns.entries.associate { (ch, pat) -> pat to ch }
 
+    /**
+     * The character for a dit/dah pattern string ("-..-" → 'X'), or null if the
+     * pattern isn't a known character. The inverse of [pattern]; mirrors the
+     * Swift `character(forPattern:)`.
+     */
+    fun characterForPattern(pattern: String): Char? = charForPattern[pattern]
+
     /** Decode a sequence of dit/dah elements back to a character, or null. */
     fun character(for_: List<Element>): Char? {
         if (for_.isEmpty()) return null

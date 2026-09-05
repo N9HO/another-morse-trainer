@@ -10,10 +10,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.content.edit
 import app.anothermorsetrainer.AdapterKeyer
+import app.anothermorsetrainer.AudioFocus
 import app.anothermorsetrainer.MidiKeyInput
 import app.anothermorsetrainer.MidiKeyOutput
 import app.anothermorsetrainer.SidetoneGenerator
 import kotlin.math.pow
+import kotlin.math.roundToInt
 import kotlin.random.Random
 
 /**
@@ -50,6 +52,10 @@ class VailRepeater(context: Context) {
     var rxBuzzEnabled by mutableStateOf(true); private set
     var keyerWpm by mutableIntStateOf(20); private set
     var users by mutableStateOf<List<VailMessage.UserInfo>>(emptyList()); private set
+    /** The server's public Rooms list (name + occupant count), from the last roster. */
+    var rooms by mutableStateOf<List<VailMessage.Room>>(emptyList()); private set
+    /** The server's Decoder flag for the room we are in. Mirrors iOS `roomDecoderEnabled`. */
+    var roomDecoderEnabled by mutableStateOf(false); private set
     var notice by mutableStateOf<String?>(null); private set
     var lagMs by mutableLongStateOf(0L); private set
     var isKeying by mutableStateOf(false); private set
@@ -65,10 +71,35 @@ class VailRepeater(context: Context) {
     var signalEvents by mutableStateOf<List<SignalEvent>>(emptyList()); private set
     var liveOwnKeyStarts by mutableStateOf<List<Long>>(emptyList()); private set
     var chatMessages by mutableStateOf<List<ChatLine>>(emptyList()); private set
+    /**
+     * Chat messages received while the chat panel was not showing. Drives the
+     * badge on the chat header. Reset when the panel opens or on a new connect.
+     */
+    var unreadChatCount by mutableIntStateOf(0); private set
+    /**
+     * Set by the screen while the chat panel is visible. While true, incoming
+     * chat does not count as unread — the user is looking right at it.
+     */
+    var isChatViewActive: Boolean = false
 
     private var keyDown = false
     private var keyBeginMs = 0L
     private val stuckKey = Runnable { handleStuckKey() }
+
+    /**
+     * Last local-clock ms each callsign appeared in a roster snapshot. The
+     * prune tick drops users older than [USER_TTL_MS] — a backstop for a server
+     * that forgets to push a fresh roster after someone leaves (channel-switch
+     * races, brief blips). Steady-state snapshots are full replacements, so
+     * it normally trims nothing.
+     */
+    private val userLastSeenMs = mutableMapOf<String, Long>()
+    private val rosterPrune = object : Runnable {
+        override fun run() {
+            pruneStaleUsers()
+            main.postDelayed(this, USER_PRUNE_INTERVAL_MS)
+        }
+    }
 
     companion object {
         /** The known public Vail servers for the picker; any wss:// URL works too. */
@@ -77,8 +108,15 @@ class VailRepeater(context: Context) {
             "Vailmorse" to DEFAULT_SERVER,
             "Vail (woozle)" to "wss://vail.woozle.org/chat"
         )
-        private const val MAX_SIGNALS = 2000
+        private const val MAX_SIGNALS = 5000
         private const val MAX_CHAT = 500
+        /** RX delay slider: 0–4000 ms in 250 ms steps, as on iOS. */
+        const val RX_DELAY_MAX_MS = 4000
+        const val RX_DELAY_STEP_MS = 250
+        const val USER_TTL_MS = 60_000L
+        const val USER_PRUNE_INTERVAL_MS = 10_000L
+        /** Prefix of the per-channel chat-read watermark keys in [prefs]. */
+        private const val CHAT_READ_PREFIX = "chatRead:"
     }
 
     init {
@@ -87,7 +125,7 @@ class VailRepeater(context: Context) {
         serverUrl = prefs.getString("server", null)?.takeIf { it.isNotBlank() } ?: DEFAULT_SERVER
         privateChannel = prefs.getBoolean("private", true)
         txTone = prefs.getInt("txTone", 72)
-        rxDelayMs = prefs.getInt("rxDelay", 2000)
+        rxDelayMs = snapRxDelay(prefs.getInt("rxDelay", 2000))
         breakInEnabled = prefs.getBoolean("breakIn", false)
         rxBuzzEnabled = prefs.getBoolean("rxBuzz", true)
         keyerWpm = prefs.getInt("keyerWpm", 20).coerceIn(5, 50)
@@ -99,7 +137,7 @@ class VailRepeater(context: Context) {
 
     fun start() {
         client.onEvent = { handleEvent(it) }
-        sidetone = SidetoneGenerator(midiToHz(txTone)).also { it.start() }
+        sidetone = newSidetone(txTone)
         midi.start(
             onKey = { down -> touchKey(down) },
             onConnected = { midiDevice = it }
@@ -118,6 +156,7 @@ class VailRepeater(context: Context) {
 
     fun stop() {
         main.removeCallbacks(stuckKey)
+        main.removeCallbacks(rosterPrune)
         client.disconnect()
         client.onEvent = null
         midi.stop()
@@ -131,13 +170,35 @@ class VailRepeater(context: Context) {
     fun connect() {
         signalEvents = emptyList()
         chatMessages = emptyList()
+        unreadChatCount = 0
         liveOwnKeyStarts = emptyList()
         client.baseUrl = serverUrl
         val isDecoder = channel.equals("Decoder", ignoreCase = true)
         client.connect(channel, isPrivate = privateChannel && !isDecoder, isDecoder = isDecoder)
+        // Roster pruning runs for the life of the connection; see [userLastSeenMs].
+        main.removeCallbacks(rosterPrune)
+        main.postDelayed(rosterPrune, USER_PRUNE_INTERVAL_MS)
     }
 
-    fun disconnect() = client.disconnect()
+    fun disconnect() {
+        main.removeCallbacks(rosterPrune)
+        client.disconnect()
+    }
+
+    /**
+     * Deterministic private-channel name for a one-to-one QSO with another
+     * operator. Both parties derive the same name (callsigns are sorted), so
+     * either can start the QSO and meet on the same channel. Same derivation as
+     * iOS `qsoChannelName(with:)`: upper-cased, joined with "-", stripped to
+     * letters, digits and "-".
+     */
+    fun qsoChannelName(otherCallsign: String): String {
+        val mine = callsign.uppercase()
+        val theirs = otherCallsign.uppercase()
+        val joined = listOf(mine, theirs).sorted().joinToString("-")
+        val sanitized = joined.filter { it.isLetterOrDigit() || it == '-' }
+        return "QSO-$sanitized"
+    }
 
     // ---- Config ----
 
@@ -178,7 +239,7 @@ class VailRepeater(context: Context) {
         txTone = n; prefs.edit { putInt("txTone", n) }
         client.updateTxTone(n)
         // Sidetone pitch follows the TX tone.
-        sidetone?.let { it.stop(); sidetone = SidetoneGenerator(midiToHz(n)).also { s -> s.start() } }
+        sidetone?.let { it.stop(); sidetone = newSidetone(n) }
         // The adapter's piezo sidetone note follows the TX tone too.
         midiOut.setSidetone(n)
     }
@@ -204,8 +265,12 @@ class VailRepeater(context: Context) {
     fun wakeAdapter() = midiOut.wakeAdapter()
 
     fun updateRxDelayMs(ms: Int) {
-        rxDelayMs = ms.coerceIn(0, 5000); prefs.edit { putInt("rxDelay", rxDelayMs) }
+        rxDelayMs = snapRxDelay(ms); prefs.edit { putInt("rxDelay", rxDelayMs) }
     }
+
+    /** Clamp to 0–[RX_DELAY_MAX_MS] and snap to the nearest [RX_DELAY_STEP_MS]. */
+    private fun snapRxDelay(ms: Int): Int =
+        ((ms.toDouble() / RX_DELAY_STEP_MS).roundToInt() * RX_DELAY_STEP_MS).coerceIn(0, RX_DELAY_MAX_MS)
 
     fun setBreakIn(enabled: Boolean) {
         breakInEnabled = enabled; prefs.edit { putBoolean("breakIn", enabled) }
@@ -216,6 +281,27 @@ class VailRepeater(context: Context) {
         if (trimmed.isEmpty()) return
         recordSignal(SignalEvent(callsign, System.currentTimeMillis(), SignalEvent.Kind.Chat(trimmed), SignalEvent.Origin.SENT))
         client.sendChat(trimmed)
+    }
+
+    /** Clear the unread chat badge. The screen calls this when the chat panel opens. */
+    fun markChatRead() {
+        unreadChatCount = 0
+        chatMessages.maxOfOrNull { it.timestampMs }?.let { advanceChatReadWatermark(it) }
+    }
+
+    // ---- Chat read watermark ----
+
+    /**
+     * Per-channel timestamp (server clock ms) of the newest chat message the
+     * user has seen, persisted across launches. The server replays the whole
+     * chat backlog on every join; without this every launch re-badged the same
+     * old messages as unread.
+     */
+    private fun chatReadWatermarkMs(): Long = prefs.getLong(CHAT_READ_PREFIX + channel, 0L)
+
+    private fun advanceChatReadWatermark(timestampMs: Long) {
+        if (timestampMs <= chatReadWatermarkMs()) return
+        prefs.edit { putLong(CHAT_READ_PREFIX + channel, timestampMs) }
     }
 
     // ---- Keying ----
@@ -267,7 +353,10 @@ class VailRepeater(context: Context) {
         when (event) {
             is VailEvent.StateChanged -> {
                 connectionState = event.state
-                if (event.state == ConnectionState.CONNECTING) users = emptyList()
+                if (event.state == ConnectionState.CONNECTING) {
+                    users = emptyList()
+                    userLastSeenMs.clear()
+                }
                 if (event.state == ConnectionState.CONNECTED) notice = null
             }
             is VailEvent.Tone -> {
@@ -283,7 +372,14 @@ class VailRepeater(context: Context) {
                 }
                 recordSignal(SignalEvent(lane, playAt, SignalEvent.Kind.Tone(event.durationMs, event.txTone), SignalEvent.Origin.RECEIVED))
             }
-            is VailEvent.Roster -> users = event.users
+            is VailEvent.Roster -> {
+                users = event.users
+                // Refresh last-seen for every callsign in the snapshot; do NOT
+                // touch entries not in it — the prune tick ages those out.
+                val nowMs = System.currentTimeMillis()
+                event.users.forEach { userLastSeenMs[it.callsign] = nowMs }
+                event.rooms?.let { rooms = it }
+            }
             is VailEvent.OwnEcho -> lagMs = event.lagMs
             is VailEvent.Notice -> notice = event.text
             is VailEvent.Chat -> {
@@ -292,16 +388,52 @@ class VailRepeater(context: Context) {
                 if (!dup) {
                     chatMessages = (chatMessages + ChatLine(event.text, event.callsign, event.timestampMs))
                         .let { if (it.size > MAX_CHAT) it.drop(it.size - MAX_CHAT) else it }
+                    // Badge only messages newer than the persisted last-read
+                    // watermark — replayed backlog the user already saw is not "new".
+                    if (isChatViewActive || event.callsign == callsign) {
+                        advanceChatReadWatermark(event.timestampMs)
+                    } else if (event.timestampMs > chatReadWatermarkMs()) {
+                        unreadChatCount += 1
+                    }
                     recordSignal(SignalEvent(event.callsign ?: "?", event.timestampMs, SignalEvent.Kind.Chat(event.text), SignalEvent.Origin.RECEIVED))
                 }
             }
-            is VailEvent.DecoderRoomChanged -> { /* informational */ }
+            is VailEvent.DecoderRoomChanged -> roomDecoderEnabled = event.enabled
+        }
+    }
+
+    // ---- Roster pruning ----
+
+    /**
+     * Drop users whose last-seen stamp is older than [USER_TTL_MS]. Server
+     * roster snapshots are full replacements, so in the steady state this never
+     * trims anything — it only catches stragglers from a snapshot the server
+     * forgot to update.
+     */
+    private fun pruneStaleUsers() {
+        if (users.isEmpty()) return
+        val nowMs = System.currentTimeMillis()
+        val alive = users.filter { u ->
+            val seen = userLastSeenMs[u.callsign] ?: return@filter false
+            nowMs - seen <= USER_TTL_MS
+        }
+        if (alive.size != users.size) {
+            users = alive
+            userLastSeenMs.keys.retainAll { cs -> alive.any { it.callsign == cs } }
         }
     }
 
     // ---- Helpers ----
 
     private fun midiToHz(note: Int): Double = 440.0 * 2.0.pow((note - 69) / 12.0)
+
+    /**
+     * The repeater's sidetone ducks other apps rather than pausing them, so a
+     * radio app can run alongside — iOS claims its `repeaterMix` session for the
+     * same reason. Drills keep the exclusive default; see [AudioFocus].
+     */
+    private fun newSidetone(note: Int): SidetoneGenerator =
+        SidetoneGenerator(midiToHz(note), AudioFocus.Gain.DUCK).also { it.start() }
 
     private fun anonCallsign(): String = "anon" + Random.nextInt(1000, 10000)
 }

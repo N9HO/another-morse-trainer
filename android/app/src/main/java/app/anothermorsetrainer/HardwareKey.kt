@@ -49,6 +49,13 @@ class HardwareKey(context: Context) {
     val isSupported: Boolean get() = input.isSupported
 
     /**
+     * True when MIDI cannot be used here at all, as opposed to no key being
+     * connected yet — the two read differently: the first is a dead end, the
+     * second just needs a key plugged in or a BLE key connected.
+     */
+    val isUnavailable: Boolean get() = input.isUnavailable
+
+    /**
      * Begin listening. [onKey] fires (on the main thread) with `true` on
      * key-down and `false` on key-up; [onConnected] reports the connected key's
      * name — null when none is attached yet, and again when the last unplugs.

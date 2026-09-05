@@ -19,8 +19,11 @@ enum PracticeReminders {
 
     /// Schedule (replacing any existing) a daily reminder at `hour:minute`
     /// local time. `streak` personalizes the body ("Keep your 12-day streak
-    /// alive…"); the content is baked in at schedule time, so AppModel
-    /// re-schedules after each day's first practice to keep the count fresh.
+    /// alive…"). The content is baked in at schedule time — unlike Android,
+    /// which reads the streak when its alarm fires — so AppModel re-schedules
+    /// through `refreshReminderIfStreakChanged` at every point the count can
+    /// move: the day's first practice, a progress reset, launch, and each
+    /// return to the foreground (a streak that lapsed overnight).
     static func schedule(hour: Int, minute: Int = 0, streak: Int = 0) {
         let center = UNUserNotificationCenter.current()
         center.removePendingNotificationRequests(withIdentifiers: [identifier])

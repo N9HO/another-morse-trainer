@@ -8,11 +8,19 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.content.edit
+import app.anothermorsetrainer.morsekit.CallsignFormat
+import app.anothermorsetrainer.morsekit.ContestLength
+import app.anothermorsetrainer.morsekit.ContestType
+import app.anothermorsetrainer.morsekit.ExamGrading
+import app.anothermorsetrainer.morsekit.ExamSpeed
 import app.anothermorsetrainer.morsekit.MorseCode
 import app.anothermorsetrainer.morsekit.MorseData
 import app.anothermorsetrainer.morsekit.MorseItem
 import app.anothermorsetrainer.morsekit.MorseTiming
 import app.anothermorsetrainer.morsekit.PhraseQuiz
+import app.anothermorsetrainer.morsekit.RapidFireContent
+import app.anothermorsetrainer.morsekit.RapidFirePace
+import app.anothermorsetrainer.morsekit.RapidFireResponse
 import app.anothermorsetrainer.morsekit.TrainerEngine
 
 /** When to reveal the correct answer after a response (mirrors iOS RevealMode). */
@@ -98,8 +106,14 @@ object Settings {
 
     /** Top of the character-speed range, shared by the setter and the slider. */
     const val MAX_CHARACTER_WPM = 60.0
-    /** Bottom of the character-speed range. */
-    const val MIN_CHARACTER_WPM = 5.0
+    /** Bottom of the character-speed range. Matches the iOS slider (15…60). */
+    const val MIN_CHARACTER_WPM = 15.0
+    /** Bottom of the Farnsworth effective-speed range. Matches the iOS slider (8…character speed). */
+    const val MIN_EFFECTIVE_WPM = 8.0
+    /** Most auto-repeats Head Copy will play after the first hearing (iOS headCopyRepeatRange). */
+    const val MAX_HEAD_COPY_REPEATS = 3
+    /** Longest Head Copy auto-reveal countdown, in seconds (iOS headCopyRevealRange). */
+    const val MAX_HEAD_COPY_REVEAL_SEC = 10
 
     /**
      * 33 WPM, matching iOS. The Koch method depends on characters arriving too
@@ -115,8 +129,16 @@ object Settings {
      */
     var characterWpm by mutableDoubleStateOf(33.0)
         private set
-    /** Equal to the character speed ⇒ standard timing, i.e. Farnsworth off, as on iOS. */
-    var effectiveWpm by mutableDoubleStateOf(33.0)
+    /**
+     * Farnsworth is an explicit switch, as on iOS: off, everything plays at
+     * standard timing whatever [effectiveWpm] remembers; on, multi-character
+     * content is spaced down to [effectiveWpm]. It used to be implied by an
+     * effective speed below the character speed — [init] migrates that.
+     */
+    var farnsworthEnabled by mutableStateOf(false)
+        private set
+    /** The Farnsworth effective speed, kept while the switch is off (iOS default 18). */
+    var effectiveWpm by mutableDoubleStateOf(18.0)
         private set
     var sidetoneHz by mutableDoubleStateOf(600.0)
         private set
@@ -156,11 +178,11 @@ object Settings {
     /** How big a pool Common Words draws from (Top-N ranked ham words). */
     var wordCount by mutableIntStateOf(100)
         private set
-    /** When to reveal the correct answer after a response. */
-    var revealMode by mutableStateOf(RevealMode.ALWAYS)
+    /** When to reveal the correct answer after a response (fresh installs: only when wrong, as on iOS). */
+    var revealMode by mutableStateOf(RevealMode.ON_WRONG)
         private set
-    /** How long a practice session runs before it ends with a summary. */
-    var practiceDuration by mutableStateOf(PracticeDuration.UNTIL_STOP)
+    /** How long a practice session runs before it ends with a summary (fresh installs: 5 minutes, as on iOS). */
+    var practiceDuration by mutableStateOf(PracticeDuration.FIVE_MIN)
         private set
 
     /** Show the digit 0 with a slash through it wherever copy text is displayed
@@ -185,11 +207,78 @@ object Settings {
     /** Story bookmarks: how far you got, per shelf ("fables") or serial id. */
     private var storyBookmarks by mutableStateOf(mapOf<String, Int>())
 
-    /** Head Copy: replay the item every few seconds until revealed. */
-    var headCopyAutoRepeat by mutableStateOf(false)
+    // ---- Mode setup, remembered across launches (iOS keeps these in AppSettings) ----
+
+    /** Journey: a wrong answer drains the level bar (iOS journeyDrainOnMiss); off = fill-only. */
+    var journeyDrainOnMiss by mutableStateOf(true)
         private set
-    /** Head Copy: reveal automatically this many seconds after the tone (0 = manual). */
-    var headCopyRevealSec by mutableIntStateOf(0)
+    /** Code Exam: the license-tied speed (iOS examSpeed). */
+    var examSpeed by mutableStateOf(ExamSpeed.GENERAL13)
+        private set
+    /** Code Exam: solid copy or content questions (iOS examGrading, default questions). */
+    var examGrading by mutableStateOf(ExamGrading.QUESTIONS)
+        private set
+    /** Code Exam: a bundled passage instead of a freshly generated one (iOS examUseBundled). */
+    var examUseBundled by mutableStateOf(false)
+        private set
+    /** Code Exam: which bundled passage comes next; "New exam" steps it (iOS examSampleIndex). */
+    var examSampleIndex by mutableIntStateOf(0)
+        private set
+    /** QRQ Speed: the character speed preset, 35–60 WPM (iOS qrqSpeed). */
+    var qrqWpm by mutableDoubleStateOf(35.0)
+        private set
+    /** Contest: which contest to emulate (iOS ContestSettings.type). */
+    var contestType by mutableStateOf(ContestType.Sst)
+        private set
+    /** Contest: how long a run lasts (iOS ContestSettings.length). */
+    var contestLength by mutableStateOf(ContestLength.TenMin)
+        private set
+    /** Rapid Fire setup (iOS RapidFireSettings), field for field. */
+    var rapidFireContent by mutableStateOf(RapidFireContent.CALLSIGNS)
+        private set
+    var rapidFireResponse by mutableStateOf(RapidFireResponse.TYPE)
+        private set
+    var rapidFirePace by mutableStateOf(RapidFirePace.STEADY)
+        private set
+    var rapidFireWordMin by mutableIntStateOf(3)
+        private set
+    var rapidFireWordMax by mutableIntStateOf(6)
+        private set
+    var rapidFireNumberCount by mutableIntStateOf(5)
+        private set
+    var rapidFireUsOnly by mutableStateOf(true)
+        private set
+    /** Call-sign shapes Rapid Fire draws from; never empty (iOS callsignFormats). */
+    var rapidFireFormats by mutableStateOf(CallsignFormat.commonDefaults.toSet())
+        private set
+
+    /**
+     * Head Copy: how many times the item replays on its own after the first
+     * hearing, 0–[MAX_HEAD_COPY_REPEATS] (0 = manual Repeat only). Mirrors iOS
+     * `headCopyRepeats`; replaces the old on/off auto-repeat, see [init].
+     */
+    var headCopyRepeats by mutableIntStateOf(2)
+        private set
+    /** Head Copy: reveal automatically this many seconds after the repeats finish (0 = manual). */
+    var headCopyRevealSec by mutableIntStateOf(5)
+        private set
+
+    // ---- Feedback (mirrors iOS showCorrectness / allowReplay) ----
+
+    /** Colour the answers right/wrong and say which it was. Off, only the reveal setting shows anything. */
+    var showCorrectness by mutableStateOf(true)
+        private set
+    /** Offer a Replay button before answering. A miss always offers one (issue #77). */
+    var allowReplay by mutableStateOf(false)
+        private set
+
+    // ---- Listen & Learn (hands-free) ----
+
+    /** What the hands-free mode announces. */
+    var listenContent by mutableStateOf(ListenContent.CHARACTERS)
+        private set
+    /** Gap between the code and the spoken answer. */
+    var listenGap by mutableStateOf(ListenGap.STANDARD)
         private set
 
     /**
@@ -238,8 +327,25 @@ object Settings {
 
     fun init(context: Context) {
         prefs = context.applicationContext.getSharedPreferences("amt_settings", Context.MODE_PRIVATE)
-        characterWpm = prefs.getFloat("charWpm", 33f).toDouble()
-        effectiveWpm = prefs.getFloat("effWpm", 33f).toDouble()
+        // The floor rose from 5 to 15 WPM (iOS parity): a slower stored speed
+        // comes up to the floor rather than sitting below the slider.
+        characterWpm = prefs.getFloat("charWpm", 33f).toDouble().coerceIn(MIN_CHARACTER_WPM, MAX_CHARACTER_WPM)
+        // Farnsworth used to be implicit — an effective speed below the
+        // character speed meant on, equal meant off. It is now an explicit
+        // switch with its own remembered effective speed, so an install without
+        // the switch stored reads it off the old relationship: a stretched
+        // effective speed keeps both the switch and the value, an equal one is
+        // off and drops back to the iOS default of 18 rather than remembering
+        // "no stretch" as the speed to stretch to.
+        val storedEffective = if (prefs.contains("effWpm")) prefs.getFloat("effWpm", 18f).toDouble() else null
+        if (prefs.contains("farnsworth")) {
+            farnsworthEnabled = prefs.getBoolean("farnsworth", false)
+            effectiveWpm = storedEffective ?: 18.0
+        } else {
+            farnsworthEnabled = storedEffective != null && storedEffective < characterWpm
+            effectiveWpm = if (storedEffective != null && storedEffective < characterWpm) storedEffective else 18.0
+        }
+        effectiveWpm = effectiveWpm.coerceIn(MIN_EFFECTIVE_WPM, characterWpm)
         sidetoneHz = prefs.getFloat("sidetone", 600f).toDouble()
         backgroundNoise = runCatching {
             BackgroundNoiseLevel.valueOf(prefs.getString("backgroundNoise", null) ?: "KEEP_ALIVE")
@@ -260,12 +366,14 @@ object Settings {
         voiceAnswersEnabled = prefs.getBoolean("voiceAnswers", false)
         answerByKeying = prefs.getBoolean("answerByKeying", false)
         answerChoices = prefs.getInt("answerChoices", 4).coerceIn(4, 6)
-        recognitionTargetSec = prefs.getFloat("recogTarget", 1.0f).toDouble()
+        recognitionTargetSec = prefs.getFloat("recogTarget", 1.0f).toDouble().coerceIn(0.5, 3.0)
         wordCount = prefs.getInt("wordCount", 100)
-        revealMode = runCatching { RevealMode.valueOf(prefs.getString("revealMode", null) ?: "ALWAYS") }
-            .getOrDefault(RevealMode.ALWAYS)
-        practiceDuration = runCatching { PracticeDuration.valueOf(prefs.getString("practiceDuration", null) ?: "UNTIL_STOP") }
-            .getOrDefault(PracticeDuration.UNTIL_STOP)
+        // Fresh-install defaults follow iOS (reveal only when wrong, 5-minute
+        // sessions); a stored choice is kept as it is.
+        revealMode = runCatching { RevealMode.valueOf(prefs.getString("revealMode", null) ?: "ON_WRONG") }
+            .getOrDefault(RevealMode.ON_WRONG)
+        practiceDuration = runCatching { PracticeDuration.valueOf(prefs.getString("practiceDuration", null) ?: "FIVE_MIN") }
+            .getOrDefault(PracticeDuration.FIVE_MIN)
         slashedZero = prefs.getBoolean("slashedZero", true)
         storyContent = runCatching { StoryContent.valueOf(prefs.getString("storyContent", null) ?: "FABLES") }
             .getOrDefault(StoryContent.FABLES)
@@ -274,8 +382,53 @@ object Settings {
             .getOrDefault(NewsSource.HAM_RADIO)
         newsFullStory = prefs.getBoolean("newsFullStory", true)
         storyBookmarks = decodeBookmarks(prefs.getString("storyBookmarks", "") ?: "")
-        headCopyAutoRepeat = prefs.getBoolean("hcAutoRepeat", false)
-        headCopyRevealSec = prefs.getInt("hcRevealSec", 0).coerceIn(0, 10)
+        journeyDrainOnMiss = prefs.getBoolean("journeyDrain", true)
+        examSpeed = ExamSpeed.allCases.firstOrNull { it.code == prefs.getString("examSpeed", null) }
+            ?: ExamSpeed.GENERAL13
+        examGrading = ExamGrading.allCases.firstOrNull { it.code == prefs.getString("examGrading", null) }
+            ?: ExamGrading.QUESTIONS
+        examUseBundled = prefs.getBoolean("examBundled", false)
+        examSampleIndex = prefs.getInt("examSampleIndex", 0).coerceAtLeast(0)
+        qrqWpm = prefs.getFloat("qrqWpm", 35f).toDouble().coerceIn(35.0, 60.0)
+        contestType = ContestType.allCases.firstOrNull { it.code == prefs.getString("contestType", null) }
+            ?: ContestType.Sst
+        contestLength = ContestLength.allCases.firstOrNull { it.code == prefs.getString("contestLength", null) }
+            ?: ContestLength.TenMin
+        rapidFireContent = runCatching { RapidFireContent.valueOf(prefs.getString("rfContent", null) ?: "CALLSIGNS") }
+            .getOrDefault(RapidFireContent.CALLSIGNS)
+        rapidFireResponse = runCatching { RapidFireResponse.valueOf(prefs.getString("rfResponse", null) ?: "TYPE") }
+            .getOrDefault(RapidFireResponse.TYPE)
+        rapidFirePace = runCatching { RapidFirePace.valueOf(prefs.getString("rfPace", null) ?: "STEADY") }
+            .getOrDefault(RapidFirePace.STEADY)
+        rapidFireWordMin = prefs.getInt("rfWordMin", 3).coerceIn(RAPID_FIRE_WORD_LENGTH_MIN, RAPID_FIRE_WORD_LENGTH_MAX)
+        rapidFireWordMax = prefs.getInt("rfWordMax", 6).coerceIn(rapidFireWordMin, RAPID_FIRE_WORD_LENGTH_MAX)
+        rapidFireNumberCount = prefs.getInt("rfNumberCount", 5).coerceIn(RAPID_FIRE_NUMBER_COUNT_MIN, RAPID_FIRE_NUMBER_COUNT_MAX)
+        rapidFireUsOnly = prefs.getBoolean("rfUsOnly", true)
+        prefs.getStringSet("rfFormats", null)?.let { stored ->
+            rapidFireFormats = CallsignFormat.entries.filter { it.code in stored }.toSet()
+                .ifEmpty { CallsignFormat.commonDefaults.toSet() }
+        }
+        // Head Copy's on/off auto-repeat became a count (iOS parity): an
+        // install that had it on gets the iOS default of 2 repeats, one that
+        // had it off keeps repeating off. The stored reveal delay is kept as is;
+        // only a fresh install gets the 5-second default.
+        headCopyRepeats = when {
+            prefs.contains("hcRepeats") -> prefs.getInt("hcRepeats", 2)
+            prefs.contains("hcAutoRepeat") -> if (prefs.getBoolean("hcAutoRepeat", false)) 2 else 0
+            else -> 2
+        }.coerceIn(0, MAX_HEAD_COPY_REPEATS)
+        headCopyRevealSec = prefs.getInt("hcRevealSec", 5).coerceIn(0, MAX_HEAD_COPY_REVEAL_SEC)
+        showCorrectness = prefs.getBoolean("showCorrectness", true)
+        allowReplay = prefs.getBoolean("allowReplay", false)
+        listenContent = runCatching { ListenContent.valueOf(prefs.getString("listenContent", null) ?: "CHARACTERS") }
+            .getOrDefault(ListenContent.CHARACTERS)
+        // The three old tiers became iOS's four: the old Fast (0.7 s) is
+        // nearest Warp, and ICR keeps its name.
+        listenGap = when (val raw = prefs.getString("listenGap", null)) {
+            null -> ListenGap.STANDARD
+            "FAST" -> ListenGap.WARP
+            else -> runCatching { ListenGap.valueOf(raw) }.getOrDefault(ListenGap.STANDARD)
+        }
         punctuationChars = (prefs.getString("punctuation", "") ?: "")
             .toSet().filter { it in MorseCode.pickablePunctuation }.toSet()
         customWordsText = prefs.getString("customWords", "") ?: ""
@@ -290,9 +443,18 @@ object Settings {
         reminderMinute = prefs.getInt("reminderMinute", 0)
     }
 
-    /** The playback timing implied by the speed settings (Farnsworth when effective < character). */
+    /**
+     * The effective speed actually in force: the Farnsworth speed while the
+     * switch is on, otherwise the character speed itself. Read this, not
+     * [effectiveWpm], wherever the speed in use is what matters (timing, the
+     * session record).
+     */
+    val effectiveWpmInUse: Double
+        get() = if (farnsworthEnabled) minOf(effectiveWpm, characterWpm) else characterWpm
+
+    /** The playback timing implied by the speed settings (Farnsworth only while switched on). */
     fun timing(): MorseTiming =
-        if (effectiveWpm < characterWpm) MorseTiming.farnsworth(characterWpm, effectiveWpm)
+        if (farnsworthEnabled && effectiveWpm < characterWpm) MorseTiming.farnsworth(characterWpm, effectiveWpm)
         else MorseTiming(characterWpm)
 
     /** Engine config carrying the user's speed, recognition target, and choice count. */
@@ -311,8 +473,13 @@ object Settings {
         persist()
     }
 
+    fun updateFarnsworthEnabled(value: Boolean) {
+        farnsworthEnabled = value
+        persist()
+    }
+
     fun updateEffectiveWpm(value: Double) {
-        effectiveWpm = value.coerceIn(MIN_CHARACTER_WPM, characterWpm)
+        effectiveWpm = value.coerceIn(MIN_EFFECTIVE_WPM, characterWpm)
         persist()
     }
 
@@ -332,13 +499,17 @@ object Settings {
         persist()
     }
 
+    // Spoken and keyed answers are mutually exclusive, as on iOS: turning one
+    // on turns the other off, whichever screen does the turning.
     fun updateVoiceAnswersEnabled(value: Boolean) {
         voiceAnswersEnabled = value
+        if (value) answerByKeying = false
         persist()
     }
 
     fun updateAnswerByKeying(value: Boolean) {
         answerByKeying = value
+        if (value) voiceAnswersEnabled = false
         persist()
     }
 
@@ -348,7 +519,7 @@ object Settings {
     }
 
     fun updateRecognitionTargetSec(value: Double) {
-        recognitionTargetSec = value.coerceIn(0.5, 2.5)
+        recognitionTargetSec = value.coerceIn(0.5, 3.0)
         persist()
     }
 
@@ -415,13 +586,33 @@ object Settings {
     private fun encodeBookmarks(map: Map<String, Int>): String =
         map.entries.joinToString("|") { "${it.key}=${it.value}" }
 
-    fun updateHeadCopyAutoRepeat(value: Boolean) {
-        headCopyAutoRepeat = value
+    fun updateHeadCopyRepeats(value: Int) {
+        headCopyRepeats = value.coerceIn(0, MAX_HEAD_COPY_REPEATS)
         persist()
     }
 
     fun updateHeadCopyRevealSec(value: Int) {
-        headCopyRevealSec = value.coerceIn(0, 10)
+        headCopyRevealSec = value.coerceIn(0, MAX_HEAD_COPY_REVEAL_SEC)
+        persist()
+    }
+
+    fun updateShowCorrectness(value: Boolean) {
+        showCorrectness = value
+        persist()
+    }
+
+    fun updateAllowReplay(value: Boolean) {
+        allowReplay = value
+        persist()
+    }
+
+    fun updateListenContent(value: ListenContent) {
+        listenContent = value
+        persist()
+    }
+
+    fun updateListenGap(value: ListenGap) {
+        listenGap = value
         persist()
     }
 
@@ -463,18 +654,12 @@ object Settings {
     }
 
     /**
-     * The parsed custom pool: split on whitespace/commas, uppercased, filtered
-     * to sendable characters, deduplicated, in entry order.
+     * The parsed custom pool — the same rules as iOS's `MorseData.parseWordList`:
+     * split on commas, semicolons and whitespace, uppercased, filtered to
+     * sendable characters, capped at 24 characters, deduplicated, in entry order.
      */
     val customWords: List<String>
-        get() {
-            val seen = LinkedHashSet<String>()
-            for (raw in customWordsText.uppercase().split('\n', '\r', ' ', ',', ';', '\t')) {
-                val w = raw.filter { MorseCode.pattern(it) != null }.take(24)
-                if (w.isNotEmpty()) seen.add(w)
-            }
-            return seen.toList()
-        }
+        get() = MorseData.parseWordList(customWordsText)
 
     /**
      * The Common Words pool: the learner's own list when enabled and big
@@ -523,9 +708,131 @@ object Settings {
         persist()
     }
 
+    // ---- Mode setup updaters (each writes only its own keys; see persistModeSetup) ----
+
+    /** iOS RapidFireSettings.wordLengthRange / numberCountRange. */
+    const val RAPID_FIRE_WORD_LENGTH_MIN = 2
+    const val RAPID_FIRE_WORD_LENGTH_MAX = 12
+    const val RAPID_FIRE_NUMBER_COUNT_MIN = 1
+    const val RAPID_FIRE_NUMBER_COUNT_MAX = 10
+
+    fun updateJourneyDrainOnMiss(value: Boolean) {
+        journeyDrainOnMiss = value
+        persistModeSetup()
+    }
+
+    fun updateExamSpeed(value: ExamSpeed) {
+        examSpeed = value
+        persistModeSetup()
+    }
+
+    fun updateExamGrading(value: ExamGrading) {
+        examGrading = value
+        persistModeSetup()
+    }
+
+    fun updateExamUseBundled(value: Boolean) {
+        examUseBundled = value
+        persistModeSetup()
+    }
+
+    /** "New exam": move on to the next bundled passage (iOS newExam). */
+    fun advanceExamSample() {
+        examSampleIndex += 1
+        persistModeSetup()
+    }
+
+    fun updateQrqWpm(value: Double) {
+        qrqWpm = value.coerceIn(35.0, 60.0)
+        persistModeSetup()
+    }
+
+    fun updateContestType(value: ContestType) {
+        contestType = value
+        persistModeSetup()
+    }
+
+    fun updateContestLength(value: ContestLength) {
+        contestLength = value
+        persistModeSetup()
+    }
+
+    fun updateRapidFireContent(value: RapidFireContent) {
+        rapidFireContent = value
+        persistModeSetup()
+    }
+
+    fun updateRapidFireResponse(value: RapidFireResponse) {
+        rapidFireResponse = value
+        persistModeSetup()
+    }
+
+    fun updateRapidFirePace(value: RapidFirePace) {
+        rapidFirePace = value
+        persistModeSetup()
+    }
+
+    /** Word-length bounds drag each other along so min ≤ max always holds (iOS steppers). */
+    fun updateRapidFireWordMin(value: Int) {
+        rapidFireWordMin = value.coerceIn(RAPID_FIRE_WORD_LENGTH_MIN, RAPID_FIRE_WORD_LENGTH_MAX)
+        if (rapidFireWordMax < rapidFireWordMin) rapidFireWordMax = rapidFireWordMin
+        persistModeSetup()
+    }
+
+    fun updateRapidFireWordMax(value: Int) {
+        rapidFireWordMax = value.coerceIn(RAPID_FIRE_WORD_LENGTH_MIN, RAPID_FIRE_WORD_LENGTH_MAX)
+        if (rapidFireWordMin > rapidFireWordMax) rapidFireWordMin = rapidFireWordMax
+        persistModeSetup()
+    }
+
+    fun updateRapidFireNumberCount(value: Int) {
+        rapidFireNumberCount = value.coerceIn(RAPID_FIRE_NUMBER_COUNT_MIN, RAPID_FIRE_NUMBER_COUNT_MAX)
+        persistModeSetup()
+    }
+
+    fun updateRapidFireUsOnly(value: Boolean) {
+        rapidFireUsOnly = value
+        persistModeSetup()
+    }
+
+    /** Toggle one call-sign shape; at least one stays on, or the generator would have nothing to build. */
+    fun toggleRapidFireFormat(format: CallsignFormat) {
+        val next = if (format in rapidFireFormats) rapidFireFormats - format else rapidFireFormats + format
+        if (next.isNotEmpty()) {
+            rapidFireFormats = next
+            persistModeSetup()
+        }
+    }
+
+    /**
+     * The mode-setup keys, written on their own so a setup change never
+     * rewrites the app-wide preferences [persist] owns (and vice versa).
+     */
+    private fun persistModeSetup() {
+        prefs.edit {
+            putBoolean("journeyDrain", journeyDrainOnMiss)
+            putString("examSpeed", examSpeed.code)
+            putString("examGrading", examGrading.code)
+            putBoolean("examBundled", examUseBundled)
+            putInt("examSampleIndex", examSampleIndex)
+            putFloat("qrqWpm", qrqWpm.toFloat())
+            putString("contestType", contestType.code)
+            putString("contestLength", contestLength.code)
+            putString("rfContent", rapidFireContent.name)
+            putString("rfResponse", rapidFireResponse.name)
+            putString("rfPace", rapidFirePace.name)
+            putInt("rfWordMin", rapidFireWordMin)
+            putInt("rfWordMax", rapidFireWordMax)
+            putInt("rfNumberCount", rapidFireNumberCount)
+            putBoolean("rfUsOnly", rapidFireUsOnly)
+            putStringSet("rfFormats", rapidFireFormats.map { it.code }.toSet())
+        }
+    }
+
     private fun persist() {
         prefs.edit {
             putFloat("charWpm", characterWpm.toFloat())
+            putBoolean("farnsworth", farnsworthEnabled)
             putFloat("effWpm", effectiveWpm.toFloat())
             putFloat("sidetone", sidetoneHz.toFloat())
             putString("backgroundNoise", backgroundNoise.name)
@@ -543,8 +850,12 @@ object Settings {
             putString("newsSource", newsSource.name)
             putBoolean("newsFullStory", newsFullStory)
             putString("storyBookmarks", encodeBookmarks(storyBookmarks))
-            putBoolean("hcAutoRepeat", headCopyAutoRepeat)
+            putInt("hcRepeats", headCopyRepeats)
             putInt("hcRevealSec", headCopyRevealSec)
+            putBoolean("showCorrectness", showCorrectness)
+            putBoolean("allowReplay", allowReplay)
+            putString("listenContent", listenContent.name)
+            putString("listenGap", listenGap.name)
             putString("punctuation", punctuationChars.joinToString(""))
             putString("customWords", customWordsText)
             putBoolean("useCustomWords", useCustomWords)

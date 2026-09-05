@@ -43,6 +43,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Alignment
@@ -303,7 +304,14 @@ fun RepeaterScreen(onBack: () -> Unit) {
                         repeater.updateTxTone(it.toInt())
                     }
                     Spacer(Modifier.height(8.dp))
-                    SliderRow(stringResource(R.string.repeater_rx_delay), stringResource(R.string.repeater_ms_value, repeater.rxDelayMs), repeater.rxDelayMs.toFloat(), 0f..5000f) {
+                    // 0–4000 ms in 250 ms steps, the same stepper range as iOS.
+                    SliderRow(
+                        stringResource(R.string.repeater_rx_delay),
+                        stringResource(R.string.repeater_ms_value, repeater.rxDelayMs),
+                        repeater.rxDelayMs.toFloat(),
+                        0f..VailRepeater.RX_DELAY_MAX_MS.toFloat(),
+                        steps = VailRepeater.RX_DELAY_MAX_MS / VailRepeater.RX_DELAY_STEP_MS - 1
+                    ) {
                         repeater.updateRxDelayMs(it.toInt())
                     }
                 }
@@ -457,10 +465,51 @@ private fun ActivityTimeline(repeater: VailRepeater) {
     }
 }
 
+/**
+ * Chat behind a Show/Hide header, the way iOS keeps it behind a toolbar button:
+ * while hidden, messages arriving count as unread and badge the header; showing
+ * the panel clears the badge and advances the per-channel read watermark, so a
+ * replayed backlog does not re-badge on the next launch.
+ */
 @Composable
 private fun ChatPanel(repeater: VailRepeater) {
     var input by remember { mutableStateOf("") }
-    Text(stringResource(R.string.repeater_chat), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Brand.textSecondary)
+    var expanded by rememberSaveable { mutableStateOf(false) }
+    DisposableEffect(expanded) {
+        repeater.isChatViewActive = expanded
+        if (expanded) repeater.markChatRead()
+        onDispose { repeater.isChatViewActive = false }
+    }
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(stringResource(R.string.repeater_chat), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Brand.textSecondary)
+            if (repeater.unreadChatCount > 0) {
+                Box(
+                    modifier = Modifier
+                        .background(Color(0xFFFFA000), RoundedCornerShape(8.dp))
+                        .padding(horizontal = 6.dp, vertical = 1.dp)
+                ) {
+                    Text(
+                        stringResource(R.string.repeater_chat_unread, repeater.unreadChatCount),
+                        color = Brand.navy,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+        TextButton(onClick = { expanded = !expanded }) {
+            Text(
+                if (expanded) stringResource(R.string.repeater_hide_chat) else stringResource(R.string.repeater_show_chat),
+                color = Brand.teal
+            )
+        }
+    }
+    if (!expanded) return
     Spacer(Modifier.height(6.dp))
     Column(modifier = Modifier.fillMaxWidth().brandCard().heightIn(min = 60.dp).padding(12.dp)) {
         val recent = repeater.chatMessages.takeLast(40)
@@ -491,7 +540,7 @@ private fun ChatPanel(repeater: VailRepeater) {
 }
 
 @Composable
-private fun SliderRow(label: String, value: String, position: Float, range: ClosedFloatingPointRange<Float>, onChange: (Float) -> Unit) {
+private fun SliderRow(label: String, value: String, position: Float, range: ClosedFloatingPointRange<Float>, steps: Int = 0, onChange: (Float) -> Unit) {
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
         Text(label, color = Brand.textPrimary, fontWeight = FontWeight.Medium)
         Text(value, color = Brand.teal, fontWeight = FontWeight.SemiBold)
@@ -500,6 +549,7 @@ private fun SliderRow(label: String, value: String, position: Float, range: Clos
         value = position,
         onValueChange = onChange,
         valueRange = range,
+        steps = steps,
         colors = SliderDefaults.colors(
             thumbColor = Brand.teal,
             activeTrackColor = Brand.teal,

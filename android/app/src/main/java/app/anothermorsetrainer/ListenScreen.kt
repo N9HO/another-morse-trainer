@@ -1,6 +1,7 @@
 package app.anothermorsetrainer
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Pause
@@ -45,7 +47,7 @@ import androidx.compose.ui.unit.sp
  * Listen mode when you leave it).
  */
 @Composable
-fun ListenScreen(onBack: () -> Unit) {
+fun ListenScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) {
     val context = LocalContext.current
 
     fun leave() {
@@ -69,7 +71,15 @@ fun ListenScreen(onBack: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             TextButton(onClick = { leave() }) { Text(stringResource(R.string.common_back), color = Brand.teal) }
-            SessionSettingsButton { showSettings = true }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                // Switching stops the loop the way Back does, then lands on
+                // the picked mode's setup (iOS #42).
+                SwitchModeButton(TrainingMode.LISTEN) { mode ->
+                    ListenService.stop(context)
+                    onSwitchMode(mode)
+                }
+                SessionSettingsButton { showSettings = true }
+            }
         }
 
         CenteredContent {
@@ -187,7 +197,12 @@ fun ListenScreen(onBack: () -> Unit) {
 
 @Composable
 private fun <T> ChipRow(options: List<T>, selected: T, label: (T) -> String, onSelect: (T) -> Unit) {
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    // Scrolls sideways: the four answer-gap tiers carry their timings in
+    // their labels and do not all fit across a phone.
+    Row(
+        modifier = Modifier.horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
         options.forEach { option ->
             FilterChip(
                 selected = option == selected,

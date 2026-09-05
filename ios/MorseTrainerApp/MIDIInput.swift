@@ -64,6 +64,12 @@ public final class MIDIInput {
     /// don't connect (and double-deliver) the same source twice.
     private var connectedRefs = Set<MIDIEndpointRef>()
     private var sourceNames: [String] = []
+    /// Paddles currently held, by the last edge each one sent. Kept so an
+    /// unplugged key — which can no longer send its note-offs — gets a key-up
+    /// delivered on its behalf (see `connectAllSources`). Behind `stateLock`
+    /// like the callbacks: written on the CoreMIDI packet thread, read and
+    /// cleared on the notification thread.
+    private var heldKeys = Set<Key>()
     private let stateLock = NSLock()
 
     /// Names of the MIDI sources currently connected (e.g. "Vail Adapter").
@@ -138,11 +144,27 @@ public final class MIDIInput {
             present.insert(src)
             if let name = endpointName(src) { names.append(name) }
         }
+        let removed = !connectedRefs.isSubset(of: present)
         connectedRefs = present
         let changed = names != sourceNames
         sourceNames = names
+        // A key that has gone can't send its note-offs any more: release
+        // whatever it left held, through the same callback the packets use,
+        // so a keyer sees an ordinary key-up rather than a transmit that
+        // never ends (Android `MidiKeyInput.disconnect`). Taken under the
+        // lock, delivered outside it — the handler may re-enter us.
+        let released: Set<Key> = removed ? heldKeys : []
+        if removed { heldKeys.removeAll() }
+        let handler = released.isEmpty ? nil : storedOnEvent
         stateLock.unlock()
         if changed { onSourcesChanged?(names) }
+        if let handler, !released.isEmpty {
+            let mach = mach_absolute_time()
+            let ms = Int64(Date().timeIntervalSince1970 * 1000)
+            for key in released {
+                handler(Event(key: key, isDown: false, machTimestamp: mach, timestampMs: ms))
+            }
+        }
     }
 
     private func handleNotification(_ notification: UnsafePointer<MIDINotification>) {
@@ -189,8 +211,16 @@ public final class MIDIInput {
 
         // Read the handler once, not once per message: a packet carrying a
         // key-down and its key-up must deliver both to the same closure even if
-        // the UI swaps handlers between them.
-        guard let handler = onEvent else { return }
+        // the UI swaps handlers between them. The held set is updated under
+        // the same lock acquisition so the unplug path always sees the state
+        // as of the last packet delivered.
+        stateLock.lock()
+        for message in messages {
+            if message.isDown { heldKeys.insert(message.paddle) } else { heldKeys.remove(message.paddle) }
+        }
+        let handler = storedOnEvent
+        stateLock.unlock()
+        guard let handler else { return }
         let timestampMs = Self.machTimeToWallClockMs(packet.timeStamp)
         for message in messages {
             handler(Event(

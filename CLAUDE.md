@@ -21,8 +21,9 @@ Nothing at the repository root builds anything. `cd ios` or `cd android` first.
   deduplicating the data tables. That is a separate project with real risk.
 - A fix that applies to both is **two** edits, one per tree, in the language and
   idiom of that tree.
-- Changing one side does not obligate you to change the other in the same
-  change, but say which side you touched.
+- A user-visible change on one side obligates the same change on the other,
+  in the same pull request or in a paired issue — see the parity rule below.
+  Either way, say which side you touched.
 
 The one thing the two trees *do* share is `fixtures/`: JSON files of expected
 values, each tree reading them in its own idiom (`JSONDecoder` in the Swift
@@ -41,6 +42,43 @@ drifting the same way still fails.
 `fixtures/**` is in the `paths:` filter of *both* workflows and in
 `merge-gate.yml`'s detection for both platforms — a fixture change has to build
 both apps, or it is only half checked.
+
+## The other rule: two ports, one feature set
+
+**Every feature, fix and behaviour change ships on both apps** (#171). Nothing
+a user can do on iOS/iPadOS/macOS may be missing on Android, or the reverse,
+unless the platform genuinely cannot do it — and then the exception is written
+down in `PARITY.md`, not left as a silent gap. `PARITY.md` is the single
+record: the policy, every intentional platform-limited exception, and the
+divergences the last audit found and had not yet closed.
+
+What this means when you make a change:
+
+- **Parity is part of the definition of done.** An issue that changes what a
+  user sees is complete when both apps have the behaviour, not when one does.
+  When you are asked to implement a feature or fix a behaviour bug, do both
+  trees in the same change — two edits, one per tree, per the rule above — or
+  say plainly which side is missing and why.
+- **A single-platform pull request has to say why.** The pull request template
+  has a Parity section; `merge-gate.yml` reads it on any PR whose diff touches
+  only one of `ios/` (excluding `ios/tools/`) and `android/` (excluding
+  `android/store-assets/`), Markdown not counted, and fails unless
+  exactly one of these is ticked: the other side is tracked in a paired issue
+  (`#N` on that line), the gap is a platform limitation recorded in
+  `PARITY.md` in the same PR, or the change is platform-internal with no
+  user-visible effect (build, CI, lint, refactor, version bump, a crash fix in
+  code only one platform has). Bot-authored PRs are exempt.
+- **Paired issues.** A feature issue tracks both sides with its "Shipped on"
+  checklist; a bug report says where it was seen and is checked on the other
+  app before it closes. When only one side lands, open or link the issue for
+  the other side rather than closing the original.
+- **The platform's own idiom is not a divergence.** iOS pairs a BLE key through
+  the system MIDI sheet and Android scans in-app; Android keeps Listen & Learn
+  alive with a foreground service and iOS with a background audio session.
+  Parity is about what the user can do, not how each OS does it.
+- **Divergence in what is documented counts too.** The two READMEs list the
+  same features; a feature added to one list and not the other is a gap in the
+  same sense.
 
 ## Do not touch the vendored decoder
 

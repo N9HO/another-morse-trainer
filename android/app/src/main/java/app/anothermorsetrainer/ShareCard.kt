@@ -12,6 +12,7 @@ import android.graphics.Typeface
 import androidx.core.content.FileProvider
 import androidx.core.graphics.createBitmap
 import app.anothermorsetrainer.morsekit.MorseCode
+import app.anothermorsetrainer.morsekit.ProgressiveCharacters
 import java.io.File
 import java.io.FileOutputStream
 import kotlin.math.roundToInt
@@ -53,15 +54,23 @@ object ShareCard {
         val margin = 64f
         canvas.drawText("Another Morse Trainer", margin, 110f, paint(WHITE, 46f, true))
 
+        val snapshot = EngineStore.snapshot()
+
         val streak = "${Stats.currentStreak}"
         val streakPaint = paint(WHITE, 150f, true)
         canvas.drawText(streak, margin, 290f, streakPaint)
         val streakW = streakPaint.measureText(streak)
         canvas.drawText("day streak", margin + streakW + 28f, 250f, paint(SUB, 44f))
         canvas.drawText("longest ${Stats.longestStreak}", margin + streakW + 28f, 300f, paint(TEAL, 36f))
+        // The Characters stage, trailing the streak row (iOS BragShareCard).
+        canvas.drawText(
+            stageDisplayName(context, snapshot.stage),
+            w - margin, 250f,
+            paint(TEAL, 36f).apply { textAlign = Paint.Align.RIGHT }
+        )
 
         val total = MorseCode.kochOrder.size
-        val mastered = masteredCount()
+        val mastered = masteredCount(snapshot)
         val stats = listOf(
             Triple("${Stats.totalAttempts}", "answered", WHITE),
             Triple("${(Stats.overallAccuracy * 100).roundToInt()}%", "accuracy", WHITE),
@@ -75,7 +84,8 @@ object ShareCard {
         }
 
         Stats.bestTtrMs?.let {
-            val secs = if (it >= 1000) "%.2fs".format(it / 1000.0) else "${it}ms"
+            // Always seconds to two places, as iOS formats it ("0.84 s").
+            val secs = "%.2f s".format(it / 1000.0)
             canvas.drawText("Fastest copy $secs · ${Stats.totalSessions} sessions",
                 margin, 520f, paint(SUB, 34f))
         }
@@ -97,12 +107,15 @@ object ShareCard {
         context.startActivity(Intent.createChooser(intent, "Share your progress"))
     }
 
-    /** Characters copied accurately and within the recognition target — "mastered". */
-    fun masteredCount(): Int {
-        val targetMs = Settings.recognitionTargetSec * 1000.0
-        return Stats.charStats.count { (_, agg) ->
-            val median = agg.medianMs
-            agg.accuracy >= 0.9 && median != null && median <= targetMs
-        }
+    /**
+     * Koch-order characters the engine counts as mastered — `CharacterStats.isMastered`
+     * over its 5-attempt window, which also needs all five attempts to exist, so a
+     * character copied once, quickly, is not yet "mastered". The same gate the
+     * ladder uses to introduce the next character, and what iOS `bragStats` counts.
+     */
+    fun masteredCount(snapshot: ProgressiveCharacters.Snapshot = EngineStore.snapshot()): Int {
+        val threshold = Settings.recognitionTargetSec
+        val byChar = snapshot.engine.stats.associateBy { it.character }
+        return MorseCode.kochOrder.count { byChar[it]?.isMastered(threshold) ?: false }
     }
 }

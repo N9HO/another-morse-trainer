@@ -26,6 +26,12 @@ no common module, and the data tables are intentionally duplicated. Converging
 them is a separate project with its own risk; please don't start it by accident
 while fixing something else.
 
+**Two ports, but one feature set.** Anything a user can do on one app they
+can do on the other, and a change ships on both — the parity rule, its
+exceptions, and the state of the last audit are in [PARITY.md](PARITY.md). A
+pull request that touches only one platform tree has to say why in its Parity
+section, and the merge gate checks that it did.
+
 The same goes for the vendored CW decoder — `ios/Sources/CWDecoderCore/` (C99)
 and `android/…/morsekit/cw/` (its Kotlin port). Both are kept byte-identical to
 a firmware copy and carry their own `PROVENANCE.md`; don't reformat, relicense

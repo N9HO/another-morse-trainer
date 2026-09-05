@@ -1,8 +1,9 @@
 import SwiftUI
 
-/// Welcome / onboarding screen shown before practice begins. Leads with a grid
-/// of tappable training-mode tiles, then reveals the options that matter for
-/// the chosen mode, the starting level, and how long to practice.
+/// Home screen shown before practice begins (first-run onboarding, the
+/// proficiency question, is `OnboardingView`). Leads with a grid of tappable
+/// training-mode tiles, then reveals the options that matter for the chosen
+/// mode and how long to practice.
 struct IntroView: View {
     @EnvironmentObject var model: AppModel
     var onStart: () -> Void
@@ -405,10 +406,14 @@ private struct ModeOptionsCard: View {
     private var keyingResponseBinding: Binding<Bool> {
         Binding(
             get: { model.settings.keyingResponse },
-            set: {
-                model.settings.keyingResponse = $0
-                if $0 { model.settings.voiceResponse = false }   // mutually exclusive
-            }
+            set: { model.setKeyingResponse($0) }   // turns voice off: mutually exclusive
+        )
+    }
+
+    private var useCustomWordsBinding: Binding<Bool> {
+        Binding(
+            get: { model.settings.useCustomWords },
+            set: { model.settings.useCustomWords = $0 }
         )
     }
 
@@ -619,10 +624,11 @@ private struct ModeOptionsCard: View {
             }
 
             if model.learningMode == .words {
-                if model.settings.customWords.isEmpty {
-                    inlinePicker(title: "How big a word pool?",
-                                 selection: wordTierBinding) { (t: WordTier) in t.label }
-                }
+                // The tier picker stays put even with a custom list: the list
+                // is a switch, not a replacement, so it can be parked without
+                // being deleted (Android parity).
+                inlinePicker(title: "How big a word pool?",
+                             selection: wordTierBinding) { (t: WordTier) in t.label }
                 customWordsControl
             }
 
@@ -672,9 +678,10 @@ private struct ModeOptionsCard: View {
                 rapidFireOptions
             }
 
-            // Voice answers apply to every choice quiz (all six — Android
-            // parity); answering by keying stays a Characters & Words option
-            // (the other quizzes' answers are meanings, not sendable tokens).
+            // Voice and keyed answers both apply to every choice quiz (all six
+            // — Android parity). Keying is honoured per drill: only where the
+            // text you heard is the answer, never for a meaning or a prosign
+            // glyph, which fall back to the choices.
             if model.learningMode.supportsVoiceAnswers {
                 Divider().overlay(Theme.hairline)
                 Toggle(isOn: voiceResponseBinding) {
@@ -690,12 +697,12 @@ private struct ModeOptionsCard: View {
                 .tint(Theme.teal)
             }
 
-            if model.learningMode == .characters || model.learningMode == .words {
+            if model.learningMode.supportsKeyedAnswers {
                 Toggle(isOn: keyingResponseBinding) {
                     VStack(alignment: .leading, spacing: 2) {
                         Label("Answer by keying", systemImage: "dot.radiowaves.left.and.right")
                             .font(.subheadline).bold()
-                        Text("Send your answer on a Morse key — a hardware Vail/BLE MIDI key or the on-screen key — and it’s decoded back to letters.")
+                        Text("Send your answer on a Morse key — a hardware Vail/BLE MIDI key or the on-screen key — and it’s decoded back to letters. Drills whose answer is a meaning or a prosign show the choices instead. You can flip this mid-drill too.")
                             .font(.footnote)
                             .foregroundStyle(Theme.textSecondary)
                             .fixedSize(horizontal: false, vertical: true)
@@ -823,28 +830,52 @@ private struct ModeOptionsCard: View {
 
     // MARK: - Custom words (issue #32)
 
+    /// An explicit "Use my word list" switch with the editor behind it, as on
+    /// Android: the list only takes over from the ranked pool while the switch
+    /// is on and it holds at least two words (one cannot offer a distractor).
     @ViewBuilder
     private var customWordsControl: some View {
         let count = model.settings.customWords.count
-        Button {
-            showingCustomWords = true
-        } label: {
-            HStack {
-                Label(count == 0 ? "Use a custom word list" : "Custom list: \(count) words",
-                      systemImage: "list.bullet.rectangle")
-                    .font(.subheadline)
-                    .foregroundStyle(.primary)
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .font(.caption)
+        Toggle(isOn: useCustomWordsBinding) {
+            VStack(alignment: .leading, spacing: 2) {
+                Label("Use my word list", systemImage: "list.bullet.rectangle")
+                    .font(.subheadline).bold()
+                Text(customWordsFootnote)
+                    .font(.footnote)
                     .foregroundStyle(Theme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
-        if count > 0 {
-            Text("Words mode is drawing from your custom list.")
-                .font(.caption)
-                .foregroundStyle(Theme.textSecondary)
+        .tint(Theme.teal)
+        if model.settings.useCustomWords {
+            Button {
+                showingCustomWords = true
+            } label: {
+                HStack {
+                    Label(count == 0 ? "Add your words" : "Edit my words (\(count))",
+                          systemImage: "square.and.pencil")
+                        .font(.subheadline)
+                        .foregroundStyle(.primary)
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.caption)
+                        .foregroundStyle(Theme.textSecondary)
+                }
+            }
         }
+    }
+
+    /// Mirrors the Android footer: what the switch does while off, and once
+    /// on, whether the list is big enough to be in use yet.
+    private var customWordsFootnote: String {
+        guard model.settings.useCustomWords else {
+            return "Practice your own words — a callsign, your name, club abbreviations — in Words instead of the ranked pool."
+        }
+        let n = model.settings.customWords.count
+        let lead = "One word per line (spaces and commas split too). "
+        return lead + (n >= AppSettings.customWordsMinimum
+            ? "\(n) words ready — Words drills your list."
+            : "Add at least two words; until then the ranked pool is used.")
     }
 
     /// A row with a label and a trailing menu picker, sized for the option card.
@@ -939,18 +970,19 @@ private struct ModeTile: View {
 
 /// Pre-session options for the chosen mode, shown when Start is tapped. Only the
 /// knobs that actually change this mode's drill appear — so the fixed-format Code
-/// Exam never asks "how long?" or "what do you already know?".
+/// Exam never asks "how long?".
+///
+/// The starting level is deliberately NOT asked here (#151). It is one
+/// app-wide answer, given at first run (`OnboardingView`) and changeable under
+/// Settings → Proficiency; re-asking it on every Characters, Confusion Drill
+/// and Sending Practice launch read as three different questions, and tapping
+/// the level you already had silently restarted the ladder. Those modes still
+/// open the sheet sensibly without it: Characters and Sending Practice carry
+/// the track-stage pin, and every one of them the duration picker.
 private struct SessionSetupSheet: View {
     @EnvironmentObject var model: AppModel
     @Environment(\.dismiss) private var dismiss
     var onStart: () -> Void
-
-    private var proficiency: Binding<Proficiency> {
-        Binding(
-            get: { model.settings.proficiency },
-            set: { model.configureProficiency($0) }   // no audio on the setup sheet
-        )
-    }
 
     private var durationBinding: Binding<PracticeDuration> {
         Binding(
@@ -986,18 +1018,6 @@ private struct SessionSetupSheet: View {
                             .fixedSize(horizontal: false, vertical: true)
 
                         ModeOptionsCard()
-
-                        if model.learningMode.usesStartingLevel {
-                            card(title: "Where are you starting?", systemImage: "figure.stairs") {
-                                Picker("Starting level", selection: proficiency) {
-                                    ForEach(Proficiency.allCases) { level in
-                                        Text(level.label).tag(level)
-                                    }
-                                }
-                                .pickerStyle(.menu)
-                                .tint(Theme.tealBright)
-                            }
-                        }
 
                         // The Characters track grows singles → pairs → triples →
                         // words & call signs on its own. Surface that here and let
@@ -1143,7 +1163,9 @@ private struct SessionSetupSheet: View {
 }
 
 /// Paste-in editor for a custom Words list (issue #32). Accepts words separated
-/// by new lines, commas, or spaces; saving replaces the active custom list.
+/// by new lines, commas, or spaces; saving replaces the saved list. Whether the
+/// list is *used* is the "Use my word list" switch on the setup sheet, and it
+/// needs at least `AppSettings.customWordsMinimum` words to take effect.
 private struct CustomWordsSheet: View {
     @EnvironmentObject var model: AppModel
     @Environment(\.dismiss) private var dismiss
@@ -1156,7 +1178,7 @@ private struct CustomWordsSheet: View {
             ZStack {
                 Theme.Background()
                 VStack(alignment: .leading, spacing: 14) {
-                    Text("Paste your own words — one per line, or separated by commas or spaces. Words mode will draw only from this list.")
+                    Text("Paste your own words — one per line, or separated by commas or spaces. With “Use my word list” on, Words mode draws only from this list.")
                         .font(.footnote)
                         .foregroundStyle(Theme.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -1171,7 +1193,9 @@ private struct CustomWordsSheet: View {
                         .autocorrectionDisabled()
                         .textInputAutocapitalization(.characters)
 
-                    Text("\(parsedCount) word\(parsedCount == 1 ? "" : "s")")
+                    Text("\(parsedCount) word\(parsedCount == 1 ? "" : "s")"
+                         + (parsedCount < AppSettings.customWordsMinimum
+                            ? " — add at least two to use the list" : ""))
                         .font(.caption.monospacedDigit())
                         .foregroundStyle(Theme.textSecondary)
 
