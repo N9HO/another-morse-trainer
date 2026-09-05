@@ -1490,7 +1490,9 @@ final class AppModel: ObservableObject {
             callsignUSOnly: r.callsignUSOnly,
             wordMinLength: r.wordMinLength,
             wordMaxLength: r.wordMaxLength,
-            numberCount: r.numberCount)
+            numberCount: r.numberCount,
+            statesIncludeSections: r.statesIncludeSections,
+            serialCutNumbers: r.serialCutNumbers)
     }
 
     /// Set up a Rapid Fire session: rebuild the generator from current settings,
@@ -2809,11 +2811,16 @@ final class AppModel: ObservableObject {
     /// Set the starting speed and reference preference.
     ///
     /// Both are always stored as the preference for next time, but they only
-    /// reach *today's* game while it is still untouched. Once a guess is spent
+    /// reach *today's* game while no guess has been made. Once a guess is spent
     /// the ladder is running, and re-basing it would let a player rewrite the
     /// speed their share text claims; the same goes for turning the chart back
     /// on after playing half a puzzle without it. The UI matches this — the
     /// card carrying these controls is only on screen before the first guess.
+    ///
+    /// Listens made before that first guess are kept (#168): they already
+    /// stepped the ladder and were heard at a speed, and the share text reports
+    /// the *slowest* speed heard, so raising the dial after a few listens can
+    /// speed the next play up but can never improve the brag.
     func configureDailyDit(startingWpm: Double, hideReference: Bool) {
         settings.dailyDitStartingWpm = startingWpm
         settings.dailyDitHideReference = hideReference
@@ -2821,21 +2828,28 @@ final class AppModel: ObservableObject {
         dailyDit = DailyDitGame(puzzleNumber: dailyDit.puzzleNumber,
                                 answer: dailyDit.answer,
                                 startingWpm: startingWpm,
-                                hideReference: hideReference)
+                                hideReference: hideReference,
+                                heard: dailyDit.heard)
         saveDailyDit()
     }
 
     /// Send the day's word at whatever the ladder is on now. Returns its
     /// duration so the UI can hold the play button lit for exactly that long.
     ///
+    /// Every play counts (#168): the listen is recorded at the speed it is
+    /// sent at — and saved, since a relaunch must not forget it. Replays after
+    /// the win are free; `listen()` leaves a finished game alone.
+    ///
     /// Deliberately `replaySound`: Daily Dit is not a drill and has no
-    /// time-to-recognize clock to disturb, and replays are free by design.
+    /// time-to-recognize clock to disturb.
     @discardableResult
     func playDailyDit() -> TimeInterval {
         guard !dailyDit.answer.isEmpty else { return 0 }
+        let wpm = dailyDit.listen()
+        saveDailyDit()
         return player.replaySound(playable: .text(dailyDit.answer),
                                   frequency: settings.toneFrequency,
-                                  timing: MorseTiming(wpm: dailyDit.currentWpm))
+                                  timing: MorseTiming(wpm: wpm))
     }
 
     func stopDailyDit() { player.stop() }

@@ -554,31 +554,28 @@
     <!-- Daily Dit: the shared daily puzzle (#155) -->
     <string name="daily_dit_title">Daily Dit</string>
     <string name="daily_dit_home_sub_new">Today\'s word in Morse — your speed, up to %1$d WPM</string>
-    <string name="daily_dit_home_sub_progress">#%1$d · %2$d of %3$d guesses used</string>
-    <string name="daily_dit_home_sub_solved">#%1$d copied in %2$d at %3$s WPM</string>
-    <string name="daily_dit_home_sub_lost">#%1$d — out of guesses</string>
+    <string name="daily_dit_home_sub_progress">#%1$d · %2$s · %3$s so far</string>
+    <string name="daily_dit_home_sub_solved">#%1$d copied at %2$s WPM · %3$s · %4$s</string>
     <string name="daily_dit_puzzle_number">Puzzle #%1$d</string>
-    <string name="daily_dit_status_playing">%1$s WPM · %2$d guesses left</string>
-    <string name="daily_dit_status_solved">Copied in %1$d at %2$s WPM</string>
-    <string name="daily_dit_status_lost">Out of guesses — it was %1$s</string>
+    <string name="daily_dit_status_playing">%1$s WPM · %2$s · %3$s</string>
+    <string name="daily_dit_status_solved">Copied at %1$s WPM · %2$s · %3$s</string>
     <string name="daily_dit_play">Play the word</string>
     <string name="daily_dit_hear_again">Hear it again</string>
     <string name="daily_dit_five_letters">Five letters</string>
     <string name="daily_dit_guess">Guess</string>
     <string name="daily_dit_ruled_out">Ruled out</string>
     <string name="daily_dit_starting_speed">Starting speed</string>
-    <string name="daily_dit_ladder_explainer">Drops %1$d WPM every %2$d guesses, down to %3$d. Locked once you guess.</string>
+    <string name="daily_dit_ladder_explainer">Drops %1$d WPM for every %2$d listens and for every %3$d wrong guesses, down to %4$d. Locked once you guess.</string>
     <string name="daily_dit_started_at">Started at %1$s WPM</string>
     <string name="daily_dit_no_reference_suffix"> · no reference</string>
     <string name="daily_dit_hide_chart">Hide the chart</string>
     <string name="daily_dit_hide_chart_sub">No dit-dah reference — your share text says so.</string>
     <string name="daily_dit_chart">Dit-dah chart</string>
     <string name="daily_dit_solid_copy">Solid copy</string>
-    <string name="daily_dit_tomorrow">Tomorrow, then</string>
     <string name="daily_dit_copy">Copy</string>
     <string name="daily_dit_copied">Copied.</string>
     <string name="daily_dit_next_tomorrow">Next puzzle tomorrow.</string>
-    <string name="daily_dit_how_it_works">One five-letter word a day, the same for everyone. Replay it as often as you like — only guesses count, and every %1$d of them slow the code by %2$d WPM. Green is the right letter in the right place, amber is the right letter somewhere else.</string>
+    <string name="daily_dit_how_it_works">One five-letter word a day, the same for everyone. Every %1$d listens and every %2$d wrong guesses slow the code by %3$d WPM — no limit on either — and your share text reports the slowest speed you heard it at. Green is the right letter in the right place, amber is the right letter somewhere else.</string>
     <string name="daily_dit_tile_empty">Empty</string>
     <string name="daily_dit_tile_correct">%1$s, right place</string>
     <string name="daily_dit_tile_present">%1$s, in the word, wrong place</string>
@@ -659,4 +656,24 @@
     <string name="settings_band_noise_footer">Band noise adds audible band noise (QRN) under everything so practising is more like copying off the air; any level also keeps Bluetooth audio awake.</string>
     <string name="rapidfire_include_sections">Include ARRL/RAC Field Day sections</string>
     <string name="rapidfire_cut_numbers">Cut numbers</string>
+    <!-- Daily Dit counts (#168): the share text carries both, so the screen says them the same way. -->
+    <plurals name="daily_dit_guesses">
+        <item quantity="one">%1$d guess</item>
+        <item quantity="other">%1$d guesses</item>
+    </plurals>
+    <plurals name="daily_dit_listens">
+        <item quantity="one">%1$d listen</item>
+        <item quantity="other">%1$d listens</item>
+    </plurals>
+    <string name="daily_dit_result_lowest">WPM, lowest heard</string>
+    <plurals name="daily_dit_result_guess_label">
+        <item quantity="one">guess</item>
+        <item quantity="other">guesses</item>
+    </plurals>
+    <plurals name="daily_dit_result_listen_label">
+        <item quantity="one">listen</item>
+        <item quantity="other">listens</item>
+    </plurals>
+    <string name="daily_dit_play_hint_playing">Every %1$d listens slow the code by %2$d WPM</string>
+    <string name="daily_dit_play_hint_done">Replays after the win are free</string>
 </resources>

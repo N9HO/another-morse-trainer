@@ -7,8 +7,8 @@ import UIKit
 /// The screen is the game: a play button, the grid of what you've guessed, and
 /// a box to type the next one. Everything else is subordinate to those three.
 /// Speed is chosen before the first guess and then belongs to the day — the
-/// ladder walks it down as guesses are spent, and the speed you were still at
-/// when you got it is what the share text brags about.
+/// ladder walks it down as listens and wrong guesses are spent (#168), and the
+/// slowest speed you heard it at is what the share text brags about.
 struct DailyDitView: View {
     @EnvironmentObject var model: AppModel
     @Environment(\.dismiss) private var dismiss
@@ -75,15 +75,21 @@ struct DailyDitView: View {
         .accessibilityElement(children: .combine)
     }
 
+    /// "1 guess · 3 listens" — the counts the share text carries, in the same words.
+    private var counts: String {
+        DailyDit.count(game.guessesUsed, "guess", "guesses")
+            + " · " + DailyDit.count(game.listens, "listen", "listens")
+    }
+
     private var statusLine: String {
         switch game.outcome {
         case .solved:
-            let at = game.solvedWpm.map { " at \(DailyDit.format(wpm: $0)) WPM" } ?? ""
-            return "Copied in \(game.guessesUsed)\(at)"
-        case .lost:
-            return "Out of guesses — it was \(game.answer)"
+            let at = game.solvedWpm.map { "at \(DailyDit.format(wpm: $0)) WPM · " } ?? ""
+            return "Copied \(at)\(counts)"
         case .playing:
-            return "\(DailyDit.format(wpm: game.currentWpm)) WPM · \(game.guessesLeft) guesses left"
+            // The speed readout is the live ladder: listens step it as well as
+            // wrong guesses, so it can change without a guess being made.
+            return "\(DailyDit.format(wpm: game.currentWpm)) WPM · \(counts)"
         }
     }
 
@@ -107,7 +113,9 @@ struct DailyDitView: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Play the word at \(DailyDit.format(wpm: game.currentWpm)) words per minute")
-        .accessibilityHint("Replays are free — only guesses count")
+        .accessibilityHint(game.isFinished
+                           ? "Replays after the win are free"
+                           : "Every \(DailyDit.listensPerSpeedStep) listens slow the code by \(Int(DailyDit.speedStepWpm)) words per minute")
     }
 
     private func play() {
@@ -276,13 +284,24 @@ struct DailyDitView: View {
 
     private var resultCard: some View {
         VStack(spacing: 12) {
-            Text(game.outcome == .solved ? "Solid copy" : "Tomorrow, then")
+            Text("Solid copy")
                 .font(.title3.weight(.semibold))
                 .foregroundStyle(.white)
             Text(game.answer)
                 .font(.system(size: 32, weight: .bold, design: .rounded))
                 .foregroundStyle(Theme.tealBright)
                 .accessibilityLabel("The word was \(game.answer)")
+
+            // The three numbers the day is scored on (#168): the slowest speed
+            // the word was heard at, and what it cost in guesses and listens.
+            HStack(spacing: 0) {
+                resultStat(value: game.solvedWpm.map { DailyDit.format(wpm: $0) } ?? "—",
+                           label: "WPM, lowest heard")
+                resultStat(value: "\(game.guessesUsed)",
+                           label: game.guessesUsed == 1 ? "guess" : "guesses")
+                resultStat(value: "\(game.listens)",
+                           label: game.listens == 1 ? "listen" : "listens")
+            }
 
             Text(game.shareText)
                 .font(.system(.footnote, design: .monospaced))
@@ -332,6 +351,20 @@ struct DailyDitView: View {
                     in: RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous))
     }
 
+    private func resultStat(value: String, label: String) -> some View {
+        VStack(spacing: 2) {
+            Text(value)
+                .font(.title3.weight(.bold).monospacedDigit())
+                .foregroundStyle(.white)
+            Text(label)
+                .font(.caption)
+                .foregroundStyle(Theme.textSecondary)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .combine)
+    }
+
     // MARK: - Before the first guess
 
     private var setupCard: some View {
@@ -340,7 +373,7 @@ struct DailyDitView: View {
                 Text("Starting speed")
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.white)
-                Text("Drops \(Int(DailyDit.speedStepWpm)) WPM every \(DailyDit.guessesPerSpeedStep) guesses, down to \(Int(DailyDit.minimumWpm)). Locked once you guess.")
+                Text("Drops \(Int(DailyDit.speedStepWpm)) WPM for every \(DailyDit.listensPerSpeedStep) listens and for every \(DailyDit.guessesPerSpeedStep) wrong guesses, down to \(Int(DailyDit.minimumWpm)). Locked once you guess.")
                     .font(.caption)
                     .foregroundStyle(Theme.textSecondary)
             }
@@ -438,11 +471,13 @@ struct DailyDitView: View {
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.white)
             Text("""
-                 One five-letter word a day, the same for everyone. Replay it as \
-                 often as you like — only guesses count, and every \
-                 \(DailyDit.guessesPerSpeedStep) of them slow the code by \
-                 \(Int(DailyDit.speedStepWpm)) WPM. Green is the right letter in \
-                 the right place, amber is the right letter somewhere else.
+                 One five-letter word a day, the same for everyone. Every \
+                 \(DailyDit.listensPerSpeedStep) listens and every \
+                 \(DailyDit.guessesPerSpeedStep) wrong guesses slow the code by \
+                 \(Int(DailyDit.speedStepWpm)) WPM — no limit on either — and \
+                 your share text reports the slowest speed you heard it at. \
+                 Green is the right letter in the right place, amber is the \
+                 right letter somewhere else.
                  """)
                 .font(.caption)
                 .foregroundStyle(Theme.textSecondary)

@@ -36,8 +36,10 @@ class DailyDitTest {
 
     @Test
     fun ruleConstantsMatchTheFixture() {
-        assertEquals(rules.getInt("maxGuesses"), DailyDit.MAX_GUESSES)
+        assertEquals(rules.getInt("listensPerSpeedStep"), DailyDit.LISTENS_PER_SPEED_STEP)
         assertEquals(rules.getInt("guessesPerSpeedStep"), DailyDit.GUESSES_PER_SPEED_STEP)
+        // #168: no guess cap. The fixture has no such rule and neither does the port.
+        assertTrue("the fixture must not reintroduce a guess cap", !rules.has("maxGuesses"))
         assertEquals(rules.getInt("wordLength"), DailyDit.WORD_LENGTH)
         assertEquals(rules.getInt("selectionStride"), DailyDit.SELECTION_STRIDE)
         assertEquals(rules.getDouble("speedStepWpm"), DailyDit.SPEED_STEP_WPM, 0.0)
@@ -176,43 +178,84 @@ class DailyDitTest {
         }
     }
 
+    /**
+     * The ladder has two independent counters (#168): listens and wrong
+     * guesses each step the speed on their own, and the steps add. The fixture
+     * table walks both axes — listens alone, guesses alone, both, and partials
+     * of each that must *not* combine into a step.
+     */
     @Test
     fun theSpeedLadderMatchesTheFixture() {
         val cases = fixture.getJSONArray("ladder")
         for (i in 0 until cases.length()) {
             val c = cases.getJSONObject(i)
             assertEquals(
-                "${c.getDouble("startingWpm")} WPM after ${c.getInt("guessesUsed")} guesses",
+                "${c.getDouble("startingWpm")} WPM after ${c.getInt("listens")} listens " +
+                    "and ${c.getInt("wrongGuesses")} wrong guesses",
                 c.getDouble("wpm"),
-                DailyDit.wpm(c.getDouble("startingWpm"), c.getInt("guessesUsed")),
+                DailyDit.wpm(c.getDouble("startingWpm"), c.getInt("listens"), c.getInt("wrongGuesses")),
                 0.0
             )
         }
-        assertEquals(DailyDit.MINIMUM_WPM, DailyDit.wpm(20.0, 500), 0.0)
+        assertEquals(DailyDit.MINIMUM_WPM, DailyDit.wpm(20.0, 500, 0), 0.0)
+        assertEquals(DailyDit.MINIMUM_WPM, DailyDit.wpm(20.0, 0, 500), 0.0)
     }
 
-    @Test
-    fun aPlayedGameProducesTheFixturesShareText() {
-        val share = fixture.getJSONObject("share")
+    /** Runs the fixture's script of listens and guesses against a fresh game. */
+    private fun play(share: JSONObject): DailyDitGame {
         var game = DailyDitGame(
             puzzleNumber = share.getInt("puzzleNumber"),
             answer = share.getString("answer"),
             startingWpm = share.getDouble("startingWpm"),
             hideReference = share.getBoolean("hideReference")
         )
-        val guesses = share.getJSONArray("guesses")
-        for (i in 0 until guesses.length()) {
-            val result = game.submit(guesses.getString(i))
-            assertTrue(
-                "${guesses.getString(i)} should be accepted",
-                result is DailyDitSubmission.Scored
-            )
-            game = (result as DailyDitSubmission.Scored).game
+        val plays = share.getJSONArray("plays")
+        for (i in 0 until plays.length()) {
+            val p = plays.getJSONObject(i)
+            when (p.getString("action")) {
+                "listen" -> game = game.listen().game
+                "guess" -> {
+                    val result = game.submit(p.getString("word"))
+                    assertTrue("${p.getString("word")} should be accepted", result is DailyDitSubmission.Scored)
+                    game = (result as DailyDitSubmission.Scored).game
+                }
+                else -> throw AssertionError("unknown play ${p.getString("action")}")
+            }
         }
+        return game
+    }
+
+    @Test
+    fun aPlayedGameProducesTheFixturesShareText() {
+        val share = fixture.getJSONObject("share")
+        val game = play(share)
         assertEquals(DailyDitOutcome.SOLVED, game.outcome)
-        assertEquals(share.getDouble("startingWpm"), game.solvedWpm!!, 0.0)
+        assertEquals(share.getInt("listens"), game.listens)
+        assertEquals(share.getInt("guessesUsed"), game.guessesUsed)
+        assertEquals(share.getDouble("solvedWpm"), game.solvedWpm!!, 0.0)
         assertEquals(share.getString("shareText"), game.shareText)
         assertTrue(game.shareText.endsWith(DailyDit.SHARE_LINK))
+    }
+
+    /**
+     * The same script, watched step by step: each listen is heard at the speed
+     * in effect before it counted, each guess is made at the speed the listens
+     * and earlier wrong guesses had reached.
+     */
+    @Test
+    fun listensAndWrongGuessesStepTheSpeedAsTheFixtureSays() {
+        val share = fixture.getJSONObject("share")
+        val game = play(share)
+        val heard = share.getJSONArray("heard")
+        assertEquals(heard.length(), game.heard.size)
+        for (i in 0 until heard.length()) {
+            assertEquals("listen ${i + 1}", heard.getDouble(i), game.heard[i], 0.0)
+        }
+        val roundWpms = share.getJSONArray("roundWpms")
+        assertEquals(roundWpms.length(), game.rounds.size)
+        for (i in 0 until roundWpms.length()) {
+            assertEquals("guess ${i + 1}", roundWpms.getDouble(i), game.rounds[i].wpm, 0.0)
+        }
     }
 
     @Test
@@ -225,18 +268,44 @@ class DailyDitTest {
             val outcome = c.getString("outcome")
             val fillers = c.getInt("guessesUsed") - if (outcome == "solved") 1 else 0
             val rounds = MutableList(fillers) { DailyDitRound("MOUND", miss, 0.0) }
+            val solvedWpm = if (c.isNull("solvedWpm")) 0.0 else c.getDouble("solvedWpm")
             if (outcome == "solved") {
-                rounds += DailyDitRound("SPEND", hit, c.getDouble("solvedWpm"))
+                rounds += DailyDitRound("SPEND", hit, solvedWpm)
             }
             val game = DailyDitGame(
                 puzzleNumber = c.getInt("puzzleNumber"),
                 answer = "SPEND",
                 startingWpm = 60.0,
                 hideReference = c.getBoolean("hideReference"),
-                rounds = rounds
+                rounds = rounds,
+                heard = List(c.getInt("listens")) { solvedWpm }
             )
             assertEquals(outcome, game.outcome.key)
             assertEquals(c.getString("headline"), game.headline)
+        }
+    }
+
+    /**
+     * The reported speed is the slowest the word was *heard* at, not the speed
+     * at the winning guess. The dial can be raised before the first guess, so
+     * a later listen can be faster than an earlier one; the minimum still wins.
+     */
+    @Test
+    fun theReportedSpeedIsTheLowestHeard() {
+        val hit = List(DailyDit.WORD_LENGTH) { DailyDitTile.CORRECT }
+        val cases = fixture.getJSONArray("solvedSpeeds")
+        for (i in 0 until cases.length()) {
+            val c = cases.getJSONObject(i)
+            val heardJson = c.getJSONArray("heard")
+            val heard = (0 until heardJson.length()).map { heardJson.getDouble(it) }
+            val game = DailyDitGame(
+                puzzleNumber = 1,
+                answer = "SPEND",
+                startingWpm = 75.0,
+                rounds = listOf(DailyDitRound("SPEND", hit, c.getDouble("winningGuessWpm"))),
+                heard = heard
+            )
+            assertEquals("heard $heard", c.getDouble("solvedWpm"), game.solvedWpm!!, 0.0)
         }
     }
 
@@ -276,18 +345,77 @@ class DailyDitTest {
     }
 
     @Test
-    fun aFinishedGameTakesNoMoreGuesses() {
-        val miss = List(DailyDit.WORD_LENGTH) { DailyDitTile.ABSENT }
-        val game = DailyDitGame(
-            puzzleNumber = 1,
-            answer = "SPEND",
-            startingWpm = 40.0,
-            rounds = List(DailyDit.MAX_GUESSES) { DailyDitRound("MOUND", miss, 40.0) }
-        )
-        assertEquals(DailyDitOutcome.LOST, game.outcome)
-        assertEquals(0, game.guessesLeft)
-        val result = game.submit("SPEND")
+    fun listensStepTheSpeedDown() {
+        var game = DailyDitGame(1, "SPEND", 40.0)
+        val sentAt = ArrayList<Double>()
+        repeat(4) {
+            val play = game.listen()
+            sentAt += play.wpm
+            game = play.game
+        }
+        // Three listens at the starting speed; the fourth feels the step.
+        assertEquals(listOf(40.0, 40.0, 40.0, 35.0), sentAt)
+        assertEquals(sentAt, game.heard)
+        assertEquals(4, game.listens)
+        assertEquals(35.0, game.currentWpm, 0.0)
+        assertEquals(0, game.guessesUsed)
+    }
+
+    @Test
+    fun listensAndWrongGuessesStepIndependentlyAndAdd() {
+        var game = DailyDitGame(1, "SPEND", 40.0)
+        repeat(2) { game = game.listen().game }
+        repeat(2) { game = (game.submit("MOUND") as DailyDitSubmission.Scored).game }
+        // Two of each is a step of neither.
+        assertEquals(40.0, game.currentWpm, 0.0)
+        game = game.listen().game
+        assertEquals(35.0, game.currentWpm, 0.0)
+        game = (game.submit("MOUND") as DailyDitSubmission.Scored).game
+        assertEquals(30.0, game.currentWpm, 0.0)
+        assertEquals(3, game.listens)
+        assertEquals(3, game.wrongGuesses)
+    }
+
+    @Test
+    fun aGameNeverRunsOutOfGuesses() {
+        var game = DailyDitGame(1, "SPEND", 40.0)
+        repeat(100) {
+            val result = game.submit("MOUND")
+            assertTrue("guess ${it + 1} should still be accepted", result is DailyDitSubmission.Scored)
+            game = (result as DailyDitSubmission.Scored).game
+        }
+        assertEquals(DailyDitOutcome.PLAYING, game.outcome)
+        assertEquals(DailyDit.MINIMUM_WPM, game.currentWpm, 0.0)
+        val win = game.submit("SPEND")
+        assertTrue(win is DailyDitSubmission.Scored)
+        game = (win as DailyDitSubmission.Scored).game
+        assertEquals(DailyDitOutcome.SOLVED, game.outcome)
+        assertEquals(101, game.guessesUsed)
+        assertEquals(100, game.wrongGuesses)
+    }
+
+    @Test
+    fun aSolvedGameTakesNoMoreGuessesAndReplaysFree() {
+        var game = DailyDitGame(1, "SPEND", 40.0)
+        game = game.listen().game
+        game = (game.submit("SPEND") as DailyDitSubmission.Scored).game
+        assertTrue(game.isFinished)
+        val result = game.submit("MOUND")
         assertTrue(result is DailyDitSubmission.Rejected)
         assertEquals(DailyDitRejection.FINISHED, (result as DailyDitSubmission.Rejected).reason)
+        // Hearing it again after the win is not a listen the share text counts.
+        val replay = game.listen()
+        assertEquals(40.0, replay.wpm, 0.0)
+        assertEquals(game, replay.game)
+        assertEquals(1, replay.game.listens)
+    }
+
+    /** A word guessed blind still reports a speed: the one the guess was made at. */
+    @Test
+    fun aWordGuessedWithoutListeningReportsTheGuessSpeed() {
+        val game = (DailyDitGame(1, "SPEND", 40.0).submit("SPEND") as DailyDitSubmission.Scored).game
+        assertEquals(0, game.listens)
+        assertEquals(40.0, game.solvedWpm!!, 0.0)
+        assertEquals("Daily Dit #1 — 40 WPM · 1 guess · 0 listens", game.headline)
     }
 }

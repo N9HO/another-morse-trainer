@@ -48,6 +48,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -75,8 +76,9 @@ private val TILE_PRESENT = Color(0xFFCAA033)
  *
  * The screen is the game: a play button, the grid of what you've guessed, and a
  * box to type the next one. Speed is chosen before the first guess and then
- * belongs to the day — the ladder walks it down as guesses are spent, and the
- * speed you were still at when you got it is what the share text brags about.
+ * belongs to the day — the ladder walks it down as listens and wrong guesses
+ * are spent (#168), and the slowest speed you heard it at is what the share
+ * text brags about.
  *
  * Ported from MorseTrainerApp/DailyDitView.swift. The iOS `ShareLink` becomes
  * an ACTION_SEND chooser and the pasteboard write becomes [ClipboardManager];
@@ -107,6 +109,9 @@ fun DailyDitScreen(onBack: () -> Unit) {
 
     val game = DailyDitStore.game
     val scroll = rememberScrollState()
+    // "1 guess · 3 listens" — the counts the share text carries, in the same words.
+    val guessesText = pluralStringResource(R.plurals.daily_dit_guesses, game.guessesUsed, game.guessesUsed)
+    val listensText = pluralStringResource(R.plurals.daily_dit_listens, game.listens, game.listens)
 
     Column(modifier = Modifier.fillMaxSize()) {
         Row(
@@ -155,15 +160,17 @@ fun DailyDitScreen(onBack: () -> Unit) {
                     text = when (game.outcome) {
                         DailyDitOutcome.SOLVED -> {
                             val wpm = game.solvedWpm?.let { DailyDit.formatWpm(it) } ?: ""
-                            stringResource(R.string.daily_dit_status_solved, game.guessesUsed, wpm)
+                            stringResource(R.string.daily_dit_status_solved, wpm, guessesText, listensText)
                         }
-                        DailyDitOutcome.LOST ->
-                            stringResource(R.string.daily_dit_status_lost, game.answer)
+                        // The speed readout is the live ladder: listens step
+                        // it as well as wrong guesses, so it can change
+                        // without a guess being made.
                         DailyDitOutcome.PLAYING ->
                             stringResource(
                                 R.string.daily_dit_status_playing,
                                 DailyDit.formatWpm(game.currentWpm),
-                                game.guessesLeft
+                                guessesText,
+                                listensText
                             )
                     },
                     style = MaterialTheme.typography.bodyMedium,
@@ -171,14 +178,16 @@ fun DailyDitScreen(onBack: () -> Unit) {
                 )
             }
 
-            // Play — replays are free, only guesses count.
+            // Play — every play counts (#168): the store records the listen
+            // and hands back the speed to send it at.
             Button(
                 onClick = {
                     if (game.answer.isNotEmpty()) {
+                        val wpm = DailyDitStore.listen()
                         player.replaySound(
                             MorseItem.Playable.Text(game.answer),
                             Settings.sidetoneHz,
-                            MorseTiming(game.currentWpm)
+                            MorseTiming(wpm)
                         )
                     }
                 },
@@ -200,7 +209,9 @@ fun DailyDitScreen(onBack: () -> Unit) {
                 ResultCard(
                     shareText = game.shareText,
                     answer = game.answer,
-                    solved = game.outcome == DailyDitOutcome.SOLVED,
+                    lowestWpm = game.solvedWpm?.let { DailyDit.formatWpm(it) } ?: "—",
+                    guesses = game.guessesUsed,
+                    listens = game.listens,
                     onCopy = {
                         copyText(context, game.shareText)
                         message = resources.getString(R.string.daily_dit_copied)
@@ -369,6 +380,7 @@ fun DailyDitScreen(onBack: () -> Unit) {
             Text(
                 stringResource(
                     R.string.daily_dit_how_it_works,
+                    DailyDit.LISTENS_PER_SPEED_STEP,
                     DailyDit.GUESSES_PER_SPEED_STEP,
                     DailyDit.SPEED_STEP_WPM.roundToInt()
                 ),
@@ -433,6 +445,23 @@ private fun Tile(letter: Char?, tile: DailyDitTile?, modifier: Modifier = Modifi
 }
 
 @Composable
+private fun ResultStat(value: String, label: String, modifier: Modifier = Modifier) {
+    Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(
+            value,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            color = Brand.textPrimary
+        )
+        Text(
+            label,
+            style = MaterialTheme.typography.labelSmall,
+            color = Brand.textSecondary
+        )
+    }
+}
+
+@Composable
 private fun SpeedTag(wpm: Double) {
     Text(
         DailyDit.formatWpm(wpm),
@@ -467,6 +496,7 @@ private fun SetupCard() {
             stringResource(
                 R.string.daily_dit_ladder_explainer,
                 DailyDit.SPEED_STEP_WPM.roundToInt(),
+                DailyDit.LISTENS_PER_SPEED_STEP,
                 DailyDit.GUESSES_PER_SPEED_STEP,
                 DailyDit.MINIMUM_WPM.roundToInt()
             ),
@@ -538,7 +568,9 @@ private fun SetupCard() {
 private fun ResultCard(
     shareText: String,
     answer: String,
-    solved: Boolean,
+    lowestWpm: String,
+    guesses: Int,
+    listens: Int,
     onCopy: () -> Unit,
     onShare: () -> Unit,
     note: String?
@@ -549,7 +581,7 @@ private fun ResultCard(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
-            stringResource(if (solved) R.string.daily_dit_solid_copy else R.string.daily_dit_tomorrow),
+            stringResource(R.string.daily_dit_solid_copy),
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.SemiBold,
             color = Brand.textPrimary
@@ -560,6 +592,21 @@ private fun ResultCard(
             fontWeight = FontWeight.Bold,
             color = Brand.tealBright
         )
+        // The three numbers the day is scored on (#168): the slowest speed the
+        // word was heard at, and what it cost in guesses and listens.
+        Row(modifier = Modifier.fillMaxWidth()) {
+            ResultStat(lowestWpm, stringResource(R.string.daily_dit_result_lowest), Modifier.weight(1f))
+            ResultStat(
+                guesses.toString(),
+                pluralStringResource(R.plurals.daily_dit_result_guess_label, guesses),
+                Modifier.weight(1f)
+            )
+            ResultStat(
+                listens.toString(),
+                pluralStringResource(R.plurals.daily_dit_result_listen_label, listens),
+                Modifier.weight(1f)
+            )
+        }
         Text(
             shareText,
             fontFamily = FontFamily.Monospace,

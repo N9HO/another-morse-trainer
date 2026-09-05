@@ -5,15 +5,18 @@ import Foundation
 ///
 /// The shape of the game:
 ///
-///   - Tap play to hear the day's word. Replays are free; guesses are the
-///     currency.
-///   - Up to `maxGuesses` guesses, each a real five-letter word.
+///   - Tap play to hear the day's word, as often as you like. Every listen —
+///     the first and every replay — is counted, and so is every wrong guess.
+///   - As many guesses as it takes, each a real five-letter word. The day ends
+///     only on the right one (#168).
 ///   - Every guess is scored per letter — right letter/right place, right
 ///     letter/wrong place, or not in the word at all.
 ///   - The code starts at whatever speed you chose (QRQ territory if you like)
-///     and steps down `speedStepWpm` every `guessesPerSpeedStep` guesses, so a
-///     word you can't catch at 75 WPM comes back within reach. What you brag
-///     about is the speed you were still at when you got it.
+///     and steps down `speedStepWpm` for every `listensPerSpeedStep` listens
+///     *and* for every `guessesPerSpeedStep` wrong guesses, the two counted
+///     separately and the steps added, so a word you can't catch at 75 WPM
+///     comes back within reach. What you brag about is the slowest speed you
+///     heard it at before you got it.
 ///
 /// Pure logic: no audio, no storage, no clock of its own — the caller passes
 /// the date in. That keeps every rule here testable and keeps this port and the
@@ -22,9 +25,9 @@ public enum DailyDit {
 
     // MARK: - Rules
 
-    /// Total guesses allowed in a day.
-    public static let maxGuesses = 21
-    /// Guesses between one speed step and the next.
+    /// Listens between one speed step and the next.
+    public static let listensPerSpeedStep = 3
+    /// Wrong guesses between one speed step and the next.
     public static let guessesPerSpeedStep = 3
     /// How much the speed drops at each step.
     public static let speedStepWpm = 5.0
@@ -169,9 +172,13 @@ public enum DailyDit {
 
     // MARK: - The speed ladder
 
-    /// The speed the next word is sent at, having spent `guessesUsed` guesses.
-    public static func wpm(startingAt start: Double, guessesUsed: Int) -> Double {
-        let steps = max(0, guessesUsed) / guessesPerSpeedStep
+    /// The speed the word is sent at, having listened `listens` times and made
+    /// `wrongGuesses` wrong guesses. The two are stepped independently and the
+    /// steps add: two listens and two wrong guesses is no step at all, three of
+    /// either is one, three of each is two.
+    public static func wpm(startingAt start: Double, listens: Int, wrongGuesses: Int) -> Double {
+        let steps = max(0, listens) / listensPerSpeedStep
+            + max(0, wrongGuesses) / guessesPerSpeedStep
         return max(minimumWpm, start - speedStepWpm * Double(steps))
     }
 }
@@ -193,9 +200,10 @@ public struct DailyDitRound: Sendable, Equatable, Codable {
     public var solved: Bool { !tiles.isEmpty && tiles.allSatisfy { $0 == .correct } }
 }
 
-/// Where a day's game stands.
+/// Where a day's game stands. There is no losing outcome: guesses are not
+/// capped, so the only way a day ends is on the right word.
 public enum DailyDitOutcome: String, Sendable, Equatable, Codable {
-    case playing, solved, lost
+    case playing, solved
 }
 
 /// Why a guess wasn't scored. Each one is a message the UI shows as-is.
@@ -204,7 +212,7 @@ public enum DailyDitRejection: String, Sendable, Equatable, Codable {
     case wrongLength
     /// Five letters, but not a word we know.
     case notAWord
-    /// The day is already won or lost.
+    /// The day is already won.
     case finished
 
     public var message: String {
@@ -226,28 +234,52 @@ public enum DailyDitSubmission: Sendable, Equatable {
 /// A value type on purpose: it is the *whole* saved state of the day, so
 /// persisting a game is encoding this and nothing else, and reloading it can't
 /// half-restore. Repeating a guess you've already made is deliberately legal —
-/// guesses buy speed steps, so spending one to drag the code slower is a real
-/// tactic, not a mistake to guard against.
+/// wrong guesses buy speed steps, so spending one to drag the code slower is a
+/// real tactic, not a mistake to guard against.
 public struct DailyDitGame: Sendable, Equatable, Codable {
     public let puzzleNumber: Int
     public let answer: String
-    /// The speed the first guess was played at.
+    /// The speed the dial was set to before anything was heard or guessed.
     public let startingWpm: Double
     /// Playing without the dit-dah chart on screen. Recorded here because it
     /// belongs in the share text — the logic doesn't care.
     public var hideReference: Bool
     public private(set) var rounds: [DailyDitRound]
+    /// The speed of every listen before the win, in order. Its count is the
+    /// listen count and its minimum is the speed the share text reports, so it
+    /// is the record rather than two counters that could disagree. Saved games
+    /// from before #168 have none; that decodes as "never listened".
+    public private(set) var heard: [Double]
 
     public init(puzzleNumber: Int,
                 answer: String,
                 startingWpm: Double,
                 hideReference: Bool = false,
-                rounds: [DailyDitRound] = []) {
+                rounds: [DailyDitRound] = [],
+                heard: [Double] = []) {
         self.puzzleNumber = puzzleNumber
         self.answer = DailyDit.normalize(answer)
         self.startingWpm = startingWpm
         self.hideReference = hideReference
         self.rounds = rounds
+        self.heard = heard
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case puzzleNumber, answer, startingWpm, hideReference, rounds, heard
+    }
+
+    /// Hand-written only so `heard` can be absent: a game saved before #168
+    /// has no listen record, and it must restore as the game it was rather
+    /// than fail to decode and hand the player a fresh day.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        puzzleNumber = try c.decode(Int.self, forKey: .puzzleNumber)
+        answer = try c.decode(String.self, forKey: .answer)
+        startingWpm = try c.decode(Double.self, forKey: .startingWpm)
+        hideReference = try c.decodeIfPresent(Bool.self, forKey: .hideReference) ?? false
+        rounds = try c.decodeIfPresent([DailyDitRound].self, forKey: .rounds) ?? []
+        heard = try c.decodeIfPresent([Double].self, forKey: .heard) ?? []
     }
 
     /// Today's game, ready to play.
@@ -263,22 +295,47 @@ public struct DailyDitGame: Sendable, Equatable, Codable {
     }
 
     public var guessesUsed: Int { rounds.count }
-    public var guessesLeft: Int { max(0, DailyDit.maxGuesses - guessesUsed) }
+
+    /// Guesses that weren't the word. While the day is open, that is all of them.
+    public var wrongGuesses: Int { rounds.filter { !$0.solved }.count }
+
+    /// Plays of the word before the win — the first and every replay.
+    public var listens: Int { heard.count }
+
+    /// The slowest the word has been heard, or nil before the first listen.
+    public var lowestHeardWpm: Double? { heard.min() }
 
     /// The speed the word plays at right now.
     public var currentWpm: Double {
-        DailyDit.wpm(startingAt: startingWpm, guessesUsed: guessesUsed)
+        DailyDit.wpm(startingAt: startingWpm, listens: listens, wrongGuesses: wrongGuesses)
     }
 
-    /// The speed the winning guess was made at — what the brag sheet reports.
-    public var solvedWpm: Double? { rounds.last(where: { $0.solved })?.wpm }
+    /// What the brag sheet reports: the slowest speed the word was heard at
+    /// before the right guess. A word guessed without ever being played falls
+    /// back to the speed the winning guess was made at.
+    public var solvedWpm: Double? {
+        guard let win = rounds.last(where: { $0.solved }) else { return nil }
+        return lowestHeardWpm ?? win.wpm
+    }
 
     public var outcome: DailyDitOutcome {
-        if rounds.contains(where: { $0.solved }) { return .solved }
-        return guessesUsed >= DailyDit.maxGuesses ? .lost : .playing
+        rounds.contains(where: { $0.solved }) ? .solved : .playing
     }
 
     public var isFinished: Bool { outcome != .playing }
+
+    /// Play the word. Counts the listen and returns the speed to send it at —
+    /// the speed in effect *before* this listen counted, so the third listen
+    /// is still at the starting speed and the fourth feels the step, exactly as
+    /// guesses behave. Once the day is won, replays are free: they are sent at
+    /// the speed the ladder finished on and not recorded, so the share text
+    /// keeps describing the game as it was played.
+    @discardableResult
+    public mutating func listen() -> Double {
+        let wpm = currentWpm
+        if !isFinished { heard.append(wpm) }
+        return wpm
+    }
 
     /// Score a guess and, if it's a real one, spend a guess on it.
     public mutating func submit(_ raw: String) -> DailyDitSubmission {
@@ -326,17 +383,21 @@ public struct DailyDitGame: Sendable, Equatable, Codable {
         return lines.joined(separator: "\n")
     }
 
-    /// "Daily Dit #245 — 4/21 at 60 WPM"
+    /// "Daily Dit #245 — 50 WPM · 4 guesses · 4 listens", or while playing
+    /// "Daily Dit #245 — 4 guesses · 4 listens so far". The speed is the slowest
+    /// the word was heard at, and both counts are there because either alone
+    /// can be gamed: a win in one guess after forty listens is a different day
+    /// from a win in one guess after one.
     public var headline: String {
         var line = "Daily Dit #\(puzzleNumber) — "
+        let counts = DailyDit.count(guessesUsed, "guess", "guesses") + " · "
+            + DailyDit.count(listens, "listen", "listens")
         switch outcome {
         case .solved:
-            line += "\(guessesUsed)/\(DailyDit.maxGuesses)"
-            if let wpm = solvedWpm { line += " at \(DailyDit.format(wpm: wpm)) WPM" }
-        case .lost:
-            line += "X/\(DailyDit.maxGuesses)"
+            if let wpm = solvedWpm { line += "\(DailyDit.format(wpm: wpm)) WPM · " }
+            line += counts
         case .playing:
-            line += "\(guessesUsed)/\(DailyDit.maxGuesses) so far"
+            line += "\(counts) so far"
         }
         if hideReference { line += " (no reference)" }
         return line
@@ -350,5 +411,10 @@ public extension DailyDit {
     /// Speeds are whole numbers in practice; don't print "60.0 WPM".
     static func format(wpm: Double) -> String {
         wpm == wpm.rounded() ? String(Int(wpm)) : String(format: "%.1f", wpm)
+    }
+
+    /// "1 guess", "2 guesses" — the share text is English on both ports, by fixture.
+    static func count(_ n: Int, _ singular: String, _ plural: String) -> String {
+        "\(n) \(n == 1 ? singular : plural)"
     }
 }
