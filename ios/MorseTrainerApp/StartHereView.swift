@@ -28,9 +28,9 @@ struct StartHereView: View {
         Stage(stage: "First week", roughly: "2–6 characters", work: "Journey. Daily, short. Don't chase speed."),
         Stage(stage: "Weeks 2–6", roughly: "Full alphabet", work: "Journey, plus Confusion Drill when pairs start blurring."),
         Stage(stage: "Your call + ? + state", roughly: "Any time from week 2", work: "Get on the air and hunt POTA. Don't wait for the full alphabet."),
-        Stage(stage: "Copying letters", roughly: "All 36, slow", work: "Words and Type It. Close the Farnsworth gap."),
+        Stage(stage: "Copying letters", roughly: "All 36, slow", work: "Common Words and Type It. Close the Farnsworth gap."),
         Stage(stage: "Copying words", roughly: "~15 WPM effective", work: "Head Copy, Rapid Fire, Short Stories."),
-        Stage(stage: "Operating", roughly: "~18 WPM+", work: "QSO Simulator, Contest, Vail repeater."),
+        Stage(stage: "Operating", roughly: "~18 WPM+", work: "Pileup Runner, Contest, Vail repeater."),
         Stage(stage: "Pushing", roughly: "35–60 WPM", work: "QRQ Speed and head copy at pace.")
     ]
 
@@ -84,7 +84,7 @@ struct StartHereView: View {
                         .foregroundStyle(Theme.textSecondary)
 
                     section("Already know some Morse?", systemImage: "checkmark.seal")
-                    Text("Open Settings → Proficiency and tell it what you already know. That sets your starting character set instead of making you re-earn A and N. Comfortable with the whole alphabet? Skip Journey and go straight to Words, Rapid Fire, or the QSO Simulator.")
+                    Text("Open Settings → Proficiency and tell it what you already know. That sets your starting character set instead of making you re-earn A and N. Comfortable with the whole alphabet? Skip Journey and go straight to Common Words, Rapid Fire, or Pileup Runner.")
                         .foregroundStyle(Theme.textSecondary)
                 }
                 .padding(24)

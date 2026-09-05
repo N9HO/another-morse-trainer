@@ -96,7 +96,7 @@ struct SettingsView: View {
                     } header: {
                         Text("Your Station")
                     } footer: {
-                        Text("Used across the app — sent when you call CQ and work stations in the QSO Simulator.")
+                        Text("Used across the app — sent when you call CQ and work stations in Pileup Runner.")
                     }
                     .listRowBackground(Theme.navyElevated)
                 }
@@ -389,7 +389,7 @@ struct SettingsView: View {
                                   range: 0...500, step: 10,
                                   format: { $0 < 10 ? "Zero-beat" : "±\(Int($0)) Hz" })
                     } header: {
-                        Text("QSO Simulator")
+                        Text("Pileup Runner")
                     } footer: {
                         Text("Max callers thins a pileup at once; the other settings reach callers as they arrive. Tone spread splits callers across the band; zero-beat stacks them all on your pitch.")
                     }
