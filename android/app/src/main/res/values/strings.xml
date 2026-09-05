@@ -674,4 +674,25 @@
         <item quantity="one">listen</item>
         <item quantity="other">listens</item>
     </plurals>
+
+    <!-- Morse Invaders (#170) -->
+    <string name="mode_invaders">Morse Invaders</string>
+    <string name="home_arcade_recognition">Arcade recognition</string>
+    <string name="invaders_blurb">Characters fall from the top in columns. Hear one and type it, or see one and key it, to shoot the lowest invader carrying it before it reaches the ground. Three lives; every wave comes faster. Misses feed your confusion drill.</string>
+    <string name="invaders_how_to_answer">How you answer</string>
+    <string name="invaders_characters">Characters</string>
+    <string name="invaders_difficulty">Difficulty</string>
+    <string name="invaders_start">Start game</string>
+    <string name="invaders_score">Score</string>
+    <string name="invaders_wave">Wave</string>
+    <string name="invaders_lives">Lives</string>
+    <string name="invaders_combo">Combo ×%1$d</string>
+    <string name="invaders_game_over">Game over</string>
+    <string name="invaders_best_combo">Best combo</string>
+    <string name="invaders_accuracy">Accuracy</string>
+    <string name="invaders_play_again">Play again</string>
+    <string name="invaders_end_game">End game</string>
+    <string name="invaders_tap_to_replay">Tap an invader to hear it again</string>
+    <string name="invaders_key_the_lowest">Key the lowest invader</string>
+    <string name="invaders_speed_note">Sent at your character speed and Farnsworth setting.</string>
 </resources>

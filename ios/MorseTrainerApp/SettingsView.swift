@@ -53,7 +53,7 @@ struct SettingsView: View {
     /// its own copy of this control.)
     private static let hardwareKeyModes: Set<TrainingMode> =
         [.sending, .characters, .words, .abbreviations, .qCodes, .prosigns,
-         .confusion, .rapidFire]
+         .confusion, .rapidFire, .invaders]
     /// Modes with a play → answer → reveal loop the Feedback section controls.
     private static let feedbackModes: Set<TrainingMode> =
         [.journey, .characters, .words, .abbreviations, .qCodes, .prosigns,

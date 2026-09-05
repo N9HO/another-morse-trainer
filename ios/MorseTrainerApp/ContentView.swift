@@ -43,6 +43,8 @@ struct ContentView: View {
                     qsoView
                 } else if model.isRapidFireReview {
                     rapidFireReviewView
+                } else if model.isInvaders {
+                    InvadersView()
                 } else if let intro = model.introduction {
                     introductionView(intro)
                 } else {
