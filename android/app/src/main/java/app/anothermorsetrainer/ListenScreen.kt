@@ -33,10 +33,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextAutoSize
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 
 /**
@@ -144,13 +146,22 @@ fun ListenScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) 
                         )
                         paused -> Text(stringResource(R.string.listen_status_paused), color = Brand.textSecondary, fontSize = 20.sp)
                         ListenState.playing -> Text(stringResource(R.string.listen_status_listening), color = Brand.teal, fontSize = 22.sp)
+                        // #167: an abbreviation answer carries its meaning
+                        // ("RPT — repeat / report") and wraps to three lines.
+                        // The theme's body line height (24.sp) is shorter than a
+                        // 40.sp glyph, so wrapped lines overlapped; the line
+                        // height is pinned to the font in em so it scales with
+                        // it, and the size steps down until the text fits the
+                        // card. Short answers still land at 40.sp.
                         else -> Text(
                             ListenState.display,
                             color = Brand.textPrimary,
                             fontSize = 40.sp,
+                            lineHeight = 1.2.em,
                             fontWeight = FontWeight.Bold,
                             fontFamily = FontFamily.Monospace,
                             textAlign = TextAlign.Center,
+                            autoSize = TextAutoSize.StepBased(minFontSize = 18.sp, maxFontSize = 40.sp, stepSize = 2.sp),
                             modifier = Modifier.padding(16.dp)
                         )
                     }

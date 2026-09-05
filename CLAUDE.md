@@ -80,6 +80,23 @@ What this means when you make a change:
   same features; a feature added to one list and not the other is a gap in the
   same sense.
 
+## The guide goes with the app
+
+The user guide at anothermorsetrainer.app/guide describes every mode,
+setting and hardware option, and its source lives outside this repository.
+**A feature, or a change to how an existing feature behaves, is not done
+until the guide section that describes it says the new thing** (#172). This
+is documentation of behaviour, not a changelog: the guide must never describe
+something the shipped apps no longer do.
+
+- The pull request template has a Guide section; `merge-gate.yml` reads it on
+  any PR that changes app code (either tree, Markdown not counted) without
+  ticking "Platform-internal", and fails unless "Guide updated" (say which
+  sections) or "No guide change needed" (say why) is ticked.
+- When a change reaches one platform before the other, the guide says which.
+- The two READMEs' feature lists are the in-repo summary of the same thing;
+  keep them in step too (the parity rule above).
+
 ## Do not touch the vendored decoder
 
 `ios/Sources/CWDecoderCore/` (C99) and `android/…/morsekit/cw/` (its Kotlin

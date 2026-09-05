@@ -23,6 +23,13 @@ name: Merge gate
 # exempt. The accepted lines are the ones in .github/pull_request_template.md;
 # the bold token at the start of each line is what the grep below keys on, so
 # rename them in both places or not at all.
+#
+# The same step enforces the guide rule (#172): the user guide on the website
+# documents every mode and setting and changes in the same release as the app,
+# so any PR that changes app code without declaring itself platform-internal
+# must also tick "Guide updated" or "No guide change needed" in its Guide
+# section. Both are declarations, not proofs — the website's source is outside
+# this repository — but a reviewer can read them.
 
 on:
   pull_request:
@@ -134,6 +141,27 @@ jobs:
                 fi
                 exit 1
               fi
+            fi
+          fi
+
+          # ---- 1c. Guide: does an app change say what happens to the docs? ----
+          # Any app-code change (either tree, Markdown excluded) that is not
+          # declared platform-internal changes something the guide may
+          # describe, so it has to say whether the guide was updated.
+          if [ $((IOS_TOUCHED + ANDROID_TOUCHED)) -ge 1 ] && [ "${PR_AUTHOR_TYPE:-}" != "Bot" ]; then
+            body_has() { printf '%s\n' "${PR_BODY:-}" | grep -qiE "$1"; }
+            BOX='^[[:space:]]*[-*][[:space:]]*\[x\][[:space:]]*\*\*'
+            echo
+            echo "── guide: this PR changes app code ──"
+            if body_has "${BOX}platform-internal\*\*"; then
+              echo "  Declared platform-internal — no guide declaration required."
+            elif body_has "${BOX}guide updated\*\*"; then
+              echo "  Declared: guide updated."
+            elif body_has "${BOX}no guide change needed\*\*"; then
+              echo "  Declared: no guide change needed."
+            else
+              echo "::error::Guide: this PR changes app code and its description does not say what happens to the user guide. Tick one box in the Guide section (see .github/pull_request_template.md): guide updated (say which sections), or no guide change needed (say why)."
+              exit 1
             fi
           fi
 
