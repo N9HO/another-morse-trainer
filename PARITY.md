@@ -178,6 +178,11 @@ in the Swift harness and `CustomWordsTest`; the contest multiplier drops
 empty pieces on both; `MorseCode.characterForPattern` is public on Android;
 the Rapid Fire response blurbs match.
 
+Closed after the release that shipped the above: the two mode names that
+differed. iOS called them "Words" and "QSO Simulator"; both apps now say
+"Common Words" and "Pileup Runner", on the tiles and in every sentence
+that names the mode. Internal identifiers did not change.
+
 Three audited rows turned out not to be gaps and are recorded here so they
 are not re-audited: the repeater's room list, deterministic private-QSO
 channel name and decoder-room flag are model state on iOS that no view

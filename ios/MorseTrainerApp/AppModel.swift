@@ -10,7 +10,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         switch self {
         case .journey:      return "Journey"
         case .characters:   return "Characters"
-        case .words:        return "Words"
+        case .words:        return "Common Words"
         case .abbreviations: return "Abbreviations"
         case .qCodes:       return "Q-Codes"
         case .prosigns:     return "Prosigns"
@@ -19,7 +19,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .sending:      return "Sending Practice"
         case .confusion:    return "Confusion Drill"
         case .listen:       return "Listen & Learn"
-        case .qso:          return "QSO Simulator"
+        case .qso:          return "Pileup Runner"
         case .contest:      return "Contest"
         case .story:        return "Short Stories"
         case .exam:         return "Code Exam"

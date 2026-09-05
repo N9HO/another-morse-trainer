@@ -35,7 +35,7 @@ testers, bug reports and feature chat live on
 - **Morse Invaders**: an arcade game — invaders descend carrying characters;
   hear one and type it, or see one and key it, before it lands. Waves,
   lives, combos, three difficulties, and every hit and miss feeds your stats
-- **QSO Simulator**: call CQ and work a simulated pileup, with your own side
+- **Pileup Runner**: call CQ and work a simulated pileup, with your own side
   keyed on the air: adjustable callers, speeds, QSB/QRN, cut numbers, bust
   behavior, callsign shapes, and a live log
 - **Contest**: timed runs of the weekly CW events (K1USN SST, ICWC MST,

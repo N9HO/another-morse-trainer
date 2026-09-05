@@ -898,12 +898,12 @@ private struct ModeOptionsCard: View {
     /// on, whether the list is big enough to be in use yet.
     private var customWordsFootnote: String {
         guard model.settings.useCustomWords else {
-            return "Practice your own words — a callsign, your name, club abbreviations — in Words instead of the ranked pool."
+            return "Practice your own words — a callsign, your name, club abbreviations — in Common Words instead of the ranked pool."
         }
         let n = model.settings.customWords.count
         let lead = "One word per line (spaces and commas split too). "
         return lead + (n >= AppSettings.customWordsMinimum
-            ? "\(n) words ready — Words drills your list."
+            ? "\(n) words ready — Common Words drills your list."
             : "Add at least two words; until then the ranked pool is used.")
     }
 
@@ -1207,7 +1207,7 @@ private struct CustomWordsSheet: View {
             ZStack {
                 Theme.Background()
                 VStack(alignment: .leading, spacing: 14) {
-                    Text("Paste your own words — one per line, or separated by commas or spaces. With “Use my word list” on, Words mode draws only from this list.")
+                    Text("Paste your own words — one per line, or separated by commas or spaces. With “Use my word list” on, Common Words draws only from this list.")
                         .font(.footnote)
                         .foregroundStyle(Theme.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
