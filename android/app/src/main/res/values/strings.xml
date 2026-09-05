@@ -674,6 +674,4 @@
         <item quantity="one">listen</item>
         <item quantity="other">listens</item>
     </plurals>
-    <string name="daily_dit_play_hint_playing">Every %1$d listens slow the code by %2$d WPM</string>
-    <string name="daily_dit_play_hint_done">Replays after the win are free</string>
 </resources>

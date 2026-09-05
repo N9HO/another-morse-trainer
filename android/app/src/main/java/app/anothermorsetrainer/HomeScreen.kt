@@ -54,6 +54,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -216,21 +217,23 @@ private fun DailyDitCard(onClick: () -> Unit) {
     LaunchedEffect(Unit) { DailyDitStore.refresh() }
     val game = DailyDitStore.game
     val done = game.isFinished
+    val guessesText = pluralStringResource(R.plurals.daily_dit_guesses, game.guessesUsed, game.guessesUsed)
+    val listensText = pluralStringResource(R.plurals.daily_dit_listens, game.listens, game.listens)
     val subtitle = when (game.outcome) {
         DailyDitOutcome.SOLVED -> stringResource(
             R.string.daily_dit_home_sub_solved,
             game.puzzleNumber,
-            game.guessesUsed,
-            game.solvedWpm?.let { DailyDit.formatWpm(it) } ?: ""
+            game.solvedWpm?.let { DailyDit.formatWpm(it) } ?: "",
+            guessesText,
+            listensText
         )
-        DailyDitOutcome.LOST ->
-            stringResource(R.string.daily_dit_home_sub_lost, game.puzzleNumber)
-        DailyDitOutcome.PLAYING -> if (game.guessesUsed > 0) {
+        // A listen starts the day as much as a guess does (#168).
+        DailyDitOutcome.PLAYING -> if (game.guessesUsed > 0 || game.listens > 0) {
             stringResource(
                 R.string.daily_dit_home_sub_progress,
                 game.puzzleNumber,
-                game.guessesUsed,
-                DailyDit.MAX_GUESSES
+                guessesText,
+                listensText
             )
         } else {
             stringResource(

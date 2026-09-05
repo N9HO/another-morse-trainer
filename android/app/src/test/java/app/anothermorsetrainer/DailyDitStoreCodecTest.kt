@@ -31,12 +31,40 @@ class DailyDitStoreCodecTest {
             startingWpm = 60.0,
             hideReference = true
         )
+        // Listens are part of the record now (#168): four of them, so the
+        // saved game carries a ladder step that came from listening alone.
+        repeat(4) { game = game.listen().game }
         for (guess in listOf("MOUND", "CRANE", "SPEED")) {
             val result = game.submit(guess)
             assertTrue("$guess should be a legal guess", result is DailyDitSubmission.Scored)
             game = (result as DailyDitSubmission.Scored).game
         }
         return game
+    }
+
+    /** The listen record is what the share text's speed comes from; it has to survive. */
+    @Test
+    fun listensSurvive() {
+        val game = playedGame()
+        val back = DailyDitStore.decode(DailyDitStore.encode(game))
+        assertEquals(listOf(60.0, 60.0, 60.0, 55.0), back.heard)
+        assertEquals(4, back.listens)
+        assertEquals(55.0, back.currentWpm, 0.0)
+    }
+
+    /**
+     * A game saved before #168 has no "heard" key. It must restore as a game
+     * that was never listened to — not fail to decode and hand out a fresh day.
+     */
+    @Test
+    fun aSaveWithoutListensDecodesAsNeverListened() {
+        val legacy = """{"puzzleNumber":245,"answer":"SPEND","startingWpm":60,"hideReference":false,""" +
+            """"rounds":[{"guess":"MOUND","wpm":60,"tiles":["absent","absent","absent","correct","correct"]}]}"""
+        val back = DailyDitStore.decode(legacy)
+        assertEquals(0, back.listens)
+        assertEquals(1, back.guessesUsed)
+        assertEquals(60.0, back.currentWpm, 0.0)
+        assertEquals(DailyDitOutcome.PLAYING, back.outcome)
     }
 
     @Test
