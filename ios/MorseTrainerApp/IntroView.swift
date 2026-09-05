@@ -497,6 +497,16 @@ private struct ModeOptionsCard: View {
                 set: { model.settings.rapidFire.callsignUSOnly = $0 })
     }
 
+    private var rapidFireSectionsBinding: Binding<Bool> {
+        Binding(get: { model.settings.rapidFire.statesIncludeSections },
+                set: { model.settings.rapidFire.statesIncludeSections = $0 })
+    }
+
+    private var rapidFireSerialCutBinding: Binding<Bool> {
+        Binding(get: { model.settings.rapidFire.serialCutNumbers },
+                set: { model.settings.rapidFire.serialCutNumbers = $0 })
+    }
+
     /// A toggle binding for one Rapid Fire call-sign format (keeps at least one on).
     private func rapidFireFormatBinding(_ format: CallsignFormat) -> Binding<Bool> {
         Binding(
@@ -731,9 +741,27 @@ private struct ModeOptionsCard: View {
         VStack(alignment: .leading, spacing: 14) {
             inlinePicker(title: "What to send",
                          selection: rapidFireContentBinding) { (c: RapidFireContent) in c.label }
+            Text(model.settings.rapidFire.content.blurb)
+                .font(.footnote)
+                .foregroundStyle(Theme.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
 
             // Per-content parameters.
             let content = model.settings.rapidFire.content
+            if content == .states || content == .mixed {
+                // The 71 ARRL/RAC sections (ContestData.arrlSections) join the
+                // state pool: EPA, STX, SDG beside OH (#173).
+                Toggle("Include ARRL/RAC Field Day sections", isOn: rapidFireSectionsBinding)
+                    .font(.subheadline)
+                    .tint(Theme.teal)
+            }
+            if content == .serials {
+                // Sent as the pileup sends them (T for 0, N for 9 …); "TTA",
+                // "001" and "1" all copy 001 (#173).
+                Toggle("Cut numbers", isOn: rapidFireSerialCutBinding)
+                    .font(.subheadline)
+                    .tint(Theme.teal)
+            }
             if content == .callsigns || content == .mixed {
                 Toggle("US call signs only", isOn: rapidFireUSOnlyBinding)
                     .font(.subheadline)

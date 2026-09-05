@@ -283,6 +283,12 @@ object Settings {
     /** Call-sign shapes Rapid Fire draws from; never empty (iOS callsignFormats). */
     var rapidFireFormats by mutableStateOf(CallsignFormat.commonDefaults.toSet())
         private set
+    /** States: widen the pool with the ARRL/RAC Field Day sections (iOS statesIncludeSections, #173). */
+    var rapidFireSections by mutableStateOf(false)
+        private set
+    /** Serial numbers: send them with cut numbers (iOS serialCutNumbers, #173). */
+    var rapidFireSerialCut by mutableStateOf(false)
+        private set
 
     /**
      * Head Copy: how many times the item replays on its own after the first
@@ -457,6 +463,8 @@ object Settings {
             rapidFireFormats = CallsignFormat.entries.filter { it.code in stored }.toSet()
                 .ifEmpty { CallsignFormat.commonDefaults.toSet() }
         }
+        rapidFireSections = prefs.getBoolean("rfSections", false)
+        rapidFireSerialCut = prefs.getBoolean("rfSerialCut", false)
         // Head Copy's on/off auto-repeat became a count (iOS parity): an
         // install that had it on gets the iOS default of 2 repeats, one that
         // had it off keeps repeating off. The stored reveal delay is kept as is;
@@ -851,6 +859,16 @@ object Settings {
         persistModeSetup()
     }
 
+    fun updateRapidFireSections(value: Boolean) {
+        rapidFireSections = value
+        persistModeSetup()
+    }
+
+    fun updateRapidFireSerialCut(value: Boolean) {
+        rapidFireSerialCut = value
+        persistModeSetup()
+    }
+
     /** Toggle one call-sign shape; at least one stays on, or the generator would have nothing to build. */
     fun toggleRapidFireFormat(format: CallsignFormat) {
         val next = if (format in rapidFireFormats) rapidFireFormats - format else rapidFireFormats + format
@@ -882,6 +900,8 @@ object Settings {
             putInt("rfNumberCount", rapidFireNumberCount)
             putBoolean("rfUsOnly", rapidFireUsOnly)
             putStringSet("rfFormats", rapidFireFormats.map { it.code }.toSet())
+            putBoolean("rfSections", rapidFireSections)
+            putBoolean("rfSerialCut", rapidFireSerialCut)
         }
     }
 
