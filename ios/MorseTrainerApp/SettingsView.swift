@@ -111,13 +111,21 @@ struct SettingsView: View {
                     } label: {
                         Label("Preview tone", systemImage: "speaker.wave.2.fill")
                     }
-                    Picker("Background noise", selection: $model.settings.backgroundNoise) {
-                        ForEach(BackgroundNoiseLevel.allCases) { Text($0.label).tag($0) }
-                    }
+                    Toggle("Keep Bluetooth audio awake", isOn: $model.settings.bluetoothKeepAlive)
                     Label {
-                        Text("On Bluetooth earbuds, silence between transmissions lets the link idle — it then wakes a moment late and clips the first character, costing you the answer. Keep-alive, the default, holds the link open with a floor too quiet to hear. Turn it up for band noise (QRN) to copy through. Off is truly silent, and brings the clipping back.")
+                        Text("Plays a floor deliberately just above silence — too quiet to hear — so Bluetooth earbuds never idle between transmissions: truly silent audio lets some headsets sleep, and they wake a moment late and clip the first character.")
                     } icon: {
                         Image(systemName: "airpods")
+                    }
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    Picker("Band noise", selection: $model.settings.bandNoise) {
+                        ForEach(BackgroundNoiseLevel.bandLevels) { Text($0.label).tag($0) }
+                    }
+                    Label {
+                        Text("Adds audible band noise (QRN) under everything so practising is more like copying off the air; any level also keeps Bluetooth audio awake.")
+                    } icon: {
+                        Image(systemName: "waveform")
                     }
                     .font(.footnote)
                     .foregroundStyle(.secondary)
@@ -655,8 +663,9 @@ struct SettingsView: View {
         default:
             break
         }
-        if s.backgroundNoise != .off {
-            lines.append("Background noise: \(s.backgroundNoise.label)")
+        lines.append("Bluetooth keep-alive: \(s.bluetoothKeepAlive ? "on" : "off")")
+        if s.bandNoise != .off {
+            lines.append("Band noise: \(s.bandNoise.label)")
         }
         if !s.selectedPunctuation.isEmpty {
             lines.append("Punctuation: \(s.selectedPunctuation.sorted().joined())")

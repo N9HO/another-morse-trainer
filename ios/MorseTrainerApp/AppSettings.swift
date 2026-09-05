@@ -209,6 +209,10 @@ struct RapidFireSettings: Codable, Equatable {
     var wordMaxLength: Int = 6
     /// Digits per group for `content == .numbers`.
     var numberCount: Int = 5
+    /// Widen the state pool with the ARRL/RAC Field Day sections (`content == .states` or `.mixed`).
+    var statesIncludeSections: Bool = false
+    /// Send `content == .serials` with cut numbers; either form is accepted as the copy.
+    var serialCutNumbers: Bool = false
     var response: RapidFireResponse = .type
     var pace: RapidFirePace = .steady
 
@@ -222,6 +226,7 @@ extension RapidFireSettings {
     enum CodingKeys: String, CodingKey {
         case content, callsignFormats, callsignUSOnly
         case wordMinLength, wordMaxLength, numberCount, response, pace
+        case statesIncludeSections, serialCutNumbers
     }
 
     init(from decoder: Decoder) throws {
@@ -236,6 +241,8 @@ extension RapidFireSettings {
         s.wordMaxLength = min(max(hi, RapidFireSettings.wordLengthRange.lowerBound), RapidFireSettings.wordLengthRange.upperBound)
         let n = try c.decodeIfPresent(Int.self, forKey: .numberCount) ?? s.numberCount
         s.numberCount = min(max(n, RapidFireSettings.numberCountRange.lowerBound), RapidFireSettings.numberCountRange.upperBound)
+        s.statesIncludeSections = try c.decodeIfPresent(Bool.self, forKey: .statesIncludeSections) ?? s.statesIncludeSections
+        s.serialCutNumbers = try c.decodeIfPresent(Bool.self, forKey: .serialCutNumbers) ?? s.serialCutNumbers
         s.response = try c.decodeIfPresent(RapidFireResponse.self, forKey: .response) ?? s.response
         s.pace = try c.decodeIfPresent(RapidFirePace.self, forKey: .pace) ?? s.pace
         self = s
@@ -388,6 +395,20 @@ enum BackgroundNoiseLevel: String, Codable, CaseIterable, Identifiable {
         case .medium:  return "Moderate"
         case .high:    return "Heavy"
         }
+    }
+
+    /// The levels the Band noise picker offers (issue #169). `keepAlive` is not
+    /// a band-noise level — it is inaudible by design — so it lives behind the
+    /// separate "Keep Bluetooth audio awake" switch instead.
+    static let bandLevels: [BackgroundNoiseLevel] = [.off, .whisper, .low, .medium, .high]
+
+    /// The level actually rendered for a given pair of settings (issue #169):
+    /// band noise when any is set (it keeps the link awake as a side effect),
+    /// else the inaudible keep-alive floor when that switch is on, else true
+    /// digital silence.
+    static func effective(bluetoothKeepAlive: Bool, bandNoise: BackgroundNoiseLevel) -> BackgroundNoiseLevel {
+        if bandNoise != .off { return bandNoise }
+        return bluetoothKeepAlive ? .keepAlive : .off
     }
 }
 
@@ -564,15 +585,34 @@ struct AppSettings: Codable, Equatable {
     /// it says so on the share text.
     var dailyDitHideReference: Bool = false
 
-    /// Continuous background noise under everything (issue #29). Defaults to
-    /// `.whisper`: the Bluetooth clipping it prevents is a silent accuracy tax
-    /// nobody would think to go looking for a setting about, and at ~56 dB under
-    /// the tone the floor does that job without anyone noticing hiss. Louder
-    /// levels are there for people who want band noise to copy through.
-    var backgroundNoise: BackgroundNoiseLevel = .keepAlive
+    /// Keep a floor of near-silent audio playing so a Bluetooth sink never sees
+    /// digital silence (issues #29, #169). On by default: the clipping it
+    /// prevents is a silent accuracy tax nobody would think to go looking for a
+    /// setting about, and at ~56 dB under the tone the floor does that job
+    /// without anyone noticing hiss.
+    var bluetoothKeepAlive: Bool = true {
+        didSet { syncBackgroundNoise() }
+    }
+    /// Audible band noise (QRN) to copy through, from `BackgroundNoiseLevel
+    /// .bandLevels`. Off by default. Any level also keeps a Bluetooth link
+    /// awake, so it supersedes `bluetoothKeepAlive` while set.
+    var bandNoise: BackgroundNoiseLevel = .off {
+        didSet { syncBackgroundNoise() }
+    }
+    /// The level the player renders — derived from the two controls above via
+    /// `BackgroundNoiseLevel.effective` and never set directly. Still a stored
+    /// property so it keeps being written under the pre-#169 key, which is the
+    /// one an older build reads (issue #169's migration runs the other way in
+    /// `init(from:)`).
+    private(set) var backgroundNoise: BackgroundNoiseLevel = .keepAlive
     /// Whether this install has been moved off the old Whisper default to the
     /// inaudible keep-alive floor (issue #92). Runs once; see `init(from:)`.
     var didMigrateNoiseFloor: Bool = false
+
+    private mutating func syncBackgroundNoise() {
+        backgroundNoise = BackgroundNoiseLevel.effective(bluetoothKeepAlive: bluetoothKeepAlive,
+                                                         bandNoise: bandNoise)
+    }
 
     /// Answer by speaking instead of tapping (every choice quiz). A per-session
     /// choice made on the setup screen.
@@ -693,6 +733,7 @@ extension AppSettings {
         case listenContent, listenGap, wordTier, customWords, useCustomWords
         case voiceResponse, keyingResponse
         case qrqSpeed, backgroundNoise, didMigrateNoiseFloor
+        case bluetoothKeepAlive, bandNoise
         case dailyDitStartingWpm, dailyDitHideReference
         case examSpeed, examGrading, examUseBundled
         case qso
@@ -740,8 +781,8 @@ extension AppSettings {
                                                       forKey: .dailyDitStartingWpm) ?? s.dailyDitStartingWpm
         s.dailyDitHideReference = try c.decodeIfPresent(Bool.self,
                                                        forKey: .dailyDitHideReference) ?? s.dailyDitHideReference
-        s.backgroundNoise = try c.decodeIfPresent(BackgroundNoiseLevel.self,
-                                                  forKey: .backgroundNoise) ?? s.backgroundNoise
+        var storedNoise = try c.decodeIfPresent(BackgroundNoiseLevel.self,
+                                                forKey: .backgroundNoise) ?? s.backgroundNoise
         // One-time move off the old Whisper default (issue #92). Whisper was
         // the shipped default, so almost everyone sitting on it never chose it
         // — they just got the loudest thing that was ever the default. Drop
@@ -749,8 +790,24 @@ extension AppSettings {
         // job for the link. Guarded by a flag so anyone who deliberately picks
         // Whisper afterwards keeps it.
         let migrated = try c.decodeIfPresent(Bool.self, forKey: .didMigrateNoiseFloor) ?? false
-        if !migrated, s.backgroundNoise == .whisper { s.backgroundNoise = .keepAlive }
+        if !migrated, storedNoise == .whisper { storedNoise = .keepAlive }
         s.didMigrateNoiseFloor = true
+        // The single six-level control became two (issue #169): a keep-alive
+        // switch and a band-noise picker. A save that has both new keys is
+        // authoritative; one that has neither is split from the old level —
+        // Off → switch off, no band noise; Keep-alive → switch on, no band
+        // noise; anything audible → switch on, that level. The old key keeps
+        // being written from the pair (see `backgroundNoise`), so an older
+        // build reads the same effective level back.
+        if let keepAlive = try c.decodeIfPresent(Bool.self, forKey: .bluetoothKeepAlive),
+           let band = try c.decodeIfPresent(BackgroundNoiseLevel.self, forKey: .bandNoise) {
+            s.bluetoothKeepAlive = keepAlive
+            s.bandNoise = band == .keepAlive ? .off : band
+        } else {
+            s.bluetoothKeepAlive = storedNoise != .off
+            s.bandNoise = storedNoise == .keepAlive ? .off : storedNoise
+        }
+        s.syncBackgroundNoise()
         s.voiceResponse = try c.decodeIfPresent(Bool.self, forKey: .voiceResponse) ?? s.voiceResponse
         s.keyingResponse = try c.decodeIfPresent(Bool.self, forKey: .keyingResponse) ?? s.keyingResponse
         s.examSpeed = try c.decodeIfPresent(ExamSpeed.self, forKey: .examSpeed) ?? s.examSpeed

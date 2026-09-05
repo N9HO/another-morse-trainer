@@ -409,7 +409,7 @@
     <string name="settings_sidetone_pitch">Sidetone pitch</string>
     <string name="settings_preview_tone">Preview tone</string>
     <string name="settings_play_button">" Play"</string>
-    <string name="settings_sound_footer">The frequency of the practice tone you hear.\n\nBackground noise plays a floor under everything. On Bluetooth earbuds the silence between transmissions lets the link idle, so it wakes a moment late and clips the first character — costing you the answer. Keep-alive, the default, holds the link open with a floor too quiet to hear. Turn it up for band noise (QRN) to copy through. Off is truly silent, and brings the clipping back.</string>
+    <string name="settings_sound_footer">The frequency of the practice tone you hear.</string>
     <string name="settings_practice">Practice</string>
     <string name="settings_answer_choices">Answer choices</string>
     <string name="settings_recognition_target">Recognition target</string>
@@ -449,7 +449,6 @@
     <string name="settings_reset_confirm_body">This clears your learned characters and stats. Settings are kept.</string>
     <string name="settings_reset">Reset</string>
     <string name="settings_session_length">Session length</string>
-    <string name="settings_background_noise">Background noise</string>
     <string name="settings_keyer_mode">Keyer mode</string>
     <string name="settings_keyer_mode_note">The adapter times the sending in this mode, at the speed you\'re practising at.</string>
 
@@ -654,4 +653,8 @@
     <string name="settings_copy_diagnostics">Copy diagnostic info</string>
     <string name="settings_copied_diagnostics">Copied to clipboard</string>
     <string name="settings_bug_reports_footer">Copies your app/Android version, device, and current settings to the clipboard to paste into a bug report.</string>
+    <string name="settings_keep_bluetooth_awake">Keep Bluetooth audio awake</string>
+    <string name="settings_keep_bluetooth_awake_footer">Keep Bluetooth audio awake plays a floor deliberately just above silence — too quiet to hear — so Bluetooth earbuds never idle between transmissions: truly silent audio lets some headsets sleep, and they wake a moment late and clip the first character.</string>
+    <string name="settings_band_noise">Band noise</string>
+    <string name="settings_band_noise_footer">Band noise adds audible band noise (QRN) under everything so practising is more like copying off the air; any level also keeps Bluetooth audio awake.</string>
 </resources>

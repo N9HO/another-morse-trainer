@@ -81,7 +81,25 @@ enum class BackgroundNoiseLevel(val amplitude: Float, val label: String) {
     WHISPER(0.010f, "Whisper"),
     LOW(0.025f, "Low"),
     MEDIUM(0.060f, "Moderate"),
-    HIGH(0.130f, "Heavy")
+    HIGH(0.130f, "Heavy");
+
+    companion object {
+        /**
+         * The levels the Band noise picker offers (issue #169). [KEEP_ALIVE] is
+         * not a band-noise level — it is inaudible by design — so it lives behind
+         * the separate "Keep Bluetooth audio awake" switch instead.
+         */
+        val bandLevels: List<BackgroundNoiseLevel> = listOf(OFF, WHISPER, LOW, MEDIUM, HIGH)
+
+        /**
+         * The level actually rendered for a pair of settings (issue #169): band
+         * noise when any is set (it keeps the link awake as a side effect), else
+         * the inaudible keep-alive floor when that switch is on, else true
+         * digital silence. Mirrors iOS `BackgroundNoiseLevel.effective`.
+         */
+        fun effective(bluetoothKeepAlive: Boolean, bandNoise: BackgroundNoiseLevel): BackgroundNoiseLevel =
+            if (bandNoise != OFF) bandNoise else if (bluetoothKeepAlive) KEEP_ALIVE else OFF
+    }
 }
 
 /** How much Morse the learner already knows — seeds the Koch starting set. */
@@ -144,17 +162,31 @@ object Settings {
         private set
 
     /**
-     * Continuous background noise under everything (issue #29). Defaults to
-     * [BackgroundNoiseLevel.KEEP_ALIVE]: the Bluetooth clipping it prevents is
-     * a silent accuracy tax nobody would think to go looking for a setting
-     * about, and at ~56 dB under the tone that floor does the job without
-     * anyone hearing it. The old WHISPER default sat ~39 dB under the tone,
-     * which was audible enough to be reported as too loud
-     * (N9HO/another-morse-trainer#92). Louder levels remain for people who want
-     * band noise to copy through.
+     * Keep a floor of near-silent audio playing so a Bluetooth sink never sees
+     * digital silence (issues #29, #169). On by default: the clipping it
+     * prevents is a silent accuracy tax nobody would think to go looking for a
+     * setting about, and at ~56 dB under the tone the [BackgroundNoiseLevel
+     * .KEEP_ALIVE] floor does the job without anyone hearing it. The old WHISPER
+     * default sat ~39 dB under the tone, which was audible enough to be
+     * reported as too loud (N9HO/another-morse-trainer#92).
      */
-    var backgroundNoise by mutableStateOf(BackgroundNoiseLevel.KEEP_ALIVE)
+    var bluetoothKeepAlive by mutableStateOf(true)
         private set
+    /**
+     * Audible band noise (QRN) to copy through, from
+     * [BackgroundNoiseLevel.bandLevels]. Off by default. Any level also keeps a
+     * Bluetooth link awake, so it supersedes [bluetoothKeepAlive] while set.
+     */
+    var bandNoise by mutableStateOf(BackgroundNoiseLevel.OFF)
+        private set
+    /**
+     * The level [BackgroundNoise] renders — derived from the two controls above
+     * via [BackgroundNoiseLevel.effective]. Reads two [mutableStateOf]s, so a
+     * Composable that reads it still recomposes. [persist] also writes it under
+     * the pre-#169 key, which is the one an older build reads.
+     */
+    val backgroundNoise: BackgroundNoiseLevel
+        get() = BackgroundNoiseLevel.effective(bluetoothKeepAlive, bandNoise)
     var hapticsEnabled by mutableStateOf(true)
         private set
 
@@ -347,7 +379,7 @@ object Settings {
         }
         effectiveWpm = effectiveWpm.coerceIn(MIN_EFFECTIVE_WPM, characterWpm)
         sidetoneHz = prefs.getFloat("sidetone", 600f).toDouble()
-        backgroundNoise = runCatching {
+        var storedNoise = runCatching {
             BackgroundNoiseLevel.valueOf(prefs.getString("backgroundNoise", null) ?: "KEEP_ALIVE")
         }.getOrDefault(BackgroundNoiseLevel.KEEP_ALIVE)
         // One-time move off the old Whisper default (issue #92). Whisper was
@@ -357,10 +389,27 @@ object Settings {
         // job for the link. Guarded by a flag so anyone who deliberately picks
         // Whisper afterwards keeps it.
         if (!prefs.getBoolean("noiseFloorMigrated", false)) {
-            if (backgroundNoise == BackgroundNoiseLevel.WHISPER) {
-                backgroundNoise = BackgroundNoiseLevel.KEEP_ALIVE
+            if (storedNoise == BackgroundNoiseLevel.WHISPER) {
+                storedNoise = BackgroundNoiseLevel.KEEP_ALIVE
             }
             prefs.edit { putBoolean("noiseFloorMigrated", true) }
+        }
+        // The single six-level control became two (issue #169): a keep-alive
+        // switch and a band-noise picker. A save that has both new keys is
+        // authoritative; one that has neither is split from the old level —
+        // Off → switch off, no band noise; Keep-alive → switch on, no band
+        // noise; anything audible → switch on, that level. [persist] keeps
+        // writing the old key from the pair, so an older build reads the same
+        // effective level back.
+        if (prefs.contains("bluetoothKeepAlive") && prefs.contains("bandNoise")) {
+            bluetoothKeepAlive = prefs.getBoolean("bluetoothKeepAlive", true)
+            bandNoise = runCatching {
+                BackgroundNoiseLevel.valueOf(prefs.getString("bandNoise", null) ?: "OFF")
+            }.getOrDefault(BackgroundNoiseLevel.OFF)
+                .let { if (it == BackgroundNoiseLevel.KEEP_ALIVE) BackgroundNoiseLevel.OFF else it }
+        } else {
+            bluetoothKeepAlive = storedNoise != BackgroundNoiseLevel.OFF
+            bandNoise = if (storedNoise == BackgroundNoiseLevel.KEEP_ALIVE) BackgroundNoiseLevel.OFF else storedNoise
         }
         hapticsEnabled = prefs.getBoolean("haptics", true)
         voiceAnswersEnabled = prefs.getBoolean("voiceAnswers", false)
@@ -488,8 +537,15 @@ object Settings {
         persist()
     }
 
-    fun updateBackgroundNoise(value: BackgroundNoiseLevel) {
-        backgroundNoise = value
+    fun updateBluetoothKeepAlive(value: Boolean) {
+        bluetoothKeepAlive = value
+        persist()
+        BackgroundNoise.refresh()   // the floor is live; retarget it now
+    }
+
+    fun updateBandNoise(value: BackgroundNoiseLevel) {
+        // KEEP_ALIVE is not a band level (see [BackgroundNoiseLevel.bandLevels]).
+        bandNoise = if (value == BackgroundNoiseLevel.KEEP_ALIVE) BackgroundNoiseLevel.OFF else value
         persist()
         BackgroundNoise.refresh()   // the floor is live; retarget it now
     }
@@ -835,6 +891,9 @@ object Settings {
             putBoolean("farnsworth", farnsworthEnabled)
             putFloat("effWpm", effectiveWpm.toFloat())
             putFloat("sidetone", sidetoneHz.toFloat())
+            putBoolean("bluetoothKeepAlive", bluetoothKeepAlive)
+            putString("bandNoise", bandNoise.name)
+            // The effective level under the pre-#169 key, for an older build.
             putString("backgroundNoise", backgroundNoise.name)
             putBoolean("haptics", hapticsEnabled)
             putBoolean("voiceAnswers", voiceAnswersEnabled)
