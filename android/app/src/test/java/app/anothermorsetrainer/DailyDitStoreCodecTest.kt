@@ -49,7 +49,10 @@ class DailyDitStoreCodecTest {
         val back = DailyDitStore.decode(DailyDitStore.encode(game))
         assertEquals(listOf(60.0, 60.0, 60.0, 55.0), back.heard)
         assertEquals(4, back.listens)
-        assertEquals(55.0, back.currentWpm, 0.0)
+        // Four listens are one step and three wrong guesses another; the two
+        // add (fixtures/daily-dit.json "ladder"), so the restored game sits
+        // at 50, not at the 55 the fourth listen was heard at.
+        assertEquals(50.0, back.currentWpm, 0.0)
     }
 
     /**
