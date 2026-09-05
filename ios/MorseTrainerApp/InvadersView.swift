@@ -1,5 +1,4 @@
 import SwiftUI
-import MorseKit
 
 /// Morse Invaders (#170): characters descend the play field in columns and the
 /// learner shoots each one by naming it — typing it after hearing it (ICR) or
