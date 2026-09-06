@@ -66,8 +66,10 @@ the iOS app's navy/teal look.
 - **CW Decoder**: point the microphone at received Morse (a rig's speaker, a
   WebSDR) and read it as text; a faithful Kotlin port of the Carrier Wave
   decoder core with live WPM/pitch telemetry and a two-core pitch-lock rescue
-- **Listen & Learn**: hands-free: hear the code, then the spoken answer; keeps
-  playing with the screen locked (foreground service)
+- **Listen & Learn**: hands-free: hear the code, then the spoken answer, over
+  characters, the curated on-air QSO elements (Top 20 or Top 100), words, or
+  abbreviations and Q-codes; keeps playing with the screen locked (foreground
+  service)
 - **Voice answers**: speak your answer instead of tapping (microphone), with
   NATO/letter-name/digit-word matching, a "did you say…?" confirm-and-correct
   flow, and a learned per-user voice profile

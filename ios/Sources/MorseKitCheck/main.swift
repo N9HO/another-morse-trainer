@@ -1495,6 +1495,91 @@ if let fx = loadCustomWordsFixture() {
     check("fixtures/custom-words.json loads and decodes", false)
 }
 
+// Listen & Learn's curated on-air QSO vocabulary (issue #182), against
+// fixtures/qso-elements.json — read by this harness AND by android
+// MorseDataQSOTest. The fixture is the one ordered list both ports carry;
+// the tiers are its first N.
+struct QSOElementsFixture: Decodable {
+    struct Item: Decodable { let token: String; let meaning: String }
+    struct Tiers: Decodable { let top20: Int; let top100: Int }
+    let tiers: Tiers
+    let items: [Item]
+}
+
+func loadQSOElementsFixture() -> QSOElementsFixture? {
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+    guard let data = try? Data(contentsOf: root.appendingPathComponent("fixtures/qso-elements.json")) else { return nil }
+    return try? JSONDecoder().decode(QSOElementsFixture.self, from: data)
+}
+
+print("\nShared QSO-elements fixture (fixtures/qso-elements.json):")
+if let fx = loadQSOElementsFixture() {
+    let table = MorseData.qsoElements
+    check("the table has exactly 100 items", table.count == 100 && fx.items.count == 100)
+    check("tokens match the fixture exactly, in order",
+          table.map { $0.token } == fx.items.map(\.token))
+    check("meanings match the fixture exactly, in order",
+          table.map { $0.meaning } == fx.items.map(\.meaning))
+    check("no token appears twice", Set(table.map { $0.token }).count == table.count)
+    check("tier sizes are the fixture's",
+          MorseData.qsoTop20Count == fx.tiers.top20 && MorseData.qsoTop100Count == fx.tiers.top100)
+
+    // Every token is sendable: a bracketed token is a prosign spelled as
+    // MorseData.prosigns spells it; anything else is characters with a
+    // Morse pattern, with single spaces as word gaps.
+    var sendable = true
+    for item in table {
+        let t = item.token
+        if t.hasPrefix("<") {
+            if !MorseData.prosigns.contains(where: { $0.name == t }) {
+                sendable = false
+                print("      ↳ \(t) is not a prosign MorseData.prosigns knows")
+            }
+        } else {
+            let clean = t == t.trimmingCharacters(in: .whitespaces) && !t.contains("  ")
+            let coded = t.allSatisfy { $0 == " " || MorseCode.pattern(for: $0) != nil }
+            if !clean || !coded {
+                sendable = false
+                print("      ↳ \(t) has a character with no Morse pattern or stray spacing")
+            }
+        }
+    }
+    check("every token is sendable (pattern or known prosign)", sendable)
+
+    // Where a token already lives in the abbreviation, Q-code or prosign
+    // tables, the meaning is that table's wording — one answer per token.
+    var agrees = true
+    for item in table {
+        let known = MorseData.abbreviations.first { $0.token == item.token }?.meaning
+            ?? MorseData.qCodes.first { $0.token == item.token }?.meaning
+            ?? MorseData.prosigns.first { $0.name == item.token }?.meaning
+        if let known, known != item.meaning {
+            agrees = false
+            print("      ↳ \(item.token): \"\(item.meaning)\" but the reference table says \"\(known)\"")
+        }
+    }
+    check("meanings agree with the abbreviation / Q-code / prosign tables", agrees)
+
+    // The tiers are the first N, as items whose answer is the meaning.
+    let top20 = MorseData.qsoElementItems(MorseData.qsoTop20Count)
+    let top100 = MorseData.qsoElementItems(MorseData.qsoTop100Count)
+    check("Top 20 is the first 20 tokens", top20.map(\.display) == fx.items.prefix(20).map(\.token))
+    check("Top 100 is the whole list", top100.map(\.display) == fx.items.map(\.token))
+    check("item answers are the meanings", top100.map(\.answer) == fx.items.map(\.meaning))
+    check("item ids are unique", Set(top100.map(\.id)).count == top100.count)
+    check("a bracketed token plays the run-together prosign pattern",
+          top100.first { $0.display == "<AR>" }?.playable == .pattern(".-.-."))
+    check("a plain token plays as text", top100.first { $0.display == "CQ" }?.playable == .text("CQ"))
+    check("a multi-word token keeps its word gap",
+          top100.first { $0.display == "CQ CQ CQ" }?.playable == .text("CQ CQ CQ"))
+} else {
+    check("fixtures/qso-elements.json loads and decodes", false)
+}
+
 // Journey mode (gamified level ladder)
 print("\nJourney:")
 do {
