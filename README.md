@@ -13,6 +13,10 @@ The user guide lives at
 testers, bug reports and feature chat live on
 [Discord](https://discord.gg/qgyk3TPUd9).
 
+Both apps are free, with no ads or subscriptions. If they have helped your copy,
+you can [buy the developer a coffee](https://buymeacoffee.com/n9ho) or see
+[other ways to help](https://anothermorsetrainer.app/support/).
+
 Each platform's own README has the full feature list and setup notes:
 [ios/README.md](ios/README.md) · [android/README.md](android/README.md).
 
