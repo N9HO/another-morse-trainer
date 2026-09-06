@@ -1744,11 +1744,27 @@ final class AppModel: ObservableObject {
         }
     }
 
+    /// The app mark as Now Playing artwork (#184). Without it a CarPlay or
+    /// Bluetooth head unit keeps showing whatever the previous app left there.
+    /// Static, so built once; `MPMediaItemArtwork` is not `Sendable`, which is
+    /// why it lives here on the main actor with the rest of the model rather
+    /// than in a global. `UIImage` is `Sendable`, so the request handler may
+    /// capture it.
+    private lazy var nowPlayingArtwork: MPMediaItemArtwork? = {
+        guard let image = UIImage(named: "AMTLogo") else { return nil }
+        return MPMediaItemArtwork(boundsSize: image.size) { _ in image }
+    }()
+
     private func updateNowPlaying() {
         var info: [String: Any] = [:]
         info[MPMediaItemPropertyTitle] = listenDisplay.isEmpty ? "Listening…" : listenDisplay
         info[MPMediaItemPropertyArtist] = "Morse Trainer · Listen & Learn"
+        info[MPMediaItemPropertyAlbumTitle] = "Another Morse Trainer"
+        info[MPNowPlayingInfoPropertyMediaType] = MPNowPlayingInfoMediaType.audio.rawValue
         info[MPNowPlayingInfoPropertyPlaybackRate] = listenPaused ? 0.0 : 1.0
+        if let artwork = nowPlayingArtwork {
+            info[MPMediaItemPropertyArtwork] = artwork
+        }
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
     }
 

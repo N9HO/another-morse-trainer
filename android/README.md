@@ -67,7 +67,8 @@ the iOS app's navy/teal look.
   WebSDR) and read it as text; a faithful Kotlin port of the Carrier Wave
   decoder core with live WPM/pitch telemetry and a two-core pitch-lock rescue
 - **Listen & Learn**: hands-free: hear the code, then the spoken answer; keeps
-  playing with the screen locked (foreground service)
+  playing with the screen locked (foreground service), with the current item
+  and the app logo on the lock screen and car displays
 - **Voice answers**: speak your answer instead of tapping (microphone), with
   NATO/letter-name/digit-word matching, a "did you say…?" confirm-and-correct
   flow, and a learned per-user voice profile

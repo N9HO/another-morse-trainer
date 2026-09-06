@@ -53,7 +53,8 @@ testers, bug reports and feature chat live on
 - **CW Decoder**: point the microphone at received Morse (a rig's speaker, a
   WebSDR) and read it as text, with live WPM/pitch telemetry
 - **Listen & Learn**: hands-free: hear the code, then the spoken answer;
-  keeps playing with the screen locked
+  keeps playing with the screen locked, with the current item and the app
+  logo on the lock screen and car displays
 - **Voice answers**: speak your answer instead of tapping in any of the six
   choice quizzes, with a confirm/closest-match fallback that learns your
   corrections

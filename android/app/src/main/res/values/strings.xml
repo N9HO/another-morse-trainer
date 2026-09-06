@@ -353,6 +353,8 @@
     <string name="listen_notification_listening">Listening…</string>
     <string name="listen_hands_free_practice">Hands-free practice</string>
     <string name="listen_resume">Resume</string>
+    <!-- The "artist" line under the item on the lock screen and car displays; the iOS Now Playing text, verbatim. -->
+    <string name="listen_now_playing_artist">Morse Trainer · Listen &amp; Learn</string>
     <string name="listen_channel_name">Listen &amp; Learn playback</string>
     <string name="listen_channel_description">Ongoing hands-free practice playback.</string>
 
