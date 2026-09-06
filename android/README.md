@@ -35,8 +35,10 @@ the iOS app's navy/teal look.
   numbers optional) / names / power sent back to back at your chosen pace;
   type as you hear it, head-copy then type, key each one back, or just listen
   and review the transmitted list
-- **Morse Invaders**: an arcade game — invaders descend carrying characters;
-  hear one and type it, or see one and key it, before it lands. Waves,
+- **Morse Invaders**: an arcade game — pixel-art invaders descend carrying
+  characters; hear one and type it on a QWERTY keyboard, or see one and key
+  it, before it lands. Each game starts 10 WPM under your character speed
+  and steps up 2 WPM every five hits (a landing steps it back). Waves,
   lives, combos, three difficulties, and every hit and miss feeds your stats
 - **Pileup Runner**: a full QSO simulator: your callsign, eight exchange
   flavours (single caller → POTA → contests), realism controls (caller count,

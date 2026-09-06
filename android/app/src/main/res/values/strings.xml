@@ -694,5 +694,10 @@
     <string name="invaders_end_game">End game</string>
     <string name="invaders_tap_to_replay">Tap an invader to hear it again</string>
     <string name="invaders_key_the_lowest">Key the lowest invader</string>
-    <string name="invaders_speed_note">Sent at your character speed and Farnsworth setting.</string>
+    <!-- Speed ramp (#178): start, step, hits per step, target -->
+    <string name="invaders_speed_ramp_note">Sent from %1$d WPM, stepping up %2$d WPM every %3$d hits to your %4$d WPM character speed. A landing steps it back.</string>
+    <string name="invaders_speed_flat_note">Sent at your %1$d WPM character speed.</string>
+    <string name="invaders_keying_speed_note">Decoded at your %1$d WPM character speed.</string>
+    <string name="invaders_wpm">WPM</string>
+    <string name="invaders_speed_reached">Speed reached: %1$d WPM</string>
 </resources>

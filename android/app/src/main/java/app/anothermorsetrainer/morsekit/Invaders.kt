@@ -74,8 +74,16 @@ class InvadersGame(
         val columns: Int = 5,
         val lives: Int = 3,
         /** Hits that clear a wave and tighten the timings. */
-        val hitsPerWave: Int = 10
-    )
+        val hitsPerWave: Int = 10,
+        /** The learner's character speed: where the speed ramp (#178) ends. */
+        val characterWpm: Double = 20.0
+    ) {
+        /** Where a game's speed starts: [InvadersGame.rampStart]. */
+        val startWpm: Double get() = rampStart(characterWpm)
+
+        /** Where the ramp ends: the character speed, never under the floor. */
+        val targetWpm: Double get() = max(minWpm, characterWpm)
+    }
 
     private val pool: List<Char> = config.characters.map { it.uppercaseChar() }.distinct()
         .ifEmpty { MorseCode.kochOrder.take(2) }
@@ -102,6 +110,15 @@ class InvadersGame(
     var elapsed = 0.0
         private set
     var isOver = false
+        private set
+    /**
+     * The speed invaders are sent at now (#178): starts at [Config.startWpm],
+     * climbs with hits and falls back with landings.
+     */
+    var currentWpm: Double = config.startWpm
+        private set
+    /** The highest speed the ramp reached this game. */
+    var bestWpm: Double = config.startWpm
         private set
 
     private var waveHits = 0
@@ -141,6 +158,7 @@ class InvadersGame(
             lives = max(0, lives - 1)
             misses += 1
             combo = 0
+            currentWpm = max(config.startWpm, currentWpm - rampStep)
             events.add(InvadersEvent.Escaped(e.copy(progress = 1.0)))
         }
         if (lives == 0) {
@@ -181,6 +199,10 @@ class InvadersGame(
         val points = pointsPerHit * multiplier(combo)
         score += points
         hits += 1
+        if (hits % hitsPerRampStep == 0) {
+            currentWpm = min(config.targetWpm, currentWpm + rampStep)
+            bestWpm = max(bestWpm, currentWpm)
+        }
         waveHits += 1
         var cleared = false
         if (waveHits >= max(1, config.hitsPerWave)) {
@@ -227,5 +249,53 @@ class InvadersGame(
 
         /** Combo multiplier: ×1 for the first three hits in a row, ×2 for the next three, up to ×4. */
         fun multiplier(combo: Int): Int = min(4, 1 + max(0, combo - 1) / 3)
+
+        // Speed ramp (#178). A game opens [rampStartOffset] WPM under the
+        // learner's character speed — never under [minWpm], the app-wide
+        // character-speed floor — and climbs [rampStep] WPM every
+        // [hitsPerRampStep] hits in total up to the character speed; a landing
+        // steps it back, never under the start. Wrong shots leave it alone.
+        // Farnsworth is ignored: a single character has no gaps to stretch.
+        // Pinned by fixtures/invaders-ramp.json on both ports.
+        const val minWpm = 15.0
+        const val rampStartOffset = 10.0
+        const val rampStep = 2.0
+        const val hitsPerRampStep = 5
+
+        /**
+         * The speed a game starts at for a character speed: 10 WPM under it,
+         * floored at 15. At or under 15 there is no ramp.
+         */
+        fun rampStart(characterWpm: Double): Double = max(minWpm, characterWpm - rampStartOffset)
+    }
+}
+
+/**
+ * The hear-it/type-it on-screen keyboard (#178): a QWERTY layout, so the
+ * reflex being trained is the one a real keyboard rewards. The digit row leads
+ * when the pool has any digit, the three letter rows are always there, and
+ * anything else in the pool (punctuation, prosigns) makes a final row in pool
+ * order without repeats. A key outside the pool stays in its row — the screen
+ * shows it dimmed and dead — so the layout never shifts as the Koch set grows.
+ * Pinned by fixtures/invaders-ramp.json; twin of the Swift `InvadersKeyboard`.
+ */
+object InvadersKeyboard {
+    val digitRow: List<Char> = "1234567890".toList()
+    val letterRows: List<List<Char>> = listOf(
+        "QWERTYUIOP".toList(),
+        "ASDFGHJKL".toList(),
+        "ZXCVBNM".toList()
+    )
+
+    /** The rows to lay out for [pool], top to bottom. */
+    fun rows(pool: List<Char>): List<List<Char>> {
+        val upper = pool.map { it.uppercaseChar() }
+        val standard = (digitRow + letterRows.flatten()).toSet()
+        val rows = ArrayList<List<Char>>()
+        if (upper.any { it in digitRow }) rows.add(digitRow)
+        rows.addAll(letterRows)
+        val extras = upper.filter { it !in standard }.distinct()
+        if (extras.isNotEmpty()) rows.add(extras)
+        return rows
     }
 }

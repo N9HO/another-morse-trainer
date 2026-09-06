@@ -1,0 +1,107 @@
+{
+  "$comment": [
+    "Morse Invaders speed ramp and on-screen keyboard (#178), pinned for both",
+    "ports: InvadersGame / InvadersKeyboard in ios/Sources/MorseKit/Invaders.swift",
+    "and android/.../morsekit/Invaders.kt. Read by ios/Sources/MorseKitCheck/main.swift",
+    "and android/app/src/test/.../morsekit/InvadersTest.kt.",
+    "",
+    "Every expected value below was worked out by hand from the rules in",
+    "'derivation', not captured from either port. Do not regenerate it to make",
+    "a failing test pass; change it only when the rule is meant to change."
+  ],
+  "derivation": {
+    "rules": [
+      "A game starts 'startOffset' WPM under the learner's character speed,",
+      "never under 'minWpm' (the app-wide character-speed floor):",
+      "  startWpm  = max(minWpm, characterWpm - startOffset)",
+      "  targetWpm = max(minWpm, characterWpm)",
+      "so with characterWpm <= minWpm there is no ramp (start == target).",
+      "Farnsworth spacing is ignored: single characters have no gaps to stretch.",
+      "Every 'hitsPerStep' hits in total (not consecutive) the speed steps up",
+      "'step' WPM, capped at targetWpm. An invader that reaches the ground steps",
+      "it down 'step' WPM, never under startWpm. A wrong shot leaves it alone.",
+      "bestWpm is the highest speed the ramp reached during the game."
+    ],
+    "minWpm": 15,
+    "startOffset": 10,
+    "step": 2,
+    "hitsPerStep": 5,
+    "noRampAtOrBelow": 15
+  },
+  "startTable": [
+    { "characterWpm": 15, "startWpm": 15, "targetWpm": 15 },
+    { "characterWpm": 20, "startWpm": 15, "targetWpm": 20 },
+    { "characterWpm": 24, "startWpm": 15, "targetWpm": 24 },
+    { "characterWpm": 25, "startWpm": 15, "targetWpm": 25 },
+    { "characterWpm": 33, "startWpm": 23, "targetWpm": 33 },
+    { "characterWpm": 40, "startWpm": 30, "targetWpm": 40 },
+    { "characterWpm": 60, "startWpm": 50, "targetWpm": 60 }
+  ],
+  "scenario": {
+    "$comment": [
+      "characterWpm 33: start 23, target 33. 'lives' is raised so four landings",
+      "do not end the game. A test drives it with a one-character pool: 'hit'",
+      "shoots a live invader, 'escape' lets the lowest one land, 'wrongShot'",
+      "names a character nothing carries. 'times' repeats the event; the",
+      "expected currentWpm is read after the last repeat. Hit totals in",
+      "brackets."
+    ],
+    "characterWpm": 33,
+    "startWpm": 23,
+    "targetWpm": 33,
+    "lives": 10,
+    "events": [
+      { "event": "hit",       "times": 4, "currentWpm": 23, "note": "[4] under the first step" },
+      { "event": "hit",       "times": 1, "currentWpm": 25, "note": "[5] first step" },
+      { "event": "wrongShot", "times": 1, "currentWpm": 25, "note": "a wrong shot changes nothing" },
+      { "event": "hit",       "times": 5, "currentWpm": 27, "note": "[10]" },
+      { "event": "escape",    "times": 1, "currentWpm": 25, "note": "a landing steps down" },
+      { "event": "escape",    "times": 1, "currentWpm": 23, "note": "back at the start" },
+      { "event": "escape",    "times": 1, "currentWpm": 23, "note": "never under the start" },
+      { "event": "hit",       "times": 5, "currentWpm": 25, "note": "[15] hits in total, not in a row" },
+      { "event": "hit",       "times": 5, "currentWpm": 27, "note": "[20]" },
+      { "event": "hit",       "times": 5, "currentWpm": 29, "note": "[25]" },
+      { "event": "hit",       "times": 5, "currentWpm": 31, "note": "[30]" },
+      { "event": "hit",       "times": 5, "currentWpm": 33, "note": "[35] at the target" },
+      { "event": "hit",       "times": 5, "currentWpm": 33, "note": "[40] capped at the target" },
+      { "event": "escape",    "times": 1, "currentWpm": 31, "note": "steps down from the target" },
+      { "event": "wrongShot", "times": 1, "currentWpm": 31 },
+      { "event": "hit",       "times": 5, "currentWpm": 33, "note": "[45] back to the target" }
+    ],
+    "bestWpm": 33
+  },
+  "keyboard": {
+    "$comment": [
+      "The hear-it/type-it keyboard is QWERTY: the digit row first when the",
+      "pool has any digit, the three letter rows always, and anything else in",
+      "the pool (punctuation, prosigns) as a final row in pool order without",
+      "repeats. A key outside the pool is still in its row - the screen shows",
+      "it dimmed and dead so the layout never shifts as the Koch set grows."
+    ],
+    "digits": "1234567890",
+    "letters": ["QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM"],
+    "cases": [
+      { "name": "letters only: no digit row",
+        "pool": "KMRSU",
+        "rows": ["QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM"] },
+      { "name": "a single letter still gets every row",
+        "pool": "K",
+        "rows": ["QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM"] },
+      { "name": "one digit brings the digit row",
+        "pool": "KMRSUAPTLOWINJEF0",
+        "rows": ["1234567890", "QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM"] },
+      { "name": "lower case is upper-cased before matching",
+        "pool": "kmr5",
+        "rows": ["1234567890", "QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM"] },
+      { "name": "punctuation goes in a final row, in pool order",
+        "pool": "KM?/",
+        "rows": ["QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM", "?/"] },
+      { "name": "a repeated extra appears once",
+        "pool": "K.?.",
+        "rows": ["QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM", ".?"] },
+      { "name": "full alphabet and digits",
+        "pool": "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
+        "rows": ["1234567890", "QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM"] }
+    ]
+  }
+}

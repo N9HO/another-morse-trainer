@@ -1,20 +1,30 @@
 package app.anothermorsetrainer.morsekit
 
+import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
 import org.junit.Test
 import kotlin.random.Random
 
 /**
  * Morse Invaders rules (#170), held to the same expectations as the Swift
- * MorseKitCheck "Morse Invaders" section: the two engines are twins.
+ * MorseKitCheck "Morse Invaders" section: the two engines are twins. The
+ * speed ramp and the on-screen keyboard (#178) are pinned by
+ * `fixtures/invaders-ramp.json`, the same file the Swift harness reads.
  */
 class InvadersTest {
 
     private val pool = listOf('K', 'M', 'R', 'S')
+
+    private val fixture: JSONObject by lazy {
+        val stream = javaClass.classLoader?.getResourceAsStream("invaders-ramp.json")
+        assertNotNull("fixtures/invaders-ramp.json is not on the test classpath", stream)
+        JSONObject(stream!!.bufferedReader().readText())
+    }
 
     private fun game(
         difficulty: InvadersDifficulty = InvadersDifficulty.NORMAL,
@@ -199,5 +209,100 @@ class InvadersTest {
         assertNotNull(s)
         s.zipWithNext().forEach { (a, b) -> assertTrue(a.second != b.second) }
         s.forEach { assertTrue(it.first in pool) }
+    }
+
+    // Speed ramp (#178), against fixtures/invaders-ramp.json.
+
+    @Test
+    fun rampConstantsAreTheFixtures() {
+        val d = fixture.getJSONObject("derivation")
+        assertEquals(d.getDouble("minWpm"), InvadersGame.minWpm, 0.0)
+        assertEquals(d.getDouble("startOffset"), InvadersGame.rampStartOffset, 0.0)
+        assertEquals(d.getDouble("step"), InvadersGame.rampStep, 0.0)
+        assertEquals(d.getInt("hitsPerStep"), InvadersGame.hitsPerRampStep)
+    }
+
+    @Test
+    fun rampStartFollowsTheFixtureTable() {
+        val table = fixture.getJSONArray("startTable")
+        assertTrue(table.length() > 0)
+        for (i in 0 until table.length()) {
+            val row = table.getJSONObject(i)
+            val wpm = row.getDouble("characterWpm")
+            assertEquals("start at $wpm WPM", row.getDouble("startWpm"), InvadersGame.rampStart(wpm), 1e-9)
+            val config = InvadersGame.Config(characters = listOf('K'), characterWpm = wpm)
+            assertEquals("Config.startWpm at $wpm", row.getDouble("startWpm"), config.startWpm, 1e-9)
+            assertEquals("Config.targetWpm at $wpm", row.getDouble("targetWpm"), config.targetWpm, 1e-9)
+            assertEquals("a new game opens at the start", row.getDouble("startWpm"), InvadersGame(config, Random(1)).currentWpm, 1e-9)
+        }
+    }
+
+    @Test
+    fun rampFollowsTheScriptedScenario() {
+        val sc = fixture.getJSONObject("scenario")
+        val g = InvadersGame(
+            InvadersGame.Config(characters = listOf('K'), lives = sc.getInt("lives"), characterWpm = sc.getDouble("characterWpm")),
+            rng = Random(7)
+        )
+        assertEquals(sc.getDouble("startWpm"), g.currentWpm, 1e-9)
+        assertEquals(sc.getDouble("targetWpm"), g.config.targetWpm, 1e-9)
+        val events = sc.getJSONArray("events")
+        for (i in 0 until events.length()) {
+            val ev = events.getJSONObject(i)
+            val kind = ev.getString("event")
+            repeat(ev.optInt("times", 1)) {
+                when (kind) {
+                    // A one-character pool: whatever is on the field is a K.
+                    "hit" -> {
+                        while (g.invaders.isEmpty()) g.advance(0.05)
+                        assertTrue(g.shoot('K').isHit)
+                    }
+                    "escape" -> {
+                        var landed = 0
+                        while (landed == 0) landed = g.advance(0.05).count { it is InvadersEvent.Escaped }
+                        assertEquals("one landing at a time", 1, landed)
+                    }
+                    "wrongShot" -> assertFalse(g.shoot('Z').isHit)
+                    else -> fail("unknown event '$kind' in the fixture")
+                }
+            }
+            assertEquals("after event $i ($kind)", ev.getDouble("currentWpm"), g.currentWpm, 1e-9)
+        }
+        assertEquals(sc.getDouble("bestWpm"), g.bestWpm, 1e-9)
+        assertFalse(g.isOver)
+    }
+
+    @Test
+    fun noRampAtOrBelowTheFloor() {
+        val floor = fixture.getJSONObject("derivation").getDouble("noRampAtOrBelow")
+        val g = InvadersGame(InvadersGame.Config(characters = listOf('K'), characterWpm = floor), rng = Random(2))
+        assertEquals(g.config.startWpm, g.config.targetWpm, 0.0)
+        repeat(12) {
+            while (g.invaders.isEmpty()) g.advance(0.05)
+            assertTrue(g.shoot('K').isHit)
+        }
+        assertEquals(floor, g.currentWpm, 1e-9)
+        assertEquals(floor, g.bestWpm, 1e-9)
+    }
+
+    // On-screen keyboard (#178), against the same fixture.
+
+    @Test
+    fun keyboardRowsMatchTheFixture() {
+        val kb = fixture.getJSONObject("keyboard")
+        assertEquals(kb.getString("digits"), InvadersKeyboard.digitRow.joinToString(""))
+        val letters = kb.getJSONArray("letters")
+        assertEquals(letters.length(), InvadersKeyboard.letterRows.size)
+        for (i in 0 until letters.length()) {
+            assertEquals(letters.getString(i), InvadersKeyboard.letterRows[i].joinToString(""))
+        }
+        val cases = kb.getJSONArray("cases")
+        assertTrue(cases.length() > 0)
+        for (i in 0 until cases.length()) {
+            val c = cases.getJSONObject(i)
+            val expected = c.getJSONArray("rows").let { arr -> List(arr.length()) { arr.getString(it) } }
+            val got = InvadersKeyboard.rows(c.getString("pool").toList()).map { it.joinToString("") }
+            assertEquals(c.getString("name"), expected, got)
+        }
     }
 }
