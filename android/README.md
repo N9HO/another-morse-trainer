@@ -69,7 +69,8 @@ the iOS app's navy/teal look.
 - **Listen & Learn**: hands-free: hear the code, then the spoken answer, over
   characters, the curated on-air QSO elements (Top 20 or Top 100), words, or
   abbreviations and Q-codes; keeps playing with the screen locked (foreground
-  service)
+  service), with the current item and the app logo on the lock screen and car
+  displays
 - **Voice answers**: speak your answer instead of tapping (microphone), with
   NATO/letter-name/digit-word matching, a "did you say…?" confirm-and-correct
   flow, and a learned per-user voice profile

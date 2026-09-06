@@ -6,9 +6,15 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.drawable.AdaptiveIconDrawable
 import android.os.Build
 import android.os.IBinder
 import android.os.SystemClock
+import android.support.v4.media.MediaMetadataCompat
+import android.support.v4.media.session.MediaSessionCompat
+import android.support.v4.media.session.PlaybackStateCompat
 import androidx.core.app.NotificationChannelCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
@@ -28,6 +34,15 @@ import kotlin.random.Random
  * supports via UIBackgroundModes. Owns the [MorsePlayer] + [SpeechPlayer] and an
  * ongoing notification with Pause/Resume + Stop actions. State is published via
  * [ListenState] for the in-app UI.
+ *
+ * It also owns a [MediaSessionCompat] (#184): a Bluetooth head unit or the lock
+ * screen only shows track info that comes through a media session, so without
+ * one a car display kept whatever the previous app had left there. The session
+ * carries the same title the notification shows — the revealed item, or
+ * "Listening…" while the code plays — the "Morse Trainer · Listen & Learn"
+ * line, and the app mark as artwork, mirroring iOS's `updateNowPlaying`. Its
+ * play/pause/stop callbacks (Bluetooth buttons, the car's controls) route to the
+ * same pause/resume/stop the notification actions use.
  */
 class ListenService : Service() {
 
@@ -46,6 +61,9 @@ class ListenService : Service() {
      * restart a session the user had deliberately paused before answering.
      */
     private var pausedByFocus = false
+    private var mediaSession: MediaSessionCompat? = null
+    /** The app mark as Now Playing artwork; static, so rendered once. */
+    private val artwork: Bitmap? by lazy { renderArtwork() }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -59,6 +77,22 @@ class ListenService : Service() {
         // in a process where onCreate never ran.
         AudioFocus.init(this)
         observeAudioFocus()
+        mediaSession = MediaSessionCompat(this, "ListenService").apply {
+            setSessionActivity(activityIntent())
+            setCallback(object : MediaSessionCompat.Callback() {
+                override fun onPlay() {
+                    if (ListenState.running && ListenState.paused) resume()
+                }
+
+                override fun onPause() {
+                    if (ListenState.running && !ListenState.paused) pause()
+                }
+
+                override fun onStop() {
+                    if (ListenState.running) stopEverything()
+                }
+            })
+        }
     }
 
     /**
@@ -210,12 +244,19 @@ class ListenService : Service() {
         ListenState.display = ""
         pausedByFocus = false
         AudioFocus.release(this)
+        // Inactive, not released: a Resume from the notification can restart
+        // the loop in this same service instance (START_NOT_STICKY only stops
+        // the *system* restarting it), and the head unit should let go of us
+        // the moment the session ends rather than showing a stopped item.
+        mediaSession?.isActive = false
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
     }
 
     override fun onDestroy() {
         loopJob?.cancel()
+        mediaSession?.release()
+        mediaSession = null
         focusObservation?.let { AudioFocus.removeObserver(it) }
         focusObservation = null
         AudioFocus.release(this)
@@ -237,12 +278,70 @@ class ListenService : Service() {
     }
 
     private fun updateNotification() {
+        updateMediaSession()
         // The foreground-service notification is exempt from the runtime
         // POST_NOTIFICATIONS gate, but NotificationManagerCompat.notify still
         // checks it on API 33+, so guard to avoid a SecurityException.
         if (NotificationManagerCompat.from(this).areNotificationsEnabled()) {
             NotificationManagerCompat.from(this).notify(NOTIFICATION_ID, buildNotification())
         }
+    }
+
+    // ---- Media session (lock screen, Bluetooth / car displays) ----
+
+    /** Same title rule as iOS: the revealed item once revealed, "Listening…" until then. */
+    private fun nowPlayingTitle(): String =
+        if (ListenState.display.isEmpty()) getString(R.string.listen_notification_listening) else ListenState.display
+
+    private fun updateMediaSession() {
+        val session = mediaSession ?: return
+        val metadata = MediaMetadataCompat.Builder()
+            .putString(MediaMetadataCompat.METADATA_KEY_TITLE, nowPlayingTitle())
+            .putString(MediaMetadataCompat.METADATA_KEY_ARTIST, getString(R.string.listen_now_playing_artist))
+            .putString(MediaMetadataCompat.METADATA_KEY_ALBUM, getString(R.string.app_name))
+        artwork?.let {
+            metadata.putBitmap(MediaMetadataCompat.METADATA_KEY_ALBUM_ART, it)
+            metadata.putBitmap(MediaMetadataCompat.METADATA_KEY_ART, it)
+        }
+        session.setMetadata(metadata.build())
+        val state = if (ListenState.paused) PlaybackStateCompat.STATE_PAUSED else PlaybackStateCompat.STATE_PLAYING
+        session.setPlaybackState(
+            PlaybackStateCompat.Builder()
+                .setActions(
+                    PlaybackStateCompat.ACTION_PLAY or PlaybackStateCompat.ACTION_PAUSE or
+                        PlaybackStateCompat.ACTION_PLAY_PAUSE or PlaybackStateCompat.ACTION_STOP
+                )
+                .setState(state, PlaybackStateCompat.PLAYBACK_POSITION_UNKNOWN, if (ListenState.paused) 0f else 1f)
+                .build()
+        )
+        session.isActive = ListenState.running
+    }
+
+    /**
+     * The launcher icon as a 512×512 bitmap. On API 26+ that is the adaptive
+     * icon; its layers are drawn oversized so the 72dp safe zone fills the
+     * square — full-bleed navy with the teal ring, like the iOS mark — instead
+     * of a masked icon floating in transparency. Below 26 the combined
+     * fallback vector is already a full square.
+     */
+    private fun renderArtwork(): Bitmap? {
+        val drawable = ContextCompat.getDrawable(this, R.mipmap.ic_launcher) ?: return null
+        val size = ARTWORK_SIZE_PX
+        val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && drawable is AdaptiveIconDrawable) {
+            // The adaptive canvas is 108dp with the visible 72dp in the middle:
+            // scale by 108/72 and centre, so the bleed falls off the bitmap.
+            val inset = size * 18 / 72
+            for (layer in listOfNotNull(drawable.background, drawable.foreground)) {
+                layer.setBounds(-inset, -inset, size + inset, size + inset)
+                layer.draw(canvas)
+            }
+        } else {
+            drawable.setBounds(0, 0, size, size)
+            drawable.draw(canvas)
+        }
+        return bitmap
     }
 
     private fun buildNotification(): Notification {
@@ -262,6 +361,14 @@ class ListenService : Service() {
             .setContentIntent(activityIntent())
             .addAction(toggleIcon, toggleLabel, serviceIntent(ACTION_TOGGLE, 1))
             .addAction(android.R.drawable.ic_menu_close_clear_cancel, getString(R.string.common_stop), serviceIntent(ACTION_STOP, 2))
+            // A media notification: the session token is what puts the item
+            // and artwork on the lock screen and, over Bluetooth, a car's
+            // display (#184). Both actions stay in the collapsed view.
+            .setStyle(
+                androidx.media.app.NotificationCompat.MediaStyle()
+                    .also { style -> mediaSession?.let { style.setMediaSession(it.sessionToken) } }
+                    .setShowActionsInCompactView(0, 1)
+            )
             .setOngoing(!ListenState.paused)
             .setOnlyAlertOnce(true)
             .setSilent(true)
@@ -286,6 +393,8 @@ class ListenService : Service() {
     companion object {
         const val CHANNEL_ID = "listen_playback"
         const val NOTIFICATION_ID = 2001
+        /** Now Playing artwork edge; head units downscale, none want more. */
+        private const val ARTWORK_SIZE_PX = 512
         const val ACTION_START = "app.anothermorsetrainer.listen.START"
         const val ACTION_TOGGLE = "app.anothermorsetrainer.listen.TOGGLE"
         const val ACTION_STOP = "app.anothermorsetrainer.listen.STOP"

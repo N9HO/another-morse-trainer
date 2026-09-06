@@ -110,6 +110,10 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.compose.ui:ui-tooling-preview")
     debugImplementation("androidx.compose.ui:ui-tooling")
+    // MediaSessionCompat + the media-style notification for Listen & Learn:
+    // the only way a Bluetooth head unit or the lock screen gets the current
+    // item and the app's artwork (#184), as iOS's MPNowPlayingInfoCenter does.
+    implementation("androidx.media:media:1.7.0")
     // WebSocket transport for the Vail repeater client (and the Short
     // Stories news-feed fetch).
     implementation("com.squareup.okhttp3:okhttp:4.12.0")

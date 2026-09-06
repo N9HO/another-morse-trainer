@@ -1375,6 +1375,10 @@ final class AppModel: ObservableObject {
 
     private func mapVoice(_ v: PileupEngine.Voice) -> MorsePlayer.PileupVoice {
         let q = settings.qso
+        // Per-caller Farnsworth is the pileup's own switch, so it reads the
+        // remembered effective speed whether or not the main Farnsworth switch
+        // in Timing is on (#180) — the same on both apps (Android
+        // PileupScreen.toMix); keep them together if that ever changes.
         let timing = q.farnsworth
             ? MorseTiming(characterWpm: v.wpm, effectiveWpm: min(v.wpm, settings.effectiveWpm))
             : MorseTiming(wpm: v.wpm)
@@ -1753,11 +1757,27 @@ final class AppModel: ObservableObject {
         }
     }
 
+    /// The app mark as Now Playing artwork (#184). Without it a CarPlay or
+    /// Bluetooth head unit keeps showing whatever the previous app left there.
+    /// Static, so built once; `MPMediaItemArtwork` is not `Sendable`, which is
+    /// why it lives here on the main actor with the rest of the model rather
+    /// than in a global. `UIImage` is `Sendable`, so the request handler may
+    /// capture it.
+    private lazy var nowPlayingArtwork: MPMediaItemArtwork? = {
+        guard let image = UIImage(named: "AMTLogo") else { return nil }
+        return MPMediaItemArtwork(boundsSize: image.size) { _ in image }
+    }()
+
     private func updateNowPlaying() {
         var info: [String: Any] = [:]
         info[MPMediaItemPropertyTitle] = listenDisplay.isEmpty ? "Listening…" : listenDisplay
         info[MPMediaItemPropertyArtist] = "Morse Trainer · Listen & Learn"
+        info[MPMediaItemPropertyAlbumTitle] = "Another Morse Trainer"
+        info[MPNowPlayingInfoPropertyMediaType] = MPNowPlayingInfoMediaType.audio.rawValue
         info[MPNowPlayingInfoPropertyPlaybackRate] = listenPaused ? 0.0 : 1.0
+        if let artwork = nowPlayingArtwork {
+            info[MPMediaItemPropertyArtwork] = artwork
+        }
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
     }
 
@@ -1967,13 +1987,20 @@ final class AppModel: ObservableObject {
         // Only attach the active set when we actually have per-character data, so
         // word/QSO/etc. sessions don't render an all-blank chart.
         let active = sessionCharTotal.isEmpty ? [] : engine.activeCharacters.map(String.init)
-        let t = timing
+        // The timing the session actually played at, not the settings behind
+        // it: the Code Exam runs at its licence speed rather than the global
+        // setting (as the Android record already says), and the effective
+        // speed is the timing's own — Farnsworth only while its switch is on,
+        // and never for QRQ, which ignores it (#180). Reading
+        // `settings.effectiveWpm` here would log the remembered speed a
+        // session never used.
+        let t = isExam ? examTiming : timing
         return SessionRecord(
             id: UUID(),
             date: Date(),
             mode: mode.rawValue,
             characterWPM: Int(t.wpm.rounded()),
-            effectiveWPM: Int((settings.farnsworth ? settings.effectiveWpm : t.wpm).rounded()),
+            effectiveWPM: Int(t.effectiveWpm.rounded()),
             attempts: summary.attempts,
             correct: summary.correct,
             fastestTTR: summary.fastest,

@@ -195,7 +195,8 @@ fun JourneyScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
         Stats.record(
             mode = "Journey", attempts = tally.attempts, correct = tally.correct,
             bestTtrMs = tally.bestMs, durationSeconds = tally.elapsedSeconds(),
-            characterWpm = Settings.characterWpm.roundToInt(), medianTtrMs = tally.medianMs()
+            characterWpm = Settings.characterWpm.roundToInt(), medianTtrMs = tally.medianMs(),
+            effectiveWpm = Settings.effectiveWpmInUse.roundToInt()
         )
     }
 

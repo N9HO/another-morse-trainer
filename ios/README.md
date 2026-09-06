@@ -54,7 +54,8 @@ testers, bug reports and feature chat live on
   WebSDR) and read it as text, with live WPM/pitch telemetry
 - **Listen & Learn**: hands-free: hear the code, then the spoken answer, over
   characters, the curated on-air QSO elements (Top 20 or Top 100), words, or
-  abbreviations and Q-codes; keeps playing with the screen locked
+  abbreviations and Q-codes; keeps playing with the screen locked, with the
+  current item and the app logo on the lock screen and car displays
 - **Voice answers**: speak your answer instead of tapping in any of the six
   choice quizzes, with a confirm/closest-match fallback that learns your
   corrections
