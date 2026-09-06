@@ -334,7 +334,8 @@ private fun SolidCopyExam(
                         attempts = 1,
                         correct = if (result.passed) 1 else 0,
                         bestTtrMs = null,
-                        characterWpm = session.speed.characterWpm.roundToInt()
+                        characterWpm = session.speed.characterWpm.roundToInt(),
+                        effectiveWpm = session.speed.effectiveWpm.roundToInt()
                     )
                     if (Settings.hapticsEnabled) {
                         if (result.passed) haptics.success() else haptics.error()
@@ -484,7 +485,8 @@ private fun QuestionsExam(
                                     attempts = total,
                                     correct = session.correctCount,
                                     bestTtrMs = null,
-                                    characterWpm = session.speed.characterWpm.roundToInt()
+                                    characterWpm = session.speed.characterWpm.roundToInt(),
+                                    effectiveWpm = session.speed.effectiveWpm.roundToInt()
                                 )
                             } else {
                                 qIndex += 1

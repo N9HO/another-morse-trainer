@@ -1375,6 +1375,10 @@ final class AppModel: ObservableObject {
 
     private func mapVoice(_ v: PileupEngine.Voice) -> MorsePlayer.PileupVoice {
         let q = settings.qso
+        // Per-caller Farnsworth is the pileup's own switch, so it reads the
+        // remembered effective speed whether or not the main Farnsworth switch
+        // in Timing is on (#180) — the same on both apps (Android
+        // PileupScreen.toMix); keep them together if that ever changes.
         let timing = q.farnsworth
             ? MorseTiming(characterWpm: v.wpm, effectiveWpm: min(v.wpm, settings.effectiveWpm))
             : MorseTiming(wpm: v.wpm)
@@ -1954,13 +1958,20 @@ final class AppModel: ObservableObject {
         // Only attach the active set when we actually have per-character data, so
         // word/QSO/etc. sessions don't render an all-blank chart.
         let active = sessionCharTotal.isEmpty ? [] : engine.activeCharacters.map(String.init)
-        let t = timing
+        // The timing the session actually played at, not the settings behind
+        // it: the Code Exam runs at its licence speed rather than the global
+        // setting (as the Android record already says), and the effective
+        // speed is the timing's own — Farnsworth only while its switch is on,
+        // and never for QRQ, which ignores it (#180). Reading
+        // `settings.effectiveWpm` here would log the remembered speed a
+        // session never used.
+        let t = isExam ? examTiming : timing
         return SessionRecord(
             id: UUID(),
             date: Date(),
             mode: mode.rawValue,
             characterWPM: Int(t.wpm.rounded()),
-            effectiveWPM: Int((settings.farnsworth ? settings.effectiveWpm : t.wpm).rounded()),
+            effectiveWPM: Int(t.effectiveWpm.rounded()),
             attempts: summary.attempts,
             correct: summary.correct,
             fastestTTR: summary.fastest,

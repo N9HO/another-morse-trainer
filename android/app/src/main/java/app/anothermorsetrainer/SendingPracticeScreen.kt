@@ -183,7 +183,8 @@ fun SendingPracticeScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Un
         Stats.record(
             mode = "Sending", attempts = tally.attempts, correct = tally.correct,
             bestTtrMs = null, durationSeconds = tally.elapsedSeconds(),
-            characterWpm = Settings.characterWpm.roundToInt()
+            characterWpm = Settings.characterWpm.roundToInt(),
+            effectiveWpm = Settings.effectiveWpmInUse.roundToInt()
         )
     }
 

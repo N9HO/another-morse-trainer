@@ -157,7 +157,8 @@ fun TypedQuizScreen(
             mode = title, attempts = tally.attempts, correct = tally.correct,
             bestTtrMs = tally.bestMs, durationSeconds = tally.elapsedSeconds(),
             // The mode's own timing, so QRQ sessions band at 35/40 WPM.
-            characterWpm = timing().wpm.roundToInt(), medianTtrMs = tally.medianMs()
+            characterWpm = timing().wpm.roundToInt(), medianTtrMs = tally.medianMs(),
+            effectiveWpm = timing().effectiveWpm.roundToInt()
         )
     }
 

@@ -78,6 +78,9 @@ private fun PileupEngine.Voice.toMix() = MorsePlayer.PileupVoice(
     frequency = Settings.sidetoneHz + toneOffset,
     // Per-caller Farnsworth (iOS AppModel.mapVoice): characters at the
     // caller's own speed, spacing stretched down to your effective speed.
+    // This is the pileup's own switch, so it reads the remembered effective
+    // speed whether or not the main Farnsworth switch in Timing is on (#180) —
+    // the same on both apps; keep them together if that ever changes.
     timing = if (PileupSettings.callerFarnsworth) {
         MorseTiming.farnsworth(characterWpm = wpm, effectiveWpm = minOf(wpm, Settings.effectiveWpm))
     } else {
