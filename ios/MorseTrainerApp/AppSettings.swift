@@ -296,13 +296,17 @@ extension StorySettings {
     }
 }
 
-/// What the hands-free "Listen & Learn" mode announces.
+/// What the hands-free "Listen & Learn" mode announces. Case order is the
+/// picker's order. The two QSO tiers are the curated on-air vocabulary of
+/// `MorseData.qsoElements` (issue #182): the first 20, or all 100.
 enum ListenContent: String, Codable, CaseIterable, Identifiable {
-    case characters, words, abbreviations
+    case characters, qsoTop20, qsoTop100, words, abbreviations
     var id: String { rawValue }
     var label: String {
         switch self {
         case .characters:    return "Characters"
+        case .qsoTop20:      return "QSO elements · Top 20"
+        case .qsoTop100:     return "QSO elements · Top 100"
         case .words:         return "Words"
         case .abbreviations: return "Abbreviations & Q-codes"
         }

@@ -1693,6 +1693,19 @@ final class AppModel: ObservableObject {
                                   display: "\(item.display) — \(item.answer)",
                                   spoken: "\(spelled). \(item.answer)")
             })
+        case .qsoTop20, .qsoTop100:
+            // The curated on-air vocabulary (issue #182), revealed and spoken
+            // exactly like the abbreviations: the token spelled out, then its
+            // meaning. A prosign's angle brackets are shown but not spelled.
+            let limit = settings.listenContent == .qsoTop20
+                ? MorseData.qsoTop20Count : MorseData.qsoTop100Count
+            return ("qso:\(limit)", MorseData.qsoElementItems(limit).map { item -> ListenItem in
+                let spelled = item.display.filter { $0 != "<" && $0 != ">" }
+                    .lowercased().map(String.init).joined(separator: " ")
+                return ListenItem(playable: item.playable,
+                                  display: "\(item.display) — \(item.answer)",
+                                  spoken: "\(spelled). \(item.answer)")
+            })
         }
     }
 

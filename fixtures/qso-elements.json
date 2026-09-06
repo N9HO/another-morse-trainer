@@ -1,0 +1,428 @@
+{
+  "_comment": [
+    "Listen & Learn's curated on-air QSO vocabulary (#182), pinned for both",
+    "ports: MorseData.qsoElements in ios/Sources/MorseKit/MorseDataQSO.swift and",
+    "android/.../morsekit/MorseDataQSO.kt. Read by",
+    "ios/Sources/MorseKitCheck/main.swift and",
+    "android/app/src/test/.../morsekit/MorseDataQSOTest.kt.",
+    "",
+    "One ordered list of 100 items, most common first, so the Top 20 tier is",
+    "the first 20 and the Top 100 tier is the whole list (the tier sizes are",
+    "in `tiers`). Each item is the token as displayed plus the meaning spoken",
+    "after it is spelled out. Written from operating practice (Morse Code",
+    "Ninja's QSO elements, ARRL, KB6NU), not captured from either port.",
+    "",
+    "Token spelling: letters, digits, ? and / are sent as text; a space is a",
+    "word gap; a token in angle brackets (<AR>, <K>, <KN>, <SK>, <BK>) is a",
+    "prosign spelled exactly as MorseData.prosigns spells it and is sent",
+    "run-together from that table's pattern. Meanings for tokens that also",
+    "appear in MorseData.abbreviations, qCodes or prosigns repeat those",
+    "tables' wording; the tests check they agree."
+  ],
+  "tiers": {
+    "top20": 20,
+    "top100": 100
+  },
+  "items": [
+    {
+      "token": "CQ",
+      "meaning": "calling any station"
+    },
+    {
+      "token": "DE",
+      "meaning": "this is / from"
+    },
+    {
+      "token": "<K>",
+      "meaning": "go ahead — any station"
+    },
+    {
+      "token": "<KN>",
+      "meaning": "go ahead — named station only"
+    },
+    {
+      "token": "<AR>",
+      "meaning": "over — end of message"
+    },
+    {
+      "token": "<SK>",
+      "meaning": "end of contact"
+    },
+    {
+      "token": "<BK>",
+      "meaning": "break — back to you"
+    },
+    {
+      "token": "TU",
+      "meaning": "thank you"
+    },
+    {
+      "token": "73",
+      "meaning": "best regards"
+    },
+    {
+      "token": "RST",
+      "meaning": "signal report"
+    },
+    {
+      "token": "599",
+      "meaning": "five nine nine — a perfect signal report"
+    },
+    {
+      "token": "5NN",
+      "meaning": "five nine nine, with N cut for 9"
+    },
+    {
+      "token": "UR",
+      "meaning": "your / you're"
+    },
+    {
+      "token": "NAME",
+      "meaning": "name"
+    },
+    {
+      "token": "QTH",
+      "meaning": "my location is"
+    },
+    {
+      "token": "HR",
+      "meaning": "here"
+    },
+    {
+      "token": "ES",
+      "meaning": "and"
+    },
+    {
+      "token": "HW?",
+      "meaning": "how do you copy?"
+    },
+    {
+      "token": "R",
+      "meaning": "received / roger"
+    },
+    {
+      "token": "TNX",
+      "meaning": "thanks"
+    },
+    {
+      "token": "QSL",
+      "meaning": "acknowledge / received"
+    },
+    {
+      "token": "QRZ?",
+      "meaning": "who is calling me?"
+    },
+    {
+      "token": "QRL?",
+      "meaning": "is this frequency in use?"
+    },
+    {
+      "token": "AGN",
+      "meaning": "again"
+    },
+    {
+      "token": "PSE",
+      "meaning": "please"
+    },
+    {
+      "token": "RIG",
+      "meaning": "radio"
+    },
+    {
+      "token": "ANT",
+      "meaning": "antenna"
+    },
+    {
+      "token": "WX",
+      "meaning": "weather"
+    },
+    {
+      "token": "OM",
+      "meaning": "old man"
+    },
+    {
+      "token": "YL",
+      "meaning": "young lady"
+    },
+    {
+      "token": "XYL",
+      "meaning": "wife (ex young lady)"
+    },
+    {
+      "token": "GM",
+      "meaning": "good morning"
+    },
+    {
+      "token": "GA",
+      "meaning": "good afternoon"
+    },
+    {
+      "token": "GE",
+      "meaning": "good evening"
+    },
+    {
+      "token": "GN",
+      "meaning": "good night"
+    },
+    {
+      "token": "CUL",
+      "meaning": "see you later"
+    },
+    {
+      "token": "CUAGN",
+      "meaning": "see you again"
+    },
+    {
+      "token": "DX",
+      "meaning": "distance"
+    },
+    {
+      "token": "FB",
+      "meaning": "fine business (great)"
+    },
+    {
+      "token": "GUD",
+      "meaning": "good"
+    },
+    {
+      "token": "VY",
+      "meaning": "very"
+    },
+    {
+      "token": "ABT",
+      "meaning": "about"
+    },
+    {
+      "token": "CPY",
+      "meaning": "copy"
+    },
+    {
+      "token": "HW",
+      "meaning": "how do you copy"
+    },
+    {
+      "token": "NW",
+      "meaning": "now"
+    },
+    {
+      "token": "WID",
+      "meaning": "with"
+    },
+    {
+      "token": "PWR",
+      "meaning": "power"
+    },
+    {
+      "token": "WATTS",
+      "meaning": "watts"
+    },
+    {
+      "token": "DIPOLE",
+      "meaning": "dipole antenna"
+    },
+    {
+      "token": "VERT",
+      "meaning": "vertical antenna"
+    },
+    {
+      "token": "YAGI",
+      "meaning": "Yagi beam antenna"
+    },
+    {
+      "token": "TEMP",
+      "meaning": "temperature"
+    },
+    {
+      "token": "DEG",
+      "meaning": "degrees"
+    },
+    {
+      "token": "SUNNY",
+      "meaning": "sunny"
+    },
+    {
+      "token": "CLDY",
+      "meaning": "cloudy"
+    },
+    {
+      "token": "RAIN",
+      "meaning": "rain"
+    },
+    {
+      "token": "QRM",
+      "meaning": "man-made interference"
+    },
+    {
+      "token": "QRN",
+      "meaning": "atmospheric noise / static"
+    },
+    {
+      "token": "QSB",
+      "meaning": "your signals are fading"
+    },
+    {
+      "token": "QRS",
+      "meaning": "send slower"
+    },
+    {
+      "token": "QRQ",
+      "meaning": "send faster"
+    },
+    {
+      "token": "QRP",
+      "meaning": "low power"
+    },
+    {
+      "token": "QRO",
+      "meaning": "increase power"
+    },
+    {
+      "token": "QRT",
+      "meaning": "stop sending / going off air"
+    },
+    {
+      "token": "QRV",
+      "meaning": "I am ready"
+    },
+    {
+      "token": "QRX",
+      "meaning": "wait / stand by"
+    },
+    {
+      "token": "QSY",
+      "meaning": "change frequency"
+    },
+    {
+      "token": "QSO",
+      "meaning": "a contact"
+    },
+    {
+      "token": "QRZ",
+      "meaning": "who is calling me?"
+    },
+    {
+      "token": "QRL",
+      "meaning": "this frequency is busy / in use"
+    },
+    {
+      "token": "QSK",
+      "meaning": "full break-in"
+    },
+    {
+      "token": "BTU",
+      "meaning": "back to you"
+    },
+    {
+      "token": "HPE",
+      "meaning": "hope"
+    },
+    {
+      "token": "SRI",
+      "meaning": "sorry"
+    },
+    {
+      "token": "TKS",
+      "meaning": "thanks"
+    },
+    {
+      "token": "RR",
+      "meaning": "roger roger — all received"
+    },
+    {
+      "token": "TEST",
+      "meaning": "contest — calling CQ contest"
+    },
+    {
+      "token": "BCNU",
+      "meaning": "be seeing you"
+    },
+    {
+      "token": "CU",
+      "meaning": "see you"
+    },
+    {
+      "token": "NR",
+      "meaning": "number"
+    },
+    {
+      "token": "NIL",
+      "meaning": "nothing received"
+    },
+    {
+      "token": "OK",
+      "meaning": "okay"
+    },
+    {
+      "token": "FER",
+      "meaning": "for"
+    },
+    {
+      "token": "HI",
+      "meaning": "laughter"
+    },
+    {
+      "token": "MNI",
+      "meaning": "many"
+    },
+    {
+      "token": "RPT",
+      "meaning": "repeat / report"
+    },
+    {
+      "token": "SIG",
+      "meaning": "signal"
+    },
+    {
+      "token": "SKED",
+      "meaning": "schedule"
+    },
+    {
+      "token": "SN",
+      "meaning": "soon"
+    },
+    {
+      "token": "TMW",
+      "meaning": "tomorrow"
+    },
+    {
+      "token": "WKD",
+      "meaning": "worked"
+    },
+    {
+      "token": "WL",
+      "meaning": "well"
+    },
+    {
+      "token": "88",
+      "meaning": "love and kisses"
+    },
+    {
+      "token": "CONDX",
+      "meaning": "conditions"
+    },
+    {
+      "token": "OP",
+      "meaning": "operator"
+    },
+    {
+      "token": "HV",
+      "meaning": "have"
+    },
+    {
+      "token": "GL",
+      "meaning": "good luck"
+    },
+    {
+      "token": "CQ CQ CQ",
+      "meaning": "calling any station — the full call"
+    },
+    {
+      "token": "TNX FER CALL",
+      "meaning": "thanks for the call"
+    },
+    {
+      "token": "5NN TU",
+      "meaning": "five nine nine, thank you — the contest exchange"
+    }
+  ]
+}
