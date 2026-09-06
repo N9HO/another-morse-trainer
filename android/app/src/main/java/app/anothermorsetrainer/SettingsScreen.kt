@@ -55,6 +55,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
 import androidx.core.content.ContextCompat
 import androidx.core.content.pm.PackageInfoCompat
@@ -159,6 +160,7 @@ fun SettingsScreen(
     onPreviewStage: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
+    val uriHandler = LocalUriHandler.current
     val player = remember { MorsePlayer() }
     DisposableEffect(Unit) { onDispose { player.release() } }
     BackHandler { onBack() }
@@ -735,6 +737,21 @@ fun SettingsScreen(
                 }
                 SectionFooter(stringResource(R.string.settings_bug_reports_footer))
 
+                // Support the project (iOS parity). Links out to the website's
+                // own page rather than straight to a tipping site: Play's
+                // payments policy reads an in-app link to external tipping as
+                // a purchase mechanism, a link to the project's homepage is
+                // not, and the coffee button lives there.
+                SectionHeader(stringResource(R.string.settings_about))
+                SettingsGroup {
+                    LinkRow(stringResource(R.string.settings_support_project)) { uriHandler.openUri(SUPPORT_URL) }
+                    GroupDivider()
+                    LinkRow(stringResource(R.string.settings_join_discord)) { uriHandler.openUri(DISCORD_URL) }
+                    GroupDivider()
+                    LinkRow(stringResource(R.string.settings_source_github)) { uriHandler.openUri(GITHUB_URL) }
+                }
+                SectionFooter(stringResource(R.string.settings_about_footer))
+
                 // Mid-session the destructive reset stays out of reach — it would
                 // yank the engine out from under the running drill. Home only.
                 if (scope == null) {
@@ -1088,6 +1105,24 @@ private fun SectionFooter(text: String) {
         fontSize = 12.sp,
         modifier = Modifier.padding(start = 8.dp, end = 8.dp, top = 6.dp)
     )
+}
+
+/** Outbound links from the About section. The support page is the one place
+ *  the coffee button lives; see the comment at the section. */
+private const val SUPPORT_URL = "https://anothermorsetrainer.app/support/"
+private const val DISCORD_URL = "https://discord.gg/qgyk3TPUd9"
+private const val GITHUB_URL = "https://github.com/N9HO/another-morse-trainer"
+
+/** A tappable row that opens something outside the app; teal like the
+ *  diagnostics row, so it reads as an action rather than a toggle. */
+@Composable
+private fun LinkRow(label: String, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(label, color = Brand.teal, fontWeight = FontWeight.Medium)
+    }
 }
 
 @Composable

@@ -665,6 +665,11 @@
     <string name="settings_copy_diagnostics">Copy diagnostic info</string>
     <string name="settings_copied_diagnostics">Copied to clipboard</string>
     <string name="settings_bug_reports_footer">Copies your app/Android version, device, and current settings to the clipboard to paste into a bug report.</string>
+    <string name="settings_about">About</string>
+    <string name="settings_support_project">Support the project</string>
+    <string name="settings_join_discord">Join the Discord</string>
+    <string name="settings_source_github">Source on GitHub</string>
+    <string name="settings_about_footer">Free and open source, with no ads, subscriptions, or tracking. Both apps live in one repository.</string>
     <string name="settings_keep_bluetooth_awake">Keep Bluetooth audio awake</string>
     <string name="settings_keep_bluetooth_awake_footer">Keep Bluetooth audio awake plays a floor deliberately just above silence — too quiet to hear — so Bluetooth earbuds never idle between transmissions: truly silent audio lets some headsets sleep, and they wake a moment late and clip the first character.</string>
     <string name="settings_band_noise">Band noise</string>

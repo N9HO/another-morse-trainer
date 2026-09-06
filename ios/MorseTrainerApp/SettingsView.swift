@@ -499,6 +499,28 @@ struct SettingsView: View {
                 }
                 .listRowBackground(Theme.navyElevated)
 
+                // Support the project (Android parity). Links out to the
+                // website's own page rather than straight to a tipping site:
+                // App Store guideline 3.1.1 treats an in-app link to external
+                // tipping as a purchase mechanism, but a link to the project's
+                // homepage is not, and the coffee button lives there.
+                Section {
+                    Link(destination: ProjectLinks.support) {
+                        Label("Support the project", systemImage: "cup.and.saucer")
+                    }
+                    Link(destination: ProjectLinks.discord) {
+                        Label("Join the Discord", systemImage: "bubble.left.and.bubble.right")
+                    }
+                    Link(destination: ProjectLinks.gitHub) {
+                        Label("Source on GitHub", systemImage: "chevron.left.forwardslash.chevron.right")
+                    }
+                } header: {
+                    Text("About")
+                } footer: {
+                    Text("Free and open source, with no ads, subscriptions, or tracking. Both apps live in one repository.")
+                }
+                .listRowBackground(Theme.navyElevated)
+
                 // Mid-session the destructive reset stays out of reach — it
                 // would yank the engine out from under the running drill. Only
                 // from the intro's app-wide entry (Android parity).
@@ -692,4 +714,12 @@ struct SettingsView: View {
 
 #Preview {
     SettingsView().environmentObject(AppModel())
+}
+
+/// Outbound links from the About section. The support page is the one
+/// place the coffee button lives; see the comment at the section.
+private enum ProjectLinks {
+    static let support = URL(string: "https://anothermorsetrainer.app/support/")!
+    static let discord = URL(string: "https://discord.gg/qgyk3TPUd9")!
+    static let gitHub = URL(string: "https://github.com/N9HO/another-morse-trainer")!
 }
