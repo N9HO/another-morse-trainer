@@ -7,6 +7,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.content.edit
+import app.anothermorsetrainer.morsekit.ActivityLedger
 import app.anothermorsetrainer.morsekit.PracticeStreak
 import app.anothermorsetrainer.morsekit.SessionHistory
 import app.anothermorsetrainer.morsekit.SessionRecord
@@ -14,6 +15,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneId
 import java.util.UUID
 import kotlin.math.roundToInt
 
@@ -32,6 +34,13 @@ data class SessionSummary(
     val recordId: String? = null
 ) {
     val accuracy: Double get() = if (attempts == 0) 0.0 else correct.toDouble() / attempts
+
+    /**
+     * Whether the session graded any answers — false for Listen & Learn and
+     * Stories, whose [attempts] are items heard (#183). Same rule as
+     * [SessionRecord.isScored].
+     */
+    val isScored: Boolean get() = SessionRecord.isScoredMode(mode) && attempts > 0
 }
 
 /** Lifetime recognition data for one character. */
@@ -77,7 +86,15 @@ object Stats {
      * first, bounded by [SessionHistory.limit]. The iOS SessionHistory twin.
      */
     var history by mutableStateOf<List<SessionRecord>>(emptyList()); private set
+    /**
+     * Seconds practiced per local calendar day, for the Stats screen's
+     * activity grid (#181). Outlives [history]'s cap: it keeps
+     * [ActivityLedger.CAP_DAYS] days. Replaced, not mutated, on each record
+     * so Compose readers see the change.
+     */
+    var activity by mutableStateOf(ActivityLedger()); private set
 
+    /** Lifetime accuracy over every *scored* answer; passive sessions are left out (#183). */
     val overallAccuracy: Double get() = if (totalAttempts == 0) 0.0 else totalCorrect.toDouble() / totalAttempts
 
     fun init(context: Context) {
@@ -97,6 +114,22 @@ object Stats {
         recent = parseRecent(prefs.getString("recent", "[]") ?: "[]")
         charStats = parseChars(prefs.getString("chars", "{}") ?: "{}")
         history = parseHistory(prefs.getString("history", "[]") ?: "[]")
+        // The ledger arrived after the history: on the first launch that has
+        // none, seed it from the sessions still in the list so the grid is not
+        // blank for someone with months of practice behind them. Saved at
+        // once, so a reset (which clears prefs) is not re-seeded from nothing.
+        val storedActivity = prefs.getString("activity", null)
+        activity = if (storedActivity != null) parseActivity(storedActivity) else seedActivity(history)
+        if (storedActivity == null) prefs.edit { putString("activity", encodeActivity(activity)) }
+    }
+
+    /** A ledger rebuilt from the sessions still in [history]: their local day and logged duration. */
+    internal fun seedActivity(sessions: List<SessionRecord>, zone: ZoneId = ZoneId.systemDefault()): ActivityLedger {
+        val ledger = ActivityLedger()
+        for (r in sessions) {
+            ledger.record(r.date.atZone(zone).toLocalDate(), r.durationSeconds?.roundToInt() ?: 0)
+        }
+        return ledger
     }
 
     /** The full detail record behind a session-list row, if it still exists. */
@@ -140,9 +173,14 @@ object Stats {
         refreshStreak()
 
         totalSessions += 1
-        totalAttempts += attempts
-        totalCorrect += correct
+        // A passive session's attempts are items heard, not answers: they
+        // count as a session and as practice time, never toward accuracy (#183).
+        if (SessionRecord.isScoredMode(mode)) {
+            totalAttempts += attempts
+            totalCorrect += correct
+        }
         if (durationSeconds > 0) totalPracticeSeconds += durationSeconds
+        activity = ActivityLedger(activity.days).also { it.record(today, durationSeconds) }
         if (bestTtrMs != null && (this.bestTtrMs == null || bestTtrMs < this.bestTtrMs!!)) {
             this.bestTtrMs = bestTtrMs
         }
@@ -186,7 +224,13 @@ object Stats {
         recent = emptyList()
         charStats = emptyMap()
         history = emptyList()
-        prefs.edit { clear() }
+        activity = ActivityLedger()
+        prefs.edit {
+            clear()
+            // An absent "activity" key means "seed from history" at the next
+            // launch; write the empty ledger so a wipe stays a wipe.
+            putString("activity", encodeActivity(activity))
+        }
     }
 
     /**
@@ -222,8 +266,28 @@ object Stats {
             putLong("streakDay", streak.lastPracticeDay?.toEpochDay() ?: -1L)
             putString("recent", encodeRecent(recent))
             putString("history", encodeHistory(history))
+            putString("activity", encodeActivity(activity))
         }
     }
+
+    /** The ledger as a JSON object of ISO day → whole seconds. */
+    private fun encodeActivity(ledger: ActivityLedger): String {
+        val obj = JSONObject()
+        for ((day, secs) in ledger.days) obj.put(day.toString(), secs)
+        return obj.toString()
+    }
+
+    /** The activity ledger, guarded the same way as [parseRecent]: one bad day is dropped, the rest kept. */
+    internal fun parseActivity(json: String): ActivityLedger = runCatching {
+        val ledger = ActivityLedger()
+        val obj = JSONObject(json)
+        val keys = obj.keys()
+        while (keys.hasNext()) {
+            val key = keys.next()
+            runCatching { ledger.record(LocalDate.parse(key), obj.getInt(key)) }
+        }
+        ledger
+    }.getOrDefault(ActivityLedger())
 
     private fun encodeRecent(list: List<SessionSummary>): String {
         val arr = JSONArray()

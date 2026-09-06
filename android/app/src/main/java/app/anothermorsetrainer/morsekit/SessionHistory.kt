@@ -41,6 +41,13 @@ data class SessionRecord(
 ) {
     val accuracy: Double get() = if (attempts == 0) 0.0 else correct.toDouble() / attempts.toDouble()
 
+    /**
+     * Whether this session graded any answers. False for a passive mode, or
+     * for a record with nothing answered; such a session has no accuracy to
+     * show and must not feed an accuracy average (#183).
+     */
+    val isScored: Boolean get() = isScoredMode(mode) && attempts > 0
+
     /** Per-character recognition result within a single session. */
     data class CharResult(
         val character: String,        // a single character, e.g. "K"
@@ -83,6 +90,19 @@ data class SessionRecord(
         }
 
     companion object {
+        /**
+         * The [mode] names of the modes that play without grading an answer —
+         * Listen & Learn announces each item, Stories reveals the passage — so
+         * their [attempts] count items *heard*, not answers, and [correct] is
+         * always 0. Their accuracy is not applicable (#183): the stats screens
+         * show "N/A" and the aggregates leave them out. The names are the
+         * `mode` strings `Stats.record` is called with on this port.
+         */
+        val PASSIVE_MODES: Set<String> = setOf("Listen", "Stories")
+
+        /** Whether sessions of [mode] grade answers at all. */
+        fun isScoredMode(mode: String): Boolean = mode !in PASSIVE_MODES
+
         /**
          * Order single characters letters-first (A–Z), then digits (0–9), so the
          * chart reads like the reference image.

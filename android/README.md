@@ -74,9 +74,10 @@ the iOS app's navy/teal look.
 - **Sending Drills**: printable practice sheets of random character groups
   drawn from what you've studied (even, personalized, or numbers & punctuation),
   ready to share or print
-- **Progress**: daily streak with milestone celebrations, session history
-  with per-session recognition charts, per-character stats, most-confused
-  pairs, performance by 5-WPM speed band, and a shareable Brag Sheet
+- **Progress**: daily streak with milestone celebrations, a GitHub-style
+  activity grid of daily practice time, session history with per-session
+  recognition charts, per-character stats, most-confused pairs, performance
+  by 5-WPM speed band, and a shareable Brag Sheet
 - Timed practice sessions (1-30 min or open-ended) with mid-session timer
   controls and an end-of-session summary, and a mode switcher that jumps
   between drills without going home
