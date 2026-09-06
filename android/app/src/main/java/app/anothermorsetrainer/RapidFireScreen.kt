@@ -191,7 +191,8 @@ fun RapidFireScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {
             Stats.record(
                 mode = "Rapid Fire", attempts = attempts, correct = correct,
                 bestTtrMs = null, durationSeconds = secs,
-                characterWpm = Settings.characterWpm.roundToInt()
+                characterWpm = Settings.characterWpm.roundToInt(),
+                effectiveWpm = Settings.effectiveWpmInUse.roundToInt()
             )
         }
     }
@@ -219,7 +220,8 @@ fun RapidFireScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {
                 mode = "Rapid Fire", attempts = runAttempts, correct = runCorrect,
                 bestTtrMs = null,
                 durationSeconds = ((lastSeenMs - startedAtMs) / 1000L).toInt().coerceAtLeast(0),
-                characterWpm = Settings.characterWpm.roundToInt()
+                characterWpm = Settings.characterWpm.roundToInt(),
+                effectiveWpm = Settings.effectiveWpmInUse.roundToInt()
             )
         }
         if (phase != RfPhase.SETUP) phase = RfPhase.SETUP

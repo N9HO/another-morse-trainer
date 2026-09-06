@@ -333,6 +333,14 @@ final class AppModel: ObservableObject {
     /// The session just completed, for the post-summary "Session detail" link.
     @Published private(set) var lastSessionRecord: SessionRecord?
 
+    // MARK: - Activity ledger (issue #181)
+
+    /// Seconds practiced per local calendar day, for the Stats screen's
+    /// activity grid. Kept apart from `history`, whose list is capped at a
+    /// hundred sessions: the ledger holds `ActivityLedger.capDays` days.
+    @Published private(set) var activity = ActivityLedger() { didSet { saveActivity() } }
+    private static let activityKey = "MorseTrainer.activity"
+
     // Per-character tallies for the current session (single-character drills only).
     private var sessionCharTotal: [Character: Int] = [:]
     private var sessionCharCorrect: [Character: Int] = [:]
@@ -378,6 +386,17 @@ final class AppModel: ObservableObject {
         restoreVoiceProfile()
         streak = AppModel.loadStreak()    // assigning in init doesn't fire didSet
         history = AppModel.loadHistory()
+        if let saved = AppModel.loadActivity() {
+            activity = saved
+        } else {
+            // The ledger arrived after the history: on the first launch that
+            // has none, seed it from the sessions still in the list so the
+            // grid is not blank for someone with months of practice behind
+            // them. Saved at once — didSet is silent in init — so a reset,
+            // which stores an empty ledger, is not re-seeded from nothing.
+            activity = AppModel.seedActivity(from: history)
+            saveActivity()
+        }
         refreshDailyDit()                 // today's puzzle, restored or started
         summary = charLadder.summary
         Haptics.enabled = loaded.hapticsEnabled   // didSet doesn't fire in init
@@ -940,6 +959,7 @@ final class AppModel: ObservableObject {
             self.storyPlaying = false
             self.phase = .awaiting
             self.sessionAttempts += 1
+            self.markPracticedToday()   // a passage heard is practice, as on Android
         }
     }
 
@@ -1375,6 +1395,10 @@ final class AppModel: ObservableObject {
 
     private func mapVoice(_ v: PileupEngine.Voice) -> MorsePlayer.PileupVoice {
         let q = settings.qso
+        // Per-caller Farnsworth is the pileup's own switch, so it reads the
+        // remembered effective speed whether or not the main Farnsworth switch
+        // in Timing is on (#180) — the same on both apps (Android
+        // PileupScreen.toMix); keep them together if that ever changes.
         let timing = q.farnsworth
             ? MorseTiming(characterWpm: v.wpm, effectiveWpm: min(v.wpm, settings.effectiveWpm))
             : MorseTiming(wpm: v.wpm)
@@ -1643,6 +1667,7 @@ final class AppModel: ObservableObject {
                 self.speech.speak(item.spoken) {
                     guard self.listenGeneration == gen, self.isListening, !self.listenPaused else { return }
                     self.sessionAttempts += 1   // count items announced this session
+                    self.markPracticedToday()   // hands-free listening is practice, as on Android
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
                         guard self.listenGeneration == gen, self.isListening, !self.listenPaused else { return }
                         self.listenStep()
@@ -1689,6 +1714,19 @@ final class AppModel: ObservableObject {
                 // Spell the token in lowercase letters so TTS says "q t h", not
                 // "capital Q…", then the meaning.
                 let spelled = item.display.lowercased().map(String.init).joined(separator: " ")
+                return ListenItem(playable: item.playable,
+                                  display: "\(item.display) — \(item.answer)",
+                                  spoken: "\(spelled). \(item.answer)")
+            })
+        case .qsoTop20, .qsoTop100:
+            // The curated on-air vocabulary (issue #182), revealed and spoken
+            // exactly like the abbreviations: the token spelled out, then its
+            // meaning. A prosign's angle brackets are shown but not spelled.
+            let limit = settings.listenContent == .qsoTop20
+                ? MorseData.qsoTop20Count : MorseData.qsoTop100Count
+            return ("qso:\(limit)", MorseData.qsoElementItems(limit).map { item -> ListenItem in
+                let spelled = item.display.filter { $0 != "<" && $0 != ">" }
+                    .lowercased().map(String.init).joined(separator: " ")
                 return ListenItem(playable: item.playable,
                                   display: "\(item.display) — \(item.answer)",
                                   spoken: "\(spelled). \(item.answer)")
@@ -1740,11 +1778,27 @@ final class AppModel: ObservableObject {
         }
     }
 
+    /// The app mark as Now Playing artwork (#184). Without it a CarPlay or
+    /// Bluetooth head unit keeps showing whatever the previous app left there.
+    /// Static, so built once; `MPMediaItemArtwork` is not `Sendable`, which is
+    /// why it lives here on the main actor with the rest of the model rather
+    /// than in a global. `UIImage` is `Sendable`, so the request handler may
+    /// capture it.
+    private lazy var nowPlayingArtwork: MPMediaItemArtwork? = {
+        guard let image = UIImage(named: "AMTLogo") else { return nil }
+        return MPMediaItemArtwork(boundsSize: image.size) { _ in image }
+    }()
+
     private func updateNowPlaying() {
         var info: [String: Any] = [:]
         info[MPMediaItemPropertyTitle] = listenDisplay.isEmpty ? "Listening…" : listenDisplay
         info[MPMediaItemPropertyArtist] = "Morse Trainer · Listen & Learn"
+        info[MPMediaItemPropertyAlbumTitle] = "Another Morse Trainer"
+        info[MPNowPlayingInfoPropertyMediaType] = MPNowPlayingInfoMediaType.audio.rawValue
         info[MPNowPlayingInfoPropertyPlaybackRate] = listenPaused ? 0.0 : 1.0
+        if let artwork = nowPlayingArtwork {
+            info[MPMediaItemPropertyArtwork] = artwork
+        }
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
     }
 
@@ -1924,6 +1978,10 @@ final class AppModel: ObservableObject {
         if let record = buildSessionRecord() {
             history.add(record)            // triggers saveHistory()
             lastSessionRecord = record
+            // The activity grid's day total (#181): the session's logged
+            // seconds, on the local day it ended.
+            activity.record(date: record.date,
+                            seconds: Int((record.durationSeconds ?? 0).rounded()))
         }
         // Hand the route back: whatever was playing before the session may
         // resume now. Nothing above this line makes a sound after it.
@@ -1933,6 +1991,11 @@ final class AppModel: ObservableObject {
 
     /// Assemble a `SessionRecord` from the session just finished, or nil if
     /// nothing was answered (don't log empty sessions).
+    ///
+    /// Listen & Learn and Short Stories count each item heard as an attempt
+    /// and never score one correct; their `mode` is in
+    /// `SessionRecord.passiveModes`, so the record reads as unscored — the
+    /// stats screens show N/A and the averages leave it out (#183).
     private func buildSessionRecord() -> SessionRecord? {
         guard sessionAttempts > 0 else { return nil }
         let summary = sessionSummary
@@ -1954,13 +2017,20 @@ final class AppModel: ObservableObject {
         // Only attach the active set when we actually have per-character data, so
         // word/QSO/etc. sessions don't render an all-blank chart.
         let active = sessionCharTotal.isEmpty ? [] : engine.activeCharacters.map(String.init)
-        let t = timing
+        // The timing the session actually played at, not the settings behind
+        // it: the Code Exam runs at its licence speed rather than the global
+        // setting (as the Android record already says), and the effective
+        // speed is the timing's own — Farnsworth only while its switch is on,
+        // and never for QRQ, which ignores it (#180). Reading
+        // `settings.effectiveWpm` here would log the remembered speed a
+        // session never used.
+        let t = isExam ? examTiming : timing
         return SessionRecord(
             id: UUID(),
             date: Date(),
             mode: mode.rawValue,
             characterWPM: Int(t.wpm.rounded()),
-            effectiveWPM: Int((settings.farnsworth ? settings.effectiveWpm : t.wpm).rounded()),
+            effectiveWPM: Int(t.effectiveWpm.rounded()),
             attempts: summary.attempts,
             correct: summary.correct,
             fastestTTR: summary.fastest,
@@ -2423,8 +2493,11 @@ final class AppModel: ObservableObject {
     var bragStats: BragStats {
         let sessions = history.sessions
         // A best-accuracy badge from a 3-question session is meaningless, so only
-        // count sessions with a meaningful number of drills behind them.
-        let realSessions = sessions.filter { $0.attempts >= 10 }
+        // count sessions with a meaningful number of drills behind them — and
+        // only scored ones: a Listen & Learn session's "attempts" are items
+        // heard, with no accuracy to be best at (#183).
+        let scored = sessions.filter(\.isScored)
+        let realSessions = scored.filter { $0.attempts >= 10 }
         let mastered = MorseCode.kochOrder.filter {
             engine.stats[$0]?.isMastered(ttrThreshold: settings.ttrThreshold) ?? false
         }.count
@@ -2437,7 +2510,7 @@ final class AppModel: ObservableObject {
             practiceSeconds: history.totalPracticeSeconds,
             fastestCopy: history.bestTTR,
             bestSessionAccuracy: realSessions.map(\.accuracy).max(),
-            biggestSession: sessions.map(\.attempts).max(),
+            biggestSession: scored.map(\.attempts).max(),
             charactersMastered: mastered,
             charactersTotal: MorseCode.kochOrder.count)
     }
@@ -2883,12 +2956,14 @@ final class AppModel: ObservableObject {
         }
     }
 
-    /// Send one invader's character on the session's player at the session
-    /// speed; returns the sound's duration so the view can date its tone end.
+    /// Send one invader's character on the session's player at `wpm` — the
+    /// game's ramp speed (#178), not the session timing: a single character
+    /// has no gaps for Farnsworth to stretch. Returns the sound's duration so
+    /// the view can date its tone end.
     @discardableResult
-    func playInvader(_ character: Character) -> TimeInterval {
+    func playInvader(_ character: Character, wpm: Double) -> TimeInterval {
         player.replaySound(playable: .text(String(character)),
-                           frequency: settings.toneFrequency, timing: timing)
+                           frequency: settings.toneFrequency, timing: MorseTiming(wpm: wpm))
     }
 
     func stopInvaders() { player.stop() }
@@ -2998,6 +3073,31 @@ final class AppModel: ObservableObject {
         }
     }
 
+    // MARK: - Persistence (activity ledger)
+
+    private func saveActivity() {
+        if let data = try? JSONEncoder().encode(activity) {
+            UserDefaults.standard.set(data, forKey: Self.activityKey)
+        }
+    }
+
+    /// The saved ledger, or nil when none has been written yet (a launch
+    /// before the ledger existed, or a fresh install) — the caller seeds one.
+    private static func loadActivity() -> ActivityLedger? {
+        guard let data = UserDefaults.standard.data(forKey: activityKey) else { return nil }
+        return try? JSONDecoder().decode(ActivityLedger.self, from: data)
+    }
+
+    /// A ledger rebuilt from the sessions still in `history`: each one's
+    /// local day and logged duration, as `endSession` would have recorded it.
+    private static func seedActivity(from history: SessionHistory) -> ActivityLedger {
+        var ledger = ActivityLedger()
+        for record in history.sessions {
+            ledger.record(date: record.date, seconds: Int((record.durationSeconds ?? 0).rounded()))
+        }
+        return ledger
+    }
+
     /// `SessionHistory.init(from:)` is row-tolerant — a corrupt session is
     /// dropped and the rest kept — and seeds the lifetime counters from the
     /// rows when the file predates them, so only a wrecked document (not JSON,
@@ -3032,6 +3132,7 @@ final class AppModel: ObservableObject {
         drill = nil
         streak = PracticeStreak()        // didSet persists the blank record
         history = SessionHistory()       // ditto; the counters live inside it
+        activity = ActivityLedger()      // ditto; an empty ledger is stored, not re-seeded
         lastSessionRecord = nil
         newMilestone = nil
         // The pending reminder must not keep promising the streak just wiped.

@@ -35,8 +35,10 @@ the iOS app's navy/teal look.
   numbers optional) / names / power sent back to back at your chosen pace;
   type as you hear it, head-copy then type, key each one back, or just listen
   and review the transmitted list
-- **Morse Invaders**: an arcade game — invaders descend carrying characters;
-  hear one and type it, or see one and key it, before it lands. Waves,
+- **Morse Invaders**: an arcade game — pixel-art invaders descend carrying
+  characters; hear one and type it on a QWERTY keyboard, or see one and key
+  it, before it lands. Each game starts 10 WPM under your character speed
+  and steps up 2 WPM every five hits (a landing steps it back). Waves,
   lives, combos, three difficulties, and every hit and miss feeds your stats
 - **Pileup Runner**: a full QSO simulator: your callsign, eight exchange
   flavours (single caller → POTA → contests), realism controls (caller count,
@@ -66,17 +68,21 @@ the iOS app's navy/teal look.
 - **CW Decoder**: point the microphone at received Morse (a rig's speaker, a
   WebSDR) and read it as text; a faithful Kotlin port of the Carrier Wave
   decoder core with live WPM/pitch telemetry and a two-core pitch-lock rescue
-- **Listen & Learn**: hands-free: hear the code, then the spoken answer; keeps
-  playing with the screen locked (foreground service)
+- **Listen & Learn**: hands-free: hear the code, then the spoken answer, over
+  characters, the curated on-air QSO elements (Top 20 or Top 100), words, or
+  abbreviations and Q-codes; keeps playing with the screen locked (foreground
+  service), with the current item and the app logo on the lock screen and car
+  displays
 - **Voice answers**: speak your answer instead of tapping (microphone), with
   NATO/letter-name/digit-word matching, a "did you say…?" confirm-and-correct
   flow, and a learned per-user voice profile
 - **Sending Drills**: printable practice sheets of random character groups
   drawn from what you've studied (even, personalized, or numbers & punctuation),
   ready to share or print
-- **Progress**: daily streak with milestone celebrations, session history
-  with per-session recognition charts, per-character stats, most-confused
-  pairs, performance by 5-WPM speed band, and a shareable Brag Sheet
+- **Progress**: daily streak with milestone celebrations, a GitHub-style
+  activity grid of daily practice time, session history with per-session
+  recognition charts, per-character stats, most-confused pairs, performance
+  by 5-WPM speed band, and a shareable Brag Sheet
 - Timed practice sessions (1-30 min or open-ended) with mid-session timer
   controls and an end-of-session summary, and a mode switcher that jumps
   between drills without going home

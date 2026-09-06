@@ -353,6 +353,8 @@
     <string name="listen_notification_listening">Listening…</string>
     <string name="listen_hands_free_practice">Hands-free practice</string>
     <string name="listen_resume">Resume</string>
+    <!-- The "artist" line under the item on the lock screen and car displays; the iOS Now Playing text, verbatim. -->
+    <string name="listen_now_playing_artist">Morse Trainer · Listen &amp; Learn</string>
     <string name="listen_channel_name">Listen &amp; Learn playback</string>
     <string name="listen_channel_description">Ongoing hands-free practice playback.</string>
 
@@ -398,6 +400,19 @@
     <string name="stats_characters_this_session">Characters this session</string>
     <string name="stats_characters_this_session_blurb">Median copy time per character — hollow rows were in your active set but not drilled this time.</string>
     <string name="stats_reaction_value">%1$s reaction</string>
+    <!-- Passive sessions (Listen & Learn, Stories) have no accuracy (#183). -->
+    <string name="stats_not_applicable">N/A</string>
+    <string name="stats_heard">Heard</string>
+    <string name="stats_heard_value">%1$s heard</string>
+    <!-- Activity grid (#181) -->
+    <string name="stats_activity">Activity</string>
+    <string name="stats_activity_blurb">One tile per day, shaded by practice time: under 5 minutes, 5–15, 15–30, and 30 or more. Rows run Monday to Sunday.</string>
+    <string name="stats_activity_less">Less</string>
+    <string name="stats_activity_more">More</string>
+    <string name="stats_activity_day_none">%1$s: no practice</string>
+    <string name="stats_activity_day_under_minute">%1$s: under a minute</string>
+    <string name="stats_activity_day_minutes">%1$s: %2$d minutes</string>
+    <string name="stats_activity_legend">Less to more practice time</string>
 
     <!-- SettingsScreen -->
     <string name="settings_scoped_note">Showing what applies here — the full settings live on the home screen.</string>
@@ -694,5 +709,10 @@
     <string name="invaders_end_game">End game</string>
     <string name="invaders_tap_to_replay">Tap an invader to hear it again</string>
     <string name="invaders_key_the_lowest">Key the lowest invader</string>
-    <string name="invaders_speed_note">Sent at your character speed and Farnsworth setting.</string>
+    <!-- Speed ramp (#178): start, step, hits per step, target -->
+    <string name="invaders_speed_ramp_note">Sent from %1$d WPM, stepping up %2$d WPM every %3$d hits to your %4$d WPM character speed. A landing steps it back.</string>
+    <string name="invaders_speed_flat_note">Sent at your %1$d WPM character speed.</string>
+    <string name="invaders_keying_speed_note">Decoded at your %1$d WPM character speed.</string>
+    <string name="invaders_wpm">WPM</string>
+    <string name="invaders_speed_reached">Speed reached: %1$d WPM</string>
 </resources>

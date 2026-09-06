@@ -217,7 +217,11 @@ struct BragSheetView: View {
 
     private func sessionRow(_ record: SessionRecord) -> some View {
         let title = TrainingMode(rawValue: record.mode)?.title ?? record.mode
-        let acc = record.attempts == 0 ? .secondary : accColor(record.accuracy)
+        // An unscored session (Listen & Learn, Short Stories) has no accuracy
+        // to colour or to show: N/A, never 0% (#183).
+        let acc = record.isScored ? accColor(record.accuracy) : Color.secondary
+        let count = SessionRecord.passiveModes.contains(record.mode)
+            ? "\(record.attempts) heard" : "\(record.attempts)"
         return HStack {
             VStack(alignment: .leading, spacing: 2) {
                 Text(title).font(.subheadline).foregroundStyle(.white)
@@ -225,9 +229,9 @@ struct BragSheetView: View {
                     .font(.caption2).foregroundStyle(Theme.textSecondary)
             }
             Spacer()
-            Text(record.attempts == 0
-                 ? "—"
-                 : "\(record.attempts) · \(percent(record.accuracy))")
+            Text(record.isScored
+                 ? "\(record.attempts) · \(percent(record.accuracy))"
+                 : "\(count) · N/A")
                 .font(.subheadline.monospacedDigit())
                 .foregroundStyle(acc)
         }

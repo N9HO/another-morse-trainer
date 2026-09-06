@@ -1,0 +1,57 @@
+{
+  "$comment": "Shared activity-ledger fixture (#181), consumed by BOTH ports: android ActivityLedgerTest and ios MorseKitCheck. Data, not code — see CLAUDE.md's two-ports rule. Expected values are derived from the rules in `derivation`, not captured from either implementation. Regenerate only with a deliberate change to the thresholds or the cap, and say so in the commit.",
+  "derivation": {
+    "day": "the LOCAL calendar day the session ended on, written yyyy-MM-dd — the same day boundary PracticeStreak uses",
+    "seconds": "sum of the whole seconds of every session recorded on that day; a session that logged no duration adds 0 but still records the day",
+    "level": "the pure function of a seconds total: 0 for 0 s, 1 for 1-299 s, 2 for 300-899 s, 3 for 900-1799 s, 4 for 1800 s and up (`levelThresholds` are the seconds at which levels 1-4 begin)",
+    "dayLevel": "a day's tile shade: level(seconds) for a recorded day, but never below 1 — a recorded day with 0 s is still a practice day; a day with no record is level 0",
+    "cap": "at most `capDays` distinct days are kept; recording a day beyond the cap drops the earliest day(s) until the count is back at the cap",
+    "note": "Derived from these rules directly, independently of either implementation."
+  },
+  "capDays": 400,
+  "levelThresholds": [1, 300, 900, 1800],
+  "levels": [
+    { "seconds": 0, "level": 0 },
+    { "seconds": 1, "level": 1 },
+    { "seconds": 59, "level": 1 },
+    { "seconds": 299, "level": 1 },
+    { "seconds": 300, "level": 2 },
+    { "seconds": 600, "level": 2 },
+    { "seconds": 899, "level": 2 },
+    { "seconds": 900, "level": 3 },
+    { "seconds": 1200, "level": 3 },
+    { "seconds": 1799, "level": 3 },
+    { "seconds": 1800, "level": 4 },
+    { "seconds": 5000, "level": 4 }
+  ],
+  "scenario": {
+    "records": [
+      { "day": "2026-03-02", "seconds": 120 },
+      { "day": "2026-03-05", "seconds": 900 },
+      { "day": "2026-03-02", "seconds": 240 },
+      { "day": "2026-03-03", "seconds": 0 },
+      { "day": "2026-03-09", "seconds": 1800 },
+      { "day": "2026-03-10", "seconds": 299 },
+      { "day": "2026-03-10", "seconds": 1 }
+    ],
+    "dayCount": 5,
+    "expected": [
+      { "day": "2026-03-01", "recorded": false, "seconds": 0, "level": 0 },
+      { "day": "2026-03-02", "recorded": true, "seconds": 360, "level": 2 },
+      { "day": "2026-03-03", "recorded": true, "seconds": 0, "level": 1 },
+      { "day": "2026-03-04", "recorded": false, "seconds": 0, "level": 0 },
+      { "day": "2026-03-05", "recorded": true, "seconds": 900, "level": 3 },
+      { "day": "2026-03-09", "recorded": true, "seconds": 1800, "level": 4 },
+      { "day": "2026-03-10", "recorded": true, "seconds": 300, "level": 2 }
+    ]
+  },
+  "cap": {
+    "firstDay": "2025-01-01",
+    "distinctDays": 401,
+    "secondsEach": 60,
+    "expectedCount": 400,
+    "droppedDay": "2025-01-01",
+    "oldestKept": "2025-01-02",
+    "newestKept": "2026-02-05"
+  }
+}

@@ -507,12 +507,10 @@ object Settings {
      * session record).
      */
     val effectiveWpmInUse: Double
-        get() = if (farnsworthEnabled) minOf(effectiveWpm, characterWpm) else characterWpm
+        get() = timing().effectiveWpm
 
     /** The playback timing implied by the speed settings (Farnsworth only while switched on). */
-    fun timing(): MorseTiming =
-        if (farnsworthEnabled && effectiveWpm < characterWpm) MorseTiming.farnsworth(characterWpm, effectiveWpm)
-        else MorseTiming(characterWpm)
+    fun timing(): MorseTiming = resolveTiming(characterWpm, farnsworthEnabled, effectiveWpm)
 
     /** Engine config carrying the user's speed, recognition target, and choice count. */
     fun engineConfig(wpm: Double = characterWpm): TrainerEngine.Config =
@@ -948,3 +946,15 @@ object Settings {
         }
     }
 }
+
+/**
+ * The speed rule behind [Settings.timing] and [Settings.effectiveWpmInUse]:
+ * the Farnsworth switch decides, and the remembered effective speed is read
+ * only while it is on. Kept as a pure function of the three values so it can
+ * be unit-tested without the settings store (#180 — in 1.14.1 "off" was
+ * implied by an effective speed equal to the character speed, so raising the
+ * character speed re-engaged Farnsworth at the old value).
+ */
+internal fun resolveTiming(characterWpm: Double, farnsworthEnabled: Boolean, effectiveWpm: Double): MorseTiming =
+    if (farnsworthEnabled && effectiveWpm < characterWpm) MorseTiming.farnsworth(characterWpm, effectiveWpm)
+    else MorseTiming(characterWpm)

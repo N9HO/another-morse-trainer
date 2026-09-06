@@ -1360,6 +1360,39 @@ do {
           hist.totalPracticeSeconds == 300 && hist.totalAnswered == 14 && hist.totalCorrect == 10)
     check("best recognition time is the fastest ever seen", hist.bestTTR == 0.219)
 
+    // Passive sessions (#183): Listen & Learn and Short Stories log what was
+    // heard, never a graded answer. They are sessions and practice time, but
+    // not answers — so they cannot drag the lifetime accuracy down.
+    let heard = SessionRecord(id: UUID(), date: Date(), mode: "listen",
+                              characterWPM: 20, effectiveWPM: 20, attempts: 40, correct: 0,
+                              fastestTTR: nil, medianTTR: nil, durationSeconds: 600,
+                              characters: [], activeCharacters: [])
+    check("a Listen & Learn session is not scored", !heard.isScored)
+    check("a Short Stories session is not scored",
+          !SessionRecord(id: UUID(), date: Date(), mode: "story",
+                         characterWPM: 20, effectiveWPM: 20, attempts: 3, correct: 3,
+                         fastestTTR: nil, medianTTR: nil, durationSeconds: nil,
+                         characters: [], activeCharacters: []).isScored)
+    check("a graded session with answers is scored", rec.isScored)
+    check("a graded session with nothing answered is not scored",
+          !SessionRecord(id: UUID(), date: Date(), mode: "characters",
+                         characterWPM: 20, effectiveWPM: 20, attempts: 0, correct: 0,
+                         fastestTTR: nil, medianTTR: nil, durationSeconds: nil,
+                         characters: [], activeCharacters: []).isScored)
+    var mixed = SessionHistory()
+    mixed.add(rec)
+    mixed.add(heard)
+    check("a passive session counts as a session and as practice time",
+          mixed.totalSessions == 2 && mixed.totalPracticeSeconds == 900)
+    check("a passive session adds nothing to the answered and correct totals",
+          mixed.totalAnswered == 13 && mixed.totalCorrect == 9
+            && abs(mixed.lifetimeAccuracy - 9.0 / 13.0) < 1e-9)
+    check("seeding from rows skips passive sessions too",
+          SessionHistory(sessions: [rec, heard]).totalAnswered == 13)
+    check("speed bands leave passive sessions out",
+          mixed.wpmBandSummaries().count == 1
+            && mixed.wpmBandSummaries().first?.attempts == 13)
+
     // One corrupt row is dropped, not the whole history (Android parses row by
     // row; Swift used to lose everything). And a file saved before the
     // lifetime counters existed seeds them from the rows that survive.
@@ -1493,6 +1526,91 @@ if let fx = loadCustomWordsFixture() {
     check("parseWordList matches the fixture across \(fx.cases.count) cases", casesOK)
 } else {
     check("fixtures/custom-words.json loads and decodes", false)
+}
+
+// Listen & Learn's curated on-air QSO vocabulary (issue #182), against
+// fixtures/qso-elements.json — read by this harness AND by android
+// MorseDataQSOTest. The fixture is the one ordered list both ports carry;
+// the tiers are its first N.
+struct QSOElementsFixture: Decodable {
+    struct Item: Decodable { let token: String; let meaning: String }
+    struct Tiers: Decodable { let top20: Int; let top100: Int }
+    let tiers: Tiers
+    let items: [Item]
+}
+
+func loadQSOElementsFixture() -> QSOElementsFixture? {
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+    guard let data = try? Data(contentsOf: root.appendingPathComponent("fixtures/qso-elements.json")) else { return nil }
+    return try? JSONDecoder().decode(QSOElementsFixture.self, from: data)
+}
+
+print("\nShared QSO-elements fixture (fixtures/qso-elements.json):")
+if let fx = loadQSOElementsFixture() {
+    let table = MorseData.qsoElements
+    check("the table has exactly 100 items", table.count == 100 && fx.items.count == 100)
+    check("tokens match the fixture exactly, in order",
+          table.map { $0.token } == fx.items.map(\.token))
+    check("meanings match the fixture exactly, in order",
+          table.map { $0.meaning } == fx.items.map(\.meaning))
+    check("no token appears twice", Set(table.map { $0.token }).count == table.count)
+    check("tier sizes are the fixture's",
+          MorseData.qsoTop20Count == fx.tiers.top20 && MorseData.qsoTop100Count == fx.tiers.top100)
+
+    // Every token is sendable: a bracketed token is a prosign spelled as
+    // MorseData.prosigns spells it; anything else is characters with a
+    // Morse pattern, with single spaces as word gaps.
+    var sendable = true
+    for item in table {
+        let t = item.token
+        if t.hasPrefix("<") {
+            if !MorseData.prosigns.contains(where: { $0.name == t }) {
+                sendable = false
+                print("      ↳ \(t) is not a prosign MorseData.prosigns knows")
+            }
+        } else {
+            let clean = t == t.trimmingCharacters(in: .whitespaces) && !t.contains("  ")
+            let coded = t.allSatisfy { $0 == " " || MorseCode.pattern(for: $0) != nil }
+            if !clean || !coded {
+                sendable = false
+                print("      ↳ \(t) has a character with no Morse pattern or stray spacing")
+            }
+        }
+    }
+    check("every token is sendable (pattern or known prosign)", sendable)
+
+    // Where a token already lives in the abbreviation, Q-code or prosign
+    // tables, the meaning is that table's wording — one answer per token.
+    var agrees = true
+    for item in table {
+        let known = MorseData.abbreviations.first { $0.token == item.token }?.meaning
+            ?? MorseData.qCodes.first { $0.token == item.token }?.meaning
+            ?? MorseData.prosigns.first { $0.name == item.token }?.meaning
+        if let known, known != item.meaning {
+            agrees = false
+            print("      ↳ \(item.token): \"\(item.meaning)\" but the reference table says \"\(known)\"")
+        }
+    }
+    check("meanings agree with the abbreviation / Q-code / prosign tables", agrees)
+
+    // The tiers are the first N, as items whose answer is the meaning.
+    let top20 = MorseData.qsoElementItems(MorseData.qsoTop20Count)
+    let top100 = MorseData.qsoElementItems(MorseData.qsoTop100Count)
+    check("Top 20 is the first 20 tokens", top20.map(\.display) == fx.items.prefix(20).map(\.token))
+    check("Top 100 is the whole list", top100.map(\.display) == fx.items.map(\.token))
+    check("item answers are the meanings", top100.map(\.answer) == fx.items.map(\.meaning))
+    check("item ids are unique", Set(top100.map(\.id)).count == top100.count)
+    check("a bracketed token plays the run-together prosign pattern",
+          top100.first { $0.display == "<AR>" }?.playable == .pattern(".-.-."))
+    check("a plain token plays as text", top100.first { $0.display == "CQ" }?.playable == .text("CQ"))
+    check("a multi-word token keeps its word gap",
+          top100.first { $0.display == "CQ CQ CQ" }?.playable == .text("CQ CQ CQ"))
+} else {
+    check("fixtures/qso-elements.json loads and decodes", false)
 }
 
 // Journey mode (gamified level ladder)
@@ -3255,6 +3373,229 @@ do {
     check("different seed, different sequence", seq != sequence(seed: 43))
     check("consecutive spawns never share a column",
           zip(seq, seq.dropFirst()).allSatisfy { $0.last != $1.last })
+}
+
+// Morse Invaders speed ramp and keyboard (#178), against
+// fixtures/invaders-ramp.json — read by this harness AND by the Kotlin
+// InvadersTest. The expected values were worked out from the rules in the
+// fixture's derivation block, not captured from either port.
+struct InvadersRampFixture: Decodable {
+    struct Derivation: Decodable {
+        let minWpm: Double; let startOffset: Double; let step: Double
+        let hitsPerStep: Int; let noRampAtOrBelow: Double
+    }
+    struct Row: Decodable { let characterWpm: Double; let startWpm: Double; let targetWpm: Double }
+    struct Event: Decodable { let event: String; let times: Int?; let currentWpm: Double }
+    struct Scenario: Decodable {
+        let characterWpm: Double; let startWpm: Double; let targetWpm: Double
+        let lives: Int; let events: [Event]; let bestWpm: Double
+    }
+    struct Keyboard: Decodable {
+        struct Case: Decodable { let name: String; let pool: String; let rows: [String] }
+        let digits: String; let letters: [String]; let cases: [Case]
+    }
+    let derivation: Derivation
+    let startTable: [Row]
+    let scenario: Scenario
+    let keyboard: Keyboard
+}
+
+func loadInvadersRampFixture() -> InvadersRampFixture? {
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+    guard let data = try? Data(contentsOf: root.appendingPathComponent("fixtures/invaders-ramp.json")) else { return nil }
+    return try? JSONDecoder().decode(InvadersRampFixture.self, from: data)
+}
+
+print("\nMorse Invaders speed ramp and keyboard (fixtures/invaders-ramp.json):")
+if let fx = loadInvadersRampFixture() {
+    let d = fx.derivation
+    check("ramp constants are the fixture's",
+          InvadersGame.minWpm == d.minWpm && InvadersGame.rampStartOffset == d.startOffset
+          && InvadersGame.rampStep == d.step && InvadersGame.hitsPerRampStep == d.hitsPerStep)
+
+    var tableOK = true
+    for row in fx.startTable {
+        let config = InvadersGame.Config(characters: ["K"], characterWpm: row.characterWpm)
+        let opens = InvadersGame(config: config, rng: SeededRNG(seed: 1)).currentWpm
+        if !approxEqual(InvadersGame.rampStart(characterWpm: row.characterWpm), row.startWpm)
+            || !approxEqual(config.startWpm, row.startWpm)
+            || !approxEqual(config.targetWpm, row.targetWpm)
+            || !approxEqual(opens, row.startWpm) {
+            tableOK = false
+            print("      ↳ \(row.characterWpm) WPM: start \(config.startWpm), target \(config.targetWpm); fixture says \(row.startWpm) / \(row.targetWpm)")
+        }
+    }
+    check("start and target follow the fixture table across \(fx.startTable.count) speeds", tableOK)
+
+    // The scripted scenario, driven with a one-character pool so whatever is
+    // on the field is a K: "hit" shoots one, "escape" lets the lowest land,
+    // "wrongShot" names a character nothing carries.
+    let sc = fx.scenario
+    let g = InvadersGame(config: .init(characters: ["K"], lives: sc.lives, characterWpm: sc.characterWpm),
+                         rng: SeededRNG(seed: 7))
+    check("the scenario game opens at its start speed",
+          approxEqual(g.currentWpm, sc.startWpm) && approxEqual(g.config.targetWpm, sc.targetWpm))
+    var scenarioOK = true
+    for (i, ev) in sc.events.enumerated() {
+        for _ in 0..<(ev.times ?? 1) {
+            switch ev.event {
+            case "hit":
+                while g.invaders.isEmpty { g.advance(by: 0.05) }
+                if !g.shoot("K").isHit { scenarioOK = false; print("      ↳ event \(i): the hit missed") }
+            case "escape":
+                var landed = 0
+                while landed == 0 {
+                    landed = g.advance(by: 0.05).filter { if case .escaped = $0 { return true } else { return false } }.count
+                }
+                if landed != 1 { scenarioOK = false; print("      ↳ event \(i): \(landed) landed at once") }
+            case "wrongShot":
+                if g.shoot("Z").isHit { scenarioOK = false; print("      ↳ event \(i): the wrong shot hit") }
+            default:
+                scenarioOK = false
+                print("      ↳ event \(i): unknown event '\(ev.event)' in the fixture")
+            }
+        }
+        if !approxEqual(g.currentWpm, ev.currentWpm) {
+            scenarioOK = false
+            print("      ↳ after event \(i) (\(ev.event)): \(g.currentWpm) WPM, fixture says \(ev.currentWpm)")
+        }
+    }
+    check("the ramp follows the scripted scenario across \(sc.events.count) events", scenarioOK && !g.isOver)
+    check("bestWpm is the highest speed reached", approxEqual(g.bestWpm, sc.bestWpm))
+
+    let flat = InvadersGame(config: .init(characters: ["K"], characterWpm: d.noRampAtOrBelow), rng: SeededRNG(seed: 2))
+    for _ in 0..<12 {
+        while flat.invaders.isEmpty { flat.advance(by: 0.05) }
+        _ = flat.shoot("K")
+    }
+    check("no ramp at or under the floor",
+          flat.config.startWpm == flat.config.targetWpm && approxEqual(flat.currentWpm, d.noRampAtOrBelow)
+          && approxEqual(flat.bestWpm, d.noRampAtOrBelow))
+
+    let kb = fx.keyboard
+    check("the digit and letter rows are the fixture's",
+          String(InvadersKeyboard.digitRow) == kb.digits
+          && InvadersKeyboard.letterRows.map { String($0) } == kb.letters)
+    var keyboardOK = true
+    for c in kb.cases {
+        let got = InvadersKeyboard.rows(for: Array(c.pool)).map { String($0) }
+        if got != c.rows {
+            keyboardOK = false
+            print("      ↳ \(c.name): got \(got), fixture says \(c.rows)")
+        }
+    }
+    check("keyboard rows match the fixture across \(kb.cases.count) pools", keyboardOK)
+} else {
+    check("fixtures/invaders-ramp.json loads and decodes", false)
+}
+
+// MARK: - Shared activity fixture
+//
+// fixtures/activity.json, consumed by this harness AND by android
+// ActivityLedgerTest. Same bargain as the timing fixture: shared *data*, never
+// shared code. It pins the shade thresholds with their boundary values, a
+// multi-record scenario with its per-day totals and levels, and the cap, so
+// the two grids cannot quietly shade the same day differently.
+struct ActivityFixture: Decodable {
+    struct Level: Decodable { let seconds, level: Int }
+    struct Record: Decodable { let day: String; let seconds: Int }
+    struct Expected: Decodable { let day: String; let recorded: Bool; let seconds, level: Int }
+    struct Scenario: Decodable { let records: [Record]; let dayCount: Int; let expected: [Expected] }
+    struct Cap: Decodable {
+        let firstDay: String
+        let distinctDays, secondsEach, expectedCount: Int
+        let droppedDay, oldestKept, newestKept: String
+    }
+    let capDays: Int
+    let levelThresholds: [Int]
+    let levels: [Level]
+    let scenario: Scenario
+    let cap: Cap
+}
+
+func loadActivityFixture() -> ActivityFixture? {
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+    let url = root.appendingPathComponent("fixtures/activity.json")
+    guard let data = try? Data(contentsOf: url) else { return nil }
+    return try? JSONDecoder().decode(ActivityFixture.self, from: data)
+}
+
+print("\nActivity ledger (issue #181), against fixtures/activity.json:")
+if let fx = loadActivityFixture() {
+    check("the cap and the thresholds are the fixture's",
+          ActivityLedger.capDays == fx.capDays
+            && ActivityLedger.levelThresholds == fx.levelThresholds
+            && ActivityLedger.maxLevel == fx.levelThresholds.count)
+
+    var levelsOK = true
+    for c in fx.levels where ActivityLedger.level(forSeconds: c.seconds) != c.level {
+        levelsOK = false
+        print("      ↳ \(c.seconds) s: got level \(ActivityLedger.level(forSeconds: c.seconds)), fixture says \(c.level)")
+    }
+    check("seconds map to shade levels as the fixture pins, boundaries included (\(fx.levels.count) cases)", levelsOK)
+
+    var ledger = ActivityLedger()
+    for r in fx.scenario.records { ledger.record(day: r.day, seconds: r.seconds) }
+    check("the scenario records \(fx.scenario.dayCount) distinct days", ledger.dayCount == fx.scenario.dayCount)
+    var daysOK = true
+    for e in fx.scenario.expected {
+        let got = (ledger.isRecorded(day: e.day), ledger.seconds(on: e.day), ledger.level(on: e.day))
+        if got != (e.recorded, e.seconds, e.level) {
+            daysOK = false
+            print("      ↳ \(e.day): got \(got), fixture says (\(e.recorded), \(e.seconds), \(e.level))")
+        }
+    }
+    check("same-day records add up and every day reads as the fixture expects", daysOK)
+
+    // The cap: walk the calendar forward from the fixture's first day.
+    let utc = { () -> Calendar in
+        var c = Calendar(identifier: .gregorian)
+        c.timeZone = TimeZone(identifier: "UTC")!
+        return c
+    }()
+    var capped = ActivityLedger()
+    if let first = ActivityLedger.date(forKey: fx.cap.firstDay, calendar: utc) {
+        for i in 0..<fx.cap.distinctDays {
+            if let day = utc.date(byAdding: .day, value: i, to: first) {
+                capped.record(date: day, seconds: fx.cap.secondsEach, calendar: utc)
+            }
+        }
+    }
+    check("the cap keeps \(fx.cap.expectedCount) days and drops the earliest",
+          capped.dayCount == fx.cap.expectedCount
+            && !capped.isRecorded(day: fx.cap.droppedDay)
+            && capped.recordedDays.first == fx.cap.oldestKept
+            && capped.recordedDays.last == fx.cap.newestKept)
+
+    // Day keys come from calendar components, so the key round-trips through
+    // the date it names and a negative duration still marks the day.
+    var neg = ActivityLedger()
+    neg.record(day: "2026-03-02", seconds: -30)
+    check("a negative duration counts as zero but still marks the day",
+          neg.isRecorded(day: "2026-03-02") && neg.seconds(on: "2026-03-02") == 0 && neg.level(on: "2026-03-02") == 1)
+    if let d = ActivityLedger.date(forKey: "2026-03-02", calendar: utc) {
+        check("a day key round-trips through the date it names",
+              ActivityLedger.dayKey(for: d, calendar: utc) == "2026-03-02")
+    } else {
+        check("a day key round-trips through the date it names", false)
+    }
+    do {
+        let data = try JSONEncoder().encode(ledger)
+        let back = try JSONDecoder().decode(ActivityLedger.self, from: data)
+        check("the ledger round-trips through JSON", back == ledger)
+    } catch {
+        check("the ledger round-trips through JSON", false)
+    }
+} else {
+    check("fixtures/activity.json loads and decodes", false)
 }
 
 print("\n────────────────────────────")

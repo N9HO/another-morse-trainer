@@ -9,6 +9,7 @@ import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -17,9 +18,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -43,13 +42,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
@@ -69,9 +67,11 @@ import app.anothermorsetrainer.morsekit.InvadersDifficulty
 import app.anothermorsetrainer.morsekit.InvadersEvent
 import app.anothermorsetrainer.morsekit.InvadersGame
 import app.anothermorsetrainer.morsekit.InvadersInput
+import app.anothermorsetrainer.morsekit.InvadersKeyboard
 import app.anothermorsetrainer.morsekit.Invader
 import app.anothermorsetrainer.morsekit.MorseCode
 import app.anothermorsetrainer.morsekit.MorseItem
+import app.anothermorsetrainer.morsekit.MorseTiming
 import app.anothermorsetrainer.morsekit.SessionRecord
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -79,6 +79,21 @@ import kotlin.math.roundToInt
 private enum class InvPhase { SETUP, RUNNING, OVER }
 
 private const val INVADER_COLUMNS = 5
+
+/**
+ * The classic 11×8 "crab" invader (#179), drawn from this bitmap so there is
+ * no image asset; `#` is a lit pixel. The same table is in `InvadersView.swift`.
+ */
+private val INVADER_SPRITE = listOf(
+    "..#.....#..",
+    "...#...#...",
+    "..#######..",
+    ".##.###.##.",
+    "###########",
+    "#.#######.#",
+    "#.#.....#.#",
+    "...##.##..."
+)
 
 /**
  * Morse Invaders (#170): characters descend the play field in columns and the
@@ -132,6 +147,9 @@ fun InvadersScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
     var lives by rememberSaveable { mutableIntStateOf(3) }
     var multiplier by remember { mutableIntStateOf(1) }
     var bestCombo by rememberSaveable { mutableIntStateOf(0) }
+    // The ramp (#178): the speed invaders are sent at now, and the highest reached.
+    var wpm by remember { mutableIntStateOf(0) }
+    var bestWpm by rememberSaveable { mutableIntStateOf(0) }
     var runAttempts by rememberSaveable { mutableIntStateOf(0) }
     var runCorrect by rememberSaveable { mutableIntStateOf(0) }
     var startedAtMs by rememberSaveable { mutableLongStateOf(0L) }
@@ -167,6 +185,8 @@ fun InvadersScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
         lives = g.lives
         multiplier = g.multiplier
         bestCombo = g.bestCombo
+        wpm = g.currentWpm.roundToInt()
+        bestWpm = g.bestWpm.roundToInt()
         runAttempts = g.hits + g.misses
         runCorrect = g.hits
         lastSeenMs = System.currentTimeMillis()
@@ -179,6 +199,7 @@ fun InvadersScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
             mode = "Morse Invaders", attempts = attempts, correct = correct,
             bestTtrMs = null, durationSeconds = seconds,
             characterWpm = Settings.characterWpm.roundToInt(),
+            effectiveWpm = Settings.effectiveWpmInUse.roundToInt(),
             charResults = results,
             activeCharacters = if (results.isEmpty()) emptyList() else engine.activeCharacters.map { it.toString() }
         )
@@ -192,7 +213,10 @@ fun InvadersScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
     }
 
     fun startGame() {
-        val g = InvadersGame(InvadersGame.Config(characters = characterPool(), difficulty = difficulty, columns = INVADER_COLUMNS))
+        val g = InvadersGame(InvadersGame.Config(
+            characters = characterPool(), difficulty = difficulty, columns = INVADER_COLUMNS,
+            characterWpm = Settings.characterWpm
+        ))
         game = g
         field = emptyList()
         toneEnd.clear()
@@ -283,9 +307,12 @@ fun InvadersScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
             for (event in g.advance(dt)) {
                 when (event) {
                     is InvadersEvent.Spawned -> if (input == InvadersInput.ICR) {
+                        // At the ramp's current speed (#178), not the session
+                        // timing: a single character has no gaps for
+                        // Farnsworth to stretch.
                         val secs = player.replaySound(
                             MorseItem.Playable.Text(event.invader.character.toString()),
-                            Settings.sidetoneHz, Settings.timing()
+                            Settings.sidetoneHz, MorseTiming(g.currentWpm)
                         )
                         toneEnd[event.invader.id] = System.currentTimeMillis() + (secs * 1000).toLong()
                     }
@@ -348,7 +375,7 @@ fun InvadersScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
                 InvadersRun(
                     input = input,
                     field = field,
-                    score = score, wave = wave, lives = lives, multiplier = multiplier,
+                    score = score, wave = wave, lives = lives, multiplier = multiplier, wpm = wpm,
                     flash = flash,
                     pool = characterPool(),
                     decoded = keyer.decodedText,
@@ -359,7 +386,7 @@ fun InvadersScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
                     onReplay = { column ->
                         val g = game ?: return@InvadersRun
                         val nearest = g.invaders.minByOrNull { abs(it.column - column) } ?: return@InvadersRun
-                        player.replaySound(MorseItem.Playable.Text(nearest.character.toString()), Settings.sidetoneHz, Settings.timing())
+                        player.replaySound(MorseItem.Playable.Text(nearest.character.toString()), Settings.sidetoneHz, MorseTiming(g.currentWpm))
                     },
                     onEnd = { abandonRun() },
                     onSwitchMode = ::switchTo
@@ -370,6 +397,7 @@ fun InvadersScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
                 InvadersOver(
                     score = score, wave = wave, bestCombo = bestCombo,
                     accuracy = if (runAttempts == 0) 0.0 else runCorrect.toDouble() / runAttempts,
+                    bestWpm = if (input == InvadersInput.ICR) bestWpm else null,
                     onAgain = { startGame() },
                     onBack = onBack
                 )
@@ -407,7 +435,19 @@ private fun InvadersSetup(
             Text(pool.joinToString(" "), fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall, color = Brand.textSecondary)
             InvLabel(stringResource(R.string.invaders_difficulty))
             InvPills(InvadersDifficulty.entries.map { it to it.label }, difficulty, onDifficulty)
-            Text(stringResource(R.string.invaders_speed_note), style = MaterialTheme.typography.bodySmall, color = Brand.textSecondary)
+            // The ramp in words (#178): where a game opens and where it climbs
+            // to. Keying mode sends nothing, so it names the decoder speed.
+            val target = Settings.characterWpm.roundToInt()
+            val start = InvadersGame.rampStart(Settings.characterWpm).roundToInt()
+            val speedNote = when {
+                input == InvadersInput.KEYING -> stringResource(R.string.invaders_keying_speed_note, target)
+                start >= target -> stringResource(R.string.invaders_speed_flat_note, target)
+                else -> stringResource(
+                    R.string.invaders_speed_ramp_note,
+                    start, InvadersGame.rampStep.roundToInt(), InvadersGame.hitsPerRampStep, target
+                )
+            }
+            Text(speedNote, style = MaterialTheme.typography.bodySmall, color = Brand.textSecondary)
             Spacer(Modifier.height(4.dp))
             Button(
                 onClick = onStart,
@@ -423,7 +463,7 @@ private fun InvadersSetup(
 private fun InvadersRun(
     input: InvadersInput,
     field: List<Invader>,
-    score: Int, wave: Int, lives: Int, multiplier: Int,
+    score: Int, wave: Int, lives: Int, multiplier: Int, wpm: Int,
     flash: Pair<String, Long>?,
     pool: List<Char>,
     decoded: String,
@@ -451,6 +491,7 @@ private fun InvadersRun(
             InvStat(stringResource(R.string.invaders_wave), wave.toString())
             InvStat(stringResource(R.string.invaders_lives), "♥".repeat(lives) + "♡".repeat((3 - lives).coerceAtLeast(0)))
             InvStat(stringResource(R.string.invaders_combo_label), "×$multiplier")
+            if (input == InvadersInput.ICR) InvStat(stringResource(R.string.invaders_wpm), wpm.toString())
         }
         Spacer(Modifier.height(10.dp))
         val labelStyle = TextStyle(fontSize = 20.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace, color = Brand.textPrimary)
@@ -472,18 +513,34 @@ private fun InvadersRun(
             val ground = size.height - 18.dp.toPx()
             drawLine(Brand.teal.copy(alpha = 0.6f), Offset(0f, ground), Offset(size.width, ground), strokeWidth = 2.dp.toPx())
             val colWidth = size.width / INVADER_COLUMNS
-            val w = 44.dp.toPx()
-            val h = 36.dp.toPx()
-            val top = 18.dp.toPx()
+            // Keying shows the character above its sprite, so the field
+            // starts lower to leave the label room at the top.
+            val top = (if (input == InvadersInput.KEYING) 30.dp else 18.dp).toPx()
+            val reach = 18.dp.toPx()
+            // The alien (#179) instead of a "?", which read as a literal
+            // character: 3 dp a pixel, 33×24 dp, about what the glyph took.
+            val px = 3.dp.toPx()
+            fun drawSprite(cx: Float, cy: Float) {
+                val ox = cx - INVADER_SPRITE[0].length * px / 2
+                val oy = cy - INVADER_SPRITE.size * px / 2
+                INVADER_SPRITE.forEachIndexed { r, row ->
+                    row.forEachIndexed { c, cell ->
+                        if (cell == '#') drawRect(Brand.tealBright, Offset(ox + c * px, oy + r * px), Size(px, px))
+                    }
+                }
+            }
             for (inv in field) {
                 val x = (inv.column + 0.5f) * colWidth
-                val y = top + inv.progress.toFloat() * (ground - top - h / 2)
-                val topLeft = Offset(x - w / 2, y - h / 2)
-                drawRoundRect(Brand.navyRaised, topLeft, Size(w, h), CornerRadius(10.dp.toPx()))
-                drawRoundRect(Brand.tealBright, topLeft, Size(w, h), CornerRadius(10.dp.toPx()), style = Stroke(1.5.dp.toPx()))
-                val label = if (input == InvadersInput.KEYING) inv.character.toString() else "?"
-                val measured = measurer.measure(label, labelStyle)
-                drawText(measured, topLeft = Offset(x - measured.size.width / 2, y - measured.size.height / 2))
+                val y = top + inv.progress.toFloat() * (ground - top - reach)
+                // ICR keeps the character to the ear; keying shows it directly
+                // above the sprite to key.
+                if (input == InvadersInput.KEYING) {
+                    drawSprite(x, y + 6.dp.toPx())
+                    val measured = measurer.measure(inv.character.toString(), labelStyle)
+                    drawText(measured, topLeft = Offset(x - measured.size.width / 2, y - 14.dp.toPx() - measured.size.height / 2))
+                } else {
+                    drawSprite(x, y)
+                }
             }
             if (flash != null && flash.second > System.currentTimeMillis()) {
                 val measured = measurer.measure(flash.first, flashStyle)
@@ -494,28 +551,7 @@ private fun InvadersRun(
         if (input == InvadersInput.ICR) {
             Text(stringResource(R.string.invaders_tap_to_replay), style = MaterialTheme.typography.labelSmall, color = Brand.textSecondary)
             Spacer(Modifier.height(6.dp))
-            LazyVerticalGrid(
-                columns = GridCells.Adaptive(44.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-                modifier = Modifier.fillMaxWidth().heightIn(max = 170.dp)
-            ) {
-                items(pool) { ch ->
-                    Text(
-                        text = ch.toString(),
-                        fontFamily = FontFamily.Monospace,
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 20.sp,
-                        color = Brand.textPrimary,
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(Brand.navyRaised)
-                            .clickable { onShoot(ch) }
-                            .padding(vertical = 10.dp)
-                    )
-                }
-            }
+            InvadersKeyRows(pool = pool, onShoot = onShoot)
         } else {
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text(stringResource(R.string.invaders_key_the_lowest), style = MaterialTheme.typography.labelSmall, color = Brand.textSecondary)
@@ -554,9 +590,55 @@ private fun InvadersRun(
     }
 }
 
+/**
+ * The hear-it/type-it keyboard (#178): [InvadersKeyboard.rows] laid out QWERTY —
+ * a digit row when the pool has digits, the three letter rows always, any
+ * punctuation below. A key outside the pool stays in place, dimmed and dead,
+ * so the layout never shifts as the Koch set grows; the hardware-keyboard
+ * handler in [InvadersScreen] presses the live ones too. Ten keys across at
+ * equal width, so the shorter rows sit centred the way a keyboard's do.
+ */
+@Composable
+private fun InvadersKeyRows(pool: List<Char>, onShoot: (Char) -> Unit) {
+    val live = pool.toSet()
+    val rows = InvadersKeyboard.rows(pool)
+    val gap = 4.dp
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+        val keyWidth = (maxWidth - gap * 9) / 10
+        Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(gap)) {
+            for (row in rows) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(gap, Alignment.CenterHorizontally)
+                ) {
+                    for (ch in row) {
+                        val enabled = ch in live
+                        Text(
+                            text = ch.toString(),
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 18.sp,
+                            color = Brand.textPrimary,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                            modifier = Modifier
+                                .width(keyWidth)
+                                .alpha(if (enabled) 1f else 0.3f)
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(Brand.navyRaised)
+                                .clickable(enabled = enabled) { onShoot(ch) }
+                                .padding(vertical = 10.dp)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun InvadersOver(
     score: Int, wave: Int, bestCombo: Int, accuracy: Double,
+    bestWpm: Int?,
     onAgain: () -> Unit, onBack: () -> Unit
 ) {
     Column(
@@ -575,6 +657,10 @@ private fun InvadersOver(
                 InvStat(stringResource(R.string.invaders_wave), wave.toString())
                 InvStat(stringResource(R.string.invaders_accuracy), "${(accuracy * 100).roundToInt()}%")
                 InvStat(stringResource(R.string.invaders_best_combo), bestCombo.toString())
+            }
+            // The speed the ramp reached (#178); null in keying mode, which sends nothing.
+            if (bestWpm != null) {
+                Text(stringResource(R.string.invaders_speed_reached, bestWpm), style = MaterialTheme.typography.bodySmall, color = Brand.textSecondary)
             }
             Button(
                 onClick = onAgain,

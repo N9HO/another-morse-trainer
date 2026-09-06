@@ -132,7 +132,8 @@ fun ContestScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
                 correct = runQsos,
                 bestTtrMs = null,
                 durationSeconds = ((lastSeenMs - startedAtMs) / 1000L).toInt().coerceAtLeast(0),
-                characterWpm = Settings.characterWpm.roundToInt()
+                characterWpm = Settings.characterWpm.roundToInt(),
+                effectiveWpm = Settings.effectiveWpmInUse.roundToInt()
             )
         }
         if (phase != CtPhase.SETUP) phase = CtPhase.SETUP
@@ -151,7 +152,8 @@ fun ContestScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
             correct = e.qsoCount,
             bestTtrMs = null,
             durationSeconds = elapsedSeconds(),
-            characterWpm = Settings.characterWpm.roundToInt()
+            characterWpm = Settings.characterWpm.roundToInt(),
+            effectiveWpm = Settings.effectiveWpmInUse.roundToInt()
         )
     }
 

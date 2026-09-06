@@ -12,9 +12,15 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
 import kotlin.random.Random
 
-/** What the hands-free "Listen & Learn" mode announces. */
+/**
+ * What the hands-free "Listen & Learn" mode announces. Entry order is the
+ * chip row's order. The two QSO tiers are the curated on-air vocabulary of
+ * [MorseData.qsoElements] (#182): the first 20, or all 100.
+ */
 enum class ListenContent(val label: String) {
     CHARACTERS("Characters"),
+    QSO_TOP_20("QSO elements · Top 20"),
+    QSO_TOP_100("QSO elements · Top 100"),
     WORDS("Words"),
     ABBREVIATIONS("Abbreviations")
 }
@@ -97,6 +103,17 @@ fun listenPool(content: ListenContent): List<ListenItem> = when (content) {
     ListenContent.ABBREVIATIONS -> (MorseData.abbreviationItems + MorseData.qCodeItems).map { item ->
         val spelled = item.display.lowercase().map { it.toString() }.joinToString(" ")
         ListenItem(item.playable, "${item.display} — ${item.answer}", "$spelled. ${item.answer}")
+    }
+    // The curated on-air vocabulary (#182), revealed and spoken exactly like
+    // the abbreviations: the token spelled out, then its meaning. A prosign's
+    // angle brackets are shown but not spelled.
+    ListenContent.QSO_TOP_20, ListenContent.QSO_TOP_100 -> {
+        val limit = if (content == ListenContent.QSO_TOP_20) MorseData.QSO_TOP_20_COUNT else MorseData.QSO_TOP_100_COUNT
+        MorseData.qsoElementItems(limit).map { item ->
+            val spelled = item.display.filter { it != '<' && it != '>' }
+                .lowercase().map { it.toString() }.joinToString(" ")
+            ListenItem(item.playable, "${item.display} — ${item.answer}", "$spelled. ${item.answer}")
+        }
     }
 }
 

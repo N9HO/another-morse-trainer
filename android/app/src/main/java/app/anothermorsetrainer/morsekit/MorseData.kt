@@ -261,6 +261,32 @@ object MorseData {
             MorseItem(id = it.token, playable = MorseItem.Playable.Text(it.token), answer = it.meaning, display = it.token)
         }
 
+    // ---- On-air QSO elements (Listen & Learn's curated tiers, #182) ----
+
+    /** Sizes of the QSO-element tiers: the first N of [qsoElements]. */
+    const val QSO_TOP_20_COUNT = 20
+    const val QSO_TOP_100_COUNT = 100
+
+    /**
+     * The 100 most-heard on-air QSO elements, most common first (table in
+     * MorseDataQSO.kt; pinned for both ports by `fixtures/qso-elements.json`).
+     */
+    val qsoElements: List<TokenMeaning> = qsoElementsData
+
+    /**
+     * Listen & Learn's "QSO elements · Top N" pool: the first [limit] of
+     * [qsoElements] as items whose answer is the meaning, like
+     * [abbreviationItems]. A bracketed token plays the run-together prosign
+     * pattern from [prosigns]; anything else plays as text.
+     */
+    fun qsoElementItems(limit: Int): List<MorseItem> =
+        qsoElements.take(limit).map { element ->
+            val prosign = prosigns.firstOrNull { it.name == element.token }
+            val playable = if (prosign != null) MorseItem.Playable.Pattern(prosign.pattern)
+            else MorseItem.Playable.Text(element.token)
+            MorseItem(id = "qso-${element.token}", playable = playable, answer = element.meaning, display = element.token)
+        }
+
     /** Prosign mode: hear the run-together prosign, choose its meaning. */
     val prosignItems: List<MorseItem>
         get() = prosigns.map {

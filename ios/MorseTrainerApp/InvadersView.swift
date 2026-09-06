@@ -34,6 +34,8 @@ struct InvadersView: View {
     private struct HUD: Equatable {
         var score = 0, wave = 1, lives = 3, combo = 0, multiplier = 1
         var bestCombo = 0, accuracy = 0.0
+        /// The ramp (#178): the speed invaders are sent at now, and the highest reached.
+        var wpm = 0, bestWpm = 0
     }
 
     private struct Option: Identifiable {
@@ -45,8 +47,8 @@ struct InvadersView: View {
     private var difficulty: InvadersDifficulty { InvadersDifficulty(rawValue: difficultyRaw) ?? .normal }
     private var characterSet: InvadersCharacterSet { InvadersCharacterSet(rawValue: characterSetRaw) ?? .active }
 
-    /// The key row: the game's pool, letters first then digits, so the row
-    /// reads the way the recognition chart does.
+    /// The game's pool, letters first then digits, so the setup card lists it
+    /// the way the recognition chart does. (The keyboard lays it out QWERTY.)
     private var pool: [Character] {
         model.invadersCharacters(characterSet)
             .map(String.init)
@@ -55,6 +57,51 @@ struct InvadersView: View {
     }
 
     private let columns = 5
+
+    /// The classic 11×8 "crab" invader (#179), drawn from this bitmap so there
+    /// is no image asset; `#` is a lit pixel. The same table is in
+    /// `InvadersScreen.kt`.
+    private static let sprite: [String] = [
+        "..#.....#..",
+        "...#...#...",
+        "..#######..",
+        ".##.###.##.",
+        "###########",
+        "#.#######.#",
+        "#.#.....#.#",
+        "...##.##...",
+    ]
+    /// Points per sprite pixel: 33×24 pt, about what the old "?" glyph took.
+    private static let spritePixel: CGFloat = 3
+
+    /// The sprite as one path centred on `centre`, filled in the invader tint.
+    private static func spritePath(centre: CGPoint) -> Path {
+        let cols = sprite[0].count
+        let origin = CGPoint(x: centre.x - CGFloat(cols) * spritePixel / 2,
+                             y: centre.y - CGFloat(sprite.count) * spritePixel / 2)
+        var path = Path()
+        for (r, row) in sprite.enumerated() {
+            for (c, cell) in row.enumerated() where cell == "#" {
+                path.addRect(CGRect(x: origin.x + CGFloat(c) * spritePixel,
+                                    y: origin.y + CGFloat(r) * spritePixel,
+                                    width: spritePixel, height: spritePixel))
+            }
+        }
+        return path
+    }
+
+    /// The ramp in words (#178) for the setup card: where a game opens and
+    /// where it climbs to. Keying mode sends nothing, so it names the decoder
+    /// speed instead.
+    private var speedNote: String {
+        let target = Int(model.settings.wpm.rounded())
+        let start = Int(InvadersGame.rampStart(characterWpm: model.settings.wpm).rounded())
+        if input == .keying { return "Decoded at your \(target) WPM character speed." }
+        if start >= target { return "Sent at your \(target) WPM character speed." }
+        return "Sent from \(start) WPM, stepping up \(Int(InvadersGame.rampStep)) WPM every "
+            + "\(InvadersGame.hitsPerRampStep) hits to your \(target) WPM character speed. "
+            + "A landing steps it back."
+    }
 
     var body: some View {
         Group {
@@ -93,9 +140,10 @@ struct InvadersView: View {
 
                 optionPicker("Difficulty", selection: $difficultyRaw,
                              options: InvadersDifficulty.allCases.map { Option(id: $0.rawValue, label: $0.label) })
-                Text("Sent at your character speed and Farnsworth setting.")
+                Text(speedNote)
                     .font(.footnote)
                     .foregroundStyle(Theme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
 
                 Button {
                     Haptics.tap()
@@ -143,7 +191,7 @@ struct InvadersView: View {
                 Text("Tap an invader to hear it again")
                     .font(.caption)
                     .foregroundStyle(Theme.textSecondary)
-                keyRow
+                keyboard
             } else {
                 InvadersKeyPanel(wpm: model.settings.wpm,
                                  toneHz: model.settings.toneFrequency,
@@ -169,6 +217,10 @@ struct InvadersView: View {
             .accessibilityLabel("\(hud.lives) lives")
             Spacer()
             stat("Combo", "×\(hud.multiplier)")
+            if input == .icr {
+                Spacer()
+                stat("WPM", "\(hud.wpm)")
+            }
         }
         .font(.subheadline.monospacedDigit())
         .padding(.horizontal, 14)
@@ -196,17 +248,24 @@ struct InvadersView: View {
             let colWidth = size.width / CGFloat(columns)
             let font = Theme.copyFont(size: 22, weight: .bold, monospaced: true,
                                       slashedZero: model.settings.slashedZero)
+            // Keying shows the character above its sprite, so the field
+            // starts lower to leave the label room at the top.
+            let top: CGFloat = input == .keying ? 30 : 18
             for inv in field {
                 let x = (CGFloat(inv.column) + 0.5) * colWidth
-                let y = 18 + CGFloat(inv.progress) * (ground - 36)
-                let rect = CGRect(x: x - 22, y: y - 18, width: 44, height: 36)
-                let body = Path(roundedRect: rect, cornerRadius: 10)
-                context.fill(body, with: .color(Theme.navyRaised))
-                context.stroke(body, with: .color(Theme.tealBright), lineWidth: 1.5)
-                // ICR keeps the character to the ear; keying shows it to key.
-                let label = input == .keying ? String(inv.character) : "?"
-                context.draw(Text(label).font(font).foregroundColor(.white),
-                             at: CGPoint(x: x, y: y))
+                let y = top + CGFloat(inv.progress) * (ground - top - 18)
+                // The alien (#179) instead of a "?", which read as a literal
+                // character. ICR keeps the character to the ear; keying shows
+                // it directly above the sprite to key.
+                if input == .keying {
+                    context.fill(Self.spritePath(centre: CGPoint(x: x, y: y + 6)),
+                                 with: .color(Theme.tealBright))
+                    context.draw(Text(String(inv.character)).font(font).foregroundColor(.white),
+                                 at: CGPoint(x: x, y: y - 14))
+                } else {
+                    context.fill(Self.spritePath(centre: CGPoint(x: x, y: y)),
+                                 with: .color(Theme.tealBright))
+                }
             }
             if flashUntil > Date() {
                 context.draw(Text(flashText).font(.headline).foregroundColor(Theme.tealBright),
@@ -226,28 +285,50 @@ struct InvadersView: View {
         guard input == .icr, let game else { return }
         let column = Int(location.x / max(1, width) * CGFloat(columns))
         guard let nearest = game.invaders.min(by: { abs($0.column - column) < abs($1.column - column) }) else { return }
-        model.playInvader(nearest.character)
+        model.playInvader(nearest.character, wpm: game.currentWpm)
     }
 
-    /// ICR: one button per pool character; a hardware keyboard presses them too.
-    private var keyRow: some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 44), spacing: 6)], spacing: 6) {
-            ForEach(pool.map(String.init), id: \.self) { key in
-                Button {
-                    shoot(Character(key))
-                } label: {
-                    Text(key)
-                        .font(Theme.copyFont(size: 20, weight: .semibold, monospaced: true,
-                                             slashedZero: model.settings.slashedZero))
-                        .frame(maxWidth: .infinity, minHeight: 44)
-                        .foregroundStyle(.white)
-                        .background(Theme.navyRaised,
-                                    in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+    /// ICR: a QWERTY keyboard (#178) — `InvadersKeyboard.rows` lays it out: a
+    /// digit row when the pool has digits, the three letter rows always, any
+    /// punctuation below. A key outside the pool stays in place, dimmed and
+    /// dead, so the layout never shifts as the Koch set grows; a hardware
+    /// keyboard presses the live ones too. Ten keys across at equal width, so
+    /// the shorter rows sit centred the way a keyboard's do.
+    private var keyboard: some View {
+        let live = Set(pool)
+        let rows = InvadersKeyboard.rows(for: pool)
+        let spacing: CGFloat = 4
+        let keyHeight: CGFloat = 40
+        return GeometryReader { geo in
+            let keyWidth = (geo.size.width - spacing * 9) / 10
+            VStack(spacing: spacing) {
+                ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
+                    HStack(spacing: spacing) {
+                        ForEach(row.map(String.init), id: \.self) { key in
+                            let enabled = live.contains(Character(key))
+                            Button {
+                                shoot(Character(key))
+                            } label: {
+                                Text(key)
+                                    .font(Theme.copyFont(size: 18, weight: .semibold, monospaced: true,
+                                                         slashedZero: model.settings.slashedZero))
+                                    .frame(width: keyWidth, height: keyHeight)
+                                    .foregroundStyle(.white)
+                                    .background(Theme.navyRaised,
+                                                in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                            }
+                            .keyboardShortcut(KeyEquivalent(Character(key.lowercased())), modifiers: [])
+                            .disabled(!enabled)
+                            .opacity(enabled ? 1 : 0.3)
+                            .accessibilityLabel("Shoot \(key)")
+                            .accessibilityHidden(!enabled)
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
                 }
-                .keyboardShortcut(KeyEquivalent(Character(key.lowercased())), modifiers: [])
-                .accessibilityLabel("Shoot \(key)")
             }
         }
+        .frame(height: CGFloat(rows.count) * keyHeight + CGFloat(max(0, rows.count - 1)) * spacing)
     }
 
     // MARK: - Game over
@@ -263,6 +344,12 @@ struct InvadersView: View {
                 stat("Best combo", "\(hud.bestCombo)")
             }
             .padding(.vertical, 8)
+            if input == .icr {
+                // The speed the ramp reached (#178); nothing is sent in keying mode.
+                Text("Speed reached: \(hud.bestWpm) WPM")
+                    .font(.footnote)
+                    .foregroundStyle(Theme.textSecondary)
+            }
             Button {
                 Haptics.tap()
                 startGame()
@@ -291,7 +378,8 @@ struct InvadersView: View {
     // MARK: - Game loop
 
     private func startGame() {
-        let config = InvadersGame.Config(characters: pool, difficulty: difficulty, columns: columns)
+        let config = InvadersGame.Config(characters: pool, difficulty: difficulty, columns: columns,
+                                         characterWpm: model.settings.wpm)
         let g = InvadersGame(config: config)
         game = g
         field = []
@@ -313,7 +401,9 @@ struct InvadersView: View {
             switch event {
             case .spawned(let inv):
                 if input == .icr {
-                    let duration = model.playInvader(inv.character)
+                    // At the ramp's current speed (#178), which the hits and
+                    // landings in this same step may just have moved.
+                    let duration = model.playInvader(inv.character, wpm: game.currentWpm)
                     toneEnd[inv.id] = now.addingTimeInterval(duration)
                 }
             case .escaped(let inv):
@@ -361,7 +451,8 @@ struct InvadersView: View {
 
     private func syncHUD(_ g: InvadersGame) {
         let next = HUD(score: g.score, wave: g.wave, lives: g.lives, combo: g.combo,
-                       multiplier: g.multiplier, bestCombo: g.bestCombo, accuracy: g.accuracy)
+                       multiplier: g.multiplier, bestCombo: g.bestCombo, accuracy: g.accuracy,
+                       wpm: Int(g.currentWpm.rounded()), bestWpm: Int(g.bestWpm.rounded()))
         if next != hud { hud = next }
     }
 }
