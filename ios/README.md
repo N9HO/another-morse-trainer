@@ -32,8 +32,10 @@ testers, bug reports and feature chat live on
   with ARRL/RAC Field Day sections) / contest serials (cut numbers optional)
   / names / power, sent back to back at your pace; type, head-copy, key each
   one back, or just listen
-- **Morse Invaders**: an arcade game — invaders descend carrying characters;
-  hear one and type it, or see one and key it, before it lands. Waves,
+- **Morse Invaders**: an arcade game — pixel-art invaders descend carrying
+  characters; hear one and type it on a QWERTY keyboard, or see one and key
+  it, before it lands. Each game starts 10 WPM under your character speed
+  and steps up 2 WPM every five hits (a landing steps it back). Waves,
   lives, combos, three difficulties, and every hit and miss feeds your stats
 - **Pileup Runner**: call CQ and work a simulated pileup, with your own side
   keyed on the air: adjustable callers, speeds, QSB/QRN, cut numbers, bust

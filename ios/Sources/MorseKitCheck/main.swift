@@ -3342,6 +3342,124 @@ do {
           zip(seq, seq.dropFirst()).allSatisfy { $0.last != $1.last })
 }
 
+// Morse Invaders speed ramp and keyboard (#178), against
+// fixtures/invaders-ramp.json — read by this harness AND by the Kotlin
+// InvadersTest. The expected values were worked out from the rules in the
+// fixture's derivation block, not captured from either port.
+struct InvadersRampFixture: Decodable {
+    struct Derivation: Decodable {
+        let minWpm: Double; let startOffset: Double; let step: Double
+        let hitsPerStep: Int; let noRampAtOrBelow: Double
+    }
+    struct Row: Decodable { let characterWpm: Double; let startWpm: Double; let targetWpm: Double }
+    struct Event: Decodable { let event: String; let times: Int?; let currentWpm: Double }
+    struct Scenario: Decodable {
+        let characterWpm: Double; let startWpm: Double; let targetWpm: Double
+        let lives: Int; let events: [Event]; let bestWpm: Double
+    }
+    struct Keyboard: Decodable {
+        struct Case: Decodable { let name: String; let pool: String; let rows: [String] }
+        let digits: String; let letters: [String]; let cases: [Case]
+    }
+    let derivation: Derivation
+    let startTable: [Row]
+    let scenario: Scenario
+    let keyboard: Keyboard
+}
+
+func loadInvadersRampFixture() -> InvadersRampFixture? {
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+    guard let data = try? Data(contentsOf: root.appendingPathComponent("fixtures/invaders-ramp.json")) else { return nil }
+    return try? JSONDecoder().decode(InvadersRampFixture.self, from: data)
+}
+
+print("\nMorse Invaders speed ramp and keyboard (fixtures/invaders-ramp.json):")
+if let fx = loadInvadersRampFixture() {
+    let d = fx.derivation
+    check("ramp constants are the fixture's",
+          InvadersGame.minWpm == d.minWpm && InvadersGame.rampStartOffset == d.startOffset
+          && InvadersGame.rampStep == d.step && InvadersGame.hitsPerRampStep == d.hitsPerStep)
+
+    var tableOK = true
+    for row in fx.startTable {
+        let config = InvadersGame.Config(characters: ["K"], characterWpm: row.characterWpm)
+        let opens = InvadersGame(config: config, rng: SeededRNG(seed: 1)).currentWpm
+        if !approxEqual(InvadersGame.rampStart(characterWpm: row.characterWpm), row.startWpm)
+            || !approxEqual(config.startWpm, row.startWpm)
+            || !approxEqual(config.targetWpm, row.targetWpm)
+            || !approxEqual(opens, row.startWpm) {
+            tableOK = false
+            print("      ↳ \(row.characterWpm) WPM: start \(config.startWpm), target \(config.targetWpm); fixture says \(row.startWpm) / \(row.targetWpm)")
+        }
+    }
+    check("start and target follow the fixture table across \(fx.startTable.count) speeds", tableOK)
+
+    // The scripted scenario, driven with a one-character pool so whatever is
+    // on the field is a K: "hit" shoots one, "escape" lets the lowest land,
+    // "wrongShot" names a character nothing carries.
+    let sc = fx.scenario
+    let g = InvadersGame(config: .init(characters: ["K"], lives: sc.lives, characterWpm: sc.characterWpm),
+                         rng: SeededRNG(seed: 7))
+    check("the scenario game opens at its start speed",
+          approxEqual(g.currentWpm, sc.startWpm) && approxEqual(g.config.targetWpm, sc.targetWpm))
+    var scenarioOK = true
+    for (i, ev) in sc.events.enumerated() {
+        for _ in 0..<(ev.times ?? 1) {
+            switch ev.event {
+            case "hit":
+                while g.invaders.isEmpty { g.advance(by: 0.05) }
+                if !g.shoot("K").isHit { scenarioOK = false; print("      ↳ event \(i): the hit missed") }
+            case "escape":
+                var landed = 0
+                while landed == 0 {
+                    landed = g.advance(by: 0.05).filter { if case .escaped = $0 { return true } else { return false } }.count
+                }
+                if landed != 1 { scenarioOK = false; print("      ↳ event \(i): \(landed) landed at once") }
+            case "wrongShot":
+                if g.shoot("Z").isHit { scenarioOK = false; print("      ↳ event \(i): the wrong shot hit") }
+            default:
+                scenarioOK = false
+                print("      ↳ event \(i): unknown event '\(ev.event)' in the fixture")
+            }
+        }
+        if !approxEqual(g.currentWpm, ev.currentWpm) {
+            scenarioOK = false
+            print("      ↳ after event \(i) (\(ev.event)): \(g.currentWpm) WPM, fixture says \(ev.currentWpm)")
+        }
+    }
+    check("the ramp follows the scripted scenario across \(sc.events.count) events", scenarioOK && !g.isOver)
+    check("bestWpm is the highest speed reached", approxEqual(g.bestWpm, sc.bestWpm))
+
+    let flat = InvadersGame(config: .init(characters: ["K"], characterWpm: d.noRampAtOrBelow), rng: SeededRNG(seed: 2))
+    for _ in 0..<12 {
+        while flat.invaders.isEmpty { flat.advance(by: 0.05) }
+        _ = flat.shoot("K")
+    }
+    check("no ramp at or under the floor",
+          flat.config.startWpm == flat.config.targetWpm && approxEqual(flat.currentWpm, d.noRampAtOrBelow)
+          && approxEqual(flat.bestWpm, d.noRampAtOrBelow))
+
+    let kb = fx.keyboard
+    check("the digit and letter rows are the fixture's",
+          String(InvadersKeyboard.digitRow) == kb.digits
+          && InvadersKeyboard.letterRows.map { String($0) } == kb.letters)
+    var keyboardOK = true
+    for c in kb.cases {
+        let got = InvadersKeyboard.rows(for: Array(c.pool)).map { String($0) }
+        if got != c.rows {
+            keyboardOK = false
+            print("      ↳ \(c.name): got \(got), fixture says \(c.rows)")
+        }
+    }
+    check("keyboard rows match the fixture across \(kb.cases.count) pools", keyboardOK)
+} else {
+    check("fixtures/invaders-ramp.json loads and decodes", false)
+}
+
 print("\n────────────────────────────")
 if failures == 0 {
     print("✅ All \(checks) checks passed.\n")

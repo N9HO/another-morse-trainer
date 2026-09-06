@@ -2923,12 +2923,14 @@ final class AppModel: ObservableObject {
         }
     }
 
-    /// Send one invader's character on the session's player at the session
-    /// speed; returns the sound's duration so the view can date its tone end.
+    /// Send one invader's character on the session's player at `wpm` — the
+    /// game's ramp speed (#178), not the session timing: a single character
+    /// has no gaps for Farnsworth to stretch. Returns the sound's duration so
+    /// the view can date its tone end.
     @discardableResult
-    func playInvader(_ character: Character) -> TimeInterval {
+    func playInvader(_ character: Character, wpm: Double) -> TimeInterval {
         player.replaySound(playable: .text(String(character)),
-                           frequency: settings.toneFrequency, timing: timing)
+                           frequency: settings.toneFrequency, timing: MorseTiming(wpm: wpm))
     }
 
     func stopInvaders() { player.stop() }

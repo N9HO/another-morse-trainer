@@ -122,18 +122,28 @@ public final class InvadersGame {
         public var lives: Int
         /// Hits that clear a wave and tighten the timings.
         public var hitsPerWave: Int
+        /// The learner's character speed: where the speed ramp (#178) ends.
+        public var characterWpm: Double
 
         public init(characters: [Character],
                     difficulty: InvadersDifficulty = .normal,
                     columns: Int = 5,
                     lives: Int = 3,
-                    hitsPerWave: Int = 10) {
+                    hitsPerWave: Int = 10,
+                    characterWpm: Double = 20) {
             self.characters = characters
             self.difficulty = difficulty
             self.columns = columns
             self.lives = lives
             self.hitsPerWave = hitsPerWave
+            self.characterWpm = characterWpm
         }
+
+        /// Where a game's speed starts: `InvadersGame.rampStart(characterWpm:)`.
+        public var startWpm: Double { InvadersGame.rampStart(characterWpm: characterWpm) }
+
+        /// Where the ramp ends: the character speed, never under the floor.
+        public var targetWpm: Double { max(InvadersGame.minWpm, characterWpm) }
     }
 
     public static let pointsPerHit = 100
@@ -157,6 +167,24 @@ public final class InvadersGame {
         min(4, 1 + max(0, combo - 1) / 3)
     }
 
+    // Speed ramp (#178). A game opens `rampStartOffset` WPM under the
+    // learner's character speed — never under `minWpm`, the app-wide
+    // character-speed floor — and climbs `rampStep` WPM every `hitsPerRampStep`
+    // hits in total up to the character speed; a landing steps it back, never
+    // under the start. Wrong shots leave it alone. Farnsworth is ignored: a
+    // single character has no gaps to stretch. Pinned by
+    // fixtures/invaders-ramp.json on both ports.
+    public static let minWpm = 15.0
+    public static let rampStartOffset = 10.0
+    public static let rampStep = 2.0
+    public static let hitsPerRampStep = 5
+
+    /// The speed a game starts at for a character speed: 10 WPM under it,
+    /// floored at 15. At or under 15 there is no ramp.
+    public static func rampStart(characterWpm: Double) -> Double {
+        max(minWpm, characterWpm - rampStartOffset)
+    }
+
     public let config: Config
     private var rng: any RandomNumberGenerator
     private let pool: [Character]
@@ -174,6 +202,11 @@ public final class InvadersGame {
     /// Game time in seconds, the sum of every `advance(by:)`.
     public private(set) var elapsed = 0.0
     public private(set) var isOver = false
+    /// The speed invaders are sent at now (#178): starts at `config.startWpm`,
+    /// climbs with hits and falls back with landings.
+    public private(set) var currentWpm: Double
+    /// The highest speed the ramp reached this game.
+    public private(set) var bestWpm: Double
 
     private var waveHits = 0
     private var sinceSpawn = 0.0
@@ -185,6 +218,8 @@ public final class InvadersGame {
         self.config = config
         self.rng = rng
         self.lives = max(1, config.lives)
+        self.currentWpm = config.startWpm
+        self.bestWpm = config.startWpm
         var seen = Set<Character>()
         let upper = config.characters
             .map { Character(String($0).uppercased()) }
@@ -226,6 +261,7 @@ public final class InvadersGame {
             lives = max(0, lives - 1)
             misses += 1
             combo = 0
+            currentWpm = max(config.startWpm, currentWpm - Self.rampStep)
             e.progress = 1.0
             events.append(.escaped(e))
         }
@@ -265,6 +301,10 @@ public final class InvadersGame {
         let points = Self.pointsPerHit * Self.multiplier(combo: combo)
         score += points
         hits += 1
+        if hits % Self.hitsPerRampStep == 0 {
+            currentWpm = min(config.targetWpm, currentWpm + Self.rampStep)
+            bestWpm = max(bestWpm, currentWpm)
+        }
         waveHits += 1
         var cleared = false
         if waveHits >= max(1, config.hitsPerWave) {
@@ -296,5 +336,35 @@ public final class InvadersGame {
         nextId += 1
         invaders.append(invader)
         return invader
+    }
+}
+
+/// The hear-it/type-it on-screen keyboard (#178): a QWERTY layout, so the
+/// reflex being trained is the one a real keyboard rewards. The digit row
+/// leads when the pool has any digit, the three letter rows are always there,
+/// and anything else in the pool (punctuation, prosigns) makes a final row in
+/// pool order without repeats. A key outside the pool stays in its row — the
+/// view shows it dimmed and dead — so the layout never shifts as the Koch set
+/// grows. Pinned by fixtures/invaders-ramp.json; twin of the Kotlin
+/// `InvadersKeyboard`.
+public enum InvadersKeyboard {
+    public static let digitRow: [Character] = Array("1234567890")
+    public static let letterRows: [[Character]] = [
+        Array("QWERTYUIOP"),
+        Array("ASDFGHJKL"),
+        Array("ZXCVBNM"),
+    ]
+
+    /// The rows to lay out for `pool`, top to bottom.
+    public static func rows(for pool: [Character]) -> [[Character]] {
+        let upper = pool.map { Character(String($0).uppercased()) }
+        let standard = Set(digitRow + letterRows.flatMap { $0 })
+        var rows: [[Character]] = []
+        if upper.contains(where: { digitRow.contains($0) }) { rows.append(digitRow) }
+        rows.append(contentsOf: letterRows)
+        var seen = Set<Character>()
+        let extras = upper.filter { !standard.contains($0) && seen.insert($0).inserted }
+        if !extras.isEmpty { rows.append(extras) }
+        return rows
     }
 }
