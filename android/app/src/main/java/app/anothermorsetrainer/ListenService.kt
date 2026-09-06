@@ -216,7 +216,11 @@ class ListenService : Service() {
 
     /**
      * Hands-free listening still counts as practice: record the session once
-     * (streak + practice time) with each completed item as a heard "answer".
+     * (streak + practice time) with each completed item as an item heard.
+     * Nothing is graded, so `correct` is 0 and "Listen" is a passive mode
+     * ([app.anothermorsetrainer.morsekit.SessionRecord.PASSIVE_MODES]): the
+     * stats screen shows N/A for its accuracy and leaves it out of the
+     * averages (#183).
      */
     private fun recordSession() {
         if (sessionRecorded) return
@@ -225,7 +229,7 @@ class ListenService : Service() {
             Stats.record(
                 mode = "Listen",
                 attempts = ListenState.itemsHeard,
-                correct = ListenState.itemsHeard,
+                correct = 0,
                 bestTtrMs = null,
                 durationSeconds = ListenState.activeSeconds
             )

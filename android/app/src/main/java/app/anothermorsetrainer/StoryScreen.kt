@@ -261,10 +261,13 @@ fun StoryScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) {
     fun recordSession(): Int? {
         if (recorded) return null
         recorded = true
+        // Passages are heard and revealed, never graded: "Stories" is a
+        // passive mode (SessionRecord.PASSIVE_MODES), shown as N/A accuracy
+        // and kept out of the averages (#183).
         return Stats.record(
             mode = "Stories",
             attempts = passagesCopied,
-            correct = passagesCopied,
+            correct = 0,
             bestTtrMs = null,
             durationSeconds = elapsedSeconds()
         )

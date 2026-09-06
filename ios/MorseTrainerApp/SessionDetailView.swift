@@ -51,10 +51,13 @@ struct SessionDetailView: View {
                 Text("\(record.characterWPM) WPM character / \(record.effectiveWPM) WPM effective")
                     .font(.subheadline)
                     .foregroundStyle(Theme.textSecondary)
+                // Listen & Learn and Short Stories grade nothing: their count
+                // is items heard and their accuracy is N/A, not 0% (#183).
+                let passive = SessionRecord.passiveModes.contains(record.mode)
                 HStack(spacing: 18) {
                     stat("Mode", modeTitle)
-                    stat("Answered", "\(record.attempts)")
-                    stat("Accuracy", record.attempts == 0 ? "—" : "\(Int((record.accuracy * 100).rounded()))%")
+                    stat(passive ? "Heard" : "Answered", "\(record.attempts)")
+                    stat("Accuracy", record.isScored ? "\(Int((record.accuracy * 100).rounded()))%" : "N/A")
                     stat("Median", record.medianTTR.map { String(format: "%.2f s", $0) } ?? "—")
                 }
                 .padding(.top, 2)

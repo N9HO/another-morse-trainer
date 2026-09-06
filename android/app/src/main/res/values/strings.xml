@@ -400,6 +400,19 @@
     <string name="stats_characters_this_session">Characters this session</string>
     <string name="stats_characters_this_session_blurb">Median copy time per character — hollow rows were in your active set but not drilled this time.</string>
     <string name="stats_reaction_value">%1$s reaction</string>
+    <!-- Passive sessions (Listen & Learn, Stories) have no accuracy (#183). -->
+    <string name="stats_not_applicable">N/A</string>
+    <string name="stats_heard">Heard</string>
+    <string name="stats_heard_value">%1$s heard</string>
+    <!-- Activity grid (#181) -->
+    <string name="stats_activity">Activity</string>
+    <string name="stats_activity_blurb">One tile per day, shaded by practice time: under 5 minutes, 5–15, 15–30, and 30 or more. Rows run Monday to Sunday.</string>
+    <string name="stats_activity_less">Less</string>
+    <string name="stats_activity_more">More</string>
+    <string name="stats_activity_day_none">%1$s: no practice</string>
+    <string name="stats_activity_day_under_minute">%1$s: under a minute</string>
+    <string name="stats_activity_day_minutes">%1$s: %2$d minutes</string>
+    <string name="stats_activity_legend">Less to more practice time</string>
 
     <!-- SettingsScreen -->
     <string name="settings_scoped_note">Showing what applies here — the full settings live on the home screen.</string>

@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -51,11 +52,17 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.anothermorsetrainer.morsekit.ActivityLedger
 import app.anothermorsetrainer.morsekit.CharacterStats
 import app.anothermorsetrainer.morsekit.ConfusionMatrix
 import app.anothermorsetrainer.morsekit.ConfusionPair
@@ -72,6 +79,8 @@ import kotlin.math.roundToInt
 
 private val DATE_FMT: DateTimeFormatter = DateTimeFormatter.ofPattern("MMM d")
 private val DETAIL_FMT: DateTimeFormatter = DateTimeFormatter.ofPattern("MMM d, yyyy · h:mm a")
+private val ACTIVITY_DAY_FMT: DateTimeFormatter = DateTimeFormatter.ofPattern("EEE d MMM")
+private val ACTIVITY_MONTH_FMT: DateTimeFormatter = DateTimeFormatter.ofPattern("MMM")
 private val MASTERED = Color(0xFFEF9F27)
 private val GOOD = Color(0xFF5DCAA5)
 
@@ -137,6 +146,21 @@ fun StatsScreen(onBack: () -> Unit) {
 
             StreakHero()
 
+            // The daily activity grid (#181), right under the streak it
+            // illustrates: half a year of columns on a phone, a full year
+            // where the window is 600 dp or wider — iOS switches on the
+            // regular size class at the same point.
+            SectionLabel(stringResource(R.string.stats_activity))
+            Text(
+                stringResource(R.string.stats_activity_blurb),
+                style = MaterialTheme.typography.bodySmall,
+                color = Brand.textSecondary,
+                modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
+            )
+            Column(modifier = Modifier.fillMaxWidth().brandCard(14.dp).padding(14.dp)) {
+                ActivityGrid(ledger = Stats.activity, weeks = if (isWideScreen()) 52 else 26)
+            }
+
             SectionLabel(stringResource(R.string.stats_lifetime))
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 MetricTile(stringResource(R.string.stats_sessions), "${Stats.totalSessions}", Modifier.weight(1f))
@@ -167,9 +191,10 @@ fun StatsScreen(onBack: () -> Unit) {
             }
 
             // Every stored session, not the 50-row summary list: the iOS twin
-            // summarises the whole SessionHistory.
+            // summarises the whole SessionHistory. Scored sessions only — a
+            // Listen & Learn session has no accuracy to contribute (#183).
             val bands = WPMBands.summarize(
-                Stats.history.map { r ->
+                Stats.history.filter { it.isScored }.map { r ->
                     WPMBands.Entry(
                         wpm = r.characterWPM,
                         attempts = r.attempts,
@@ -206,6 +231,7 @@ fun StatsScreen(onBack: () -> Unit) {
                         date = LocalDate.ofEpochDay(s.epochDay).format(DATE_FMT),
                         attempts = s.attempts,
                         accuracy = s.accuracy,
+                        scored = s.isScored,
                         onOpen = record?.let { { selected = it } }
                     )
                     if (i < recent.size - 1) HairlineDivider()
@@ -476,13 +502,148 @@ private fun WeekStrip() {
     }
 }
 
+// MARK: - Activity grid (#181)
+
+/**
+ * The GitHub-style activity grid — the iOS `ActivityGridView`: one tile per
+ * day, seven rows Monday to Sunday, one column per week ending with the
+ * current week, shaded by that day's practice time from [ActivityLedger].
+ * Sized from the card's width so the columns always fit, and each past day
+ * carries its own content description ("Tue 3 Sep: 12 minutes").
+ */
+@Composable
+private fun ActivityGrid(ledger: ActivityLedger, weeks: Int, today: LocalDate = LocalDate.now()) {
+    val monday = today.minusDays((today.dayOfWeek.value - 1).toLong())
+    val firstDay = monday.minusWeeks((weeks - 1).toLong())
+    val gutter = 22.dp          // weekday labels
+    val headerHeight = 16.dp    // month labels
+    val gap = 2.dp
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+        val tile = ((maxWidth - gutter - gap * (weeks - 1)) / weeks).coerceAtLeast(4.dp)
+        Column(modifier = Modifier.fillMaxWidth()) {
+            // A month label over the first column that holds the 1st of a
+            // month, at most every third column so they never overlap.
+            Row(modifier = Modifier.fillMaxWidth().height(headerHeight)) {
+                Spacer(Modifier.width(gutter))
+                var lastLabelWeek = -3
+                for (week in 0 until weeks) {
+                    val weekStart = firstDay.plusWeeks(week.toLong())
+                    val firstOfMonth = (0..6).map { weekStart.plusDays(it.toLong()) }.firstOrNull { it.dayOfMonth == 1 }
+                    val label = if (firstOfMonth != null && week - lastLabelWeek >= 3) {
+                        lastLabelWeek = week
+                        firstOfMonth.format(ACTIVITY_MONTH_FMT)
+                    } else null
+                    Box(modifier = Modifier.width(if (week < weeks - 1) tile + gap else tile)) {
+                        if (label != null) {
+                            Text(
+                                label,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Brand.textSecondary,
+                                maxLines = 1,
+                                softWrap = false,
+                                overflow = TextOverflow.Visible,
+                                modifier = Modifier.wrapContentWidth(Alignment.Start, unbounded = true)
+                            )
+                        }
+                    }
+                }
+            }
+            Row(modifier = Modifier.fillMaxWidth()) {
+                // Weekday labels down the gutter, on alternate rows.
+                Column(modifier = Modifier.width(gutter)) {
+                    val labels = listOf("M", null, "W", null, "F", null, null)
+                    for (row in 0..6) {
+                        if (row > 0) Spacer(Modifier.height(gap))
+                        Box(modifier = Modifier.height(tile), contentAlignment = Alignment.CenterStart) {
+                            labels[row]?.let {
+                                Text(it, style = MaterialTheme.typography.labelSmall, color = Brand.textSecondary, maxLines = 1, softWrap = false)
+                            }
+                        }
+                    }
+                }
+                for (week in 0 until weeks) {
+                    if (week > 0) Spacer(Modifier.width(gap))
+                    Column(modifier = Modifier.width(tile)) {
+                        for (weekday in 0..6) {
+                            if (weekday > 0) Spacer(Modifier.height(gap))
+                            ActivityTile(ledger, firstDay.plusDays((week * 7 + weekday).toLong()), today, tile)
+                        }
+                    }
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+            ActivityLegend()
+        }
+    }
+}
+
+/** One day's tile; days still to come are left blank. */
+@Composable
+private fun ActivityTile(ledger: ActivityLedger, day: LocalDate, today: LocalDate, size: Dp) {
+    if (day.isAfter(today)) {
+        Spacer(Modifier.size(size))
+        return
+    }
+    val dayText = day.format(ACTIVITY_DAY_FMT)
+    val seconds = ledger.seconds(day)
+    val label = when {
+        !ledger.isRecorded(day) -> stringResource(R.string.stats_activity_day_none, dayText)
+        seconds < 60 -> stringResource(R.string.stats_activity_day_under_minute, dayText)
+        else -> stringResource(R.string.stats_activity_day_minutes, dayText, seconds / 60)
+    }
+    val shape = RoundedCornerShape(2.dp)
+    Box(
+        modifier = Modifier
+            .size(size)
+            .clip(shape)
+            .background(activityColor(ledger.level(day)))
+            .then(if (day == today) Modifier.border(1.dp, Brand.tealBright, shape) else Modifier)
+            .semantics { contentDescription = label }
+    )
+}
+
+/** "Less ▢▢▢▢▢ More" — the five shades in order. */
+@Composable
+private fun ActivityLegend() {
+    val legend = stringResource(R.string.stats_activity_legend)
+    Row(
+        modifier = Modifier.fillMaxWidth().clearAndSetSemantics { contentDescription = legend },
+        horizontalArrangement = Arrangement.End,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(stringResource(R.string.stats_activity_less), style = MaterialTheme.typography.labelSmall, color = Brand.textSecondary)
+        for (level in 0..ActivityLedger.MAX_LEVEL) {
+            Spacer(Modifier.width(4.dp))
+            Box(modifier = Modifier.size(10.dp).clip(RoundedCornerShape(2.dp)).background(activityColor(level)))
+        }
+        Spacer(Modifier.width(4.dp))
+        Text(stringResource(R.string.stats_activity_more), style = MaterialTheme.typography.labelSmall, color = Brand.textSecondary)
+    }
+}
+
+/**
+ * Shade for a level, 0 (nothing) to 4 (30 minutes or more): the teal accent
+ * stepped up in opacity, the same five steps as the iOS grid.
+ */
+private fun activityColor(level: Int): Color = when (level) {
+    0 -> Color.White.copy(alpha = 0.06f)
+    1 -> Brand.teal.copy(alpha = 0.3f)
+    2 -> Brand.teal.copy(alpha = 0.55f)
+    3 -> Brand.teal.copy(alpha = 0.8f)
+    else -> Brand.tealBright
+}
+
 // MARK: - Personal bests
 
 @Composable
 private fun PersonalBests(snapshot: ProgressiveCharacters.Snapshot) {
-    val realSessions = Stats.recent.filter { it.attempts >= 10 }
+    // Scored sessions only: a Listen & Learn session's "attempts" are items
+    // heard, with no accuracy to be best at (#183) — and a best-accuracy
+    // badge from a 3-question session is meaningless, so at least ten drills.
+    val scored = Stats.recent.filter { it.isScored }
+    val realSessions = scored.filter { it.attempts >= 10 }
     val bestAcc = realSessions.maxOfOrNull { it.accuracy }
-    val biggest = Stats.recent.maxOfOrNull { it.attempts }
+    val biggest = scored.maxOfOrNull { it.attempts }
     val mastered = ShareCard.masteredCount(snapshot)
     val total = MorseCode.kochOrder.size
 
@@ -537,8 +698,16 @@ private fun SessionRow(
     date: String,
     attempts: Int,
     accuracy: Double,
+    scored: Boolean,
     onOpen: (() -> Unit)? = null
 ) {
+    // A session that graded nothing — Listen & Learn, Stories — has no
+    // accuracy, and must not read as 0% (#183): its count is items heard.
+    val summary = when {
+        scored -> "$attempts · ${(accuracy * 100).roundToInt()}%"
+        SessionRecord.isScoredMode(mode) -> "$attempts · ${stringResource(R.string.stats_not_applicable)}"
+        else -> "${stringResource(R.string.stats_heard_value, attempts)} · ${stringResource(R.string.stats_not_applicable)}"
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -551,9 +720,9 @@ private fun SessionRow(
             Text(date, style = MaterialTheme.typography.labelSmall, color = Brand.textSecondary)
         }
         Text(
-            if (attempts == 0) "—" else "$attempts · ${(accuracy * 100).roundToInt()}%",
+            summary,
             fontWeight = FontWeight.Medium,
-            color = if (accuracy >= 0.9) GOOD else MASTERED
+            color = if (!scored) Brand.textPrimary else if (accuracy >= 0.9) GOOD else MASTERED
         )
         if (onOpen != null) {
             Spacer(Modifier.width(8.dp))
@@ -593,10 +762,16 @@ private fun SessionDetail(record: SessionRecord, onBack: () -> Unit) {
                 textAlign = TextAlign.Center
             )
 
+            // Listen & Learn and Stories grade nothing: their count is items
+            // heard and their accuracy is N/A, not 0% (#183).
+            val passive = !SessionRecord.isScoredMode(record.mode)
             Column(modifier = Modifier.fillMaxWidth().brandCard(14.dp).padding(horizontal = 14.dp, vertical = 4.dp)) {
-                DetailRow(stringResource(R.string.common_answered), "${record.attempts}")
+                DetailRow(stringResource(if (passive) R.string.stats_heard else R.string.common_answered), "${record.attempts}")
                 HairlineDivider()
-                DetailRow(stringResource(R.string.common_accuracy), "${(record.accuracy * 100).roundToInt()}%")
+                DetailRow(
+                    stringResource(R.string.common_accuracy),
+                    if (record.isScored) "${(record.accuracy * 100).roundToInt()}%" else stringResource(R.string.stats_not_applicable)
+                )
                 HairlineDivider()
                 DetailRow(stringResource(R.string.common_fastest), record.fastestTTR?.let { stringResource(R.string.common_seconds_2dp, it) } ?: "—")
                 HairlineDivider()

@@ -1360,6 +1360,39 @@ do {
           hist.totalPracticeSeconds == 300 && hist.totalAnswered == 14 && hist.totalCorrect == 10)
     check("best recognition time is the fastest ever seen", hist.bestTTR == 0.219)
 
+    // Passive sessions (#183): Listen & Learn and Short Stories log what was
+    // heard, never a graded answer. They are sessions and practice time, but
+    // not answers — so they cannot drag the lifetime accuracy down.
+    let heard = SessionRecord(id: UUID(), date: Date(), mode: "listen",
+                              characterWPM: 20, effectiveWPM: 20, attempts: 40, correct: 0,
+                              fastestTTR: nil, medianTTR: nil, durationSeconds: 600,
+                              characters: [], activeCharacters: [])
+    check("a Listen & Learn session is not scored", !heard.isScored)
+    check("a Short Stories session is not scored",
+          !SessionRecord(id: UUID(), date: Date(), mode: "story",
+                         characterWPM: 20, effectiveWPM: 20, attempts: 3, correct: 3,
+                         fastestTTR: nil, medianTTR: nil, durationSeconds: nil,
+                         characters: [], activeCharacters: []).isScored)
+    check("a graded session with answers is scored", rec.isScored)
+    check("a graded session with nothing answered is not scored",
+          !SessionRecord(id: UUID(), date: Date(), mode: "characters",
+                         characterWPM: 20, effectiveWPM: 20, attempts: 0, correct: 0,
+                         fastestTTR: nil, medianTTR: nil, durationSeconds: nil,
+                         characters: [], activeCharacters: []).isScored)
+    var mixed = SessionHistory()
+    mixed.add(rec)
+    mixed.add(heard)
+    check("a passive session counts as a session and as practice time",
+          mixed.totalSessions == 2 && mixed.totalPracticeSeconds == 900)
+    check("a passive session adds nothing to the answered and correct totals",
+          mixed.totalAnswered == 13 && mixed.totalCorrect == 9
+            && abs(mixed.lifetimeAccuracy - 9.0 / 13.0) < 1e-9)
+    check("seeding from rows skips passive sessions too",
+          SessionHistory(sessions: [rec, heard]).totalAnswered == 13)
+    check("speed bands leave passive sessions out",
+          mixed.wpmBandSummaries().count == 1
+            && mixed.wpmBandSummaries().first?.attempts == 13)
+
     // One corrupt row is dropped, not the whole history (Android parses row by
     // row; Swift used to lose everything). And a file saved before the
     // lifetime counters existed seeds them from the rows that survive.
@@ -3458,6 +3491,111 @@ if let fx = loadInvadersRampFixture() {
     check("keyboard rows match the fixture across \(kb.cases.count) pools", keyboardOK)
 } else {
     check("fixtures/invaders-ramp.json loads and decodes", false)
+}
+
+// MARK: - Shared activity fixture
+//
+// fixtures/activity.json, consumed by this harness AND by android
+// ActivityLedgerTest. Same bargain as the timing fixture: shared *data*, never
+// shared code. It pins the shade thresholds with their boundary values, a
+// multi-record scenario with its per-day totals and levels, and the cap, so
+// the two grids cannot quietly shade the same day differently.
+struct ActivityFixture: Decodable {
+    struct Level: Decodable { let seconds, level: Int }
+    struct Record: Decodable { let day: String; let seconds: Int }
+    struct Expected: Decodable { let day: String; let recorded: Bool; let seconds, level: Int }
+    struct Scenario: Decodable { let records: [Record]; let dayCount: Int; let expected: [Expected] }
+    struct Cap: Decodable {
+        let firstDay: String
+        let distinctDays, secondsEach, expectedCount: Int
+        let droppedDay, oldestKept, newestKept: String
+    }
+    let capDays: Int
+    let levelThresholds: [Int]
+    let levels: [Level]
+    let scenario: Scenario
+    let cap: Cap
+}
+
+func loadActivityFixture() -> ActivityFixture? {
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+    let url = root.appendingPathComponent("fixtures/activity.json")
+    guard let data = try? Data(contentsOf: url) else { return nil }
+    return try? JSONDecoder().decode(ActivityFixture.self, from: data)
+}
+
+print("\nActivity ledger (issue #181), against fixtures/activity.json:")
+if let fx = loadActivityFixture() {
+    check("the cap and the thresholds are the fixture's",
+          ActivityLedger.capDays == fx.capDays
+            && ActivityLedger.levelThresholds == fx.levelThresholds
+            && ActivityLedger.maxLevel == fx.levelThresholds.count)
+
+    var levelsOK = true
+    for c in fx.levels where ActivityLedger.level(forSeconds: c.seconds) != c.level {
+        levelsOK = false
+        print("      ↳ \(c.seconds) s: got level \(ActivityLedger.level(forSeconds: c.seconds)), fixture says \(c.level)")
+    }
+    check("seconds map to shade levels as the fixture pins, boundaries included (\(fx.levels.count) cases)", levelsOK)
+
+    var ledger = ActivityLedger()
+    for r in fx.scenario.records { ledger.record(day: r.day, seconds: r.seconds) }
+    check("the scenario records \(fx.scenario.dayCount) distinct days", ledger.dayCount == fx.scenario.dayCount)
+    var daysOK = true
+    for e in fx.scenario.expected {
+        let got = (ledger.isRecorded(day: e.day), ledger.seconds(on: e.day), ledger.level(on: e.day))
+        if got != (e.recorded, e.seconds, e.level) {
+            daysOK = false
+            print("      ↳ \(e.day): got \(got), fixture says (\(e.recorded), \(e.seconds), \(e.level))")
+        }
+    }
+    check("same-day records add up and every day reads as the fixture expects", daysOK)
+
+    // The cap: walk the calendar forward from the fixture's first day.
+    let utc = { () -> Calendar in
+        var c = Calendar(identifier: .gregorian)
+        c.timeZone = TimeZone(identifier: "UTC")!
+        return c
+    }()
+    var capped = ActivityLedger()
+    if let first = ActivityLedger.date(forKey: fx.cap.firstDay, calendar: utc) {
+        for i in 0..<fx.cap.distinctDays {
+            if let day = utc.date(byAdding: .day, value: i, to: first) {
+                capped.record(date: day, seconds: fx.cap.secondsEach, calendar: utc)
+            }
+        }
+    }
+    check("the cap keeps \(fx.cap.expectedCount) days and drops the earliest",
+          capped.dayCount == fx.cap.expectedCount
+            && !capped.isRecorded(day: fx.cap.droppedDay)
+            && capped.recordedDays.first == fx.cap.oldestKept
+            && capped.recordedDays.last == fx.cap.newestKept)
+
+    // Day keys come from calendar components, so the key round-trips through
+    // the date it names and a negative duration still marks the day.
+    var neg = ActivityLedger()
+    neg.record(day: "2026-03-02", seconds: -30)
+    check("a negative duration counts as zero but still marks the day",
+          neg.isRecorded(day: "2026-03-02") && neg.seconds(on: "2026-03-02") == 0 && neg.level(on: "2026-03-02") == 1)
+    if let d = ActivityLedger.date(forKey: "2026-03-02", calendar: utc) {
+        check("a day key round-trips through the date it names",
+              ActivityLedger.dayKey(for: d, calendar: utc) == "2026-03-02")
+    } else {
+        check("a day key round-trips through the date it names", false)
+    }
+    do {
+        let data = try JSONEncoder().encode(ledger)
+        let back = try JSONDecoder().decode(ActivityLedger.self, from: data)
+        check("the ledger round-trips through JSON", back == ledger)
+    } catch {
+        check("the ledger round-trips through JSON", false)
+    }
+} else {
+    check("fixtures/activity.json loads and decodes", false)
 }
 
 print("\n────────────────────────────")

@@ -75,9 +75,10 @@ testers, bug reports and feature chat live on
 - **Bluetooth keep-alive and band noise**: a near-silent floor (on by
   default) that stops Bluetooth earbuds sleeping through the first character,
   and a separate band-noise level to copy through
-- **Progress**: daily streak with milestone celebrations, session history
-  with per-session recognition charts, per-character stats, most-confused
-  pairs, performance by 5-WPM speed band, and a shareable Brag Sheet
+- **Progress**: daily streak with milestone celebrations, a GitHub-style
+  activity grid of daily practice time, session history with per-session
+  recognition charts, per-character stats, most-confused pairs, performance
+  by 5-WPM speed band, and a shareable Brag Sheet
 - Character speed adjustable to 60 WPM, with Farnsworth spacing tracking it
 - Timed practice sessions (1-30 min or open-ended) with mid-session timer
   controls and an end-of-session summary, and a mode switcher that jumps

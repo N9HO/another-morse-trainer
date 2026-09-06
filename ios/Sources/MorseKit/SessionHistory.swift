@@ -46,6 +46,18 @@ public struct SessionRecord: Codable, Sendable, Identifiable, Equatable {
 
     public var accuracy: Double { attempts == 0 ? 0 : Double(correct) / Double(attempts) }
 
+    /// `TrainingMode` raw values of the modes that play without grading an
+    /// answer — Listen & Learn announces each item, Short Stories reveals the
+    /// passage — so their `attempts` count items *heard*, not answers, and
+    /// `correct` is always 0. Their accuracy is not applicable (#183): the
+    /// stats screens show "N/A" and the aggregates leave them out.
+    public static let passiveModes: Set<String> = ["listen", "story"]
+
+    /// Whether this session graded any answers. False for a passive mode,
+    /// or for a record with nothing answered; such a session has no accuracy
+    /// to show and must not feed an accuracy average.
+    public var isScored: Bool { attempts > 0 && !Self.passiveModes.contains(mode) }
+
     /// Per-character recognition result within a single session.
     public struct CharResult: Codable, Sendable, Equatable, Identifiable {
         public var character: String        // a single character, e.g. "K"
@@ -128,7 +140,9 @@ public struct SessionHistory: Codable, Sendable, Equatable {
 
     /// Sessions ever recorded (the list holds at most the newest `limit`).
     public private(set) var totalSessions: Int
-    /// Drills ever answered, and how many were right.
+    /// Drills ever answered, and how many were right. Only scored sessions
+    /// count (#183): a Listen & Learn session's heard items are not answers
+    /// and would drag `lifetimeAccuracy` down.
     public private(set) var totalAnswered: Int
     public private(set) var totalCorrect: Int
     /// Seconds ever spent in a session that logged a duration.
@@ -142,8 +156,9 @@ public struct SessionHistory: Codable, Sendable, Equatable {
     public init(sessions: [SessionRecord] = []) {
         self.sessions = sessions
         self.totalSessions = sessions.count
-        self.totalAnswered = sessions.reduce(0) { $0 + $1.attempts }
-        self.totalCorrect = sessions.reduce(0) { $0 + $1.correct }
+        let scored = sessions.filter(\.isScored)
+        self.totalAnswered = scored.reduce(0) { $0 + $1.attempts }
+        self.totalCorrect = scored.reduce(0) { $0 + $1.correct }
         self.totalPracticeSeconds = sessions.reduce(0.0) { $0 + max(0, $1.durationSeconds ?? 0) }
         self.bestTTR = sessions.compactMap(\.fastestTTR).min()
     }
@@ -156,8 +171,10 @@ public struct SessionHistory: Codable, Sendable, Equatable {
             sessions.removeLast(sessions.count - Self.limit)
         }
         totalSessions += 1
-        totalAnswered += record.attempts
-        totalCorrect += record.correct
+        if record.isScored {
+            totalAnswered += record.attempts
+            totalCorrect += record.correct
+        }
         totalPracticeSeconds += max(0, record.durationSeconds ?? 0)
         if let fastest = record.fastestTTR, bestTTR.map({ fastest < $0 }) ?? true {
             bestTTR = fastest
@@ -236,12 +253,13 @@ public extension SessionHistory {
     }
 
     /// Performance grouped into 5-WPM speed bands, slowest band first. Only
-    /// sessions that actually answered something — and recorded their speed —
-    /// are counted (older persisted sessions predate the speed field, and
+    /// sessions that actually graded an answer — and recorded their speed —
+    /// are counted (a passive Listen & Learn session has no accuracy to
+    /// contribute, #183; older persisted sessions predate the speed field, and
     /// without the speed check they all land in a phantom 0-4 WPM band at the
     /// head of the chart).
     func wpmBandSummaries() -> [WPMBandSummary] {
-        let answered = sessions.filter { $0.attempts > 0 && $0.characterWPM > 0 }
+        let answered = sessions.filter { $0.isScored && $0.characterWPM > 0 }
         let grouped = Dictionary(grouping: answered) { Self.band(forWPM: $0.characterWPM).lowerBound }
         return grouped.keys.sorted().map { lower in
             let records = grouped[lower] ?? []
