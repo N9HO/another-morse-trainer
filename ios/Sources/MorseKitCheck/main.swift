@@ -5130,6 +5130,323 @@ do {
     })
 }
 
+// MARK: - CW Asteroids (#189)
+//
+// fixtures/asteroids.json, consumed by this harness AND by the Kotlin
+// AsteroidsTest. Shared data, never shared code: it pins the timing and ramp
+// constants, the timing, multiplier, word-chance and ramp-start tables, the
+// word filter, the split rule, and a scripted scenario per input mode. The
+// expected values were worked out from the rules in the fixture's derivation
+// block, not captured from either port.
+struct AsteroidsFixture: Decodable {
+    struct Constants: Decodable {
+        let pointsPerCharacter, lives, hitsPerWave, maxOnField, sectors: Int
+        let baseSpawnInterval, minSpawnInterval, spawnTightening: Double
+        let baseApproachTime, minApproachTime, approachTightening, splitSpread: Double
+        let wordWaveStart: Int; let wordChancePerWave, maxWordChance: Double
+        let wordRank, minWordLength, maxWordLength: Int
+        let sendBufferTimeout: Double
+    }
+    struct Ramp: Decodable { let minWpm, startOffset, step: Double; let hitsPerStep: Int }
+    struct Derivation: Decodable {
+        let constants: Constants; let ramp: Ramp; let timeScale: [String: Double]
+    }
+    struct TimingRow: Decodable { let wave: Int; let difficulty: String; let spawnInterval, approachTime: Double }
+    struct MultiplierRow: Decodable { let combo, multiplier: Int }
+    struct ChanceRow: Decodable { let wave: Int; let chance: Double }
+    struct StartRow: Decodable { let characterWpm, startWpm, targetWpm: Double }
+    struct WordFilter: Decodable { let pool: String; let words, kept: [String] }
+    struct Fragment: Decodable { let label: String; let angle: Double; let progress: Double? }
+    struct SplitCase: Decodable { let label: String; let angle, progress: Double; let fragments: [Fragment] }
+    struct Split: Decodable { let cases: [SplitCase] }
+    struct SendEvent: Decodable {
+        let event: String; let label: String?; let angle, progress, seconds: Double?
+        let char: String?; let outcome, buffer, expected, chosen: String?
+        let points: Int?; let fragments: [Fragment]?
+    }
+    struct SendFinal: Decodable { let score, hits, misses, combo, bestCombo, wave, lives, onField: Int }
+    struct SendScenario: Decodable { let characterWpm: Double; let hitsPerWave: Int; let events: [SendEvent]; let final: SendFinal }
+    struct CopyEvent: Decodable { let event: String; let times: Int?; let currentWpm: Double }
+    struct CopyFinal: Decodable { let score, hits, misses, bestCombo, wave, lives: Int; let bestWpm: Double }
+    struct CopyScenario: Decodable {
+        let characterWpm, startWpm, targetWpm: Double; let lives, hitsPerWave: Int
+        let events: [CopyEvent]; let final: CopyFinal
+    }
+    let derivation: Derivation
+    let timingTable: [TimingRow]
+    let multiplierTable: [MultiplierRow]
+    let wordChanceTable: [ChanceRow]
+    let startTable: [StartRow]
+    let wordFilter: WordFilter
+    let split: Split
+    let sendScenario: SendScenario
+    let copyScenario: CopyScenario
+}
+
+func loadAsteroidsFixture() -> AsteroidsFixture? {
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+    guard let data = try? Data(contentsOf: root.appendingPathComponent("fixtures/asteroids.json")) else { return nil }
+    return try? JSONDecoder().decode(AsteroidsFixture.self, from: data)
+}
+
+print("\nCW Asteroids (fixtures/asteroids.json):")
+if let fx = loadAsteroidsFixture() {
+    let c = fx.derivation.constants
+    check("asteroids constants are the fixture's",
+          AsteroidsGame.pointsPerCharacter == c.pointsPerCharacter && AsteroidsGame.defaultLives == c.lives
+          && AsteroidsGame.defaultHitsPerWave == c.hitsPerWave && AsteroidsGame.maxOnField == c.maxOnField
+          && AsteroidsGame.sectors == c.sectors
+          && AsteroidsGame.baseSpawnInterval == c.baseSpawnInterval && AsteroidsGame.minSpawnInterval == c.minSpawnInterval
+          && AsteroidsGame.spawnTightening == c.spawnTightening
+          && AsteroidsGame.baseApproachTime == c.baseApproachTime && AsteroidsGame.minApproachTime == c.minApproachTime
+          && AsteroidsGame.approachTightening == c.approachTightening && AsteroidsGame.splitSpread == c.splitSpread
+          && AsteroidsGame.wordWaveStart == c.wordWaveStart && AsteroidsGame.wordChancePerWave == c.wordChancePerWave
+          && AsteroidsGame.maxWordChance == c.maxWordChance && AsteroidsGame.wordRank == c.wordRank
+          && AsteroidsGame.minWordLength == c.minWordLength && AsteroidsGame.maxWordLength == c.maxWordLength
+          && AsteroidsGame.sendBufferTimeout == c.sendBufferTimeout)
+    let r = fx.derivation.ramp
+    check("asteroids ramp constants are the fixture's",
+          AsteroidsGame.minWpm == r.minWpm && AsteroidsGame.rampStartOffset == r.startOffset
+          && AsteroidsGame.rampStep == r.step && AsteroidsGame.hitsPerRampStep == r.hitsPerStep)
+    check("difficulty time scales are the fixture's",
+          InvadersDifficulty.allCases.allSatisfy { fx.derivation.timeScale[$0.rawValue] == $0.timeScale })
+
+    var timingOK = true
+    for row in fx.timingTable {
+        guard let d = InvadersDifficulty(rawValue: row.difficulty) else { timingOK = false; continue }
+        if !approxEqual(AsteroidsGame.spawnInterval(wave: row.wave, difficulty: d), row.spawnInterval, 1e-6)
+            || !approxEqual(AsteroidsGame.approachTime(wave: row.wave, difficulty: d), row.approachTime, 1e-6) {
+            timingOK = false
+        }
+    }
+    check("timing table matches across \(fx.timingTable.count) rows", timingOK && !fx.timingTable.isEmpty)
+    check("multiplier table matches",
+          fx.multiplierTable.allSatisfy { AsteroidsGame.multiplier(combo: $0.combo) == $0.multiplier })
+    check("word chance table matches",
+          fx.wordChanceTable.allSatisfy { approxEqual(AsteroidsGame.wordChance(wave: $0.wave), $0.chance, 1e-9) })
+
+    var startOK = true
+    for row in fx.startTable {
+        let config = AsteroidsGame.Config(characters: ["K"], input: .copy, characterWpm: row.characterWpm)
+        let opens = AsteroidsGame(config: config, rng: SeededRNG(seed: 1)).currentWpm
+        if !approxEqual(AsteroidsGame.rampStart(characterWpm: row.characterWpm), row.startWpm)
+            || !approxEqual(config.startWpm, row.startWpm) || !approxEqual(config.targetWpm, row.targetWpm)
+            || !approxEqual(opens, row.startWpm) {
+            startOK = false
+        }
+    }
+    check("ramp start table matches across \(fx.startTable.count) rows", startOK)
+
+    let wf = fx.wordFilter
+    check("word pool filter keeps the fixture's words",
+          AsteroidsGame.wordPool(words: wf.words, characters: Array(wf.pool)) == wf.kept)
+    let wfGame = AsteroidsGame(config: .init(characters: Array(wf.pool), words: wf.words), rng: SeededRNG(seed: 1))
+    check("a game's word pool is the filtered list", wfGame.wordPool == wf.kept)
+
+    var splitOK = true
+    for sc in fx.split.cases {
+        let g = AsteroidsGame(config: .init(characters: ["K"]), rng: SeededRNG(seed: 1))
+        let parent = g.place(label: sc.label, angle: sc.angle, progress: sc.progress)
+        var shot = AsteroidsShot(outcome: .ignored)
+        for ch in sc.label { shot = g.send(ch) }
+        if !shot.isHit || shot.asteroid?.id != parent.id || shot.fragments.count != sc.fragments.count { splitOK = false; continue }
+        for (f, e) in zip(shot.fragments, sc.fragments) {
+            if f.label != e.label || !approxEqual(f.angle, e.angle, 1e-9) || !approxEqual(f.progress, sc.progress, 1e-9)
+                || !f.isFragment || !approxEqual(f.approachTime, g.approachTime) {
+                splitOK = false
+            }
+        }
+        if g.asteroids.map(\.id) != shot.fragments.map(\.id) { splitOK = false }
+    }
+    check("a word splits into fragments per the fixture across \(fx.split.cases.count) cases", splitOK)
+
+    // Send-mode scenario.
+    do {
+        let sc = fx.sendScenario
+        let g = AsteroidsGame(config: .init(characters: ["K"], input: .send, hitsPerWave: sc.hitsPerWave,
+                                            characterWpm: sc.characterWpm), rng: SeededRNG(seed: 9))
+        var ok = true
+        var problems: [String] = []
+        for (i, ev) in sc.events.enumerated() {
+            switch ev.event {
+            case "place":
+                _ = g.place(label: ev.label ?? "", angle: ev.angle ?? 0, progress: ev.progress ?? 0)
+            case "send":
+                let shot = g.send(ev.char?.first ?? " ")
+                if shot.outcome.rawValue != ev.outcome { ok = false; problems.append("event \(i): outcome \(shot.outcome) not \(ev.outcome ?? "?")") }
+                if let p = ev.points, shot.points != p { ok = false; problems.append("event \(i): points \(shot.points) not \(p)") }
+                if let e = ev.expected, shot.expected != e.first { ok = false; problems.append("event \(i): expected \(String(describing: shot.expected))") }
+                if let ch = ev.chosen, shot.chosen != ch.first { ok = false; problems.append("event \(i): chosen \(String(describing: shot.chosen))") }
+                if let frags = ev.fragments {
+                    if frags.count != shot.fragments.count { ok = false; problems.append("event \(i): \(shot.fragments.count) fragments") }
+                    for (f, e) in zip(shot.fragments, frags) {
+                        if f.label != e.label || !approxEqual(f.angle, e.angle, 1e-9)
+                            || !approxEqual(f.progress, e.progress ?? f.progress, 1e-9) {
+                            ok = false; problems.append("event \(i): fragment \(f.label)@\(f.angle)")
+                        }
+                    }
+                }
+            case "advance":
+                g.advance(by: ev.seconds ?? 0)
+            default:
+                ok = false; problems.append("event \(i): unknown '\(ev.event)'")
+            }
+            if let b = ev.buffer, g.sendBuffer != b { ok = false; problems.append("event \(i): buffer '\(g.sendBuffer)' not '\(b)'") }
+        }
+        let f = sc.final
+        if g.score != f.score || g.hits != f.hits || g.misses != f.misses || g.combo != f.combo
+            || g.bestCombo != f.bestCombo || g.wave != f.wave || g.lives != f.lives || g.asteroids.count != f.onField {
+            ok = false
+            problems.append("final score \(g.score) hits \(g.hits) misses \(g.misses) combo \(g.combo) best \(g.bestCombo) wave \(g.wave) lives \(g.lives) onField \(g.asteroids.count)")
+        }
+        check("send scenario follows the fixture" + (problems.isEmpty ? "" : " — " + problems.joined(separator: "; ")), ok)
+    }
+
+    // Copy-mode scenario.
+    do {
+        let sc = fx.copyScenario
+        let g = AsteroidsGame(config: .init(characters: ["K"], input: .copy, lives: sc.lives, hitsPerWave: sc.hitsPerWave,
+                                            characterWpm: sc.characterWpm), rng: SeededRNG(seed: 7))
+        var ok = approxEqual(g.currentWpm, sc.startWpm) && approxEqual(g.config.targetWpm, sc.targetWpm)
+        var problems: [String] = []
+        var angle = 0.0
+        func nextAngle() -> Double { angle += 0.5; return angle }
+        for (i, ev) in sc.events.enumerated() {
+            for _ in 0..<(ev.times ?? 1) {
+                switch ev.event {
+                case "hit":
+                    if g.armed == nil { _ = g.place(label: "K", angle: nextAngle(), progress: 0) }
+                    guard let armed = g.armed else { ok = false; problems.append("event \(i): nothing armed"); continue }
+                    if !g.tap(armed.id).isHit { ok = false; problems.append("event \(i): tap on the armed asteroid missed") }
+                case "wrongTap":
+                    if g.armed == nil { _ = g.place(label: "K", angle: nextAngle(), progress: 0) }
+                    let m = g.place(label: "M", angle: nextAngle(), progress: 0)
+                    let shot = g.tap(m.id)
+                    if shot.outcome != .miss || shot.chosen != "M" { ok = false; problems.append("event \(i): wrong tap was \(shot.outcome)") }
+                case "strike":
+                    _ = g.place(label: "K", angle: nextAngle(), progress: 0.99)
+                    var struck = 0
+                    var guardSteps = 0
+                    while struck == 0 && guardSteps < 100 {
+                        struck = g.advance(by: 0.05).filter { if case .struck = $0 { return true } else { return false } }.count
+                        guardSteps += 1
+                    }
+                    if struck != 1 { ok = false; problems.append("event \(i): \(struck) strikes") }
+                default:
+                    ok = false; problems.append("event \(i): unknown '\(ev.event)'")
+                }
+            }
+            if !approxEqual(g.currentWpm, ev.currentWpm) { ok = false; problems.append("event \(i) (\(ev.event)): \(g.currentWpm) WPM not \(ev.currentWpm)") }
+        }
+        let f = sc.final
+        if g.score != f.score || g.hits != f.hits || g.misses != f.misses || g.bestCombo != f.bestCombo
+            || g.wave != f.wave || g.lives != f.lives || !approxEqual(g.bestWpm, f.bestWpm) || g.isOver {
+            ok = false
+            problems.append("final score \(g.score) hits \(g.hits) misses \(g.misses) best \(g.bestCombo) wave \(g.wave) lives \(g.lives) bestWpm \(g.bestWpm)")
+        }
+        check("copy scenario follows the fixture" + (problems.isEmpty ? "" : " — " + problems.joined(separator: "; ")), ok)
+    }
+
+    // Rules the fixture states in prose, checked directly.
+    do {
+        let pool: [Character] = ["K", "M", "R", "S"]
+        let g1 = AsteroidsGame(config: .init(characters: pool), rng: SeededRNG(seed: 1))
+        let interval = g1.spawnInterval
+        check("nothing spawns before the interval", g1.advance(by: interval - 0.01).isEmpty && g1.asteroids.isEmpty)
+        let spawned = g1.advance(by: 0.02)
+        if case .spawned(let a)? = spawned.first {
+            check("a spawn lands on the interval, born by the overshoot, from the rim",
+                  spawned.count == 1 && pool.contains(a.label.first!) && a.label.count == 1
+                  && approxEqual(a.progress, 0.01 / g1.approachTime)
+                  && approxEqual(a.approachTime, AsteroidsGame.baseApproachTime))
+        } else {
+            check("first event is a spawn", false)
+        }
+        check("copy mode is not armed in send mode", g1.armed == nil)
+
+        // Sectors: consecutive spawns never share one; every angle is a sector centre.
+        let g2 = AsteroidsGame(config: .init(characters: pool), rng: SeededRNG(seed: 42))
+        var angles: [Double] = []
+        for _ in 0..<12 {
+            g2.advance(by: g2.spawnInterval)
+            if let last = g2.asteroids.last { angles.append(last.angle) }
+            for a in g2.asteroids { for ch in a.label { _ = g2.send(ch) } }
+        }
+        let step = 2 * Double.pi / Double(AsteroidsGame.sectors)
+        check("spawn angles sit on sector centres and consecutive spawns differ",
+              angles.count == 12
+              && angles.allSatisfy { a in let s = a / step - 0.5; return approxEqual(s, s.rounded(), 1e-9) }
+              && zip(angles, angles.dropFirst()).allSatisfy { !approxEqual($0, $1, 1e-9) })
+
+        // Position: rim at progress 0, ship at 1.
+        let rim = Asteroid(id: 1, label: "K", angle: 0, progress: 0, approachTime: 10)
+        let ship = Asteroid(id: 2, label: "K", angle: 1, progress: 1, approachTime: 10)
+        check("normalised position runs from the rim to the ship",
+              approxEqual(rim.x, 1.0) && approxEqual(rim.y, 0.5) && approxEqual(ship.x, 0.5) && approxEqual(ship.y, 0.5)
+              && approxEqual(rim.heading, Double.pi))
+
+        // A full field skips the spawn.
+        let g3 = AsteroidsGame(config: .init(characters: pool), rng: SeededRNG(seed: 3))
+        for i in 0..<AsteroidsGame.maxOnField { _ = g3.place(label: "K", angle: Double(i), progress: 0) }
+        check("a full field skips the spawn", !g3.advance(by: g3.spawnInterval + 0.01).contains { if case .spawned = $0 { return true } else { return false } }
+              && g3.asteroids.count == AsteroidsGame.maxOnField)
+
+        // A strike costs a life; the third ends the game.
+        let g4 = AsteroidsGame(config: .init(characters: pool), rng: SeededRNG(seed: 4))
+        var strikes = 0
+        var over = false
+        var steps = 0
+        while !over && steps < 100_000 {
+            for ev in g4.advance(by: 0.1) {
+                if case .struck = ev { strikes += 1 }
+                if case .gameOver = ev { over = true }
+            }
+            steps += 1
+        }
+        check("three strikes end the game", over && g4.isOver && g4.lives == 0 && strikes == 3 && g4.asteroids.isEmpty)
+        check("a finished game ignores time, sends and taps",
+              g4.advance(by: 10).isEmpty && g4.send("K").outcome == .ignored && g4.tap(1).outcome == .ignored)
+
+        // Copy mode: the cue arms one asteroid, a tap on the wrong one misses, on an empty spot is ignored.
+        let g5 = AsteroidsGame(config: .init(characters: ["K", "M"], input: .copy), rng: SeededRNG(seed: 5))
+        let k = g5.place(label: "K", angle: 0, progress: 0)
+        let m = g5.place(label: "M", angle: 1, progress: 0)
+        check("placing arms the first asteroid in copy mode", g5.armed?.id == k.id)
+        check("a tap on empty space is ignored", g5.tap(99).outcome == .ignored && g5.misses == 0)
+        let wrong = g5.tap(m.id)
+        check("a tap on the wrong asteroid is a miss confused with its label",
+              wrong.outcome == .miss && wrong.expected == "K" && wrong.chosen == "M" && g5.misses == 1 && g5.asteroids.count == 2)
+        let right = g5.tap(k.id)
+        check("a tap on the armed asteroid hits and arms the next",
+              right.isHit && right.cued?.id == m.id && g5.armed?.id == m.id && g5.asteroids.count == 1)
+        let k2 = g5.place(label: "K", angle: 2, progress: 0)
+        _ = g5.tap(m.id)
+        check("with one left it is armed at once and a second placement is not", g5.armed?.id == k2.id)
+        let k3 = g5.place(label: "K", angle: 3, progress: 0)
+        check("any asteroid carrying the armed label is a hit", g5.tap(k3.id).isHit && g5.armed?.id == k2.id)
+
+        // The same seed gives the same spawn sequence.
+        func sequence(seed: UInt64) -> [String] {
+            let g = AsteroidsGame(config: .init(characters: pool), rng: SeededRNG(seed: seed))
+            var out: [String] = []
+            for _ in 0..<10 {
+                g.advance(by: g.spawnInterval)
+                if let last = g.asteroids.last { out.append("\(last.label)@\(last.angle)") }
+                for a in g.asteroids { for ch in a.label { _ = g.send(ch) } }
+            }
+            return out
+        }
+        check("same seed, same spawn sequence", sequence(seed: 42) == sequence(seed: 42) && sequence(seed: 42).count == 10)
+        check("different seed, different sequence", sequence(seed: 42) != sequence(seed: 43))
+    }
+} else {
+    check("fixtures/asteroids.json loads and decodes", false)
+}
+
 print("\n────────────────────────────")
 if failures == 0 {
     print("✅ All \(checks) checks passed.\n")

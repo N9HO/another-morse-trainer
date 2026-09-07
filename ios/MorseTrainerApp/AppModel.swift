@@ -4,7 +4,7 @@ import MediaPlayer
 
 /// The ways to practice.
 enum TrainingMode: String, CaseIterable, Identifiable {
-    case journey, characters, words, abbreviations, qCodes, prosigns, headCopy, typed, sending, confusion, listen, qso, contest, story, exam, qrq, rapidFire, invaders, galaga, defender, dungeon, frogger
+    case journey, characters, words, abbreviations, qCodes, prosigns, headCopy, typed, sending, confusion, listen, qso, contest, story, exam, qrq, rapidFire, invaders, galaga, defender, dungeon, frogger, asteroids
     var id: String { rawValue }
     var title: String {
         switch self {
@@ -30,6 +30,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .defender:     return "Morse Defender"
         case .dungeon:      return "CW Dungeon"
         case .frogger:      return "CW Frogger"
+        case .asteroids:    return "CW Asteroids"
         }
     }
     var icon: String {
@@ -56,6 +57,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .defender:      return "shield.lefthalf.filled"
         case .dungeon:       return "wand.and.stars"
         case .frogger:       return "road.lanes"
+        case .asteroids:     return "scope"
         }
     }
     /// In meaning-based modes the question is "what are they saying?"
@@ -81,6 +83,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .defender:           return "Route the defence to the callsign you hear"
         case .dungeon:            return "Key the counter-spell"
         case .frogger:            return "Cross on the character you hear"
+        case .asteroids:          return "Send the label on each asteroid"
         }
     }
     /// A very short descriptor shown on the mode-selection tiles (intro screen).
@@ -109,6 +112,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .defender:      return "Arcade callsign copy"
         case .dungeon:       return "Roguelike sending"
         case .frogger:       return "Arcade crossing"
+        case .asteroids:     return "Arcade sending"
         }
     }
 
@@ -160,6 +164,8 @@ enum TrainingMode: String, CaseIterable, Identifiable {
             return "A roguelike, room by room. Each monster casts a spell word in Morse; copy it, then key the counter word from the spell book on a Morse key before the attack lands. A counter in time hurts the monster, a wrong or late one costs a life, and some counters heal you. Three lives; every room's window is shorter. Every keyed character feeds your stats and confusion drill."
         case .frogger:
             return "Hop a frog across three lanes of traffic and three of river. Every vehicle and log carries a character, and each lane is cued in Morse: only the cued vehicle is harmless and only the cued log floats. Three lives; each crossing is a wave and the traffic gets faster. Labels hide as the waves go on. Wrong lanes feed your confusion drill."
+        case .asteroids:
+            return "Labelled asteroids drift in toward your ship. See one and key its label to destroy it, or hear one sent and tap the asteroid carrying it. Later waves bring short words and callsigns that split into their characters when hit. Three lives; every wave comes faster. Misses feed your confusion drill."
         }
     }
 
@@ -200,6 +206,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         // Morse Invaders ends when the last life is lost, not on a clock.
         // CW Dungeon ends when the last life is lost, not on a clock.
         // CW Frogger ends on the last life too.
+        // CW Asteroids likewise ends on the last life.
         case .exam, .story, .contest, .invaders, .galaga, .defender: return false
         default: return true
         }
@@ -516,6 +523,7 @@ final class AppModel: ObservableObject {
         case .defender:     return charLadder   // unused: Defender runs its own game loop (DefenderView)
         case .dungeon:      return charLadder   // unused: CW Dungeon runs its own game loop (DungeonView)
         case .frogger:      return charLadder   // unused: Frogger runs its own game loop (FroggerView)
+        case .asteroids:    return charLadder   // unused: Asteroids runs its own game loop (AsteroidsView)
         }
     }
 
@@ -545,6 +553,8 @@ final class AppModel: ObservableObject {
     var isDungeon: Bool { mode == .dungeon }
     /// CW Frogger (#190): the arcade crossing, run by `FroggerView` on its own frame clock.
     var isFrogger: Bool { mode == .frogger }
+    /// CW Asteroids (#189): the arcade sending game, run by `AsteroidsView` on its own frame clock.
+    var isAsteroids: Bool { mode == .asteroids }
     /// Rapid Fire's hands-off "just listen, review the list at the end" variant,
     /// which streams items on its own loop instead of waiting for an answer.
     var isRapidFireReview: Bool { isRapidFire && settings.rapidFire.response == .review }
@@ -716,6 +726,10 @@ final class AppModel: ObservableObject {
             stopListening()
             startStory(active: false)
             // The game itself lives in DungeonView; the session here only
+        } else if mode == .asteroids {
+            stopListening()
+            startStory(active: false)
+            // The game itself lives in AsteroidsView; the session here only
             // holds the audio route and the tally the view feeds it.
             introduction = nil
             drill = nil
@@ -2033,6 +2047,7 @@ final class AppModel: ObservableObject {
         if isRapidFire || isInvaders || isGalaga || isDefender { player.stop() }
         if isRapidFire || isInvaders { player.stop() }
         if isDungeon { player.stop() }
+        if isAsteroids { player.stop() }
         phase = .idle
         if let record = buildSessionRecord() {
             history.add(record)            // triggers saveHistory()
@@ -3194,6 +3209,59 @@ final class AppModel: ObservableObject {
     /// The frog landed in the water: a miss on the cue with no confusion partner.
     func noteFroggerMiss(target: Character) {
         noteInvadersEscape(target: target)
+    // MARK: - CW Asteroids (#189)
+
+    /// The word labels a game may draw from: the ranked common-words list,
+    /// which `AsteroidsGame` cuts to its rank, length and character set.
+    /// Twin of `AsteroidsScreen`'s `MorseData.rankedWords` on Android.
+    func asteroidsWords() -> [String] { MorseData.rankedWords }
+
+    /// Copy mode: send one asteroid's label on the session's player at `wpm`
+    /// — the game's ramp speed, not the session timing — and return the
+    /// sound's duration so the view can date its tone end.
+    @discardableResult
+    func playAsteroid(_ label: String, wpm: Double) -> TimeInterval {
+        player.replaySound(playable: .text(label),
+                           frequency: settings.toneFrequency, timing: MorseTiming(wpm: wpm))
+    }
+
+    func stopAsteroids() { player.stop() }
+
+    /// An asteroid destroyed: every character of its label is a correct
+    /// recognition with the time it took (copy mode) or 0 (send mode). The
+    /// session tally and the per-character chart take each the way a
+    /// Characters answer would.
+    func noteAsteroidsHit(label: String, ttr: TimeInterval) {
+        for ch in label {
+            _ = engine.noteAttempt(answer: ch, target: ch, ttr: ttr)
+            noteSessionResult(correct: true, ttr: ttr, target: String(ch))
+        }
+        saveProgress()
+    }
+
+    /// A wrong character keyed, or the wrong asteroid tapped: a miss on
+    /// `expected` confused with `chosen`, so the pair feeds the Confusion
+    /// Drill. With nothing expected (an empty field) only the tally counts.
+    func noteAsteroidsMiss(expected: Character?, chosen: Character?) {
+        if let expected {
+            if let chosen {
+                _ = engine.noteAttempt(answer: chosen, target: expected, ttr: 0)
+            } else {
+                engine.noteMiss(target: expected)
+            }
+        }
+        noteSessionResult(correct: false, ttr: 0, target: expected.map(String.init) ?? "")
+        saveProgress()
+    }
+
+    /// An asteroid reached the ship: a miss for every character of its label
+    /// with no confusion partner.
+    func noteAsteroidsStrike(label: String) {
+        for ch in label {
+            engine.noteMiss(target: ch)
+            noteSessionResult(correct: false, ttr: 0, target: String(ch))
+        }
+        saveProgress()
     }
 
     /// Offer a guess. A rejected guess costs nothing and is not saved.

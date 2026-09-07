@@ -72,6 +72,12 @@ the iOS app's navy/teal look.
   floats. Labels hide as the waves go on until the traffic announces itself in
   Morse. Three lives, waves, combos, three difficulties, its own gentle speed
   ramp, and every lane decision feeds your stats and confusion matrix
+- **CW Asteroids**: the sending-side arcade game — labelled asteroids drift
+  in toward your ship; key each one's label to destroy it, or hear a label
+  sent and tap the asteroid carrying it. From wave 3 larger asteroids carry
+  short words and callsigns that split into their characters when hit.
+  Waves, lives, combos, three difficulties, a gentle speed ramp in hear-it
+  mode, and every hit and miss feeds your stats
 - **Pileup Runner**: a full QSO simulator: your callsign, eight exchange
   flavours (single caller → POTA → contests), realism controls (caller count,
   speed band, tone spread, QSB, QRN, cut numbers, bust behavior, callsign

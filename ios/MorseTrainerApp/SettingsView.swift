@@ -55,6 +55,7 @@ struct SettingsView: View {
         [.sending, .characters, .words, .abbreviations, .qCodes, .prosigns,
          .confusion, .rapidFire, .invaders, .galaga]
          .confusion, .rapidFire, .invaders, .dungeon]
+         .confusion, .rapidFire, .invaders, .asteroids]
     /// Modes with a play → answer → reveal loop the Feedback section controls.
     private static let feedbackModes: Set<TrainingMode> =
         [.journey, .characters, .words, .abbreviations, .qCodes, .prosigns,
