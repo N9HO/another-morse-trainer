@@ -446,6 +446,7 @@ class InvadersTest {
         assertTrue("share $share under the fixture's minimum", share >= ss.getDouble("minShare"))
         assertTrue("share $share over the fixture's maximum", share <= ss.getDouble("maxShare"))
     }
+
     // On-screen keyboard (#178), against the same fixture.
 
     @Test
