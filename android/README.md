@@ -40,6 +40,12 @@ the iOS app's navy/teal look.
   it, before it lands. Each game starts 10 WPM under your character speed
   and steps up 2 WPM every five hits (a landing steps it back). Waves,
   lives, combos, three difficulties, and every hit and miss feeds your stats
+- **CW Asteroids**: the sending-side arcade game — labelled asteroids drift
+  in toward your ship; key each one's label to destroy it, or hear a label
+  sent and tap the asteroid carrying it. From wave 3 larger asteroids carry
+  short words and callsigns that split into their characters when hit.
+  Waves, lives, combos, three difficulties, a gentle speed ramp in hear-it
+  mode, and every hit and miss feeds your stats
 - **Pileup Runner**: a full QSO simulator: your callsign, eight exchange
   flavours (single caller → POTA → contests), realism controls (caller count,
   speed band, tone spread, QSB, QRN, cut numbers, bust behavior, callsign

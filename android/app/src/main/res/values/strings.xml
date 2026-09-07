@@ -728,4 +728,32 @@
     <string name="invaders_keying_speed_note">Decoded at your %1$d WPM character speed.</string>
     <string name="invaders_wpm">WPM</string>
     <string name="invaders_speed_reached">Speed reached: %1$d WPM</string>
+
+    <!-- CW Asteroids (#189) -->
+    <string name="mode_asteroids">CW Asteroids</string>
+    <string name="home_arcade_sending">Arcade sending</string>
+    <string name="asteroids_blurb">Labelled asteroids drift in toward your ship. See one and key its label to destroy it, or hear one sent and tap the asteroid carrying it. Later waves bring short words and callsigns that split into their characters when hit. Three lives; every wave comes faster. Misses feed your confusion drill.</string>
+    <string name="asteroids_how_you_play">How you play</string>
+    <string name="asteroids_characters">Characters</string>
+    <string name="asteroids_words_note">From wave %1$d, larger asteroids carry short words and callsigns spelt from these characters; a word splits into its characters when hit.</string>
+    <string name="asteroids_difficulty">Difficulty</string>
+    <string name="asteroids_start">Start game</string>
+    <string name="asteroids_score">Score</string>
+    <string name="asteroids_wave">Wave</string>
+    <string name="asteroids_lives">Lives</string>
+    <string name="asteroids_combo_label">Combo</string>
+    <string name="asteroids_game_over">Game over</string>
+    <string name="asteroids_best_combo">Best combo</string>
+    <string name="asteroids_accuracy">Accuracy</string>
+    <string name="asteroids_play_again">Play again</string>
+    <string name="asteroids_end_game">End game</string>
+    <string name="asteroids_tap_what_you_heard">Tap the asteroid you heard</string>
+    <string name="asteroids_hear_again">Hear it again</string>
+    <string name="asteroids_key_a_label">Key an asteroid\'s label</string>
+    <!-- Speed ramp (copy mode): start, step, hits per step, target -->
+    <string name="asteroids_speed_ramp_note">Sent from %1$d WPM, stepping up %2$d WPM every %3$d hits to your %4$d WPM character speed. An asteroid that reaches the ship steps it back.</string>
+    <string name="asteroids_speed_flat_note">Sent at your %1$d WPM character speed.</string>
+    <string name="asteroids_send_speed_note">Decoded at your %1$d WPM character speed.</string>
+    <string name="asteroids_wpm">WPM</string>
+    <string name="asteroids_speed_reached">Speed reached: %1$d WPM</string>
 </resources>

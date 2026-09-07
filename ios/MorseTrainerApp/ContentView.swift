@@ -45,6 +45,8 @@ struct ContentView: View {
                     rapidFireReviewView
                 } else if model.isInvaders {
                     InvadersView()
+                } else if model.isAsteroids {
+                    AsteroidsView()
                 } else if let intro = model.introduction {
                     introductionView(intro)
                 } else {

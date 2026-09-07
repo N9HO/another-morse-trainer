@@ -4,7 +4,7 @@ import MediaPlayer
 
 /// The ways to practice.
 enum TrainingMode: String, CaseIterable, Identifiable {
-    case journey, characters, words, abbreviations, qCodes, prosigns, headCopy, typed, sending, confusion, listen, qso, contest, story, exam, qrq, rapidFire, invaders
+    case journey, characters, words, abbreviations, qCodes, prosigns, headCopy, typed, sending, confusion, listen, qso, contest, story, exam, qrq, rapidFire, invaders, asteroids
     var id: String { rawValue }
     var title: String {
         switch self {
@@ -26,6 +26,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .qrq:          return "QRQ Speed"
         case .rapidFire:    return "Rapid Fire"
         case .invaders:     return "Morse Invaders"
+        case .asteroids:    return "CW Asteroids"
         }
     }
     var icon: String {
@@ -48,6 +49,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .qrq:           return "hare"
         case .rapidFire:     return "bolt.fill"
         case .invaders:      return "gamecontroller.fill"
+        case .asteroids:     return "scope"
         }
     }
     /// In meaning-based modes the question is "what are they saying?"
@@ -69,6 +71,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .qrq:                return "Type what you hear"
         case .rapidFire:          return "Copy what you hear"
         case .invaders:           return "Shoot the character you hear"
+        case .asteroids:          return "Send the label on each asteroid"
         }
     }
     /// A very short descriptor shown on the mode-selection tiles (intro screen).
@@ -93,6 +96,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .qrq:           return "High-speed copy"
         case .rapidFire:     return "Back-to-back copy"
         case .invaders:      return "Arcade recognition"
+        case .asteroids:     return "Arcade sending"
         }
     }
 
@@ -136,6 +140,8 @@ enum TrainingMode: String, CaseIterable, Identifiable {
             return "Real-world copy drill: a stream of call signs, words, number groups, or state abbreviations sent back to back at whatever pace you choose. Type each one as it lands, send it back on a key, or just copy along and review the full list of what was transmitted at the end."
         case .invaders:
             return "Characters fall from the top in columns. Hear one and type it, or see one and key it, to shoot the lowest invader carrying it before it reaches the ground. Three lives; every wave comes faster. Misses feed your confusion drill."
+        case .asteroids:
+            return "Labelled asteroids drift in toward your ship. See one and key its label to destroy it, or hear one sent and tap the asteroid carrying it. Later waves bring short words and callsigns that split into their characters when hit. Three lives; every wave comes faster. Misses feed your confusion drill."
         }
     }
 
@@ -172,6 +178,8 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         // its setup card, so the generic duration picker would be redundant.
         // Morse Invaders ends when the last life is lost, not on a clock.
         case .exam, .story, .contest, .invaders: return false
+        // CW Asteroids likewise ends on the last life.
+        case .asteroids:                         return false
         default:                                 return true
         }
     }
@@ -483,6 +491,7 @@ final class AppModel: ObservableObject {
         case .qrq:          return qrqQuiz
         case .rapidFire:    return rapidFireQuiz
         case .invaders:     return charLadder   // unused: Invaders runs its own game loop (InvadersView)
+        case .asteroids:    return charLadder   // unused: Asteroids runs its own game loop (AsteroidsView)
         }
     }
 
@@ -504,6 +513,8 @@ final class AppModel: ObservableObject {
     var isRapidFire: Bool { mode == .rapidFire }
     /// Morse Invaders (#170): the arcade game, run by `InvadersView` on its own frame clock.
     var isInvaders: Bool { mode == .invaders }
+    /// CW Asteroids (#189): the arcade sending game, run by `AsteroidsView` on its own frame clock.
+    var isAsteroids: Bool { mode == .asteroids }
     /// Rapid Fire's hands-off "just listen, review the list at the end" variant,
     /// which streams items on its own loop instead of waiting for an answer.
     var isRapidFireReview: Bool { isRapidFire && settings.rapidFire.response == .review }
@@ -667,6 +678,14 @@ final class AppModel: ObservableObject {
             stopListening()
             startStory(active: false)
             // The game itself lives in InvadersView; the session here only
+            // holds the audio route and the tally the view feeds it.
+            introduction = nil
+            drill = nil
+            phase = .idle
+        } else if mode == .asteroids {
+            stopListening()
+            startStory(active: false)
+            // The game itself lives in AsteroidsView; the session here only
             // holds the audio route and the tally the view feeds it.
             introduction = nil
             drill = nil
@@ -1974,6 +1993,7 @@ final class AppModel: ObservableObject {
         qsoActive = false
         rapidFireGeneration += 1   // cancel any pending Rapid Fire stream
         if isRapidFire || isInvaders { player.stop() }
+        if isAsteroids { player.stop() }
         phase = .idle
         if let record = buildSessionRecord() {
             history.add(record)            // triggers saveHistory()
@@ -2984,6 +3004,61 @@ final class AppModel: ObservableObject {
     func noteInvadersEscape(target: Character) {
         engine.noteMiss(target: target)
         noteSessionResult(correct: false, ttr: 0, target: String(target))
+        saveProgress()
+    }
+
+    // MARK: - CW Asteroids (#189)
+
+    /// The word labels a game may draw from: the ranked common-words list,
+    /// which `AsteroidsGame` cuts to its rank, length and character set.
+    /// Twin of `AsteroidsScreen`'s `MorseData.rankedWords` on Android.
+    func asteroidsWords() -> [String] { MorseData.rankedWords }
+
+    /// Copy mode: send one asteroid's label on the session's player at `wpm`
+    /// — the game's ramp speed, not the session timing — and return the
+    /// sound's duration so the view can date its tone end.
+    @discardableResult
+    func playAsteroid(_ label: String, wpm: Double) -> TimeInterval {
+        player.replaySound(playable: .text(label),
+                           frequency: settings.toneFrequency, timing: MorseTiming(wpm: wpm))
+    }
+
+    func stopAsteroids() { player.stop() }
+
+    /// An asteroid destroyed: every character of its label is a correct
+    /// recognition with the time it took (copy mode) or 0 (send mode). The
+    /// session tally and the per-character chart take each the way a
+    /// Characters answer would.
+    func noteAsteroidsHit(label: String, ttr: TimeInterval) {
+        for ch in label {
+            _ = engine.noteAttempt(answer: ch, target: ch, ttr: ttr)
+            noteSessionResult(correct: true, ttr: ttr, target: String(ch))
+        }
+        saveProgress()
+    }
+
+    /// A wrong character keyed, or the wrong asteroid tapped: a miss on
+    /// `expected` confused with `chosen`, so the pair feeds the Confusion
+    /// Drill. With nothing expected (an empty field) only the tally counts.
+    func noteAsteroidsMiss(expected: Character?, chosen: Character?) {
+        if let expected {
+            if let chosen {
+                _ = engine.noteAttempt(answer: chosen, target: expected, ttr: 0)
+            } else {
+                engine.noteMiss(target: expected)
+            }
+        }
+        noteSessionResult(correct: false, ttr: 0, target: expected.map(String.init) ?? "")
+        saveProgress()
+    }
+
+    /// An asteroid reached the ship: a miss for every character of its label
+    /// with no confusion partner.
+    func noteAsteroidsStrike(label: String) {
+        for ch in label {
+            engine.noteMiss(target: ch)
+            noteSessionResult(correct: false, ttr: 0, target: String(ch))
+        }
         saveProgress()
     }
 
