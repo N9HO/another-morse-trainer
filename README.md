@@ -16,6 +16,35 @@ testers, bug reports and feature chat live on
 Each platform's own README has the full feature list and setup notes:
 [ios/README.md](ios/README.md) · [android/README.md](android/README.md).
 
+## Why I did this
+
+**I stand on the shoulders of giants.**
+
+When I learned Morse, I found a whole shelf of great tools, each one built by
+someone who loved CW and gave it away. One taught the characters. One ran a
+pileup. One put me on the air with real operators. One drilled the words. One
+played characters and said them out loud while I drove. Every one of them was
+excellent, and every one of them lived somewhere different: some on a desktop,
+some in a browser, some on a phone, one on a bit of hardware on the bench. I
+spent as much time switching between them as I did practicing, and I
+desperately wanted one place I could open and just train.
+
+That is all this app is. It is not a new idea. It is the tools that taught me,
+in one pocket, on both phones, free.
+
+Ham radio (and CW especially) has given me far more than I expected when I
+first picked up a key. Friendships with people I would never have met. Places I
+would never have gone and things I would never have done, all because someone
+on the other end answered. I am grateful for that, and this is my way of giving
+some of it back.
+
+If it helps your copy, or gives you the confidence to get on the air for the
+first time, then that makes it all worthwhile. Please feel free to share it
+with your club, your friends, or your classmates. It would be an honor if it
+helped them too. I hope to see you as part of our amazing community.
+
+73, Justin N9HO
+
 ## License
 
 Copyright © 2026 Justin Rogers (N9HO).
