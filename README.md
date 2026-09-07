@@ -16,6 +16,25 @@ testers, bug reports and feature chat live on
 Each platform's own README has the full feature list and setup notes:
 [ios/README.md](ios/README.md) · [android/README.md](android/README.md).
 
+## License
+
+Copyright © 2026 Justin Rogers (N9HO).
+
+Another Morse Trainer is free software: both apps and everything else in this
+repository are licensed under the **GNU General Public License, version 3 or
+(at your option) any later version** ([LICENSE](LICENSE), SPDX
+`GPL-3.0-or-later`). You may run, study, share and modify it; if you
+distribute a modified version, or an app built from one, it must be published
+under the same license with its source available. It comes with no warranty.
+
+The one exception is the vendored CW decoder, `ios/Sources/CWDecoderCore/` and
+its Kotlin port at `android/…/morsekit/cw/`, which is MIT-licensed, copyright
+Jay Vana, and keeps its own `LICENSE` and `PROVENANCE.md`. MIT is compatible
+with the GPL; the notice travels with the code, so keep them together.
+
+"Another Morse Trainer", the AMT icon and the `anothermorsetrainer.app` domain
+are not covered by the license. A fork should ship under its own name.
+
 ## Two ports, deliberately not one
 
 `ios/Sources/MorseKit/` (Swift) and

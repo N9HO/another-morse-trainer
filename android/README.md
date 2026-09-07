@@ -110,3 +110,9 @@ Requires JDK 17 (Android Studio's bundled JBR works) and the Android SDK.
 
 See [RELEASE.md](RELEASE.md) for signing and Google Play upload steps. The
 signing keystore and `keystore.properties` are intentionally **not** committed.
+
+## License
+
+GPL-3.0-or-later, per the repository's root [LICENSE](../LICENSE) and the License
+section of the [top-level README](../README.md). The vendored CW decoder port
+under `morsekit/cw/` is MIT and keeps its own `PROVENANCE.md`.

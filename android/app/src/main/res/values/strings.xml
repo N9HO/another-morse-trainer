@@ -670,6 +670,14 @@
     <string name="settings_join_discord">Join the Discord</string>
     <string name="settings_source_github">Source on GitHub</string>
     <string name="settings_about_footer">Free and open source, with no ads, subscriptions, or tracking. Both apps live in one repository.</string>
+    <string name="settings_licenses">Licenses</string>
+    <string name="licenses_app_title">Another Morse Trainer</string>
+    <string name="licenses_app_notice">Copyright © 2026 Justin Rogers (N9HO).\n\nAnother Morse Trainer is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.\n\nThis program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.</string>
+    <string name="licenses_read_full">Read the full license on GitHub</string>
+    <string name="licenses_cw_decoder_title">CW decoder core</string>
+    <string name="licenses_cw_decoder_footer">The audio decoder is a port of the Carrier Wave firmware\'s decoder, under the MIT license.</string>
+    <string name="licenses_cw_decoder_mit">MIT License\n\nCopyright (c) 2026 Jay Vana\n\nPermission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the \"Software\"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.</string>
+    <string name="common_close">Close</string>
     <string name="settings_keep_bluetooth_awake">Keep Bluetooth audio awake</string>
     <string name="settings_keep_bluetooth_awake_footer">Keep Bluetooth audio awake plays a floor deliberately just above silence — too quiet to hear — so Bluetooth earbuds never idle between transmissions: truly silent audio lets some headsets sleep, and they wake a moment late and clip the first character.</string>
     <string name="settings_band_noise">Band noise</string>

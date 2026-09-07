@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
@@ -59,6 +60,7 @@ import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
 import androidx.core.content.ContextCompat
 import androidx.core.content.pm.PackageInfoCompat
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -168,6 +170,7 @@ fun SettingsScreen(
     fun shown(modes: Set<SettingsMode>): Boolean = scope == null || scope in modes
 
     var confirmReset by remember { mutableStateOf(false) }
+    var showLicenses by remember { mutableStateOf(false) }
 
     // "Copy diagnostic info" (iOS issue #31): a two-second "Copied" confirmation.
     val haptics = remember { Haptics(context) }
@@ -749,6 +752,8 @@ fun SettingsScreen(
                     LinkRow(stringResource(R.string.settings_join_discord)) { uriHandler.openUri(DISCORD_URL) }
                     GroupDivider()
                     LinkRow(stringResource(R.string.settings_source_github)) { uriHandler.openUri(GITHUB_URL) }
+                    GroupDivider()
+                    LinkRow(stringResource(R.string.settings_licenses)) { showLicenses = true }
                 }
                 SectionFooter(stringResource(R.string.settings_about_footer))
 
@@ -794,6 +799,41 @@ fun SettingsScreen(
             },
             dismissButton = {
                 TextButton(onClick = { confirmReset = false }) { Text(stringResource(R.string.common_cancel), color = Brand.teal) }
+            }
+        )
+    }
+
+    // The notices the licenses oblige the app to carry (iOS parity). The GPL
+    // asks an interactive program to show its terms and no-warranty statement,
+    // and the vendored decoder's MIT notice must accompany every copy — the
+    // APK ships no text file, so this dialog is the copy that travels with it.
+    if (showLicenses) {
+        AlertDialog(
+            onDismissRequest = { showLicenses = false },
+            containerColor = Brand.navyElevated,
+            title = { Text(stringResource(R.string.settings_licenses), color = Brand.textPrimary) },
+            text = {
+                Column(
+                    modifier = Modifier.verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(stringResource(R.string.licenses_app_title), color = Brand.textPrimary, fontWeight = FontWeight.SemiBold)
+                    Text(stringResource(R.string.licenses_app_notice), color = Brand.textSecondary, fontSize = 13.sp)
+                    Text(
+                        stringResource(R.string.licenses_read_full),
+                        color = Brand.teal, fontWeight = FontWeight.Medium,
+                        modifier = Modifier.clickable { uriHandler.openUri(LICENSE_URL) }
+                    )
+                    Text(stringResource(R.string.licenses_cw_decoder_title), color = Brand.textPrimary, fontWeight = FontWeight.SemiBold)
+                    Text(stringResource(R.string.licenses_cw_decoder_footer), color = Brand.textSecondary, fontSize = 13.sp)
+                    Text(
+                        stringResource(R.string.licenses_cw_decoder_mit),
+                        color = Brand.textSecondary, fontSize = 12.sp, fontFamily = FontFamily.Monospace
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showLicenses = false }) { Text(stringResource(R.string.common_close), color = Brand.teal) }
             }
         )
     }
@@ -1112,6 +1152,7 @@ private fun SectionFooter(text: String) {
 private const val SUPPORT_URL = "https://anothermorsetrainer.app/support/"
 private const val DISCORD_URL = "https://discord.gg/qgyk3TPUd9"
 private const val GITHUB_URL = "https://github.com/N9HO/another-morse-trainer"
+private const val LICENSE_URL = "https://github.com/N9HO/another-morse-trainer/blob/main/LICENSE"
 
 /** A tappable row that opens something outside the app; teal like the
  *  diagnostics row, so it reads as an action rather than a toggle. */

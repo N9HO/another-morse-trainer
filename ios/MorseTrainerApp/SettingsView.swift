@@ -514,6 +514,11 @@ struct SettingsView: View {
                     Link(destination: ProjectLinks.gitHub) {
                         Label("Source on GitHub", systemImage: "chevron.left.forwardslash.chevron.right")
                     }
+                    NavigationLink {
+                        LicensesView()
+                    } label: {
+                        Label("Licenses", systemImage: "doc.text")
+                    }
                 } header: {
                     Text("About")
                 } footer: {
@@ -722,4 +727,64 @@ private enum ProjectLinks {
     static let support = URL(string: "https://anothermorsetrainer.app/support/")!
     static let discord = URL(string: "https://discord.gg/qgyk3TPUd9")!
     static let gitHub = URL(string: "https://github.com/N9HO/another-morse-trainer")!
+    static let license = URL(string: "https://github.com/N9HO/another-morse-trainer/blob/main/LICENSE")!
+}
+
+/// The notices the licenses oblige the app to carry (Android parity). The
+/// GPL asks an interactive program to show its terms and no-warranty
+/// statement, and the vendored decoder's MIT notice must accompany every
+/// copy — the bundle ships its `LICENSE` file, and this is where a person
+/// can actually read it. Both texts are literals here rather than loaded
+/// from the bundle, so a resource rename can't silently drop a notice.
+struct LicensesView: View {
+    var body: some View {
+        List {
+            Section {
+                Text(LicenseNotices.app)
+                Link(destination: ProjectLinks.license) {
+                    Label("Read the full license on GitHub", systemImage: "arrow.up.right.square")
+                }
+            } header: {
+                Text("Another Morse Trainer")
+            }
+            .listRowBackground(Theme.navyElevated)
+
+            Section {
+                Text(LicenseNotices.cwDecoderMIT)
+                    .font(.system(.footnote, design: .monospaced))
+            } header: {
+                Text("CW decoder core")
+            } footer: {
+                Text("The audio decoder is vendored from the Carrier Wave firmware under the MIT license.")
+            }
+            .listRowBackground(Theme.navyElevated)
+        }
+        .scrollContentBackground(.hidden)
+        .readableWidth()
+        .background(Theme.Background())
+        .navigationTitle("Licenses")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+private enum LicenseNotices {
+    static let app = """
+    Copyright © 2026 Justin Rogers (N9HO).
+
+    Another Morse Trainer is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+    """
+
+    static let cwDecoderMIT = """
+    MIT License
+
+    Copyright (c) 2026 Jay Vana
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+    """
 }
