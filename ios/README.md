@@ -108,3 +108,10 @@ swift run MorseKitCheck
 
 CI (`.github/workflows/ios.yml`) builds both the package and the app on every
 push, so changes made away from a Mac still get compile-checked.
+
+## License
+
+GPL-3.0-or-later, per the repository's root [LICENSE](../LICENSE) and the License
+section of the [top-level README](../README.md). The vendored CW decoder under
+`Sources/CWDecoderCore/` is MIT and keeps its own `LICENSE` and
+`PROVENANCE.md`.

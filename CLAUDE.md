@@ -104,6 +104,15 @@ port) are kept byte-identical to a firmware copy. Each has a `PROVENANCE.md`
 next to the code it documents, and `CWDecoderCore` also has its own `LICENSE`.
 Don't reformat, relicense, tidy, or relocate them or those files.
 
+## Licensing
+
+The repository is GPL-3.0-or-later (root `LICENSE`, copyright Justin Rogers); the
+vendored decoder above stays MIT (copyright Jay Vana), which the GPL permits.
+Both apps show both notices on the Settings › About › Licenses screen — the
+GPL asks an interactive program to display its terms, and the MIT notice must
+accompany every copy, including the shipped binaries. A new third-party
+dependency that carries a notice goes on that screen too, on both ports.
+
 ## Building and testing
 
 ```bash
