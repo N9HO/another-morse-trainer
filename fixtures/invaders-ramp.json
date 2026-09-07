@@ -52,7 +52,7 @@
     "stepUp": 1,
     "stepDown": 2,
     "hitsPerStep": 6,
-    "hold": 3,
+    "hold": 4,
     "noRampAtOrBelow": 15
   },
   "startTable": [
@@ -74,7 +74,7 @@
     "characterWpm": 33,
     "startWpm": 23,
     "hitsPerLaterStep": 9,
-    "hitsToTarget": 87,
+    "hitsToTarget": 86,
     "wpmOneHitShort": 32
   },
   "scenario": {
@@ -92,7 +92,7 @@
     "lives": 10,
     "events": [
       { "event": "hit",       "times": 5,  "currentWpm": 23, "streak": 5, "settling": 0, "note": "[5] one short of the first step" },
-      { "event": "hit",       "times": 1,  "currentWpm": 24, "streak": 0, "settling": 3, "note": "[6] first step; a hold begins" },
+      { "event": "hit",       "times": 1,  "currentWpm": 25, "streak": 0, "settling": 3, "note": "[6] first step; a hold begins" },
       { "event": "hit",       "times": 3,  "currentWpm": 24, "streak": 0, "settling": 0, "note": "three settling hits count for nothing" },
       { "event": "hit",       "times": 5,  "currentWpm": 24, "streak": 5, "settling": 0, "note": "[5]" },
       { "event": "wrongShot", "times": 1,  "currentWpm": 24, "streak": 0, "settling": 0, "note": "a wrong shot resets the streak, leaves the speed" },
@@ -148,7 +148,7 @@
     ],
     "debtPerMiss": 2,
     "maxDebt": 6,
-    "bonus": 0.5,
+    "bonus": 0.6,
     "weightTable": [
       { "debt": 0, "weight": 1.0 },
       { "debt": 1, "weight": 1.5 },
@@ -157,7 +157,7 @@
       { "debt": 6, "weight": 4.0 }
     ],
     "pick": [
-      { "weights": [1, 1, 1, 1], "roll": 0.0,  "index": 0 },
+      { "weights": [1, 1, 1, 1], "roll": 0.0,  "index": 1 },
       { "weights": [1, 1, 1, 1], "roll": 0.24, "index": 0, "note": "x = 0.96" },
       { "weights": [1, 1, 1, 1], "roll": 0.26, "index": 1, "note": "x = 1.04" },
       { "weights": [1, 1, 1, 1], "roll": 0.51, "index": 2, "note": "x = 2.04" },
@@ -200,7 +200,7 @@
       "pool": "KMRS",
       "lives": 10,
       "events": [
-        { "event": "escape",    "label": "A",                 "weights": { "A": 2.0 },           "note": "debt 2" },
+        { "event": "escape",    "label": "A",                 "weights": { "A": 2.5 },           "note": "debt 2" },
         { "event": "escape",    "label": "A",                 "weights": { "A": 3.0 },           "note": "debt 4" },
         { "event": "escape",    "label": "A",                 "weights": { "A": 4.0 },           "note": "debt 6, the cap" },
         { "event": "escape",    "label": "A",                 "weights": { "A": 4.0 },           "note": "still capped" },
@@ -229,7 +229,7 @@
       "debited": "K",
       "lives": 10000,
       "spawns": 300,
-      "minShare": 0.4,
+      "minShare": 0.6,
       "maxShare": 0.7
     }
   },
