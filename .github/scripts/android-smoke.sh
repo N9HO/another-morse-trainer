@@ -51,18 +51,47 @@ echo "started, pid $pid"
 sleep 10
 adb exec-out screencap -p > home.png || true
 
+# Theme.AMT is the application theme, so a colour resource the shrinker removed
+# out from under it throws during inflation rather than rendering wrong.
+#
+# Only the app's own process is searched. The emulator's other processes throw
+# the same exception classes for their own reasons — Android CI run
+# 34075575078 failed on a Resources$NotFoundException from the Google app
+# (pid 1747, tag "A") while this app was alive and healthy — so a search of the
+# whole buffer fails on somebody else's bug. `logcat --pid` filters on the
+# entry's pid (API 24+; the emulator here is 34), so it also works after the
+# process has died. The one thing that cannot catch is a crash followed by a
+# restart, where pid_of hands back the new process: AndroidRuntime's report
+# names the package on the line after "FATAL EXCEPTION", so that is grepped by
+# name across the whole buffer as well.
+PAT='FATAL EXCEPTION|Resources\$NotFoundException|ClassNotFoundException|NoSuchMethodError|NoClassDefFoundError'
+
+app_crashed() {   # $1 = pid the app had when we last saw it alive
+  adb logcat -d --pid="$1" | grep -qE "$PAT" && return 0
+  adb logcat -d | grep -A 2 'FATAL EXCEPTION' | grep -q "Process: $PKG," && return 0
+  return 1
+}
+
+app_crash_dump() { # the app's stack, not some other process's
+  local by_pid
+  by_pid=$(adb logcat -d --pid="$1" | grep -B 5 -A 40 -E "$PAT")
+  if [ -n "$by_pid" ]; then
+    printf '%s\n' "$by_pid"
+  else
+    adb logcat -d | grep -B 1 -A 40 "Process: $PKG,"
+  fi | head -150
+}
+
 if [ -z "$(pid_of)" ]; then
   echo "::error::$PKG died within 10s of launch"
-  adb logcat -d | tail -200
+  app_crash_dump "$pid"
+  adb logcat -d --pid="$pid" | tail -100
   exit 1
 fi
 
-# Theme.AMT is the application theme, so a colour resource the shrinker removed
-# out from under it throws during inflation rather than rendering wrong.
-PAT='FATAL EXCEPTION|Resources\$NotFoundException|ClassNotFoundException|NoSuchMethodError|NoClassDefFoundError'
-if adb logcat -d | grep -qE "$PAT"; then
+if app_crashed "$pid"; then
   echo "::error::crash or missing symbol in logcat — most likely an R8 keep rule"
-  adb logcat -d | grep -B 5 -A 40 -E "$PAT" | head -150
+  app_crash_dump "$pid"
   exit 1
 fi
 
@@ -112,13 +141,14 @@ fi
 
 if [ -z "$(pid_of)" ]; then
   echo "::error::$PKG died on rotation"
-  adb logcat -d | tail -200
+  app_crash_dump "$pid"
+  adb logcat -d --pid="$pid" | tail -100
   exit 1
 fi
 
-if adb logcat -d | grep -qE "$PAT"; then
+if app_crashed "$pid"; then
   echo "::error::crash on rotation"
-  adb logcat -d | grep -B 5 -A 40 -E "$PAT" | head -150
+  app_crash_dump "$pid"
   exit 1
 fi
 
