@@ -55,7 +55,9 @@ testers, bug reports and feature chat live on
   abbreviations, ham lingo, cut numbers, and the full alphabet, with
   per-signal detail
 - **CW Decoder**: point the microphone at received Morse (a rig's speaker, a
-  WebSDR) and read it as text, with live WPM/pitch telemetry
+  WebSDR) and read it as text, with live WPM/pitch telemetry, a two-core
+  pitch-lock rescue, and a noise blanker that keeps QRN static crashes from
+  reaching the decoder as marks
 - **Listen & Learn**: hands-free: hear the code, then the spoken answer, over
   characters, the curated on-air QSO elements (Top 20 or Top 100), words, or
   abbreviations and Q-codes; keeps playing with the screen locked, with the

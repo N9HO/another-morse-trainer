@@ -1,0 +1,238 @@
+{
+  "$comment": "Shared CW pre-filter (noise blanker) fixture, consumed by BOTH ports: android CwPrefilterTest and ios MorseKitCheck. Data, not code - see CLAUDE.md's two-ports rule.",
+  "derivation": {
+    "filter": "A noise blanker on float PCM (nominal full scale +/-1), one sample in and one out, applied before the CW core. State: two second-order sections and two envelopes. All constants are in `constants`.",
+    "bandpass": "RBJ constant-peak band-pass, normalised so a0 = 1: w = 2*pi*pitchHz/sampleRate, alpha = sin(w)/(2Q), b0 = alpha/(1+alpha), b2 = -b0, a1 = -2cos(w)/(1+alpha), a2 = (1-alpha)/(1+alpha), b1 = 0. y[n] = b0*x[n] + b2*x[n-2] - a1*y[n-1] - a2*y[n-2].",
+    "perSample": "In this order for input x[n]: (1) detector yd = band-pass(Q = detectorQ) of x, histories shifted; (2) envelope e = max(|yd|, e*exp(-1000/(envelopeMs*sampleRate))); (3) residual r = |x - yd|, and R += (r - R) * 1000/(noiseMs*sampleRate); (4) reference = max(ratio*e, noiseRatio*R, floor) where ratio = holdRatio if a blank was already running (remaining > 0 before this sample) else triggerRatio; if r > reference then remaining = round(holdMs*sampleRate/1000); (5) blanked = remaining > 0. If blanked: remaining -= 1, the continuation resonator advances as y = g*(c*y[n-1] - y[n-2]) with c = 2cos(w), g = exp(-1000/(decayMs*sampleRate)), and its x-history takes a 0; otherwise the resonator is the band-pass (Q = resonatorQ) of x with normal history. (6) output = resonator output if blanked, else x unchanged.",
+    "retune": "Changing the pitch recomputes both sections' coefficients and c; state is kept. reset() zeroes every history, both envelopes and the countdown.",
+    "vectors": "signal.type tone: amplitude*sin(2*pi*pitchHz*n/sampleRate); silence: zeros; noise: uniform in [-amplitude, +amplitude) from the xorshift64* generator described in decoder.json (value = ((out >> 40) / 8388608 - 1) * amplitude). A burst adds amplitude*(1 - k/length)*(+1 for even k, -1 for odd k) at start+k, k in [0, length). Expectations: blankedAll = every sample in the inclusive range reports blanking; clearFrom = no sample at or after that index is blanked; onsetBlankBefore = every blanked sample in the vector lies before that index and there is at least one; exact = output equals input bit for bit at those indices; values = output at index n within tolerance.sample; maxAbs = |output| over [from, to) is at most max; blankedFraction = share of blanked samples over [from, to) is at most max; blankedNone = no sample blanked anywhere.",
+    "note": "Values computed in double precision from these equations, not captured from either port; the ports use single precision, which the sample tolerance covers. The onset of a hard-keyed tone from silence is itself a wideband event and takes a short blank (under 2 ms); that is expected and pinned as such. Steady hiss at -20 dBFS still trips the blanker on a few percent of samples once its level is known; that is harmless (the continuation from a noise-level state decays to nothing) and pinned as a ceiling, not as zero."
+  },
+  "constants": {
+    "detectorQ": 1.0,
+    "resonatorQ": 6.0,
+    "triggerRatio": 1.5,
+    "holdRatio": 0.5,
+    "noiseRatio": 2.5,
+    "floor": 0.02,
+    "holdMs": 1.0,
+    "envelopeMs": 2.0,
+    "noiseMs": 100.0,
+    "decayMs": 25.0
+  },
+  "tolerance": {
+    "coefficient": 1e-06,
+    "sample": 0.002
+  },
+  "coefficients": [
+    {
+      "sampleRate": 8000,
+      "pitchHz": 700,
+      "q": 1,
+      "b0": 0.2071353268638176,
+      "b2": -0.2071353268638176,
+      "a1": -1.3520565304267764,
+      "a2": 0.5857293462723648
+    },
+    {
+      "sampleRate": 8000,
+      "pitchHz": 700,
+      "q": 6,
+      "b0": 0.04172478535459116,
+      "b2": -0.04172478535459116,
+      "a1": -1.634127873023429,
+      "a2": 0.9165504292908178
+    },
+    {
+      "sampleRate": 48000,
+      "pitchHz": 700,
+      "q": 1,
+      "b0": 0.04374924592306914,
+      "b2": -0.04374924592306914,
+      "a1": -1.9044784258135876,
+      "a2": 0.9125015081538618
+    },
+    {
+      "sampleRate": 48000,
+      "pitchHz": 620,
+      "q": 6,
+      "b0": 0.006710395333685506,
+      "b2": -0.006710395333685506,
+      "a1": -1.9800404080131466,
+      "a2": 0.9865792093326289
+    },
+    {
+      "sampleRate": 44100,
+      "pitchHz": 810,
+      "q": 1,
+      "b0": 0.054440335445697444,
+      "b2": -0.054440335445697444,
+      "a1": -1.878539942336372,
+      "a2": 0.8911193291086051
+    }
+  ],
+  "vectors": [
+    {
+      "name": "tone passes through after its onset",
+      "sampleRate": 8000,
+      "pitchHz": 700,
+      "length": 800,
+      "signal": {
+        "type": "tone",
+        "amplitude": 0.25
+      },
+      "expect": {
+        "onsetBlankBefore": 48,
+        "exact": [
+          100,
+          101,
+          102,
+          400,
+          799
+        ]
+      }
+    },
+    {
+      "name": "crash inside a tone is blanked and the tone continues",
+      "sampleRate": 8000,
+      "pitchHz": 700,
+      "length": 800,
+      "signal": {
+        "type": "tone",
+        "amplitude": 0.25
+      },
+      "burst": {
+        "start": 400,
+        "length": 20,
+        "amplitude": 0.9
+      },
+      "expect": {
+        "blankedAll": [
+          400,
+          419
+        ],
+        "clearFrom": 440,
+        "exact": [
+          300,
+          600
+        ],
+        "values": [
+          {
+            "n": 404,
+            "out": 0.19606045815556628
+          },
+          {
+            "n": 408,
+            "out": -0.2332611848981161
+          },
+          {
+            "n": 416,
+            "out": 0.12710717149429088
+          },
+          {
+            "n": 424,
+            "out": 0.1548524645937253
+          }
+        ]
+      }
+    },
+    {
+      "name": "crash inside a tone at 48 kHz",
+      "sampleRate": 48000,
+      "pitchHz": 700,
+      "length": 4800,
+      "signal": {
+        "type": "tone",
+        "amplitude": 0.25
+      },
+      "burst": {
+        "start": 2400,
+        "length": 120,
+        "amplitude": 0.9
+      },
+      "expect": {
+        "blankedAll": [
+          2400,
+          2519
+        ],
+        "clearFrom": 2640,
+        "exact": [
+          1200,
+          3600
+        ],
+        "values": [
+          {
+            "n": 2448,
+            "out": -0.23248440294649095
+          },
+          {
+            "n": 2496,
+            "out": 0.04625493261587204
+          },
+          {
+            "n": 2544,
+            "out": 0.21416570979483945
+          }
+        ]
+      }
+    },
+    {
+      "name": "crash in silence is blanked to silence",
+      "sampleRate": 8000,
+      "pitchHz": 700,
+      "length": 800,
+      "signal": {
+        "type": "silence"
+      },
+      "burst": {
+        "start": 400,
+        "length": 20,
+        "amplitude": 0.9
+      },
+      "expect": {
+        "blankedAll": [
+          400,
+          419
+        ],
+        "clearFrom": 440,
+        "maxAbs": {
+          "from": 400,
+          "to": 440,
+          "max": 1e-06
+        }
+      }
+    },
+    {
+      "name": "steady hiss is left alone once its level is known",
+      "sampleRate": 8000,
+      "pitchHz": 700,
+      "length": 8000,
+      "signal": {
+        "type": "noise",
+        "amplitude": 0.1,
+        "noiseSeed": 5
+      },
+      "expect": {
+        "blankedFraction": {
+          "from": 4000,
+          "to": 8000,
+          "max": 0.2
+        }
+      }
+    },
+    {
+      "name": "quiet room noise is never blanked",
+      "sampleRate": 48000,
+      "pitchHz": 700,
+      "length": 4800,
+      "signal": {
+        "type": "noise",
+        "amplitude": 0.01,
+        "noiseSeed": 9
+      },
+      "expect": {
+        "blankedNone": true
+      }
+    }
+  ]
+}

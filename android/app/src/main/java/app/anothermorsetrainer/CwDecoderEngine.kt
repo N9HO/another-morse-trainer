@@ -12,6 +12,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
+import app.anothermorsetrainer.morsekit.CwPrefilter
 import app.anothermorsetrainer.morsekit.cw.CwDecoder
 import kotlin.math.cos
 import kotlin.math.roundToInt
@@ -20,7 +21,9 @@ import kotlin.math.sqrt
 /**
  * Live CW (Morse) audio decoder: taps the microphone and runs the ported
  * Carrier Wave core (morsekit/cw) over the incoming PCM, publishing decoded
- * text plus speed/pitch telemetry.
+ * text plus speed/pitch telemetry. A noise blanker ([CwPrefilter], MorseKit)
+ * sits between the capture loop and each core instance so QRN static crashes
+ * don't reach the core as marks (#195).
  *
  * Port of the iOS `CWDecoderEngine` (AVAudioEngine tap → [AudioRecord] on a
  * dedicated capture thread). The decoders are fed only from that thread; the
@@ -179,6 +182,14 @@ class CwDecoderEngine {
  * locked pitch, and when the scout's pitch has been carrying several times the
  * primary's energy and the scout is actually decoding it, the scout holds the
  * real signal and the two swap roles.
+ *
+ * Each slot also owns a [CwPrefilter] — a noise blanker tuned to that slot's
+ * pitch (#195). QRN static crashes reach the core as spurious marks; the
+ * blanker replaces each crash with the tone's own continuation before the
+ * core hears it. It is per slot because its continuation runs at the slot's
+ * locked pitch, and its signal path is pass-through, so a searching scout
+ * still hears the whole band. The energy meters and the quiet tracker read
+ * the raw samples, not the blanked ones.
  */
 private class CoreBox {
 
@@ -213,6 +224,11 @@ private class CoreBox {
         /** Pitch the magnitude meter is tuned to, and its Goertzel coefficient. */
         var meterHz = 0f
         var meterCoeff = 0f
+        /** The slot's noise blanker (retuned with the meter) and the int16
+         * PCM it produces for this slot's core. Sized on the first buffer and
+         * reused, so the capture loop allocates nothing per read. */
+        var filter = CwPrefilter(48_000f)
+        var scratch = ShortArray(0)
 
         fun advanceBucket() {
             head = (head + 1) % BUCKETS
@@ -241,12 +257,14 @@ private class CoreBox {
             meterHz = toneHz
             meterCoeff = 2f * cos(2f * Math.PI.toFloat() * toneHz / rate)
             bucketMag.fill(0f)
+            filter.retune(toneHz)
         }
 
         /** Back to fresh acquisition: recalibrate the noise floor and re-arm
          * the pitch search. Everything counted so far belonged to the old lock. */
         fun reset() {
             decoder?.reset()
+            filter.reset()
             pendingText.setLength(0)
             bucketSymbols.fill(0)
             bucketMag.fill(0f)
@@ -284,7 +302,6 @@ private class CoreBox {
     private var primary = Slot()
     private var scout: Slot? = null
     private var rate = 0
-    private var scratch = ShortArray(0)
     private var samplesIntoBucket = 0
     private var samplesSinceSwap = 0
     private var toneHz = 0f
@@ -333,11 +350,13 @@ private class CoreBox {
         }
 
         primary = Slot()
+        primary.filter = CwPrefilter(inputRate.toFloat())
         primary.decoder = CwDecoder.create(configFor(primary)) ?: return false
 
         // The scout is a resilience layer; if it can't allocate, the primary
         // still decodes the way the firmware does.
         val second = Slot()
+        second.filter = CwPrefilter(inputRate.toFloat())
         second.decoder = CwDecoder.create(configFor(second))
         scout = if (second.decoder != null) second else null
         return true
@@ -348,40 +367,48 @@ private class CoreBox {
         scout = null
     }
 
-    /** Convert one float buffer to int16 PCM, meter it, and push it through
-     * both cores. Runs on the capture thread. */
+    /** Blanker output to int16 PCM for the core, clamped: the continuation
+     * resonator can overshoot full scale by a hair on a transient. */
+    private fun pcm(y: Float): Short = (y.coerceIn(-1f, 1f) * 32000).toInt().toShort()
+
+    /** Convert one float buffer to int16 PCM, meter it, run each slot's noise
+     * blanker, and push the result through that slot's core. Runs on the
+     * capture thread. */
     fun feed(data: FloatArray, count: Int) {
         val decoder = primary.decoder ?: return
         if (count <= 0) return
-        if (scratch.size < count) scratch = ShortArray(count)
+        if (primary.scratch.size < count) primary.scratch = ShortArray(count)
+        val scoutSlot = scout
+        if (scoutSlot != null && scoutSlot.scratch.size < count) scoutSlot.scratch = ShortArray(count)
 
         primary.retuneMeter(decoder.toneHz, rate)
-        scout?.let { s -> s.decoder?.let { s.retuneMeter(it.toneHz, rate) } }
+        scoutSlot?.let { s -> s.decoder?.let { s.retuneMeter(it.toneHz, rate) } }
         val pCoeff = primary.meterCoeff
-        val sCoeff = scout?.meterCoeff ?: 0f
+        val sCoeff = scoutSlot?.meterCoeff ?: 0f
         var p1 = 0f; var p2 = 0f; var s1 = 0f; var s2 = 0f
         var energy = 0f
         for (i in 0 until count) {
             val raw = data[i]
             val sample = if (raw.isFinite()) raw.coerceIn(-1f, 1f) else 0f
             energy += sample * sample
-            scratch[i] = (sample * 32000).toInt().toShort()
             val p0 = sample + pCoeff * p1 - p2
             p2 = p1; p1 = p0
             val s0 = sample + sCoeff * s1 - s2
             s2 = s1; s1 = s0
+            primary.scratch[i] = pcm(primary.filter.process(sample))
+            if (scoutSlot != null) scoutSlot.scratch[i] = pcm(scoutSlot.filter.process(sample))
         }
         level = sqrt(energy / count)
         val norm = count.toFloat()
         primary.bucketMag[primary.head] +=
             sqrt(maxOf(0f, p1 * p1 + p2 * p2 - pCoeff * p1 * p2)) / norm
-        scout?.let {
+        scoutSlot?.let {
             it.bucketMag[it.head] +=
                 sqrt(maxOf(0f, s1 * s1 + s2 * s2 - sCoeff * s1 * s2)) / norm
         }
 
-        decoder.feed(scratch, count)
-        scout?.decoder?.feed(scratch, count)
+        decoder.feed(primary.scratch, count)
+        scoutSlot?.let { s -> s.decoder?.feed(s.scratch, count) }
         toneHz = decoder.toneHz
         advanceClock(count)
         supervise()
