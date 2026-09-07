@@ -1,0 +1,812 @@
+{
+  "$comment": [
+    "CW Galaga (#187), pinned for both ports: GalagaGame / GalagaPath in",
+    "ios/Sources/MorseKit/Galaga.swift and android/.../morsekit/Galaga.kt.",
+    "Read by ios/Sources/MorseKitCheck/main.swift and",
+    "android/app/src/test/.../morsekit/GalagaTest.kt.",
+    "",
+    "Every expected value below was worked out from the rules in 'derivation'",
+    "by a throwaway script, not captured from either port. Do not regenerate",
+    "it to make a failing test pass; change it only when a rule is meant to",
+    "change."
+  ],
+  "derivation": {
+    "rules": [
+      "Enemies enter one at a time, every entryInterval seconds, each flying",
+      "its entry path for entryTime seconds before settling into its",
+      "formation slot. Slots fill in order, row by row from the top, left to",
+      "right; even slot indexes enter from the left, odd from the right.",
+      "Formation for a wave: rows = min(4, 1 + (wave + 1) div 2),",
+      "columns = min(6, 3 + wave); size = rows * columns.",
+      "maxDivers = min(3, 1 + (wave - 1) div 2) enemies may be off their slot",
+      "(diving or returning) at once. While at least one enemy is formed and",
+      "fewer than maxDivers are off their slot, the dive clock runs; every",
+      "diveInterval seconds one formed enemy, chosen at random, dives for",
+      "diveTime seconds. A dive that reaches the bottom costs a life, resets",
+      "the combo and steps the speed down; the enemy then returns to its slot",
+      "in returnTime = diveTime * returnFactor seconds and can dive again.",
+      "Each timing is base * decay^(wave - 1), floored, then scaled by the",
+      "difficulty: relaxed 1.35, normal 1.0, fast 0.75. waveGap is not scaled.",
+      "Naming a character hits the most threatening enemy carrying it:",
+      "a diver (the further down the better), then a returning one (the",
+      "lower the better), then a formed one on the lowest row, then one still",
+      "entering; ties go to the earlier-released enemy. With none carrying it",
+      "the shot is a miss that resets the combo.",
+      "A hit scores pointsPerHit, plus diveBonus when the enemy was diving,",
+      "times the combo multiplier: min(maxMultiplier, 1 + (combo - 1) div",
+      "comboStep) where combo counts consecutive hits including this one.",
+      "Shooting the last enemy of a fully released formation clears the wave,",
+      "adds waveBonus, and the next wave's entries begin after waveGap.",
+      "Speed ramp: a game starts startOffset WPM under the character speed,",
+      "never under minWpm; every hitsPerStep hits in total (not consecutive)",
+      "it steps up 'step' WPM to the character speed; a landed dive steps it",
+      "down 'step', never under the start. A wrong shot leaves it alone.",
+      "Farnsworth is ignored: a single character has no gaps to stretch.",
+      "Paths are in unit field coordinates, x 0..1 left to right, y 0 at the",
+      "top and 1 at the bottom where the player sits. slot(row, column) =",
+      "((column + 0.5) / columns, formationTop + row * rowPitch). The entry",
+      "path is the cubic Bezier P0 (-0.08 or 1.08, 0.5), P1 (0.25 or 0.75,",
+      "1.05), P2 (1.0 or 0.0, 0.0), P3 = slot (left-entry values first). The",
+      "dive is the cubic P0 = slot, P1 (sx, sy + 0.4), P2 (1 - sx, 0.6),",
+      "P3 (1 - sx, 1.0); the return is the dive run backwards."
+    ],
+    "pointsPerHit": 100,
+    "diveBonus": 50,
+    "waveBonus": 500,
+    "comboStep": 3,
+    "maxMultiplier": 8,
+    "lives": 3,
+    "minWpm": 15,
+    "startOffset": 8,
+    "step": 1,
+    "hitsPerStep": 6,
+    "noRampAtOrBelow": 15,
+    "timing": {
+      "baseEntryInterval": 1.4,
+      "entryIntervalDecay": 0.92,
+      "minEntryInterval": 0.5,
+      "baseEntryTime": 2.4,
+      "entryTimeDecay": 0.94,
+      "minEntryTime": 1.2,
+      "baseDiveInterval": 3.0,
+      "diveIntervalDecay": 0.9,
+      "minDiveInterval": 1.0,
+      "baseDiveTime": 4.0,
+      "diveTimeDecay": 0.92,
+      "minDiveTime": 1.8,
+      "returnFactor": 0.5,
+      "waveGap": 1.5,
+      "difficultyScale": {
+        "relaxed": 1.35,
+        "normal": 1.0,
+        "fast": 0.75
+      }
+    },
+    "layout": {
+      "formationTop": 0.1,
+      "rowPitch": 0.11
+    }
+  },
+  "formationTable": [
+    {
+      "wave": 1,
+      "rows": 2,
+      "columns": 4,
+      "size": 8,
+      "maxDivers": 1
+    },
+    {
+      "wave": 2,
+      "rows": 2,
+      "columns": 5,
+      "size": 10,
+      "maxDivers": 1
+    },
+    {
+      "wave": 3,
+      "rows": 3,
+      "columns": 6,
+      "size": 18,
+      "maxDivers": 2
+    },
+    {
+      "wave": 4,
+      "rows": 3,
+      "columns": 6,
+      "size": 18,
+      "maxDivers": 2
+    },
+    {
+      "wave": 5,
+      "rows": 4,
+      "columns": 6,
+      "size": 24,
+      "maxDivers": 3
+    },
+    {
+      "wave": 6,
+      "rows": 4,
+      "columns": 6,
+      "size": 24,
+      "maxDivers": 3
+    },
+    {
+      "wave": 7,
+      "rows": 4,
+      "columns": 6,
+      "size": 24,
+      "maxDivers": 3
+    },
+    {
+      "wave": 12,
+      "rows": 4,
+      "columns": 6,
+      "size": 24,
+      "maxDivers": 3
+    }
+  ],
+  "timingTable": [
+    {
+      "wave": 1,
+      "difficulty": "normal",
+      "entryInterval": 1.4,
+      "entryTime": 2.4,
+      "diveInterval": 3.0,
+      "diveTime": 4.0,
+      "returnTime": 2.0
+    },
+    {
+      "wave": 2,
+      "difficulty": "normal",
+      "entryInterval": 1.288,
+      "entryTime": 2.256,
+      "diveInterval": 2.7,
+      "diveTime": 3.68,
+      "returnTime": 1.84
+    },
+    {
+      "wave": 3,
+      "difficulty": "normal",
+      "entryInterval": 1.18496,
+      "entryTime": 2.12064,
+      "diveInterval": 2.43,
+      "diveTime": 3.3856,
+      "returnTime": 1.6928
+    },
+    {
+      "wave": 5,
+      "difficulty": "normal",
+      "entryInterval": 1.002950144,
+      "entryTime": 1.873797504,
+      "diveInterval": 1.9683,
+      "diveTime": 2.86557184,
+      "returnTime": 1.43278592
+    },
+    {
+      "wave": 10,
+      "difficulty": "normal",
+      "entryInterval": 0.661025909,
+      "entryTime": 1.375187525,
+      "diveInterval": 1.162261467,
+      "diveTime": 1.888645453,
+      "returnTime": 0.944322727
+    },
+    {
+      "wave": 40,
+      "difficulty": "normal",
+      "entryInterval": 0.5,
+      "entryTime": 1.2,
+      "diveInterval": 1.0,
+      "diveTime": 1.8,
+      "returnTime": 0.9
+    },
+    {
+      "wave": 1,
+      "difficulty": "relaxed",
+      "entryInterval": 1.89,
+      "entryTime": 3.24,
+      "diveInterval": 4.05,
+      "diveTime": 5.4,
+      "returnTime": 2.7
+    },
+    {
+      "wave": 1,
+      "difficulty": "fast",
+      "entryInterval": 1.05,
+      "entryTime": 1.8,
+      "diveInterval": 2.25,
+      "diveTime": 3.0,
+      "returnTime": 1.5
+    },
+    {
+      "wave": 40,
+      "difficulty": "fast",
+      "entryInterval": 0.375,
+      "entryTime": 0.9,
+      "diveInterval": 0.75,
+      "diveTime": 1.35,
+      "returnTime": 0.675
+    }
+  ],
+  "comboTable": [
+    {
+      "combo": 0,
+      "multiplier": 1
+    },
+    {
+      "combo": 1,
+      "multiplier": 1
+    },
+    {
+      "combo": 2,
+      "multiplier": 1
+    },
+    {
+      "combo": 3,
+      "multiplier": 1
+    },
+    {
+      "combo": 4,
+      "multiplier": 2
+    },
+    {
+      "combo": 6,
+      "multiplier": 2
+    },
+    {
+      "combo": 7,
+      "multiplier": 3
+    },
+    {
+      "combo": 9,
+      "multiplier": 3
+    },
+    {
+      "combo": 10,
+      "multiplier": 4
+    },
+    {
+      "combo": 13,
+      "multiplier": 5
+    },
+    {
+      "combo": 16,
+      "multiplier": 6
+    },
+    {
+      "combo": 19,
+      "multiplier": 7
+    },
+    {
+      "combo": 21,
+      "multiplier": 7
+    },
+    {
+      "combo": 22,
+      "multiplier": 8
+    },
+    {
+      "combo": 25,
+      "multiplier": 8
+    },
+    {
+      "combo": 40,
+      "multiplier": 8
+    },
+    {
+      "combo": 100,
+      "multiplier": 8
+    }
+  ],
+  "startTable": [
+    {
+      "characterWpm": 15,
+      "startWpm": 15,
+      "targetWpm": 15
+    },
+    {
+      "characterWpm": 18,
+      "startWpm": 15,
+      "targetWpm": 18
+    },
+    {
+      "characterWpm": 20,
+      "startWpm": 15,
+      "targetWpm": 20
+    },
+    {
+      "characterWpm": 23,
+      "startWpm": 15,
+      "targetWpm": 23
+    },
+    {
+      "characterWpm": 25,
+      "startWpm": 17,
+      "targetWpm": 25
+    },
+    {
+      "characterWpm": 33,
+      "startWpm": 25,
+      "targetWpm": 33
+    },
+    {
+      "characterWpm": 40,
+      "startWpm": 32,
+      "targetWpm": 40
+    },
+    {
+      "characterWpm": 60,
+      "startWpm": 52,
+      "targetWpm": 60
+    }
+  ],
+  "paths": [
+    {
+      "row": 0,
+      "column": 0,
+      "columns": 4,
+      "fromLeft": true,
+      "slot": {
+        "x": 0.125,
+        "y": 0.1
+      },
+      "entry": [
+        {
+          "t": 0.0,
+          "x": -0.08,
+          "y": 0.5
+        },
+        {
+          "t": 0.25,
+          "x": 0.214296875,
+          "y": 0.65546875
+        },
+        {
+          "t": 0.5,
+          "x": 0.474375,
+          "y": 0.46875
+        },
+        {
+          "t": 0.75,
+          "x": 0.508515625,
+          "y": 0.19765625
+        },
+        {
+          "t": 1.0,
+          "x": 0.125,
+          "y": 0.1
+        }
+      ],
+      "dive": [
+        {
+          "t": 0.0,
+          "x": 0.125,
+          "y": 0.1
+        },
+        {
+          "t": 0.25,
+          "x": 0.2421875,
+          "y": 0.353125
+        },
+        {
+          "t": 0.5,
+          "x": 0.5,
+          "y": 0.55
+        },
+        {
+          "t": 0.75,
+          "x": 0.7578125,
+          "y": 0.746875
+        },
+        {
+          "t": 1.0,
+          "x": 0.875,
+          "y": 1.0
+        }
+      ]
+    },
+    {
+      "row": 1,
+      "column": 3,
+      "columns": 4,
+      "fromLeft": false,
+      "slot": {
+        "x": 0.875,
+        "y": 0.21
+      },
+      "entry": [
+        {
+          "t": 0.0,
+          "x": 1.08,
+          "y": 0.5
+        },
+        {
+          "t": 0.25,
+          "x": 0.785703125,
+          "y": 0.6571875
+        },
+        {
+          "t": 0.5,
+          "x": 0.525625,
+          "y": 0.4825
+        },
+        {
+          "t": 0.75,
+          "x": 0.491484375,
+          "y": 0.2440625
+        },
+        {
+          "t": 1.0,
+          "x": 0.875,
+          "y": 0.21
+        }
+      ],
+      "dive": [
+        {
+          "t": 0.0,
+          "x": 0.875,
+          "y": 0.21
+        },
+        {
+          "t": 0.25,
+          "x": 0.7578125,
+          "y": 0.4459375
+        },
+        {
+          "t": 0.5,
+          "x": 0.5,
+          "y": 0.605
+        },
+        {
+          "t": 0.75,
+          "x": 0.2421875,
+          "y": 0.7640625
+        },
+        {
+          "t": 1.0,
+          "x": 0.125,
+          "y": 1.0
+        }
+      ]
+    },
+    {
+      "row": 3,
+      "column": 2,
+      "columns": 6,
+      "fromLeft": true,
+      "slot": {
+        "x": 0.416666667,
+        "y": 0.43
+      },
+      "entry": [
+        {
+          "t": 0.0,
+          "x": -0.08,
+          "y": 0.5
+        },
+        {
+          "t": 0.25,
+          "x": 0.218854167,
+          "y": 0.660625
+        },
+        {
+          "t": 0.5,
+          "x": 0.510833333,
+          "y": 0.51
+        },
+        {
+          "t": 0.75,
+          "x": 0.6315625,
+          "y": 0.336875
+        },
+        {
+          "t": 1.0,
+          "x": 0.416666667,
+          "y": 0.43
+        }
+      ],
+      "dive": [
+        {
+          "t": 0.0,
+          "x": 0.416666667,
+          "y": 0.43
+        },
+        {
+          "t": 0.25,
+          "x": 0.442708333,
+          "y": 0.6315625
+        },
+        {
+          "t": 0.5,
+          "x": 0.5,
+          "y": 0.715
+        },
+        {
+          "t": 0.75,
+          "x": 0.557291667,
+          "y": 0.7984375
+        },
+        {
+          "t": 1.0,
+          "x": 0.583333333,
+          "y": 1.0
+        }
+      ]
+    },
+    {
+      "row": 2,
+      "column": 5,
+      "columns": 6,
+      "fromLeft": false,
+      "slot": {
+        "x": 0.916666667,
+        "y": 0.32
+      },
+      "entry": [
+        {
+          "t": 0.0,
+          "x": 1.08,
+          "y": 0.5
+        },
+        {
+          "t": 0.25,
+          "x": 0.786354167,
+          "y": 0.65890625
+        },
+        {
+          "t": 0.5,
+          "x": 0.530833333,
+          "y": 0.49625
+        },
+        {
+          "t": 0.75,
+          "x": 0.5090625,
+          "y": 0.29046875
+        },
+        {
+          "t": 1.0,
+          "x": 0.916666667,
+          "y": 0.32
+        }
+      ],
+      "dive": [
+        {
+          "t": 0.0,
+          "x": 0.916666667,
+          "y": 0.32
+        },
+        {
+          "t": 0.25,
+          "x": 0.786458333,
+          "y": 0.53875
+        },
+        {
+          "t": 0.5,
+          "x": 0.5,
+          "y": 0.66
+        },
+        {
+          "t": 0.75,
+          "x": 0.213541667,
+          "y": 0.78125
+        },
+        {
+          "t": 1.0,
+          "x": 0.083333333,
+          "y": 1.0
+        }
+      ]
+    }
+  ],
+  "scenario": {
+    "$comment": [
+      "characterWpm 33: start 25, target 33. 'lives' is raised so the landed",
+      "dives do not end the game. A test drives it with a one-character pool:",
+      "'hit' shoots whatever is on the field (waiting for something to be",
+      "released), 'diveLands' advances time without shooting until one dive",
+      "reaches the bottom, 'wrongShot' names a character nothing carries.",
+      "'times' repeats the event; the expected values are read after the last",
+      "repeat. 'multiplier' is what the NEXT hit would earn. Hit totals in",
+      "brackets. Scores are not pinned here because which hits catch a diver",
+      "depends on the clock; the tests check each hit's points against the",
+      "rule instead."
+    ],
+    "characterWpm": 33,
+    "startWpm": 25,
+    "targetWpm": 33,
+    "lives": 10,
+    "events": [
+      {
+        "event": "hit",
+        "times": 5,
+        "currentWpm": 25,
+        "combo": 5,
+        "multiplier": 2,
+        "lives": 10,
+        "wave": 1,
+        "note": "[5] under the first step"
+      },
+      {
+        "event": "hit",
+        "times": 1,
+        "currentWpm": 26,
+        "combo": 6,
+        "multiplier": 3,
+        "lives": 10,
+        "wave": 1,
+        "note": "[6] first step"
+      },
+      {
+        "event": "wrongShot",
+        "times": 1,
+        "currentWpm": 26,
+        "combo": 0,
+        "multiplier": 1,
+        "lives": 10,
+        "wave": 1,
+        "note": "a wrong shot leaves the speed alone but breaks the combo"
+      },
+      {
+        "event": "hit",
+        "times": 2,
+        "currentWpm": 26,
+        "combo": 2,
+        "multiplier": 1,
+        "lives": 10,
+        "wave": 2,
+        "note": "[8] the eighth hit clears wave 1 (2x4)"
+      },
+      {
+        "event": "diveLands",
+        "times": 1,
+        "currentWpm": 25,
+        "combo": 0,
+        "multiplier": 1,
+        "lives": 9,
+        "wave": 2,
+        "note": "a landed dive steps down"
+      },
+      {
+        "event": "diveLands",
+        "times": 1,
+        "currentWpm": 25,
+        "combo": 0,
+        "multiplier": 1,
+        "lives": 8,
+        "wave": 2,
+        "note": "never under the start"
+      },
+      {
+        "event": "hit",
+        "times": 4,
+        "currentWpm": 26,
+        "combo": 4,
+        "multiplier": 2,
+        "lives": 8,
+        "wave": 2,
+        "note": "[12]"
+      },
+      {
+        "event": "hit",
+        "times": 6,
+        "currentWpm": 27,
+        "combo": 10,
+        "multiplier": 4,
+        "lives": 8,
+        "wave": 3,
+        "note": "[18] ten hits in wave 2 (2x5) clear it"
+      },
+      {
+        "event": "hit",
+        "times": 6,
+        "currentWpm": 28,
+        "combo": 16,
+        "multiplier": 6,
+        "lives": 8,
+        "wave": 3,
+        "note": "[24]"
+      },
+      {
+        "event": "hit",
+        "times": 6,
+        "currentWpm": 29,
+        "combo": 22,
+        "multiplier": 8,
+        "lives": 8,
+        "wave": 3,
+        "note": "[30] the multiplier caps at 8"
+      },
+      {
+        "event": "hit",
+        "times": 6,
+        "currentWpm": 30,
+        "combo": 28,
+        "multiplier": 8,
+        "lives": 8,
+        "wave": 4,
+        "note": "[36] wave 3 (3x6) cleared"
+      },
+      {
+        "event": "diveLands",
+        "times": 1,
+        "currentWpm": 29,
+        "combo": 0,
+        "multiplier": 1,
+        "lives": 7,
+        "wave": 4,
+        "note": "steps down from 30"
+      },
+      {
+        "event": "hit",
+        "times": 6,
+        "currentWpm": 30,
+        "combo": 6,
+        "multiplier": 3,
+        "lives": 7,
+        "wave": 4,
+        "note": "[42]"
+      },
+      {
+        "event": "hit",
+        "times": 6,
+        "currentWpm": 31,
+        "combo": 12,
+        "multiplier": 5,
+        "lives": 7,
+        "wave": 4,
+        "note": "[48]"
+      },
+      {
+        "event": "hit",
+        "times": 6,
+        "currentWpm": 32,
+        "combo": 18,
+        "multiplier": 7,
+        "lives": 7,
+        "wave": 5,
+        "note": "[54] wave 4 (3x6) cleared"
+      },
+      {
+        "event": "hit",
+        "times": 6,
+        "currentWpm": 33,
+        "combo": 24,
+        "multiplier": 8,
+        "lives": 7,
+        "wave": 5,
+        "note": "[60] at the target"
+      },
+      {
+        "event": "hit",
+        "times": 6,
+        "currentWpm": 33,
+        "combo": 30,
+        "multiplier": 8,
+        "lives": 7,
+        "wave": 5,
+        "note": "[66] capped at the target"
+      },
+      {
+        "event": "diveLands",
+        "times": 1,
+        "currentWpm": 32,
+        "combo": 0,
+        "multiplier": 1,
+        "lives": 6,
+        "wave": 5,
+        "note": "steps down from the target"
+      },
+      {
+        "event": "hit",
+        "times": 6,
+        "currentWpm": 33,
+        "combo": 6,
+        "multiplier": 3,
+        "lives": 6,
+        "wave": 5,
+        "note": "[72] back to the target"
+      }
+    ],
+    "bestWpm": 33
+  }
+}

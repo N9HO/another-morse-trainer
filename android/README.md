@@ -42,6 +42,13 @@ the iOS app's navy/teal look.
   characters you miss come round more often until you master them again.
   Waves, lives, combos, three difficulties, and every hit and miss feeds
   your stats
+- **CW Galaga**: the formation game — enemies swoop in along curved paths,
+  settle into a formation and dive at you one by one; hear one and type it,
+  or see one and key it, to shoot the most dangerous enemy carrying it before
+  its dive gets through. Its own ramp (8 WPM under your
+  character speed, up 1 WPM every six hits), a combo multiplier up to ×8,
+  bigger formations every wave, three lives, three difficulties, and every
+  hit and miss feeds your stats
 - **Pileup Runner**: a full QSO simulator: your callsign, eight exchange
   flavours (single caller → POTA → contests), realism controls (caller count,
   speed band, tone spread, QSB, QRN, cut numbers, bust behavior, callsign

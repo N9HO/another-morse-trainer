@@ -728,4 +728,15 @@
     <string name="invaders_keying_speed_note">Decoded at your %1$d WPM character speed.</string>
     <string name="invaders_wpm">WPM</string>
     <string name="invaders_speed_reached">Speed reached: %1$d WPM</string>
+
+    <!-- CW Galaga (#187). Shares the invaders_* labels the two games have in common. -->
+    <string name="mode_galaga">CW Galaga</string>
+    <string name="home_arcade_formations">Arcade formations</string>
+    <string name="galaga_blurb">Enemies swoop in along curved paths and settle into a formation, then dive at you one by one. Hear one and type it, or see one and key it, to shoot the most dangerous enemy carrying it before its dive gets through. Consecutive hits build a combo multiplier up to ×8; three lives; every wave brings a bigger formation and faster dives. Misses feed your confusion drill.</string>
+    <string name="galaga_copy_blurb">Enemies fly in unmarked. Each one is sent in Morse as it enters and again as it dives (tap it to hear it again); type the character you heard to shoot the most dangerous one carrying it.</string>
+    <string name="galaga_send_blurb">Each enemy shows its character. Key it on the on-screen key or a hardware key; the decoded character shoots the most dangerous one carrying it.</string>
+    <!-- Speed ramp: start, step, hits per step, target -->
+    <string name="galaga_speed_ramp_note">Sent from %1$d WPM, stepping up %2$d WPM every %3$d hits to your %4$d WPM character speed. A dive that gets through steps it back.</string>
+    <string name="galaga_tap_to_replay">Tap an enemy to hear it again</string>
+    <string name="galaga_key_the_diver">Key the diving enemy</string>
 </resources>
