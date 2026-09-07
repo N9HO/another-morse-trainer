@@ -3598,6 +3598,286 @@ if let fx = loadActivityFixture() {
     check("fixtures/activity.json loads and decodes", false)
 }
 
+// CW Frogger (#190), against fixtures/frogger.json — read by this harness AND
+// by the Kotlin FroggerTest. The expected values were derived from the rules
+// in the fixture's derivation block by a script that knows only those rules,
+// not captured from either port.
+struct FroggerFixture: Decodable {
+    struct Derivation: Decodable {
+        let rows, startRow, medianRow, goalRow, columns: Int
+        let frogHalfWidth, waveSpeedGrowth, maxLaneSpeed: Double
+        let pointsPerHop, pointsPerDecision, pointsPerCrossing, memoryFromWave, hiddenFromWave: Int
+        let minWpm, rampStartOffset, rampStep: Double
+        let decisionsPerStep: Int
+    }
+    struct Lane: Decodable { let row: Int; let kind: String; let direction, count: Int; let width, baseSpeed: Double }
+    struct Speed: Decodable { let baseSpeed: Double; let wave: Int; let difficulty: String; let speed: Double }
+    struct Multiplier: Decodable { let combo, multiplier: Int }
+    struct Stage: Decodable { let wave: Int; let stage: String }
+    struct RampRow: Decodable { let characterWpm, startWpm, targetWpm: Double }
+    struct Step: Decodable {
+        let advance: Double?; let move: String?
+        let events: [String]; let row: Int; let x: Double
+        let score, lives, wave, combo: Int; let currentWpm: Double
+        let enteredCount: Int?
+    }
+    struct Final: Decodable { let decisions, misses: Int; let bestWpm: Double; let isOver: Bool }
+    struct Scenario: Decodable {
+        let pool, difficulty: String; let characterWpm: Double; let lives: Int
+        let startWpm, targetWpm: Double; let firstCueRow: Int
+        let steps: [Step]; let final: Final
+    }
+    let derivation: Derivation
+    let lanes: [Lane]
+    let difficultyTimeScale: [String: Double]
+    let speedTable: [Speed]
+    let multiplier: [Multiplier]
+    let labelStage: [Stage]
+    let rampStartTable: [RampRow]
+    let scenario: Scenario
+}
+
+func loadFroggerFixture() -> FroggerFixture? {
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+    guard let data = try? Data(contentsOf: root.appendingPathComponent("fixtures/frogger.json")) else { return nil }
+    return try? JSONDecoder().decode(FroggerFixture.self, from: data)
+}
+
+/// The fixture's name for an event, or nil for the ones it counts separately.
+func froggerEventKind(_ event: FroggerEvent) -> String? {
+    switch event {
+    case .hopped:   return "hopped"
+    case .cue:      return "cue"
+    case .passed:   return "passed"
+    case .landed:   return "landed"
+    case .squashed: return "squashed"
+    case .sank:     return "sank"
+    case .drowned:  return "drowned"
+    case .crossed:  return "crossed"
+    case .gameOver: return "gameOver"
+    case .entered:  return nil
+    }
+}
+
+print("\nCW Frogger (fixtures/frogger.json):")
+if let fx = loadFroggerFixture() {
+    let d = fx.derivation
+    check("the board and scoring constants are the fixture's",
+          FroggerGame.rows == d.rows && FroggerGame.startRow == d.startRow
+          && FroggerGame.medianRow == d.medianRow && FroggerGame.goalRow == d.goalRow
+          && FroggerGame.columns == d.columns && approxEqual(FroggerGame.frogHalfWidth, d.frogHalfWidth)
+          && approxEqual(FroggerGame.waveSpeedGrowth, d.waveSpeedGrowth)
+          && approxEqual(FroggerGame.maxLaneSpeed, d.maxLaneSpeed)
+          && FroggerGame.pointsPerHop == d.pointsPerHop && FroggerGame.pointsPerDecision == d.pointsPerDecision
+          && FroggerGame.pointsPerCrossing == d.pointsPerCrossing
+          && FroggerGame.memoryFromWave == d.memoryFromWave && FroggerGame.hiddenFromWave == d.hiddenFromWave)
+    check("the ramp constants are the fixture's",
+          FroggerGame.minWpm == d.minWpm && FroggerGame.rampStartOffset == d.rampStartOffset
+          && FroggerGame.rampStep == d.rampStep && FroggerGame.decisionsPerRampStep == d.decisionsPerStep)
+
+    var lanesOK = FroggerGame.lanes.count == fx.lanes.count
+    for (lane, expected) in zip(FroggerGame.lanes, fx.lanes) {
+        if lane.row != expected.row || lane.kind.rawValue != expected.kind || lane.direction != expected.direction
+            || lane.count != expected.count || !approxEqual(lane.width, expected.width)
+            || !approxEqual(lane.baseSpeed, expected.baseSpeed) {
+            lanesOK = false
+            print("      ↳ row \(lane.row): \(lane) differs from the fixture")
+        }
+    }
+    check("the lane layout is the fixture's (\(fx.lanes.count) lanes)", lanesOK)
+    check("difficulty time scales are the fixture's",
+          InvadersDifficulty.allCases.allSatisfy { d in fx.difficultyTimeScale[d.rawValue].map { approxEqual($0, d.timeScale) } ?? false })
+
+    var speedsOK = true
+    for s in fx.speedTable {
+        guard let difficulty = InvadersDifficulty(rawValue: s.difficulty) else { speedsOK = false; continue }
+        let got = FroggerGame.laneSpeed(baseSpeed: s.baseSpeed, wave: s.wave, difficulty: difficulty)
+        if !approxEqual(got, s.speed) {
+            speedsOK = false
+            print("      ↳ base \(s.baseSpeed) wave \(s.wave) \(s.difficulty): got \(got), fixture says \(s.speed)")
+        }
+    }
+    check("lane speeds follow the fixture table across \(fx.speedTable.count) rows", speedsOK)
+    check("the combo multiplier steps as the fixture pins",
+          fx.multiplier.allSatisfy { FroggerGame.multiplier(combo: $0.combo) == $0.multiplier })
+    check("the label stage follows the wave as the fixture pins",
+          fx.labelStage.allSatisfy { FroggerGame.labelStage(wave: $0.wave).rawValue == $0.stage })
+    var rampOK = true
+    for row in fx.rampStartTable {
+        let config = FroggerGame.Config(characters: ["K"], characterWpm: row.characterWpm)
+        let opens = FroggerGame(config: config, rng: SeededRNG(seed: 1)).currentWpm
+        if !approxEqual(FroggerGame.rampStart(characterWpm: row.characterWpm), row.startWpm)
+            || !approxEqual(config.startWpm, row.startWpm) || !approxEqual(config.targetWpm, row.targetWpm)
+            || !approxEqual(opens, row.startWpm) {
+            rampOK = false
+            print("      ↳ \(row.characterWpm) WPM: start \(config.startWpm), target \(config.targetWpm); fixture says \(row.startWpm) / \(row.targetWpm)")
+        }
+    }
+    check("ramp start and target follow the fixture table across \(fx.rampStartTable.count) speeds", rampOK)
+
+    // The scripted crossing.
+    let sc = fx.scenario
+    let g = FroggerGame(config: .init(characters: Array(sc.pool),
+                                      difficulty: InvadersDifficulty(rawValue: sc.difficulty) ?? .normal,
+                                      lives: sc.lives, characterWpm: sc.characterWpm),
+                        rng: SeededRNG(seed: 9))
+    let cueChar = sc.pool.first!
+    check("the scenario game opens on the start bank at its start speed with lane 1 cued",
+          g.frog == FroggerFrog(row: FroggerGame.startRow, x: 0.5) && approxEqual(g.currentWpm, sc.startWpm)
+          && approxEqual(g.config.targetWpm, sc.targetWpm) && g.cues == [sc.firstCueRow: cueChar]
+          && g.objects.count == FroggerGame.lanes.reduce(0) { $0 + $1.count }
+          && g.objects.allSatisfy { $0.character == cueChar })
+    var scenarioOK = true
+    for (i, step) in sc.steps.enumerated() {
+        let events: [FroggerEvent]
+        let what: String
+        if let seconds = step.advance {
+            events = g.advance(by: seconds)
+            what = "advance \(seconds)"
+        } else if let move = step.move, let direction = FroggerDirection(rawValue: move) {
+            events = g.move(direction)
+            what = "move \(move)"
+        } else {
+            scenarioOK = false
+            print("      ↳ step \(i): unknown step in the fixture")
+            continue
+        }
+        let kinds = events.compactMap(froggerEventKind)
+        let entered = events.filter { if case .entered = $0 { return true } else { return false } }.count
+        var cuesOK = true
+        for event in events {
+            if case .cue(let row, let character) = event, row != g.frog.row + 1 || character != cueChar { cuesOK = false }
+        }
+        let got = "\(kinds) row \(g.frog.row) x \(g.frog.x) score \(g.score) lives \(g.lives) wave \(g.wave) combo \(g.combo) wpm \(g.currentWpm)"
+        let want = "\(step.events) row \(step.row) x \(step.x) score \(step.score) lives \(step.lives) wave \(step.wave) combo \(step.combo) wpm \(step.currentWpm)"
+        if kinds != step.events || g.frog.row != step.row || !approxEqual(g.frog.x, step.x)
+            || g.score != step.score || g.lives != step.lives || g.wave != step.wave || g.combo != step.combo
+            || !approxEqual(g.currentWpm, step.currentWpm) || !cuesOK
+            || (step.enteredCount.map { $0 != entered } ?? false) {
+            scenarioOK = false
+            print("      ↳ step \(i) (\(what)): got \(got)\(entered > 0 ? " entered \(entered)" : ""); fixture says \(want)\(step.enteredCount.map { " entered \($0)" } ?? "")")
+        }
+    }
+    check("the scripted crossing matches the fixture across \(sc.steps.count) steps", scenarioOK)
+    check("the scenario's totals are the fixture's",
+          g.decisions == sc.final.decisions && g.misses == sc.final.misses
+          && approxEqual(g.bestWpm, sc.final.bestWpm) && g.isOver == sc.final.isOver
+          && approxEqual(g.accuracy, Double(sc.final.decisions) / Double(sc.final.decisions + sc.final.misses)))
+} else {
+    check("fixtures/frogger.json loads and decodes", false)
+}
+
+// CW Frogger rules the fixture leaves to the random generator — the same
+// expectations as the Kotlin FroggerTest.
+print("\nCW Frogger rules:")
+do {
+    // A two-character pool: whatever the cue is, the other label is wrong.
+    // Objects sit at 1/6, 1/2 and 5/6 until time moves, so the frog at 0.5 is
+    // on the middle object of every lane it hops into.
+    func game(seed: UInt64) -> FroggerGame {
+        FroggerGame(config: .init(characters: ["K", "M"]), rng: SeededRNG(seed: seed))
+    }
+    var squashSeen = false, passSeen = false, sinkSeen = false, landSeen = false
+    var rulesOK = true
+    for seed in 1...40 {
+        let g = game(seed: UInt64(seed))
+        guard let cue = g.nextCue, let middle = g.objects.first(where: { $0.row == 1 && abs($0.x - 0.5) < 1e-9 }) else {
+            rulesOK = false; continue
+        }
+        let events = g.move(.up)
+        if middle.character == cue {
+            passSeen = true
+            if !events.contains(.passed(middle, points: FroggerGame.pointsPerDecision)) || g.lives != 3 || g.combo != 1 { rulesOK = false }
+        } else {
+            squashSeen = true
+            if !events.contains(.squashed(middle, cue: cue)) || g.lives != 2 || g.frog.row != 0 || g.cues.count != 1 { rulesOK = false }
+        }
+        // Straight to the river on a fresh game: walk the median first.
+        let r = game(seed: UInt64(seed) + 100)
+        var atMedian = false
+        for _ in 0..<4 {
+            let ev = r.move(.up)
+            if ev.contains(where: { if case .squashed = $0 { return true } else { return false } }) { break }
+            if r.frog.row == FroggerGame.medianRow { atMedian = true }
+        }
+        guard atMedian, let riverCue = r.nextCue,
+              let log = r.objects.first(where: { $0.row == 5 && abs($0.x - 0.5) < 1e-9 }) else { continue }
+        let landing = r.move(.up)
+        if log.character == riverCue {
+            landSeen = true
+            if !landing.contains(where: { if case .landed(let l, _) = $0 { return l.id == log.id } else { return false } })
+                || r.ridingId != log.id { rulesOK = false }
+        } else {
+            sinkSeen = true
+            if !landing.contains(.sank(log, cue: riverCue)) || r.frog.row != 0 || r.ridingId != nil { rulesOK = false }
+        }
+    }
+    check("a wrong vehicle squashes, a cued one is passed through", rulesOK && squashSeen && passSeen)
+    check("a wrong log sinks, a cued one is ridden", sinkSeen && landSeen)
+
+    // A ridden log carries the frog, and the frog wraps with it.
+    let k = FroggerGame(config: .init(characters: ["K"]), rng: SeededRNG(seed: 3))
+    for _ in 0..<5 { k.move(.up) }
+    let before = k.frog.x
+    k.advance(by: 0.5)
+    let lane5 = FroggerGame.lanes.first { $0.row == 5 }!
+    check("a cued log carries the frog with it",
+          k.frog.row == 5 && k.ridingId != nil
+          && approxEqual(k.frog.x, before - FroggerGame.laneSpeed(baseSpeed: lane5.baseSpeed, wave: 1, difficulty: .normal) * 0.5))
+    let riding = k.ridingId
+    k.advance(by: 4)
+    check("the frog wraps with its log", k.ridingId == riding && k.frog.x >= 0 && k.frog.x < 1
+          && k.objects.first { $0.id == riding }.map { approxEqual(FroggerGame.wrappedDistance($0.x, k.frog.x), 0) } ?? false)
+
+    // A vehicle is credited once per overlap, not once per frame.
+    let p = FroggerGame(config: .init(characters: ["K"]), rng: SeededRNG(seed: 4))
+    p.move(.up)
+    let after = p.decisions
+    for _ in 0..<10 { p.advance(by: 0.01) }
+    check("a passing vehicle is credited once", after == 1 && p.decisions == 1)
+
+    // Three deaths end the game; a finished game ignores hops and time.
+    let o = FroggerGame(config: .init(characters: ["K"]), rng: SeededRNG(seed: 5))
+    var deaths = 0
+    var over = false
+    o.advance(by: 1.0)
+    for _ in 0..<3 {
+        for _ in 0..<5 {
+            let ev = o.move(.up)
+            if ev.contains(where: { if case .drowned = $0 { return true } else { return false } }) { deaths += 1 }
+            if ev.contains(.gameOver) { over = true }
+            if o.frog.row == 0 { break }
+        }
+    }
+    check("three drownings end the game", deaths == 3 && over && o.isOver && o.lives == 0)
+    check("a finished game ignores hops and time", o.move(.up).isEmpty && o.advance(by: 1).isEmpty)
+
+    // Memory stage: a lane's labels hide once it is cued; hidden stage: never shown.
+    let m = FroggerGame(config: .init(characters: ["K"]), rng: SeededRNG(seed: 6))
+    check("labels are visible in wave 1", m.labelStage == .visible && (1...7).allSatisfy { m.isLabelVisible(row: $0) })
+    for _ in 0..<2 { for _ in 0..<8 { m.move(.up) } }
+    check("wave 3 hides a lane's labels once it is cued",
+          m.wave == 3 && m.labelStage == .memory && !m.isLabelVisible(row: 1) && m.isLabelVisible(row: 2))
+    for _ in 0..<2 { for _ in 0..<8 { m.move(.up) } }
+    check("wave 5 never shows a label", m.wave == 5 && m.labelStage == .hidden && !(1...7).contains { m.isLabelVisible(row: $0) })
+
+    // The same seed gives the same labels and cues.
+    func labels(seed: UInt64) -> String {
+        let g = FroggerGame(config: .init(characters: ["K", "M", "R", "S"]), rng: SeededRNG(seed: seed))
+        return g.objects.map { String($0.character) }.joined() + String(g.nextCue ?? "?")
+    }
+    check("same seed, same labels and cue", labels(seed: 42) == labels(seed: 42))
+    check("different seed, different labels", labels(seed: 42) != labels(seed: 43))
+    check("the cue is always a label its lane carries", (1...30).allSatisfy { seed in
+        let g = FroggerGame(config: .init(characters: ["K", "M", "R", "S", "U", "A"]), rng: SeededRNG(seed: UInt64(seed)))
+        return g.objects.contains { $0.row == 1 && $0.character == g.nextCue }
+    })
+}
+
 print("\n────────────────────────────")
 if failures == 0 {
     print("✅ All \(checks) checks passed.\n")

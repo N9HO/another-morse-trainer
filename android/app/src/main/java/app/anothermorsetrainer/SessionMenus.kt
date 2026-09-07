@@ -51,7 +51,8 @@ enum class TrainingMode(private val quizTitle: String? = null, private val title
     EXAM(titleRes = R.string.mode_code_exam),
     QRQ(titleRes = R.string.mode_qrq_speed),
     RAPID_FIRE(titleRes = R.string.mode_rapid_fire),
-    INVADERS(titleRes = R.string.mode_invaders);
+    INVADERS(titleRes = R.string.mode_invaders),
+    FROGGER(titleRes = R.string.mode_frogger);
 
     /** The menu label — the home tile's title. */
     @Composable

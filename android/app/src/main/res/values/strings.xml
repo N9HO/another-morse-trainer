@@ -728,4 +728,39 @@
     <string name="invaders_keying_speed_note">Decoded at your %1$d WPM character speed.</string>
     <string name="invaders_wpm">WPM</string>
     <string name="invaders_speed_reached">Speed reached: %1$d WPM</string>
+
+    <!-- CW Frogger (#190) -->
+    <string name="mode_frogger">CW Frogger</string>
+    <string name="home_arcade_crossing">Arcade crossing</string>
+    <string name="frogger_blurb">Hop a frog across three lanes of traffic and three of river. Every vehicle and log carries a character, and each lane is cued in Morse: only the cued vehicle is harmless and only the cued log floats. Three lives; each crossing is a wave and the traffic gets faster. Labels hide as the waves go on. Wrong lanes feed your confusion drill.</string>
+    <string name="frogger_characters">Characters</string>
+    <string name="frogger_difficulty">Difficulty</string>
+    <string name="frogger_start">Start game</string>
+    <string name="frogger_score">Score</string>
+    <string name="frogger_wave">Wave</string>
+    <string name="frogger_lives">Lives</string>
+    <string name="frogger_combo_label">Combo</string>
+    <string name="frogger_wpm">WPM</string>
+    <string name="frogger_game_over">Game over</string>
+    <string name="frogger_best_combo">Best combo</string>
+    <string name="frogger_accuracy">Accuracy</string>
+    <string name="frogger_play_again">Play again</string>
+    <string name="frogger_end_game">End game</string>
+    <string name="frogger_tap_to_replay">Tap the board to hear the next lane\'s cue again</string>
+    <string name="frogger_tap_to_replay_hidden">Tap the board to hear the next lane\'s cue again; the traffic announces itself</string>
+    <string name="frogger_hop_up">Hop up</string>
+    <string name="frogger_hop_down">Hop down</string>
+    <string name="frogger_hop_left">Hop left</string>
+    <string name="frogger_hop_right">Hop right</string>
+    <string name="frogger_board_description">Board: frog on row %1$d of %2$d</string>
+    <!-- Speed ramp: start, step, decisions per step, target -->
+    <string name="frogger_speed_ramp_note">Cues sent from %1$d WPM, stepping up %2$d WPM every %3$d safe crossings of a lane to your %4$d WPM character speed. Losing a life steps it back.</string>
+    <string name="frogger_speed_flat_note">Cues sent at your %1$d WPM character speed.</string>
+    <string name="frogger_labels_note">Labels show for the first two crossings, hide once a lane is cued from the third, and from the fifth the traffic announces itself in Morse instead.</string>
+    <string name="frogger_speed_reached">Speed reached: %1$d WPM</string>
+    <!-- Flashes on the board: the wrong label and the cue -->
+    <string name="frogger_flash_hit">Hit by %1$s, not %2$s</string>
+    <string name="frogger_flash_sank">%1$s sank, not %2$s</string>
+    <string name="frogger_flash_splash">Splash — the log was %1$s</string>
+    <string name="frogger_flash_across">Across! +%1$d — wave %2$d</string>
 </resources>

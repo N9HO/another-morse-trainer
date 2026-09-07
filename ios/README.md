@@ -37,6 +37,12 @@ testers, bug reports and feature chat live on
   it, before it lands. Each game starts 10 WPM under your character speed
   and steps up 2 WPM every five hits (a landing steps it back). Waves,
   lives, combos, three difficulties, and every hit and miss feeds your stats
+- **CW Frogger**: an arcade crossing — hop a frog over three lanes of traffic
+  and three of river. Every vehicle and log carries a character and each lane
+  is cued in Morse: only the cued vehicle is harmless, only the cued log
+  floats. Labels hide as the waves go on until the traffic announces itself in
+  Morse. Three lives, waves, combos, three difficulties, its own gentle speed
+  ramp, and every lane decision feeds your stats and confusion matrix
 - **Pileup Runner**: call CQ and work a simulated pileup, with your own side
   keyed on the air: adjustable callers, speeds, QSB/QRN, cut numbers, bust
   behavior, callsign shapes, and a live log
