@@ -106,7 +106,7 @@
       "wave": 3,
       "rows": 3,
       "columns": 6,
-      "size": 18,
+      "size": 19,
       "maxDivers": 2
     },
     {
@@ -629,7 +629,7 @@
       {
         "event": "hit",
         "times": 1,
-        "currentWpm": 26,
+        "currentWpm": 27,
         "combo": 6,
         "multiplier": 3,
         "lives": 10,
