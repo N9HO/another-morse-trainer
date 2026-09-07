@@ -444,7 +444,8 @@ private fun InvadersSetup(
                 start >= target -> stringResource(R.string.invaders_speed_flat_note, target)
                 else -> stringResource(
                     R.string.invaders_speed_ramp_note,
-                    start, InvadersGame.rampStep.roundToInt(), InvadersGame.hitsPerRampStep, target
+                    start, InvadersGame.rampStepUp.roundToInt(), InvadersGame.hitsPerRampStep,
+                    InvadersGame.rampHold, target, InvadersGame.rampStepDown.roundToInt()
                 )
             }
             Text(speedNote, style = MaterialTheme.typography.bodySmall, color = Brand.textSecondary)

@@ -98,9 +98,10 @@ struct InvadersView: View {
         let start = Int(InvadersGame.rampStart(characterWpm: model.settings.wpm).rounded())
         if input == .keying { return "Decoded at your \(target) WPM character speed." }
         if start >= target { return "Sent at your \(target) WPM character speed." }
-        return "Sent from \(start) WPM, stepping up \(Int(InvadersGame.rampStep)) WPM every "
-            + "\(InvadersGame.hitsPerRampStep) hits to your \(target) WPM character speed. "
-            + "A landing steps it back."
+        return "Sent from \(start) WPM, stepping up \(Int(InvadersGame.rampStepUp)) WPM after "
+            + "\(InvadersGame.hitsPerRampStep) hits in a row (the first \(InvadersGame.rampHold) after any "
+            + "change do not count) to your \(target) WPM character speed. A landing steps it back "
+            + "\(Int(InvadersGame.rampStepDown)) WPM. Characters you miss come round more often until you master them."
     }
 
     var body: some View {

@@ -3375,20 +3375,43 @@ do {
           zip(seq, seq.dropFirst()).allSatisfy { $0.last != $1.last })
 }
 
-// Morse Invaders speed ramp and keyboard (#178), against
-// fixtures/invaders-ramp.json — read by this harness AND by the Kotlin
-// InvadersTest. The expected values were worked out from the rules in the
-// fixture's derivation block, not captured from either port.
+// Morse Invaders speed ramp (#178, retuned in #194), adaptive character
+// weighting (#194) and keyboard (#178), against fixtures/invaders-ramp.json —
+// read by this harness AND by the Kotlin InvadersTest. The expected values
+// were worked out from the rules in the fixture's derivation and weighting
+// blocks, not captured from either port.
 struct InvadersRampFixture: Decodable {
     struct Derivation: Decodable {
-        let minWpm: Double; let startOffset: Double; let step: Double
-        let hitsPerStep: Int; let noRampAtOrBelow: Double
+        let minWpm: Double; let startOffset: Double; let stepUp: Double; let stepDown: Double
+        let hitsPerStep: Int; let hold: Int; let noRampAtOrBelow: Double
     }
     struct Row: Decodable { let characterWpm: Double; let startWpm: Double; let targetWpm: Double }
-    struct Event: Decodable { let event: String; let times: Int?; let currentWpm: Double }
+    struct PerfectRun: Decodable {
+        let characterWpm: Double; let startWpm: Double; let hitsPerLaterStep: Int
+        let hitsToTarget: Int; let wpmOneHitShort: Double
+    }
+    struct Event: Decodable {
+        let event: String; let times: Int?; let currentWpm: Double; let streak: Int; let settling: Int
+    }
     struct Scenario: Decodable {
         let characterWpm: Double; let startWpm: Double; let targetWpm: Double
         let lives: Int; let events: [Event]; let bestWpm: Double
+    }
+    struct Weighting: Decodable {
+        struct WeightRow: Decodable { let debt: Int; let weight: Double }
+        struct Pick: Decodable { let weights: [Double]; let roll: Double; let index: Int }
+        struct WeightEvent: Decodable {
+            let event: String; let times: Int?; let label: String?; let bind: String?
+            let avoid: [String]?; let emptyField: Bool?; let weights: [String: Double]
+        }
+        struct Scenario: Decodable { let pool: String; let lives: Int; let events: [WeightEvent] }
+        struct SpawnShare: Decodable {
+            let pool: String; let debited: String; let lives: Int; let spawns: Int
+            let minShare: Double; let maxShare: Double
+        }
+        let debtPerMiss: Int; let maxDebt: Int; let bonus: Double
+        let weightTable: [WeightRow]; let pick: [Pick]
+        let scenario: Scenario; let spawnShare: SpawnShare
     }
     struct Keyboard: Decodable {
         struct Case: Decodable { let name: String; let pool: String; let rows: [String] }
@@ -3396,7 +3419,9 @@ struct InvadersRampFixture: Decodable {
     }
     let derivation: Derivation
     let startTable: [Row]
+    let perfectRun: PerfectRun
     let scenario: Scenario
+    let weighting: Weighting
     let keyboard: Keyboard
 }
 
@@ -3410,26 +3435,43 @@ func loadInvadersRampFixture() -> InvadersRampFixture? {
     return try? JSONDecoder().decode(InvadersRampFixture.self, from: data)
 }
 
-print("\nMorse Invaders speed ramp and keyboard (fixtures/invaders-ramp.json):")
+print("\nMorse Invaders speed ramp, weighting and keyboard (fixtures/invaders-ramp.json):")
 if let fx = loadInvadersRampFixture() {
     let d = fx.derivation
     check("ramp constants are the fixture's",
           InvadersGame.minWpm == d.minWpm && InvadersGame.rampStartOffset == d.startOffset
-          && InvadersGame.rampStep == d.step && InvadersGame.hitsPerRampStep == d.hitsPerStep)
+          && InvadersGame.rampStepUp == d.stepUp && InvadersGame.rampStepDown == d.stepDown
+          && InvadersGame.hitsPerRampStep == d.hitsPerStep && InvadersGame.rampHold == d.hold)
 
     var tableOK = true
     for row in fx.startTable {
         let config = InvadersGame.Config(characters: ["K"], characterWpm: row.characterWpm)
-        let opens = InvadersGame(config: config, rng: SeededRNG(seed: 1)).currentWpm
+        let opens = InvadersGame(config: config, rng: SeededRNG(seed: 1))
         if !approxEqual(InvadersGame.rampStart(characterWpm: row.characterWpm), row.startWpm)
             || !approxEqual(config.startWpm, row.startWpm)
             || !approxEqual(config.targetWpm, row.targetWpm)
-            || !approxEqual(opens, row.startWpm) {
+            || !approxEqual(opens.currentWpm, row.startWpm)
+            || opens.rampStreak != 0 || opens.rampSettling != 0 {
             tableOK = false
             print("      ↳ \(row.characterWpm) WPM: start \(config.startWpm), target \(config.targetWpm); fixture says \(row.startWpm) / \(row.targetWpm)")
         }
     }
     check("start and target follow the fixture table across \(fx.startTable.count) speeds", tableOK)
+
+    // Nothing but hits: the ramp takes the fixture's count to reach the target.
+    let pr = fx.perfectRun
+    let perfect = InvadersGame(config: .init(characters: ["K"], characterWpm: pr.characterWpm), rng: SeededRNG(seed: 3))
+    var perfectOK = approxEqual(perfect.currentWpm, pr.startWpm)
+    for _ in 0..<(pr.hitsToTarget - 1) {
+        while perfect.invaders.isEmpty { perfect.advance(by: 0.05) }
+        if !perfect.shoot("K").isHit { perfectOK = false }
+    }
+    perfectOK = perfectOK && approxEqual(perfect.currentWpm, pr.wpmOneHitShort)
+    while perfect.invaders.isEmpty { perfect.advance(by: 0.05) }
+    perfectOK = perfectOK && perfect.shoot("K").isHit && approxEqual(perfect.currentWpm, perfect.config.targetWpm)
+    check("a perfect run reaches the target on hit \(pr.hitsToTarget), not \(pr.hitsToTarget - 1)", perfectOK && !perfect.isOver)
+    check("hold + hits per step is the fixture's later-step cost",
+          InvadersGame.rampHold + InvadersGame.hitsPerRampStep == pr.hitsPerLaterStep)
 
     // The scripted scenario, driven with a one-character pool so whatever is
     // on the field is a K: "hit" shoots one, "escape" lets the lowest land,
@@ -3440,12 +3482,14 @@ if let fx = loadInvadersRampFixture() {
     check("the scenario game opens at its start speed",
           approxEqual(g.currentWpm, sc.startWpm) && approxEqual(g.config.targetWpm, sc.targetWpm))
     var scenarioOK = true
+    var scenarioHits = 0
     for (i, ev) in sc.events.enumerated() {
         for _ in 0..<(ev.times ?? 1) {
             switch ev.event {
             case "hit":
                 while g.invaders.isEmpty { g.advance(by: 0.05) }
                 if !g.shoot("K").isHit { scenarioOK = false; print("      ↳ event \(i): the hit missed") }
+                scenarioHits += 1
             case "escape":
                 var landed = 0
                 while landed == 0 {
@@ -3459,12 +3503,12 @@ if let fx = loadInvadersRampFixture() {
                 print("      ↳ event \(i): unknown event '\(ev.event)' in the fixture")
             }
         }
-        if !approxEqual(g.currentWpm, ev.currentWpm) {
+        if !approxEqual(g.currentWpm, ev.currentWpm) || g.rampStreak != ev.streak || g.rampSettling != ev.settling {
             scenarioOK = false
-            print("      ↳ after event \(i) (\(ev.event)): \(g.currentWpm) WPM, fixture says \(ev.currentWpm)")
+            print("      ↳ after event \(i) (\(ev.event) ×\(ev.times ?? 1)): \(g.currentWpm) WPM, streak \(g.rampStreak), settling \(g.rampSettling); fixture says \(ev.currentWpm) / \(ev.streak) / \(ev.settling)")
         }
     }
-    check("the ramp follows the scripted scenario across \(sc.events.count) events", scenarioOK && !g.isOver)
+    check("the ramp follows the scripted scenario across \(sc.events.count) events (\(scenarioHits) hits)", scenarioOK && !g.isOver)
     check("bestWpm is the highest speed reached", approxEqual(g.bestWpm, sc.bestWpm))
 
     let flat = InvadersGame(config: .init(characters: ["K"], characterWpm: d.noRampAtOrBelow), rng: SeededRNG(seed: 2))
@@ -3475,6 +3519,120 @@ if let fx = loadInvadersRampFixture() {
     check("no ramp at or under the floor",
           flat.config.startWpm == flat.config.targetWpm && approxEqual(flat.currentWpm, d.noRampAtOrBelow)
           && approxEqual(flat.bestWpm, d.noRampAtOrBelow))
+
+    // Adaptive character weighting (#194).
+    let w = fx.weighting
+    check("weighting constants are the fixture's",
+          InvadersGame.debtPerMiss == w.debtPerMiss && InvadersGame.maxMissDebt == w.maxDebt
+          && InvadersGame.missWeightBonus == w.bonus)
+    check("spawn weight is 1 + bonus × debt across \(w.weightTable.count) debts",
+          w.weightTable.allSatisfy { approxEqual(InvadersGame.spawnWeight(debt: $0.debt), $0.weight) })
+    var pickOK = true
+    for p in w.pick {
+        let got = InvadersGame.pick(weights: p.weights, roll: p.roll)
+        if got != p.index {
+            pickOK = false
+            print("      ↳ pick(\(p.weights), \(p.roll)) = \(got), fixture says \(p.index)")
+        }
+    }
+    check("pick lands where the fixture says across \(w.pick.count) rolls", pickOK)
+
+    // The weighting scenario: labels bind to whatever the generator spawns,
+    // per the driving rules in the fixture's comment.
+    let ws = w.scenario
+    let wg = InvadersGame(config: .init(characters: Array(ws.pool), lives: ws.lives), rng: SeededRNG(seed: 11))
+    var labels: [String: Character] = [:]
+    var weightingOK = true
+    func fail(_ i: Int, _ why: String) { weightingOK = false; print("      ↳ weighting event \(i): \(why)") }
+    func shootAll(_ which: (Character) -> Bool) {
+        for inv in wg.invaders where which(inv.character) { _ = wg.shoot(inv.character) }
+    }
+    func landed(_ events: [InvadersEvent]) -> [Invader] {
+        events.compactMap { if case .escaped(let e) = $0 { return e } else { return nil } }
+    }
+    for (i, ev) in ws.events.enumerated() {
+        for _ in 0..<(ev.times ?? 1) {
+            var steps = 0
+            switch ev.event {
+            case "escape":
+                if let label = ev.label, let c = labels[label] {
+                    var done = false
+                    while !done && steps < 100_000 {
+                        shootAll { $0 != c }
+                        let fell = landed(wg.advance(by: 0.05))
+                        if fell.contains(where: { $0.character == c }) { done = true }
+                        else if !fell.isEmpty { fail(i, "the wrong character landed"); done = true }
+                        steps += 1
+                    }
+                } else {
+                    var fell: [Invader] = []
+                    while fell.isEmpty && steps < 100_000 { fell = landed(wg.advance(by: 0.05)); steps += 1 }
+                    if fell.count != 1 { fail(i, "\(fell.count) landed at once") }
+                    if let label = ev.label, let first = fell.first { labels[label] = first.character }
+                }
+            case "hit":
+                guard let label = ev.label, let c = labels[label] else { fail(i, "hit needs a bound label"); break }
+                var done = false
+                while !done && steps < 100_000 {
+                    shootAll { $0 != c }
+                    if wg.invaders.contains(where: { $0.character == c }) {
+                        if !wg.shoot(c).isHit { fail(i, "the hit missed") }
+                        done = true
+                    } else {
+                        wg.advance(by: 0.05)
+                    }
+                    steps += 1
+                }
+            case "wrongShot":
+                if ev.emptyField == true {
+                    shootAll { _ in true }
+                    if !wg.invaders.isEmpty || wg.shoot("Z").isHit { fail(i, "the empty-field wrong shot hit") }
+                } else {
+                    let avoided = Set((ev.avoid ?? []).compactMap { labels[$0] })
+                    while (wg.invaders.isEmpty || wg.invaders.contains { avoided.contains($0.character) }) && steps < 100_000 {
+                        shootAll { avoided.contains($0) }
+                        if wg.invaders.isEmpty { wg.advance(by: 0.05) }
+                        steps += 1
+                    }
+                    guard let low = wg.lowest else { fail(i, "nothing on the field to miss"); break }
+                    if let bind = ev.bind { labels[bind] = low.character }
+                    if wg.shoot("Z").isHit { fail(i, "the wrong shot hit") }
+                }
+            default:
+                fail(i, "unknown event '\(ev.event)' in the fixture")
+            }
+            if steps >= 100_000 { fail(i, "gave up waiting for the generator") }
+        }
+        var expected: [Character: Double] = [:]
+        for (label, weight) in ev.weights {
+            if let c = labels[label] { expected[c] = weight } else { fail(i, "label \(label) is not bound") }
+        }
+        for (c, weight) in wg.spawnWeights where !approxEqual(weight, expected[c] ?? 1.0) {
+            fail(i, "\(c) weighs \(weight), fixture says \(expected[c] ?? 1.0)")
+        }
+    }
+    check("spawn weights follow the weighting scenario across \(ws.events.count) events", weightingOK && !wg.isOver)
+
+    // The weights reach the spawn choice: a character kept in debt spawns
+    // far more often than its uniform share.
+    let ss = w.spawnShare
+    let sg = InvadersGame(config: .init(characters: Array(ss.pool), lives: ss.lives), rng: SeededRNG(seed: 21))
+    let debited = Character(ss.debited)
+    var debitedSpawns = 0
+    var shareOK = true
+    for _ in 0..<ss.spawns {
+        let spawned = sg.advance(by: sg.spawnInterval).filter { if case .spawned = $0 { return true } else { return false } }
+        guard spawned.count == 1, sg.invaders.count == 1 else { shareOK = false; break }
+        let inv = sg.invaders[0]
+        if inv.character == debited {
+            debitedSpawns += 1
+            if sg.shoot("Z").isHit { shareOK = false }
+        }
+        if !sg.shoot(inv.character).isHit { shareOK = false }
+    }
+    let share = Double(debitedSpawns) / Double(ss.spawns)
+    check("a character in debt spawns more often (share \(share) of \(ss.spawns))",
+          shareOK && share >= ss.minShare && share <= ss.maxShare)
 
     let kb = fx.keyboard
     check("the digit and letter rows are the fixture's",
