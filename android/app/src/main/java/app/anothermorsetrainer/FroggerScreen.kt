@@ -116,6 +116,12 @@ fun FroggerScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
     val player = remember { MorsePlayer() }
     val haptics = remember { Haptics(context) }
     val prefs = remember { context.getSharedPreferences("amt_frogger", android.content.Context.MODE_PRIVATE) }
+    // The board flashes, resolved in composition (lint: a non-composable
+    // must not read resources through the context) and formatted on use.
+    val flashHit = stringResource(R.string.frogger_flash_hit)
+    val flashSank = stringResource(R.string.frogger_flash_sank)
+    val flashSplash = stringResource(R.string.frogger_flash_splash)
+    val flashAcross = stringResource(R.string.frogger_flash_across)
 
     var phase by rememberSaveable { mutableStateOf(FrogPhase.SETUP) }
     // Setup choices persist across launches, like every other mode's.
@@ -301,26 +307,26 @@ fun FroggerScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
                     engine.noteAttempt(event.obj.character, event.cue, 0.0)
                     tally(event.cue, false)
                     if (Settings.hapticsEnabled) haptics.error()
-                    flash = context.getString(R.string.frogger_flash_hit, event.obj.character.toString(), event.cue.toString()) to now + 1200
+                    flash = flashHit.format(event.obj.character.toString(), event.cue.toString()) to now + 1200
                     cueToneEnd.clear()
                 }
                 is FroggerEvent.Sank -> {
                     engine.noteAttempt(event.obj.character, event.cue, 0.0)
                     tally(event.cue, false)
                     if (Settings.hapticsEnabled) haptics.error()
-                    flash = context.getString(R.string.frogger_flash_sank, event.obj.character.toString(), event.cue.toString()) to now + 1200
+                    flash = flashSank.format(event.obj.character.toString(), event.cue.toString()) to now + 1200
                     cueToneEnd.clear()
                 }
                 is FroggerEvent.Drowned -> {
                     engine.noteMiss(event.cue)
                     tally(event.cue, false)
                     if (Settings.hapticsEnabled) haptics.error()
-                    flash = context.getString(R.string.frogger_flash_splash, event.cue.toString()) to now + 1200
+                    flash = flashSplash.format(event.cue.toString()) to now + 1200
                     cueToneEnd.clear()
                 }
                 is FroggerEvent.Crossed -> {
                     if (Settings.hapticsEnabled) haptics.success()
-                    flash = context.getString(R.string.frogger_flash_across, event.points, g.wave) to now + 1200
+                    flash = flashAcross.format(event.points, g.wave) to now + 1200
                     cueToneEnd.clear()
                 }
                 is FroggerEvent.Entered -> {
