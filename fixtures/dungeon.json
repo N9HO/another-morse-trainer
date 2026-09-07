@@ -1,0 +1,976 @@
+{
+  "$comment": [
+    "CW Dungeon (#186, #170), pinned for both ports: DungeonGame / DungeonSpells",
+    "in ios/Sources/MorseKit/Dungeon.swift and android/.../morsekit/Dungeon.kt.",
+    "Read by ios/Sources/MorseKitCheck/main.swift and",
+    "android/app/src/test/.../morsekit/DungeonTest.kt.",
+    "",
+    "Every expected value below was worked out from the rules in 'derivation',",
+    "not captured from either port. Do not regenerate it to make a failing test",
+    "pass; change it only when a rule is meant to change."
+  ],
+  "derivation": {
+    "rules": [
+      "A monster casts a spell word in Morse; the learner keys the counter word",
+      "before the attack window closes. The window opens when the spell has",
+      "finished sounding: the attack lands at sendSeconds + window after the cast.",
+      "  sendSeconds = PARIS timing of the word at the ramp's current speed:",
+      "    dit 1, dah 3, element gap 1, character gap 3 units, unit = 1.2 / WPM s",
+      "    (Farnsworth, when set, stretches the character gap as MorseTiming does;",
+      "    the rows below are standard timing).",
+      "  window(room) = max(minWindow, baseWindow * windowDecay^(room-1)) * timeScale",
+      "    with the Invaders difficulty scale: relaxed 1.35, normal 1, fast 0.75.",
+      "The first cast comes castDelay after the game starts and castDelay after",
+      "each resolution; a cleared room waits roomDelay before its first cast.",
+      "A correct counter scores pointsPerHit * multiplier(combo) and takes one",
+      "hit off the casting monster; multiplier = min(4, 1 + (combo-1)/3), the",
+      "Invaders rule. A heal spell countered also restores one life, up to the",
+      "starting lives. A wrong or late counter costs a life and resets the combo.",
+      "When every monster in the room is down the room is cleared: +roomClearBonus,",
+      "and the next room is entered. Rooms 1-2 hold one monster, later rooms two,",
+      "each taking hitsPerMonster hits; every bossEvery-th room holds one dragon",
+      "taking bossHits. Regular kinds cycle slime, bat, skeleton, ghost by room.",
+      "Speed ramp: a game opens startOffset WPM under the character speed, never",
+      "under minWpm; every hitsPerStep hits in total steps up 'step' WPM to the",
+      "character speed; a hit taken steps down 'step', never under the start.",
+      "Spell pools: a spell is available when every letter of its pair is in the",
+      "active set (case-insensitive). Fewer than minPool available falls back to",
+      "the first starterCount spells of the list, flagged 'fallback'. The list is",
+      "ordered by the latest Koch letter each pair needs.",
+      "characterOutcomes pairs each expected character with the keyed one at the",
+      "same position (null when nothing was keyed there); extra keyed characters",
+      "are ignored."
+    ],
+    "pointsPerHit": 100,
+    "roomClearBonus": 250,
+    "hitsPerMonster": 2,
+    "bossEvery": 5,
+    "bossHits": 4,
+    "lives": 3,
+    "baseWindow": 6.0,
+    "windowDecay": 0.92,
+    "minWindow": 2.5,
+    "castDelay": 1.0,
+    "roomDelay": 2.0,
+    "minWpm": 15,
+    "startOffset": 8,
+    "step": 1,
+    "hitsPerStep": 4,
+    "starterCount": 4,
+    "minPool": 3
+  },
+  "spells": [
+    {
+      "spell": "TRAP",
+      "counter": "MAP",
+      "heals": false,
+      "characters": "AMPRT",
+      "unlock": 8
+    },
+    {
+      "spell": "ROT",
+      "counter": "SALT",
+      "heals": true,
+      "characters": "ALORST",
+      "unlock": 10
+    },
+    {
+      "spell": "STORM",
+      "counter": "PORT",
+      "heals": false,
+      "characters": "MOPRST",
+      "unlock": 10
+    },
+    {
+      "spell": "MAUL",
+      "counter": "ARMOR",
+      "heals": false,
+      "characters": "ALMORU",
+      "unlock": 10
+    },
+    {
+      "spell": "SWARM",
+      "counter": "SWAT",
+      "heals": false,
+      "characters": "AMRSTW",
+      "unlock": 11
+    },
+    {
+      "spell": "MIST",
+      "counter": "LAMP",
+      "heals": false,
+      "characters": "AILMPST",
+      "unlock": 12
+    },
+    {
+      "spell": "SNOW",
+      "counter": "SUN",
+      "heals": false,
+      "characters": "NOSUW",
+      "unlock": 13
+    },
+    {
+      "spell": "STUN",
+      "counter": "SLAP",
+      "heals": false,
+      "characters": "ALNPSTU",
+      "unlock": 13
+    },
+    {
+      "spell": "WILT",
+      "counter": "POTION",
+      "heals": true,
+      "characters": "ILNOPTW",
+      "unlock": 13
+    },
+    {
+      "spell": "SLEEP",
+      "counter": "WAKE",
+      "heals": false,
+      "characters": "AEKLPSW",
+      "unlock": 15
+    },
+    {
+      "spell": "OMEN",
+      "counter": "TOTEM",
+      "heals": false,
+      "characters": "EMNOT",
+      "unlock": 15
+    },
+    {
+      "spell": "FIRE",
+      "counter": "WATER",
+      "heals": false,
+      "characters": "AEFIRTW",
+      "unlock": 16
+    },
+    {
+      "spell": "FROST",
+      "counter": "FLAME",
+      "heals": false,
+      "characters": "AEFLMORST",
+      "unlock": 16
+    },
+    {
+      "spell": "SMOKE",
+      "counter": "FAN",
+      "heals": false,
+      "characters": "AEFKMNOS",
+      "unlock": 16
+    },
+    {
+      "spell": "KNOT",
+      "counter": "KNIFE",
+      "heals": false,
+      "characters": "EFIKNOT",
+      "unlock": 16
+    },
+    {
+      "spell": "GLOOM",
+      "counter": "GLOW",
+      "heals": false,
+      "characters": "GLMOW",
+      "unlock": 20
+    },
+    {
+      "spell": "QUAKE",
+      "counter": "LEAP",
+      "heals": false,
+      "characters": "AEKLPQU",
+      "unlock": 22
+    },
+    {
+      "spell": "GAZE",
+      "counter": "VEIL",
+      "heals": false,
+      "characters": "AEGILVZ",
+      "unlock": 24
+    },
+    {
+      "spell": "VENOM",
+      "counter": "HEAL",
+      "heals": true,
+      "characters": "AEHLMNOV",
+      "unlock": 25
+    },
+    {
+      "spell": "CURSE",
+      "counter": "BLESS",
+      "heals": false,
+      "characters": "BCELRSU",
+      "unlock": 33
+    },
+    {
+      "spell": "SHADOW",
+      "counter": "LIGHT",
+      "heals": false,
+      "characters": "ADGHILOSTW",
+      "unlock": 35
+    },
+    {
+      "spell": "BLAZE",
+      "counter": "DOUSE",
+      "heals": false,
+      "characters": "ABDELOSUZ",
+      "unlock": 35
+    },
+    {
+      "spell": "DECAY",
+      "counter": "MEND",
+      "heals": true,
+      "characters": "ACDEMNY",
+      "unlock": 35
+    },
+    {
+      "spell": "HEX",
+      "counter": "CHARM",
+      "heals": false,
+      "characters": "ACEHMRX",
+      "unlock": 37
+    }
+  ],
+  "pools": [
+    {
+      "name": "two characters fall back to the starters",
+      "characters": "KM",
+      "spells": [
+        "TRAP>MAP",
+        "ROT>SALT",
+        "STORM>PORT",
+        "MAUL>ARMOR"
+      ],
+      "fallback": true
+    },
+    {
+      "name": "the first eight Koch letters spell one pair, so fall back",
+      "characters": "KMRSUAPT",
+      "spells": [
+        "TRAP>MAP",
+        "ROT>SALT",
+        "STORM>PORT",
+        "MAUL>ARMOR"
+      ],
+      "fallback": true
+    },
+    {
+      "name": "the first ten Koch letters spell exactly the starters",
+      "characters": "KMRSUAPTLO",
+      "spells": [
+        "TRAP>MAP",
+        "ROT>SALT",
+        "STORM>PORT",
+        "MAUL>ARMOR"
+      ],
+      "fallback": false
+    },
+    {
+      "name": "lower case is upper-cased",
+      "characters": "kmrsuaptlo",
+      "spells": [
+        "TRAP>MAP",
+        "ROT>SALT",
+        "STORM>PORT",
+        "MAUL>ARMOR"
+      ],
+      "fallback": false
+    },
+    {
+      "name": "the first thirteen Koch letters",
+      "characters": "KMRSUAPTLOWIN",
+      "spells": [
+        "TRAP>MAP",
+        "ROT>SALT",
+        "STORM>PORT",
+        "MAUL>ARMOR",
+        "SWARM>SWAT",
+        "MIST>LAMP",
+        "SNOW>SUN",
+        "STUN>SLAP",
+        "WILT>POTION"
+      ],
+      "fallback": false
+    },
+    {
+      "name": "a set that is not a Koch prefix",
+      "characters": "AEFIRTWSLPKMO",
+      "spells": [
+        "TRAP>MAP",
+        "ROT>SALT",
+        "STORM>PORT",
+        "SWARM>SWAT",
+        "MIST>LAMP",
+        "SLEEP>WAKE",
+        "FIRE>WATER",
+        "FROST>FLAME"
+      ],
+      "fallback": false
+    },
+    {
+      "name": "digits and punctuation in the set change nothing",
+      "characters": "KMRSUAPTLO05?",
+      "spells": [
+        "TRAP>MAP",
+        "ROT>SALT",
+        "STORM>PORT",
+        "MAUL>ARMOR"
+      ],
+      "fallback": false
+    },
+    {
+      "name": "every letter spells every pair",
+      "characters": "KMRSUAPTLOWINJEFYVGQZHBCDX",
+      "spells": [
+        "TRAP>MAP",
+        "ROT>SALT",
+        "STORM>PORT",
+        "MAUL>ARMOR",
+        "SWARM>SWAT",
+        "MIST>LAMP",
+        "SNOW>SUN",
+        "STUN>SLAP",
+        "WILT>POTION",
+        "SLEEP>WAKE",
+        "OMEN>TOTEM",
+        "FIRE>WATER",
+        "FROST>FLAME",
+        "SMOKE>FAN",
+        "KNOT>KNIFE",
+        "GLOOM>GLOW",
+        "QUAKE>LEAP",
+        "GAZE>VEIL",
+        "VENOM>HEAL",
+        "CURSE>BLESS",
+        "SHADOW>LIGHT",
+        "BLAZE>DOUSE",
+        "DECAY>MEND",
+        "HEX>CHARM"
+      ],
+      "fallback": false
+    }
+  ],
+  "rooms": [
+    {
+      "room": 1,
+      "monsters": [
+        {
+          "kind": "slime",
+          "hits": 2
+        }
+      ]
+    },
+    {
+      "room": 2,
+      "monsters": [
+        {
+          "kind": "bat",
+          "hits": 2
+        }
+      ]
+    },
+    {
+      "room": 3,
+      "monsters": [
+        {
+          "kind": "skeleton",
+          "hits": 2
+        },
+        {
+          "kind": "skeleton",
+          "hits": 2
+        }
+      ]
+    },
+    {
+      "room": 4,
+      "monsters": [
+        {
+          "kind": "ghost",
+          "hits": 2
+        },
+        {
+          "kind": "ghost",
+          "hits": 2
+        }
+      ]
+    },
+    {
+      "room": 5,
+      "monsters": [
+        {
+          "kind": "dragon",
+          "hits": 4
+        }
+      ]
+    },
+    {
+      "room": 6,
+      "monsters": [
+        {
+          "kind": "bat",
+          "hits": 2
+        },
+        {
+          "kind": "bat",
+          "hits": 2
+        }
+      ]
+    },
+    {
+      "room": 9,
+      "monsters": [
+        {
+          "kind": "slime",
+          "hits": 2
+        },
+        {
+          "kind": "slime",
+          "hits": 2
+        }
+      ]
+    },
+    {
+      "room": 10,
+      "monsters": [
+        {
+          "kind": "dragon",
+          "hits": 4
+        }
+      ]
+    },
+    {
+      "room": 11,
+      "monsters": [
+        {
+          "kind": "skeleton",
+          "hits": 2
+        },
+        {
+          "kind": "skeleton",
+          "hits": 2
+        }
+      ]
+    }
+  ],
+  "windows": [
+    {
+      "room": 1,
+      "difficulty": "relaxed",
+      "window": 8.1
+    },
+    {
+      "room": 1,
+      "difficulty": "normal",
+      "window": 6.0
+    },
+    {
+      "room": 1,
+      "difficulty": "fast",
+      "window": 4.5
+    },
+    {
+      "room": 2,
+      "difficulty": "relaxed",
+      "window": 7.452
+    },
+    {
+      "room": 2,
+      "difficulty": "normal",
+      "window": 5.52
+    },
+    {
+      "room": 2,
+      "difficulty": "fast",
+      "window": 4.14
+    },
+    {
+      "room": 3,
+      "difficulty": "relaxed",
+      "window": 6.85584
+    },
+    {
+      "room": 3,
+      "difficulty": "normal",
+      "window": 5.0784
+    },
+    {
+      "room": 3,
+      "difficulty": "fast",
+      "window": 3.8088
+    },
+    {
+      "room": 5,
+      "difficulty": "relaxed",
+      "window": 5.802782976
+    },
+    {
+      "room": 5,
+      "difficulty": "normal",
+      "window": 4.29835776
+    },
+    {
+      "room": 5,
+      "difficulty": "fast",
+      "window": 3.22376832
+    },
+    {
+      "room": 10,
+      "difficulty": "relaxed",
+      "window": 3.824507043
+    },
+    {
+      "room": 10,
+      "difficulty": "normal",
+      "window": 2.83296818
+    },
+    {
+      "room": 10,
+      "difficulty": "fast",
+      "window": 2.124726135
+    },
+    {
+      "room": 11,
+      "difficulty": "relaxed",
+      "window": 3.518546479
+    },
+    {
+      "room": 11,
+      "difficulty": "normal",
+      "window": 2.606330725
+    },
+    {
+      "room": 11,
+      "difficulty": "fast",
+      "window": 1.954748044
+    },
+    {
+      "room": 12,
+      "difficulty": "relaxed",
+      "window": 3.375
+    },
+    {
+      "room": 12,
+      "difficulty": "normal",
+      "window": 2.5
+    },
+    {
+      "room": 12,
+      "difficulty": "fast",
+      "window": 1.875
+    },
+    {
+      "room": 40,
+      "difficulty": "relaxed",
+      "window": 3.375
+    },
+    {
+      "room": 40,
+      "difficulty": "normal",
+      "window": 2.5
+    },
+    {
+      "room": 40,
+      "difficulty": "fast",
+      "window": 1.875
+    }
+  ],
+  "sendSeconds": [
+    {
+      "word": "FIRE",
+      "wpm": 20,
+      "units": 29,
+      "seconds": 1.74
+    },
+    {
+      "word": "FIRE",
+      "wpm": 15,
+      "units": 29,
+      "seconds": 2.32
+    },
+    {
+      "word": "SALT",
+      "wpm": 25,
+      "units": 31,
+      "seconds": 1.488
+    },
+    {
+      "word": "MAP",
+      "wpm": 30,
+      "units": 29,
+      "seconds": 1.16
+    },
+    {
+      "word": "E",
+      "wpm": 20,
+      "units": 1,
+      "seconds": 0.06
+    },
+    {
+      "word": "SHADOW",
+      "wpm": 18,
+      "units": 59,
+      "seconds": 3.933333333
+    }
+  ],
+  "multiplier": [
+    {
+      "combo": 1,
+      "multiplier": 1
+    },
+    {
+      "combo": 2,
+      "multiplier": 1
+    },
+    {
+      "combo": 3,
+      "multiplier": 1
+    },
+    {
+      "combo": 4,
+      "multiplier": 2
+    },
+    {
+      "combo": 6,
+      "multiplier": 2
+    },
+    {
+      "combo": 7,
+      "multiplier": 3
+    },
+    {
+      "combo": 9,
+      "multiplier": 3
+    },
+    {
+      "combo": 10,
+      "multiplier": 4
+    },
+    {
+      "combo": 40,
+      "multiplier": 4
+    }
+  ],
+  "characterOutcomes": [
+    {
+      "expected": "SALT",
+      "keyed": "SALT",
+      "outcomes": [
+        {
+          "target": "S",
+          "chosen": "S"
+        },
+        {
+          "target": "A",
+          "chosen": "A"
+        },
+        {
+          "target": "L",
+          "chosen": "L"
+        },
+        {
+          "target": "T",
+          "chosen": "T"
+        }
+      ]
+    },
+    {
+      "expected": "SALT",
+      "keyed": "SAKT",
+      "outcomes": [
+        {
+          "target": "S",
+          "chosen": "S"
+        },
+        {
+          "target": "A",
+          "chosen": "A"
+        },
+        {
+          "target": "L",
+          "chosen": "K"
+        },
+        {
+          "target": "T",
+          "chosen": "T"
+        }
+      ]
+    },
+    {
+      "expected": "SALT",
+      "keyed": "SA",
+      "outcomes": [
+        {
+          "target": "S",
+          "chosen": "S"
+        },
+        {
+          "target": "A",
+          "chosen": "A"
+        },
+        {
+          "target": "L",
+          "chosen": null
+        },
+        {
+          "target": "T",
+          "chosen": null
+        }
+      ]
+    },
+    {
+      "expected": "SALT",
+      "keyed": "SALTS",
+      "outcomes": [
+        {
+          "target": "S",
+          "chosen": "S"
+        },
+        {
+          "target": "A",
+          "chosen": "A"
+        },
+        {
+          "target": "L",
+          "chosen": "L"
+        },
+        {
+          "target": "T",
+          "chosen": "T"
+        }
+      ]
+    },
+    {
+      "expected": "SALT",
+      "keyed": "",
+      "outcomes": [
+        {
+          "target": "S",
+          "chosen": null
+        },
+        {
+          "target": "A",
+          "chosen": null
+        },
+        {
+          "target": "L",
+          "chosen": null
+        },
+        {
+          "target": "T",
+          "chosen": null
+        }
+      ]
+    },
+    {
+      "expected": "SALT",
+      "keyed": "salt",
+      "outcomes": [
+        {
+          "target": "S",
+          "chosen": "S"
+        },
+        {
+          "target": "A",
+          "chosen": "A"
+        },
+        {
+          "target": "L",
+          "chosen": "L"
+        },
+        {
+          "target": "T",
+          "chosen": "T"
+        }
+      ]
+    },
+    {
+      "expected": "SALT",
+      "keyed": "SA#T",
+      "outcomes": [
+        {
+          "target": "S",
+          "chosen": "S"
+        },
+        {
+          "target": "A",
+          "chosen": "A"
+        },
+        {
+          "target": "L",
+          "chosen": "#"
+        },
+        {
+          "target": "T",
+          "chosen": "T"
+        }
+      ]
+    },
+    {
+      "expected": "MAP",
+      "keyed": "PAM",
+      "outcomes": [
+        {
+          "target": "M",
+          "chosen": "P"
+        },
+        {
+          "target": "A",
+          "chosen": "A"
+        },
+        {
+          "target": "P",
+          "chosen": "M"
+        }
+      ]
+    }
+  ],
+  "scenario": {
+    "$comment": [
+      "characterWpm 23: start 15, target 23. Pool = TRAP > MAP only, so the",
+      "test keys MAP for 'counter' and XX for 'wrong'; 'late' advances to the",
+      "end of the window. 'times' repeats the step; expectations are read",
+      "after the last repeat. Score: 100 x multiplier per counter, +250 a room."
+    ],
+    "characterWpm": 23,
+    "startWpm": 15,
+    "targetWpm": 23,
+    "lives": 3,
+    "difficulty": "normal",
+    "spell": "TRAP>MAP",
+    "steps": [
+      {
+        "step": "counter",
+        "times": 1,
+        "score": 100,
+        "lives": 3,
+        "combo": 1,
+        "room": 1,
+        "currentWpm": 15,
+        "alive": 1,
+        "note": "x1; the slime has one hit left"
+      },
+      {
+        "step": "counter",
+        "times": 1,
+        "score": 450,
+        "lives": 3,
+        "combo": 2,
+        "room": 2,
+        "currentWpm": 15,
+        "alive": 1,
+        "note": "x1 + 250 room bonus; room 2 is a bat"
+      },
+      {
+        "step": "counter",
+        "times": 1,
+        "score": 550,
+        "lives": 3,
+        "combo": 3,
+        "room": 2,
+        "currentWpm": 15,
+        "alive": 1
+      },
+      {
+        "step": "counter",
+        "times": 1,
+        "score": 1000,
+        "lives": 3,
+        "combo": 4,
+        "room": 3,
+        "currentWpm": 16,
+        "alive": 2,
+        "note": "combo 4 is x2 (+200), 4th hit steps the ramp, room cleared +250; room 3 holds two skeletons"
+      },
+      {
+        "step": "wrong",
+        "times": 1,
+        "score": 1000,
+        "lives": 2,
+        "combo": 0,
+        "room": 3,
+        "currentWpm": 15,
+        "alive": 2,
+        "note": "a wrong counter: a life, the combo, and a ramp step back to the start"
+      },
+      {
+        "step": "late",
+        "times": 1,
+        "score": 1000,
+        "lives": 1,
+        "combo": 0,
+        "room": 3,
+        "currentWpm": 15,
+        "alive": 2,
+        "note": "never under the start"
+      },
+      {
+        "step": "counter",
+        "times": 4,
+        "score": 1750,
+        "lives": 1,
+        "combo": 4,
+        "room": 4,
+        "currentWpm": 16,
+        "alive": 2,
+        "note": "100+100+100+200 = 500, +250 for the room; hit 8 steps the ramp; room 4 holds two ghosts"
+      },
+      {
+        "step": "late",
+        "times": 1,
+        "score": 1750,
+        "lives": 0,
+        "combo": 0,
+        "room": 4,
+        "currentWpm": 15,
+        "alive": 2,
+        "gameOver": true
+      }
+    ],
+    "hits": 8,
+    "misses": 3,
+    "bestCombo": 4,
+    "bestWpm": 16
+  },
+  "healScenario": {
+    "$comment": [
+      "Pool = ROT > SALT, a heal spell. A wrong counter costs a life; countering",
+      "the heal restores it; at full lives a countered heal changes nothing."
+    ],
+    "characterWpm": 20,
+    "lives": 3,
+    "spell": "ROT>SALT",
+    "steps": [
+      {
+        "step": "counter",
+        "lives": 3,
+        "healed": false,
+        "note": "already at full lives"
+      },
+      {
+        "step": "wrong",
+        "lives": 2,
+        "healed": false
+      },
+      {
+        "step": "wrong",
+        "lives": 1,
+        "healed": false
+      },
+      {
+        "step": "counter",
+        "lives": 2,
+        "healed": true
+      },
+      {
+        "step": "counter",
+        "lives": 3,
+        "healed": true
+      },
+      {
+        "step": "counter",
+        "lives": 3,
+        "healed": false,
+        "note": "capped at the starting lives"
+      }
+    ]
+  }
+}

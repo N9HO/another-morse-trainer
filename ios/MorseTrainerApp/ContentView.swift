@@ -49,6 +49,8 @@ struct ContentView: View {
                     GalagaView()
                 } else if model.isDefender {
                     DefenderView()
+                } else if model.isDungeon {
+                    DungeonView()
                 } else if let intro = model.introduction {
                     introductionView(intro)
                 } else {

@@ -4,7 +4,7 @@ import MediaPlayer
 
 /// The ways to practice.
 enum TrainingMode: String, CaseIterable, Identifiable {
-    case journey, characters, words, abbreviations, qCodes, prosigns, headCopy, typed, sending, confusion, listen, qso, contest, story, exam, qrq, rapidFire, invaders, galaga, defender
+    case journey, characters, words, abbreviations, qCodes, prosigns, headCopy, typed, sending, confusion, listen, qso, contest, story, exam, qrq, rapidFire, invaders, galaga, defender, dungeon
     var id: String { rawValue }
     var title: String {
         switch self {
@@ -28,6 +28,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .invaders:     return "Morse Invaders"
         case .galaga:       return "CW Galaga"
         case .defender:     return "Morse Defender"
+        case .dungeon:      return "CW Dungeon"
         }
     }
     var icon: String {
@@ -52,6 +53,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .invaders:      return "gamecontroller.fill"
         case .galaga:        return "airplane"
         case .defender:      return "shield.lefthalf.filled"
+        case .dungeon:       return "wand.and.stars"
         }
     }
     /// In meaning-based modes the question is "what are they saying?"
@@ -75,6 +77,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .invaders:           return "Shoot the character you hear"
         case .galaga:             return "Shoot the character you hear"
         case .defender:           return "Route the defence to the callsign you hear"
+        case .dungeon:            return "Key the counter-spell"
         }
     }
     /// A very short descriptor shown on the mode-selection tiles (intro screen).
@@ -101,6 +104,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .invaders:      return "Arcade recognition"
         case .galaga:        return "Arcade formations"
         case .defender:      return "Arcade callsign copy"
+        case .dungeon:       return "Roguelike sending"
         }
     }
 
@@ -148,6 +152,8 @@ enum TrainingMode: String, CaseIterable, Identifiable {
             return "Enemies swoop in along curved paths and settle into a formation, then dive at you one by one. Hear one and type it, or see one and key it, to shoot the most dangerous enemy carrying it before its dive gets through. Consecutive hits build a combo multiplier up to ×8; three lives; every wave brings a bigger formation and faster dives. Misses feed your confusion drill."
         case .defender:
             return "Cities and ships line the bottom, each with a callsign. Attackers come down from the top, and each one sends the callsign of the asset it is heading for. Copy it and route the defence — tap that asset, or type the callsign — before the attacker arrives. Lose every asset and the game is over; every wave brings more assets and more attackers at once. Every copy feeds your character stats."
+        case .dungeon:
+            return "A roguelike, room by room. Each monster casts a spell word in Morse; copy it, then key the counter word from the spell book on a Morse key before the attack lands. A counter in time hurts the monster, a wrong or late one costs a life, and some counters heal you. Three lives; every room's window is shorter. Every keyed character feeds your stats and confusion drill."
         }
     }
 
@@ -185,6 +191,8 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         // Morse Invaders and CW Galaga end when the last life is lost, not on a clock.
         // Morse Invaders ends when the last life is lost, not on a clock;
         // Morse Defender when the last asset falls.
+        // Morse Invaders ends when the last life is lost, not on a clock.
+        // CW Dungeon ends when the last life is lost, not on a clock.
         case .exam, .story, .contest, .invaders, .galaga, .defender: return false
         default: return true
         }
@@ -499,6 +507,7 @@ final class AppModel: ObservableObject {
         case .invaders:     return charLadder   // unused: Invaders runs its own game loop (InvadersView)
         case .galaga:       return charLadder   // unused: Galaga runs its own game loop (GalagaView)
         case .defender:     return charLadder   // unused: Defender runs its own game loop (DefenderView)
+        case .dungeon:      return charLadder   // unused: CW Dungeon runs its own game loop (DungeonView)
         }
     }
 
@@ -524,6 +533,8 @@ final class AppModel: ObservableObject {
     var isGalaga: Bool { mode == .galaga }
     /// Morse Defender (#188): the callsign arcade game, run by `DefenderView` on its own frame clock.
     var isDefender: Bool { mode == .defender }
+    /// CW Dungeon (#186): the roguelike, run by `DungeonView` on its own frame clock.
+    var isDungeon: Bool { mode == .dungeon }
     /// Rapid Fire's hands-off "just listen, review the list at the end" variant,
     /// which streams items on its own loop instead of waiting for an answer.
     var isRapidFireReview: Bool { isRapidFire && settings.rapidFire.response == .review }
@@ -687,6 +698,14 @@ final class AppModel: ObservableObject {
             stopListening()
             startStory(active: false)
             // The game itself lives in InvadersView / GalagaView; the session here only
+            // holds the audio route and the tally the view feeds it.
+            introduction = nil
+            drill = nil
+            phase = .idle
+        } else if mode == .dungeon {
+            stopListening()
+            startStory(active: false)
+            // The game itself lives in DungeonView; the session here only
             // holds the audio route and the tally the view feeds it.
             introduction = nil
             drill = nil
@@ -1994,6 +2013,8 @@ final class AppModel: ObservableObject {
         qsoActive = false
         rapidFireGeneration += 1   // cancel any pending Rapid Fire stream
         if isRapidFire || isInvaders || isGalaga || isDefender { player.stop() }
+        if isRapidFire || isInvaders { player.stop() }
+        if isDungeon { player.stop() }
         phase = .idle
         if let record = buildSessionRecord() {
             history.add(record)            // triggers saveHistory()
@@ -3073,6 +3094,35 @@ final class AppModel: ObservableObject {
                 charCorrect = false
             }
             noteDefenderCharacter(ch, correct: charCorrect, ttr: ttr)
+    // MARK: - CW Dungeon (#186)
+
+    /// Send a monster's spell word on the session's player at the game's
+    /// timing — the ramp's character speed with the learner's Farnsworth
+    /// spacing, since a word has gaps to stretch. Returns the sound's duration.
+    @discardableResult
+    func playDungeonSpell(_ word: String, timing: MorseTiming) -> TimeInterval {
+        player.replaySound(playable: .text(word), frequency: settings.toneFrequency, timing: timing)
+    }
+
+    func stopDungeon() { player.stop() }
+
+    /// One keyed counter word, graded character by character against the
+    /// expected one (`DungeonGame.characterOutcomes`): a match is a correct
+    /// recognition, a different character is a miss confused with what was
+    /// keyed, and a position nothing reached is a plain miss. The session
+    /// tally and the per-character chart take each the way a Characters
+    /// answer would; no time-to-recognize, since a word has no single tone
+    /// end to measure from.
+    func noteDungeonOutcomes(_ outcomes: [DungeonCharacterOutcome]) {
+        guard !outcomes.isEmpty else { return }
+        for o in outcomes {
+            if let chosen = o.chosen {
+                let correct = engine.noteAttempt(answer: chosen, target: o.target, ttr: 0)
+                noteSessionResult(correct: correct, ttr: 0, target: String(o.target))
+            } else {
+                engine.noteMiss(target: o.target)
+                noteSessionResult(correct: false, ttr: 0, target: String(o.target))
+            }
         }
         saveProgress()
     }
