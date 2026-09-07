@@ -239,7 +239,7 @@
         "STORM>PORT",
         "MAUL>ARMOR"
       ],
-      "fallback": true
+      "fallback": false
     },
     {
       "name": "the first eight Koch letters spell one pair, so fall back",
@@ -460,7 +460,7 @@
     {
       "room": 1,
       "difficulty": "normal",
-      "window": 6.0
+      "window": 6.5
     },
     {
       "room": 1,
@@ -851,7 +851,7 @@
       {
         "step": "counter",
         "times": 1,
-        "score": 450,
+        "score": 451,
         "lives": 3,
         "combo": 2,
         "room": 2,
