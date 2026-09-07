@@ -2053,6 +2053,11 @@ struct DecoderFixture: Decodable {
         let expectedText: String
         let wpmRange: [Double]?
         let expectedToneHz, toneToleranceHz: Double?
+        // QRN (issue #195): static crashes from a second seeded generator,
+        // and whether the case is decoded through the CW pre-filter.
+        let crashRate, crashAmplitude, crashMinMs, crashMaxMs: Double?
+        let crashSeed: UInt64?
+        let prefilter, bareCoreFails: Bool?
     }
     let tolerance: Tolerance
     let cases: [Case]
@@ -2077,9 +2082,14 @@ if let fx = loadDecoderFixture() {
     /// the message at ITU timing, and enough tail to flush the last character.
     /// Noise is seeded and uniform, so every run hears identical samples.
     /// The fixture's `derivation.render` block is the spec this implements.
+    struct Crashes {
+        var rate: Double, amplitude: Double, minMs: Double, maxMs: Double, seed: UInt64
+    }
+
     func renderCW(_ message: String, wpm: Double, toneHz: Double,
                   sampleRate: Double, amplitude: Double,
-                  noiseAmplitude: Double = 0, noiseSeed: UInt64 = 0) -> [Int16] {
+                  noiseAmplitude: Double = 0, noiseSeed: UInt64 = 0,
+                  crashes: Crashes? = nil) -> [Int16] {
         let unit = 1.2 / wpm
         var segments: [(tone: Double, gap: Double)] = []
         let words = message.split(separator: " ")
@@ -2104,24 +2114,47 @@ if let fx = loadDecoderFixture() {
             noiseAmplitude == 0 ? 0
                 : (Double(rng.next() >> 40) / 8_388_608.0 - 1.0) * noiseAmplitude
         }
-        var samples: [Int16] = []
-        func push(_ value: Double) {
-            samples.append(Int16(max(-32767, min(32767, value + noise()))))
-        }
-        for _ in 0..<Int(sampleRate * 0.7) { push(0) }   // noise-floor calibration
+        var clean: [Double] = []
+        for _ in 0..<Int(sampleRate * 0.7) { clean.append(0) }   // noise-floor calibration
         let omega = 2.0 * Double.pi * toneHz / sampleRate
         for segment in segments {
-            for i in 0..<Int(segment.tone * sampleRate) { push(amplitude * sin(omega * Double(i))) }
-            for _ in 0..<Int(segment.gap * sampleRate) { push(0) }
+            for i in 0..<Int(segment.tone * sampleRate) { clean.append(amplitude * sin(omega * Double(i))) }
+            for _ in 0..<Int(segment.gap * sampleRate) { clean.append(0) }
         }
-        for _ in 0..<Int(sampleRate * 0.5) { push(0) }   // let the tail flush
+        for _ in 0..<Int(sampleRate * 0.5) { clean.append(0) }   // let the tail flush
+
+        // QRN static crashes (the fixture's `derivation.qrn`): decaying
+        // broadband bursts at seeded, jittered intervals, from their own
+        // generator so the hiss stream is untouched by their presence.
+        if let crashes, crashes.rate > 0 {
+            var crng = SeededRNG(seed: crashes.seed)
+            var t = 0.0
+            while true {
+                t += (0.5 + Double(crng.next() >> 40) / 16_777_216.0) / crashes.rate
+                let start = Int(t * sampleRate)
+                if start >= clean.count { break }
+                let ms = crashes.minMs + Double(crng.next() >> 40) / 16_777_216.0 * (crashes.maxMs - crashes.minMs)
+                let len = Int(ms * sampleRate / 1000)
+                for k in 0..<len {
+                    let signed = Double(crng.next() >> 40) / 8_388_608.0 - 1.0
+                    if start + k < clean.count {
+                        clean[start + k] += crashes.amplitude * (1 - Double(k) / Double(len)) * signed
+                    }
+                }
+            }
+        }
+        var samples: [Int16] = []
+        samples.reserveCapacity(clean.count)
+        for value in clean {
+            samples.append(Int16(max(-32767, min(32767, value + noise()))))
+        }
         return samples
     }
 
     /// Run PCM through the vendored core; `passes: 2` replays the same audio
     /// after a cw_decoder_reset() to prove the decoder rearms cleanly.
     func decodeCW(_ samples: [Int16], inputRate: UInt32,
-                  passes: Int = 1) -> (text: String, wpm: Float, toneHz: Float) {
+                  passes: Int = 1, prefilter: Bool = false) -> (text: String, wpm: Float, toneHz: Float) {
         let sink = AudioSink()
         var cfg = cw_config_t()
         cw_config_default(&cfg)
@@ -2136,9 +2169,28 @@ if let fx = loadDecoderFixture() {
         guard let decoder = cw_decoder_create(&cfg) else { return ("<create failed>", 0, 0) }
         defer { cw_decoder_destroy(decoder) }
         var texts: [String] = []
+        var filter = CWPrefilter(sampleRate: Float(inputRate))
+        var chunk = [Int16](repeating: 0, count: 2048)
         for pass in 0..<passes {
-            if pass > 0 { cw_decoder_reset(decoder); sink.text = "" }
-            samples.withUnsafeBufferPointer { cw_decoder_feed(decoder, $0.baseAddress, $0.count) }
+            if pass > 0 { cw_decoder_reset(decoder); filter.reset(); sink.text = "" }
+            if prefilter {
+                // The apps' capture paths, in miniature (the fixture's
+                // `derivation.prefilter`): retune to the core's lock before
+                // every buffer, filter, then feed.
+                var offset = 0
+                while offset < samples.count {
+                    let n = min(2048, samples.count - offset)
+                    filter.retune(pitchHz: cw_decoder_tone_hz(decoder))
+                    for i in 0..<n {
+                        let y = filter.process(Float(samples[offset + i]) / 32768)
+                        chunk[i] = Int16(max(-32767, min(32767, y * 32768)))
+                    }
+                    chunk.withUnsafeBufferPointer { cw_decoder_feed(decoder, $0.baseAddress, n) }
+                    offset += n
+                }
+            } else {
+                samples.withUnsafeBufferPointer { cw_decoder_feed(decoder, $0.baseAddress, $0.count) }
+            }
             texts.append(sink.text.trimmingCharacters(in: .whitespaces))
         }
         return (texts.joined(separator: "|"), cw_decoder_wpm(decoder), cw_decoder_tone_hz(decoder))
@@ -2146,9 +2198,16 @@ if let fx = loadDecoderFixture() {
 
     check("fixture carries cases", !fx.cases.isEmpty)
     for c in fx.cases {
+        var crashes: Crashes?
+        if let rate = c.crashRate, rate > 0 {
+            crashes = Crashes(rate: rate, amplitude: c.crashAmplitude ?? 0,
+                              minMs: c.crashMinMs ?? 0, maxMs: c.crashMaxMs ?? 0,
+                              seed: c.crashSeed ?? 0)
+        }
         let pcm = renderCW(c.message, wpm: c.wpm, toneHz: c.toneHz,
                            sampleRate: c.sampleRate, amplitude: c.amplitude,
-                           noiseAmplitude: c.noiseAmplitude, noiseSeed: c.noiseSeed)
+                           noiseAmplitude: c.noiseAmplitude, noiseSeed: c.noiseSeed,
+                           crashes: crashes)
         let absSum = pcm.reduce(0.0) { $0 + abs(Double($1)) }
         let renderOK = pcm.count == c.renderedSamples
             && approxEqual(absSum, c.absSum, max(1e-6, c.absSum * fx.tolerance.absSumRelative))
@@ -2157,9 +2216,17 @@ if let fx = loadDecoderFixture() {
             print("      ↳ rendered \(pcm.count) samples with |sum| \(absSum); fixture says \(c.renderedSamples) and \(c.absSum)")
         }
 
-        let result = decodeCW(pcm, inputRate: UInt32(c.inputRate), passes: c.passes)
+        let result = decodeCW(pcm, inputRate: UInt32(c.inputRate), passes: c.passes,
+                              prefilter: c.prefilter ?? false)
         check("\(c.name): decodes '\(c.expectedText)'", result.text == c.expectedText)
         if result.text != c.expectedText { print("      ↳ decoded '\(result.text)'") }
+        if c.bareCoreFails == true {
+            // The case earns its place by breaking the bare core; if it stops
+            // doing so, it has drifted easy and the fixture should say so.
+            let bare = decodeCW(pcm, inputRate: UInt32(c.inputRate), passes: c.passes)
+            check("\(c.name): the bare core does not copy it (got '\(bare.text)')",
+                  bare.text != c.expectedText)
+        }
 
         if let range = c.wpmRange, range.count == 2 {
             check("\(c.name): speed estimate lands in \(range[0])–\(range[1]) WPM",
@@ -2174,8 +2241,130 @@ if let fx = loadDecoderFixture() {
     // having; a fixture edit that dropped them would otherwise pass quietly.
     check("fixture still pins a speed estimate and a pitch lock",
           fx.cases.contains { $0.wpmRange != nil } && fx.cases.contains { $0.expectedToneHz != nil })
+    check("fixture still carries QRN cases the bare core fails",
+          fx.cases.contains { $0.bareCoreFails == true && $0.prefilter == true })
 } else {
     check("fixtures/decoder.json loads and decodes", false)
+}
+
+// MARK: - Shared CW pre-filter fixture
+//
+// fixtures/cw-prefilter.json, read by this harness and by android
+// CwPrefilterTest: the noise blanker's coefficients and its behaviour on a
+// handful of synthetic vectors, derived from the difference equations in the
+// fixture's `derivation`, so both ports are pinned to one arithmetic.
+struct PrefilterFixture: Decodable {
+    struct Tolerance: Decodable { let coefficient, sample: Double }
+    struct Coefficients: Decodable {
+        let sampleRate, pitchHz, q, b0, b2, a1, a2: Double
+    }
+    struct Signal: Decodable {
+        let type: String
+        let amplitude: Double?
+        let noiseSeed: UInt64?
+    }
+    struct Burst: Decodable { let start, length: Int; let amplitude: Double }
+    struct Value: Decodable { let n: Int; let out: Double }
+    struct Span: Decodable { let from, to: Int; let max: Double }
+    struct Expect: Decodable {
+        let blankedAll: [Int]?
+        let clearFrom, onsetBlankBefore: Int?
+        let exact: [Int]?
+        let values: [Value]?
+        let maxAbs, blankedFraction: Span?
+        let blankedNone: Bool?
+    }
+    struct Vector: Decodable {
+        let name: String
+        let sampleRate, pitchHz: Double
+        let length: Int
+        let signal: Signal
+        let burst: Burst?
+        let expect: Expect
+    }
+    let tolerance: Tolerance
+    let coefficients: [Coefficients]
+    let vectors: [Vector]
+}
+
+print("\nCW pre-filter (noise blanker), against fixtures/cw-prefilter.json:")
+if let data = try? Data(contentsOf: URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent()
+        .deletingLastPathComponent().deletingLastPathComponent()
+        .appendingPathComponent("fixtures/cw-prefilter.json")),
+   let fx = try? JSONDecoder().decode(PrefilterFixture.self, from: data) {
+    check("fixture carries coefficients and vectors", !fx.coefficients.isEmpty && !fx.vectors.isEmpty)
+    for c in fx.coefficients {
+        let k = CWPrefilter.bandPassCoefficients(sampleRate: Float(c.sampleRate), pitchHz: Float(c.pitchHz), q: Float(c.q))
+        let ok = approxEqual(Double(k.b0), c.b0, fx.tolerance.coefficient)
+            && approxEqual(Double(k.b2), c.b2, fx.tolerance.coefficient)
+            && approxEqual(Double(k.a1), c.a1, fx.tolerance.coefficient)
+            && approxEqual(Double(k.a2), c.a2, fx.tolerance.coefficient)
+        check("band-pass at \(Int(c.pitchHz)) Hz, Q \(c.q), \(Int(c.sampleRate)) Hz matches the fixture", ok)
+    }
+    for v in fx.vectors {
+        // Render the vector from its description.
+        var x = [Float](repeating: 0, count: v.length)
+        switch v.signal.type {
+        case "tone":
+            let amp = v.signal.amplitude ?? 0
+            for n in 0..<v.length { x[n] = Float(amp * sin(2 * Double.pi * v.pitchHz * Double(n) / v.sampleRate)) }
+        case "noise":
+            var rng = SeededRNG(seed: v.signal.noiseSeed ?? 0)
+            let amp = v.signal.amplitude ?? 0
+            for n in 0..<v.length { x[n] = Float((Double(rng.next() >> 40) / 8_388_608.0 - 1.0) * amp) }
+        default:
+            break
+        }
+        if let b = v.burst {
+            for k in 0..<b.length {
+                x[b.start + k] += Float(b.amplitude * (1 - Double(k) / Double(b.length)) * (k % 2 == 0 ? 1 : -1))
+            }
+        }
+        var filter = CWPrefilter(sampleRate: Float(v.sampleRate), pitchHz: Float(v.pitchHz))
+        var out = [Float](repeating: 0, count: v.length)
+        var blanked = [Bool](repeating: false, count: v.length)
+        for n in 0..<v.length {
+            out[n] = filter.process(x[n])
+            blanked[n] = filter.isBlanking
+        }
+        let e = v.expect
+        if let range = e.blankedAll, range.count == 2 {
+            check("\(v.name): blanks \(range[0])…\(range[1])", (range[0]...range[1]).allSatisfy { blanked[$0] })
+        }
+        if let from = e.clearFrom {
+            check("\(v.name): clear again from \(from)", (from..<v.length).allSatisfy { !blanked[$0] })
+        }
+        if let before = e.onsetBlankBefore {
+            let hits = blanked.enumerated().filter { $0.element }.map { $0.offset }
+            check("\(v.name): the onset blank is short (before \(before))",
+                  !hits.isEmpty && hits.allSatisfy { $0 < before })
+        }
+        if let exact = e.exact {
+            check("\(v.name): pass-through samples are untouched", exact.allSatisfy { out[$0] == x[$0] })
+        }
+        if let values = e.values {
+            check("\(v.name): continuation values match the fixture",
+                  values.allSatisfy { approxEqual(Double(out[$0.n]), $0.out, fx.tolerance.sample) })
+            if let miss = values.first(where: { !approxEqual(Double(out[$0.n]), $0.out, fx.tolerance.sample) }) {
+                print("      ↳ out[\(miss.n)] = \(out[miss.n]), fixture says \(miss.out)")
+            }
+        }
+        if let span = e.maxAbs {
+            check("\(v.name): output stays under \(span.max) over \(span.from)…\(span.to)",
+                  out[span.from..<span.to].allSatisfy { abs(Double($0)) <= span.max })
+        }
+        if let span = e.blankedFraction {
+            let share = Double(blanked[span.from..<span.to].filter { $0 }.count) / Double(span.to - span.from)
+            check("\(v.name): blanks at most \(span.max) of samples over \(span.from)…\(span.to) (\(share))",
+                  share <= span.max)
+        }
+        if e.blankedNone == true {
+            check("\(v.name): never blanks", !blanked.contains(true))
+        }
+    }
+} else {
+    check("fixtures/cw-prefilter.json loads", false)
 }
 
 // Timing at the new 60 WPM ceiling (issue #79)

@@ -3,7 +3,9 @@ import AVFoundation
 
 /// Live CW (Morse) audio decoder: taps the microphone and runs the vendored
 /// Carrier Wave C core (Sources/CWDecoderCore, via the bridging header) over
-/// the incoming PCM, publishing decoded text plus speed/pitch telemetry.
+/// the incoming PCM, publishing decoded text plus speed/pitch telemetry. A
+/// noise blanker (`CWPrefilter`, MorseKit) sits between the tap and each core
+/// instance so QRN static crashes don't reach the core as marks (#195).
 ///
 /// Threading follows the core's contract — cw_decoder_feed() is called only
 /// from the audio tap's realtime thread, and the core's callbacks fire there
@@ -164,6 +166,14 @@ final class CWDecoderEngine: ObservableObject {
 /// slot's locked pitch, and when the scout's pitch has been carrying several
 /// times the primary's energy and the scout is actually decoding it, the
 /// scout holds the real signal and the two swap roles.
+///
+/// Each slot also owns a `CWPrefilter` — a noise blanker tuned to that slot's
+/// pitch (#195). QRN static crashes reach the core as spurious marks; the
+/// blanker replaces each crash with the tone's own continuation before the
+/// core hears it. It is per slot because its continuation runs at the slot's
+/// locked pitch, and its signal path is pass-through, so a searching scout
+/// still hears the whole band. The energy meters and the quiet tracker read
+/// the raw samples, not the blanked ones.
 private final class CoreBox: @unchecked Sendable {
 
     struct Update {
@@ -195,6 +205,11 @@ private final class CoreBox: @unchecked Sendable {
         /// Pitch the magnitude meter is tuned to, and its Goertzel coefficient.
         var meterHz: Float = 0
         var meterCoeff: Float = 0
+        /// The slot's noise blanker (retuned with the meter) and the int16
+        /// PCM it produces for this slot's core. Sized on the first buffer
+        /// and reused, so the tap allocates nothing per callback.
+        var filter = CWPrefilter(sampleRate: 48_000)
+        var scratch: [Int16] = []
 
         func advanceBucket() {
             head = (head + 1) % Slot.buckets
@@ -223,12 +238,14 @@ private final class CoreBox: @unchecked Sendable {
             meterHz = toneHz
             meterCoeff = 2 * cos(2 * Float.pi * toneHz / Float(rate))
             for i in 0..<Slot.buckets { bucketMag[i] = 0 }
+            filter.retune(pitchHz: toneHz)
         }
 
         /// Back to fresh acquisition: recalibrate the noise floor and re-arm
         /// the pitch search. Everything counted so far belonged to the old lock.
         func reset() {
             if let decoder { cw_decoder_reset(decoder) }
+            filter.reset()
             pendingText = ""
             for i in 0..<Slot.buckets {
                 bucketSymbols[i] = 0
@@ -266,7 +283,6 @@ private final class CoreBox: @unchecked Sendable {
     private var primary = Slot()
     private var scout: Slot?
     private var rate = 0
-    private var scratch: [Int16] = []
     private var samplesIntoBucket = 0
     private var samplesSinceSwap = 0
     private var toneHz: Float = 0
@@ -317,6 +333,7 @@ private final class CoreBox: @unchecked Sendable {
         }
 
         primary = Slot()
+        primary.filter = CWPrefilter(sampleRate: Float(rate))
         cfg.user = Unmanaged.passUnretained(primary).toOpaque()
         primary.decoder = cw_decoder_create(&cfg)
         guard primary.decoder != nil else { return false }
@@ -324,6 +341,7 @@ private final class CoreBox: @unchecked Sendable {
         // The scout is a resilience layer; if it can't allocate, the primary
         // still decodes the way the firmware does.
         let second = Slot()
+        second.filter = CWPrefilter(sampleRate: Float(rate))
         cfg.user = Unmanaged.passUnretained(second).toOpaque()
         second.decoder = cw_decoder_create(&cfg)
         scout = second.decoder != nil ? second : nil
@@ -337,44 +355,61 @@ private final class CoreBox: @unchecked Sendable {
         scout = nil
     }
 
-    /// Convert one Float32 buffer to int16 PCM, meter it, and push it through
-    /// both cores. Runs on the realtime tap thread.
+    /// Blanker output to int16 PCM for the core, clamped: the continuation
+    /// resonator can overshoot full scale by a hair on a transient.
+    @inline(__always)
+    private static func pcm(_ y: Float) -> Int16 {
+        Int16(max(-1, min(1, y)) * 32000)
+    }
+
+    /// Convert one Float32 buffer to int16 PCM, meter it, run each slot's
+    /// noise blanker, and push the result through that slot's core. Runs on
+    /// the realtime tap thread.
     func feed(_ buffer: AVAudioPCMBuffer) {
         guard let decoder = primary.decoder, let data = buffer.floatChannelData?[0] else { return }
         let count = Int(buffer.frameLength)
         guard count > 0 else { return }
-        if scratch.count < count { scratch = [Int16](repeating: 0, count: count) }
+        if primary.scratch.count < count { primary.scratch = [Int16](repeating: 0, count: count) }
+        let scoutSlot = scout
+        if let scoutSlot, scoutSlot.scratch.count < count {
+            scoutSlot.scratch = [Int16](repeating: 0, count: count)
+        }
 
         primary.retuneMeter(to: cw_decoder_tone_hz(decoder), rate: rate)
-        if let scout, let scoutDecoder = scout.decoder {
-            scout.retuneMeter(to: cw_decoder_tone_hz(scoutDecoder), rate: rate)
+        if let scoutSlot, let scoutDecoder = scoutSlot.decoder {
+            scoutSlot.retuneMeter(to: cw_decoder_tone_hz(scoutDecoder), rate: rate)
         }
         let pCoeff = primary.meterCoeff
-        let sCoeff = scout?.meterCoeff ?? 0
+        let sCoeff = scoutSlot?.meterCoeff ?? 0
         var p1: Float = 0, p2: Float = 0, s1: Float = 0, s2: Float = 0
         var energy: Float = 0
         for i in 0..<count {
             let raw = data[i]
             let sample = raw.isFinite ? max(-1, min(1, raw)) : 0
             energy += sample * sample
-            scratch[i] = Int16(sample * 32000)
             let p0 = sample + pCoeff * p1 - p2
             p2 = p1; p1 = p0
             let s0 = sample + sCoeff * s1 - s2
             s2 = s1; s1 = s0
+            primary.scratch[i] = Self.pcm(primary.filter.process(sample))
+            if let scoutSlot {
+                scoutSlot.scratch[i] = Self.pcm(scoutSlot.filter.process(sample))
+            }
         }
         level = (energy / Float(count)).squareRoot()
         let norm = Float(count)
         primary.bucketMag[primary.head] +=
             max(0, p1 * p1 + p2 * p2 - pCoeff * p1 * p2).squareRoot() / norm
-        if let scout {
-            scout.bucketMag[scout.head] +=
+        if let scoutSlot {
+            scoutSlot.bucketMag[scoutSlot.head] +=
                 max(0, s1 * s1 + s2 * s2 - sCoeff * s1 * s2).squareRoot() / norm
         }
 
-        scratch.withUnsafeBufferPointer {
+        primary.scratch.withUnsafeBufferPointer {
             cw_decoder_feed(decoder, $0.baseAddress, count)
-            if let scoutDecoder = scout?.decoder {
+        }
+        if let scoutSlot, let scoutDecoder = scoutSlot.decoder {
+            scoutSlot.scratch.withUnsafeBufferPointer {
                 cw_decoder_feed(scoutDecoder, $0.baseAddress, count)
             }
         }
