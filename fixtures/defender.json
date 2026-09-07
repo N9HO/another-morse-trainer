@@ -66,7 +66,7 @@
     "$comment": "spawnInterval, travelTime and concurrent per wave and difficulty, from the formulas above; floors bite at wave 10 (spawn) and wave 30 (travel).",
     "rows": [
       { "wave": 1,  "difficulty": "relaxed", "spawnInterval": 6.75,     "travelTime": 18.9,      "concurrent": 1 },
-      { "wave": 1,  "difficulty": "normal",  "spawnInterval": 5.1,      "travelTime": 14.0,      "concurrent": 1 },
+      { "wave": 1,  "difficulty": "normal",  "spawnInterval": 5.0,      "travelTime": 14.0,      "concurrent": 1 },
       { "wave": 1,  "difficulty": "fast",    "spawnInterval": 3.75,     "travelTime": 10.5,      "concurrent": 1 },
       { "wave": 2,  "difficulty": "relaxed", "spawnInterval": 6.075,    "travelTime": 17.388,    "concurrent": 1 },
       { "wave": 2,  "difficulty": "normal",  "spawnInterval": 4.5,      "travelTime": 12.88,     "concurrent": 1 },
@@ -156,7 +156,7 @@
     "startWpm": 25,
     "targetWpm": 33,
     "events": [
-      { "event": "hit",        "times": 3, "score": 301,  "combo": 3,  "wave": 1, "assets": 4, "live": 4, "currentWpm": 25, "note": "[3] three at x1" },
+      { "event": "hit",        "times": 3, "score": 300,  "combo": 3,  "wave": 1, "assets": 4, "live": 4, "currentWpm": 25, "note": "[3] three at x1" },
       { "event": "hit",        "times": 1, "score": 500,  "combo": 4,  "wave": 1, "assets": 4, "live": 4, "currentWpm": 27, "note": "[4] x2 from the fourth; first ramp step" },
       { "event": "wrongRoute", "times": 1, "score": 500,  "combo": 0,  "wave": 1, "assets": 4, "live": 4, "currentWpm": 27, "note": "a wasted shot: combo gone, speed untouched" },
       { "event": "hit",        "times": 2, "score": 700,  "combo": 2,  "wave": 2, "assets": 5, "live": 5, "currentWpm": 27, "note": "[6] wave cleared; a fifth asset arrives" },
