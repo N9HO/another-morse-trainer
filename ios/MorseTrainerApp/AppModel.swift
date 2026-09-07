@@ -4,7 +4,7 @@ import MediaPlayer
 
 /// The ways to practice.
 enum TrainingMode: String, CaseIterable, Identifiable {
-    case journey, characters, words, abbreviations, qCodes, prosigns, headCopy, typed, sending, confusion, listen, qso, contest, story, exam, qrq, rapidFire, invaders
+    case journey, characters, words, abbreviations, qCodes, prosigns, headCopy, typed, sending, confusion, listen, qso, contest, story, exam, qrq, rapidFire, invaders, dungeon
     var id: String { rawValue }
     var title: String {
         switch self {
@@ -26,6 +26,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .qrq:          return "QRQ Speed"
         case .rapidFire:    return "Rapid Fire"
         case .invaders:     return "Morse Invaders"
+        case .dungeon:      return "CW Dungeon"
         }
     }
     var icon: String {
@@ -48,6 +49,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .qrq:           return "hare"
         case .rapidFire:     return "bolt.fill"
         case .invaders:      return "gamecontroller.fill"
+        case .dungeon:       return "wand.and.stars"
         }
     }
     /// In meaning-based modes the question is "what are they saying?"
@@ -69,6 +71,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .qrq:                return "Type what you hear"
         case .rapidFire:          return "Copy what you hear"
         case .invaders:           return "Shoot the character you hear"
+        case .dungeon:            return "Key the counter-spell"
         }
     }
     /// A very short descriptor shown on the mode-selection tiles (intro screen).
@@ -93,6 +96,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .qrq:           return "High-speed copy"
         case .rapidFire:     return "Back-to-back copy"
         case .invaders:      return "Arcade recognition"
+        case .dungeon:       return "Roguelike sending"
         }
     }
 
@@ -136,6 +140,8 @@ enum TrainingMode: String, CaseIterable, Identifiable {
             return "Real-world copy drill: a stream of call signs, words, number groups, or state abbreviations sent back to back at whatever pace you choose. Type each one as it lands, send it back on a key, or just copy along and review the full list of what was transmitted at the end."
         case .invaders:
             return "Characters fall from the top in columns. Hear one and type it, or see one and key it, to shoot the lowest invader carrying it before it reaches the ground. Three lives; every wave comes faster. Misses feed your confusion drill."
+        case .dungeon:
+            return "A roguelike, room by room. Each monster casts a spell word in Morse; copy it, then key the counter word from the spell book on a Morse key before the attack lands. A counter in time hurts the monster, a wrong or late one costs a life, and some counters heal you. Three lives; every room's window is shorter. Every keyed character feeds your stats and confusion drill."
         }
     }
 
@@ -172,6 +178,8 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         // its setup card, so the generic duration picker would be redundant.
         // Morse Invaders ends when the last life is lost, not on a clock.
         case .exam, .story, .contest, .invaders: return false
+        // CW Dungeon ends when the last life is lost, not on a clock.
+        case .dungeon:                           return false
         default:                                 return true
         }
     }
@@ -483,6 +491,7 @@ final class AppModel: ObservableObject {
         case .qrq:          return qrqQuiz
         case .rapidFire:    return rapidFireQuiz
         case .invaders:     return charLadder   // unused: Invaders runs its own game loop (InvadersView)
+        case .dungeon:      return charLadder   // unused: CW Dungeon runs its own game loop (DungeonView)
         }
     }
 
@@ -504,6 +513,8 @@ final class AppModel: ObservableObject {
     var isRapidFire: Bool { mode == .rapidFire }
     /// Morse Invaders (#170): the arcade game, run by `InvadersView` on its own frame clock.
     var isInvaders: Bool { mode == .invaders }
+    /// CW Dungeon (#186): the roguelike, run by `DungeonView` on its own frame clock.
+    var isDungeon: Bool { mode == .dungeon }
     /// Rapid Fire's hands-off "just listen, review the list at the end" variant,
     /// which streams items on its own loop instead of waiting for an answer.
     var isRapidFireReview: Bool { isRapidFire && settings.rapidFire.response == .review }
@@ -667,6 +678,14 @@ final class AppModel: ObservableObject {
             stopListening()
             startStory(active: false)
             // The game itself lives in InvadersView; the session here only
+            // holds the audio route and the tally the view feeds it.
+            introduction = nil
+            drill = nil
+            phase = .idle
+        } else if mode == .dungeon {
+            stopListening()
+            startStory(active: false)
+            // The game itself lives in DungeonView; the session here only
             // holds the audio route and the tally the view feeds it.
             introduction = nil
             drill = nil
@@ -1974,6 +1993,7 @@ final class AppModel: ObservableObject {
         qsoActive = false
         rapidFireGeneration += 1   // cancel any pending Rapid Fire stream
         if isRapidFire || isInvaders { player.stop() }
+        if isDungeon { player.stop() }
         phase = .idle
         if let record = buildSessionRecord() {
             history.add(record)            // triggers saveHistory()
@@ -2984,6 +3004,39 @@ final class AppModel: ObservableObject {
     func noteInvadersEscape(target: Character) {
         engine.noteMiss(target: target)
         noteSessionResult(correct: false, ttr: 0, target: String(target))
+        saveProgress()
+    }
+
+    // MARK: - CW Dungeon (#186)
+
+    /// Send a monster's spell word on the session's player at the game's
+    /// timing — the ramp's character speed with the learner's Farnsworth
+    /// spacing, since a word has gaps to stretch. Returns the sound's duration.
+    @discardableResult
+    func playDungeonSpell(_ word: String, timing: MorseTiming) -> TimeInterval {
+        player.replaySound(playable: .text(word), frequency: settings.toneFrequency, timing: timing)
+    }
+
+    func stopDungeon() { player.stop() }
+
+    /// One keyed counter word, graded character by character against the
+    /// expected one (`DungeonGame.characterOutcomes`): a match is a correct
+    /// recognition, a different character is a miss confused with what was
+    /// keyed, and a position nothing reached is a plain miss. The session
+    /// tally and the per-character chart take each the way a Characters
+    /// answer would; no time-to-recognize, since a word has no single tone
+    /// end to measure from.
+    func noteDungeonOutcomes(_ outcomes: [DungeonCharacterOutcome]) {
+        guard !outcomes.isEmpty else { return }
+        for o in outcomes {
+            if let chosen = o.chosen {
+                let correct = engine.noteAttempt(answer: chosen, target: o.target, ttr: 0)
+                noteSessionResult(correct: correct, ttr: 0, target: String(o.target))
+            } else {
+                engine.noteMiss(target: o.target)
+                noteSessionResult(correct: false, ttr: 0, target: String(o.target))
+            }
+        }
         saveProgress()
     }
 

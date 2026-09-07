@@ -45,6 +45,8 @@ struct ContentView: View {
                     rapidFireReviewView
                 } else if model.isInvaders {
                     InvadersView()
+                } else if model.isDungeon {
+                    DungeonView()
                 } else if let intro = model.introduction {
                     introductionView(intro)
                 } else {

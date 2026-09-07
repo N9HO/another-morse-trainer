@@ -129,6 +129,7 @@ private sealed interface Route {
     data object Qrq : Route
     data object RapidFire : Route
     data object Invaders : Route
+    data object Dungeon : Route
     data object Story : Route
     data object Sending : Route
     data object SendingDrills : Route
@@ -169,6 +170,7 @@ private fun routeTag(route: Route): String = when (route) {
     Route.Qrq -> "qrq"
     Route.RapidFire -> "rapidFire"
     Route.Invaders -> "invaders"
+    Route.Dungeon -> "dungeon"
     Route.Story -> "story"
     Route.Sending -> "sending"
     Route.SendingDrills -> "sendingDrills"
@@ -194,6 +196,7 @@ private fun routeFrom(tag: String): Route? = when (tag) {
     "qrq" -> Route.Qrq
     "rapidFire" -> Route.RapidFire
     "invaders" -> Route.Invaders
+    "dungeon" -> Route.Dungeon
     "story" -> Route.Story
     "sending" -> Route.Sending
     "sendingDrills" -> Route.SendingDrills
@@ -299,6 +302,7 @@ private fun AppRoot() {
             TrainingMode.QRQ -> launch(qrqTarget())
             TrainingMode.RAPID_FIRE -> route = Route.RapidFire
             TrainingMode.INVADERS -> route = Route.Invaders
+            TrainingMode.DUNGEON -> route = Route.Dungeon
         }
     }
 
@@ -321,6 +325,7 @@ private fun AppRoot() {
             onPickQrq = { launch(qrqTarget()) },
             onPickRapidFire = { route = Route.RapidFire },
             onPickInvaders = { route = Route.Invaders },
+            onPickDungeon = { route = Route.Dungeon },
             onPickStory = { launch(storyTarget()) },
             onPickSending = { launch(sendingTarget()) },
             onPickSendingDrills = { route = Route.SendingDrills },
@@ -360,6 +365,7 @@ private fun AppRoot() {
         Route.Qrq -> QrqScreen(onBack = { route = Route.Home }, onSwitchMode = { switchTo(it) })
         Route.RapidFire -> RapidFireScreen(onBack = { route = Route.Home }, onSwitchMode = { switchTo(it) })
         Route.Invaders -> InvadersScreen(onBack = { route = Route.Home }, onSwitchMode = { switchTo(it) })
+        Route.Dungeon -> DungeonScreen(onBack = { route = Route.Home }, onSwitchMode = { switchTo(it) })
         Route.Story -> StoryScreen(onBack = { route = Route.Home }, onSwitchMode = { switchTo(it) })
         Route.Sending -> SendingPracticeScreen(onBack = { route = Route.Home }, onSwitchMode = { switchTo(it) })
         Route.SendingDrills -> SendingDrillScreen(onBack = { route = Route.Home })

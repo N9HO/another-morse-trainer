@@ -728,4 +728,33 @@
     <string name="invaders_keying_speed_note">Decoded at your %1$d WPM character speed.</string>
     <string name="invaders_wpm">WPM</string>
     <string name="invaders_speed_reached">Speed reached: %1$d WPM</string>
+
+    <!-- CW Dungeon (#186) -->
+    <string name="mode_dungeon">CW Dungeon</string>
+    <string name="home_roguelike_sending">Roguelike sending</string>
+    <string name="dungeon_blurb">A roguelike, room by room. Each monster casts a spell word in Morse; copy it, then key the counter word from the spell book on a Morse key before the attack lands. A counter in time hurts the monster, a wrong or late one costs a life, and some counters heal you. Three lives; every room\'s window is shorter. Every keyed character feeds your stats and confusion drill.</string>
+    <string name="dungeon_characters">Characters</string>
+    <string name="dungeon_spell_book">Spell book</string>
+    <string name="dungeon_spell_book_note">Hear the spell, key the counter. ♥ marks a counter that also heals you.</string>
+    <string name="dungeon_fallback_note">Your active characters spell fewer than %1$d pairs, so the starter spells are in use. They need the first ten Koch characters.</string>
+    <string name="dungeon_difficulty">Difficulty</string>
+    <!-- Speed ramp: start, step, counters per step, target -->
+    <string name="dungeon_speed_ramp_note">Spells are sent from %1$d WPM, stepping up %2$d WPM every %3$d counters to your %4$d WPM character speed. A hit taken steps it back.</string>
+    <string name="dungeon_speed_flat_note">Spells are sent at your %1$d WPM character speed.</string>
+    <string name="dungeon_farnsworth_note">Farnsworth spacing at %1$d WPM applies to the spell.</string>
+    <string name="dungeon_start">Enter the dungeon</string>
+    <string name="dungeon_score">Score</string>
+    <string name="dungeon_room">Room</string>
+    <string name="dungeon_rooms">Rooms</string>
+    <string name="dungeon_lives">Lives</string>
+    <string name="dungeon_combo">Combo</string>
+    <string name="dungeon_wpm">WPM</string>
+    <string name="dungeon_tap_to_replay">Tap a monster to hear its spell again</string>
+    <string name="dungeon_key_the_counter">Key the counter-spell</string>
+    <string name="dungeon_end_game">Leave</string>
+    <string name="dungeon_game_over">You fell</string>
+    <string name="dungeon_accuracy">Accuracy</string>
+    <string name="dungeon_best_combo">Best combo</string>
+    <string name="dungeon_speed_reached">Speed reached: %1$d WPM</string>
+    <string name="dungeon_play_again">Try again</string>
 </resources>

@@ -37,6 +37,13 @@ testers, bug reports and feature chat live on
   it, before it lands. Each game starts 10 WPM under your character speed
   and steps up 2 WPM every five hits (a landing steps it back). Waves,
   lives, combos, three difficulties, and every hit and miss feeds your stats
+- **CW Dungeon**: a small roguelike — monsters cast spell words in Morse;
+  copy the spell, then key its counter word (the spell book is on screen) on
+  the on-screen or a hardware key before the attack lands. Counters hurt the
+  monster, some heal you, a wrong or late one costs a life. Rooms, bosses,
+  combos, three difficulties, a gentle speed ramp with your Farnsworth
+  spacing, spells tiered to your active Koch set, and every keyed character
+  feeds your stats
 - **Pileup Runner**: call CQ and work a simulated pileup, with your own side
   keyed on the air: adjustable callers, speeds, QSB/QRN, cut numbers, bust
   behavior, callsign shapes, and a live log

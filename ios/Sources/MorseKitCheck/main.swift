@@ -3598,6 +3598,283 @@ if let fx = loadActivityFixture() {
     check("fixtures/activity.json loads and decodes", false)
 }
 
+
+// MARK: - CW Dungeon (#186)
+//
+// fixtures/dungeon.json, read by this harness AND by the Kotlin DungeonTest:
+// the spell book, pools, room layouts, attack windows, send times, scoring
+// and two scripted scenarios, all worked out from the rules in the fixture's
+// derivation block, never captured from either port.
+struct DungeonFixture: Decodable {
+    struct Derivation: Decodable {
+        let pointsPerHit: Int; let roomClearBonus: Int; let hitsPerMonster: Int
+        let bossEvery: Int; let bossHits: Int; let lives: Int
+        let baseWindow: Double; let windowDecay: Double; let minWindow: Double
+        let castDelay: Double; let roomDelay: Double
+        let minWpm: Double; let startOffset: Double; let step: Double; let hitsPerStep: Int
+        let starterCount: Int; let minPool: Int
+    }
+    struct Spell: Decodable { let spell: String; let counter: String; let heals: Bool; let characters: String }
+    struct Pool: Decodable { let name: String; let characters: String; let spells: [String]; let fallback: Bool }
+    struct Monster: Decodable { let kind: String; let hits: Int }
+    struct Room: Decodable { let room: Int; let monsters: [Monster] }
+    struct Window: Decodable { let room: Int; let difficulty: String; let window: Double }
+    struct Send: Decodable { let word: String; let wpm: Double; let seconds: Double }
+    struct Multiplier: Decodable { let combo: Int; let multiplier: Int }
+    struct Outcome: Decodable { let target: String; let chosen: String? }
+    struct OutcomeCase: Decodable { let expected: String; let keyed: String; let outcomes: [Outcome] }
+    struct Step: Decodable {
+        let step: String; let times: Int?
+        let score: Int; let lives: Int; let combo: Int; let room: Int; let currentWpm: Double; let alive: Int
+        let gameOver: Bool?
+    }
+    struct Scenario: Decodable {
+        let characterWpm: Double; let startWpm: Double; let targetWpm: Double; let lives: Int
+        let difficulty: String; let spell: String; let steps: [Step]
+        let hits: Int; let misses: Int; let bestCombo: Int; let bestWpm: Double
+    }
+    struct HealStep: Decodable { let step: String; let lives: Int; let healed: Bool }
+    struct HealScenario: Decodable { let characterWpm: Double; let lives: Int; let spell: String; let steps: [HealStep] }
+    let derivation: Derivation
+    let spells: [Spell]
+    let pools: [Pool]
+    let rooms: [Room]
+    let windows: [Window]
+    let sendSeconds: [Send]
+    let multiplier: [Multiplier]
+    let characterOutcomes: [OutcomeCase]
+    let scenario: Scenario
+    let healScenario: HealScenario
+}
+
+func loadDungeonFixture() -> DungeonFixture? {
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+    guard let data = try? Data(contentsOf: root.appendingPathComponent("fixtures/dungeon.json")) else { return nil }
+    return try? JSONDecoder().decode(DungeonFixture.self, from: data)
+}
+
+/// "TRAP>MAP" in the fixture names a spell of the book.
+func dungeonSpell(named key: String) -> DungeonSpell? {
+    DungeonSpells.all.first { "\($0.spell)>\($0.counter)" == key }
+}
+
+/// Step a game until a spell is pending (or it ends); returns the seconds waited.
+@MainActor
+func dungeonWaitForCast(_ g: DungeonGame) -> Double {
+    var waited = 0.0
+    while g.pendingCast == nil && !g.isOver && waited < 10 { g.advance(by: 0.05); waited += 0.05 }
+    return waited
+}
+
+print("\nCW Dungeon (fixtures/dungeon.json):")
+if let fx = loadDungeonFixture() {
+    let d = fx.derivation
+    check("scoring and room constants are the fixture's",
+          DungeonGame.pointsPerHit == d.pointsPerHit && DungeonGame.roomClearBonus == d.roomClearBonus
+          && DungeonGame.hitsPerMonster == d.hitsPerMonster && DungeonGame.bossEvery == d.bossEvery
+          && DungeonGame.bossHits == d.bossHits)
+    check("timing constants are the fixture's",
+          DungeonGame.baseWindow == d.baseWindow && DungeonGame.windowDecay == d.windowDecay
+          && DungeonGame.minWindow == d.minWindow && DungeonGame.castDelay == d.castDelay
+          && DungeonGame.roomDelay == d.roomDelay)
+    check("ramp constants are the fixture's",
+          DungeonGame.minWpm == d.minWpm && DungeonGame.rampStartOffset == d.startOffset
+          && DungeonGame.rampStep == d.step && DungeonGame.hitsPerRampStep == d.hitsPerStep)
+    check("pool constants are the fixture's",
+          DungeonSpells.starterCount == d.starterCount && DungeonSpells.minPool == d.minPool)
+
+    // The spell book, in order, with the characters each pair needs.
+    var bookOK = DungeonSpells.all.count == fx.spells.count
+    for (got, want) in zip(DungeonSpells.all, fx.spells) {
+        if got.spell != want.spell || got.counter != want.counter || got.heals != want.heals
+            || String(got.characters.sorted()) != want.characters {
+            bookOK = false
+            print("      ↳ \(got.label): fixture says \(want.spell) → \(want.counter), heals \(want.heals), needs \(want.characters)")
+        }
+    }
+    check("the spell book is the fixture's \(fx.spells.count) pairs, in order", bookOK)
+    check("starters are the first \(d.starterCount) of the book",
+          DungeonSpells.starters == Array(DungeonSpells.all.prefix(d.starterCount)))
+
+    var poolsOK = true
+    for p in fx.pools {
+        let got = DungeonSpells.pool(for: Array(p.characters))
+        let names = got.spells.map { "\($0.spell)>\($0.counter)" }
+        if names != p.spells || got.fallback != p.fallback {
+            poolsOK = false
+            print("      ↳ \(p.name): got \(names) fallback \(got.fallback); fixture says \(p.spells) fallback \(p.fallback)")
+        }
+    }
+    check("pools follow the fixture across \(fx.pools.count) sets", poolsOK)
+
+    var roomsOK = true
+    for r in fx.rooms {
+        let got = DungeonGame.layout(room: r.room).map { "\($0.kind.rawValue):\($0.hits)" }
+        let want = r.monsters.map { "\($0.kind):\($0.hits)" }
+        if got != want { roomsOK = false; print("      ↳ room \(r.room): got \(got), fixture says \(want)") }
+    }
+    check("room layouts follow the fixture across \(fx.rooms.count) rooms", roomsOK)
+
+    var windowsOK = true
+    for w in fx.windows {
+        guard let diff = InvadersDifficulty(rawValue: w.difficulty) else { windowsOK = false; continue }
+        let got = DungeonGame.window(room: w.room, difficulty: diff)
+        if !approxEqual(got, w.window, 1e-6) {
+            windowsOK = false
+            print("      ↳ room \(w.room) \(w.difficulty): \(got), fixture says \(w.window)")
+        }
+    }
+    check("attack windows follow the fixture across \(fx.windows.count) cases", windowsOK)
+
+    var sendOK = true
+    for s in fx.sendSeconds {
+        let got = DungeonGame.sendSeconds(s.word, timing: MorseTiming(wpm: s.wpm))
+        if !approxEqual(got, s.seconds, 1e-6) {
+            sendOK = false
+            print("      ↳ \(s.word) at \(s.wpm) WPM: \(got) s, fixture says \(s.seconds)")
+        }
+    }
+    check("send times follow PARIS timing across \(fx.sendSeconds.count) words", sendOK)
+
+    check("the multiplier follows the fixture",
+          fx.multiplier.allSatisfy { DungeonGame.multiplier(combo: $0.combo) == $0.multiplier })
+
+    var outcomesOK = true
+    for c in fx.characterOutcomes {
+        let got = DungeonGame.characterOutcomes(expected: c.expected, keyed: c.keyed)
+        let want = c.outcomes.map { DungeonCharacterOutcome(target: Character($0.target), chosen: $0.chosen.map { Character($0) }) }
+        if got != want {
+            outcomesOK = false
+            print("      ↳ \(c.expected) vs '\(c.keyed)': got \(got.map { "\($0.target)/\($0.chosen.map(String.init) ?? "-")" })")
+        }
+    }
+    check("character outcomes follow the fixture across \(fx.characterOutcomes.count) cases", outcomesOK)
+
+    // The scripted scenario: a one-spell pool, so what is cast is known.
+    let sc = fx.scenario
+    if let spell = dungeonSpell(named: sc.spell), let diff = InvadersDifficulty(rawValue: sc.difficulty) {
+        let g = DungeonGame(config: .init(spells: [spell], difficulty: diff, lives: sc.lives, characterWpm: sc.characterWpm),
+                            rng: SeededRNG(seed: 7))
+        check("the scenario game opens at its start speed with one monster",
+              approxEqual(g.currentWpm, sc.startWpm) && approxEqual(g.config.targetWpm, sc.targetWpm)
+              && g.room == 1 && g.monsters.count == 1 && g.pendingCast == nil)
+        // The first cast comes castDelay after the start, not before.
+        let early = g.advance(by: d.castDelay - 0.01)
+        let onTime = g.advance(by: 0.02)
+        var firstCast: DungeonCast?
+        if case .cast(let c)? = onTime.first { firstCast = c }
+        check("the first spell is cast castDelay after the start",
+              early.isEmpty && onTime.count == 1 && firstCast?.spell == spell
+              && firstCast?.monsterId == g.monsters[0].id && g.isSending)
+        check("the cast carries the room's window and the word's send time",
+              firstCast.map { approxEqual($0.window, DungeonGame.window(room: 1, difficulty: diff))
+                  && approxEqual($0.sendSeconds, DungeonGame.sendSeconds(spell.spell, timing: MorseTiming(wpm: sc.startWpm))) } ?? false)
+        let probe = DungeonGame(config: .init(spells: [spell]), rng: SeededRNG(seed: 1))
+        check("keying between casts is nothing",
+              probe.cast(spell.counter) == nil && probe.score == 0 && probe.lives == 3)
+
+        var scenarioOK = true
+        var lastRoom = 1
+        for (i, st) in sc.steps.enumerated() {
+            for _ in 0..<(st.times ?? 1) {
+                let waited = dungeonWaitForCast(g)
+                if g.room != lastRoom {
+                    // A new room's first cast waits roomDelay, not castDelay.
+                    if waited < d.roomDelay - 0.05 { scenarioOK = false; print("      ↳ step \(i): room \(g.room) cast after \(waited) s, under roomDelay") }
+                    lastRoom = g.room
+                }
+                guard let pending = g.pendingCast else { scenarioOK = false; print("      ↳ step \(i): no spell pending"); break }
+                switch st.step {
+                case "counter":
+                    if !(g.cast(pending.spell.counter)?.isCountered ?? false) { scenarioOK = false; print("      ↳ step \(i): the counter did not land") }
+                case "wrong":
+                    let r = g.cast("XX")
+                    if r?.outcome != .wrong || r?.points != 0 { scenarioOK = false; print("      ↳ step \(i): XX was not wrong") }
+                case "late":
+                    // The attack lands at sendSeconds + window, not a tick before.
+                    let before = g.advance(by: pending.sendSeconds + pending.window - 0.01)
+                    let after = g.advance(by: 0.02)
+                    let landed = after.contains { if case .attacked = $0 { return true } else { return false } }
+                    if !before.isEmpty || !landed { scenarioOK = false; print("      ↳ step \(i): the attack landed early or not at all") }
+                default:
+                    scenarioOK = false
+                    print("      ↳ step \(i): unknown step '\(st.step)' in the fixture")
+                }
+            }
+            let alive = g.monsters.filter { !$0.isDown }.count
+            if g.score != st.score || g.lives != st.lives || g.combo != st.combo || g.room != st.room
+                || !approxEqual(g.currentWpm, st.currentWpm) || alive != st.alive || g.isOver != (st.gameOver ?? false) {
+                scenarioOK = false
+                print("      ↳ after step \(i) (\(st.step)): score \(g.score) lives \(g.lives) combo \(g.combo) room \(g.room) wpm \(g.currentWpm) alive \(alive) over \(g.isOver); fixture says \(st.score) \(st.lives) \(st.combo) \(st.room) \(st.currentWpm) \(st.alive) \(st.gameOver ?? false)")
+            }
+        }
+        check("the run follows the scripted scenario across \(sc.steps.count) steps", scenarioOK)
+        check("the scenario's tallies are the fixture's",
+              g.hits == sc.hits && g.misses == sc.misses && g.bestCombo == sc.bestCombo && approxEqual(g.bestWpm, sc.bestWpm))
+        check("a finished game ignores time and keying",
+              g.isOver && g.advance(by: 10).isEmpty && g.cast(spell.counter) == nil)
+    } else {
+        check("the scenario names a spell of the book and a difficulty", false)
+    }
+
+    let hs = fx.healScenario
+    if let heal = dungeonSpell(named: hs.spell) {
+        let g = DungeonGame(config: .init(spells: [heal], lives: hs.lives, characterWpm: hs.characterWpm), rng: SeededRNG(seed: 3))
+        var healOK = heal.heals
+        for (i, st) in hs.steps.enumerated() {
+            _ = dungeonWaitForCast(g)
+            let r = st.step == "counter" ? g.cast(heal.counter) : g.cast("XX")
+            if g.lives != st.lives || (r?.healed ?? false) != st.healed {
+                healOK = false
+                print("      ↳ heal step \(i) (\(st.step)): lives \(g.lives) healed \(r?.healed ?? false); fixture says \(st.lives) \(st.healed)")
+            }
+        }
+        check("a countered heal restores a life, never past the start", healOK)
+    } else {
+        check("the heal scenario names a spell of the book", false)
+    }
+
+    // Same seed, same spells; the same spell never twice running.
+    @MainActor
+    func spellSequence(seed: UInt64) -> [String] {
+        let g = DungeonGame(config: .init(spells: DungeonSpells.all, lives: 50), rng: SeededRNG(seed: seed))
+        var out: [String] = []
+        for _ in 0..<24 {
+            _ = dungeonWaitForCast(g)
+            out.append(g.pendingCast?.spell.spell ?? "")
+            _ = g.cast("XX")
+        }
+        return out
+    }
+    let seq = spellSequence(seed: 42)
+    check("same seed gives the same spell sequence, never the same spell twice running",
+          seq == spellSequence(seed: 42) && seq != spellSequence(seed: 43)
+          && zip(seq, seq.dropFirst()).allSatisfy { $0 != $1 })
+
+    // Echoing the spell is a wrong counter, and says so.
+    if let trap = dungeonSpell(named: "TRAP>MAP") {
+        let g = DungeonGame(config: .init(spells: [trap]), rng: SeededRNG(seed: 1))
+        _ = dungeonWaitForCast(g)
+        let r = g.cast("trap")
+        check("echoing the spell is a wrong counter flagged as an echo",
+              r?.isCountered == false && r?.isEcho == true && g.lives == 2)
+    } else {
+        check("TRAP>MAP is in the book", false)
+    }
+
+    // Farnsworth stretches the sent word's character gaps, not its characters.
+    let fw = DungeonGame(config: .init(spells: DungeonSpells.starters, characterWpm: 20, effectiveWpm: 10), rng: SeededRNG(seed: 1))
+    check("an effective speed under the ramp start stretches the spell's spacing",
+          fw.timing.wpm == fw.config.startWpm && fw.timing.effectiveWpm == 10
+          && DungeonGame.sendSeconds("TRAP", timing: fw.timing) > DungeonGame.sendSeconds("TRAP", timing: MorseTiming(wpm: fw.config.startWpm)))
+} else {
+    check("fixtures/dungeon.json loads and decodes", false)
+}
+
 print("\n────────────────────────────")
 if failures == 0 {
     print("✅ All \(checks) checks passed.\n")
