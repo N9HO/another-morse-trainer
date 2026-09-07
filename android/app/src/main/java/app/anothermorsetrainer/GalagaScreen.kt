@@ -37,6 +37,7 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
@@ -48,6 +49,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
@@ -62,58 +64,63 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.anothermorsetrainer.morsekit.GalagaEnemy
+import app.anothermorsetrainer.morsekit.GalagaEnemyState
+import app.anothermorsetrainer.morsekit.GalagaEvent
+import app.anothermorsetrainer.morsekit.GalagaGame
+import app.anothermorsetrainer.morsekit.GalagaPath
 import app.anothermorsetrainer.morsekit.InvadersCharacterSet
 import app.anothermorsetrainer.morsekit.InvadersDifficulty
-import app.anothermorsetrainer.morsekit.InvadersEvent
-import app.anothermorsetrainer.morsekit.InvadersGame
 import app.anothermorsetrainer.morsekit.InvadersInput
 import app.anothermorsetrainer.morsekit.InvadersKeyboard
-import app.anothermorsetrainer.morsekit.Invader
 import app.anothermorsetrainer.morsekit.MorseCode
 import app.anothermorsetrainer.morsekit.MorseItem
 import app.anothermorsetrainer.morsekit.MorseTiming
 import app.anothermorsetrainer.morsekit.SessionRecord
-import kotlin.math.abs
+import kotlin.math.hypot
 import kotlin.math.roundToInt
 
-private enum class InvPhase { SETUP, RUNNING, OVER }
-
-private const val INVADER_COLUMNS = 5
+private enum class GalPhase { SETUP, RUNNING, OVER }
 
 /**
- * The classic 11×8 "crab" invader (#179), drawn from this bitmap so there is
- * no image asset; `#` is a lit pixel. The same table is in `InvadersView.swift`.
+ * An 11×8 "butterfly" enemy, drawn from this bitmap so there is no image
+ * asset; `#` is a lit pixel. The same table is in `GalagaView.swift`.
  */
-private val INVADER_SPRITE = listOf(
-    "..#.....#..",
-    "...#...#...",
-    "..#######..",
-    ".##.###.##.",
-    "###########",
-    "#.#######.#",
-    "#.#.....#.#",
-    "...##.##..."
+private val GALAGA_SPRITE = listOf(
+    "#.........#",
+    "#..#...#..#",
+    "##.#####.##",
+    ".#########.",
+    "..##.#.##..",
+    ".###.#.###.",
+    "#.##...##.#",
+    "#..#...#..#"
 )
 
 /**
- * Morse Invaders (#170): characters descend the play field in columns and the
- * learner shoots each one by naming it — typing it after hearing it (ICR) or
- * keying it after seeing it. The rules live in [InvadersGame]; this screen is
- * the frame clock ([withFrameNanos]), the sound, the input and the drawing.
+ * CW Galaga (#187): enemies swoop in along curved paths and settle into a
+ * formation at the top, then dive at the player one at a time. The learner
+ * shoots each one by naming the character it carries — typing it after
+ * hearing it (copy) or keying it after seeing it (send) — and consecutive
+ * hits build a combo multiplier. The rules live in [GalagaGame] and the
+ * flight paths in [GalagaPath]; this screen is the frame clock
+ * ([withFrameNanos]), the sound, the input and the drawing.
  *
- * Twin of the iOS `InvadersView.swift`. Session state survives process death
+ * Twin of the iOS `GalagaView.swift`. Session state survives process death
  * as a score, not a game: the tally rides `rememberSaveable` and a reclaimed
- * run is closed out to [Stats] on restore, like Contest and Rapid Fire.
+ * run is closed out to [Stats] on restore, like Invaders, Contest and Rapid
+ * Fire.
  */
 @Composable
-fun InvadersScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) {
+fun GalagaScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) {
     val context = LocalContext.current
     val player = remember { MorsePlayer() }
     val haptics = remember { Haptics(context) }
-    val prefs = remember { context.getSharedPreferences("amt_invaders", android.content.Context.MODE_PRIVATE) }
+    val prefs = remember { context.getSharedPreferences("amt_galaga", android.content.Context.MODE_PRIVATE) }
 
-    var phase by rememberSaveable { mutableStateOf(InvPhase.SETUP) }
-    // Setup choices persist across launches, like every other mode's.
+    var phase by rememberSaveable { mutableStateOf(GalPhase.SETUP) }
+    // Setup choices persist across launches, like every other mode's. The
+    // choices themselves are the arcade games' shared enums (Invaders.kt).
     var input by rememberSaveable {
         mutableStateOf(runCatching { InvadersInput.valueOf(prefs.getString("input", "") ?: "") }.getOrDefault(InvadersInput.ICR))
     }
@@ -133,21 +140,22 @@ fun InvadersScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
     val track = remember { EngineStore.characters() }
     val engine = track.engine
 
-    /** The pool, letters first then digits (the recognition chart's order). */
+    /** The pool, letters first then digits (the recognition chart's order); the same two pools as Invaders. */
     fun characterPool(): List<Char> = when (characterSet) {
         InvadersCharacterSet.ACTIVE -> engine.activeCharacters
         InvadersCharacterSet.FULL -> MorseCode.kochOrder.filter { it.isLetterOrDigit() }
     }.map { it.toString() }.sortedWith(SessionRecord.characterOrder).map { it[0] }
 
     // Run state. The game dies with the process; the tally below does not.
-    var game by remember { mutableStateOf<InvadersGame?>(null) }
-    var field by remember { mutableStateOf<List<Invader>>(emptyList()) }
+    var game by remember { mutableStateOf<GalagaGame?>(null) }
+    var field by remember { mutableStateOf<List<GalagaEnemy>>(emptyList()) }
+    var columns by remember { mutableIntStateOf(4) }
     var score by rememberSaveable { mutableIntStateOf(0) }
     var wave by rememberSaveable { mutableIntStateOf(1) }
     var lives by rememberSaveable { mutableIntStateOf(3) }
     var multiplier by remember { mutableIntStateOf(1) }
     var bestCombo by rememberSaveable { mutableIntStateOf(0) }
-    // The ramp (#178): the speed invaders are sent at now, and the highest reached.
+    // The ramp: the speed enemies are sent at now, and the highest reached.
     var wpm by remember { mutableIntStateOf(0) }
     var bestWpm by rememberSaveable { mutableIntStateOf(0) }
     var runAttempts by rememberSaveable { mutableIntStateOf(0) }
@@ -155,12 +163,12 @@ fun InvadersScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
     var startedAtMs by rememberSaveable { mutableLongStateOf(0L) }
     var lastSeenMs by rememberSaveable { mutableLongStateOf(0L) }
     var flash by remember { mutableStateOf<Pair<String, Long>?>(null) }
-    // When each invader's Morse finished sounding (ICR), by id, so a hit's
-    // time-to-recognize runs from the end of the tone.
+    // When each enemy's Morse finished sounding (copy mode), by id, so a
+    // hit's time-to-recognize runs from the end of the tone.
     val toneEnd = remember { HashMap<Int, Long>() }
     val charResults = remember { HashMap<Char, IntArray>() }   // attempts, correct
 
-    // Keying mode: the same decoder Sending Practice uses, plus a hardware key.
+    // Send mode: the same decoder Sending Practice uses, plus a hardware key.
     val keyer = remember { SendingKeyer(wpm = Settings.characterWpm, toneHz = Settings.sidetoneHz) }
     val midi = remember { HardwareKey(context) }
     AdapterConfigSync(midi)
@@ -171,7 +179,7 @@ fun InvadersScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
     DisposableEffect(Unit) { onDispose { player.release() } }
 
     DisposableEffect(phase, input) {
-        if (phase == InvPhase.RUNNING && input == InvadersInput.KEYING) {
+        if (phase == GalPhase.RUNNING && input == InvadersInput.KEYING) {
             keyer.scope = scope
             keyer.start()
             midi.start(onKey = { down -> keyer.touchKey(down) }, onConnected = { midiDevice = it })
@@ -179,7 +187,7 @@ fun InvadersScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
         onDispose { midi.stop(); keyer.stop() }
     }
 
-    fun syncHud(g: InvadersGame) {
+    fun syncHud(g: GalagaGame) {
         score = g.score
         wave = g.wave
         lives = g.lives
@@ -189,6 +197,7 @@ fun InvadersScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
         bestWpm = g.bestWpm.roundToInt()
         runAttempts = g.hits + g.misses
         runCorrect = g.hits
+        columns = g.formation.columns
         lastSeenMs = System.currentTimeMillis()
     }
 
@@ -196,7 +205,7 @@ fun InvadersScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
         if (attempts <= 0) return
         val results = charResults.map { (ch, a) -> SessionRecord.CharResult(ch.toString(), a[0], a[1], null) }
         Stats.record(
-            mode = "Morse Invaders", attempts = attempts, correct = correct,
+            mode = "CW Galaga", attempts = attempts, correct = correct,
             bestTtrMs = null, durationSeconds = seconds,
             characterWpm = Settings.characterWpm.roundToInt(),
             effectiveWpm = Settings.effectiveWpmInUse.roundToInt(),
@@ -213,8 +222,8 @@ fun InvadersScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
     }
 
     fun startGame() {
-        val g = InvadersGame(InvadersGame.Config(
-            characters = characterPool(), difficulty = difficulty, columns = INVADER_COLUMNS,
+        val g = GalagaGame(GalagaGame.Config(
+            characters = characterPool(), difficulty = difficulty,
             characterWpm = Settings.characterWpm
         ))
         game = g
@@ -224,7 +233,7 @@ fun InvadersScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
         flash = null
         startedAtMs = System.currentTimeMillis()
         syncHud(g)
-        phase = InvPhase.RUNNING
+        phase = GalPhase.RUNNING
     }
 
     fun finishGame() {
@@ -233,23 +242,23 @@ fun InvadersScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
         syncHud(g)
         recordRun(g.hits + g.misses, g.hits, ((System.currentTimeMillis() - startedAtMs) / 1000L).toInt())
         EngineStore.save()
-        phase = InvPhase.OVER
+        phase = GalPhase.OVER
     }
 
     /** End a run early (Back, the mode switcher): record what was played. */
     fun abandonRun() {
         val g = game
         player.stop()
-        if (g != null && phase == InvPhase.RUNNING) {
+        if (g != null && phase == GalPhase.RUNNING) {
             recordRun(g.hits + g.misses, g.hits, ((System.currentTimeMillis() - startedAtMs) / 1000L).toInt())
             EngineStore.save()
         }
         game = null
-        phase = InvPhase.SETUP
+        phase = GalPhase.SETUP
     }
 
     fun switchTo(mode: TrainingMode) {
-        if (phase == InvPhase.RUNNING) abandonRun() else player.stop()
+        if (phase == GalPhase.RUNNING) abandonRun() else player.stop()
         onSwitchMode(mode)
     }
 
@@ -258,19 +267,19 @@ fun InvadersScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
     // saved tally, as finishGame would have, and land on setup.
     LaunchedEffect(Unit) {
         if (game != null) return@LaunchedEffect
-        if (phase == InvPhase.RUNNING) {
+        if (phase == GalPhase.RUNNING) {
             recordRun(runAttempts, runCorrect, ((lastSeenMs - startedAtMs) / 1000L).toInt().coerceAtLeast(0))
         }
-        if (phase != InvPhase.SETUP) phase = InvPhase.SETUP
+        if (phase != GalPhase.SETUP) phase = GalPhase.SETUP
     }
 
     fun shoot(character: Char) {
         val g = game ?: return
-        if (phase != InvPhase.RUNNING) return
+        if (phase != GalPhase.RUNNING) return
         val now = System.currentTimeMillis()
-        val lowest = g.lowest
+        val threat = g.mostThreatening
         val shot = g.shoot(character)
-        val hit = shot.invader
+        val hit = shot.enemy
         if (hit != null) {
             val end = toneEnd.remove(hit.id)
             val ttr = if (end != null) ((now - end).coerceAtLeast(0)) / 1000.0 else 0.0
@@ -279,77 +288,69 @@ fun InvadersScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
             if (Settings.hapticsEnabled) haptics.success()
             flash = (if (shot.waveCleared) "Wave ${g.wave}!" else "+${shot.points}") to now + 800
         } else {
-            // A wrong key: confused with whatever was nearest the ground.
-            if (lowest != null) {
-                engine.noteAttempt(character.uppercaseChar(), lowest.character, 0.0)
-                tally(lowest.character, false)
+            // A wrong key: confused with whatever was the biggest threat.
+            if (threat != null) {
+                engine.noteAttempt(character.uppercaseChar(), threat.character, 0.0)
+                tally(threat.character, false)
             }
             if (Settings.hapticsEnabled) haptics.error()
             flash = "miss" to now + 600
         }
-        field = g.invaders
+        field = g.enemies
         syncHud(g)
     }
 
     // The frame clock: each frame moves the game on by the real time elapsed.
     LaunchedEffect(phase, game) {
         val g = game ?: return@LaunchedEffect
-        if (phase != InvPhase.RUNNING) return@LaunchedEffect
+        if (phase != GalPhase.RUNNING) return@LaunchedEffect
         var last = -1L
         while (true) {
             val nanos = withFrameNanos { it }
             if (last < 0) { last = nanos; continue }
-            // Cap a long gap (the app was backgrounded) so the field does not
-            // empty onto the ground in one step.
+            // Cap a long gap (the app was backgrounded) so a dive does not
+            // land in one step.
             val dt = ((nanos - last) / 1e9).coerceAtMost(0.1)
             last = nanos
             var over = false
             for (event in g.advance(dt)) {
                 when (event) {
-                    is InvadersEvent.Spawned -> if (input == InvadersInput.ICR) {
-                        // At the ramp's current speed (#178), not the session
-                        // timing: a single character has no gaps for
-                        // Farnsworth to stretch.
-                        val secs = player.replaySound(
-                            MorseItem.Playable.Text(event.invader.character.toString()),
-                            Settings.sidetoneHz, MorseTiming(g.currentWpm)
-                        )
-                        toneEnd[event.invader.id] = System.currentTimeMillis() + (secs * 1000).toLong()
-                    }
-                    is InvadersEvent.Escaped -> {
-                        toneEnd.remove(event.invader.id)
-                        engine.noteMiss(event.invader.character)
-                        tally(event.invader.character, false)
+                    is GalagaEvent.Entered -> sendEnemy(player, event.enemy, g, input, toneEnd)
+                    is GalagaEvent.Dived -> sendEnemy(player, event.enemy, g, input, toneEnd)
+                    is GalagaEvent.Landed -> {
+                        toneEnd.remove(event.enemy.id)
+                        engine.noteMiss(event.enemy.character)
+                        tally(event.enemy.character, false)
                         if (Settings.hapticsEnabled) haptics.error()
-                        flash = "${event.invader.character} got through" to System.currentTimeMillis() + 1000
+                        flash = "${event.enemy.character} got through" to System.currentTimeMillis() + 1000
                     }
-                    InvadersEvent.GameOver -> over = true
+                    GalagaEvent.GameOver -> over = true
                 }
             }
-            field = g.invaders
+            field = g.enemies
             syncHud(g)
             if (over) { finishGame(); return@LaunchedEffect }
         }
     }
 
-    // Keying: the first finalised character is the shot.
+    // Send mode: the first finalised character is the shot.
     LaunchedEffect(keyer.decodedText, keyer.isKeying, phase) {
-        if (phase != InvPhase.RUNNING || input != InvadersInput.KEYING || keyer.isKeying) return@LaunchedEffect
+        if (phase != GalPhase.RUNNING || input != InvadersInput.KEYING || keyer.isKeying) return@LaunchedEffect
         val ch = keyer.decodedText.trim().firstOrNull() ?: return@LaunchedEffect
         keyer.clear()
         shoot(ch)
     }
 
-    // Hardware keyboard (ICR): the character key is the shot.
+    // Hardware keyboard (copy mode): the character key is the shot.
     val hwFocus = remember { FocusRequester() }
-    LaunchedEffect(phase) { if (phase == InvPhase.RUNNING) hwFocus.requestFocus() }
+    LaunchedEffect(phase) { if (phase == GalPhase.RUNNING) hwFocus.requestFocus() }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
             .focusRequester(hwFocus)
             .onKeyEvent { event ->
-                if (event.type != KeyEventType.KeyDown || phase != InvPhase.RUNNING || input != InvadersInput.ICR) return@onKeyEvent false
+                if (event.type != KeyEventType.KeyDown || phase != GalPhase.RUNNING || input != InvadersInput.ICR) return@onKeyEvent false
                 val ch = event.utf16CodePoint.takeIf { it > 0 }?.toChar()?.uppercaseChar() ?: return@onKeyEvent false
                 if (ch !in characterPool()) return@onKeyEvent false
                 shoot(ch)
@@ -358,9 +359,9 @@ fun InvadersScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
             .focusable()
     ) {
         when (phase) {
-            InvPhase.SETUP -> {
+            GalPhase.SETUP -> {
                 BackHandler { onBack() }
-                InvadersSetup(
+                GalagaSetup(
                     input = input, onInput = { input = it },
                     characterSet = characterSet, onCharacterSet = { characterSet = it },
                     pool = characterPool(),
@@ -370,11 +371,12 @@ fun InvadersScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
                     onSwitchMode = ::switchTo
                 )
             }
-            InvPhase.RUNNING -> {
+            GalPhase.RUNNING -> {
                 BackHandler { abandonRun() }
-                InvadersRun(
+                GalagaRun(
                     input = input,
                     field = field,
+                    columns = columns,
                     score = score, wave = wave, lives = lives, multiplier = multiplier, wpm = wpm,
                     flash = flash,
                     pool = characterPool(),
@@ -383,18 +385,17 @@ fun InvadersScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
                     midiDevice = midiDevice,
                     onKey = { down -> keyPressed = down; keyer.touchKey(down) },
                     onShoot = { shoot(it) },
-                    onReplay = { column ->
-                        val g = game ?: return@InvadersRun
-                        val nearest = g.invaders.minByOrNull { abs(it.column - column) } ?: return@InvadersRun
-                        player.replaySound(MorseItem.Playable.Text(nearest.character.toString()), Settings.sidetoneHz, MorseTiming(g.currentWpm))
+                    onReplay = { enemy ->
+                        val g = game ?: return@GalagaRun
+                        player.replaySound(MorseItem.Playable.Text(enemy.character.toString()), Settings.sidetoneHz, MorseTiming(g.currentWpm))
                     },
                     onEnd = { abandonRun() },
                     onSwitchMode = ::switchTo
                 )
             }
-            InvPhase.OVER -> {
+            GalPhase.OVER -> {
                 BackHandler { onBack() }
-                InvadersOver(
+                GalagaOver(
                     score = score, wave = wave, bestCombo = bestCombo,
                     accuracy = if (runAttempts == 0) 0.0 else runCorrect.toDouble() / runAttempts,
                     bestWpm = if (input == InvadersInput.ICR) bestWpm else null,
@@ -406,8 +407,23 @@ fun InvadersScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
     }
 }
 
+/**
+ * Copy mode sends an enemy's character as it enters and again as it dives,
+ * at the ramp's current speed, not the session timing: a single character
+ * has no gaps for Farnsworth to stretch. Dates the tone's end for the
+ * time-to-recognize clock.
+ */
+private fun sendEnemy(player: MorsePlayer, enemy: GalagaEnemy, g: GalagaGame, input: InvadersInput, toneEnd: HashMap<Int, Long>) {
+    if (input != InvadersInput.ICR) return
+    val secs = player.replaySound(
+        MorseItem.Playable.Text(enemy.character.toString()),
+        Settings.sidetoneHz, MorseTiming(g.currentWpm)
+    )
+    toneEnd[enemy.id] = System.currentTimeMillis() + (secs * 1000).toLong()
+}
+
 @Composable
-private fun InvadersSetup(
+private fun GalagaSetup(
     input: InvadersInput, onInput: (InvadersInput) -> Unit,
     characterSet: InvadersCharacterSet, onCharacterSet: (InvadersCharacterSet) -> Unit,
     pool: List<Char>,
@@ -418,34 +434,36 @@ private fun InvadersSetup(
     Column(modifier = Modifier.fillMaxSize()) {
         Row(modifier = Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
             TextButton(onClick = onBack) { Text(stringResource(R.string.common_back), color = Brand.teal) }
-            Text(stringResource(R.string.mode_invaders), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text(stringResource(R.string.mode_galaga), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             Spacer(Modifier.weight(1f))
-            SwitchModeButton(TrainingMode.INVADERS, onSwitchMode)
+            SwitchModeButton(TrainingMode.GALAGA, onSwitchMode)
         }
         Column(
             modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Text(stringResource(R.string.invaders_blurb), style = MaterialTheme.typography.bodySmall, color = Brand.textSecondary)
-            InvLabel(stringResource(R.string.invaders_how_to_answer))
-            InvPills(InvadersInput.entries.map { it to it.label }, input, onInput)
-            Text(input.blurb, style = MaterialTheme.typography.bodySmall, color = Brand.textSecondary)
-            InvLabel(stringResource(R.string.invaders_characters))
-            InvPills(InvadersCharacterSet.entries.map { it to it.label }, characterSet, onCharacterSet)
+            Text(stringResource(R.string.galaga_blurb), style = MaterialTheme.typography.bodySmall, color = Brand.textSecondary)
+            GalLabel(stringResource(R.string.invaders_how_to_answer))
+            GalPills(InvadersInput.entries.map { it to it.label }, input, onInput)
+            Text(
+                stringResource(if (input == InvadersInput.ICR) R.string.galaga_copy_blurb else R.string.galaga_send_blurb),
+                style = MaterialTheme.typography.bodySmall, color = Brand.textSecondary
+            )
+            GalLabel(stringResource(R.string.invaders_characters))
+            GalPills(InvadersCharacterSet.entries.map { it to it.label }, characterSet, onCharacterSet)
             Text(pool.joinToString(" "), fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall, color = Brand.textSecondary)
-            InvLabel(stringResource(R.string.invaders_difficulty))
-            InvPills(InvadersDifficulty.entries.map { it to it.label }, difficulty, onDifficulty)
-            // The ramp in words (#178): where a game opens and where it climbs
-            // to. Keying mode sends nothing, so it names the decoder speed.
+            GalLabel(stringResource(R.string.invaders_difficulty))
+            GalPills(InvadersDifficulty.entries.map { it to it.label }, difficulty, onDifficulty)
+            // The ramp in words: where a game opens and where it climbs to.
+            // Send mode sends nothing, so it names the decoder speed.
             val target = Settings.characterWpm.roundToInt()
-            val start = InvadersGame.rampStart(Settings.characterWpm).roundToInt()
+            val start = GalagaGame.rampStart(Settings.characterWpm).roundToInt()
             val speedNote = when {
                 input == InvadersInput.KEYING -> stringResource(R.string.invaders_keying_speed_note, target)
                 start >= target -> stringResource(R.string.invaders_speed_flat_note, target)
                 else -> stringResource(
-                    R.string.invaders_speed_ramp_note,
-                    start, InvadersGame.rampStepUp.roundToInt(), InvadersGame.hitsPerRampStep,
-                    InvadersGame.rampHold, target, InvadersGame.rampStepDown.roundToInt()
+                    R.string.galaga_speed_ramp_note,
+                    start, GalagaGame.rampStep.roundToInt(), GalagaGame.hitsPerRampStep, target
                 )
             }
             Text(speedNote, style = MaterialTheme.typography.bodySmall, color = Brand.textSecondary)
@@ -461,9 +479,10 @@ private fun InvadersSetup(
 }
 
 @Composable
-private fun InvadersRun(
+private fun GalagaRun(
     input: InvadersInput,
-    field: List<Invader>,
+    field: List<GalagaEnemy>,
+    columns: Int,
     score: Int, wave: Int, lives: Int, multiplier: Int, wpm: Int,
     flash: Pair<String, Long>?,
     pool: List<Char>,
@@ -472,31 +491,41 @@ private fun InvadersRun(
     midiDevice: String?,
     onKey: (Boolean) -> Unit,
     onShoot: (Char) -> Unit,
-    onReplay: (Int) -> Unit,
+    onReplay: (GalagaEnemy) -> Unit,
     onEnd: () -> Unit,
     onSwitchMode: (TrainingMode) -> Unit
 ) {
     val measurer = rememberTextMeasurer()
+    // The tap handler reads the field as it is now without restarting on
+    // every frame, which would cancel a tap in progress.
+    val latestField = rememberUpdatedState(field)
+    val latestColumns = rememberUpdatedState(columns)
     Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
         Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             TextButton(onClick = onEnd) { Text(stringResource(R.string.invaders_end_game), color = Brand.teal) }
             Spacer(Modifier.weight(1f))
-            SwitchModeButton(TrainingMode.INVADERS, onSwitchMode)
+            SwitchModeButton(TrainingMode.GALAGA, onSwitchMode)
         }
         Row(
             modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(Brand.cornerRadius)).brandCard().padding(horizontal = 14.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            InvStat(stringResource(R.string.invaders_score), score.toString())
-            InvStat(stringResource(R.string.invaders_wave), wave.toString())
-            InvStat(stringResource(R.string.invaders_lives), "♥".repeat(lives) + "♡".repeat((3 - lives).coerceAtLeast(0)))
-            InvStat(stringResource(R.string.invaders_combo_label), "×$multiplier")
-            if (input == InvadersInput.ICR) InvStat(stringResource(R.string.invaders_wpm), wpm.toString())
+            GalStat(stringResource(R.string.invaders_score), score.toString())
+            GalStat(stringResource(R.string.invaders_wave), wave.toString())
+            GalStat(stringResource(R.string.invaders_lives), "♥".repeat(lives) + "♡".repeat((3 - lives).coerceAtLeast(0)))
+            GalStat(stringResource(R.string.invaders_combo_label), "×$multiplier")
+            if (input == InvadersInput.ICR) GalStat(stringResource(R.string.invaders_wpm), wpm.toString())
         }
         Spacer(Modifier.height(10.dp))
         val labelStyle = TextStyle(fontSize = 20.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace, color = Brand.textPrimary)
         val flashStyle = TextStyle(fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Brand.tealBright)
+        // Where the unit-space paths land on the canvas: the field keeps a
+        // margin so the sprite stays whole at the edges of its swoop, and the
+        // bottom of the dive is the player's line. The keying label sits
+        // above the sprite, so that layout starts lower.
+        fun canvasPoint(p: GalagaPath.Point, width: Float, height: Float, inset: Float, top: Float, bottom: Float): Offset =
+            Offset(inset + p.x.toFloat() * (width - 2 * inset), top + p.y.toFloat() * (bottom - top))
         Canvas(
             modifier = Modifier
                 .weight(1f)
@@ -507,40 +536,56 @@ private fun InvadersRun(
                 .pointerInput(input) {
                     if (input != InvadersInput.ICR) return@pointerInput
                     detectTapGestures { offset ->
-                        onReplay((offset.x / size.width * INVADER_COLUMNS).toInt().coerceIn(0, INVADER_COLUMNS - 1))
+                        val inset = 20.dp.toPx()
+                        val top = 18.dp.toPx()
+                        val bottom = size.height - 36.dp.toPx()
+                        val cols = latestColumns.value
+                        val nearest = latestField.value.minByOrNull { e ->
+                            val p = canvasPoint(GalagaPath.position(e, cols), size.width.toFloat(), size.height.toFloat(), inset, top, bottom)
+                            hypot(p.x - offset.x, p.y - offset.y)
+                        }
+                        if (nearest != null) onReplay(nearest)
                     }
                 }
         ) {
             val ground = size.height - 18.dp.toPx()
             drawLine(Brand.teal.copy(alpha = 0.6f), Offset(0f, ground), Offset(size.width, ground), strokeWidth = 2.dp.toPx())
-            val colWidth = size.width / INVADER_COLUMNS
-            // Keying shows the character above its sprite, so the field
-            // starts lower to leave the label room at the top.
+            // The player's ship: a small chevron on the line.
+            val ship = Path().apply {
+                val cx = size.width / 2
+                val cy = ground - 12.dp.toPx()
+                moveTo(cx, cy - 9.dp.toPx())
+                lineTo(cx + 10.dp.toPx(), cy + 7.dp.toPx())
+                lineTo(cx, cy + 2.dp.toPx())
+                lineTo(cx - 10.dp.toPx(), cy + 7.dp.toPx())
+                close()
+            }
+            drawPath(ship, Brand.teal)
+            val inset = 20.dp.toPx()
             val top = (if (input == InvadersInput.KEYING) 30.dp else 18.dp).toPx()
-            val reach = 18.dp.toPx()
-            // The alien (#179) instead of a "?", which read as a literal
-            // character: 3 dp a pixel, 33×24 dp, about what the glyph took.
+            val bottom = size.height - 36.dp.toPx()
+            // The sprite: 3 dp a pixel, 33×24 dp, the Invaders sprite's size.
             val px = 3.dp.toPx()
-            fun drawSprite(cx: Float, cy: Float) {
-                val ox = cx - INVADER_SPRITE[0].length * px / 2
-                val oy = cy - INVADER_SPRITE.size * px / 2
-                INVADER_SPRITE.forEachIndexed { r, row ->
+            fun drawSprite(cx: Float, cy: Float, tint: androidx.compose.ui.graphics.Color) {
+                val ox = cx - GALAGA_SPRITE[0].length * px / 2
+                val oy = cy - GALAGA_SPRITE.size * px / 2
+                GALAGA_SPRITE.forEachIndexed { r, row ->
                     row.forEachIndexed { c, cell ->
-                        if (cell == '#') drawRect(Brand.tealBright, Offset(ox + c * px, oy + r * px), Size(px, px))
+                        if (cell == '#') drawRect(tint, Offset(ox + c * px, oy + r * px), Size(px, px))
                     }
                 }
             }
-            for (inv in field) {
-                val x = (inv.column + 0.5f) * colWidth
-                val y = top + inv.progress.toFloat() * (ground - top - reach)
-                // ICR keeps the character to the ear; keying shows it directly
-                // above the sprite to key.
+            for (enemy in field) {
+                val p = canvasPoint(GalagaPath.position(enemy, columns), size.width, size.height, inset, top, bottom)
+                val tint = if (enemy.state == GalagaEnemyState.DIVING) Brand.tealBright else Brand.teal
+                // Copy mode keeps the character to the ear; send mode shows
+                // it directly above the sprite to key.
                 if (input == InvadersInput.KEYING) {
-                    drawSprite(x, y + 6.dp.toPx())
-                    val measured = measurer.measure(inv.character.toString(), labelStyle)
-                    drawText(measured, topLeft = Offset(x - measured.size.width / 2, y - 14.dp.toPx() - measured.size.height / 2))
+                    drawSprite(p.x, p.y + 6.dp.toPx(), tint)
+                    val measured = measurer.measure(enemy.character.toString(), labelStyle)
+                    drawText(measured, topLeft = Offset(p.x - measured.size.width / 2, p.y - 14.dp.toPx() - measured.size.height / 2))
                 } else {
-                    drawSprite(x, y)
+                    drawSprite(p.x, p.y, tint)
                 }
             }
             if (flash != null && flash.second > System.currentTimeMillis()) {
@@ -550,12 +595,12 @@ private fun InvadersRun(
         }
         Spacer(Modifier.height(10.dp))
         if (input == InvadersInput.ICR) {
-            Text(stringResource(R.string.invaders_tap_to_replay), style = MaterialTheme.typography.labelSmall, color = Brand.textSecondary)
+            Text(stringResource(R.string.galaga_tap_to_replay), style = MaterialTheme.typography.labelSmall, color = Brand.textSecondary)
             Spacer(Modifier.height(6.dp))
-            InvadersKeyRows(pool = pool, onShoot = onShoot)
+            GalagaKeyRows(pool = pool, onShoot = onShoot)
         } else {
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text(stringResource(R.string.invaders_key_the_lowest), style = MaterialTheme.typography.labelSmall, color = Brand.textSecondary)
+                Text(stringResource(R.string.galaga_key_the_diver), style = MaterialTheme.typography.labelSmall, color = Brand.textSecondary)
                 Spacer(Modifier.weight(1f))
                 Text(decoded.ifEmpty { "—" }, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.SemiBold, fontSize = 22.sp, color = Brand.textPrimary)
                 midiDevice?.let { Text("  🎹", color = Brand.teal) }
@@ -592,15 +637,14 @@ private fun InvadersRun(
 }
 
 /**
- * The hear-it/type-it keyboard (#178): [InvadersKeyboard.rows] laid out QWERTY —
- * a digit row when the pool has digits, the three letter rows always, any
- * punctuation below. A key outside the pool stays in place, dimmed and dead,
- * so the layout never shifts as the Koch set grows; the hardware-keyboard
- * handler in [InvadersScreen] presses the live ones too. Ten keys across at
- * equal width, so the shorter rows sit centred the way a keyboard's do.
+ * The copy-mode keyboard: the arcade games' [InvadersKeyboard.rows] laid out
+ * QWERTY — a digit row when the pool has digits, the three letter rows
+ * always, any punctuation below. A key outside the pool stays in place,
+ * dimmed and dead, so the layout never shifts as the Koch set grows; the
+ * hardware-keyboard handler in [GalagaScreen] presses the live ones too.
  */
 @Composable
-private fun InvadersKeyRows(pool: List<Char>, onShoot: (Char) -> Unit) {
+private fun GalagaKeyRows(pool: List<Char>, onShoot: (Char) -> Unit) {
     val live = pool.toSet()
     val rows = InvadersKeyboard.rows(pool)
     val gap = 4.dp
@@ -637,7 +681,7 @@ private fun InvadersKeyRows(pool: List<Char>, onShoot: (Char) -> Unit) {
 }
 
 @Composable
-private fun InvadersOver(
+private fun GalagaOver(
     score: Int, wave: Int, bestCombo: Int, accuracy: Double,
     bestWpm: Int?,
     onAgain: () -> Unit, onBack: () -> Unit
@@ -654,12 +698,12 @@ private fun InvadersOver(
         ) {
             Text(stringResource(R.string.invaders_game_over), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                InvStat(stringResource(R.string.invaders_score), score.toString())
-                InvStat(stringResource(R.string.invaders_wave), wave.toString())
-                InvStat(stringResource(R.string.invaders_accuracy), "${(accuracy * 100).roundToInt()}%")
-                InvStat(stringResource(R.string.invaders_best_combo), bestCombo.toString())
+                GalStat(stringResource(R.string.invaders_score), score.toString())
+                GalStat(stringResource(R.string.invaders_wave), wave.toString())
+                GalStat(stringResource(R.string.invaders_accuracy), "${(accuracy * 100).roundToInt()}%")
+                GalStat(stringResource(R.string.invaders_best_combo), bestCombo.toString())
             }
-            // The speed the ramp reached (#178); null in keying mode, which sends nothing.
+            // The speed the ramp reached; null in send mode, which sends nothing.
             if (bestWpm != null) {
                 Text(stringResource(R.string.invaders_speed_reached, bestWpm), style = MaterialTheme.typography.bodySmall, color = Brand.textSecondary)
             }
@@ -676,7 +720,7 @@ private fun InvadersOver(
 }
 
 @Composable
-private fun InvStat(label: String, value: String) {
+private fun GalStat(label: String, value: String) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(label.uppercase(), fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Brand.textSecondary)
         Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
@@ -684,12 +728,12 @@ private fun InvStat(label: String, value: String) {
 }
 
 @Composable
-private fun InvLabel(text: String) {
+private fun GalLabel(text: String) {
     Text(text, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, color = Brand.textPrimary)
 }
 
 @Composable
-private fun <T> InvPills(options: List<Pair<T, String>>, selected: T, onSelect: (T) -> Unit) {
+private fun <T> GalPills(options: List<Pair<T, String>>, selected: T, onSelect: (T) -> Unit) {
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         for ((value, label) in options) {
             val on = value == selected

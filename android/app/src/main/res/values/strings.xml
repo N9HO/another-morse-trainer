@@ -723,9 +723,138 @@
     <string name="invaders_tap_to_replay">Tap an invader to hear it again</string>
     <string name="invaders_key_the_lowest">Key the lowest invader</string>
     <!-- Speed ramp (#178): start, step, hits per step, target -->
-    <string name="invaders_speed_ramp_note">Sent from %1$d WPM, stepping up %2$d WPM every %3$d hits to your %4$d WPM character speed. A landing steps it back.</string>
+    <string name="invaders_speed_ramp_note">Sent from %1$d WPM, stepping up %2$d WPM after %3$d hits in a row (the first %4$d after any change do not count) to your %5$d WPM character speed. A landing steps it back %6$d WPM. Characters you miss come round more often until you master them.</string>
     <string name="invaders_speed_flat_note">Sent at your %1$d WPM character speed.</string>
     <string name="invaders_keying_speed_note">Decoded at your %1$d WPM character speed.</string>
     <string name="invaders_wpm">WPM</string>
     <string name="invaders_speed_reached">Speed reached: %1$d WPM</string>
+
+    <!-- CW Galaga (#187). Shares the invaders_* labels the two games have in common. -->
+    <string name="mode_galaga">CW Galaga</string>
+    <string name="home_arcade_formations">Arcade formations</string>
+    <string name="galaga_blurb">Enemies swoop in along curved paths and settle into a formation, then dive at you one by one. Hear one and type it, or see one and key it, to shoot the most dangerous enemy carrying it before its dive gets through. Consecutive hits build a combo multiplier up to ×8; three lives; every wave brings a bigger formation and faster dives. Misses feed your confusion drill.</string>
+    <string name="galaga_copy_blurb">Enemies fly in unmarked. Each one is sent in Morse as it enters and again as it dives (tap it to hear it again); type the character you heard to shoot the most dangerous one carrying it.</string>
+    <string name="galaga_send_blurb">Each enemy shows its character. Key it on the on-screen key or a hardware key; the decoded character shoots the most dangerous one carrying it.</string>
+    <!-- Speed ramp: start, step, hits per step, target -->
+    <string name="galaga_speed_ramp_note">Sent from %1$d WPM, stepping up %2$d WPM every %3$d hits to your %4$d WPM character speed. A dive that gets through steps it back.</string>
+    <string name="galaga_tap_to_replay">Tap an enemy to hear it again</string>
+    <string name="galaga_key_the_diver">Key the diving enemy</string>
+    <!-- Morse Defender (#188) -->
+    <string name="mode_defender">Morse Defender</string>
+    <string name="home_arcade_callsign_copy">Arcade callsign copy</string>
+    <string name="defender_blurb">Cities and ships line the bottom, each with a callsign. Attackers come down from the top, and each one sends the callsign of the asset it is heading for. Copy it and route the defence — tap that asset, or type the callsign — before the attacker arrives. Lose every asset and the game is over; every wave brings more assets and more attackers at once. Every copy feeds your character stats.</string>
+    <string name="defender_how_to_route">How you route</string>
+    <string name="defender_callsigns">Callsigns</string>
+    <string name="defender_callsigns_active">From my characters</string>
+    <string name="defender_callsigns_full">Real callsigns</string>
+    <string name="defender_callsigns_active_note">Four-character call-like groups spelled only from your active set: %1$s</string>
+    <string name="defender_callsigns_full_note">Real US-style callsigns such as K1AB, AB1C, K1ABC and AB1CD.</string>
+    <string name="defender_difficulty">Difficulty</string>
+    <string name="defender_start">Start game</string>
+    <string name="defender_score">Score</string>
+    <string name="defender_wave">Wave</string>
+    <string name="defender_assets">Assets</string>
+    <string name="defender_combo_label">Combo</string>
+    <string name="defender_wpm">WPM</string>
+    <string name="defender_game_over">All assets lost</string>
+    <string name="defender_best_combo">Best combo</string>
+    <string name="defender_accuracy">Accuracy</string>
+    <string name="defender_play_again">Play again</string>
+    <string name="defender_end_game">End game</string>
+    <string name="defender_tap_hint">Tap an attacker to hear it again · tap the asset it named</string>
+    <string name="defender_tap_to_replay">Tap an attacker to hear it again</string>
+    <!-- Speed ramp: start, step, hits per step, target -->
+    <string name="defender_speed_ramp_note">Callsigns sent from %1$d WPM, stepping up %2$d WPM every %3$d hits to your %4$d WPM character speed. A lost asset steps it back.</string>
+    <string name="defender_speed_flat_note">Callsigns sent at your %1$d WPM character speed.</string>
+    <string name="defender_farnsworth_note">Farnsworth spacing at %1$d WPM effective applies.</string>
+    <string name="defender_speed_reached">Speed reached: %1$d WPM</string>
+    <!-- CW Dungeon (#186) -->
+    <string name="mode_dungeon">CW Dungeon</string>
+    <string name="home_roguelike_sending">Roguelike sending</string>
+    <string name="dungeon_blurb">A roguelike, room by room. Each monster casts a spell word in Morse; copy it, then key the counter word from the spell book on a Morse key before the attack lands. A counter in time hurts the monster, a wrong or late one costs a life, and some counters heal you. Three lives; every room\'s window is shorter. Every keyed character feeds your stats and confusion drill.</string>
+    <string name="dungeon_characters">Characters</string>
+    <string name="dungeon_spell_book">Spell book</string>
+    <string name="dungeon_spell_book_note">Hear the spell, key the counter. ♥ marks a counter that also heals you.</string>
+    <string name="dungeon_fallback_note">Your active characters spell fewer than %1$d pairs, so the starter spells are in use. They need the first ten Koch characters.</string>
+    <string name="dungeon_difficulty">Difficulty</string>
+    <!-- Speed ramp: start, step, counters per step, target -->
+    <string name="dungeon_speed_ramp_note">Spells are sent from %1$d WPM, stepping up %2$d WPM every %3$d counters to your %4$d WPM character speed. A hit taken steps it back.</string>
+    <string name="dungeon_speed_flat_note">Spells are sent at your %1$d WPM character speed.</string>
+    <string name="dungeon_farnsworth_note">Farnsworth spacing at %1$d WPM applies to the spell.</string>
+    <string name="dungeon_start">Enter the dungeon</string>
+    <string name="dungeon_score">Score</string>
+    <string name="dungeon_room">Room</string>
+    <string name="dungeon_rooms">Rooms</string>
+    <string name="dungeon_lives">Lives</string>
+    <string name="dungeon_combo">Combo</string>
+    <string name="dungeon_wpm">WPM</string>
+    <string name="dungeon_tap_to_replay">Tap a monster to hear its spell again</string>
+    <string name="dungeon_key_the_counter">Key the counter-spell</string>
+    <string name="dungeon_end_game">Leave</string>
+    <string name="dungeon_game_over">You fell</string>
+    <string name="dungeon_accuracy">Accuracy</string>
+    <string name="dungeon_best_combo">Best combo</string>
+    <string name="dungeon_speed_reached">Speed reached: %1$d WPM</string>
+    <string name="dungeon_play_again">Try again</string>
+    <!-- CW Frogger (#190) -->
+    <string name="mode_frogger">CW Frogger</string>
+    <string name="home_arcade_crossing">Arcade crossing</string>
+    <string name="frogger_blurb">Hop a frog across three lanes of traffic and three of river. Every vehicle and log carries a character, and each lane is cued in Morse: only the cued vehicle is harmless and only the cued log floats. Three lives; each crossing is a wave and the traffic gets faster. Labels hide as the waves go on. Wrong lanes feed your confusion drill.</string>
+    <string name="frogger_characters">Characters</string>
+    <string name="frogger_difficulty">Difficulty</string>
+    <string name="frogger_start">Start game</string>
+    <string name="frogger_score">Score</string>
+    <string name="frogger_wave">Wave</string>
+    <string name="frogger_lives">Lives</string>
+    <string name="frogger_combo_label">Combo</string>
+    <string name="frogger_wpm">WPM</string>
+    <string name="frogger_game_over">Game over</string>
+    <string name="frogger_best_combo">Best combo</string>
+    <string name="frogger_accuracy">Accuracy</string>
+    <string name="frogger_play_again">Play again</string>
+    <string name="frogger_end_game">End game</string>
+    <string name="frogger_tap_to_replay">Tap the board to hear the next lane\'s cue again</string>
+    <string name="frogger_tap_to_replay_hidden">Tap the board to hear the next lane\'s cue again; the traffic announces itself</string>
+    <string name="frogger_hop_up">Hop up</string>
+    <string name="frogger_hop_down">Hop down</string>
+    <string name="frogger_hop_left">Hop left</string>
+    <string name="frogger_hop_right">Hop right</string>
+    <string name="frogger_board_description">Board: frog on row %1$d of %2$d</string>
+    <!-- Speed ramp: start, step, decisions per step, target -->
+    <string name="frogger_speed_ramp_note">Cues sent from %1$d WPM, stepping up %2$d WPM every %3$d safe crossings of a lane to your %4$d WPM character speed. Losing a life steps it back.</string>
+    <string name="frogger_speed_flat_note">Cues sent at your %1$d WPM character speed.</string>
+    <string name="frogger_labels_note">Labels show for the first two crossings, hide once a lane is cued from the third, and from the fifth the traffic announces itself in Morse instead.</string>
+    <string name="frogger_speed_reached">Speed reached: %1$d WPM</string>
+    <!-- Flashes on the board: the wrong label and the cue -->
+    <string name="frogger_flash_hit">Hit by %1$s, not %2$s</string>
+    <string name="frogger_flash_sank">%1$s sank, not %2$s</string>
+    <string name="frogger_flash_splash">Splash — the log was %1$s</string>
+    <string name="frogger_flash_across">Across! +%1$d — wave %2$d</string>
+    <!-- CW Asteroids (#189) -->
+    <string name="mode_asteroids">CW Asteroids</string>
+    <string name="home_arcade_sending">Arcade sending</string>
+    <string name="asteroids_blurb">Labelled asteroids drift in toward your ship. See one and key its label to destroy it, or hear one sent and tap the asteroid carrying it. Later waves bring short words and callsigns that split into their characters when hit. Three lives; every wave comes faster. Misses feed your confusion drill.</string>
+    <string name="asteroids_how_you_play">How you play</string>
+    <string name="asteroids_characters">Characters</string>
+    <string name="asteroids_words_note">From wave %1$d, larger asteroids carry short words and callsigns spelt from these characters; a word splits into its characters when hit.</string>
+    <string name="asteroids_difficulty">Difficulty</string>
+    <string name="asteroids_start">Start game</string>
+    <string name="asteroids_score">Score</string>
+    <string name="asteroids_wave">Wave</string>
+    <string name="asteroids_lives">Lives</string>
+    <string name="asteroids_combo_label">Combo</string>
+    <string name="asteroids_game_over">Game over</string>
+    <string name="asteroids_best_combo">Best combo</string>
+    <string name="asteroids_accuracy">Accuracy</string>
+    <string name="asteroids_play_again">Play again</string>
+    <string name="asteroids_end_game">End game</string>
+    <string name="asteroids_tap_what_you_heard">Tap the asteroid you heard</string>
+    <string name="asteroids_hear_again">Hear it again</string>
+    <string name="asteroids_key_a_label">Key an asteroid\'s label</string>
+    <!-- Speed ramp (copy mode): start, step, hits per step, target -->
+    <string name="asteroids_speed_ramp_note">Sent from %1$d WPM, stepping up %2$d WPM every %3$d hits to your %4$d WPM character speed. An asteroid that reaches the ship steps it back.</string>
+    <string name="asteroids_speed_flat_note">Sent at your %1$d WPM character speed.</string>
+    <string name="asteroids_send_speed_note">Decoded at your %1$d WPM character speed.</string>
+    <string name="asteroids_wpm">WPM</string>
+    <string name="asteroids_speed_reached">Speed reached: %1$d WPM</string>
 </resources>

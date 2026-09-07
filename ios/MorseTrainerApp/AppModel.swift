@@ -4,7 +4,7 @@ import MediaPlayer
 
 /// The ways to practice.
 enum TrainingMode: String, CaseIterable, Identifiable {
-    case journey, characters, words, abbreviations, qCodes, prosigns, headCopy, typed, sending, confusion, listen, qso, contest, story, exam, qrq, rapidFire, invaders
+    case journey, characters, words, abbreviations, qCodes, prosigns, headCopy, typed, sending, confusion, listen, qso, contest, story, exam, qrq, rapidFire, invaders, galaga, defender, dungeon, frogger, asteroids
     var id: String { rawValue }
     var title: String {
         switch self {
@@ -26,6 +26,11 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .qrq:          return "QRQ Speed"
         case .rapidFire:    return "Rapid Fire"
         case .invaders:     return "Morse Invaders"
+        case .galaga:       return "CW Galaga"
+        case .defender:     return "Morse Defender"
+        case .dungeon:      return "CW Dungeon"
+        case .frogger:      return "CW Frogger"
+        case .asteroids:    return "CW Asteroids"
         }
     }
     var icon: String {
@@ -48,6 +53,11 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .qrq:           return "hare"
         case .rapidFire:     return "bolt.fill"
         case .invaders:      return "gamecontroller.fill"
+        case .galaga:        return "airplane"
+        case .defender:      return "shield.lefthalf.filled"
+        case .dungeon:       return "wand.and.stars"
+        case .frogger:       return "road.lanes"
+        case .asteroids:     return "scope"
         }
     }
     /// In meaning-based modes the question is "what are they saying?"
@@ -69,6 +79,11 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .qrq:                return "Type what you hear"
         case .rapidFire:          return "Copy what you hear"
         case .invaders:           return "Shoot the character you hear"
+        case .galaga:             return "Shoot the character you hear"
+        case .defender:           return "Route the defence to the callsign you hear"
+        case .dungeon:            return "Key the counter-spell"
+        case .frogger:            return "Cross on the character you hear"
+        case .asteroids:          return "Send the label on each asteroid"
         }
     }
     /// A very short descriptor shown on the mode-selection tiles (intro screen).
@@ -93,6 +108,11 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .qrq:           return "High-speed copy"
         case .rapidFire:     return "Back-to-back copy"
         case .invaders:      return "Arcade recognition"
+        case .galaga:        return "Arcade formations"
+        case .defender:      return "Arcade callsign copy"
+        case .dungeon:       return "Roguelike sending"
+        case .frogger:       return "Arcade crossing"
+        case .asteroids:     return "Arcade sending"
         }
     }
 
@@ -136,6 +156,16 @@ enum TrainingMode: String, CaseIterable, Identifiable {
             return "Real-world copy drill: a stream of call signs, words, number groups, or state abbreviations sent back to back at whatever pace you choose. Type each one as it lands, send it back on a key, or just copy along and review the full list of what was transmitted at the end."
         case .invaders:
             return "Characters fall from the top in columns. Hear one and type it, or see one and key it, to shoot the lowest invader carrying it before it reaches the ground. Three lives; every wave comes faster. Misses feed your confusion drill."
+        case .galaga:
+            return "Enemies swoop in along curved paths and settle into a formation, then dive at you one by one. Hear one and type it, or see one and key it, to shoot the most dangerous enemy carrying it before its dive gets through. Consecutive hits build a combo multiplier up to ×8; three lives; every wave brings a bigger formation and faster dives. Misses feed your confusion drill."
+        case .defender:
+            return "Cities and ships line the bottom, each with a callsign. Attackers come down from the top, and each one sends the callsign of the asset it is heading for. Copy it and route the defence — tap that asset, or type the callsign — before the attacker arrives. Lose every asset and the game is over; every wave brings more assets and more attackers at once. Every copy feeds your character stats."
+        case .dungeon:
+            return "A roguelike, room by room. Each monster casts a spell word in Morse; copy it, then key the counter word from the spell book on a Morse key before the attack lands. A counter in time hurts the monster, a wrong or late one costs a life, and some counters heal you. Three lives; every room's window is shorter. Every keyed character feeds your stats and confusion drill."
+        case .frogger:
+            return "Hop a frog across three lanes of traffic and three of river. Every vehicle and log carries a character, and each lane is cued in Morse: only the cued vehicle is harmless and only the cued log floats. Three lives; each crossing is a wave and the traffic gets faster. Labels hide as the waves go on. Wrong lanes feed your confusion drill."
+        case .asteroids:
+            return "Labelled asteroids drift in toward your ship. See one and key its label to destroy it, or hear one sent and tap the asteroid carrying it. Later waves bring short words and callsigns that split into their characters when hit. Three lives; every wave comes faster. Misses feed your confusion drill."
         }
     }
 
@@ -170,9 +200,10 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         switch self {
         // Contest picks its own length (the real one-hour event or a sprint) in
         // its setup card, so the generic duration picker would be redundant.
-        // Morse Invaders ends when the last life is lost, not on a clock.
-        case .exam, .story, .contest, .invaders: return false
-        default:                                 return true
+        // The arcade games (#170) end when the last life — or, for Defender,
+        // the last asset — is lost, not on a clock.
+        case .exam, .story, .contest, .invaders, .galaga, .defender, .dungeon, .frogger, .asteroids: return false
+        default: return true
         }
     }
 
@@ -483,6 +514,11 @@ final class AppModel: ObservableObject {
         case .qrq:          return qrqQuiz
         case .rapidFire:    return rapidFireQuiz
         case .invaders:     return charLadder   // unused: Invaders runs its own game loop (InvadersView)
+        case .galaga:       return charLadder   // unused: Galaga runs its own game loop (GalagaView)
+        case .defender:     return charLadder   // unused: Defender runs its own game loop (DefenderView)
+        case .dungeon:      return charLadder   // unused: CW Dungeon runs its own game loop (DungeonView)
+        case .frogger:      return charLadder   // unused: Frogger runs its own game loop (FroggerView)
+        case .asteroids:    return charLadder   // unused: Asteroids runs its own game loop (AsteroidsView)
         }
     }
 
@@ -504,6 +540,16 @@ final class AppModel: ObservableObject {
     var isRapidFire: Bool { mode == .rapidFire }
     /// Morse Invaders (#170): the arcade game, run by `InvadersView` on its own frame clock.
     var isInvaders: Bool { mode == .invaders }
+    /// CW Galaga (#187): the formation game, run by `GalagaView` on its own frame clock.
+    var isGalaga: Bool { mode == .galaga }
+    /// Morse Defender (#188): the callsign arcade game, run by `DefenderView` on its own frame clock.
+    var isDefender: Bool { mode == .defender }
+    /// CW Dungeon (#186): the roguelike, run by `DungeonView` on its own frame clock.
+    var isDungeon: Bool { mode == .dungeon }
+    /// CW Frogger (#190): the arcade crossing, run by `FroggerView` on its own frame clock.
+    var isFrogger: Bool { mode == .frogger }
+    /// CW Asteroids (#189): the arcade sending game, run by `AsteroidsView` on its own frame clock.
+    var isAsteroids: Bool { mode == .asteroids }
     /// Rapid Fire's hands-off "just listen, review the list at the end" variant,
     /// which streams items on its own loop instead of waiting for an answer.
     var isRapidFireReview: Bool { isRapidFire && settings.rapidFire.response == .review }
@@ -663,11 +709,13 @@ final class AppModel: ObservableObject {
             stopListening()
             startStory(active: false)
             startRapidFire()
-        } else if mode == .invaders {
+        } else if mode == .invaders || mode == .galaga || mode == .defender
+                    || mode == .dungeon || mode == .frogger || mode == .asteroids {
             stopListening()
             startStory(active: false)
-            // The game itself lives in InvadersView; the session here only
-            // holds the audio route and the tally the view feeds it.
+            // The game itself lives in its own view (InvadersView, GalagaView,
+            // …); the session here only holds the audio route and the tally
+            // the view feeds it.
             introduction = nil
             drill = nil
             phase = .idle
@@ -1973,7 +2021,7 @@ final class AppModel: ObservableObject {
         qsoBusy = false
         qsoActive = false
         rapidFireGeneration += 1   // cancel any pending Rapid Fire stream
-        if isRapidFire || isInvaders { player.stop() }
+        if isRapidFire || isInvaders || isGalaga || isDefender || isDungeon || isFrogger || isAsteroids { player.stop() }
         phase = .idle
         if let record = buildSessionRecord() {
             history.add(record)            // triggers saveHistory()
@@ -2984,6 +3032,219 @@ final class AppModel: ObservableObject {
     func noteInvadersEscape(target: Character) {
         engine.noteMiss(target: target)
         noteSessionResult(correct: false, ttr: 0, target: String(target))
+        saveProgress()
+    }
+
+    // MARK: - CW Galaga (#187)
+
+    /// The characters a game draws from: the same two pools as Morse
+    /// Invaders. Twin of `GalagaScreen.characterPool` on Android.
+    func galagaCharacters(_ set: InvadersCharacterSet) -> [Character] {
+        invadersCharacters(set)
+    }
+
+    /// Send one enemy's character on the session's player at the game's ramp
+    /// speed — a single character has no gaps for Farnsworth to stretch.
+    /// Returns the sound's duration so the view can date its tone end.
+    @discardableResult
+    func playGalaga(_ character: Character, wpm: Double) -> TimeInterval {
+        playInvader(character, wpm: wpm)
+    }
+
+    func stopGalaga() { player.stop() }
+
+    /// One shot at `target` — the enemy hit, or the biggest threat on the
+    /// field when the key matched nothing — recorded exactly as an Invaders
+    /// shot is: a hit is a correct recognition with its time, a wrong key a
+    /// miss confused with `chosen`, so the pair feeds the Confusion Drill.
+    func noteGalagaShot(target: Character, chosen: Character, ttr: TimeInterval) {
+        noteInvadersShot(target: target, chosen: chosen, ttr: ttr)
+    }
+
+    /// A dive got through unanswered: a miss for its character with no
+    /// confusion partner.
+    func noteGalagaLanding(target: Character) {
+        noteInvadersEscape(target: target)
+    }
+
+    // MARK: - Morse Defender (#188)
+
+    /// Send one attacker's callsign on the session's player at `wpm` — the
+    /// game's ramp speed — with Farnsworth spacing honoured when the switch is
+    /// on: a callsign has gaps to stretch, unlike an Invaders character.
+    /// Returns the sound's duration so the view can date its tone end.
+    @discardableResult
+    func playDefenderCallsign(_ callsign: String, wpm: Double) -> TimeInterval {
+        let timing = DefenderGame.sendTiming(wpm: wpm, farnsworthWpm: settings.farnsworth ? settings.effectiveWpm : nil)
+        return player.replaySound(playable: .text(callsign), frequency: settings.toneFrequency, timing: timing)
+    }
+
+    func stopDefender() { player.stop() }
+
+    /// One routed defence: `target` is the callsign that was sent (the
+    /// attacker destroyed, or the one nearest arrival when the route was
+    /// wrong) and `chosen` the callsign the learner answered with — the asset
+    /// tapped, or the text typed. The session tally takes it as one attempt;
+    /// the per-character stats and the Confusion Drill take it character by
+    /// character, position by position, so a copy of K1AB as K1AR records B
+    /// confused with R. A shorter answer leaves the unanswered characters as
+    /// plain misses.
+    func noteDefenderRoute(target: String, chosen: String, ttr: TimeInterval) {
+        let sent = Array(target.uppercased())
+        let answer = Array(chosen.uppercased())
+        let correct = sent == answer
+        noteSessionResult(correct: correct, ttr: ttr, target: target)
+        for (i, ch) in sent.enumerated() {
+            let charCorrect: Bool
+            if i < answer.count {
+                charCorrect = engine.noteAttempt(answer: answer[i], target: ch, ttr: ttr)
+            } else {
+                engine.noteMiss(target: ch)
+                charCorrect = false
+            }
+            noteDefenderCharacter(ch, correct: charCorrect, ttr: ttr)
+        }
+        saveProgress()
+    }
+
+    /// An attacker reached its asset unanswered: a miss for every character
+    /// of the callsign it sent, with no confusion partner.
+    func noteDefenderStrike(callsign: String) {
+        noteSessionResult(correct: false, ttr: 0, target: callsign)
+        for ch in callsign.uppercased() {
+            engine.noteMiss(target: ch)
+            noteDefenderCharacter(ch, correct: false, ttr: 0)
+        }
+        saveProgress()
+    }
+
+    /// The session's per-character chart, fed one character of a callsign at
+    /// a time; the attempt count itself is per callsign (`noteSessionResult`).
+    private func noteDefenderCharacter(_ ch: Character, correct: Bool, ttr: TimeInterval) {
+        sessionCharTotal[ch, default: 0] += 1
+        if correct {
+            sessionCharCorrect[ch, default: 0] += 1
+            if ttr > 0 { sessionCharTTRs[ch, default: []].append(ttr) }
+        }
+    }
+
+    // MARK: - CW Dungeon (#186)
+
+    /// Send a monster's spell word on the session's player at the game's
+    /// timing — the ramp's character speed with the learner's Farnsworth
+    /// spacing, since a word has gaps to stretch. Returns the sound's duration.
+    @discardableResult
+    func playDungeonSpell(_ word: String, timing: MorseTiming) -> TimeInterval {
+        player.replaySound(playable: .text(word), frequency: settings.toneFrequency, timing: timing)
+    }
+
+    func stopDungeon() { player.stop() }
+
+    /// One keyed counter word, graded character by character against the
+    /// expected one (`DungeonGame.characterOutcomes`): a match is a correct
+    /// recognition, a different character is a miss confused with what was
+    /// keyed, and a position nothing reached is a plain miss. The session
+    /// tally and the per-character chart take each the way a Characters
+    /// answer would; no time-to-recognize, since a word has no single tone
+    /// end to measure from.
+    func noteDungeonOutcomes(_ outcomes: [DungeonCharacterOutcome]) {
+        guard !outcomes.isEmpty else { return }
+        for o in outcomes {
+            if let chosen = o.chosen {
+                let correct = engine.noteAttempt(answer: chosen, target: o.target, ttr: 0)
+                noteSessionResult(correct: correct, ttr: 0, target: String(o.target))
+            } else {
+                engine.noteMiss(target: o.target)
+                noteSessionResult(correct: false, ttr: 0, target: String(o.target))
+            }
+        }
+        saveProgress()
+    }
+
+    // MARK: - CW Frogger (#190)
+
+    /// The characters the traffic carries: the same two pools Invaders offers.
+    /// Twin of `FroggerScreen.characterPool` on Android.
+    func froggerCharacters(_ set: InvadersCharacterSet) -> [Character] {
+        invadersCharacters(set)
+    }
+
+    /// Send a lane's cue (or, in the hidden stage, an object's own character)
+    /// at `wpm`, the game's ramp speed. Returns the sound's duration so the
+    /// view can date its tone end and queue the next one behind it.
+    @discardableResult
+    func playFroggerCue(_ character: Character, wpm: Double) -> TimeInterval {
+        player.replaySound(playable: .text(String(character)),
+                           frequency: settings.toneFrequency, timing: MorseTiming(wpm: wpm))
+    }
+
+    func stopFrogger() { player.stop() }
+
+    /// One decision about a lane: a correct one is a recognition of the cue
+    /// with its time; a wrong vehicle or log is a miss confused with the
+    /// label the frog chose, so the pair feeds the Confusion Drill. Recorded
+    /// exactly as an Invaders shot.
+    func noteFroggerDecision(target: Character, chosen: Character, ttr: TimeInterval) {
+        noteInvadersShot(target: target, chosen: chosen, ttr: ttr)
+    }
+
+    /// The frog landed in the water: a miss on the cue with no confusion partner.
+    func noteFroggerMiss(target: Character) {
+        noteInvadersEscape(target: target)
+    }
+
+    // MARK: - CW Asteroids (#189)
+
+    /// The word labels a game may draw from: the ranked common-words list,
+    /// which `AsteroidsGame` cuts to its rank, length and character set.
+    /// Twin of `AsteroidsScreen`'s `MorseData.rankedWords` on Android.
+    func asteroidsWords() -> [String] { MorseData.rankedWords }
+
+    /// Copy mode: send one asteroid's label on the session's player at `wpm`
+    /// — the game's ramp speed, not the session timing — and return the
+    /// sound's duration so the view can date its tone end.
+    @discardableResult
+    func playAsteroid(_ label: String, wpm: Double) -> TimeInterval {
+        player.replaySound(playable: .text(label),
+                           frequency: settings.toneFrequency, timing: MorseTiming(wpm: wpm))
+    }
+
+    func stopAsteroids() { player.stop() }
+
+    /// An asteroid destroyed: every character of its label is a correct
+    /// recognition with the time it took (copy mode) or 0 (send mode). The
+    /// session tally and the per-character chart take each the way a
+    /// Characters answer would.
+    func noteAsteroidsHit(label: String, ttr: TimeInterval) {
+        for ch in label {
+            _ = engine.noteAttempt(answer: ch, target: ch, ttr: ttr)
+            noteSessionResult(correct: true, ttr: ttr, target: String(ch))
+        }
+        saveProgress()
+    }
+
+    /// A wrong character keyed, or the wrong asteroid tapped: a miss on
+    /// `expected` confused with `chosen`, so the pair feeds the Confusion
+    /// Drill. With nothing expected (an empty field) only the tally counts.
+    func noteAsteroidsMiss(expected: Character?, chosen: Character?) {
+        if let expected {
+            if let chosen {
+                _ = engine.noteAttempt(answer: chosen, target: expected, ttr: 0)
+            } else {
+                engine.noteMiss(target: expected)
+            }
+        }
+        noteSessionResult(correct: false, ttr: 0, target: expected.map(String.init) ?? "")
+        saveProgress()
+    }
+
+    /// An asteroid reached the ship: a miss for every character of its label
+    /// with no confusion partner.
+    func noteAsteroidsStrike(label: String) {
+        for ch in label {
+            engine.noteMiss(target: ch)
+            noteSessionResult(correct: false, ttr: 0, target: String(ch))
+        }
         saveProgress()
     }
 

@@ -35,8 +35,46 @@ testers, bug reports and feature chat live on
 - **Morse Invaders**: an arcade game — pixel-art invaders descend carrying
   characters; hear one and type it on a QWERTY keyboard, or see one and key
   it, before it lands. Each game starts 10 WPM under your character speed
+  and steps up 1 WPM after six hits in a row (a landing steps it back 2);
+  characters you miss come round more often until you master them again.
+  Waves, lives, combos, three difficulties, and every hit and miss feeds
+  your stats
+- **CW Galaga**: the formation game — enemies swoop in along curved paths,
+  settle into a formation and dive at you one by one; hear one and type it,
+  or see one and key it, to shoot the most dangerous enemy carrying it before
+  its dive gets through. Its own ramp (8 WPM under your
+  character speed, up 1 WPM every six hits), a combo multiplier up to ×8,
+  bigger formations every wave, three lives, three difficulties, and every
+  hit and miss feeds your stats
   and steps up 2 WPM every five hits (a landing steps it back). Waves,
   lives, combos, three difficulties, and every hit and miss feeds your stats
+- **Morse Defender**: an arcade callsign-copy game — cities and ships with
+  callsigns line the bottom; each attacker sends its target's callsign and
+  you route the defence by tapping that asset or typing the callsign before
+  it arrives. Callsigns are call-like groups from your active set or real
+  US calls, sent from 8 WPM under your character speed (Farnsworth honoured)
+  and stepping up 2 WPM every four hits. Assets are the lives (4 growing to
+  8), up to three attackers at once, waves, combos, three difficulties, and
+  every character copied feeds your stats and confusion matrix
+- **CW Dungeon**: a small roguelike — monsters cast spell words in Morse;
+  copy the spell, then key its counter word (the spell book is on screen) on
+  the on-screen or a hardware key before the attack lands. Counters hurt the
+  monster, some heal you, a wrong or late one costs a life. Rooms, bosses,
+  combos, three difficulties, a gentle speed ramp with your Farnsworth
+  spacing, spells tiered to your active Koch set, and every keyed character
+  feeds your stats
+- **CW Frogger**: an arcade crossing — hop a frog over three lanes of traffic
+  and three of river. Every vehicle and log carries a character and each lane
+  is cued in Morse: only the cued vehicle is harmless, only the cued log
+  floats. Labels hide as the waves go on until the traffic announces itself in
+  Morse. Three lives, waves, combos, three difficulties, its own gentle speed
+  ramp, and every lane decision feeds your stats and confusion matrix
+- **CW Asteroids**: the sending-side arcade game — labelled asteroids drift
+  in toward your ship; key each one's label to destroy it, or hear a label
+  sent and tap the asteroid carrying it. From wave 3 larger asteroids carry
+  short words and callsigns that split into their characters when hit.
+  Waves, lives, combos, three difficulties, a gentle speed ramp in hear-it
+  mode, and every hit and miss feeds your stats
 - **Pileup Runner**: call CQ and work a simulated pileup, with your own side
   keyed on the air: adjustable callers, speeds, QSB/QRN, cut numbers, bust
   behavior, callsign shapes, and a live log
@@ -53,7 +91,9 @@ testers, bug reports and feature chat live on
   abbreviations, ham lingo, cut numbers, and the full alphabet, with
   per-signal detail
 - **CW Decoder**: point the microphone at received Morse (a rig's speaker, a
-  WebSDR) and read it as text, with live WPM/pitch telemetry
+  WebSDR) and read it as text, with live WPM/pitch telemetry, a two-core
+  pitch-lock rescue, and a noise blanker that keeps QRN static crashes from
+  reaching the decoder as marks
 - **Listen & Learn**: hands-free: hear the code, then the spoken answer, over
   characters, the curated on-air QSO elements (Top 20 or Top 100), words, or
   abbreviations and Q-codes; keeps playing with the screen locked, with the

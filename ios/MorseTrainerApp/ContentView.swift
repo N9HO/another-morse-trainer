@@ -45,6 +45,16 @@ struct ContentView: View {
                     rapidFireReviewView
                 } else if model.isInvaders {
                     InvadersView()
+                } else if model.isGalaga {
+                    GalagaView()
+                } else if model.isDefender {
+                    DefenderView()
+                } else if model.isDungeon {
+                    DungeonView()
+                } else if model.isFrogger {
+                    FroggerView()
+                } else if model.isAsteroids {
+                    AsteroidsView()
                 } else if let intro = model.introduction {
                     introductionView(intro)
                 } else {

@@ -1,0 +1,747 @@
+{
+  "$comment": [
+    "CW Frogger (#190, part of #170), pinned for both ports: FroggerGame in",
+    "ios/Sources/MorseKit/Frogger.swift and android/.../morsekit/Frogger.kt. Read by",
+    "ios/Sources/MorseKitCheck/main.swift and android/app/src/test/.../morsekit/FroggerTest.kt.",
+    "",
+    "Every expected value below was worked out from the rules in 'derivation'",
+    "by a script that knows only those rules, not captured from either port.",
+    "Do not regenerate it to make a failing test pass; change it only when the",
+    "rule is meant to change."
+  ],
+  "derivation": {
+    "rules": [
+      "The board has 9 rows: 0 is the start bank, 1-3 road lanes, 4 the median,",
+      "5-7 river lanes, 8 the goal bank. Positions are normalised: x runs 0..1",
+      "across the board and wraps. Each lane holds 'count' objects centred at",
+      "(i + 0.5) / count when the lane is laid out (a new game and every new",
+      "wave), moving 'direction' at laneSpeed and wrapping; an object that",
+      "wraps 'enters' the board again.",
+      "  laneSpeed = min(maxLaneSpeed, baseSpeed * waveSpeedGrowth^(wave-1)) / difficulty.timeScale",
+      "The frog hops one row up or down, or 1/columns sideways, clamped so its",
+      "centre stays within half a hop of the edges; a hop that moves it by less",
+      "than 1e-9 (nothing, or only float noise at the clamp) is",
+      "ignored. Every object carries a character from the learner's pool. Each",
+      "lane gets a cue - one of the characters its objects carry - the first",
+      "time the frog lands on the row below it in a crossing; the cue is what",
+      "the game sends in Morse. On a road lane a vehicle carrying the cue is",
+      "harmless and passing through it is a correct decision; touching any",
+      "other vehicle is a wrong one (life lost). Road contact: wrapped |dx| <",
+      "width/2 + frogHalfWidth, checked on every hop and every advance; a",
+      "vehicle is credited once per overlap. On a river lane the frog must",
+      "land with its centre over a log (wrapped |dx| < width/2): a cue log is",
+      "a correct decision and carries the frog with it, any other log sinks,",
+      "no log drowns (wrong, no confusion partner). A death costs a life and",
+      "the combo, steps the speed ramp back, returns the frog to the start",
+      "bank and clears every cue. Zero lives ends the game.",
+      "Scoring: pointsPerHop for each hop onto a row higher than any reached",
+      "in this crossing; pointsPerDecision x multiplier(combo) for a correct",
+      "decision, where combo counts consecutive correct decisions and",
+      "multiplier = min(4, 1 + (combo-1) div 3); pointsPerCrossing on reaching",
+      "the goal, which also starts the next wave: lanes are laid out afresh at",
+      "the new wave's speeds, the frog returns to the start bank, the combo",
+      "is kept. Labels: waves 1-2 always shown ('visible'); waves 3-4 a lane's",
+      "labels hide once it has been cued ('memory'); from wave 5 labels are",
+      "never shown and objects announce their own character in Morse as they",
+      "enter ('hidden').",
+      "Speed ramp: a game opens rampStartOffset WPM under the character speed,",
+      "never under minWpm; every decisionsPerStep correct decisions in total",
+      "step it up rampStep WPM, capped at the character speed; a death steps",
+      "it down rampStep, never under the start. bestWpm is the highest reached."
+    ],
+    "rows": 9,
+    "startRow": 0,
+    "medianRow": 4,
+    "goalRow": 8,
+    "columns": 7,
+    "frogHalfWidth": 0.04,
+    "waveSpeedGrowth": 1.08,
+    "maxLaneSpeed": 0.5,
+    "pointsPerHop": 10,
+    "pointsPerDecision": 50,
+    "pointsPerCrossing": 200,
+    "memoryFromWave": 3,
+    "hiddenFromWave": 5,
+    "minWpm": 15,
+    "rampStartOffset": 8,
+    "rampStep": 2,
+    "decisionsPerStep": 4
+  },
+  "lanes": [
+    {
+      "row": 1,
+      "kind": "road",
+      "direction": 1,
+      "count": 3,
+      "width": 0.12,
+      "baseSpeed": 0.16
+    },
+    {
+      "row": 2,
+      "kind": "road",
+      "direction": -1,
+      "count": 3,
+      "width": 0.12,
+      "baseSpeed": 0.2
+    },
+    {
+      "row": 3,
+      "kind": "road",
+      "direction": 1,
+      "count": 3,
+      "width": 0.12,
+      "baseSpeed": 0.24
+    },
+    {
+      "row": 5,
+      "kind": "river",
+      "direction": -1,
+      "count": 3,
+      "width": 0.18,
+      "baseSpeed": 0.14
+    },
+    {
+      "row": 6,
+      "kind": "river",
+      "direction": 1,
+      "count": 3,
+      "width": 0.18,
+      "baseSpeed": 0.18
+    },
+    {
+      "row": 7,
+      "kind": "river",
+      "direction": -1,
+      "count": 3,
+      "width": 0.18,
+      "baseSpeed": 0.22
+    }
+  ],
+  "difficultyTimeScale": {
+    "relaxed": 1.35,
+    "normal": 1.0,
+    "fast": 0.75
+  },
+  "speedTable": [
+    {
+      "baseSpeed": 0.16,
+      "wave": 1,
+      "difficulty": "relaxed",
+      "speed": 0.118519
+    },
+    {
+      "baseSpeed": 0.16,
+      "wave": 1,
+      "difficulty": "normal",
+      "speed": 0.16
+    },
+    {
+      "baseSpeed": 0.16,
+      "wave": 1,
+      "difficulty": "fast",
+      "speed": 0.213333
+    },
+    {
+      "baseSpeed": 0.16,
+      "wave": 2,
+      "difficulty": "relaxed",
+      "speed": 0.128
+    },
+    {
+      "baseSpeed": 0.16,
+      "wave": 2,
+      "difficulty": "normal",
+      "speed": 0.1728
+    },
+    {
+      "baseSpeed": 0.16,
+      "wave": 2,
+      "difficulty": "fast",
+      "speed": 0.2304
+    },
+    {
+      "baseSpeed": 0.16,
+      "wave": 5,
+      "difficulty": "relaxed",
+      "speed": 0.161243
+    },
+    {
+      "baseSpeed": 0.16,
+      "wave": 5,
+      "difficulty": "normal",
+      "speed": 0.217678
+    },
+    {
+      "baseSpeed": 0.16,
+      "wave": 5,
+      "difficulty": "fast",
+      "speed": 0.290238
+    },
+    {
+      "baseSpeed": 0.16,
+      "wave": 10,
+      "difficulty": "relaxed",
+      "speed": 0.236919
+    },
+    {
+      "baseSpeed": 0.16,
+      "wave": 10,
+      "difficulty": "normal",
+      "speed": 0.319841
+    },
+    {
+      "baseSpeed": 0.16,
+      "wave": 10,
+      "difficulty": "fast",
+      "speed": 0.426454
+    },
+    {
+      "baseSpeed": 0.16,
+      "wave": 30,
+      "difficulty": "relaxed",
+      "speed": 0.37037
+    },
+    {
+      "baseSpeed": 0.16,
+      "wave": 30,
+      "difficulty": "normal",
+      "speed": 0.5
+    },
+    {
+      "baseSpeed": 0.16,
+      "wave": 30,
+      "difficulty": "fast",
+      "speed": 0.666667
+    },
+    {
+      "baseSpeed": 0.22,
+      "wave": 1,
+      "difficulty": "relaxed",
+      "speed": 0.162963
+    },
+    {
+      "baseSpeed": 0.22,
+      "wave": 1,
+      "difficulty": "normal",
+      "speed": 0.22
+    },
+    {
+      "baseSpeed": 0.22,
+      "wave": 1,
+      "difficulty": "fast",
+      "speed": 0.293333
+    },
+    {
+      "baseSpeed": 0.22,
+      "wave": 2,
+      "difficulty": "relaxed",
+      "speed": 0.176
+    },
+    {
+      "baseSpeed": 0.22,
+      "wave": 2,
+      "difficulty": "normal",
+      "speed": 0.2376
+    },
+    {
+      "baseSpeed": 0.22,
+      "wave": 2,
+      "difficulty": "fast",
+      "speed": 0.3168
+    },
+    {
+      "baseSpeed": 0.22,
+      "wave": 5,
+      "difficulty": "relaxed",
+      "speed": 0.221709
+    },
+    {
+      "baseSpeed": 0.22,
+      "wave": 5,
+      "difficulty": "normal",
+      "speed": 0.299308
+    },
+    {
+      "baseSpeed": 0.22,
+      "wave": 5,
+      "difficulty": "fast",
+      "speed": 0.399077
+    },
+    {
+      "baseSpeed": 0.22,
+      "wave": 10,
+      "difficulty": "relaxed",
+      "speed": 0.325764
+    },
+    {
+      "baseSpeed": 0.22,
+      "wave": 10,
+      "difficulty": "normal",
+      "speed": 0.439781
+    },
+    {
+      "baseSpeed": 0.22,
+      "wave": 10,
+      "difficulty": "fast",
+      "speed": 0.586375
+    },
+    {
+      "baseSpeed": 0.22,
+      "wave": 30,
+      "difficulty": "relaxed",
+      "speed": 0.37037
+    },
+    {
+      "baseSpeed": 0.22,
+      "wave": 30,
+      "difficulty": "normal",
+      "speed": 0.5
+    },
+    {
+      "baseSpeed": 0.22,
+      "wave": 30,
+      "difficulty": "fast",
+      "speed": 0.666667
+    }
+  ],
+  "multiplier": [
+    {
+      "combo": 1,
+      "multiplier": 1
+    },
+    {
+      "combo": 3,
+      "multiplier": 1
+    },
+    {
+      "combo": 4,
+      "multiplier": 2
+    },
+    {
+      "combo": 6,
+      "multiplier": 2
+    },
+    {
+      "combo": 7,
+      "multiplier": 3
+    },
+    {
+      "combo": 9,
+      "multiplier": 3
+    },
+    {
+      "combo": 10,
+      "multiplier": 4
+    },
+    {
+      "combo": 40,
+      "multiplier": 4
+    }
+  ],
+  "labelStage": [
+    {
+      "wave": 1,
+      "stage": "visible"
+    },
+    {
+      "wave": 2,
+      "stage": "visible"
+    },
+    {
+      "wave": 3,
+      "stage": "memory"
+    },
+    {
+      "wave": 4,
+      "stage": "memory"
+    },
+    {
+      "wave": 5,
+      "stage": "hidden"
+    },
+    {
+      "wave": 6,
+      "stage": "hidden"
+    },
+    {
+      "wave": 12,
+      "stage": "hidden"
+    }
+  ],
+  "rampStartTable": [
+    {
+      "characterWpm": 15,
+      "startWpm": 15,
+      "targetWpm": 15
+    },
+    {
+      "characterWpm": 20,
+      "startWpm": 15,
+      "targetWpm": 20
+    },
+    {
+      "characterWpm": 23,
+      "startWpm": 15,
+      "targetWpm": 23
+    },
+    {
+      "characterWpm": 25,
+      "startWpm": 17,
+      "targetWpm": 25
+    },
+    {
+      "characterWpm": 30,
+      "startWpm": 22,
+      "targetWpm": 30
+    },
+    {
+      "characterWpm": 40,
+      "startWpm": 32,
+      "targetWpm": 40
+    }
+  ],
+  "scenario": {
+    "$comment": [
+      "Normal difficulty, a one-character pool ('K') so every object and every",
+      "cue is K: the scripted hops exercise contact, credit, drowning, the",
+      "sideways clamp and the wave change without depending on either port's",
+      "random generator. Each step is one 'advance' (seconds) or one 'move'",
+      "(up/down/left/right); the expected state is read after it. 'events'",
+      "lists the kinds the call returned, in order, with 'entered' left out",
+      "and counted separately by 'enteredCount' on advance steps. 'cue' events",
+      "always carry the character 'K' and the row above the frog."
+    ],
+    "pool": "K",
+    "difficulty": "normal",
+    "characterWpm": 25.0,
+    "lives": 3,
+    "startWpm": 17.0,
+    "targetWpm": 25.0,
+    "firstCueRow": 1,
+    "steps": [
+      {
+        "move": "up",
+        "events": [
+          "hopped",
+          "passed",
+          "cue"
+        ],
+        "row": 1,
+        "x": 0.5,
+        "score": 60,
+        "lives": 3,
+        "wave": 1,
+        "combo": 1,
+        "currentWpm": 17.0
+      },
+      {
+        "move": "up",
+        "events": [
+          "hopped",
+          "passed",
+          "cue"
+        ],
+        "row": 2,
+        "x": 0.5,
+        "score": 120,
+        "lives": 3,
+        "wave": 1,
+        "combo": 2,
+        "currentWpm": 17.0
+      },
+      {
+        "move": "up",
+        "events": [
+          "hopped",
+          "passed"
+        ],
+        "row": 3,
+        "x": 0.5,
+        "score": 180,
+        "lives": 3,
+        "wave": 1,
+        "combo": 3,
+        "currentWpm": 17.0
+      },
+      {
+        "move": "up",
+        "events": [
+          "hopped",
+          "cue"
+        ],
+        "row": 4,
+        "x": 0.5,
+        "score": 190,
+        "lives": 3,
+        "wave": 1,
+        "combo": 3,
+        "currentWpm": 17.0
+      },
+      {
+        "move": "up",
+        "events": [
+          "hopped",
+          "landed",
+          "cue"
+        ],
+        "row": 5,
+        "x": 0.5,
+        "score": 300,
+        "lives": 3,
+        "wave": 1,
+        "combo": 4,
+        "currentWpm": 19.0
+      },
+      {
+        "move": "up",
+        "events": [
+          "hopped",
+          "landed",
+          "cue"
+        ],
+        "row": 6,
+        "x": 0.5,
+        "score": 410,
+        "lives": 3,
+        "wave": 1,
+        "combo": 5,
+        "currentWpm": 19.0
+      },
+      {
+        "move": "up",
+        "events": [
+          "hopped",
+          "landed"
+        ],
+        "row": 7,
+        "x": 0.5,
+        "score": 520,
+        "lives": 3,
+        "wave": 1,
+        "combo": 6,
+        "currentWpm": 19.0
+      },
+      {
+        "move": "up",
+        "events": [
+          "hopped",
+          "crossed",
+          "cue"
+        ],
+        "row": 0,
+        "x": 0.5,
+        "score": 730,
+        "lives": 3,
+        "wave": 2,
+        "combo": 6,
+        "currentWpm": 19.0
+      },
+      {
+        "advance": 1.0,
+        "events": [],
+        "row": 0,
+        "x": 0.5,
+        "score": 730,
+        "lives": 3,
+        "wave": 2,
+        "combo": 6,
+        "currentWpm": 19.0,
+        "enteredCount": 5
+      },
+      {
+        "move": "up",
+        "events": [
+          "hopped",
+          "cue"
+        ],
+        "row": 1,
+        "x": 0.5,
+        "score": 740,
+        "lives": 3,
+        "wave": 2,
+        "combo": 6,
+        "currentWpm": 19.0
+      },
+      {
+        "move": "up",
+        "events": [
+          "hopped",
+          "cue"
+        ],
+        "row": 2,
+        "x": 0.5,
+        "score": 750,
+        "lives": 3,
+        "wave": 2,
+        "combo": 6,
+        "currentWpm": 19.0
+      },
+      {
+        "move": "up",
+        "events": [
+          "hopped",
+          "passed"
+        ],
+        "row": 3,
+        "x": 0.5,
+        "score": 910,
+        "lives": 3,
+        "wave": 2,
+        "combo": 7,
+        "currentWpm": 19.0
+      },
+      {
+        "move": "up",
+        "events": [
+          "hopped",
+          "cue"
+        ],
+        "row": 4,
+        "x": 0.5,
+        "score": 920,
+        "lives": 3,
+        "wave": 2,
+        "combo": 7,
+        "currentWpm": 19.0
+      },
+      {
+        "move": "up",
+        "events": [
+          "hopped",
+          "drowned",
+          "cue"
+        ],
+        "row": 0,
+        "x": 0.5,
+        "score": 930,
+        "lives": 2,
+        "wave": 2,
+        "combo": 0,
+        "currentWpm": 17.0
+      },
+      {
+        "move": "up",
+        "events": [
+          "hopped",
+          "cue"
+        ],
+        "row": 1,
+        "x": 0.5,
+        "score": 940,
+        "lives": 2,
+        "wave": 2,
+        "combo": 0,
+        "currentWpm": 17.0
+      },
+      {
+        "move": "down",
+        "events": [
+          "hopped"
+        ],
+        "row": 0,
+        "x": 0.5,
+        "score": 940,
+        "lives": 2,
+        "wave": 2,
+        "combo": 0,
+        "currentWpm": 17.0
+      },
+      {
+        "move": "left",
+        "events": [
+          "hopped"
+        ],
+        "row": 0,
+        "x": 0.357143,
+        "score": 940,
+        "lives": 2,
+        "wave": 2,
+        "combo": 0,
+        "currentWpm": 17.0
+      },
+      {
+        "move": "right",
+        "events": [
+          "hopped"
+        ],
+        "row": 0,
+        "x": 0.5,
+        "score": 940,
+        "lives": 2,
+        "wave": 2,
+        "combo": 0,
+        "currentWpm": 17.0
+      },
+      {
+        "move": "right",
+        "events": [
+          "hopped"
+        ],
+        "row": 0,
+        "x": 0.642857,
+        "score": 940,
+        "lives": 2,
+        "wave": 2,
+        "combo": 0,
+        "currentWpm": 17.0
+      },
+      {
+        "move": "right",
+        "events": [
+          "hopped"
+        ],
+        "row": 0,
+        "x": 0.785714,
+        "score": 940,
+        "lives": 2,
+        "wave": 2,
+        "combo": 0,
+        "currentWpm": 17.0
+      },
+      {
+        "move": "right",
+        "events": [
+          "hopped"
+        ],
+        "row": 0,
+        "x": 0.928571,
+        "score": 940,
+        "lives": 2,
+        "wave": 2,
+        "combo": 0,
+        "currentWpm": 17.0
+      },
+      {
+        "move": "right",
+        "events": [],
+        "row": 0,
+        "x": 0.928571,
+        "score": 940,
+        "lives": 2,
+        "wave": 2,
+        "combo": 0,
+        "currentWpm": 17.0
+      },
+      {
+        "move": "up",
+        "events": [
+          "hopped",
+          "passed"
+        ],
+        "row": 1,
+        "x": 0.928571,
+        "score": 990,
+        "lives": 2,
+        "wave": 2,
+        "combo": 1,
+        "currentWpm": 19.0
+      }
+    ],
+    "final": {
+      "decisions": 8,
+      "misses": 1,
+      "bestWpm": 19.0,
+      "isOver": false
+    }
+  }
+}

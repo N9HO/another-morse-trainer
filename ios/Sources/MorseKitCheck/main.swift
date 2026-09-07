@@ -2053,6 +2053,11 @@ struct DecoderFixture: Decodable {
         let expectedText: String
         let wpmRange: [Double]?
         let expectedToneHz, toneToleranceHz: Double?
+        // QRN (issue #195): static crashes from a second seeded generator,
+        // and whether the case is decoded through the CW pre-filter.
+        let crashRate, crashAmplitude, crashMinMs, crashMaxMs: Double?
+        let crashSeed: UInt64?
+        let prefilter, bareCoreFails: Bool?
     }
     let tolerance: Tolerance
     let cases: [Case]
@@ -2077,9 +2082,14 @@ if let fx = loadDecoderFixture() {
     /// the message at ITU timing, and enough tail to flush the last character.
     /// Noise is seeded and uniform, so every run hears identical samples.
     /// The fixture's `derivation.render` block is the spec this implements.
+    struct Crashes {
+        var rate: Double, amplitude: Double, minMs: Double, maxMs: Double, seed: UInt64
+    }
+
     func renderCW(_ message: String, wpm: Double, toneHz: Double,
                   sampleRate: Double, amplitude: Double,
-                  noiseAmplitude: Double = 0, noiseSeed: UInt64 = 0) -> [Int16] {
+                  noiseAmplitude: Double = 0, noiseSeed: UInt64 = 0,
+                  crashes: Crashes? = nil) -> [Int16] {
         let unit = 1.2 / wpm
         var segments: [(tone: Double, gap: Double)] = []
         let words = message.split(separator: " ")
@@ -2104,24 +2114,47 @@ if let fx = loadDecoderFixture() {
             noiseAmplitude == 0 ? 0
                 : (Double(rng.next() >> 40) / 8_388_608.0 - 1.0) * noiseAmplitude
         }
-        var samples: [Int16] = []
-        func push(_ value: Double) {
-            samples.append(Int16(max(-32767, min(32767, value + noise()))))
-        }
-        for _ in 0..<Int(sampleRate * 0.7) { push(0) }   // noise-floor calibration
+        var clean: [Double] = []
+        for _ in 0..<Int(sampleRate * 0.7) { clean.append(0) }   // noise-floor calibration
         let omega = 2.0 * Double.pi * toneHz / sampleRate
         for segment in segments {
-            for i in 0..<Int(segment.tone * sampleRate) { push(amplitude * sin(omega * Double(i))) }
-            for _ in 0..<Int(segment.gap * sampleRate) { push(0) }
+            for i in 0..<Int(segment.tone * sampleRate) { clean.append(amplitude * sin(omega * Double(i))) }
+            for _ in 0..<Int(segment.gap * sampleRate) { clean.append(0) }
         }
-        for _ in 0..<Int(sampleRate * 0.5) { push(0) }   // let the tail flush
+        for _ in 0..<Int(sampleRate * 0.5) { clean.append(0) }   // let the tail flush
+
+        // QRN static crashes (the fixture's `derivation.qrn`): decaying
+        // broadband bursts at seeded, jittered intervals, from their own
+        // generator so the hiss stream is untouched by their presence.
+        if let crashes, crashes.rate > 0 {
+            var crng = SeededRNG(seed: crashes.seed)
+            var t = 0.0
+            while true {
+                t += (0.5 + Double(crng.next() >> 40) / 16_777_216.0) / crashes.rate
+                let start = Int(t * sampleRate)
+                if start >= clean.count { break }
+                let ms = crashes.minMs + Double(crng.next() >> 40) / 16_777_216.0 * (crashes.maxMs - crashes.minMs)
+                let len = Int(ms * sampleRate / 1000)
+                for k in 0..<len {
+                    let signed = Double(crng.next() >> 40) / 8_388_608.0 - 1.0
+                    if start + k < clean.count {
+                        clean[start + k] += crashes.amplitude * (1 - Double(k) / Double(len)) * signed
+                    }
+                }
+            }
+        }
+        var samples: [Int16] = []
+        samples.reserveCapacity(clean.count)
+        for value in clean {
+            samples.append(Int16(max(-32767, min(32767, value + noise()))))
+        }
         return samples
     }
 
     /// Run PCM through the vendored core; `passes: 2` replays the same audio
     /// after a cw_decoder_reset() to prove the decoder rearms cleanly.
     func decodeCW(_ samples: [Int16], inputRate: UInt32,
-                  passes: Int = 1) -> (text: String, wpm: Float, toneHz: Float) {
+                  passes: Int = 1, prefilter: Bool = false) -> (text: String, wpm: Float, toneHz: Float) {
         let sink = AudioSink()
         var cfg = cw_config_t()
         cw_config_default(&cfg)
@@ -2136,9 +2169,28 @@ if let fx = loadDecoderFixture() {
         guard let decoder = cw_decoder_create(&cfg) else { return ("<create failed>", 0, 0) }
         defer { cw_decoder_destroy(decoder) }
         var texts: [String] = []
+        var filter = CWPrefilter(sampleRate: Float(inputRate))
+        var chunk = [Int16](repeating: 0, count: 2048)
         for pass in 0..<passes {
-            if pass > 0 { cw_decoder_reset(decoder); sink.text = "" }
-            samples.withUnsafeBufferPointer { cw_decoder_feed(decoder, $0.baseAddress, $0.count) }
+            if pass > 0 { cw_decoder_reset(decoder); filter.reset(); sink.text = "" }
+            if prefilter {
+                // The apps' capture paths, in miniature (the fixture's
+                // `derivation.prefilter`): retune to the core's lock before
+                // every buffer, filter, then feed.
+                var offset = 0
+                while offset < samples.count {
+                    let n = min(2048, samples.count - offset)
+                    filter.retune(pitchHz: cw_decoder_tone_hz(decoder))
+                    for i in 0..<n {
+                        let y = filter.process(Float(samples[offset + i]) / 32768)
+                        chunk[i] = Int16(max(-32767, min(32767, y * 32768)))
+                    }
+                    chunk.withUnsafeBufferPointer { cw_decoder_feed(decoder, $0.baseAddress, n) }
+                    offset += n
+                }
+            } else {
+                samples.withUnsafeBufferPointer { cw_decoder_feed(decoder, $0.baseAddress, $0.count) }
+            }
             texts.append(sink.text.trimmingCharacters(in: .whitespaces))
         }
         return (texts.joined(separator: "|"), cw_decoder_wpm(decoder), cw_decoder_tone_hz(decoder))
@@ -2146,9 +2198,16 @@ if let fx = loadDecoderFixture() {
 
     check("fixture carries cases", !fx.cases.isEmpty)
     for c in fx.cases {
+        var crashes: Crashes?
+        if let rate = c.crashRate, rate > 0 {
+            crashes = Crashes(rate: rate, amplitude: c.crashAmplitude ?? 0,
+                              minMs: c.crashMinMs ?? 0, maxMs: c.crashMaxMs ?? 0,
+                              seed: c.crashSeed ?? 0)
+        }
         let pcm = renderCW(c.message, wpm: c.wpm, toneHz: c.toneHz,
                            sampleRate: c.sampleRate, amplitude: c.amplitude,
-                           noiseAmplitude: c.noiseAmplitude, noiseSeed: c.noiseSeed)
+                           noiseAmplitude: c.noiseAmplitude, noiseSeed: c.noiseSeed,
+                           crashes: crashes)
         let absSum = pcm.reduce(0.0) { $0 + abs(Double($1)) }
         let renderOK = pcm.count == c.renderedSamples
             && approxEqual(absSum, c.absSum, max(1e-6, c.absSum * fx.tolerance.absSumRelative))
@@ -2157,9 +2216,17 @@ if let fx = loadDecoderFixture() {
             print("      ↳ rendered \(pcm.count) samples with |sum| \(absSum); fixture says \(c.renderedSamples) and \(c.absSum)")
         }
 
-        let result = decodeCW(pcm, inputRate: UInt32(c.inputRate), passes: c.passes)
+        let result = decodeCW(pcm, inputRate: UInt32(c.inputRate), passes: c.passes,
+                              prefilter: c.prefilter ?? false)
         check("\(c.name): decodes '\(c.expectedText)'", result.text == c.expectedText)
         if result.text != c.expectedText { print("      ↳ decoded '\(result.text)'") }
+        if c.bareCoreFails == true {
+            // The case earns its place by breaking the bare core; if it stops
+            // doing so, it has drifted easy and the fixture should say so.
+            let bare = decodeCW(pcm, inputRate: UInt32(c.inputRate), passes: c.passes)
+            check("\(c.name): the bare core does not copy it (got '\(bare.text)')",
+                  bare.text != c.expectedText)
+        }
 
         if let range = c.wpmRange, range.count == 2 {
             check("\(c.name): speed estimate lands in \(range[0])–\(range[1]) WPM",
@@ -2174,8 +2241,130 @@ if let fx = loadDecoderFixture() {
     // having; a fixture edit that dropped them would otherwise pass quietly.
     check("fixture still pins a speed estimate and a pitch lock",
           fx.cases.contains { $0.wpmRange != nil } && fx.cases.contains { $0.expectedToneHz != nil })
+    check("fixture still carries QRN cases the bare core fails",
+          fx.cases.contains { $0.bareCoreFails == true && $0.prefilter == true })
 } else {
     check("fixtures/decoder.json loads and decodes", false)
+}
+
+// MARK: - Shared CW pre-filter fixture
+//
+// fixtures/cw-prefilter.json, read by this harness and by android
+// CwPrefilterTest: the noise blanker's coefficients and its behaviour on a
+// handful of synthetic vectors, derived from the difference equations in the
+// fixture's `derivation`, so both ports are pinned to one arithmetic.
+struct PrefilterFixture: Decodable {
+    struct Tolerance: Decodable { let coefficient, sample: Double }
+    struct Coefficients: Decodable {
+        let sampleRate, pitchHz, q, b0, b2, a1, a2: Double
+    }
+    struct Signal: Decodable {
+        let type: String
+        let amplitude: Double?
+        let noiseSeed: UInt64?
+    }
+    struct Burst: Decodable { let start, length: Int; let amplitude: Double }
+    struct Value: Decodable { let n: Int; let out: Double }
+    struct Span: Decodable { let from, to: Int; let max: Double }
+    struct Expect: Decodable {
+        let blankedAll: [Int]?
+        let clearFrom, onsetBlankBefore: Int?
+        let exact: [Int]?
+        let values: [Value]?
+        let maxAbs, blankedFraction: Span?
+        let blankedNone: Bool?
+    }
+    struct Vector: Decodable {
+        let name: String
+        let sampleRate, pitchHz: Double
+        let length: Int
+        let signal: Signal
+        let burst: Burst?
+        let expect: Expect
+    }
+    let tolerance: Tolerance
+    let coefficients: [Coefficients]
+    let vectors: [Vector]
+}
+
+print("\nCW pre-filter (noise blanker), against fixtures/cw-prefilter.json:")
+if let data = try? Data(contentsOf: URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent()
+        .deletingLastPathComponent().deletingLastPathComponent()
+        .appendingPathComponent("fixtures/cw-prefilter.json")),
+   let fx = try? JSONDecoder().decode(PrefilterFixture.self, from: data) {
+    check("fixture carries coefficients and vectors", !fx.coefficients.isEmpty && !fx.vectors.isEmpty)
+    for c in fx.coefficients {
+        let k = CWPrefilter.bandPassCoefficients(sampleRate: Float(c.sampleRate), pitchHz: Float(c.pitchHz), q: Float(c.q))
+        let ok = approxEqual(Double(k.b0), c.b0, fx.tolerance.coefficient)
+            && approxEqual(Double(k.b2), c.b2, fx.tolerance.coefficient)
+            && approxEqual(Double(k.a1), c.a1, fx.tolerance.coefficient)
+            && approxEqual(Double(k.a2), c.a2, fx.tolerance.coefficient)
+        check("band-pass at \(Int(c.pitchHz)) Hz, Q \(c.q), \(Int(c.sampleRate)) Hz matches the fixture", ok)
+    }
+    for v in fx.vectors {
+        // Render the vector from its description.
+        var x = [Float](repeating: 0, count: v.length)
+        switch v.signal.type {
+        case "tone":
+            let amp = v.signal.amplitude ?? 0
+            for n in 0..<v.length { x[n] = Float(amp * sin(2 * Double.pi * v.pitchHz * Double(n) / v.sampleRate)) }
+        case "noise":
+            var rng = SeededRNG(seed: v.signal.noiseSeed ?? 0)
+            let amp = v.signal.amplitude ?? 0
+            for n in 0..<v.length { x[n] = Float((Double(rng.next() >> 40) / 8_388_608.0 - 1.0) * amp) }
+        default:
+            break
+        }
+        if let b = v.burst {
+            for k in 0..<b.length {
+                x[b.start + k] += Float(b.amplitude * (1 - Double(k) / Double(b.length)) * (k % 2 == 0 ? 1 : -1))
+            }
+        }
+        var filter = CWPrefilter(sampleRate: Float(v.sampleRate), pitchHz: Float(v.pitchHz))
+        var out = [Float](repeating: 0, count: v.length)
+        var blanked = [Bool](repeating: false, count: v.length)
+        for n in 0..<v.length {
+            out[n] = filter.process(x[n])
+            blanked[n] = filter.isBlanking
+        }
+        let e = v.expect
+        if let range = e.blankedAll, range.count == 2 {
+            check("\(v.name): blanks \(range[0])…\(range[1])", (range[0]...range[1]).allSatisfy { blanked[$0] })
+        }
+        if let from = e.clearFrom {
+            check("\(v.name): clear again from \(from)", (from..<v.length).allSatisfy { !blanked[$0] })
+        }
+        if let before = e.onsetBlankBefore {
+            let hits = blanked.enumerated().filter { $0.element }.map { $0.offset }
+            check("\(v.name): the onset blank is short (before \(before))",
+                  !hits.isEmpty && hits.allSatisfy { $0 < before })
+        }
+        if let exact = e.exact {
+            check("\(v.name): pass-through samples are untouched", exact.allSatisfy { out[$0] == x[$0] })
+        }
+        if let values = e.values {
+            check("\(v.name): continuation values match the fixture",
+                  values.allSatisfy { approxEqual(Double(out[$0.n]), $0.out, fx.tolerance.sample) })
+            if let miss = values.first(where: { !approxEqual(Double(out[$0.n]), $0.out, fx.tolerance.sample) }) {
+                print("      ↳ out[\(miss.n)] = \(out[miss.n]), fixture says \(miss.out)")
+            }
+        }
+        if let span = e.maxAbs {
+            check("\(v.name): output stays under \(span.max) over \(span.from)…\(span.to)",
+                  out[span.from..<span.to].allSatisfy { abs(Double($0)) <= span.max })
+        }
+        if let span = e.blankedFraction {
+            let share = Double(blanked[span.from..<span.to].filter { $0 }.count) / Double(span.to - span.from)
+            check("\(v.name): blanks at most \(span.max) of samples over \(span.from)…\(span.to) (\(share))",
+                  share <= span.max)
+        }
+        if e.blankedNone == true {
+            check("\(v.name): never blanks", !blanked.contains(true))
+        }
+    }
+} else {
+    check("fixtures/cw-prefilter.json loads", false)
 }
 
 // Timing at the new 60 WPM ceiling (issue #79)
@@ -3375,20 +3564,43 @@ do {
           zip(seq, seq.dropFirst()).allSatisfy { $0.last != $1.last })
 }
 
-// Morse Invaders speed ramp and keyboard (#178), against
-// fixtures/invaders-ramp.json — read by this harness AND by the Kotlin
-// InvadersTest. The expected values were worked out from the rules in the
-// fixture's derivation block, not captured from either port.
+// Morse Invaders speed ramp (#178, retuned in #194), adaptive character
+// weighting (#194) and keyboard (#178), against fixtures/invaders-ramp.json —
+// read by this harness AND by the Kotlin InvadersTest. The expected values
+// were worked out from the rules in the fixture's derivation and weighting
+// blocks, not captured from either port.
 struct InvadersRampFixture: Decodable {
     struct Derivation: Decodable {
-        let minWpm: Double; let startOffset: Double; let step: Double
-        let hitsPerStep: Int; let noRampAtOrBelow: Double
+        let minWpm: Double; let startOffset: Double; let stepUp: Double; let stepDown: Double
+        let hitsPerStep: Int; let hold: Int; let noRampAtOrBelow: Double
     }
     struct Row: Decodable { let characterWpm: Double; let startWpm: Double; let targetWpm: Double }
-    struct Event: Decodable { let event: String; let times: Int?; let currentWpm: Double }
+    struct PerfectRun: Decodable {
+        let characterWpm: Double; let startWpm: Double; let hitsPerLaterStep: Int
+        let hitsToTarget: Int; let wpmOneHitShort: Double
+    }
+    struct Event: Decodable {
+        let event: String; let times: Int?; let currentWpm: Double; let streak: Int; let settling: Int
+    }
     struct Scenario: Decodable {
         let characterWpm: Double; let startWpm: Double; let targetWpm: Double
         let lives: Int; let events: [Event]; let bestWpm: Double
+    }
+    struct Weighting: Decodable {
+        struct WeightRow: Decodable { let debt: Int; let weight: Double }
+        struct Pick: Decodable { let weights: [Double]; let roll: Double; let index: Int }
+        struct WeightEvent: Decodable {
+            let event: String; let times: Int?; let label: String?; let bind: String?
+            let avoid: [String]?; let emptyField: Bool?; let weights: [String: Double]
+        }
+        struct Scenario: Decodable { let pool: String; let lives: Int; let events: [WeightEvent] }
+        struct SpawnShare: Decodable {
+            let pool: String; let debited: String; let lives: Int; let spawns: Int
+            let minShare: Double; let maxShare: Double
+        }
+        let debtPerMiss: Int; let maxDebt: Int; let bonus: Double
+        let weightTable: [WeightRow]; let pick: [Pick]
+        let scenario: Scenario; let spawnShare: SpawnShare
     }
     struct Keyboard: Decodable {
         struct Case: Decodable { let name: String; let pool: String; let rows: [String] }
@@ -3396,7 +3608,9 @@ struct InvadersRampFixture: Decodable {
     }
     let derivation: Derivation
     let startTable: [Row]
+    let perfectRun: PerfectRun
     let scenario: Scenario
+    let weighting: Weighting
     let keyboard: Keyboard
 }
 
@@ -3410,26 +3624,43 @@ func loadInvadersRampFixture() -> InvadersRampFixture? {
     return try? JSONDecoder().decode(InvadersRampFixture.self, from: data)
 }
 
-print("\nMorse Invaders speed ramp and keyboard (fixtures/invaders-ramp.json):")
+print("\nMorse Invaders speed ramp, weighting and keyboard (fixtures/invaders-ramp.json):")
 if let fx = loadInvadersRampFixture() {
     let d = fx.derivation
     check("ramp constants are the fixture's",
           InvadersGame.minWpm == d.minWpm && InvadersGame.rampStartOffset == d.startOffset
-          && InvadersGame.rampStep == d.step && InvadersGame.hitsPerRampStep == d.hitsPerStep)
+          && InvadersGame.rampStepUp == d.stepUp && InvadersGame.rampStepDown == d.stepDown
+          && InvadersGame.hitsPerRampStep == d.hitsPerStep && InvadersGame.rampHold == d.hold)
 
     var tableOK = true
     for row in fx.startTable {
         let config = InvadersGame.Config(characters: ["K"], characterWpm: row.characterWpm)
-        let opens = InvadersGame(config: config, rng: SeededRNG(seed: 1)).currentWpm
+        let opens = InvadersGame(config: config, rng: SeededRNG(seed: 1))
         if !approxEqual(InvadersGame.rampStart(characterWpm: row.characterWpm), row.startWpm)
             || !approxEqual(config.startWpm, row.startWpm)
             || !approxEqual(config.targetWpm, row.targetWpm)
-            || !approxEqual(opens, row.startWpm) {
+            || !approxEqual(opens.currentWpm, row.startWpm)
+            || opens.rampStreak != 0 || opens.rampSettling != 0 {
             tableOK = false
             print("      ↳ \(row.characterWpm) WPM: start \(config.startWpm), target \(config.targetWpm); fixture says \(row.startWpm) / \(row.targetWpm)")
         }
     }
     check("start and target follow the fixture table across \(fx.startTable.count) speeds", tableOK)
+
+    // Nothing but hits: the ramp takes the fixture's count to reach the target.
+    let pr = fx.perfectRun
+    let perfect = InvadersGame(config: .init(characters: ["K"], characterWpm: pr.characterWpm), rng: SeededRNG(seed: 3))
+    var perfectOK = approxEqual(perfect.currentWpm, pr.startWpm)
+    for _ in 0..<(pr.hitsToTarget - 1) {
+        while perfect.invaders.isEmpty { perfect.advance(by: 0.05) }
+        if !perfect.shoot("K").isHit { perfectOK = false }
+    }
+    perfectOK = perfectOK && approxEqual(perfect.currentWpm, pr.wpmOneHitShort)
+    while perfect.invaders.isEmpty { perfect.advance(by: 0.05) }
+    perfectOK = perfectOK && perfect.shoot("K").isHit && approxEqual(perfect.currentWpm, perfect.config.targetWpm)
+    check("a perfect run reaches the target on hit \(pr.hitsToTarget), not \(pr.hitsToTarget - 1)", perfectOK && !perfect.isOver)
+    check("hold + hits per step is the fixture's later-step cost",
+          InvadersGame.rampHold + InvadersGame.hitsPerRampStep == pr.hitsPerLaterStep)
 
     // The scripted scenario, driven with a one-character pool so whatever is
     // on the field is a K: "hit" shoots one, "escape" lets the lowest land,
@@ -3440,12 +3671,14 @@ if let fx = loadInvadersRampFixture() {
     check("the scenario game opens at its start speed",
           approxEqual(g.currentWpm, sc.startWpm) && approxEqual(g.config.targetWpm, sc.targetWpm))
     var scenarioOK = true
+    var scenarioHits = 0
     for (i, ev) in sc.events.enumerated() {
         for _ in 0..<(ev.times ?? 1) {
             switch ev.event {
             case "hit":
                 while g.invaders.isEmpty { g.advance(by: 0.05) }
                 if !g.shoot("K").isHit { scenarioOK = false; print("      ↳ event \(i): the hit missed") }
+                scenarioHits += 1
             case "escape":
                 var landed = 0
                 while landed == 0 {
@@ -3459,12 +3692,12 @@ if let fx = loadInvadersRampFixture() {
                 print("      ↳ event \(i): unknown event '\(ev.event)' in the fixture")
             }
         }
-        if !approxEqual(g.currentWpm, ev.currentWpm) {
+        if !approxEqual(g.currentWpm, ev.currentWpm) || g.rampStreak != ev.streak || g.rampSettling != ev.settling {
             scenarioOK = false
-            print("      ↳ after event \(i) (\(ev.event)): \(g.currentWpm) WPM, fixture says \(ev.currentWpm)")
+            print("      ↳ after event \(i) (\(ev.event) ×\(ev.times ?? 1)): \(g.currentWpm) WPM, streak \(g.rampStreak), settling \(g.rampSettling); fixture says \(ev.currentWpm) / \(ev.streak) / \(ev.settling)")
         }
     }
-    check("the ramp follows the scripted scenario across \(sc.events.count) events", scenarioOK && !g.isOver)
+    check("the ramp follows the scripted scenario across \(sc.events.count) events (\(scenarioHits) hits)", scenarioOK && !g.isOver)
     check("bestWpm is the highest speed reached", approxEqual(g.bestWpm, sc.bestWpm))
 
     let flat = InvadersGame(config: .init(characters: ["K"], characterWpm: d.noRampAtOrBelow), rng: SeededRNG(seed: 2))
@@ -3475,6 +3708,120 @@ if let fx = loadInvadersRampFixture() {
     check("no ramp at or under the floor",
           flat.config.startWpm == flat.config.targetWpm && approxEqual(flat.currentWpm, d.noRampAtOrBelow)
           && approxEqual(flat.bestWpm, d.noRampAtOrBelow))
+
+    // Adaptive character weighting (#194).
+    let w = fx.weighting
+    check("weighting constants are the fixture's",
+          InvadersGame.debtPerMiss == w.debtPerMiss && InvadersGame.maxMissDebt == w.maxDebt
+          && InvadersGame.missWeightBonus == w.bonus)
+    check("spawn weight is 1 + bonus × debt across \(w.weightTable.count) debts",
+          w.weightTable.allSatisfy { approxEqual(InvadersGame.spawnWeight(debt: $0.debt), $0.weight) })
+    var pickOK = true
+    for p in w.pick {
+        let got = InvadersGame.pick(weights: p.weights, roll: p.roll)
+        if got != p.index {
+            pickOK = false
+            print("      ↳ pick(\(p.weights), \(p.roll)) = \(got), fixture says \(p.index)")
+        }
+    }
+    check("pick lands where the fixture says across \(w.pick.count) rolls", pickOK)
+
+    // The weighting scenario: labels bind to whatever the generator spawns,
+    // per the driving rules in the fixture's comment.
+    let ws = w.scenario
+    let wg = InvadersGame(config: .init(characters: Array(ws.pool), lives: ws.lives), rng: SeededRNG(seed: 11))
+    var labels: [String: Character] = [:]
+    var weightingOK = true
+    func fail(_ i: Int, _ why: String) { weightingOK = false; print("      ↳ weighting event \(i): \(why)") }
+    func shootAll(_ which: (Character) -> Bool) {
+        for inv in wg.invaders where which(inv.character) { _ = wg.shoot(inv.character) }
+    }
+    func landed(_ events: [InvadersEvent]) -> [Invader] {
+        events.compactMap { if case .escaped(let e) = $0 { return e } else { return nil } }
+    }
+    for (i, ev) in ws.events.enumerated() {
+        for _ in 0..<(ev.times ?? 1) {
+            var steps = 0
+            switch ev.event {
+            case "escape":
+                if let label = ev.label, let c = labels[label] {
+                    var done = false
+                    while !done && steps < 100_000 {
+                        shootAll { $0 != c }
+                        let fell = landed(wg.advance(by: 0.05))
+                        if fell.contains(where: { $0.character == c }) { done = true }
+                        else if !fell.isEmpty { fail(i, "the wrong character landed"); done = true }
+                        steps += 1
+                    }
+                } else {
+                    var fell: [Invader] = []
+                    while fell.isEmpty && steps < 100_000 { fell = landed(wg.advance(by: 0.05)); steps += 1 }
+                    if fell.count != 1 { fail(i, "\(fell.count) landed at once") }
+                    if let label = ev.label, let first = fell.first { labels[label] = first.character }
+                }
+            case "hit":
+                guard let label = ev.label, let c = labels[label] else { fail(i, "hit needs a bound label"); break }
+                var done = false
+                while !done && steps < 100_000 {
+                    shootAll { $0 != c }
+                    if wg.invaders.contains(where: { $0.character == c }) {
+                        if !wg.shoot(c).isHit { fail(i, "the hit missed") }
+                        done = true
+                    } else {
+                        wg.advance(by: 0.05)
+                    }
+                    steps += 1
+                }
+            case "wrongShot":
+                if ev.emptyField == true {
+                    shootAll { _ in true }
+                    if !wg.invaders.isEmpty || wg.shoot("Z").isHit { fail(i, "the empty-field wrong shot hit") }
+                } else {
+                    let avoided = Set((ev.avoid ?? []).compactMap { labels[$0] })
+                    while (wg.invaders.isEmpty || wg.invaders.contains { avoided.contains($0.character) }) && steps < 100_000 {
+                        shootAll { avoided.contains($0) }
+                        if wg.invaders.isEmpty { wg.advance(by: 0.05) }
+                        steps += 1
+                    }
+                    guard let low = wg.lowest else { fail(i, "nothing on the field to miss"); break }
+                    if let bind = ev.bind { labels[bind] = low.character }
+                    if wg.shoot("Z").isHit { fail(i, "the wrong shot hit") }
+                }
+            default:
+                fail(i, "unknown event '\(ev.event)' in the fixture")
+            }
+            if steps >= 100_000 { fail(i, "gave up waiting for the generator") }
+        }
+        var expected: [Character: Double] = [:]
+        for (label, weight) in ev.weights {
+            if let c = labels[label] { expected[c] = weight } else { fail(i, "label \(label) is not bound") }
+        }
+        for (c, weight) in wg.spawnWeights where !approxEqual(weight, expected[c] ?? 1.0) {
+            fail(i, "\(c) weighs \(weight), fixture says \(expected[c] ?? 1.0)")
+        }
+    }
+    check("spawn weights follow the weighting scenario across \(ws.events.count) events", weightingOK && !wg.isOver)
+
+    // The weights reach the spawn choice: a character kept in debt spawns
+    // far more often than its uniform share.
+    let ss = w.spawnShare
+    let sg = InvadersGame(config: .init(characters: Array(ss.pool), lives: ss.lives), rng: SeededRNG(seed: 21))
+    let debited = Character(ss.debited)
+    var debitedSpawns = 0
+    var shareOK = true
+    for _ in 0..<ss.spawns {
+        let spawned = sg.advance(by: sg.spawnInterval).filter { if case .spawned = $0 { return true } else { return false } }
+        guard spawned.count == 1, sg.invaders.count == 1 else { shareOK = false; break }
+        let inv = sg.invaders[0]
+        if inv.character == debited {
+            debitedSpawns += 1
+            if sg.shoot("Z").isHit { shareOK = false }
+        }
+        if !sg.shoot(inv.character).isHit { shareOK = false }
+    }
+    let share = Double(debitedSpawns) / Double(ss.spawns)
+    check("a character in debt spawns more often (share \(share) of \(ss.spawns))",
+          shareOK && share >= ss.minShare && share <= ss.maxShare)
 
     let kb = fx.keyboard
     check("the digit and letter rows are the fixture's",
@@ -3596,6 +3943,1508 @@ if let fx = loadActivityFixture() {
     }
 } else {
     check("fixtures/activity.json loads and decodes", false)
+}
+
+// MARK: - CW Galaga (#187), against fixtures/galaga.json
+//
+// Read by this harness AND by the Kotlin GalagaTest. The expected values were
+// worked out from the rules in the fixture's derivation block, not captured
+// from either port. The rule-level checks (targeting, scoring, lives, dives)
+// are the same ones GalagaTest makes.
+struct GalagaFixture: Decodable {
+    struct Timing: Decodable {
+        let baseEntryInterval: Double; let entryIntervalDecay: Double; let minEntryInterval: Double
+        let baseEntryTime: Double; let entryTimeDecay: Double; let minEntryTime: Double
+        let baseDiveInterval: Double; let diveIntervalDecay: Double; let minDiveInterval: Double
+        let baseDiveTime: Double; let diveTimeDecay: Double; let minDiveTime: Double
+        let returnFactor: Double; let waveGap: Double
+        let difficultyScale: [String: Double]
+    }
+    struct Layout: Decodable { let formationTop: Double; let rowPitch: Double }
+    struct Derivation: Decodable {
+        let pointsPerHit: Int; let diveBonus: Int; let waveBonus: Int
+        let comboStep: Int; let maxMultiplier: Int; let lives: Int
+        let minWpm: Double; let startOffset: Double; let step: Double; let hitsPerStep: Int
+        let noRampAtOrBelow: Double
+        let timing: Timing
+        let layout: Layout
+    }
+    struct FormationRow: Decodable { let wave: Int; let rows: Int; let columns: Int; let size: Int; let maxDivers: Int }
+    struct TimingRow: Decodable {
+        let wave: Int; let difficulty: String
+        let entryInterval: Double; let entryTime: Double; let diveInterval: Double; let diveTime: Double; let returnTime: Double
+    }
+    struct ComboRow: Decodable { let combo: Int; let multiplier: Int }
+    struct StartRow: Decodable { let characterWpm: Double; let startWpm: Double; let targetWpm: Double }
+    struct PathPoint: Decodable { let t: Double; let x: Double; let y: Double }
+    struct PathCase: Decodable {
+        let row: Int; let column: Int; let columns: Int; let fromLeft: Bool
+        let slot: XY; let entry: [PathPoint]; let dive: [PathPoint]
+        struct XY: Decodable { let x: Double; let y: Double }
+    }
+    struct Event: Decodable {
+        let event: String; let times: Int?
+        let currentWpm: Double; let combo: Int; let multiplier: Int; let lives: Int; let wave: Int
+    }
+    struct Scenario: Decodable {
+        let characterWpm: Double; let startWpm: Double; let targetWpm: Double
+        let lives: Int; let events: [Event]; let bestWpm: Double
+    }
+    let derivation: Derivation
+    let formationTable: [FormationRow]
+    let timingTable: [TimingRow]
+    let comboTable: [ComboRow]
+    let startTable: [StartRow]
+    let paths: [PathCase]
+    let scenario: Scenario
+}
+
+func loadGalagaFixture() -> GalagaFixture? {
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+    guard let data = try? Data(contentsOf: root.appendingPathComponent("fixtures/galaga.json")) else { return nil }
+    return try? JSONDecoder().decode(GalagaFixture.self, from: data)
+}
+
+print("\nCW Galaga (fixtures/galaga.json):")
+if let fx = loadGalagaFixture() {
+    let d = fx.derivation
+    let t = d.timing
+    check("galaga scoring and ramp constants are the fixture's",
+          GalagaGame.pointsPerHit == d.pointsPerHit && GalagaGame.diveBonus == d.diveBonus
+          && GalagaGame.waveBonus == d.waveBonus && GalagaGame.comboStep == d.comboStep
+          && GalagaGame.maxMultiplier == d.maxMultiplier
+          && GalagaGame.minWpm == d.minWpm && GalagaGame.rampStartOffset == d.startOffset
+          && GalagaGame.rampStep == d.step && GalagaGame.hitsPerRampStep == d.hitsPerStep
+          && GalagaGame.Config(characters: ["K"]).lives == d.lives)
+    check("galaga timing constants are the fixture's",
+          GalagaGame.baseEntryInterval == t.baseEntryInterval && GalagaGame.entryIntervalDecay == t.entryIntervalDecay
+          && GalagaGame.minEntryInterval == t.minEntryInterval
+          && GalagaGame.baseEntryTime == t.baseEntryTime && GalagaGame.entryTimeDecay == t.entryTimeDecay
+          && GalagaGame.minEntryTime == t.minEntryTime
+          && GalagaGame.baseDiveInterval == t.baseDiveInterval && GalagaGame.diveIntervalDecay == t.diveIntervalDecay
+          && GalagaGame.minDiveInterval == t.minDiveInterval
+          && GalagaGame.baseDiveTime == t.baseDiveTime && GalagaGame.diveTimeDecay == t.diveTimeDecay
+          && GalagaGame.minDiveTime == t.minDiveTime
+          && GalagaGame.returnFactor == t.returnFactor && GalagaGame.waveGap == t.waveGap
+          && InvadersDifficulty.relaxed.timeScale == t.difficultyScale["relaxed"]
+          && InvadersDifficulty.normal.timeScale == t.difficultyScale["normal"]
+          && InvadersDifficulty.fast.timeScale == t.difficultyScale["fast"])
+    check("galaga layout constants are the fixture's",
+          GalagaPath.formationTop == d.layout.formationTop && GalagaPath.rowPitch == d.layout.rowPitch)
+
+    var formationOK = true
+    for row in fx.formationTable {
+        let f = GalagaGame.formation(wave: row.wave)
+        if f.rows != row.rows || f.columns != row.columns || f.size != row.size
+            || GalagaGame.maxDivers(wave: row.wave) != row.maxDivers {
+            formationOK = false
+            print("      ↳ wave \(row.wave): \(f.rows)×\(f.columns), \(GalagaGame.maxDivers(wave: row.wave)) divers; fixture says \(row.rows)×\(row.columns), \(row.maxDivers)")
+        }
+    }
+    check("galaga formations follow the fixture table across \(fx.formationTable.count) waves", formationOK)
+
+    var timingOK = true
+    for row in fx.timingTable {
+        guard let diff = InvadersDifficulty(rawValue: row.difficulty) else { timingOK = false; continue }
+        if !approxEqual(GalagaGame.entryInterval(wave: row.wave, difficulty: diff), row.entryInterval, 1e-9)
+            || !approxEqual(GalagaGame.entryTime(wave: row.wave, difficulty: diff), row.entryTime, 1e-9)
+            || !approxEqual(GalagaGame.diveInterval(wave: row.wave, difficulty: diff), row.diveInterval, 1e-9)
+            || !approxEqual(GalagaGame.diveTime(wave: row.wave, difficulty: diff), row.diveTime, 1e-9)
+            || !approxEqual(GalagaGame.returnTime(wave: row.wave, difficulty: diff), row.returnTime, 1e-9) {
+            timingOK = false
+            print("      ↳ wave \(row.wave) \(row.difficulty): entry \(GalagaGame.entryInterval(wave: row.wave, difficulty: diff))/\(GalagaGame.entryTime(wave: row.wave, difficulty: diff)), dive \(GalagaGame.diveInterval(wave: row.wave, difficulty: diff))/\(GalagaGame.diveTime(wave: row.wave, difficulty: diff)); fixture says \(row.entryInterval)/\(row.entryTime), \(row.diveInterval)/\(row.diveTime)")
+        }
+    }
+    check("galaga timings follow the fixture table across \(fx.timingTable.count) rows", timingOK)
+
+    check("galaga combo multiplier follows the fixture table",
+          fx.comboTable.allSatisfy { GalagaGame.multiplier(combo: $0.combo) == $0.multiplier })
+
+    var tableOK = true
+    for row in fx.startTable {
+        let config = GalagaGame.Config(characters: ["K"], characterWpm: row.characterWpm)
+        let opens = GalagaGame(config: config, rng: SeededRNG(seed: 1)).currentWpm
+        if !approxEqual(GalagaGame.rampStart(characterWpm: row.characterWpm), row.startWpm)
+            || !approxEqual(config.startWpm, row.startWpm)
+            || !approxEqual(config.targetWpm, row.targetWpm)
+            || !approxEqual(opens, row.startWpm) {
+            tableOK = false
+            print("      ↳ \(row.characterWpm) WPM: start \(config.startWpm), target \(config.targetWpm); fixture says \(row.startWpm) / \(row.targetWpm)")
+        }
+    }
+    check("galaga ramp start and target follow the fixture table across \(fx.startTable.count) speeds", tableOK)
+
+    var pathsOK = true
+    for c in fx.paths {
+        let s = GalagaPath.slot(row: c.row, column: c.column, columns: c.columns)
+        if !approxEqual(s.x, c.slot.x, 1e-9) || !approxEqual(s.y, c.slot.y, 1e-9) {
+            pathsOK = false
+            print("      ↳ slot (\(c.row),\(c.column)) of \(c.columns): \(s), fixture says \(c.slot.x), \(c.slot.y)")
+        }
+        for p in c.entry {
+            let got = GalagaPath.entry(t: p.t, fromLeft: c.fromLeft, slot: s)
+            if !approxEqual(got.x, p.x, 1e-9) || !approxEqual(got.y, p.y, 1e-9) {
+                pathsOK = false
+                print("      ↳ entry t=\(p.t) to (\(c.row),\(c.column)): \(got), fixture says \(p.x), \(p.y)")
+            }
+        }
+        for p in c.dive {
+            let got = GalagaPath.dive(t: p.t, slot: s)
+            if !approxEqual(got.x, p.x, 1e-9) || !approxEqual(got.y, p.y, 1e-9) {
+                pathsOK = false
+                print("      ↳ dive t=\(p.t) from (\(c.row),\(c.column)): \(got), fixture says \(p.x), \(p.y)")
+            }
+        }
+        // position(of:) is the same curves keyed by state; the return is the dive backwards.
+        let entering = GalagaEnemy(id: 1, character: "K", row: c.row, column: c.column, fromLeft: c.fromLeft,
+                                   state: .entering, progress: 0.25, legTime: 1)
+        let returning = GalagaEnemy(id: 2, character: "K", row: c.row, column: c.column, fromLeft: c.fromLeft,
+                                    state: .returning, progress: 0.75, legTime: 1)
+        let formed = GalagaEnemy(id: 3, character: "K", row: c.row, column: c.column, fromLeft: c.fromLeft,
+                                 state: .formed, progress: 0, legTime: 1)
+        if GalagaPath.position(of: entering, columns: c.columns) != GalagaPath.entry(t: 0.25, fromLeft: c.fromLeft, slot: s)
+            || GalagaPath.position(of: returning, columns: c.columns) != GalagaPath.dive(t: 0.25, slot: s)
+            || GalagaPath.position(of: formed, columns: c.columns) != s {
+            pathsOK = false
+            print("      ↳ position(of:) disagrees with the curves at (\(c.row),\(c.column))")
+        }
+    }
+    check("galaga paths follow the fixture across \(fx.paths.count) slots", pathsOK)
+
+    // Rules the fixture states in words, checked the way GalagaTest does.
+    let g1 = GalagaGame(config: .init(characters: ["K"]), rng: SeededRNG(seed: 3))
+    let interval = g1.entryInterval
+    check("galaga: nothing enters before the interval", g1.advance(by: interval - 0.01).isEmpty && g1.enemies.isEmpty)
+    let first = g1.advance(by: 0.02)
+    var enteredOK = false
+    if first.count == 1, case .entered(let e) = first[0] {
+        enteredOK = e.state == .entering && e.row == 0 && e.column == 0 && e.fromLeft
+            && approxEqual(e.progress, 0.01 / g1.entryTime, 1e-9) && approxEqual(e.legTime, g1.entryTime)
+    }
+    check("galaga: the first enemy enters on the interval, from the left, into slot (0,0)", enteredOK)
+    check("galaga: an entering enemy settles into formation after its entry time", {
+        g1.advance(by: g1.entryTime)
+        return g1.enemies.first?.state == .formed
+    }())
+    let second = g1.enemies.count > 1 ? g1.enemies[1] : nil
+    check("galaga: the second enemy enters from the right into slot (0,1)",
+          second?.row == 0 && second?.column == 1 && second?.fromLeft == false)
+
+    // A dive: one formed enemy, wait out the dive clock, then let it land.
+    let g2 = GalagaGame(config: .init(characters: ["K"]), rng: SeededRNG(seed: 5))
+    var dived: GalagaEnemy?
+    var landed: GalagaEnemy?
+    var guardSteps = 0
+    while landed == nil && guardSteps < 100_000 {
+        for ev in g2.advance(by: 0.05) {
+            if case .dived(let e) = ev, dived == nil { dived = e }
+            if case .landed(let e) = ev { landed = e }
+        }
+        guardSteps += 1
+    }
+    check("galaga: a formed enemy dives", dived?.state == .diving && dived?.progress == 0 && approxEqual(dived?.legTime ?? 0, g2.diveTime))
+    check("galaga: a dive that lands costs a life, resets the combo and returns the enemy",
+          landed?.progress == 1.0 && g2.lives == 2 && g2.misses == 1 && g2.combo == 0
+          && g2.enemies.first(where: { $0.id == landed?.id })?.state == .returning)
+    check("galaga: shooting the returning enemy scores without the dive bonus", {
+        guard let landed else { return false }
+        let before = g2.score
+        let shot = g2.shoot("k")
+        return shot.isHit && shot.enemy?.id == landed.id && shot.enemy?.state == .returning
+            && shot.points == GalagaGame.pointsPerHit && g2.score == before + GalagaGame.pointsPerHit
+    }())
+
+    // Targeting: a diver outranks a formed enemy on a lower row, which outranks one entering.
+    let entering = GalagaEnemy(id: 1, character: "K", row: 0, column: 0, fromLeft: true, state: .entering, progress: 0.9, legTime: 1)
+    let topRow = GalagaEnemy(id: 2, character: "K", row: 0, column: 1, fromLeft: false, state: .formed, progress: 0, legTime: 1)
+    let lowRow = GalagaEnemy(id: 3, character: "K", row: 2, column: 1, fromLeft: false, state: .formed, progress: 0, legTime: 1)
+    let returning = GalagaEnemy(id: 4, character: "K", row: 1, column: 0, fromLeft: true, state: .returning, progress: 0.2, legTime: 1)
+    let diver = GalagaEnemy(id: 5, character: "K", row: 1, column: 1, fromLeft: false, state: .diving, progress: 0.1, legTime: 1)
+    let deeperDiver = GalagaEnemy(id: 6, character: "K", row: 1, column: 2, fromLeft: true, state: .diving, progress: 0.4, legTime: 1)
+    check("galaga: threat order is deeper diver > diver > returning > lowest row > higher row > entering",
+          GalagaGame.threat(of: deeperDiver) > GalagaGame.threat(of: diver)
+          && GalagaGame.threat(of: diver) > GalagaGame.threat(of: returning)
+          && GalagaGame.threat(of: returning) > GalagaGame.threat(of: lowRow)
+          && GalagaGame.threat(of: lowRow) > GalagaGame.threat(of: topRow)
+          && GalagaGame.threat(of: topRow) > GalagaGame.threat(of: entering))
+
+    // Scoring: a diver is worth the bonus; every hit's points follow the rule; a wrong shot is a miss.
+    let g3 = GalagaGame(config: .init(characters: ["K"]), rng: SeededRNG(seed: 9))
+    var scoreOK = true
+    var sawDiver = false
+    var shots = 0
+    guardSteps = 0
+    while shots < 12 && guardSteps < 100_000 {
+        let events = g3.advance(by: 0.05)
+        guardSteps += 1
+        // Shoot only once something is diving, or once the field is full, so
+        // the dive bonus is exercised at least once.
+        let diving = g3.enemies.contains { $0.state == .diving }
+        if diving || g3.enemies.count >= 4 {
+            let before = g3.score
+            let combo = g3.combo
+            let shot = g3.shoot("K")
+            shots += 1
+            guard let hit = shot.enemy else { scoreOK = false; continue }
+            let expected = (GalagaGame.pointsPerHit + (hit.state == .diving ? GalagaGame.diveBonus : 0))
+                * GalagaGame.multiplier(combo: combo + 1)
+            if hit.state == .diving { sawDiver = true }
+            let bonus = shot.waveCleared ? GalagaGame.waveBonus : 0
+            if shot.points != expected || g3.score != before + expected + bonus { scoreOK = false }
+        }
+        _ = events
+    }
+    check("galaga: every hit scores (100 + 50 for a diver) × the multiplier, and a diver was hit", scoreOK && sawDiver)
+    let wrong = g3.shoot("Z")
+    check("galaga: a wrong shot is a miss that breaks the combo",
+          !wrong.isHit && wrong.points == 0 && g3.combo == 0 && g3.misses == 1)
+
+    // Waves: shooting a full formation clears it and adds the bonus; the next wave enters after the gap.
+    let g4 = GalagaGame(config: .init(characters: ["K"]), rng: SeededRNG(seed: 11))
+    var cleared = false
+    var clearedScore = 0
+    guardSteps = 0
+    while !cleared && guardSteps < 100_000 {
+        g4.advance(by: 0.05)
+        guardSteps += 1
+        if !g4.enemies.isEmpty {
+            let before = g4.score
+            let shot = g4.shoot("K")
+            if shot.waveCleared { cleared = true; clearedScore = g4.score - before - shot.points }
+        }
+    }
+    check("galaga: the eighth hit clears wave 1 (2×4) and adds the wave bonus",
+          cleared && g4.wave == 2 && g4.hits == 8 && clearedScore == GalagaGame.waveBonus && g4.released == 0 && g4.enemies.isEmpty)
+    check("galaga: wave 2's first entry waits the wave gap plus an interval", {
+        let waited = g4.advance(by: GalagaGame.waveGap + g4.entryInterval - 0.01)
+        if !waited.isEmpty || !g4.enemies.isEmpty { return false }
+        let next = g4.advance(by: 0.02)
+        return next.count == 1 && g4.enemies.count == 1 && g4.formation.size == 10
+    }())
+
+    // Three landed dives end the game.
+    let g5 = GalagaGame(config: .init(characters: ["K"]), rng: SeededRNG(seed: 13))
+    var over = false
+    var landings = 0
+    guardSteps = 0
+    while !over && guardSteps < 100_000 {
+        for ev in g5.advance(by: 0.1) {
+            if case .landed = ev { landings += 1 }
+            if case .gameOver = ev { over = true }
+        }
+        guardSteps += 1
+    }
+    check("galaga: three landed dives end the game", over && g5.isOver && g5.lives == 0 && landings == 3 && g5.enemies.isEmpty)
+    check("galaga: a finished game ignores time and shots", g5.advance(by: 10).isEmpty && !g5.shoot("K").isHit && g5.misses == 3)
+
+    // The scripted scenario, driven with a one-character pool so whatever is
+    // on the field is a K: "hit" shoots one, "diveLands" waits for a landing,
+    // "wrongShot" names a character nothing carries.
+    let sc = fx.scenario
+    let g = GalagaGame(config: .init(characters: ["K"], lives: sc.lives, characterWpm: sc.characterWpm),
+                       rng: SeededRNG(seed: 7))
+    check("galaga: the scenario game opens at its start speed",
+          approxEqual(g.currentWpm, sc.startWpm) && approxEqual(g.config.targetWpm, sc.targetWpm))
+    var scenarioOK = true
+    for (i, ev) in sc.events.enumerated() {
+        for _ in 0..<(ev.times ?? 1) {
+            switch ev.event {
+            case "hit":
+                while g.enemies.isEmpty { g.advance(by: 0.05) }
+                if !g.shoot("K").isHit { scenarioOK = false; print("      ↳ event \(i): the hit missed") }
+            case "diveLands":
+                var landed = 0
+                while landed == 0 {
+                    landed = g.advance(by: 0.05).filter { if case .landed = $0 { return true } else { return false } }.count
+                }
+                if landed != 1 { scenarioOK = false; print("      ↳ event \(i): \(landed) landed at once") }
+            case "wrongShot":
+                if g.shoot("Z").isHit { scenarioOK = false; print("      ↳ event \(i): the wrong shot hit") }
+            default:
+                scenarioOK = false
+                print("      ↳ event \(i): unknown event '\(ev.event)' in the fixture")
+            }
+        }
+        if !approxEqual(g.currentWpm, ev.currentWpm) || g.combo != ev.combo || g.multiplier != ev.multiplier
+            || g.lives != ev.lives || g.wave != ev.wave {
+            scenarioOK = false
+            print("      ↳ after event \(i) (\(ev.event)): \(g.currentWpm) WPM combo \(g.combo) ×\(g.multiplier) lives \(g.lives) wave \(g.wave); fixture says \(ev.currentWpm) / \(ev.combo) / ×\(ev.multiplier) / \(ev.lives) / \(ev.wave)")
+        }
+    }
+    check("galaga: the scenario holds across \(sc.events.count) events", scenarioOK && !g.isOver)
+    check("galaga: bestWpm is the highest speed reached", approxEqual(g.bestWpm, sc.bestWpm))
+
+    let flat = GalagaGame(config: .init(characters: ["K"], characterWpm: d.noRampAtOrBelow), rng: SeededRNG(seed: 2))
+    for _ in 0..<12 {
+        while flat.enemies.isEmpty { flat.advance(by: 0.05) }
+        _ = flat.shoot("K")
+    }
+    check("galaga: no ramp at or under the floor",
+          flat.config.startWpm == flat.config.targetWpm && approxEqual(flat.currentWpm, d.noRampAtOrBelow)
+          && approxEqual(flat.bestWpm, d.noRampAtOrBelow))
+
+    // The same seed gives the same sequence of characters and divers.
+    func sequence(_ seed: UInt64) -> [String] {
+        let g = GalagaGame(config: .init(characters: ["K", "M", "R", "S"]), rng: SeededRNG(seed: seed))
+        var out: [String] = []
+        var steps = 0
+        while out.count < 20 && steps < 100_000 {
+            for ev in g.advance(by: 0.05) {
+                if case .entered(let e) = ev { out.append("E\(e.character)") }
+                if case .dived(let e) = ev { out.append("D\(e.id)"); _ = g.shoot(e.character) }
+            }
+            steps += 1
+        }
+        return out
+    }
+    check("galaga: the same seed gives the same sequence, and every character is from the pool",
+          sequence(42) == sequence(42) && sequence(42) != sequence(43)
+          && sequence(42).allSatisfy { $0.hasPrefix("D") || ["EK", "EM", "ER", "ES"].contains($0) })
+} else {
+    check("fixtures/galaga.json loads and decodes", false)
+}
+
+// Morse Defender (#188), against fixtures/defender.json — read by this harness
+// AND by the Kotlin DefenderTest. The expected values were worked out from the
+// rules in the fixture's derivation block, not captured from either port.
+struct DefenderFixture: Decodable {
+    struct Derivation: Decodable {
+        let pointsPerHit: Int
+        let baseSpawnInterval: Double; let minSpawnInterval: Double; let spawnDecay: Double
+        let baseTravelTime: Double; let minTravelTime: Double; let travelDecay: Double
+        let maxConcurrent: Int; let startAssets: Int; let maxAssets: Int; let hitsPerWave: Int
+        let columns: Int
+        let minWpm: Double; let startOffset: Double; let step: Double; let hitsPerStep: Int
+    }
+    struct DifficultyRow: Decodable {
+        let wave: Int; let difficulty: String; let spawnInterval: Double; let travelTime: Double; let concurrent: Int
+    }
+    struct DifficultyTable: Decodable { let rows: [DifficultyRow] }
+    struct MultiplierRow: Decodable { let combo: Int; let multiplier: Int }
+    struct RampRow: Decodable { let characterWpm: Double; let startWpm: Double; let targetWpm: Double }
+    struct TimingCase: Decodable {
+        let name: String; let wpm: Double; let farnsworthWpm: Double?; let characterWpm: Double; let effectiveWpm: Double
+    }
+    struct Callsigns: Decodable {
+        struct Synthetic: Decodable {
+            let name: String; let pool: String; let length: Int; let alphabet: String; let digitAt: Int; let token: String?
+        }
+        struct Real: Decodable {
+            let draws: Int; let minLength: Int; let maxLength: Int; let digitCount: Int; let digitIndexes: [Int]
+        }
+        let synthetic: [Synthetic]
+        let real: Real
+    }
+    struct Event: Decodable {
+        let event: String; let times: Int?
+        let score: Int; let combo: Int; let wave: Int; let assets: Int; let live: Int; let currentWpm: Double
+    }
+    struct Scenario: Decodable {
+        let characterWpm: Double; let startWpm: Double; let targetWpm: Double
+        let events: [Event]; let hits: Int; let misses: Int; let bestCombo: Int; let bestWpm: Double
+    }
+    struct Loss: Decodable { let strikesToLose: Int }
+    let derivation: Derivation
+    let difficultyTable: DifficultyTable
+    let multiplierTable: [MultiplierRow]
+    let rampStartTable: [RampRow]
+    let sendTiming: [TimingCase]
+    let callsigns: Callsigns
+    let scenario: Scenario
+    let loss: Loss
+}
+
+func loadDefenderFixture() -> DefenderFixture? {
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+    guard let data = try? Data(contentsOf: root.appendingPathComponent("fixtures/defender.json")) else { return nil }
+    return try? JSONDecoder().decode(DefenderFixture.self, from: data)
+}
+
+print("\nMorse Defender (fixtures/defender.json):")
+if let fx = loadDefenderFixture() {
+    let d = fx.derivation
+    check("defender constants are the fixture's",
+          DefenderGame.pointsPerHit == d.pointsPerHit
+          && DefenderGame.baseSpawnInterval == d.baseSpawnInterval
+          && DefenderGame.minSpawnInterval == d.minSpawnInterval
+          && DefenderGame.spawnDecay == d.spawnDecay
+          && DefenderGame.baseTravelTime == d.baseTravelTime
+          && DefenderGame.minTravelTime == d.minTravelTime
+          && DefenderGame.travelDecay == d.travelDecay
+          && DefenderGame.maxConcurrent == d.maxConcurrent
+          && DefenderGame.defaultStartAssets == d.startAssets
+          && DefenderGame.defaultMaxAssets == d.maxAssets
+          && DefenderGame.defaultHitsPerWave == d.hitsPerWave
+          && DefenderGame.defaultColumns == d.columns
+          && DefenderGame.minWpm == d.minWpm
+          && DefenderGame.rampStartOffset == d.startOffset
+          && DefenderGame.rampStep == d.step
+          && DefenderGame.hitsPerRampStep == d.hitsPerStep)
+
+    var tableOK = true
+    for row in fx.difficultyTable.rows {
+        guard let difficulty = InvadersDifficulty(rawValue: row.difficulty) else {
+            tableOK = false
+            print("      ↳ unknown difficulty '\(row.difficulty)' in the fixture")
+            continue
+        }
+        let spawn = DefenderGame.spawnInterval(wave: row.wave, difficulty: difficulty)
+        let travel = DefenderGame.travelTime(wave: row.wave, difficulty: difficulty)
+        let concurrent = DefenderGame.concurrent(wave: row.wave)
+        if !approxEqual(spawn, row.spawnInterval, 1e-5) || !approxEqual(travel, row.travelTime, 1e-5)
+            || concurrent != row.concurrent {
+            tableOK = false
+            print("      ↳ wave \(row.wave) \(row.difficulty): spawn \(spawn), travel \(travel), concurrent \(concurrent); fixture says \(row.spawnInterval) / \(row.travelTime) / \(row.concurrent)")
+        }
+    }
+    check("spawn interval, travel time and concurrency follow the fixture table across \(fx.difficultyTable.rows.count) rows", tableOK)
+
+    check("the combo multiplier follows the fixture table",
+          fx.multiplierTable.allSatisfy { DefenderGame.multiplier(combo: $0.combo) == $0.multiplier })
+
+    var rampOK = true
+    for row in fx.rampStartTable {
+        let config = DefenderGame.Config(characters: ["K", "M"], characterWpm: row.characterWpm)
+        let opens = DefenderGame(config: config, rng: SeededRNG(seed: 1)).currentWpm
+        if !approxEqual(DefenderGame.rampStart(characterWpm: row.characterWpm), row.startWpm)
+            || !approxEqual(config.startWpm, row.startWpm)
+            || !approxEqual(config.targetWpm, row.targetWpm)
+            || !approxEqual(opens, row.startWpm) {
+            rampOK = false
+            print("      ↳ \(row.characterWpm) WPM: start \(config.startWpm), target \(config.targetWpm); fixture says \(row.startWpm) / \(row.targetWpm)")
+        }
+    }
+    check("ramp start and target follow the fixture table across \(fx.rampStartTable.count) speeds", rampOK)
+
+    var timingOK = true
+    for c in fx.sendTiming {
+        let t = DefenderGame.sendTiming(wpm: c.wpm, farnsworthWpm: c.farnsworthWpm)
+        if !approxEqual(t.wpm, c.characterWpm) || !approxEqual(t.effectiveWpm, c.effectiveWpm) {
+            timingOK = false
+            print("      ↳ \(c.name): \(t.wpm)/\(t.effectiveWpm), fixture says \(c.characterWpm)/\(c.effectiveWpm)")
+        }
+    }
+    check("send timing honours Farnsworth as the fixture says across \(fx.sendTiming.count) cases", timingOK)
+
+    var syntheticOK = true
+    for c in fx.callsigns.synthetic {
+        let pool = Array(c.pool)
+        let alphabet = String(DefenderGame.callsignAlphabet(from: pool))
+        if alphabet != c.alphabet {
+            syntheticOK = false
+            print("      ↳ \(c.name): alphabet \(alphabet), fixture says \(c.alphabet)")
+        }
+        let hasLetters = c.alphabet.contains { $0.isLetter }
+        var rng = SeededRNG(seed: 11)
+        for _ in 0..<50 {
+            let token = DefenderGame.syntheticCallsign(from: pool, using: &rng)
+            let chars = Array(token)
+            var ok = chars.count == c.length && chars.allSatisfy { c.alphabet.contains($0) }
+            for (i, ch) in chars.enumerated() {
+                if i == c.digitAt { ok = ok && ch.isNumber }
+                else if c.digitAt >= 0 && hasLetters { ok = ok && ch.isLetter }
+                else if c.digitAt < 0 { ok = ok && !ch.isNumber }
+            }
+            if let pinned = c.token { ok = ok && token == pinned }
+            if !ok {
+                syntheticOK = false
+                print("      ↳ \(c.name): '\(token)' breaks the shape rule")
+                break
+            }
+        }
+    }
+    check("synthetic callsigns follow the shape rules across \(fx.callsigns.synthetic.count) pools", syntheticOK)
+
+    let real = fx.callsigns.real
+    var realOK = true
+    var realRng = SeededRNG(seed: 5)
+    for _ in 0..<real.draws {
+        let call = DefenderGame.realCallsign(using: &realRng)
+        let digits = call.enumerated().filter { $0.element.isNumber }
+        let ok = (real.minLength...real.maxLength).contains(call.count)
+            && digits.count == real.digitCount
+            && digits.allSatisfy { real.digitIndexes.contains($0.offset) }
+            && call.allSatisfy { $0.isLetter || $0.isNumber }
+        if !ok {
+            realOK = false
+            print("      ↳ real callsign '\(call)' is not one of the everyday shapes")
+            break
+        }
+    }
+    check("real callsigns are the everyday US shapes across \(real.draws) draws", realOK)
+
+    // The game opens with the default assets, each standing with a distinct callsign.
+    let fresh = DefenderGame(config: .init(characters: ["K", "M", "R", "S", "U"]), rng: SeededRNG(seed: 3))
+    check("a new game places the starting assets, all standing, no two alike",
+          fresh.assets.count == d.startAssets && fresh.liveAssets == d.startAssets
+          && Set(fresh.assets.map(\.callsign)).count == d.startAssets && fresh.attackers.isEmpty)
+
+    // Launch timing: nothing before the interval, one on it, born a hair down.
+    let interval = fresh.spawnInterval
+    check("nothing launches before the interval", fresh.advance(by: interval - 0.01).isEmpty && fresh.attackers.isEmpty)
+    let launched = fresh.advance(by: 0.02)
+    check("one attacker launches on the interval, aimed at a standing asset",
+          launched.count == 1 && fresh.attackers.count == 1
+          && fresh.assets.contains { $0.id == fresh.attackers[0].targetId && $0.callsign == fresh.attackers[0].callsign }
+          && approxEqual(fresh.attackers[0].progress, 0.01 / fresh.travelTime, 1e-9))
+    check("wave 1 holds one attacker in flight",
+          fresh.advance(by: interval * 2).filter { if case .launched = $0 { return true } else { return false } }.isEmpty
+          && fresh.attackers.count == 1)
+
+    // The scripted scenario.
+    let sc = fx.scenario
+    let g = DefenderGame(config: .init(characters: ["K", "M", "R", "S", "U"], characterWpm: sc.characterWpm),
+                         rng: SeededRNG(seed: 7))
+    check("the scenario game opens at its start speed",
+          approxEqual(g.currentWpm, sc.startWpm) && approxEqual(g.config.targetWpm, sc.targetWpm))
+    var scenarioOK = true
+    for (i, ev) in sc.events.enumerated() {
+        for _ in 0..<(ev.times ?? 1) {
+            switch ev.event {
+            case "hit":
+                while g.attackers.isEmpty { g.advance(by: 0.05) }
+                guard let nearest = g.nearestArrival else { scenarioOK = false; break }
+                if !g.route(to: nearest.targetId).isHit { scenarioOK = false; print("      ↳ event \(i): the route missed") }
+            case "wrongRoute":
+                guard let open = g.assets.first(where: { $0.isAlive && !g.isTargeted($0.id) }) else {
+                    scenarioOK = false; print("      ↳ event \(i): no untargeted asset to waste a shot on"); break
+                }
+                if g.route(to: open.id).isHit { scenarioOK = false; print("      ↳ event \(i): the wasted shot hit") }
+            case "strike":
+                var struck = 0
+                while struck == 0 {
+                    struck = g.advance(by: 0.05).filter { if case .struck = $0 { return true } else { return false } }.count
+                }
+                if struck != 1 { scenarioOK = false; print("      ↳ event \(i): \(struck) struck at once") }
+            default:
+                scenarioOK = false
+                print("      ↳ event \(i): unknown event '\(ev.event)' in the fixture")
+            }
+        }
+        if g.score != ev.score || g.combo != ev.combo || g.wave != ev.wave
+            || g.assets.count != ev.assets || g.liveAssets != ev.live || !approxEqual(g.currentWpm, ev.currentWpm) {
+            scenarioOK = false
+            print("      ↳ after event \(i) (\(ev.event)): score \(g.score) combo \(g.combo) wave \(g.wave) assets \(g.assets.count) live \(g.liveAssets) \(g.currentWpm) WPM; fixture says \(ev.score) \(ev.combo) \(ev.wave) \(ev.assets) \(ev.live) \(ev.currentWpm)")
+        }
+    }
+    check("the game follows the scripted scenario across \(sc.events.count) events", scenarioOK && !g.isOver)
+    check("the scenario's totals are the fixture's",
+          g.hits == sc.hits && g.misses == sc.misses && g.bestCombo == sc.bestCombo && approxEqual(g.bestWpm, sc.bestWpm))
+    check("every callsign placed in the scenario is distinct",
+          Set(g.assets.map(\.callsign)).count == g.assets.count)
+
+    // A typed callsign routes like a tap; a callsign nobody has is a wasted shot.
+    let typed = DefenderGame(config: .init(characters: ["K", "M"]), rng: SeededRNG(seed: 9))
+    while typed.attackers.isEmpty { typed.advance(by: 0.05) }
+    let aimed = typed.nearestArrival!
+    check("an unknown typed callsign is a wasted shot that breaks nothing else",
+          !typed.route(callsign: "ZZZZ").isHit && typed.misses == 1 && typed.attackers.count == 1)
+    check("the typed callsign routes to its asset, case-insensitively",
+          typed.route(callsign: aimed.callsign.lowercased()).attacker?.id == aimed.id && typed.hits == 1)
+    check("the keyboard pool is the synthetic alphabet for the active set, letters and digits for real calls",
+          typed.keyboardPool == ["K", "M"]
+          && DefenderGame(config: .init(characters: [], callsigns: .full), rng: SeededRNG(seed: 1)).keyboardPool.count == 36)
+
+    // Never route: every attacker strikes, and the fourth ends the game.
+    let lost = DefenderGame(config: .init(characters: ["K", "M", "R"]), rng: SeededRNG(seed: 4))
+    var strikes = 0
+    var over = false
+    var guardSteps = 0
+    while !over && guardSteps < 200_000 {
+        for e in lost.advance(by: 0.1) {
+            if case .struck = e { strikes += 1 }
+            if case .gameOver = e { over = true }
+        }
+        guardSteps += 1
+    }
+    check("losing every asset ends the game after \(fx.loss.strikesToLose) strikes and clears the field",
+          over && lost.isOver && strikes == fx.loss.strikesToLose && lost.liveAssets == 0 && lost.attackers.isEmpty)
+    check("a finished game ignores time and routes",
+          lost.advance(by: 10).isEmpty && !lost.route(to: lost.assets[0].id).isHit && lost.misses == fx.loss.strikesToLose)
+} else {
+    check("fixtures/defender.json loads and decodes", false)
+}
+
+
+// MARK: - CW Dungeon (#186)
+//
+// fixtures/dungeon.json, read by this harness AND by the Kotlin DungeonTest:
+// the spell book, pools, room layouts, attack windows, send times, scoring
+// and two scripted scenarios, all worked out from the rules in the fixture's
+// derivation block, never captured from either port.
+struct DungeonFixture: Decodable {
+    struct Derivation: Decodable {
+        let pointsPerHit: Int; let roomClearBonus: Int; let hitsPerMonster: Int
+        let bossEvery: Int; let bossHits: Int; let lives: Int
+        let baseWindow: Double; let windowDecay: Double; let minWindow: Double
+        let castDelay: Double; let roomDelay: Double
+        let minWpm: Double; let startOffset: Double; let step: Double; let hitsPerStep: Int
+        let starterCount: Int; let minPool: Int
+    }
+    struct Spell: Decodable { let spell: String; let counter: String; let heals: Bool; let characters: String }
+    struct Pool: Decodable { let name: String; let characters: String; let spells: [String]; let fallback: Bool }
+    struct Monster: Decodable { let kind: String; let hits: Int }
+    struct Room: Decodable { let room: Int; let monsters: [Monster] }
+    struct Window: Decodable { let room: Int; let difficulty: String; let window: Double }
+    struct Send: Decodable { let word: String; let wpm: Double; let seconds: Double }
+    struct Multiplier: Decodable { let combo: Int; let multiplier: Int }
+    struct Outcome: Decodable { let target: String; let chosen: String? }
+    struct OutcomeCase: Decodable { let expected: String; let keyed: String; let outcomes: [Outcome] }
+    struct Step: Decodable {
+        let step: String; let times: Int?
+        let score: Int; let lives: Int; let combo: Int; let room: Int; let currentWpm: Double; let alive: Int
+        let gameOver: Bool?
+    }
+    struct Scenario: Decodable {
+        let characterWpm: Double; let startWpm: Double; let targetWpm: Double; let lives: Int
+        let difficulty: String; let spell: String; let steps: [Step]
+        let hits: Int; let misses: Int; let bestCombo: Int; let bestWpm: Double
+    }
+    struct HealStep: Decodable { let step: String; let lives: Int; let healed: Bool }
+    struct HealScenario: Decodable { let characterWpm: Double; let lives: Int; let spell: String; let steps: [HealStep] }
+    let derivation: Derivation
+    let spells: [Spell]
+    let pools: [Pool]
+    let rooms: [Room]
+    let windows: [Window]
+    let sendSeconds: [Send]
+    let multiplier: [Multiplier]
+    let characterOutcomes: [OutcomeCase]
+    let scenario: Scenario
+    let healScenario: HealScenario
+}
+
+func loadDungeonFixture() -> DungeonFixture? {
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+    guard let data = try? Data(contentsOf: root.appendingPathComponent("fixtures/dungeon.json")) else { return nil }
+    return try? JSONDecoder().decode(DungeonFixture.self, from: data)
+}
+
+/// "TRAP>MAP" in the fixture names a spell of the book.
+func dungeonSpell(named key: String) -> DungeonSpell? {
+    DungeonSpells.all.first { "\($0.spell)>\($0.counter)" == key }
+}
+
+/// Step a game until a spell is pending (or it ends); returns the seconds waited.
+@MainActor
+func dungeonWaitForCast(_ g: DungeonGame) -> Double {
+    var waited = 0.0
+    while g.pendingCast == nil && !g.isOver && waited < 10 { g.advance(by: 0.05); waited += 0.05 }
+    return waited
+}
+
+print("\nCW Dungeon (fixtures/dungeon.json):")
+if let fx = loadDungeonFixture() {
+    let d = fx.derivation
+    check("scoring and room constants are the fixture's",
+          DungeonGame.pointsPerHit == d.pointsPerHit && DungeonGame.roomClearBonus == d.roomClearBonus
+          && DungeonGame.hitsPerMonster == d.hitsPerMonster && DungeonGame.bossEvery == d.bossEvery
+          && DungeonGame.bossHits == d.bossHits)
+    check("timing constants are the fixture's",
+          DungeonGame.baseWindow == d.baseWindow && DungeonGame.windowDecay == d.windowDecay
+          && DungeonGame.minWindow == d.minWindow && DungeonGame.castDelay == d.castDelay
+          && DungeonGame.roomDelay == d.roomDelay)
+    check("ramp constants are the fixture's",
+          DungeonGame.minWpm == d.minWpm && DungeonGame.rampStartOffset == d.startOffset
+          && DungeonGame.rampStep == d.step && DungeonGame.hitsPerRampStep == d.hitsPerStep)
+    check("pool constants are the fixture's",
+          DungeonSpells.starterCount == d.starterCount && DungeonSpells.minPool == d.minPool)
+
+    // The spell book, in order, with the characters each pair needs.
+    var bookOK = DungeonSpells.all.count == fx.spells.count
+    for (got, want) in zip(DungeonSpells.all, fx.spells) {
+        if got.spell != want.spell || got.counter != want.counter || got.heals != want.heals
+            || String(got.characters.sorted()) != want.characters {
+            bookOK = false
+            print("      ↳ \(got.label): fixture says \(want.spell) → \(want.counter), heals \(want.heals), needs \(want.characters)")
+        }
+    }
+    check("the spell book is the fixture's \(fx.spells.count) pairs, in order", bookOK)
+    check("starters are the first \(d.starterCount) of the book",
+          DungeonSpells.starters == Array(DungeonSpells.all.prefix(d.starterCount)))
+
+    var poolsOK = true
+    for p in fx.pools {
+        let got = DungeonSpells.pool(for: Array(p.characters))
+        let names = got.spells.map { "\($0.spell)>\($0.counter)" }
+        if names != p.spells || got.fallback != p.fallback {
+            poolsOK = false
+            print("      ↳ \(p.name): got \(names) fallback \(got.fallback); fixture says \(p.spells) fallback \(p.fallback)")
+        }
+    }
+    check("pools follow the fixture across \(fx.pools.count) sets", poolsOK)
+
+    var roomsOK = true
+    for r in fx.rooms {
+        let got = DungeonGame.layout(room: r.room).map { "\($0.kind.rawValue):\($0.hits)" }
+        let want = r.monsters.map { "\($0.kind):\($0.hits)" }
+        if got != want { roomsOK = false; print("      ↳ room \(r.room): got \(got), fixture says \(want)") }
+    }
+    check("room layouts follow the fixture across \(fx.rooms.count) rooms", roomsOK)
+
+    var windowsOK = true
+    for w in fx.windows {
+        guard let diff = InvadersDifficulty(rawValue: w.difficulty) else { windowsOK = false; continue }
+        let got = DungeonGame.window(room: w.room, difficulty: diff)
+        if !approxEqual(got, w.window, 1e-6) {
+            windowsOK = false
+            print("      ↳ room \(w.room) \(w.difficulty): \(got), fixture says \(w.window)")
+        }
+    }
+    check("attack windows follow the fixture across \(fx.windows.count) cases", windowsOK)
+
+    var sendOK = true
+    for s in fx.sendSeconds {
+        let got = DungeonGame.sendSeconds(s.word, timing: MorseTiming(wpm: s.wpm))
+        if !approxEqual(got, s.seconds, 1e-6) {
+            sendOK = false
+            print("      ↳ \(s.word) at \(s.wpm) WPM: \(got) s, fixture says \(s.seconds)")
+        }
+    }
+    check("send times follow PARIS timing across \(fx.sendSeconds.count) words", sendOK)
+
+    check("the multiplier follows the fixture",
+          fx.multiplier.allSatisfy { DungeonGame.multiplier(combo: $0.combo) == $0.multiplier })
+
+    var outcomesOK = true
+    for c in fx.characterOutcomes {
+        let got = DungeonGame.characterOutcomes(expected: c.expected, keyed: c.keyed)
+        let want = c.outcomes.map { DungeonCharacterOutcome(target: Character($0.target), chosen: $0.chosen.map { Character($0) }) }
+        if got != want {
+            outcomesOK = false
+            print("      ↳ \(c.expected) vs '\(c.keyed)': got \(got.map { "\($0.target)/\($0.chosen.map(String.init) ?? "-")" })")
+        }
+    }
+    check("character outcomes follow the fixture across \(fx.characterOutcomes.count) cases", outcomesOK)
+
+    // The scripted scenario: a one-spell pool, so what is cast is known.
+    let sc = fx.scenario
+    if let spell = dungeonSpell(named: sc.spell), let diff = InvadersDifficulty(rawValue: sc.difficulty) {
+        let g = DungeonGame(config: .init(spells: [spell], difficulty: diff, lives: sc.lives, characterWpm: sc.characterWpm),
+                            rng: SeededRNG(seed: 7))
+        check("the scenario game opens at its start speed with one monster",
+              approxEqual(g.currentWpm, sc.startWpm) && approxEqual(g.config.targetWpm, sc.targetWpm)
+              && g.room == 1 && g.monsters.count == 1 && g.pendingCast == nil)
+        // The first cast comes castDelay after the start, not before.
+        let early = g.advance(by: d.castDelay - 0.01)
+        let onTime = g.advance(by: 0.02)
+        var firstCast: DungeonCast?
+        if case .cast(let c)? = onTime.first { firstCast = c }
+        check("the first spell is cast castDelay after the start",
+              early.isEmpty && onTime.count == 1 && firstCast?.spell == spell
+              && firstCast?.monsterId == g.monsters[0].id && g.isSending)
+        check("the cast carries the room's window and the word's send time",
+              firstCast.map { approxEqual($0.window, DungeonGame.window(room: 1, difficulty: diff))
+                  && approxEqual($0.sendSeconds, DungeonGame.sendSeconds(spell.spell, timing: MorseTiming(wpm: sc.startWpm))) } ?? false)
+        let probe = DungeonGame(config: .init(spells: [spell]), rng: SeededRNG(seed: 1))
+        check("keying between casts is nothing",
+              probe.cast(spell.counter) == nil && probe.score == 0 && probe.lives == 3)
+
+        var scenarioOK = true
+        var lastRoom = 1
+        for (i, st) in sc.steps.enumerated() {
+            for _ in 0..<(st.times ?? 1) {
+                let waited = dungeonWaitForCast(g)
+                if g.room != lastRoom {
+                    // A new room's first cast waits roomDelay, not castDelay.
+                    if waited < d.roomDelay - 0.05 { scenarioOK = false; print("      ↳ step \(i): room \(g.room) cast after \(waited) s, under roomDelay") }
+                    lastRoom = g.room
+                }
+                guard let pending = g.pendingCast else { scenarioOK = false; print("      ↳ step \(i): no spell pending"); break }
+                switch st.step {
+                case "counter":
+                    if !(g.cast(pending.spell.counter)?.isCountered ?? false) { scenarioOK = false; print("      ↳ step \(i): the counter did not land") }
+                case "wrong":
+                    let r = g.cast("XX")
+                    if r?.outcome != .wrong || r?.points != 0 { scenarioOK = false; print("      ↳ step \(i): XX was not wrong") }
+                case "late":
+                    // The attack lands at sendSeconds + window, not a tick before.
+                    let before = g.advance(by: pending.sendSeconds + pending.window - 0.01)
+                    let after = g.advance(by: 0.02)
+                    let landed = after.contains { if case .attacked = $0 { return true } else { return false } }
+                    if !before.isEmpty || !landed { scenarioOK = false; print("      ↳ step \(i): the attack landed early or not at all") }
+                default:
+                    scenarioOK = false
+                    print("      ↳ step \(i): unknown step '\(st.step)' in the fixture")
+                }
+            }
+            let alive = g.monsters.filter { !$0.isDown }.count
+            if g.score != st.score || g.lives != st.lives || g.combo != st.combo || g.room != st.room
+                || !approxEqual(g.currentWpm, st.currentWpm) || alive != st.alive || g.isOver != (st.gameOver ?? false) {
+                scenarioOK = false
+                print("      ↳ after step \(i) (\(st.step)): score \(g.score) lives \(g.lives) combo \(g.combo) room \(g.room) wpm \(g.currentWpm) alive \(alive) over \(g.isOver); fixture says \(st.score) \(st.lives) \(st.combo) \(st.room) \(st.currentWpm) \(st.alive) \(st.gameOver ?? false)")
+            }
+        }
+        check("the run follows the scripted scenario across \(sc.steps.count) steps", scenarioOK)
+        check("the scenario's tallies are the fixture's",
+              g.hits == sc.hits && g.misses == sc.misses && g.bestCombo == sc.bestCombo && approxEqual(g.bestWpm, sc.bestWpm))
+        check("a finished game ignores time and keying",
+              g.isOver && g.advance(by: 10).isEmpty && g.cast(spell.counter) == nil)
+    } else {
+        check("the scenario names a spell of the book and a difficulty", false)
+    }
+
+    let hs = fx.healScenario
+    if let heal = dungeonSpell(named: hs.spell) {
+        let g = DungeonGame(config: .init(spells: [heal], lives: hs.lives, characterWpm: hs.characterWpm), rng: SeededRNG(seed: 3))
+        var healOK = heal.heals
+        for (i, st) in hs.steps.enumerated() {
+            _ = dungeonWaitForCast(g)
+            let r = st.step == "counter" ? g.cast(heal.counter) : g.cast("XX")
+            if g.lives != st.lives || (r?.healed ?? false) != st.healed {
+                healOK = false
+                print("      ↳ heal step \(i) (\(st.step)): lives \(g.lives) healed \(r?.healed ?? false); fixture says \(st.lives) \(st.healed)")
+            }
+        }
+        check("a countered heal restores a life, never past the start", healOK)
+    } else {
+        check("the heal scenario names a spell of the book", false)
+    }
+
+    // Same seed, same spells; the same spell never twice running.
+    @MainActor
+    func spellSequence(seed: UInt64) -> [String] {
+        let g = DungeonGame(config: .init(spells: DungeonSpells.all, lives: 50), rng: SeededRNG(seed: seed))
+        var out: [String] = []
+        for _ in 0..<24 {
+            _ = dungeonWaitForCast(g)
+            out.append(g.pendingCast?.spell.spell ?? "")
+            _ = g.cast("XX")
+        }
+        return out
+    }
+    let seq = spellSequence(seed: 42)
+    check("same seed gives the same spell sequence, never the same spell twice running",
+          seq == spellSequence(seed: 42) && seq != spellSequence(seed: 43)
+          && zip(seq, seq.dropFirst()).allSatisfy { $0 != $1 })
+
+    // Echoing the spell is a wrong counter, and says so.
+    if let trap = dungeonSpell(named: "TRAP>MAP") {
+        let g = DungeonGame(config: .init(spells: [trap]), rng: SeededRNG(seed: 1))
+        _ = dungeonWaitForCast(g)
+        let r = g.cast("trap")
+        check("echoing the spell is a wrong counter flagged as an echo",
+              r?.isCountered == false && r?.isEcho == true && g.lives == 2)
+    } else {
+        check("TRAP>MAP is in the book", false)
+    }
+
+    // Farnsworth stretches the sent word's character gaps, not its characters.
+    let fw = DungeonGame(config: .init(spells: DungeonSpells.starters, characterWpm: 20, effectiveWpm: 10), rng: SeededRNG(seed: 1))
+    check("an effective speed under the ramp start stretches the spell's spacing",
+          fw.timing.wpm == fw.config.startWpm && fw.timing.effectiveWpm == 10
+          && DungeonGame.sendSeconds("TRAP", timing: fw.timing) > DungeonGame.sendSeconds("TRAP", timing: MorseTiming(wpm: fw.config.startWpm)))
+} else {
+    check("fixtures/dungeon.json loads and decodes", false)
+}
+
+// CW Frogger (#190), against fixtures/frogger.json — read by this harness AND
+// by the Kotlin FroggerTest. The expected values were derived from the rules
+// in the fixture's derivation block by a script that knows only those rules,
+// not captured from either port.
+struct FroggerFixture: Decodable {
+    struct Derivation: Decodable {
+        let rows, startRow, medianRow, goalRow, columns: Int
+        let frogHalfWidth, waveSpeedGrowth, maxLaneSpeed: Double
+        let pointsPerHop, pointsPerDecision, pointsPerCrossing, memoryFromWave, hiddenFromWave: Int
+        let minWpm, rampStartOffset, rampStep: Double
+        let decisionsPerStep: Int
+    }
+    struct Lane: Decodable { let row: Int; let kind: String; let direction, count: Int; let width, baseSpeed: Double }
+    struct Speed: Decodable { let baseSpeed: Double; let wave: Int; let difficulty: String; let speed: Double }
+    struct Multiplier: Decodable { let combo, multiplier: Int }
+    struct Stage: Decodable { let wave: Int; let stage: String }
+    struct RampRow: Decodable { let characterWpm, startWpm, targetWpm: Double }
+    struct Step: Decodable {
+        let advance: Double?; let move: String?
+        let events: [String]; let row: Int; let x: Double
+        let score, lives, wave, combo: Int; let currentWpm: Double
+        let enteredCount: Int?
+    }
+    struct Final: Decodable { let decisions, misses: Int; let bestWpm: Double; let isOver: Bool }
+    struct Scenario: Decodable {
+        let pool, difficulty: String; let characterWpm: Double; let lives: Int
+        let startWpm, targetWpm: Double; let firstCueRow: Int
+        let steps: [Step]; let final: Final
+    }
+    let derivation: Derivation
+    let lanes: [Lane]
+    let difficultyTimeScale: [String: Double]
+    let speedTable: [Speed]
+    let multiplier: [Multiplier]
+    let labelStage: [Stage]
+    let rampStartTable: [RampRow]
+    let scenario: Scenario
+}
+
+func loadFroggerFixture() -> FroggerFixture? {
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+    guard let data = try? Data(contentsOf: root.appendingPathComponent("fixtures/frogger.json")) else { return nil }
+    return try? JSONDecoder().decode(FroggerFixture.self, from: data)
+}
+
+/// The fixture's name for an event, or nil for the ones it counts separately.
+func froggerEventKind(_ event: FroggerEvent) -> String? {
+    switch event {
+    case .hopped:   return "hopped"
+    case .cue:      return "cue"
+    case .passed:   return "passed"
+    case .landed:   return "landed"
+    case .squashed: return "squashed"
+    case .sank:     return "sank"
+    case .drowned:  return "drowned"
+    case .crossed:  return "crossed"
+    case .gameOver: return "gameOver"
+    case .entered:  return nil
+    }
+}
+
+print("\nCW Frogger (fixtures/frogger.json):")
+if let fx = loadFroggerFixture() {
+    let d = fx.derivation
+    check("the board and scoring constants are the fixture's",
+          FroggerGame.rows == d.rows && FroggerGame.startRow == d.startRow
+          && FroggerGame.medianRow == d.medianRow && FroggerGame.goalRow == d.goalRow
+          && FroggerGame.columns == d.columns && approxEqual(FroggerGame.frogHalfWidth, d.frogHalfWidth)
+          && approxEqual(FroggerGame.waveSpeedGrowth, d.waveSpeedGrowth)
+          && approxEqual(FroggerGame.maxLaneSpeed, d.maxLaneSpeed)
+          && FroggerGame.pointsPerHop == d.pointsPerHop && FroggerGame.pointsPerDecision == d.pointsPerDecision
+          && FroggerGame.pointsPerCrossing == d.pointsPerCrossing
+          && FroggerGame.memoryFromWave == d.memoryFromWave && FroggerGame.hiddenFromWave == d.hiddenFromWave)
+    check("the ramp constants are the fixture's",
+          FroggerGame.minWpm == d.minWpm && FroggerGame.rampStartOffset == d.rampStartOffset
+          && FroggerGame.rampStep == d.rampStep && FroggerGame.decisionsPerRampStep == d.decisionsPerStep)
+
+    var lanesOK = FroggerGame.lanes.count == fx.lanes.count
+    for (lane, expected) in zip(FroggerGame.lanes, fx.lanes) {
+        if lane.row != expected.row || lane.kind.rawValue != expected.kind || lane.direction != expected.direction
+            || lane.count != expected.count || !approxEqual(lane.width, expected.width)
+            || !approxEqual(lane.baseSpeed, expected.baseSpeed) {
+            lanesOK = false
+            print("      ↳ row \(lane.row): \(lane) differs from the fixture")
+        }
+    }
+    check("the lane layout is the fixture's (\(fx.lanes.count) lanes)", lanesOK)
+    check("difficulty time scales are the fixture's",
+          InvadersDifficulty.allCases.allSatisfy { d in fx.difficultyTimeScale[d.rawValue].map { approxEqual($0, d.timeScale) } ?? false })
+
+    var speedsOK = true
+    for s in fx.speedTable {
+        guard let difficulty = InvadersDifficulty(rawValue: s.difficulty) else { speedsOK = false; continue }
+        let got = FroggerGame.laneSpeed(baseSpeed: s.baseSpeed, wave: s.wave, difficulty: difficulty)
+        if !approxEqual(got, s.speed) {
+            speedsOK = false
+            print("      ↳ base \(s.baseSpeed) wave \(s.wave) \(s.difficulty): got \(got), fixture says \(s.speed)")
+        }
+    }
+    check("lane speeds follow the fixture table across \(fx.speedTable.count) rows", speedsOK)
+    check("the combo multiplier steps as the fixture pins",
+          fx.multiplier.allSatisfy { FroggerGame.multiplier(combo: $0.combo) == $0.multiplier })
+    check("the label stage follows the wave as the fixture pins",
+          fx.labelStage.allSatisfy { FroggerGame.labelStage(wave: $0.wave).rawValue == $0.stage })
+    var rampOK = true
+    for row in fx.rampStartTable {
+        let config = FroggerGame.Config(characters: ["K"], characterWpm: row.characterWpm)
+        let opens = FroggerGame(config: config, rng: SeededRNG(seed: 1)).currentWpm
+        if !approxEqual(FroggerGame.rampStart(characterWpm: row.characterWpm), row.startWpm)
+            || !approxEqual(config.startWpm, row.startWpm) || !approxEqual(config.targetWpm, row.targetWpm)
+            || !approxEqual(opens, row.startWpm) {
+            rampOK = false
+            print("      ↳ \(row.characterWpm) WPM: start \(config.startWpm), target \(config.targetWpm); fixture says \(row.startWpm) / \(row.targetWpm)")
+        }
+    }
+    check("ramp start and target follow the fixture table across \(fx.rampStartTable.count) speeds", rampOK)
+
+    // The scripted crossing.
+    let sc = fx.scenario
+    let g = FroggerGame(config: .init(characters: Array(sc.pool),
+                                      difficulty: InvadersDifficulty(rawValue: sc.difficulty) ?? .normal,
+                                      lives: sc.lives, characterWpm: sc.characterWpm),
+                        rng: SeededRNG(seed: 9))
+    let cueChar = sc.pool.first!
+    check("the scenario game opens on the start bank at its start speed with lane 1 cued",
+          g.frog == FroggerFrog(row: FroggerGame.startRow, x: 0.5) && approxEqual(g.currentWpm, sc.startWpm)
+          && approxEqual(g.config.targetWpm, sc.targetWpm) && g.cues == [sc.firstCueRow: cueChar]
+          && g.objects.count == FroggerGame.lanes.reduce(0) { $0 + $1.count }
+          && g.objects.allSatisfy { $0.character == cueChar })
+    var scenarioOK = true
+    for (i, step) in sc.steps.enumerated() {
+        let events: [FroggerEvent]
+        let what: String
+        if let seconds = step.advance {
+            events = g.advance(by: seconds)
+            what = "advance \(seconds)"
+        } else if let move = step.move, let direction = FroggerDirection(rawValue: move) {
+            events = g.move(direction)
+            what = "move \(move)"
+        } else {
+            scenarioOK = false
+            print("      ↳ step \(i): unknown step in the fixture")
+            continue
+        }
+        let kinds = events.compactMap(froggerEventKind)
+        let entered = events.filter { if case .entered = $0 { return true } else { return false } }.count
+        var cuesOK = true
+        for event in events {
+            if case .cue(let row, let character) = event, row != g.frog.row + 1 || character != cueChar { cuesOK = false }
+        }
+        let got = "\(kinds) row \(g.frog.row) x \(g.frog.x) score \(g.score) lives \(g.lives) wave \(g.wave) combo \(g.combo) wpm \(g.currentWpm)"
+        let want = "\(step.events) row \(step.row) x \(step.x) score \(step.score) lives \(step.lives) wave \(step.wave) combo \(step.combo) wpm \(step.currentWpm)"
+        if kinds != step.events || g.frog.row != step.row || !approxEqual(g.frog.x, step.x)
+            || g.score != step.score || g.lives != step.lives || g.wave != step.wave || g.combo != step.combo
+            || !approxEqual(g.currentWpm, step.currentWpm) || !cuesOK
+            || (step.enteredCount.map { $0 != entered } ?? false) {
+            scenarioOK = false
+            print("      ↳ step \(i) (\(what)): got \(got)\(entered > 0 ? " entered \(entered)" : ""); fixture says \(want)\(step.enteredCount.map { " entered \($0)" } ?? "")")
+        }
+    }
+    check("the scripted crossing matches the fixture across \(sc.steps.count) steps", scenarioOK)
+    check("the scenario's totals are the fixture's",
+          g.decisions == sc.final.decisions && g.misses == sc.final.misses
+          && approxEqual(g.bestWpm, sc.final.bestWpm) && g.isOver == sc.final.isOver
+          && approxEqual(g.accuracy, Double(sc.final.decisions) / Double(sc.final.decisions + sc.final.misses)))
+} else {
+    check("fixtures/frogger.json loads and decodes", false)
+}
+
+// CW Frogger rules the fixture leaves to the random generator — the same
+// expectations as the Kotlin FroggerTest.
+print("\nCW Frogger rules:")
+do {
+    // A two-character pool: whatever the cue is, the other label is wrong.
+    // Objects sit at 1/6, 1/2 and 5/6 until time moves, so the frog at 0.5 is
+    // on the middle object of every lane it hops into.
+    func game(seed: UInt64) -> FroggerGame {
+        FroggerGame(config: .init(characters: ["K", "M"]), rng: SeededRNG(seed: seed))
+    }
+    var squashSeen = false, passSeen = false, sinkSeen = false, landSeen = false
+    var rulesOK = true
+    for seed in 1...40 {
+        let g = game(seed: UInt64(seed))
+        guard let cue = g.nextCue, let middle = g.objects.first(where: { $0.row == 1 && abs($0.x - 0.5) < 1e-9 }) else {
+            rulesOK = false; continue
+        }
+        let events = g.move(.up)
+        if middle.character == cue {
+            passSeen = true
+            if !events.contains(.passed(middle, points: FroggerGame.pointsPerDecision)) || g.lives != 3 || g.combo != 1 { rulesOK = false }
+        } else {
+            squashSeen = true
+            if !events.contains(.squashed(middle, cue: cue)) || g.lives != 2 || g.frog.row != 0 || g.cues.count != 1 { rulesOK = false }
+        }
+        // Straight to the river on a fresh game: walk the median first.
+        let r = game(seed: UInt64(seed) + 100)
+        var atMedian = false
+        for _ in 0..<4 {
+            let ev = r.move(.up)
+            if ev.contains(where: { if case .squashed = $0 { return true } else { return false } }) { break }
+            if r.frog.row == FroggerGame.medianRow { atMedian = true }
+        }
+        guard atMedian, let riverCue = r.nextCue,
+              let log = r.objects.first(where: { $0.row == 5 && abs($0.x - 0.5) < 1e-9 }) else { continue }
+        let landing = r.move(.up)
+        if log.character == riverCue {
+            landSeen = true
+            if !landing.contains(where: { if case .landed(let l, _) = $0 { return l.id == log.id } else { return false } })
+                || r.ridingId != log.id { rulesOK = false }
+        } else {
+            sinkSeen = true
+            if !landing.contains(.sank(log, cue: riverCue)) || r.frog.row != 0 || r.ridingId != nil { rulesOK = false }
+        }
+    }
+    check("a wrong vehicle squashes, a cued one is passed through", rulesOK && squashSeen && passSeen)
+    check("a wrong log sinks, a cued one is ridden", sinkSeen && landSeen)
+
+    // A ridden log carries the frog, and the frog wraps with it.
+    let k = FroggerGame(config: .init(characters: ["K"]), rng: SeededRNG(seed: 3))
+    for _ in 0..<5 { k.move(.up) }
+    let before = k.frog.x
+    k.advance(by: 0.5)
+    let lane5 = FroggerGame.lanes.first { $0.row == 5 }!
+    check("a cued log carries the frog with it",
+          k.frog.row == 5 && k.ridingId != nil
+          && approxEqual(k.frog.x, before - FroggerGame.laneSpeed(baseSpeed: lane5.baseSpeed, wave: 1, difficulty: .normal) * 0.5))
+    let riding = k.ridingId
+    k.advance(by: 4)
+    check("the frog wraps with its log", k.ridingId == riding && k.frog.x >= 0 && k.frog.x < 1
+          && k.objects.first { $0.id == riding }.map { approxEqual(FroggerGame.wrappedDistance($0.x, k.frog.x), 0) } ?? false)
+
+    // A vehicle is credited once per overlap, not once per frame.
+    let p = FroggerGame(config: .init(characters: ["K"]), rng: SeededRNG(seed: 4))
+    p.move(.up)
+    let after = p.decisions
+    for _ in 0..<10 { p.advance(by: 0.01) }
+    check("a passing vehicle is credited once", after == 1 && p.decisions == 1)
+
+    // Three deaths end the game; a finished game ignores hops and time.
+    let o = FroggerGame(config: .init(characters: ["K"]), rng: SeededRNG(seed: 5))
+    var deaths = 0
+    var over = false
+    o.advance(by: 1.0)
+    for _ in 0..<3 {
+        for _ in 0..<5 {
+            let ev = o.move(.up)
+            if ev.contains(where: { if case .drowned = $0 { return true } else { return false } }) { deaths += 1 }
+            if ev.contains(.gameOver) { over = true }
+            if o.frog.row == 0 { break }
+        }
+    }
+    check("three drownings end the game", deaths == 3 && over && o.isOver && o.lives == 0)
+    check("a finished game ignores hops and time", o.move(.up).isEmpty && o.advance(by: 1).isEmpty)
+
+    // Memory stage: a lane's labels hide once it is cued; hidden stage: never shown.
+    let m = FroggerGame(config: .init(characters: ["K"]), rng: SeededRNG(seed: 6))
+    check("labels are visible in wave 1", m.labelStage == .visible && (1...7).allSatisfy { m.isLabelVisible(row: $0) })
+    for _ in 0..<2 { for _ in 0..<8 { m.move(.up) } }
+    check("wave 3 hides a lane's labels once it is cued",
+          m.wave == 3 && m.labelStage == .memory && !m.isLabelVisible(row: 1) && m.isLabelVisible(row: 2))
+    for _ in 0..<2 { for _ in 0..<8 { m.move(.up) } }
+    check("wave 5 never shows a label", m.wave == 5 && m.labelStage == .hidden && !(1...7).contains { m.isLabelVisible(row: $0) })
+
+    // The same seed gives the same labels and cues.
+    func labels(seed: UInt64) -> String {
+        let g = FroggerGame(config: .init(characters: ["K", "M", "R", "S"]), rng: SeededRNG(seed: seed))
+        return g.objects.map { String($0.character) }.joined() + String(g.nextCue ?? "?")
+    }
+    check("same seed, same labels and cue", labels(seed: 42) == labels(seed: 42))
+    check("different seed, different labels", labels(seed: 42) != labels(seed: 43))
+    check("the cue is always a label its lane carries", (1...30).allSatisfy { seed in
+        let g = FroggerGame(config: .init(characters: ["K", "M", "R", "S", "U", "A"]), rng: SeededRNG(seed: UInt64(seed)))
+        return g.objects.contains { $0.row == 1 && $0.character == g.nextCue }
+    })
+}
+
+// MARK: - CW Asteroids (#189)
+//
+// fixtures/asteroids.json, consumed by this harness AND by the Kotlin
+// AsteroidsTest. Shared data, never shared code: it pins the timing and ramp
+// constants, the timing, multiplier, word-chance and ramp-start tables, the
+// word filter, the split rule, and a scripted scenario per input mode. The
+// expected values were worked out from the rules in the fixture's derivation
+// block, not captured from either port.
+struct AsteroidsFixture: Decodable {
+    struct Constants: Decodable {
+        let pointsPerCharacter, lives, hitsPerWave, maxOnField, sectors: Int
+        let baseSpawnInterval, minSpawnInterval, spawnTightening: Double
+        let baseApproachTime, minApproachTime, approachTightening, splitSpread: Double
+        let wordWaveStart: Int; let wordChancePerWave, maxWordChance: Double
+        let wordRank, minWordLength, maxWordLength: Int
+        let sendBufferTimeout: Double
+    }
+    struct Ramp: Decodable { let minWpm, startOffset, step: Double; let hitsPerStep: Int }
+    struct Derivation: Decodable {
+        let constants: Constants; let ramp: Ramp; let timeScale: [String: Double]
+    }
+    struct TimingRow: Decodable { let wave: Int; let difficulty: String; let spawnInterval, approachTime: Double }
+    struct MultiplierRow: Decodable { let combo, multiplier: Int }
+    struct ChanceRow: Decodable { let wave: Int; let chance: Double }
+    struct StartRow: Decodable { let characterWpm, startWpm, targetWpm: Double }
+    struct WordFilter: Decodable { let pool: String; let words, kept: [String] }
+    struct Fragment: Decodable { let label: String; let angle: Double; let progress: Double? }
+    struct SplitCase: Decodable { let label: String; let angle, progress: Double; let fragments: [Fragment] }
+    struct Split: Decodable { let cases: [SplitCase] }
+    struct SendEvent: Decodable {
+        let event: String; let label: String?; let angle, progress, seconds: Double?
+        let char: String?; let outcome, buffer, expected, chosen: String?
+        let points: Int?; let fragments: [Fragment]?
+    }
+    struct SendFinal: Decodable { let score, hits, misses, combo, bestCombo, wave, lives, onField: Int }
+    struct SendScenario: Decodable { let characterWpm: Double; let hitsPerWave: Int; let events: [SendEvent]; let final: SendFinal }
+    struct CopyEvent: Decodable { let event: String; let times: Int?; let currentWpm: Double }
+    struct CopyFinal: Decodable { let score, hits, misses, bestCombo, wave, lives: Int; let bestWpm: Double }
+    struct CopyScenario: Decodable {
+        let characterWpm, startWpm, targetWpm: Double; let lives, hitsPerWave: Int
+        let events: [CopyEvent]; let final: CopyFinal
+    }
+    let derivation: Derivation
+    let timingTable: [TimingRow]
+    let multiplierTable: [MultiplierRow]
+    let wordChanceTable: [ChanceRow]
+    let startTable: [StartRow]
+    let wordFilter: WordFilter
+    let split: Split
+    let sendScenario: SendScenario
+    let copyScenario: CopyScenario
+}
+
+func loadAsteroidsFixture() -> AsteroidsFixture? {
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+    guard let data = try? Data(contentsOf: root.appendingPathComponent("fixtures/asteroids.json")) else { return nil }
+    return try? JSONDecoder().decode(AsteroidsFixture.self, from: data)
+}
+
+print("\nCW Asteroids (fixtures/asteroids.json):")
+if let fx = loadAsteroidsFixture() {
+    let c = fx.derivation.constants
+    check("asteroids constants are the fixture's",
+          AsteroidsGame.pointsPerCharacter == c.pointsPerCharacter && AsteroidsGame.defaultLives == c.lives
+          && AsteroidsGame.defaultHitsPerWave == c.hitsPerWave && AsteroidsGame.maxOnField == c.maxOnField
+          && AsteroidsGame.sectors == c.sectors
+          && AsteroidsGame.baseSpawnInterval == c.baseSpawnInterval && AsteroidsGame.minSpawnInterval == c.minSpawnInterval
+          && AsteroidsGame.spawnTightening == c.spawnTightening
+          && AsteroidsGame.baseApproachTime == c.baseApproachTime && AsteroidsGame.minApproachTime == c.minApproachTime
+          && AsteroidsGame.approachTightening == c.approachTightening && AsteroidsGame.splitSpread == c.splitSpread
+          && AsteroidsGame.wordWaveStart == c.wordWaveStart && AsteroidsGame.wordChancePerWave == c.wordChancePerWave
+          && AsteroidsGame.maxWordChance == c.maxWordChance && AsteroidsGame.wordRank == c.wordRank
+          && AsteroidsGame.minWordLength == c.minWordLength && AsteroidsGame.maxWordLength == c.maxWordLength
+          && AsteroidsGame.sendBufferTimeout == c.sendBufferTimeout)
+    let r = fx.derivation.ramp
+    check("asteroids ramp constants are the fixture's",
+          AsteroidsGame.minWpm == r.minWpm && AsteroidsGame.rampStartOffset == r.startOffset
+          && AsteroidsGame.rampStep == r.step && AsteroidsGame.hitsPerRampStep == r.hitsPerStep)
+    check("difficulty time scales are the fixture's",
+          InvadersDifficulty.allCases.allSatisfy { fx.derivation.timeScale[$0.rawValue] == $0.timeScale })
+
+    var timingOK = true
+    for row in fx.timingTable {
+        guard let d = InvadersDifficulty(rawValue: row.difficulty) else { timingOK = false; continue }
+        if !approxEqual(AsteroidsGame.spawnInterval(wave: row.wave, difficulty: d), row.spawnInterval, 1e-6)
+            || !approxEqual(AsteroidsGame.approachTime(wave: row.wave, difficulty: d), row.approachTime, 1e-6) {
+            timingOK = false
+        }
+    }
+    check("timing table matches across \(fx.timingTable.count) rows", timingOK && !fx.timingTable.isEmpty)
+    check("multiplier table matches",
+          fx.multiplierTable.allSatisfy { AsteroidsGame.multiplier(combo: $0.combo) == $0.multiplier })
+    check("word chance table matches",
+          fx.wordChanceTable.allSatisfy { approxEqual(AsteroidsGame.wordChance(wave: $0.wave), $0.chance, 1e-9) })
+
+    var startOK = true
+    for row in fx.startTable {
+        let config = AsteroidsGame.Config(characters: ["K"], input: .copy, characterWpm: row.characterWpm)
+        let opens = AsteroidsGame(config: config, rng: SeededRNG(seed: 1)).currentWpm
+        if !approxEqual(AsteroidsGame.rampStart(characterWpm: row.characterWpm), row.startWpm)
+            || !approxEqual(config.startWpm, row.startWpm) || !approxEqual(config.targetWpm, row.targetWpm)
+            || !approxEqual(opens, row.startWpm) {
+            startOK = false
+        }
+    }
+    check("ramp start table matches across \(fx.startTable.count) rows", startOK)
+
+    let wf = fx.wordFilter
+    check("word pool filter keeps the fixture's words",
+          AsteroidsGame.wordPool(words: wf.words, characters: Array(wf.pool)) == wf.kept)
+    let wfGame = AsteroidsGame(config: .init(characters: Array(wf.pool), words: wf.words), rng: SeededRNG(seed: 1))
+    check("a game's word pool is the filtered list", wfGame.wordPool == wf.kept)
+
+    var splitOK = true
+    for sc in fx.split.cases {
+        let g = AsteroidsGame(config: .init(characters: ["K"]), rng: SeededRNG(seed: 1))
+        let parent = g.place(label: sc.label, angle: sc.angle, progress: sc.progress)
+        var shot = AsteroidsShot(outcome: .ignored)
+        for ch in sc.label { shot = g.send(ch) }
+        if !shot.isHit || shot.asteroid?.id != parent.id || shot.fragments.count != sc.fragments.count { splitOK = false; continue }
+        for (f, e) in zip(shot.fragments, sc.fragments) {
+            if f.label != e.label || !approxEqual(f.angle, e.angle, 1e-9) || !approxEqual(f.progress, sc.progress, 1e-9)
+                || !f.isFragment || !approxEqual(f.approachTime, g.approachTime) {
+                splitOK = false
+            }
+        }
+        if g.asteroids.map(\.id) != shot.fragments.map(\.id) { splitOK = false }
+    }
+    check("a word splits into fragments per the fixture across \(fx.split.cases.count) cases", splitOK)
+
+    // Send-mode scenario.
+    do {
+        let sc = fx.sendScenario
+        let g = AsteroidsGame(config: .init(characters: ["K"], input: .send, hitsPerWave: sc.hitsPerWave,
+                                            characterWpm: sc.characterWpm), rng: SeededRNG(seed: 9))
+        var ok = true
+        var problems: [String] = []
+        for (i, ev) in sc.events.enumerated() {
+            switch ev.event {
+            case "place":
+                _ = g.place(label: ev.label ?? "", angle: ev.angle ?? 0, progress: ev.progress ?? 0)
+            case "send":
+                let shot = g.send(ev.char?.first ?? " ")
+                if shot.outcome.rawValue != ev.outcome { ok = false; problems.append("event \(i): outcome \(shot.outcome) not \(ev.outcome ?? "?")") }
+                if let p = ev.points, shot.points != p { ok = false; problems.append("event \(i): points \(shot.points) not \(p)") }
+                if let e = ev.expected, shot.expected != e.first { ok = false; problems.append("event \(i): expected \(String(describing: shot.expected))") }
+                if let ch = ev.chosen, shot.chosen != ch.first { ok = false; problems.append("event \(i): chosen \(String(describing: shot.chosen))") }
+                if let frags = ev.fragments {
+                    if frags.count != shot.fragments.count { ok = false; problems.append("event \(i): \(shot.fragments.count) fragments") }
+                    for (f, e) in zip(shot.fragments, frags) {
+                        if f.label != e.label || !approxEqual(f.angle, e.angle, 1e-9)
+                            || !approxEqual(f.progress, e.progress ?? f.progress, 1e-9) {
+                            ok = false; problems.append("event \(i): fragment \(f.label)@\(f.angle)")
+                        }
+                    }
+                }
+            case "advance":
+                g.advance(by: ev.seconds ?? 0)
+            default:
+                ok = false; problems.append("event \(i): unknown '\(ev.event)'")
+            }
+            if let b = ev.buffer, g.sendBuffer != b { ok = false; problems.append("event \(i): buffer '\(g.sendBuffer)' not '\(b)'") }
+        }
+        let f = sc.final
+        if g.score != f.score || g.hits != f.hits || g.misses != f.misses || g.combo != f.combo
+            || g.bestCombo != f.bestCombo || g.wave != f.wave || g.lives != f.lives || g.asteroids.count != f.onField {
+            ok = false
+            problems.append("final score \(g.score) hits \(g.hits) misses \(g.misses) combo \(g.combo) best \(g.bestCombo) wave \(g.wave) lives \(g.lives) onField \(g.asteroids.count)")
+        }
+        check("send scenario follows the fixture" + (problems.isEmpty ? "" : " — " + problems.joined(separator: "; ")), ok)
+    }
+
+    // Copy-mode scenario.
+    do {
+        let sc = fx.copyScenario
+        let g = AsteroidsGame(config: .init(characters: ["K"], input: .copy, lives: sc.lives, hitsPerWave: sc.hitsPerWave,
+                                            characterWpm: sc.characterWpm), rng: SeededRNG(seed: 7))
+        var ok = approxEqual(g.currentWpm, sc.startWpm) && approxEqual(g.config.targetWpm, sc.targetWpm)
+        var problems: [String] = []
+        var angle = 0.0
+        func nextAngle() -> Double { angle += 0.5; return angle }
+        for (i, ev) in sc.events.enumerated() {
+            for _ in 0..<(ev.times ?? 1) {
+                switch ev.event {
+                case "hit":
+                    if g.armed == nil { _ = g.place(label: "K", angle: nextAngle(), progress: 0) }
+                    guard let armed = g.armed else { ok = false; problems.append("event \(i): nothing armed"); continue }
+                    if !g.tap(armed.id).isHit { ok = false; problems.append("event \(i): tap on the armed asteroid missed") }
+                case "wrongTap":
+                    if g.armed == nil { _ = g.place(label: "K", angle: nextAngle(), progress: 0) }
+                    let m = g.place(label: "M", angle: nextAngle(), progress: 0)
+                    let shot = g.tap(m.id)
+                    if shot.outcome != .miss || shot.chosen != "M" { ok = false; problems.append("event \(i): wrong tap was \(shot.outcome)") }
+                case "strike":
+                    _ = g.place(label: "K", angle: nextAngle(), progress: 0.99)
+                    var struck = 0
+                    var guardSteps = 0
+                    while struck == 0 && guardSteps < 100 {
+                        struck = g.advance(by: 0.05).filter { if case .struck = $0 { return true } else { return false } }.count
+                        guardSteps += 1
+                    }
+                    if struck != 1 { ok = false; problems.append("event \(i): \(struck) strikes") }
+                default:
+                    ok = false; problems.append("event \(i): unknown '\(ev.event)'")
+                }
+            }
+            if !approxEqual(g.currentWpm, ev.currentWpm) { ok = false; problems.append("event \(i) (\(ev.event)): \(g.currentWpm) WPM not \(ev.currentWpm)") }
+        }
+        let f = sc.final
+        if g.score != f.score || g.hits != f.hits || g.misses != f.misses || g.bestCombo != f.bestCombo
+            || g.wave != f.wave || g.lives != f.lives || !approxEqual(g.bestWpm, f.bestWpm) || g.isOver {
+            ok = false
+            problems.append("final score \(g.score) hits \(g.hits) misses \(g.misses) best \(g.bestCombo) wave \(g.wave) lives \(g.lives) bestWpm \(g.bestWpm)")
+        }
+        check("copy scenario follows the fixture" + (problems.isEmpty ? "" : " — " + problems.joined(separator: "; ")), ok)
+    }
+
+    // Rules the fixture states in prose, checked directly.
+    do {
+        let pool: [Character] = ["K", "M", "R", "S"]
+        let g1 = AsteroidsGame(config: .init(characters: pool), rng: SeededRNG(seed: 1))
+        let interval = g1.spawnInterval
+        check("nothing spawns before the interval", g1.advance(by: interval - 0.01).isEmpty && g1.asteroids.isEmpty)
+        let spawned = g1.advance(by: 0.02)
+        if case .spawned(let a)? = spawned.first {
+            check("a spawn lands on the interval, born by the overshoot, from the rim",
+                  spawned.count == 1 && pool.contains(a.label.first!) && a.label.count == 1
+                  && approxEqual(a.progress, 0.01 / g1.approachTime)
+                  && approxEqual(a.approachTime, AsteroidsGame.baseApproachTime))
+        } else {
+            check("first event is a spawn", false)
+        }
+        check("copy mode is not armed in send mode", g1.armed == nil)
+
+        // Sectors: consecutive spawns never share one; every angle is a sector centre.
+        let g2 = AsteroidsGame(config: .init(characters: pool), rng: SeededRNG(seed: 42))
+        var angles: [Double] = []
+        for _ in 0..<12 {
+            g2.advance(by: g2.spawnInterval)
+            if let last = g2.asteroids.last { angles.append(last.angle) }
+            for a in g2.asteroids { for ch in a.label { _ = g2.send(ch) } }
+        }
+        let step = 2 * Double.pi / Double(AsteroidsGame.sectors)
+        check("spawn angles sit on sector centres and consecutive spawns differ",
+              angles.count == 12
+              && angles.allSatisfy { a in let s = a / step - 0.5; return approxEqual(s, s.rounded(), 1e-9) }
+              && zip(angles, angles.dropFirst()).allSatisfy { !approxEqual($0, $1, 1e-9) })
+
+        // Position: rim at progress 0, ship at 1.
+        let rim = Asteroid(id: 1, label: "K", angle: 0, progress: 0, approachTime: 10)
+        let ship = Asteroid(id: 2, label: "K", angle: 1, progress: 1, approachTime: 10)
+        check("normalised position runs from the rim to the ship",
+              approxEqual(rim.x, 1.0) && approxEqual(rim.y, 0.5) && approxEqual(ship.x, 0.5) && approxEqual(ship.y, 0.5)
+              && approxEqual(rim.heading, Double.pi))
+
+        // A full field skips the spawn.
+        let g3 = AsteroidsGame(config: .init(characters: pool), rng: SeededRNG(seed: 3))
+        for i in 0..<AsteroidsGame.maxOnField { _ = g3.place(label: "K", angle: Double(i), progress: 0) }
+        check("a full field skips the spawn", !g3.advance(by: g3.spawnInterval + 0.01).contains { if case .spawned = $0 { return true } else { return false } }
+              && g3.asteroids.count == AsteroidsGame.maxOnField)
+
+        // A strike costs a life; the third ends the game.
+        let g4 = AsteroidsGame(config: .init(characters: pool), rng: SeededRNG(seed: 4))
+        var strikes = 0
+        var over = false
+        var steps = 0
+        while !over && steps < 100_000 {
+            for ev in g4.advance(by: 0.1) {
+                if case .struck = ev { strikes += 1 }
+                if case .gameOver = ev { over = true }
+            }
+            steps += 1
+        }
+        check("three strikes end the game", over && g4.isOver && g4.lives == 0 && strikes == 3 && g4.asteroids.isEmpty)
+        check("a finished game ignores time, sends and taps",
+              g4.advance(by: 10).isEmpty && g4.send("K").outcome == .ignored && g4.tap(1).outcome == .ignored)
+
+        // Copy mode: the cue arms one asteroid, a tap on the wrong one misses, on an empty spot is ignored.
+        let g5 = AsteroidsGame(config: .init(characters: ["K", "M"], input: .copy), rng: SeededRNG(seed: 5))
+        let k = g5.place(label: "K", angle: 0, progress: 0)
+        let m = g5.place(label: "M", angle: 1, progress: 0)
+        check("placing arms the first asteroid in copy mode", g5.armed?.id == k.id)
+        check("a tap on empty space is ignored", g5.tap(99).outcome == .ignored && g5.misses == 0)
+        let wrong = g5.tap(m.id)
+        check("a tap on the wrong asteroid is a miss confused with its label",
+              wrong.outcome == .miss && wrong.expected == "K" && wrong.chosen == "M" && g5.misses == 1 && g5.asteroids.count == 2)
+        let right = g5.tap(k.id)
+        check("a tap on the armed asteroid hits and arms the next",
+              right.isHit && right.cued?.id == m.id && g5.armed?.id == m.id && g5.asteroids.count == 1)
+        let k2 = g5.place(label: "K", angle: 2, progress: 0)
+        _ = g5.tap(m.id)
+        check("with one left it is armed at once and a second placement is not", g5.armed?.id == k2.id)
+        let k3 = g5.place(label: "K", angle: 3, progress: 0)
+        check("any asteroid carrying the armed label is a hit", g5.tap(k3.id).isHit && g5.armed?.id == k2.id)
+
+        // The same seed gives the same spawn sequence.
+        func sequence(seed: UInt64) -> [String] {
+            let g = AsteroidsGame(config: .init(characters: pool), rng: SeededRNG(seed: seed))
+            var out: [String] = []
+            for _ in 0..<10 {
+                g.advance(by: g.spawnInterval)
+                if let last = g.asteroids.last { out.append("\(last.label)@\(last.angle)") }
+                for a in g.asteroids { for ch in a.label { _ = g.send(ch) } }
+            }
+            return out
+        }
+        check("same seed, same spawn sequence", sequence(seed: 42) == sequence(seed: 42) && sequence(seed: 42).count == 10)
+        check("different seed, different sequence", sequence(seed: 42) != sequence(seed: 43))
+    }
+} else {
+    check("fixtures/asteroids.json loads and decodes", false)
 }
 
 print("\n────────────────────────────")

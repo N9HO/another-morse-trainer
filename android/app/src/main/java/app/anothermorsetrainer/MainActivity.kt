@@ -129,6 +129,11 @@ private sealed interface Route {
     data object Qrq : Route
     data object RapidFire : Route
     data object Invaders : Route
+    data object Galaga : Route
+    data object Defender : Route
+    data object Dungeon : Route
+    data object Frogger : Route
+    data object Asteroids : Route
     data object Story : Route
     data object Sending : Route
     data object SendingDrills : Route
@@ -169,6 +174,11 @@ private fun routeTag(route: Route): String = when (route) {
     Route.Qrq -> "qrq"
     Route.RapidFire -> "rapidFire"
     Route.Invaders -> "invaders"
+    Route.Galaga -> "galaga"
+    Route.Defender -> "defender"
+    Route.Dungeon -> "dungeon"
+    Route.Frogger -> "frogger"
+    Route.Asteroids -> "asteroids"
     Route.Story -> "story"
     Route.Sending -> "sending"
     Route.SendingDrills -> "sendingDrills"
@@ -194,6 +204,11 @@ private fun routeFrom(tag: String): Route? = when (tag) {
     "qrq" -> Route.Qrq
     "rapidFire" -> Route.RapidFire
     "invaders" -> Route.Invaders
+    "galaga" -> Route.Galaga
+    "defender" -> Route.Defender
+    "dungeon" -> Route.Dungeon
+    "frogger" -> Route.Frogger
+    "asteroids" -> Route.Asteroids
     "story" -> Route.Story
     "sending" -> Route.Sending
     "sendingDrills" -> Route.SendingDrills
@@ -299,6 +314,11 @@ private fun AppRoot() {
             TrainingMode.QRQ -> launch(qrqTarget())
             TrainingMode.RAPID_FIRE -> route = Route.RapidFire
             TrainingMode.INVADERS -> route = Route.Invaders
+            TrainingMode.GALAGA -> route = Route.Galaga
+            TrainingMode.DEFENDER -> route = Route.Defender
+            TrainingMode.DUNGEON -> route = Route.Dungeon
+            TrainingMode.FROGGER -> route = Route.Frogger
+            TrainingMode.ASTEROIDS -> route = Route.Asteroids
         }
     }
 
@@ -321,6 +341,11 @@ private fun AppRoot() {
             onPickQrq = { launch(qrqTarget()) },
             onPickRapidFire = { route = Route.RapidFire },
             onPickInvaders = { route = Route.Invaders },
+            onPickGalaga = { route = Route.Galaga },
+            onPickDefender = { route = Route.Defender },
+            onPickDungeon = { route = Route.Dungeon },
+            onPickFrogger = { route = Route.Frogger },
+            onPickAsteroids = { route = Route.Asteroids },
             onPickStory = { launch(storyTarget()) },
             onPickSending = { launch(sendingTarget()) },
             onPickSendingDrills = { route = Route.SendingDrills },
@@ -360,6 +385,11 @@ private fun AppRoot() {
         Route.Qrq -> QrqScreen(onBack = { route = Route.Home }, onSwitchMode = { switchTo(it) })
         Route.RapidFire -> RapidFireScreen(onBack = { route = Route.Home }, onSwitchMode = { switchTo(it) })
         Route.Invaders -> InvadersScreen(onBack = { route = Route.Home }, onSwitchMode = { switchTo(it) })
+        Route.Galaga -> GalagaScreen(onBack = { route = Route.Home }, onSwitchMode = { switchTo(it) })
+        Route.Defender -> DefenderScreen(onBack = { route = Route.Home }, onSwitchMode = { switchTo(it) })
+        Route.Dungeon -> DungeonScreen(onBack = { route = Route.Home }, onSwitchMode = { switchTo(it) })
+        Route.Frogger -> FroggerScreen(onBack = { route = Route.Home }, onSwitchMode = { switchTo(it) })
+        Route.Asteroids -> AsteroidsScreen(onBack = { route = Route.Home }, onSwitchMode = { switchTo(it) })
         Route.Story -> StoryScreen(onBack = { route = Route.Home }, onSwitchMode = { switchTo(it) })
         Route.Sending -> SendingPracticeScreen(onBack = { route = Route.Home }, onSwitchMode = { switchTo(it) })
         Route.SendingDrills -> SendingDrillScreen(onBack = { route = Route.Home })

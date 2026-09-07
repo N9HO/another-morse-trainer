@@ -1,31 +1,36 @@
 import SwiftUI
 
-/// Morse Invaders (#170): characters descend the play field in columns and the
-/// learner shoots each one by naming it — typing it after hearing it (ICR) or
-/// keying it after seeing it. The rules live in `InvadersGame` (MorseKit); this
-/// view is the frame clock, the sound, the input, and the drawing. It runs
-/// inside the normal session (`AppModel.start()` for `.invaders`), so the End
-/// button, the mode menu and the session summary all work as everywhere else,
-/// and the tally goes to history through `AppModel.noteInvadersShot`.
+/// CW Galaga (#187): enemies swoop in along curved paths and settle into a
+/// formation at the top, then dive at the player one at a time. The learner
+/// shoots each one by naming the character it carries — typing it after
+/// hearing it (copy) or keying it after seeing it (send) — and consecutive
+/// hits build a combo multiplier. The rules live in `GalagaGame` (MorseKit)
+/// and the flight paths in `GalagaPath`; this view is the frame clock, the
+/// sound, the input, and the drawing. It runs inside the normal session
+/// (`AppModel.start()` for `.galaga`), so the End button, the mode menu and
+/// the session summary all work as everywhere else, and the tally goes to
+/// history through `AppModel.noteGalagaShot`.
 ///
-/// Twin of `InvadersScreen.kt` on Android.
-struct InvadersView: View {
+/// Twin of `GalagaScreen.kt` on Android.
+struct GalagaView: View {
     @EnvironmentObject var model: AppModel
 
-    // Setup choices persist across launches, like every other mode's.
-    @AppStorage("invaders.input") private var inputRaw = InvadersInput.icr.rawValue
-    @AppStorage("invaders.difficulty") private var difficultyRaw = InvadersDifficulty.normal.rawValue
-    @AppStorage("invaders.characters") private var characterSetRaw = InvadersCharacterSet.active.rawValue
+    // Setup choices persist across launches, like every other mode's. The
+    // choices themselves are the arcade games' shared enums (Invaders.swift).
+    @AppStorage("galaga.input") private var inputRaw = InvadersInput.icr.rawValue
+    @AppStorage("galaga.difficulty") private var difficultyRaw = InvadersDifficulty.normal.rawValue
+    @AppStorage("galaga.characters") private var characterSetRaw = InvadersCharacterSet.active.rawValue
 
     private enum Phase { case setup, playing, over }
     @State private var phase: Phase = .setup
-    @State private var game: InvadersGame?
+    @State private var game: GalagaGame?
     /// A snapshot of the field for drawing; refreshed every frame from `game`.
-    @State private var field: [Invader] = []
+    @State private var field: [GalagaEnemy] = []
+    @State private var columns = 4
     @State private var hud = HUD()
     @State private var lastFrame: Date?
-    /// When each invader's Morse finished sounding (ICR), keyed by invader id,
-    /// so a hit's time-to-recognize runs from the end of the tone.
+    /// When each enemy's Morse finished sounding (copy mode), keyed by enemy
+    /// id, so a hit's time-to-recognize runs from the end of the tone.
     @State private var toneEnd: [Int: Date] = [:]
     /// A flash of feedback on the field: the last hit's points, or "miss".
     @State private var flashText = ""
@@ -34,7 +39,7 @@ struct InvadersView: View {
     private struct HUD: Equatable {
         var score = 0, wave = 1, lives = 3, combo = 0, multiplier = 1
         var bestCombo = 0, accuracy = 0.0
-        /// The ramp (#178): the speed invaders are sent at now, and the highest reached.
+        /// The ramp: the speed enemies are sent at now, and the highest reached.
         var wpm = 0, bestWpm = 0
     }
 
@@ -50,31 +55,39 @@ struct InvadersView: View {
     /// The game's pool, letters first then digits, so the setup card lists it
     /// the way the recognition chart does. (The keyboard lays it out QWERTY.)
     private var pool: [Character] {
-        model.invadersCharacters(characterSet)
+        model.galagaCharacters(characterSet)
             .map(String.init)
             .sorted(by: SessionRecord.characterOrder)
             .compactMap(\.first)
     }
 
-    private let columns = 5
+    /// The input choice in this game's words: what an enemy does when it
+    /// enters, and what shoots it.
+    private static func inputBlurb(_ input: InvadersInput) -> String {
+        switch input {
+        case .icr:
+            return "Enemies fly in unmarked. Each one is sent in Morse as it enters and again as it dives (tap it to hear it again); type the character you heard to shoot the most dangerous one carrying it."
+        case .keying:
+            return "Each enemy shows its character. Key it on the on-screen key or a hardware key; the decoded character shoots the most dangerous one carrying it."
+        }
+    }
 
-    /// The classic 11×8 "crab" invader (#179), drawn from this bitmap so there
-    /// is no image asset; `#` is a lit pixel. The same table is in
-    /// `InvadersScreen.kt`.
+    /// An 11×8 "butterfly" enemy, drawn from this bitmap so there is no image
+    /// asset; `#` is a lit pixel. The same table is in `GalagaScreen.kt`.
     private static let sprite: [String] = [
-        "..#.....#..",
-        "...#...#...",
-        "..#######..",
-        ".##.###.##.",
-        "###########",
-        "#.#######.#",
-        "#.#.....#.#",
-        "...##.##...",
+        "#.........#",
+        "#..#...#..#",
+        "##.#####.##",
+        ".#########.",
+        "..##.#.##..",
+        ".###.#.###.",
+        "#.##...##.#",
+        "#..#...#..#",
     ]
-    /// Points per sprite pixel: 33×24 pt, about what the old "?" glyph took.
+    /// Points per sprite pixel: 33×24 pt, the Invaders sprite's size.
     private static let spritePixel: CGFloat = 3
 
-    /// The sprite as one path centred on `centre`, filled in the invader tint.
+    /// The sprite as one path centred on `centre`.
     private static func spritePath(centre: CGPoint) -> Path {
         let cols = sprite[0].count
         let origin = CGPoint(x: centre.x - CGFloat(cols) * spritePixel / 2,
@@ -90,18 +103,27 @@ struct InvadersView: View {
         return path
     }
 
-    /// The ramp in words (#178) for the setup card: where a game opens and
-    /// where it climbs to. Keying mode sends nothing, so it names the decoder
-    /// speed instead.
+    /// The player's ship at the bottom: a small chevron.
+    private static func shipPath(centre: CGPoint) -> Path {
+        var path = Path()
+        path.move(to: CGPoint(x: centre.x, y: centre.y - 9))
+        path.addLine(to: CGPoint(x: centre.x + 10, y: centre.y + 7))
+        path.addLine(to: CGPoint(x: centre.x, y: centre.y + 2))
+        path.addLine(to: CGPoint(x: centre.x - 10, y: centre.y + 7))
+        path.closeSubpath()
+        return path
+    }
+
+    /// The ramp in words for the setup card: where a game opens and where it
+    /// climbs to. Keying mode sends nothing, so it names the decoder speed.
     private var speedNote: String {
         let target = Int(model.settings.wpm.rounded())
-        let start = Int(InvadersGame.rampStart(characterWpm: model.settings.wpm).rounded())
+        let start = Int(GalagaGame.rampStart(characterWpm: model.settings.wpm).rounded())
         if input == .keying { return "Decoded at your \(target) WPM character speed." }
         if start >= target { return "Sent at your \(target) WPM character speed." }
-        return "Sent from \(start) WPM, stepping up \(Int(InvadersGame.rampStepUp)) WPM after "
-            + "\(InvadersGame.hitsPerRampStep) hits in a row (the first \(InvadersGame.rampHold) after any "
-            + "change do not count) to your \(target) WPM character speed. A landing steps it back "
-            + "\(Int(InvadersGame.rampStepDown)) WPM. Characters you miss come round more often until you master them."
+        return "Sent from \(start) WPM, stepping up \(Int(GalagaGame.rampStep)) WPM every "
+            + "\(GalagaGame.hitsPerRampStep) hits to your \(target) WPM character speed. "
+            + "A dive that gets through steps it back."
     }
 
     var body: some View {
@@ -112,7 +134,7 @@ struct InvadersView: View {
             case .over:    gameOverCard
             }
         }
-        .onDisappear { model.stopInvaders() }
+        .onDisappear { model.stopGalaga() }
     }
 
     // MARK: - Setup
@@ -120,14 +142,14 @@ struct InvadersView: View {
     private var setupCard: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                Text(TrainingMode.invaders.blurb)
+                Text(TrainingMode.galaga.blurb)
                     .font(.footnote)
                     .foregroundStyle(Theme.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
 
                 optionPicker("How you answer", selection: $inputRaw,
                              options: InvadersInput.allCases.map { Option(id: $0.rawValue, label: $0.label) })
-                Text(input.blurb)
+                Text(Self.inputBlurb(input))
                     .font(.footnote)
                     .foregroundStyle(Theme.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -181,7 +203,7 @@ struct InvadersView: View {
             hudBar
             GeometryReader { geo in
                 TimelineView(.animation) { context in
-                    canvas(width: geo.size.width)
+                    canvas(size: geo.size)
                         // The frame clock: every tick moves the game on by the
                         // real time elapsed, so a dropped frame costs no distance.
                         .onChange(of: context.date) { now in step(now: now) }
@@ -189,14 +211,14 @@ struct InvadersView: View {
             }
             .frame(maxHeight: .infinity)
             if input == .icr {
-                Text("Tap an invader to hear it again")
+                Text("Tap an enemy to hear it again")
                     .font(.caption)
                     .foregroundStyle(Theme.textSecondary)
                 keyboard
             } else {
-                InvadersKeyPanel(wpm: model.settings.wpm,
-                                 toneHz: model.settings.toneFrequency,
-                                 slashedZero: model.settings.slashedZero) { ch in
+                GalagaKeyPanel(wpm: model.settings.wpm,
+                               toneHz: model.settings.toneFrequency,
+                               slashedZero: model.settings.slashedZero) { ch in
                     shoot(ch)
                 }
             }
@@ -238,34 +260,40 @@ struct InvadersView: View {
         }
     }
 
-    private func canvas(width: CGFloat) -> some View {
+    /// Where the unit-space paths land on the canvas: the field keeps a
+    /// margin so the sprite stays whole at the edges of its swoop, and the
+    /// bottom of the dive is the player's line.
+    private func canvasPoint(_ p: GalagaPath.Point, in size: CGSize) -> CGPoint {
+        let inset: CGFloat = 20
+        let top: CGFloat = input == .keying ? 30 : 18
+        let bottom = size.height - 36
+        return CGPoint(x: inset + CGFloat(p.x) * (size.width - 2 * inset),
+                       y: top + CGFloat(p.y) * (bottom - top))
+    }
+
+    private func canvas(size: CGSize) -> some View {
         Canvas { context, size in
             let ground = size.height - 18
             var line = Path()
             line.move(to: CGPoint(x: 0, y: ground))
             line.addLine(to: CGPoint(x: size.width, y: ground))
             context.stroke(line, with: .color(Theme.teal.opacity(0.6)), lineWidth: 2)
+            context.fill(Self.shipPath(centre: CGPoint(x: size.width / 2, y: ground - 12)),
+                         with: .color(Theme.teal))
 
-            let colWidth = size.width / CGFloat(columns)
             let font = Theme.copyFont(size: 22, weight: .bold, monospaced: true,
                                       slashedZero: model.settings.slashedZero)
-            // Keying shows the character above its sprite, so the field
-            // starts lower to leave the label room at the top.
-            let top: CGFloat = input == .keying ? 30 : 18
-            for inv in field {
-                let x = (CGFloat(inv.column) + 0.5) * colWidth
-                let y = top + CGFloat(inv.progress) * (ground - top - 18)
-                // The alien (#179) instead of a "?", which read as a literal
-                // character. ICR keeps the character to the ear; keying shows
+            for enemy in field {
+                let p = canvasPoint(GalagaPath.position(of: enemy, columns: columns), in: size)
+                let tint = enemy.state == .diving ? Theme.tealBright : Theme.teal
+                // Copy mode keeps the character to the ear; send mode shows
                 // it directly above the sprite to key.
                 if input == .keying {
-                    context.fill(Self.spritePath(centre: CGPoint(x: x, y: y + 6)),
-                                 with: .color(Theme.tealBright))
-                    context.draw(Text(String(inv.character)).font(font).foregroundColor(.white),
-                                 at: CGPoint(x: x, y: y - 14))
+                    context.fill(Self.spritePath(centre: CGPoint(x: p.x, y: p.y + 6)), with: .color(tint))
+                    context.draw(Text(String(enemy.character)).font(font).foregroundColor(.white),
+                                 at: CGPoint(x: p.x, y: p.y - 14))
                 } else {
-                    context.fill(Self.spritePath(centre: CGPoint(x: x, y: y)),
-                                 with: .color(Theme.tealBright))
+                    context.fill(Self.spritePath(centre: p), with: .color(tint))
                 }
             }
             if flashUntil > Date() {
@@ -277,24 +305,27 @@ struct InvadersView: View {
         .overlay(RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous)
             .strokeBorder(Theme.hairline, lineWidth: 1))
         .contentShape(Rectangle())
-        .onTapGesture { location in replay(at: location, width: width) }
-        .accessibilityLabel("Play field, \(field.count) invaders")
+        .onTapGesture { location in replay(at: location, size: size) }
+        .accessibilityLabel("Play field, \(field.count) enemies")
     }
 
-    /// ICR: tap a column to hear the nearest invader's character again.
-    private func replay(at location: CGPoint, width: CGFloat) {
+    /// Copy mode: tap near an enemy to hear its character again.
+    private func replay(at location: CGPoint, size: CGSize) {
         guard input == .icr, let game else { return }
-        let column = Int(location.x / max(1, width) * CGFloat(columns))
-        guard let nearest = game.invaders.min(by: { abs($0.column - column) < abs($1.column - column) }) else { return }
-        model.playInvader(nearest.character, wpm: game.currentWpm)
+        let nearest = game.enemies.min { a, b in
+            let pa = canvasPoint(GalagaPath.position(of: a, columns: columns), in: size)
+            let pb = canvasPoint(GalagaPath.position(of: b, columns: columns), in: size)
+            return hypot(pa.x - location.x, pa.y - location.y) < hypot(pb.x - location.x, pb.y - location.y)
+        }
+        guard let nearest else { return }
+        model.playGalaga(nearest.character, wpm: game.currentWpm)
     }
 
-    /// ICR: a QWERTY keyboard (#178) — `InvadersKeyboard.rows` lays it out: a
-    /// digit row when the pool has digits, the three letter rows always, any
-    /// punctuation below. A key outside the pool stays in place, dimmed and
-    /// dead, so the layout never shifts as the Koch set grows; a hardware
-    /// keyboard presses the live ones too. Ten keys across at equal width, so
-    /// the shorter rows sit centred the way a keyboard's do.
+    /// Copy mode: the arcade games' QWERTY keyboard — `InvadersKeyboard.rows`
+    /// lays it out: a digit row when the pool has digits, the three letter
+    /// rows always, any punctuation below. A key outside the pool stays in
+    /// place, dimmed and dead, so the layout never shifts as the Koch set
+    /// grows; a hardware keyboard presses the live ones too.
     private var keyboard: some View {
         let live = Set(pool)
         let rows = InvadersKeyboard.rows(for: pool)
@@ -346,7 +377,7 @@ struct InvadersView: View {
             }
             .padding(.vertical, 8)
             if input == .icr {
-                // The speed the ramp reached (#178); nothing is sent in keying mode.
+                // The speed the ramp reached; nothing is sent in keying mode.
                 Text("Speed reached: \(hud.bestWpm) WPM")
                     .font(.footnote)
                     .foregroundStyle(Theme.textSecondary)
@@ -379,11 +410,12 @@ struct InvadersView: View {
     // MARK: - Game loop
 
     private func startGame() {
-        let config = InvadersGame.Config(characters: pool, difficulty: difficulty, columns: columns,
-                                         characterWpm: model.settings.wpm)
-        let g = InvadersGame(config: config)
+        let config = GalagaGame.Config(characters: pool, difficulty: difficulty,
+                                       characterWpm: model.settings.wpm)
+        let g = GalagaGame(config: config)
         game = g
         field = []
+        columns = g.formation.columns
         toneEnd = [:]
         flashUntil = .distantPast
         lastFrame = nil
@@ -395,53 +427,55 @@ struct InvadersView: View {
         guard phase == .playing, let game else { return }
         defer { lastFrame = now }
         guard let last = lastFrame else { return }
-        // Cap a long gap (the app was backgrounded) so the field does not
-        // empty onto the ground in one step.
+        // Cap a long gap (the app was backgrounded) so a dive does not land
+        // in one step.
         let dt = min(0.1, now.timeIntervalSince(last))
         for event in game.advance(by: dt) {
             switch event {
-            case .spawned(let inv):
+            case .entered(let enemy), .dived(let enemy):
                 if input == .icr {
-                    // At the ramp's current speed (#178), which the hits and
+                    // At the ramp's current speed, which the hits and
                     // landings in this same step may just have moved.
-                    let duration = model.playInvader(inv.character, wpm: game.currentWpm)
-                    toneEnd[inv.id] = now.addingTimeInterval(duration)
+                    let duration = model.playGalaga(enemy.character, wpm: game.currentWpm)
+                    toneEnd[enemy.id] = now.addingTimeInterval(duration)
                 }
-            case .escaped(let inv):
-                toneEnd[inv.id] = nil
-                model.noteInvadersEscape(target: inv.character)
+            case .landed(let enemy):
+                toneEnd[enemy.id] = nil
+                model.noteGalagaLanding(target: enemy.character)
                 Haptics.error()
-                flash("\(inv.character) got through", for: 1.0)
+                flash("\(enemy.character) got through", for: 1.0)
             case .gameOver:
-                model.stopInvaders()
+                model.stopGalaga()
                 phase = .over
             }
         }
-        field = game.invaders
+        field = game.enemies
+        columns = game.formation.columns
         syncHUD(game)
     }
 
     private func shoot(_ character: Character) {
         guard phase == .playing, let game else { return }
         let now = Date()
-        let lowest = game.lowest
+        let threat = game.mostThreatening
         let shot = game.shoot(character)
-        if let hit = shot.invader {
+        if let hit = shot.enemy {
             let ttr = toneEnd[hit.id].map { max(0, now.timeIntervalSince($0)) } ?? 0
             toneEnd[hit.id] = nil
-            model.noteInvadersShot(target: hit.character, chosen: hit.character, ttr: ttr)
+            model.noteGalagaShot(target: hit.character, chosen: hit.character, ttr: ttr)
             Haptics.success()
             flash(shot.waveCleared ? "Wave \(game.wave)!" : "+\(shot.points)", for: 0.8)
         } else {
-            // A wrong key: confused with whatever was nearest the ground.
-            if let lowest {
-                model.noteInvadersShot(target: lowest.character,
-                                       chosen: Character(String(character).uppercased()), ttr: 0)
+            // A wrong key: confused with whatever was the biggest threat.
+            if let threat {
+                model.noteGalagaShot(target: threat.character,
+                                     chosen: Character(String(character).uppercased()), ttr: 0)
             }
             Haptics.error()
             flash("miss", for: 0.6)
         }
-        field = game.invaders
+        field = game.enemies
+        columns = game.formation.columns
         syncHUD(game)
     }
 
@@ -450,7 +484,7 @@ struct InvadersView: View {
         flashUntil = Date().addingTimeInterval(seconds)
     }
 
-    private func syncHUD(_ g: InvadersGame) {
+    private func syncHUD(_ g: GalagaGame) {
         let next = HUD(score: g.score, wave: g.wave, lives: g.lives, combo: g.combo,
                        multiplier: g.multiplier, bestCombo: g.bestCombo, accuracy: g.accuracy,
                        wpm: Int(g.currentWpm.rounded()), bestWpm: Int(g.bestWpm.rounded()))
@@ -458,11 +492,12 @@ struct InvadersView: View {
     }
 }
 
-/// Keying mode's input: the on-screen key (a hardware Vail/BLE-MIDI key feeds
+/// Send mode's input: the on-screen key (a hardware Vail/BLE-MIDI key feeds
 /// the same decoder). Owns its `SendingKeyer` the way `SendingKeyerView` does,
 /// so the decoder is built at the session speed; each finalised character is
-/// handed to `onCharacter` as the shot.
-private struct InvadersKeyPanel: View {
+/// handed to `onCharacter` as the shot. The same panel Invaders' keying mode
+/// uses, kept with this view so neither game's file depends on the other's.
+private struct GalagaKeyPanel: View {
     let slashedZero: Bool
     let onCharacter: (Character) -> Void
     @StateObject private var sender: SendingKeyer
@@ -477,7 +512,7 @@ private struct InvadersKeyPanel: View {
     var body: some View {
         VStack(spacing: 10) {
             HStack {
-                Text("Key the lowest invader")
+                Text("Key the diving enemy")
                     .font(.caption)
                     .foregroundStyle(Theme.textSecondary)
                 Spacer()
@@ -510,7 +545,7 @@ private struct InvadersKeyPanel: View {
                     }
             )
             .accessibilityLabel("Morse key")
-            .accessibilityHint("Press and hold to key the character on the lowest invader")
+            .accessibilityHint("Press and hold to key the character on the diving enemy")
         }
         .onAppear { sender.start() }
         .onDisappear { sender.stop() }
