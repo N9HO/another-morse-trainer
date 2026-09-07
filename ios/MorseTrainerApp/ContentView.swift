@@ -51,6 +51,8 @@ struct ContentView: View {
                     DefenderView()
                 } else if model.isDungeon {
                     DungeonView()
+                } else if model.isFrogger {
+                    FroggerView()
                 } else if let intro = model.introduction {
                     introductionView(intro)
                 } else {

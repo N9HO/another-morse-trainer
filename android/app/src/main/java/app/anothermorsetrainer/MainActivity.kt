@@ -132,6 +132,7 @@ private sealed interface Route {
     data object Galaga : Route
     data object Defender : Route
     data object Dungeon : Route
+    data object Frogger : Route
     data object Story : Route
     data object Sending : Route
     data object SendingDrills : Route
@@ -175,6 +176,7 @@ private fun routeTag(route: Route): String = when (route) {
     Route.Galaga -> "galaga"
     Route.Defender -> "defender"
     Route.Dungeon -> "dungeon"
+    Route.Frogger -> "frogger"
     Route.Story -> "story"
     Route.Sending -> "sending"
     Route.SendingDrills -> "sendingDrills"
@@ -203,6 +205,7 @@ private fun routeFrom(tag: String): Route? = when (tag) {
     "galaga" -> Route.Galaga
     "defender" -> Route.Defender
     "dungeon" -> Route.Dungeon
+    "frogger" -> Route.Frogger
     "story" -> Route.Story
     "sending" -> Route.Sending
     "sendingDrills" -> Route.SendingDrills
@@ -311,6 +314,7 @@ private fun AppRoot() {
             TrainingMode.GALAGA -> route = Route.Galaga
             TrainingMode.DEFENDER -> route = Route.Defender
             TrainingMode.DUNGEON -> route = Route.Dungeon
+            TrainingMode.FROGGER -> route = Route.Frogger
         }
     }
 
@@ -336,6 +340,7 @@ private fun AppRoot() {
             onPickGalaga = { route = Route.Galaga },
             onPickDefender = { route = Route.Defender },
             onPickDungeon = { route = Route.Dungeon },
+            onPickFrogger = { route = Route.Frogger },
             onPickStory = { launch(storyTarget()) },
             onPickSending = { launch(sendingTarget()) },
             onPickSendingDrills = { route = Route.SendingDrills },
@@ -378,6 +383,7 @@ private fun AppRoot() {
         Route.Galaga -> GalagaScreen(onBack = { route = Route.Home }, onSwitchMode = { switchTo(it) })
         Route.Defender -> DefenderScreen(onBack = { route = Route.Home }, onSwitchMode = { switchTo(it) })
         Route.Dungeon -> DungeonScreen(onBack = { route = Route.Home }, onSwitchMode = { switchTo(it) })
+        Route.Frogger -> FroggerScreen(onBack = { route = Route.Home }, onSwitchMode = { switchTo(it) })
         Route.Story -> StoryScreen(onBack = { route = Route.Home }, onSwitchMode = { switchTo(it) })
         Route.Sending -> SendingPracticeScreen(onBack = { route = Route.Home }, onSwitchMode = { switchTo(it) })
         Route.SendingDrills -> SendingDrillScreen(onBack = { route = Route.Home })

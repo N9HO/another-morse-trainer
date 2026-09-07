@@ -4,7 +4,7 @@ import MediaPlayer
 
 /// The ways to practice.
 enum TrainingMode: String, CaseIterable, Identifiable {
-    case journey, characters, words, abbreviations, qCodes, prosigns, headCopy, typed, sending, confusion, listen, qso, contest, story, exam, qrq, rapidFire, invaders, galaga, defender, dungeon
+    case journey, characters, words, abbreviations, qCodes, prosigns, headCopy, typed, sending, confusion, listen, qso, contest, story, exam, qrq, rapidFire, invaders, galaga, defender, dungeon, frogger
     var id: String { rawValue }
     var title: String {
         switch self {
@@ -29,6 +29,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .galaga:       return "CW Galaga"
         case .defender:     return "Morse Defender"
         case .dungeon:      return "CW Dungeon"
+        case .frogger:      return "CW Frogger"
         }
     }
     var icon: String {
@@ -54,6 +55,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .galaga:        return "airplane"
         case .defender:      return "shield.lefthalf.filled"
         case .dungeon:       return "wand.and.stars"
+        case .frogger:       return "road.lanes"
         }
     }
     /// In meaning-based modes the question is "what are they saying?"
@@ -78,6 +80,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .galaga:             return "Shoot the character you hear"
         case .defender:           return "Route the defence to the callsign you hear"
         case .dungeon:            return "Key the counter-spell"
+        case .frogger:            return "Cross on the character you hear"
         }
     }
     /// A very short descriptor shown on the mode-selection tiles (intro screen).
@@ -105,6 +108,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .galaga:        return "Arcade formations"
         case .defender:      return "Arcade callsign copy"
         case .dungeon:       return "Roguelike sending"
+        case .frogger:       return "Arcade crossing"
         }
     }
 
@@ -154,6 +158,8 @@ enum TrainingMode: String, CaseIterable, Identifiable {
             return "Cities and ships line the bottom, each with a callsign. Attackers come down from the top, and each one sends the callsign of the asset it is heading for. Copy it and route the defence — tap that asset, or type the callsign — before the attacker arrives. Lose every asset and the game is over; every wave brings more assets and more attackers at once. Every copy feeds your character stats."
         case .dungeon:
             return "A roguelike, room by room. Each monster casts a spell word in Morse; copy it, then key the counter word from the spell book on a Morse key before the attack lands. A counter in time hurts the monster, a wrong or late one costs a life, and some counters heal you. Three lives; every room's window is shorter. Every keyed character feeds your stats and confusion drill."
+        case .frogger:
+            return "Hop a frog across three lanes of traffic and three of river. Every vehicle and log carries a character, and each lane is cued in Morse: only the cued vehicle is harmless and only the cued log floats. Three lives; each crossing is a wave and the traffic gets faster. Labels hide as the waves go on. Wrong lanes feed your confusion drill."
         }
     }
 
@@ -193,6 +199,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         // Morse Defender when the last asset falls.
         // Morse Invaders ends when the last life is lost, not on a clock.
         // CW Dungeon ends when the last life is lost, not on a clock.
+        // CW Frogger ends on the last life too.
         case .exam, .story, .contest, .invaders, .galaga, .defender: return false
         default: return true
         }
@@ -508,6 +515,7 @@ final class AppModel: ObservableObject {
         case .galaga:       return charLadder   // unused: Galaga runs its own game loop (GalagaView)
         case .defender:     return charLadder   // unused: Defender runs its own game loop (DefenderView)
         case .dungeon:      return charLadder   // unused: CW Dungeon runs its own game loop (DungeonView)
+        case .frogger:      return charLadder   // unused: Frogger runs its own game loop (FroggerView)
         }
     }
 
@@ -535,6 +543,8 @@ final class AppModel: ObservableObject {
     var isDefender: Bool { mode == .defender }
     /// CW Dungeon (#186): the roguelike, run by `DungeonView` on its own frame clock.
     var isDungeon: Bool { mode == .dungeon }
+    /// CW Frogger (#190): the arcade crossing, run by `FroggerView` on its own frame clock.
+    var isFrogger: Bool { mode == .frogger }
     /// Rapid Fire's hands-off "just listen, review the list at the end" variant,
     /// which streams items on its own loop instead of waiting for an answer.
     var isRapidFireReview: Bool { isRapidFire && settings.rapidFire.response == .review }
@@ -707,6 +717,14 @@ final class AppModel: ObservableObject {
             startStory(active: false)
             // The game itself lives in DungeonView; the session here only
             // holds the audio route and the tally the view feeds it.
+            introduction = nil
+            drill = nil
+            phase = .idle
+        } else if mode == .frogger {
+            stopListening()
+            startStory(active: false)
+            // As Invaders: the game lives in FroggerView, the session holds
+            // the audio route and the tally.
             introduction = nil
             drill = nil
             phase = .idle
@@ -3146,6 +3164,36 @@ final class AppModel: ObservableObject {
             sessionCharCorrect[ch, default: 0] += 1
             if ttr > 0 { sessionCharTTRs[ch, default: []].append(ttr) }
         }
+    // MARK: - CW Frogger (#190)
+
+    /// The characters the traffic carries: the same two pools Invaders offers.
+    /// Twin of `FroggerScreen.characterPool` on Android.
+    func froggerCharacters(_ set: InvadersCharacterSet) -> [Character] {
+        invadersCharacters(set)
+    }
+
+    /// Send a lane's cue (or, in the hidden stage, an object's own character)
+    /// at `wpm`, the game's ramp speed. Returns the sound's duration so the
+    /// view can date its tone end and queue the next one behind it.
+    @discardableResult
+    func playFroggerCue(_ character: Character, wpm: Double) -> TimeInterval {
+        player.replaySound(playable: .text(String(character)),
+                           frequency: settings.toneFrequency, timing: MorseTiming(wpm: wpm))
+    }
+
+    func stopFrogger() { player.stop() }
+
+    /// One decision about a lane: a correct one is a recognition of the cue
+    /// with its time; a wrong vehicle or log is a miss confused with the
+    /// label the frog chose, so the pair feeds the Confusion Drill. Recorded
+    /// exactly as an Invaders shot.
+    func noteFroggerDecision(target: Character, chosen: Character, ttr: TimeInterval) {
+        noteInvadersShot(target: target, chosen: chosen, ttr: ttr)
+    }
+
+    /// The frog landed in the water: a miss on the cue with no confusion partner.
+    func noteFroggerMiss(target: Character) {
+        noteInvadersEscape(target: target)
     }
 
     /// Offer a guess. A rejected guess costs nothing and is not saved.
