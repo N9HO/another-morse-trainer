@@ -54,7 +54,7 @@
       "a miss leaves it alone. Farnsworth is ignored."
     ],
     "constants": {
-      "pointsPerCharacter": 101,
+      "pointsPerCharacter": 100,
       "lives": 3,
       "hitsPerWave": 8,
       "maxOnField": 5,
@@ -190,7 +190,7 @@
       { "event": "send", "char": "K", "outcome": "partial", "buffer": "K" },
       { "event": "advance", "seconds": 2.6, "buffer": "" }
     ],
-    "final": { "score": 901, "hits": 5, "misses": 2, "combo": 2, "bestCombo": 2, "wave": 1, "lives": 3, "onField": 5 }
+    "final": { "score": 900, "hits": 5, "misses": 2, "combo": 2, "bestCombo": 2, "wave": 1, "lives": 3, "onField": 5 }
   },
   "copyScenario": {
     "$comment": [
