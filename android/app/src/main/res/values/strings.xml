@@ -723,7 +723,7 @@
     <string name="invaders_tap_to_replay">Tap an invader to hear it again</string>
     <string name="invaders_key_the_lowest">Key the lowest invader</string>
     <!-- Speed ramp (#178): start, step, hits per step, target -->
-    <string name="invaders_speed_ramp_note">Sent from %1$d WPM, stepping up %2$d WPM every %3$d hits to your %4$d WPM character speed. A landing steps it back.</string>
+    <string name="invaders_speed_ramp_note">Sent from %1$d WPM, stepping up %2$d WPM after %3$d hits in a row (the first %4$d after any change do not count) to your %5$d WPM character speed. A landing steps it back %6$d WPM. Characters you miss come round more often until you master them.</string>
     <string name="invaders_speed_flat_note">Sent at your %1$d WPM character speed.</string>
     <string name="invaders_keying_speed_note">Decoded at your %1$d WPM character speed.</string>
     <string name="invaders_wpm">WPM</string>

@@ -120,6 +120,18 @@ class InvadersGame(
     /** The highest speed the ramp reached this game. */
     var bestWpm: Double = config.startWpm
         private set
+    /**
+     * Hits in a row at the current speed since the last change of speed, wrong
+     * shot or landing (#194); [hitsPerRampStep] of them step it up.
+     */
+    var rampStreak = 0
+        private set
+    /** Settling hits still to come after the last change of speed (#194); they count for nothing. */
+    var rampSettling = 0
+        private set
+
+    /** Hits each character is owed after being missed (#194); absent is 0. */
+    private val missDebt = HashMap<Char, Int>()
 
     private var waveHits = 0
     private var sinceSpawn = 0.0
@@ -141,6 +153,10 @@ class InvadersGame(
     /** The multiplier the next hit earns. */
     val multiplier: Int get() = multiplier(combo + 1)
 
+    /** Every pool character's spawn weight right now (#194): 1 unless it is owed hits. */
+    val spawnWeights: Map<Char, Double>
+        get() = pool.associateWith { spawnWeight(missDebt[it] ?: 0) }
+
     /**
      * Move time forward by [seconds]: invaders fall, any that reach the ground
      * cost a life, and the spawn clock releases new ones. Returns what happened,
@@ -158,7 +174,8 @@ class InvadersGame(
             lives = max(0, lives - 1)
             misses += 1
             combo = 0
-            currentWpm = max(config.startWpm, currentWpm - rampStep)
+            noteMissed(e.character)
+            changeSpeed(max(config.startWpm, currentWpm - rampStepDown))
             events.add(InvadersEvent.Escaped(e.copy(progress = 1.0)))
         }
         if (lives == 0) {
@@ -191,6 +208,11 @@ class InvadersGame(
         if (target == null) {
             combo = 0
             misses += 1
+            rampStreak = 0
+            // The character missed is the one nearest the ground — the one the
+            // learner was presumably naming, and the one the screen records
+            // against the confusion matrix.
+            lowest?.let { noteMissed(it.character) }
             return InvadersShot(null, 0, false)
         }
         invaders = invaders.filter { it.id != target.id }
@@ -199,9 +221,14 @@ class InvadersGame(
         val points = pointsPerHit * multiplier(combo)
         score += points
         hits += 1
-        if (hits % hitsPerRampStep == 0) {
-            currentWpm = min(config.targetWpm, currentWpm + rampStep)
-            bestWpm = max(bestWpm, currentWpm)
+        noteHit(c)
+        if (rampSettling > 0) {
+            rampSettling -= 1
+        } else {
+            rampStreak += 1
+            if (rampStreak >= hitsPerRampStep) {
+                changeSpeed(min(config.targetWpm, currentWpm + rampStepUp))
+            }
         }
         waveHits += 1
         var cleared = false
@@ -213,13 +240,37 @@ class InvadersGame(
         return InvadersShot(target, points, cleared)
     }
 
+    /**
+     * Moves the ramp to [wpm]: the streak restarts either way, and a change of
+     * speed opens a hold of [rampHold] settling hits.
+     */
+    private fun changeSpeed(wpm: Double) {
+        rampStreak = 0
+        if (wpm == currentWpm) return
+        currentWpm = wpm
+        bestWpm = max(bestWpm, wpm)
+        rampSettling = rampHold
+    }
+
+    private fun noteMissed(c: Char) {
+        missDebt[c] = min(maxMissDebt, (missDebt[c] ?: 0) + debtPerMiss)
+    }
+
+    private fun noteHit(c: Char) {
+        val debt = missDebt[c] ?: return
+        if (debt > 1) missDebt[c] = debt - 1 else missDebt.remove(c)
+    }
+
     private fun spawn(progress: Double): Invader {
         // Prefer a character not already on the field, so "the lowest one
         // carrying it" is usually the only one; a two-character pool repeats.
+        // Among those, a character the learner has been missing is weighted
+        // heavier (#194): one roll, then [pick] over the weights.
         val onField = invaders.map { it.character }.toSet()
         val fresh = pool.filter { it !in onField }
         val choices = fresh.ifEmpty { pool }
-        val character = choices[rng.nextInt(choices.size)]
+        val weights = choices.map { spawnWeight(missDebt[it] ?: 0) }
+        val character = choices[pick(weights, rng.nextDouble())]
         val columns = max(1, config.columns)
         val column = if (columns == 1) 0 else {
             val open = (0 until columns).filter { it != lastColumn }
@@ -250,23 +301,61 @@ class InvadersGame(
         /** Combo multiplier: ×1 for the first three hits in a row, ×2 for the next three, up to ×4. */
         fun multiplier(combo: Int): Int = min(4, 1 + max(0, combo - 1) / 3)
 
-        // Speed ramp (#178). A game opens [rampStartOffset] WPM under the
-        // learner's character speed — never under [minWpm], the app-wide
-        // character-speed floor — and climbs [rampStep] WPM every
-        // [hitsPerRampStep] hits in total up to the character speed; a landing
-        // steps it back, never under the start. Wrong shots leave it alone.
-        // Farnsworth is ignored: a single character has no gaps to stretch.
-        // Pinned by fixtures/invaders-ramp.json on both ports.
+        // Speed ramp (#178, retuned in #194). A game opens [rampStartOffset]
+        // WPM under the learner's character speed — never under [minWpm], the
+        // app-wide character-speed floor — and climbs towards the character
+        // speed only as the learner consolidates: [hitsPerRampStep] hits in a
+        // row at the current speed step it up [rampStepUp] WPM. A wrong shot
+        // resets that streak and leaves the speed alone; a landing resets it
+        // and steps the speed down [rampStepDown], never under the start.
+        // After every change of speed the first [rampHold] hits settle — they
+        // count for nothing, so a fumble while adjusting to the new speed
+        // costs nothing either. Farnsworth is ignored: a single character has
+        // no gaps to stretch. Pinned by fixtures/invaders-ramp.json on both
+        // ports.
         const val minWpm = 15.0
         const val rampStartOffset = 10.0
-        const val rampStep = 2.0
-        const val hitsPerRampStep = 5
+        const val rampStepUp = 1.0
+        const val rampStepDown = 2.0
+        const val hitsPerRampStep = 6
+        const val rampHold = 3
 
         /**
          * The speed a game starts at for a character speed: 10 WPM under it,
          * floored at 15. At or under 15 there is no ramp.
          */
         fun rampStart(characterWpm: Double): Double = max(minWpm, characterWpm - rampStartOffset)
+
+        // Adaptive character weighting (#194). A character the learner misses
+        // — an invader that lands, or a wrong shot made while it was on the
+        // lowest invader — is owed [debtPerMiss] hits, up to [maxMissDebt];
+        // every hit on it pays one off. Its spawn weight is
+        // 1 + [missWeightBonus] × the debt, so a missed character comes round
+        // more often until it has been hit twice more than missed, then is
+        // back to normal. Per game; nothing persists. Pinned by
+        // fixtures/invaders-ramp.json on both ports.
+        const val debtPerMiss = 2
+        const val maxMissDebt = 6
+        const val missWeightBonus = 0.5
+
+        /** The spawn weight of a character owed [debt] hits: 1 when owed nothing. */
+        fun spawnWeight(debt: Int): Double = 1 + missWeightBonus * max(0, debt)
+
+        /**
+         * The index a roll in [0, 1) lands on when [weights] are laid end to
+         * end: the first whose running total exceeds [roll] × the sum. A roll
+         * at or past 1 lands on the last. Pure, so the fixture can pin the
+         * decision without pinning either port's generator.
+         */
+        fun pick(weights: List<Double>, roll: Double): Int {
+            val x = roll * weights.sum()
+            var total = 0.0
+            for ((i, w) in weights.withIndex()) {
+                total += w
+                if (x < total) return i
+            }
+            return max(0, weights.size - 1)
+        }
     }
 }
 

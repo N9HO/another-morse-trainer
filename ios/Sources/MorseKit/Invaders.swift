@@ -167,22 +167,58 @@ public final class InvadersGame {
         min(4, 1 + max(0, combo - 1) / 3)
     }
 
-    // Speed ramp (#178). A game opens `rampStartOffset` WPM under the
-    // learner's character speed — never under `minWpm`, the app-wide
-    // character-speed floor — and climbs `rampStep` WPM every `hitsPerRampStep`
-    // hits in total up to the character speed; a landing steps it back, never
-    // under the start. Wrong shots leave it alone. Farnsworth is ignored: a
-    // single character has no gaps to stretch. Pinned by
-    // fixtures/invaders-ramp.json on both ports.
+    // Speed ramp (#178, retuned in #194). A game opens `rampStartOffset` WPM
+    // under the learner's character speed — never under `minWpm`, the
+    // app-wide character-speed floor — and climbs towards the character
+    // speed only as the learner consolidates: `hitsPerRampStep` hits in a row
+    // at the current speed step it up `rampStepUp` WPM. A wrong shot resets
+    // that streak and leaves the speed alone; a landing resets it and steps
+    // the speed down `rampStepDown`, never under the start. After every
+    // change of speed the first `rampHold` hits settle — they count for
+    // nothing, so a fumble while adjusting to the new speed costs nothing
+    // either. Farnsworth is ignored: a single character has no gaps to
+    // stretch. Pinned by fixtures/invaders-ramp.json on both ports.
     public static let minWpm = 15.0
     public static let rampStartOffset = 10.0
-    public static let rampStep = 2.0
-    public static let hitsPerRampStep = 5
+    public static let rampStepUp = 1.0
+    public static let rampStepDown = 2.0
+    public static let hitsPerRampStep = 6
+    public static let rampHold = 3
 
     /// The speed a game starts at for a character speed: 10 WPM under it,
     /// floored at 15. At or under 15 there is no ramp.
     public static func rampStart(characterWpm: Double) -> Double {
         max(minWpm, characterWpm - rampStartOffset)
+    }
+
+    // Adaptive character weighting (#194). A character the learner misses —
+    // an invader that lands, or a wrong shot made while it was on the lowest
+    // invader — is owed `debtPerMiss` hits, up to `maxMissDebt`; every hit on
+    // it pays one off. Its spawn weight is 1 + `missWeightBonus` × the debt,
+    // so a missed character comes round more often until it has been hit
+    // twice more than missed, then is back to normal. Per game; nothing
+    // persists. Pinned by fixtures/invaders-ramp.json on both ports.
+    public static let debtPerMiss = 2
+    public static let maxMissDebt = 6
+    public static let missWeightBonus = 0.5
+
+    /// The spawn weight of a character owed `debt` hits: 1 when owed nothing.
+    public static func spawnWeight(debt: Int) -> Double {
+        1 + missWeightBonus * Double(max(0, debt))
+    }
+
+    /// The index a roll in 0..<1 lands on when `weights` are laid end to end:
+    /// the first whose running total exceeds `roll` × the sum. A roll at or
+    /// past 1 lands on the last. Pure, so the fixture can pin the decision
+    /// without pinning either port's generator.
+    public static func pick(weights: [Double], roll: Double) -> Int {
+        let x = roll * weights.reduce(0, +)
+        var total = 0.0
+        for (i, w) in weights.enumerated() {
+            total += w
+            if x < total { return i }
+        }
+        return max(0, weights.count - 1)
     }
 
     public let config: Config
@@ -207,6 +243,15 @@ public final class InvadersGame {
     public private(set) var currentWpm: Double
     /// The highest speed the ramp reached this game.
     public private(set) var bestWpm: Double
+    /// Hits in a row at the current speed since the last change of speed,
+    /// wrong shot or landing (#194); `hitsPerRampStep` of them step it up.
+    public private(set) var rampStreak = 0
+    /// Settling hits still to come after the last change of speed (#194);
+    /// they count for nothing.
+    public private(set) var rampSettling = 0
+
+    /// Hits each character is owed after being missed (#194); absent is 0.
+    private var missDebt: [Character: Int] = [:]
 
     private var waveHits = 0
     private var sinceSpawn = 0.0
@@ -244,6 +289,12 @@ public final class InvadersGame {
     /// The multiplier the next hit earns.
     public var multiplier: Int { Self.multiplier(combo: combo + 1) }
 
+    /// Every pool character's spawn weight right now (#194): 1 unless it is
+    /// owed hits.
+    public var spawnWeights: [Character: Double] {
+        Dictionary(uniqueKeysWithValues: pool.map { ($0, Self.spawnWeight(debt: missDebt[$0] ?? 0)) })
+    }
+
     /// Move time forward by `seconds`: invaders fall, any that reach the ground
     /// cost a life, and the spawn clock releases new ones. Returns what
     /// happened, in order. A finished game ignores time.
@@ -261,7 +312,8 @@ public final class InvadersGame {
             lives = max(0, lives - 1)
             misses += 1
             combo = 0
-            currentWpm = max(config.startWpm, currentWpm - Self.rampStep)
+            noteMissed(e.character)
+            changeSpeed(to: max(config.startWpm, currentWpm - Self.rampStepDown))
             e.progress = 1.0
             events.append(.escaped(e))
         }
@@ -293,6 +345,11 @@ public final class InvadersGame {
         guard let target = invaders.filter({ $0.character == c }).max(by: { $0.progress < $1.progress }) else {
             combo = 0
             misses += 1
+            rampStreak = 0
+            // The character missed is the one nearest the ground — the one the
+            // learner was presumably naming, and the one the views record
+            // against the confusion matrix.
+            if let lowest { noteMissed(lowest.character) }
             return InvadersShot(invader: nil, points: 0, waveCleared: false)
         }
         invaders.removeAll { $0.id == target.id }
@@ -301,9 +358,14 @@ public final class InvadersGame {
         let points = Self.pointsPerHit * Self.multiplier(combo: combo)
         score += points
         hits += 1
-        if hits % Self.hitsPerRampStep == 0 {
-            currentWpm = min(config.targetWpm, currentWpm + Self.rampStep)
-            bestWpm = max(bestWpm, currentWpm)
+        noteHit(c)
+        if rampSettling > 0 {
+            rampSettling -= 1
+        } else {
+            rampStreak += 1
+            if rampStreak >= Self.hitsPerRampStep {
+                changeSpeed(to: min(config.targetWpm, currentWpm + Self.rampStepUp))
+            }
         }
         waveHits += 1
         var cleared = false
@@ -315,13 +377,35 @@ public final class InvadersGame {
         return InvadersShot(invader: target, points: points, waveCleared: cleared)
     }
 
+    /// Moves the ramp to `wpm`: the streak restarts either way, and a change
+    /// of speed opens a hold of `rampHold` settling hits.
+    private func changeSpeed(to wpm: Double) {
+        rampStreak = 0
+        guard wpm != currentWpm else { return }
+        currentWpm = wpm
+        bestWpm = max(bestWpm, wpm)
+        rampSettling = Self.rampHold
+    }
+
+    private func noteMissed(_ c: Character) {
+        missDebt[c] = min(Self.maxMissDebt, (missDebt[c] ?? 0) + Self.debtPerMiss)
+    }
+
+    private func noteHit(_ c: Character) {
+        guard let debt = missDebt[c] else { return }
+        missDebt[c] = debt > 1 ? debt - 1 : nil
+    }
+
     private func spawn(progress: Double) -> Invader {
         // Prefer a character not already on the field, so "the lowest one
         // carrying it" is usually the only one; a two-character pool repeats.
+        // Among those, a character the learner has been missing is weighted
+        // heavier (#194): one roll, then `pick` over the weights.
         let onField = Set(invaders.map(\.character))
         let fresh = pool.filter { !onField.contains($0) }
         let choices = fresh.isEmpty ? pool : fresh
-        let character = choices[Int.random(in: 0..<choices.count, using: &rng)]
+        let weights = choices.map { Self.spawnWeight(debt: missDebt[$0] ?? 0) }
+        let character = choices[Self.pick(weights: weights, roll: Double.random(in: 0..<1, using: &rng))]
         let columns = max(1, config.columns)
         let column: Int
         if columns == 1 {

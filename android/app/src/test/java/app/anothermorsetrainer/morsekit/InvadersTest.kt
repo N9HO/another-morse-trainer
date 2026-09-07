@@ -211,15 +211,17 @@ class InvadersTest {
         s.forEach { assertTrue(it.first in pool) }
     }
 
-    // Speed ramp (#178), against fixtures/invaders-ramp.json.
+    // Speed ramp (#178, retuned in #194), against fixtures/invaders-ramp.json.
 
     @Test
     fun rampConstantsAreTheFixtures() {
         val d = fixture.getJSONObject("derivation")
         assertEquals(d.getDouble("minWpm"), InvadersGame.minWpm, 0.0)
         assertEquals(d.getDouble("startOffset"), InvadersGame.rampStartOffset, 0.0)
-        assertEquals(d.getDouble("step"), InvadersGame.rampStep, 0.0)
+        assertEquals(d.getDouble("stepUp"), InvadersGame.rampStepUp, 0.0)
+        assertEquals(d.getDouble("stepDown"), InvadersGame.rampStepDown, 0.0)
         assertEquals(d.getInt("hitsPerStep"), InvadersGame.hitsPerRampStep)
+        assertEquals(d.getInt("hold"), InvadersGame.rampHold)
     }
 
     @Test
@@ -233,8 +235,29 @@ class InvadersTest {
             val config = InvadersGame.Config(characters = listOf('K'), characterWpm = wpm)
             assertEquals("Config.startWpm at $wpm", row.getDouble("startWpm"), config.startWpm, 1e-9)
             assertEquals("Config.targetWpm at $wpm", row.getDouble("targetWpm"), config.targetWpm, 1e-9)
-            assertEquals("a new game opens at the start", row.getDouble("startWpm"), InvadersGame(config, Random(1)).currentWpm, 1e-9)
+            val opens = InvadersGame(config, Random(1))
+            assertEquals("a new game opens at the start", row.getDouble("startWpm"), opens.currentWpm, 1e-9)
+            assertEquals("a new game opens with no streak", 0, opens.rampStreak)
+            assertEquals("a new game opens with nothing to settle", 0, opens.rampSettling)
         }
+    }
+
+    @Test
+    fun perfectRunReachesTheTargetOnTheFixturesHit() {
+        val pr = fixture.getJSONObject("perfectRun")
+        val g = InvadersGame(InvadersGame.Config(characters = listOf('K'), characterWpm = pr.getDouble("characterWpm")), rng = Random(3))
+        assertEquals(pr.getDouble("startWpm"), g.currentWpm, 1e-9)
+        val toTarget = pr.getInt("hitsToTarget")
+        repeat(toTarget - 1) {
+            while (g.invaders.isEmpty()) g.advance(0.05)
+            assertTrue(g.shoot('K').isHit)
+        }
+        assertEquals("one hit short", pr.getDouble("wpmOneHitShort"), g.currentWpm, 1e-9)
+        while (g.invaders.isEmpty()) g.advance(0.05)
+        assertTrue(g.shoot('K').isHit)
+        assertEquals("at the target on hit $toTarget", g.config.targetWpm, g.currentWpm, 1e-9)
+        assertEquals(pr.getInt("hitsPerLaterStep"), InvadersGame.rampHold + InvadersGame.hitsPerRampStep)
+        assertFalse(g.isOver)
     }
 
     @Test
@@ -267,6 +290,8 @@ class InvadersTest {
                 }
             }
             assertEquals("after event $i ($kind)", ev.getDouble("currentWpm"), g.currentWpm, 1e-9)
+            assertEquals("streak after event $i ($kind)", ev.getInt("streak"), g.rampStreak)
+            assertEquals("settling after event $i ($kind)", ev.getInt("settling"), g.rampSettling)
         }
         assertEquals(sc.getDouble("bestWpm"), g.bestWpm, 1e-9)
         assertFalse(g.isOver)
@@ -283,6 +308,143 @@ class InvadersTest {
         }
         assertEquals(floor, g.currentWpm, 1e-9)
         assertEquals(floor, g.bestWpm, 1e-9)
+    }
+
+    // Adaptive character weighting (#194), against the same fixture.
+
+    @Test
+    fun weightingConstantsAndWeightsAreTheFixtures() {
+        val w = fixture.getJSONObject("weighting")
+        assertEquals(w.getInt("debtPerMiss"), InvadersGame.debtPerMiss)
+        assertEquals(w.getInt("maxDebt"), InvadersGame.maxMissDebt)
+        assertEquals(w.getDouble("bonus"), InvadersGame.missWeightBonus, 0.0)
+        val table = w.getJSONArray("weightTable")
+        assertTrue(table.length() > 0)
+        for (i in 0 until table.length()) {
+            val row = table.getJSONObject(i)
+            assertEquals("debt ${row.getInt("debt")}", row.getDouble("weight"), InvadersGame.spawnWeight(row.getInt("debt")), 1e-9)
+        }
+    }
+
+    @Test
+    fun pickLandsWhereTheFixtureSays() {
+        val cases = fixture.getJSONObject("weighting").getJSONArray("pick")
+        assertTrue(cases.length() > 0)
+        for (i in 0 until cases.length()) {
+            val c = cases.getJSONObject(i)
+            val weights = c.getJSONArray("weights").let { arr -> List(arr.length()) { arr.getDouble(it) } }
+            assertEquals("pick($weights, ${c.getDouble("roll")})", c.getInt("index"), InvadersGame.pick(weights, c.getDouble("roll")))
+        }
+    }
+
+    @Test
+    fun spawnWeightsFollowTheWeightingScenario() {
+        // Labels bind to whatever the generator spawns, per the driving rules
+        // in the fixture's comment.
+        val sc = fixture.getJSONObject("weighting").getJSONObject("scenario")
+        val g = InvadersGame(InvadersGame.Config(characters = sc.getString("pool").toList(), lives = sc.getInt("lives")), rng = Random(11))
+        val labels = HashMap<String, Char>()
+        fun shootAll(which: (Char) -> Boolean) {
+            g.invaders.filter { which(it.character) }.forEach { assertTrue(g.shoot(it.character).isHit) }
+        }
+        fun landed(events: List<InvadersEvent>) = events.filterIsInstance<InvadersEvent.Escaped>().map { it.invader }
+        val events = sc.getJSONArray("events")
+        for (i in 0 until events.length()) {
+            val ev = events.getJSONObject(i)
+            val kind = ev.getString("event")
+            repeat(ev.optInt("times", 1)) {
+                var steps = 0
+                when (kind) {
+                    "escape" -> {
+                        val label = ev.optString("label", "")
+                        val bound = labels[label]
+                        if (bound != null) {
+                            var done = false
+                            while (!done && steps < 100_000) {
+                                shootAll { it != bound }
+                                val fell = landed(g.advance(0.05))
+                                if (fell.any { it.character == bound }) done = true
+                                else assertTrue("event $i: the wrong character landed", fell.isEmpty())
+                                steps += 1
+                            }
+                        } else {
+                            var fell = emptyList<Invader>()
+                            while (fell.isEmpty() && steps < 100_000) { fell = landed(g.advance(0.05)); steps += 1 }
+                            assertEquals("event $i: one landing at a time", 1, fell.size)
+                            if (label.isNotEmpty()) labels[label] = fell[0].character
+                        }
+                    }
+                    "hit" -> {
+                        val c = labels[ev.getString("label")] ?: throw AssertionError("event $i: hit needs a bound label")
+                        var done = false
+                        while (!done && steps < 100_000) {
+                            shootAll { it != c }
+                            if (g.invaders.any { it.character == c }) {
+                                assertTrue(g.shoot(c).isHit)
+                                done = true
+                            } else {
+                                g.advance(0.05)
+                            }
+                            steps += 1
+                        }
+                    }
+                    "wrongShot" -> {
+                        if (ev.optBoolean("emptyField", false)) {
+                            shootAll { true }
+                            assertTrue(g.invaders.isEmpty())
+                            assertFalse(g.shoot('Z').isHit)
+                        } else {
+                            val avoidArr = ev.optJSONArray("avoid")
+                            val avoided: Set<Char> = if (avoidArr == null) emptySet() else
+                                (0 until avoidArr.length()).mapNotNull { labels[avoidArr.getString(it)] }.toSet()
+                            while ((g.invaders.isEmpty() || g.invaders.any { it.character in avoided }) && steps < 100_000) {
+                                shootAll { it in avoided }
+                                if (g.invaders.isEmpty()) g.advance(0.05)
+                                steps += 1
+                            }
+                            val low = g.lowest ?: throw AssertionError("event $i: nothing on the field to miss")
+                            if (ev.has("bind")) labels[ev.getString("bind")] = low.character
+                            assertFalse(g.shoot('Z').isHit)
+                        }
+                    }
+                    else -> fail("unknown event '$kind' in the fixture")
+                }
+                assertTrue("event $i: gave up waiting for the generator", steps < 100_000)
+            }
+            val expected = HashMap<Char, Double>()
+            val weights = ev.getJSONObject("weights")
+            for (label in weights.keys()) {
+                val c = labels[label] ?: throw AssertionError("event $i: label $label is not bound")
+                expected[c] = weights.getDouble(label)
+            }
+            for ((c, weight) in g.spawnWeights) {
+                assertEquals("event $i ($kind): weight of $c", expected[c] ?: 1.0, weight, 1e-9)
+            }
+        }
+        assertFalse(g.isOver)
+    }
+
+    @Test
+    fun characterInDebtSpawnsMoreOften() {
+        // The weights reach the spawn choice through this port's own generator.
+        val ss = fixture.getJSONObject("weighting").getJSONObject("spawnShare")
+        val g = InvadersGame(InvadersGame.Config(characters = ss.getString("pool").toList(), lives = ss.getInt("lives")), rng = Random(21))
+        val debited = ss.getString("debited")[0]
+        val spawns = ss.getInt("spawns")
+        var debitedSpawns = 0
+        repeat(spawns) {
+            assertEquals(1, g.advance(g.spawnInterval).count { it is InvadersEvent.Spawned })
+            assertEquals(1, g.invaders.size)
+            val inv = g.invaders[0]
+            if (inv.character == debited) {
+                debitedSpawns += 1
+                assertFalse(g.shoot('Z').isHit)
+            }
+            assertTrue(g.shoot(inv.character).isHit)
+        }
+        val share = debitedSpawns.toDouble() / spawns
+        assertTrue("share $share under the fixture's minimum", share >= ss.getDouble("minShare"))
+        assertTrue("share $share over the fixture's maximum", share <= ss.getDouble("maxShare"))
     }
 
     // On-screen keyboard (#178), against the same fixture.
