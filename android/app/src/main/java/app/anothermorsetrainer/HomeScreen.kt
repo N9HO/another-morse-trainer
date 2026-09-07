@@ -38,6 +38,7 @@ import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.QuestionAnswer
 import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.SportsEsports
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.TextFields
@@ -90,6 +91,7 @@ fun HomeScreen(
     onPickQrq: () -> Unit,
     onPickRapidFire: () -> Unit,
     onPickInvaders: () -> Unit,
+    onPickDefender: () -> Unit,
     onPickStory: () -> Unit,
     onPickSending: () -> Unit,
     onPickSendingDrills: () -> Unit,
@@ -128,6 +130,7 @@ fun HomeScreen(
         HomeItem(stringResource(R.string.mode_qrq_speed), stringResource(R.string.common_high_speed_copy), Icons.Filled.Bolt, onPickQrq) +
         HomeItem(stringResource(R.string.mode_rapid_fire), stringResource(R.string.home_back_to_back_copy), Icons.Filled.FlashOn, onPickRapidFire) +
         HomeItem(stringResource(R.string.mode_invaders), stringResource(R.string.home_arcade_recognition), Icons.Filled.SportsEsports, onPickInvaders) +
+        HomeItem(stringResource(R.string.mode_defender), stringResource(R.string.home_arcade_callsign_copy), Icons.Filled.Shield, onPickDefender) +
         HomeItem(stringResource(R.string.mode_sending_practice), stringResource(R.string.common_key_it_back), Icons.Filled.Vibration, onPickSending) +
         HomeItem(stringResource(R.string.mode_sending_drills), stringResource(R.string.home_printable_sheets), Icons.Filled.Print, onPickSendingDrills) +
         HomeItem(stringResource(R.string.mode_repeater), stringResource(R.string.home_live_over_the_network), Icons.Filled.Wifi, onPickRepeater) +

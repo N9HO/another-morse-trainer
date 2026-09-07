@@ -728,4 +728,34 @@
     <string name="invaders_keying_speed_note">Decoded at your %1$d WPM character speed.</string>
     <string name="invaders_wpm">WPM</string>
     <string name="invaders_speed_reached">Speed reached: %1$d WPM</string>
+
+    <!-- Morse Defender (#188) -->
+    <string name="mode_defender">Morse Defender</string>
+    <string name="home_arcade_callsign_copy">Arcade callsign copy</string>
+    <string name="defender_blurb">Cities and ships line the bottom, each with a callsign. Attackers come down from the top, and each one sends the callsign of the asset it is heading for. Copy it and route the defence — tap that asset, or type the callsign — before the attacker arrives. Lose every asset and the game is over; every wave brings more assets and more attackers at once. Every copy feeds your character stats.</string>
+    <string name="defender_how_to_route">How you route</string>
+    <string name="defender_callsigns">Callsigns</string>
+    <string name="defender_callsigns_active">From my characters</string>
+    <string name="defender_callsigns_full">Real callsigns</string>
+    <string name="defender_callsigns_active_note">Four-character call-like groups spelled only from your active set: %1$s</string>
+    <string name="defender_callsigns_full_note">Real US-style callsigns such as K1AB, AB1C, K1ABC and AB1CD.</string>
+    <string name="defender_difficulty">Difficulty</string>
+    <string name="defender_start">Start game</string>
+    <string name="defender_score">Score</string>
+    <string name="defender_wave">Wave</string>
+    <string name="defender_assets">Assets</string>
+    <string name="defender_combo_label">Combo</string>
+    <string name="defender_wpm">WPM</string>
+    <string name="defender_game_over">All assets lost</string>
+    <string name="defender_best_combo">Best combo</string>
+    <string name="defender_accuracy">Accuracy</string>
+    <string name="defender_play_again">Play again</string>
+    <string name="defender_end_game">End game</string>
+    <string name="defender_tap_hint">Tap an attacker to hear it again · tap the asset it named</string>
+    <string name="defender_tap_to_replay">Tap an attacker to hear it again</string>
+    <!-- Speed ramp: start, step, hits per step, target -->
+    <string name="defender_speed_ramp_note">Callsigns sent from %1$d WPM, stepping up %2$d WPM every %3$d hits to your %4$d WPM character speed. A lost asset steps it back.</string>
+    <string name="defender_speed_flat_note">Callsigns sent at your %1$d WPM character speed.</string>
+    <string name="defender_farnsworth_note">Farnsworth spacing at %1$d WPM effective applies.</string>
+    <string name="defender_speed_reached">Speed reached: %1$d WPM</string>
 </resources>

@@ -37,6 +37,14 @@ testers, bug reports and feature chat live on
   it, before it lands. Each game starts 10 WPM under your character speed
   and steps up 2 WPM every five hits (a landing steps it back). Waves,
   lives, combos, three difficulties, and every hit and miss feeds your stats
+- **Morse Defender**: an arcade callsign-copy game — cities and ships with
+  callsigns line the bottom; each attacker sends its target's callsign and
+  you route the defence by tapping that asset or typing the callsign before
+  it arrives. Callsigns are call-like groups from your active set or real
+  US calls, sent from 8 WPM under your character speed (Farnsworth honoured)
+  and stepping up 2 WPM every four hits. Assets are the lives (4 growing to
+  8), up to three attackers at once, waves, combos, three difficulties, and
+  every character copied feeds your stats and confusion matrix
 - **Pileup Runner**: call CQ and work a simulated pileup, with your own side
   keyed on the air: adjustable callers, speeds, QSB/QRN, cut numbers, bust
   behavior, callsign shapes, and a live log

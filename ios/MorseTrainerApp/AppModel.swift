@@ -4,7 +4,7 @@ import MediaPlayer
 
 /// The ways to practice.
 enum TrainingMode: String, CaseIterable, Identifiable {
-    case journey, characters, words, abbreviations, qCodes, prosigns, headCopy, typed, sending, confusion, listen, qso, contest, story, exam, qrq, rapidFire, invaders
+    case journey, characters, words, abbreviations, qCodes, prosigns, headCopy, typed, sending, confusion, listen, qso, contest, story, exam, qrq, rapidFire, invaders, defender
     var id: String { rawValue }
     var title: String {
         switch self {
@@ -26,6 +26,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .qrq:          return "QRQ Speed"
         case .rapidFire:    return "Rapid Fire"
         case .invaders:     return "Morse Invaders"
+        case .defender:     return "Morse Defender"
         }
     }
     var icon: String {
@@ -48,6 +49,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .qrq:           return "hare"
         case .rapidFire:     return "bolt.fill"
         case .invaders:      return "gamecontroller.fill"
+        case .defender:      return "shield.lefthalf.filled"
         }
     }
     /// In meaning-based modes the question is "what are they saying?"
@@ -69,6 +71,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .qrq:                return "Type what you hear"
         case .rapidFire:          return "Copy what you hear"
         case .invaders:           return "Shoot the character you hear"
+        case .defender:           return "Route the defence to the callsign you hear"
         }
     }
     /// A very short descriptor shown on the mode-selection tiles (intro screen).
@@ -93,6 +96,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .qrq:           return "High-speed copy"
         case .rapidFire:     return "Back-to-back copy"
         case .invaders:      return "Arcade recognition"
+        case .defender:      return "Arcade callsign copy"
         }
     }
 
@@ -136,6 +140,8 @@ enum TrainingMode: String, CaseIterable, Identifiable {
             return "Real-world copy drill: a stream of call signs, words, number groups, or state abbreviations sent back to back at whatever pace you choose. Type each one as it lands, send it back on a key, or just copy along and review the full list of what was transmitted at the end."
         case .invaders:
             return "Characters fall from the top in columns. Hear one and type it, or see one and key it, to shoot the lowest invader carrying it before it reaches the ground. Three lives; every wave comes faster. Misses feed your confusion drill."
+        case .defender:
+            return "Cities and ships line the bottom, each with a callsign. Attackers come down from the top, and each one sends the callsign of the asset it is heading for. Copy it and route the defence — tap that asset, or type the callsign — before the attacker arrives. Lose every asset and the game is over; every wave brings more assets and more attackers at once. Every copy feeds your character stats."
         }
     }
 
@@ -170,9 +176,10 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         switch self {
         // Contest picks its own length (the real one-hour event or a sprint) in
         // its setup card, so the generic duration picker would be redundant.
-        // Morse Invaders ends when the last life is lost, not on a clock.
-        case .exam, .story, .contest, .invaders: return false
-        default:                                 return true
+        // Morse Invaders ends when the last life is lost, not on a clock;
+        // Morse Defender when the last asset falls.
+        case .exam, .story, .contest, .invaders, .defender: return false
+        default:                                            return true
         }
     }
 
@@ -483,6 +490,7 @@ final class AppModel: ObservableObject {
         case .qrq:          return qrqQuiz
         case .rapidFire:    return rapidFireQuiz
         case .invaders:     return charLadder   // unused: Invaders runs its own game loop (InvadersView)
+        case .defender:     return charLadder   // unused: Defender runs its own game loop (DefenderView)
         }
     }
 
@@ -504,6 +512,8 @@ final class AppModel: ObservableObject {
     var isRapidFire: Bool { mode == .rapidFire }
     /// Morse Invaders (#170): the arcade game, run by `InvadersView` on its own frame clock.
     var isInvaders: Bool { mode == .invaders }
+    /// Morse Defender (#188): the callsign arcade game, run by `DefenderView` on its own frame clock.
+    var isDefender: Bool { mode == .defender }
     /// Rapid Fire's hands-off "just listen, review the list at the end" variant,
     /// which streams items on its own loop instead of waiting for an answer.
     var isRapidFireReview: Bool { isRapidFire && settings.rapidFire.response == .review }
@@ -663,11 +673,12 @@ final class AppModel: ObservableObject {
             stopListening()
             startStory(active: false)
             startRapidFire()
-        } else if mode == .invaders {
+        } else if mode == .invaders || mode == .defender {
             stopListening()
             startStory(active: false)
-            // The game itself lives in InvadersView; the session here only
-            // holds the audio route and the tally the view feeds it.
+            // The game itself lives in InvadersView / DefenderView; the
+            // session here only holds the audio route and the tally the view
+            // feeds it.
             introduction = nil
             drill = nil
             phase = .idle
@@ -1973,7 +1984,7 @@ final class AppModel: ObservableObject {
         qsoBusy = false
         qsoActive = false
         rapidFireGeneration += 1   // cancel any pending Rapid Fire stream
-        if isRapidFire || isInvaders { player.stop() }
+        if isRapidFire || isInvaders || isDefender { player.stop() }
         phase = .idle
         if let record = buildSessionRecord() {
             history.add(record)            // triggers saveHistory()
@@ -2985,6 +2996,67 @@ final class AppModel: ObservableObject {
         engine.noteMiss(target: target)
         noteSessionResult(correct: false, ttr: 0, target: String(target))
         saveProgress()
+    }
+
+    // MARK: - Morse Defender (#188)
+
+    /// Send one attacker's callsign on the session's player at `wpm` — the
+    /// game's ramp speed — with Farnsworth spacing honoured when the switch is
+    /// on: a callsign has gaps to stretch, unlike an Invaders character.
+    /// Returns the sound's duration so the view can date its tone end.
+    @discardableResult
+    func playDefenderCallsign(_ callsign: String, wpm: Double) -> TimeInterval {
+        let timing = DefenderGame.sendTiming(wpm: wpm, farnsworthWpm: settings.farnsworth ? settings.effectiveWpm : nil)
+        return player.replaySound(playable: .text(callsign), frequency: settings.toneFrequency, timing: timing)
+    }
+
+    func stopDefender() { player.stop() }
+
+    /// One routed defence: `target` is the callsign that was sent (the
+    /// attacker destroyed, or the one nearest arrival when the route was
+    /// wrong) and `chosen` the callsign the learner answered with — the asset
+    /// tapped, or the text typed. The session tally takes it as one attempt;
+    /// the per-character stats and the Confusion Drill take it character by
+    /// character, position by position, so a copy of K1AB as K1AR records B
+    /// confused with R. A shorter answer leaves the unanswered characters as
+    /// plain misses.
+    func noteDefenderRoute(target: String, chosen: String, ttr: TimeInterval) {
+        let sent = Array(target.uppercased())
+        let answer = Array(chosen.uppercased())
+        let correct = sent == answer
+        noteSessionResult(correct: correct, ttr: ttr, target: target)
+        for (i, ch) in sent.enumerated() {
+            let charCorrect: Bool
+            if i < answer.count {
+                charCorrect = engine.noteAttempt(answer: answer[i], target: ch, ttr: ttr)
+            } else {
+                engine.noteMiss(target: ch)
+                charCorrect = false
+            }
+            noteDefenderCharacter(ch, correct: charCorrect, ttr: ttr)
+        }
+        saveProgress()
+    }
+
+    /// An attacker reached its asset unanswered: a miss for every character
+    /// of the callsign it sent, with no confusion partner.
+    func noteDefenderStrike(callsign: String) {
+        noteSessionResult(correct: false, ttr: 0, target: callsign)
+        for ch in callsign.uppercased() {
+            engine.noteMiss(target: ch)
+            noteDefenderCharacter(ch, correct: false, ttr: 0)
+        }
+        saveProgress()
+    }
+
+    /// The session's per-character chart, fed one character of a callsign at
+    /// a time; the attempt count itself is per callsign (`noteSessionResult`).
+    private func noteDefenderCharacter(_ ch: Character, correct: Bool, ttr: TimeInterval) {
+        sessionCharTotal[ch, default: 0] += 1
+        if correct {
+            sessionCharCorrect[ch, default: 0] += 1
+            if ttr > 0 { sessionCharTTRs[ch, default: []].append(ttr) }
+        }
     }
 
     /// Offer a guess. A rejected guess costs nothing and is not saved.
