@@ -200,14 +200,9 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         switch self {
         // Contest picks its own length (the real one-hour event or a sprint) in
         // its setup card, so the generic duration picker would be redundant.
-        // Morse Invaders and CW Galaga end when the last life is lost, not on a clock.
-        // Morse Invaders ends when the last life is lost, not on a clock;
-        // Morse Defender when the last asset falls.
-        // Morse Invaders ends when the last life is lost, not on a clock.
-        // CW Dungeon ends when the last life is lost, not on a clock.
-        // CW Frogger ends on the last life too.
-        // CW Asteroids likewise ends on the last life.
-        case .exam, .story, .contest, .invaders, .galaga, .defender: return false
+        // The arcade games (#170) end when the last life — or, for Defender,
+        // the last asset — is lost, not on a clock.
+        case .exam, .story, .contest, .invaders, .galaga, .defender, .dungeon, .frogger, .asteroids: return false
         default: return true
         }
     }
@@ -714,31 +709,13 @@ final class AppModel: ObservableObject {
             stopListening()
             startStory(active: false)
             startRapidFire()
-        } else if mode == .invaders || mode == .galaga || mode == .defender {
+        } else if mode == .invaders || mode == .galaga || mode == .defender
+                    || mode == .dungeon || mode == .frogger || mode == .asteroids {
             stopListening()
             startStory(active: false)
-            // The game itself lives in InvadersView / GalagaView; the session here only
-            // holds the audio route and the tally the view feeds it.
-            introduction = nil
-            drill = nil
-            phase = .idle
-        } else if mode == .dungeon {
-            stopListening()
-            startStory(active: false)
-            // The game itself lives in DungeonView; the session here only
-        } else if mode == .asteroids {
-            stopListening()
-            startStory(active: false)
-            // The game itself lives in AsteroidsView; the session here only
-            // holds the audio route and the tally the view feeds it.
-            introduction = nil
-            drill = nil
-            phase = .idle
-        } else if mode == .frogger {
-            stopListening()
-            startStory(active: false)
-            // As Invaders: the game lives in FroggerView, the session holds
-            // the audio route and the tally.
+            // The game itself lives in its own view (InvadersView, GalagaView,
+            // …); the session here only holds the audio route and the tally
+            // the view feeds it.
             introduction = nil
             drill = nil
             phase = .idle
@@ -2044,10 +2021,7 @@ final class AppModel: ObservableObject {
         qsoBusy = false
         qsoActive = false
         rapidFireGeneration += 1   // cancel any pending Rapid Fire stream
-        if isRapidFire || isInvaders || isGalaga || isDefender { player.stop() }
-        if isRapidFire || isInvaders { player.stop() }
-        if isDungeon { player.stop() }
-        if isAsteroids { player.stop() }
+        if isRapidFire || isInvaders || isGalaga || isDefender || isDungeon || isFrogger || isAsteroids { player.stop() }
         phase = .idle
         if let record = buildSessionRecord() {
             history.add(record)            // triggers saveHistory()
@@ -3091,6 +3065,8 @@ final class AppModel: ObservableObject {
     /// confusion partner.
     func noteGalagaLanding(target: Character) {
         noteInvadersEscape(target: target)
+    }
+
     // MARK: - Morse Defender (#188)
 
     /// Send one attacker's callsign on the session's player at `wpm` — the
@@ -3127,6 +3103,31 @@ final class AppModel: ObservableObject {
                 charCorrect = false
             }
             noteDefenderCharacter(ch, correct: charCorrect, ttr: ttr)
+        }
+        saveProgress()
+    }
+
+    /// An attacker reached its asset unanswered: a miss for every character
+    /// of the callsign it sent, with no confusion partner.
+    func noteDefenderStrike(callsign: String) {
+        noteSessionResult(correct: false, ttr: 0, target: callsign)
+        for ch in callsign.uppercased() {
+            engine.noteMiss(target: ch)
+            noteDefenderCharacter(ch, correct: false, ttr: 0)
+        }
+        saveProgress()
+    }
+
+    /// The session's per-character chart, fed one character of a callsign at
+    /// a time; the attempt count itself is per callsign (`noteSessionResult`).
+    private func noteDefenderCharacter(_ ch: Character, correct: Bool, ttr: TimeInterval) {
+        sessionCharTotal[ch, default: 0] += 1
+        if correct {
+            sessionCharCorrect[ch, default: 0] += 1
+            if ttr > 0 { sessionCharTTRs[ch, default: []].append(ttr) }
+        }
+    }
+
     // MARK: - CW Dungeon (#186)
 
     /// Send a monster's spell word on the session's player at the game's
@@ -3160,25 +3161,6 @@ final class AppModel: ObservableObject {
         saveProgress()
     }
 
-    /// An attacker reached its asset unanswered: a miss for every character
-    /// of the callsign it sent, with no confusion partner.
-    func noteDefenderStrike(callsign: String) {
-        noteSessionResult(correct: false, ttr: 0, target: callsign)
-        for ch in callsign.uppercased() {
-            engine.noteMiss(target: ch)
-            noteDefenderCharacter(ch, correct: false, ttr: 0)
-        }
-        saveProgress()
-    }
-
-    /// The session's per-character chart, fed one character of a callsign at
-    /// a time; the attempt count itself is per callsign (`noteSessionResult`).
-    private func noteDefenderCharacter(_ ch: Character, correct: Bool, ttr: TimeInterval) {
-        sessionCharTotal[ch, default: 0] += 1
-        if correct {
-            sessionCharCorrect[ch, default: 0] += 1
-            if ttr > 0 { sessionCharTTRs[ch, default: []].append(ttr) }
-        }
     // MARK: - CW Frogger (#190)
 
     /// The characters the traffic carries: the same two pools Invaders offers.
@@ -3209,6 +3191,8 @@ final class AppModel: ObservableObject {
     /// The frog landed in the water: a miss on the cue with no confusion partner.
     func noteFroggerMiss(target: Character) {
         noteInvadersEscape(target: target)
+    }
+
     // MARK: - CW Asteroids (#189)
 
     /// The word labels a game may draw from: the ranked common-words list,
