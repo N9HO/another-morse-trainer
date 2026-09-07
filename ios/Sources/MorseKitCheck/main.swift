@@ -3598,6 +3598,369 @@ if let fx = loadActivityFixture() {
     check("fixtures/activity.json loads and decodes", false)
 }
 
+// MARK: - CW Galaga (#187), against fixtures/galaga.json
+//
+// Read by this harness AND by the Kotlin GalagaTest. The expected values were
+// worked out from the rules in the fixture's derivation block, not captured
+// from either port. The rule-level checks (targeting, scoring, lives, dives)
+// are the same ones GalagaTest makes.
+struct GalagaFixture: Decodable {
+    struct Timing: Decodable {
+        let baseEntryInterval: Double; let entryIntervalDecay: Double; let minEntryInterval: Double
+        let baseEntryTime: Double; let entryTimeDecay: Double; let minEntryTime: Double
+        let baseDiveInterval: Double; let diveIntervalDecay: Double; let minDiveInterval: Double
+        let baseDiveTime: Double; let diveTimeDecay: Double; let minDiveTime: Double
+        let returnFactor: Double; let waveGap: Double
+        let difficultyScale: [String: Double]
+    }
+    struct Layout: Decodable { let formationTop: Double; let rowPitch: Double }
+    struct Derivation: Decodable {
+        let pointsPerHit: Int; let diveBonus: Int; let waveBonus: Int
+        let comboStep: Int; let maxMultiplier: Int; let lives: Int
+        let minWpm: Double; let startOffset: Double; let step: Double; let hitsPerStep: Int
+        let noRampAtOrBelow: Double
+        let timing: Timing
+        let layout: Layout
+    }
+    struct FormationRow: Decodable { let wave: Int; let rows: Int; let columns: Int; let size: Int; let maxDivers: Int }
+    struct TimingRow: Decodable {
+        let wave: Int; let difficulty: String
+        let entryInterval: Double; let entryTime: Double; let diveInterval: Double; let diveTime: Double; let returnTime: Double
+    }
+    struct ComboRow: Decodable { let combo: Int; let multiplier: Int }
+    struct StartRow: Decodable { let characterWpm: Double; let startWpm: Double; let targetWpm: Double }
+    struct PathPoint: Decodable { let t: Double; let x: Double; let y: Double }
+    struct PathCase: Decodable {
+        let row: Int; let column: Int; let columns: Int; let fromLeft: Bool
+        let slot: XY; let entry: [PathPoint]; let dive: [PathPoint]
+        struct XY: Decodable { let x: Double; let y: Double }
+    }
+    struct Event: Decodable {
+        let event: String; let times: Int?
+        let currentWpm: Double; let combo: Int; let multiplier: Int; let lives: Int; let wave: Int
+    }
+    struct Scenario: Decodable {
+        let characterWpm: Double; let startWpm: Double; let targetWpm: Double
+        let lives: Int; let events: [Event]; let bestWpm: Double
+    }
+    let derivation: Derivation
+    let formationTable: [FormationRow]
+    let timingTable: [TimingRow]
+    let comboTable: [ComboRow]
+    let startTable: [StartRow]
+    let paths: [PathCase]
+    let scenario: Scenario
+}
+
+func loadGalagaFixture() -> GalagaFixture? {
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+    guard let data = try? Data(contentsOf: root.appendingPathComponent("fixtures/galaga.json")) else { return nil }
+    return try? JSONDecoder().decode(GalagaFixture.self, from: data)
+}
+
+print("\nCW Galaga (fixtures/galaga.json):")
+if let fx = loadGalagaFixture() {
+    let d = fx.derivation
+    let t = d.timing
+    check("galaga scoring and ramp constants are the fixture's",
+          GalagaGame.pointsPerHit == d.pointsPerHit && GalagaGame.diveBonus == d.diveBonus
+          && GalagaGame.waveBonus == d.waveBonus && GalagaGame.comboStep == d.comboStep
+          && GalagaGame.maxMultiplier == d.maxMultiplier
+          && GalagaGame.minWpm == d.minWpm && GalagaGame.rampStartOffset == d.startOffset
+          && GalagaGame.rampStep == d.step && GalagaGame.hitsPerRampStep == d.hitsPerStep
+          && GalagaGame.Config(characters: ["K"]).lives == d.lives)
+    check("galaga timing constants are the fixture's",
+          GalagaGame.baseEntryInterval == t.baseEntryInterval && GalagaGame.entryIntervalDecay == t.entryIntervalDecay
+          && GalagaGame.minEntryInterval == t.minEntryInterval
+          && GalagaGame.baseEntryTime == t.baseEntryTime && GalagaGame.entryTimeDecay == t.entryTimeDecay
+          && GalagaGame.minEntryTime == t.minEntryTime
+          && GalagaGame.baseDiveInterval == t.baseDiveInterval && GalagaGame.diveIntervalDecay == t.diveIntervalDecay
+          && GalagaGame.minDiveInterval == t.minDiveInterval
+          && GalagaGame.baseDiveTime == t.baseDiveTime && GalagaGame.diveTimeDecay == t.diveTimeDecay
+          && GalagaGame.minDiveTime == t.minDiveTime
+          && GalagaGame.returnFactor == t.returnFactor && GalagaGame.waveGap == t.waveGap
+          && InvadersDifficulty.relaxed.timeScale == t.difficultyScale["relaxed"]
+          && InvadersDifficulty.normal.timeScale == t.difficultyScale["normal"]
+          && InvadersDifficulty.fast.timeScale == t.difficultyScale["fast"])
+    check("galaga layout constants are the fixture's",
+          GalagaPath.formationTop == d.layout.formationTop && GalagaPath.rowPitch == d.layout.rowPitch)
+
+    var formationOK = true
+    for row in fx.formationTable {
+        let f = GalagaGame.formation(wave: row.wave)
+        if f.rows != row.rows || f.columns != row.columns || f.size != row.size
+            || GalagaGame.maxDivers(wave: row.wave) != row.maxDivers {
+            formationOK = false
+            print("      ↳ wave \(row.wave): \(f.rows)×\(f.columns), \(GalagaGame.maxDivers(wave: row.wave)) divers; fixture says \(row.rows)×\(row.columns), \(row.maxDivers)")
+        }
+    }
+    check("galaga formations follow the fixture table across \(fx.formationTable.count) waves", formationOK)
+
+    var timingOK = true
+    for row in fx.timingTable {
+        guard let diff = InvadersDifficulty(rawValue: row.difficulty) else { timingOK = false; continue }
+        if !approxEqual(GalagaGame.entryInterval(wave: row.wave, difficulty: diff), row.entryInterval, 1e-9)
+            || !approxEqual(GalagaGame.entryTime(wave: row.wave, difficulty: diff), row.entryTime, 1e-9)
+            || !approxEqual(GalagaGame.diveInterval(wave: row.wave, difficulty: diff), row.diveInterval, 1e-9)
+            || !approxEqual(GalagaGame.diveTime(wave: row.wave, difficulty: diff), row.diveTime, 1e-9)
+            || !approxEqual(GalagaGame.returnTime(wave: row.wave, difficulty: diff), row.returnTime, 1e-9) {
+            timingOK = false
+            print("      ↳ wave \(row.wave) \(row.difficulty): entry \(GalagaGame.entryInterval(wave: row.wave, difficulty: diff))/\(GalagaGame.entryTime(wave: row.wave, difficulty: diff)), dive \(GalagaGame.diveInterval(wave: row.wave, difficulty: diff))/\(GalagaGame.diveTime(wave: row.wave, difficulty: diff)); fixture says \(row.entryInterval)/\(row.entryTime), \(row.diveInterval)/\(row.diveTime)")
+        }
+    }
+    check("galaga timings follow the fixture table across \(fx.timingTable.count) rows", timingOK)
+
+    check("galaga combo multiplier follows the fixture table",
+          fx.comboTable.allSatisfy { GalagaGame.multiplier(combo: $0.combo) == $0.multiplier })
+
+    var tableOK = true
+    for row in fx.startTable {
+        let config = GalagaGame.Config(characters: ["K"], characterWpm: row.characterWpm)
+        let opens = GalagaGame(config: config, rng: SeededRNG(seed: 1)).currentWpm
+        if !approxEqual(GalagaGame.rampStart(characterWpm: row.characterWpm), row.startWpm)
+            || !approxEqual(config.startWpm, row.startWpm)
+            || !approxEqual(config.targetWpm, row.targetWpm)
+            || !approxEqual(opens, row.startWpm) {
+            tableOK = false
+            print("      ↳ \(row.characterWpm) WPM: start \(config.startWpm), target \(config.targetWpm); fixture says \(row.startWpm) / \(row.targetWpm)")
+        }
+    }
+    check("galaga ramp start and target follow the fixture table across \(fx.startTable.count) speeds", tableOK)
+
+    var pathsOK = true
+    for c in fx.paths {
+        let s = GalagaPath.slot(row: c.row, column: c.column, columns: c.columns)
+        if !approxEqual(s.x, c.slot.x, 1e-9) || !approxEqual(s.y, c.slot.y, 1e-9) {
+            pathsOK = false
+            print("      ↳ slot (\(c.row),\(c.column)) of \(c.columns): \(s), fixture says \(c.slot.x), \(c.slot.y)")
+        }
+        for p in c.entry {
+            let got = GalagaPath.entry(t: p.t, fromLeft: c.fromLeft, slot: s)
+            if !approxEqual(got.x, p.x, 1e-9) || !approxEqual(got.y, p.y, 1e-9) {
+                pathsOK = false
+                print("      ↳ entry t=\(p.t) to (\(c.row),\(c.column)): \(got), fixture says \(p.x), \(p.y)")
+            }
+        }
+        for p in c.dive {
+            let got = GalagaPath.dive(t: p.t, slot: s)
+            if !approxEqual(got.x, p.x, 1e-9) || !approxEqual(got.y, p.y, 1e-9) {
+                pathsOK = false
+                print("      ↳ dive t=\(p.t) from (\(c.row),\(c.column)): \(got), fixture says \(p.x), \(p.y)")
+            }
+        }
+        // position(of:) is the same curves keyed by state; the return is the dive backwards.
+        let entering = GalagaEnemy(id: 1, character: "K", row: c.row, column: c.column, fromLeft: c.fromLeft,
+                                   state: .entering, progress: 0.25, legTime: 1)
+        let returning = GalagaEnemy(id: 2, character: "K", row: c.row, column: c.column, fromLeft: c.fromLeft,
+                                    state: .returning, progress: 0.75, legTime: 1)
+        let formed = GalagaEnemy(id: 3, character: "K", row: c.row, column: c.column, fromLeft: c.fromLeft,
+                                 state: .formed, progress: 0, legTime: 1)
+        if GalagaPath.position(of: entering, columns: c.columns) != GalagaPath.entry(t: 0.25, fromLeft: c.fromLeft, slot: s)
+            || GalagaPath.position(of: returning, columns: c.columns) != GalagaPath.dive(t: 0.25, slot: s)
+            || GalagaPath.position(of: formed, columns: c.columns) != s {
+            pathsOK = false
+            print("      ↳ position(of:) disagrees with the curves at (\(c.row),\(c.column))")
+        }
+    }
+    check("galaga paths follow the fixture across \(fx.paths.count) slots", pathsOK)
+
+    // Rules the fixture states in words, checked the way GalagaTest does.
+    let g1 = GalagaGame(config: .init(characters: ["K"]), rng: SeededRNG(seed: 3))
+    let interval = g1.entryInterval
+    check("galaga: nothing enters before the interval", g1.advance(by: interval - 0.01).isEmpty && g1.enemies.isEmpty)
+    let first = g1.advance(by: 0.02)
+    var enteredOK = false
+    if first.count == 1, case .entered(let e) = first[0] {
+        enteredOK = e.state == .entering && e.row == 0 && e.column == 0 && e.fromLeft
+            && approxEqual(e.progress, 0.01 / g1.entryTime, 1e-9) && approxEqual(e.legTime, g1.entryTime)
+    }
+    check("galaga: the first enemy enters on the interval, from the left, into slot (0,0)", enteredOK)
+    check("galaga: an entering enemy settles into formation after its entry time", {
+        g1.advance(by: g1.entryTime)
+        return g1.enemies.first?.state == .formed
+    }())
+    let second = g1.enemies.count > 1 ? g1.enemies[1] : nil
+    check("galaga: the second enemy enters from the right into slot (0,1)",
+          second?.row == 0 && second?.column == 1 && second?.fromLeft == false)
+
+    // A dive: one formed enemy, wait out the dive clock, then let it land.
+    let g2 = GalagaGame(config: .init(characters: ["K"]), rng: SeededRNG(seed: 5))
+    var dived: GalagaEnemy?
+    var landed: GalagaEnemy?
+    var guardSteps = 0
+    while landed == nil && guardSteps < 100_000 {
+        for ev in g2.advance(by: 0.05) {
+            if case .dived(let e) = ev, dived == nil { dived = e }
+            if case .landed(let e) = ev { landed = e }
+        }
+        guardSteps += 1
+    }
+    check("galaga: a formed enemy dives", dived?.state == .diving && dived?.progress == 0 && approxEqual(dived?.legTime ?? 0, g2.diveTime))
+    check("galaga: a dive that lands costs a life, resets the combo and returns the enemy",
+          landed?.progress == 1.0 && g2.lives == 2 && g2.misses == 1 && g2.combo == 0
+          && g2.enemies.first(where: { $0.id == landed?.id })?.state == .returning)
+    check("galaga: shooting the returning enemy scores without the dive bonus", {
+        guard let landed else { return false }
+        let before = g2.score
+        let shot = g2.shoot("k")
+        return shot.isHit && shot.enemy?.id == landed.id && shot.enemy?.state == .returning
+            && shot.points == GalagaGame.pointsPerHit && g2.score == before + GalagaGame.pointsPerHit
+    }())
+
+    // Targeting: a diver outranks a formed enemy on a lower row, which outranks one entering.
+    let entering = GalagaEnemy(id: 1, character: "K", row: 0, column: 0, fromLeft: true, state: .entering, progress: 0.9, legTime: 1)
+    let topRow = GalagaEnemy(id: 2, character: "K", row: 0, column: 1, fromLeft: false, state: .formed, progress: 0, legTime: 1)
+    let lowRow = GalagaEnemy(id: 3, character: "K", row: 2, column: 1, fromLeft: false, state: .formed, progress: 0, legTime: 1)
+    let returning = GalagaEnemy(id: 4, character: "K", row: 1, column: 0, fromLeft: true, state: .returning, progress: 0.2, legTime: 1)
+    let diver = GalagaEnemy(id: 5, character: "K", row: 1, column: 1, fromLeft: false, state: .diving, progress: 0.1, legTime: 1)
+    let deeperDiver = GalagaEnemy(id: 6, character: "K", row: 1, column: 2, fromLeft: true, state: .diving, progress: 0.4, legTime: 1)
+    check("galaga: threat order is deeper diver > diver > returning > lowest row > higher row > entering",
+          GalagaGame.threat(of: deeperDiver) > GalagaGame.threat(of: diver)
+          && GalagaGame.threat(of: diver) > GalagaGame.threat(of: returning)
+          && GalagaGame.threat(of: returning) > GalagaGame.threat(of: lowRow)
+          && GalagaGame.threat(of: lowRow) > GalagaGame.threat(of: topRow)
+          && GalagaGame.threat(of: topRow) > GalagaGame.threat(of: entering))
+
+    // Scoring: a diver is worth the bonus; every hit's points follow the rule; a wrong shot is a miss.
+    let g3 = GalagaGame(config: .init(characters: ["K"]), rng: SeededRNG(seed: 9))
+    var scoreOK = true
+    var sawDiver = false
+    var shots = 0
+    guardSteps = 0
+    while shots < 12 && guardSteps < 100_000 {
+        let events = g3.advance(by: 0.05)
+        guardSteps += 1
+        // Shoot only once something is diving, or once the field is full, so
+        // the dive bonus is exercised at least once.
+        let diving = g3.enemies.contains { $0.state == .diving }
+        if diving || g3.enemies.count >= 4 {
+            let before = g3.score
+            let combo = g3.combo
+            let shot = g3.shoot("K")
+            shots += 1
+            guard let hit = shot.enemy else { scoreOK = false; continue }
+            let expected = (GalagaGame.pointsPerHit + (hit.state == .diving ? GalagaGame.diveBonus : 0))
+                * GalagaGame.multiplier(combo: combo + 1)
+            if hit.state == .diving { sawDiver = true }
+            let bonus = shot.waveCleared ? GalagaGame.waveBonus : 0
+            if shot.points != expected || g3.score != before + expected + bonus { scoreOK = false }
+        }
+        _ = events
+    }
+    check("galaga: every hit scores (100 + 50 for a diver) × the multiplier, and a diver was hit", scoreOK && sawDiver)
+    let wrong = g3.shoot("Z")
+    check("galaga: a wrong shot is a miss that breaks the combo",
+          !wrong.isHit && wrong.points == 0 && g3.combo == 0 && g3.misses == 1)
+
+    // Waves: shooting a full formation clears it and adds the bonus; the next wave enters after the gap.
+    let g4 = GalagaGame(config: .init(characters: ["K"]), rng: SeededRNG(seed: 11))
+    var cleared = false
+    var clearedScore = 0
+    guardSteps = 0
+    while !cleared && guardSteps < 100_000 {
+        g4.advance(by: 0.05)
+        guardSteps += 1
+        if !g4.enemies.isEmpty {
+            let before = g4.score
+            let shot = g4.shoot("K")
+            if shot.waveCleared { cleared = true; clearedScore = g4.score - before - shot.points }
+        }
+    }
+    check("galaga: the eighth hit clears wave 1 (2×4) and adds the wave bonus",
+          cleared && g4.wave == 2 && g4.hits == 8 && clearedScore == GalagaGame.waveBonus && g4.released == 0 && g4.enemies.isEmpty)
+    check("galaga: wave 2's first entry waits the wave gap plus an interval", {
+        let waited = g4.advance(by: GalagaGame.waveGap + g4.entryInterval - 0.01)
+        if !waited.isEmpty || !g4.enemies.isEmpty { return false }
+        let next = g4.advance(by: 0.02)
+        return next.count == 1 && g4.enemies.count == 1 && g4.formation.size == 10
+    }())
+
+    // Three landed dives end the game.
+    let g5 = GalagaGame(config: .init(characters: ["K"]), rng: SeededRNG(seed: 13))
+    var over = false
+    var landings = 0
+    guardSteps = 0
+    while !over && guardSteps < 100_000 {
+        for ev in g5.advance(by: 0.1) {
+            if case .landed = ev { landings += 1 }
+            if case .gameOver = ev { over = true }
+        }
+        guardSteps += 1
+    }
+    check("galaga: three landed dives end the game", over && g5.isOver && g5.lives == 0 && landings == 3 && g5.enemies.isEmpty)
+    check("galaga: a finished game ignores time and shots", g5.advance(by: 10).isEmpty && !g5.shoot("K").isHit && g5.misses == 3)
+
+    // The scripted scenario, driven with a one-character pool so whatever is
+    // on the field is a K: "hit" shoots one, "diveLands" waits for a landing,
+    // "wrongShot" names a character nothing carries.
+    let sc = fx.scenario
+    let g = GalagaGame(config: .init(characters: ["K"], lives: sc.lives, characterWpm: sc.characterWpm),
+                       rng: SeededRNG(seed: 7))
+    check("galaga: the scenario game opens at its start speed",
+          approxEqual(g.currentWpm, sc.startWpm) && approxEqual(g.config.targetWpm, sc.targetWpm))
+    var scenarioOK = true
+    for (i, ev) in sc.events.enumerated() {
+        for _ in 0..<(ev.times ?? 1) {
+            switch ev.event {
+            case "hit":
+                while g.enemies.isEmpty { g.advance(by: 0.05) }
+                if !g.shoot("K").isHit { scenarioOK = false; print("      ↳ event \(i): the hit missed") }
+            case "diveLands":
+                var landed = 0
+                while landed == 0 {
+                    landed = g.advance(by: 0.05).filter { if case .landed = $0 { return true } else { return false } }.count
+                }
+                if landed != 1 { scenarioOK = false; print("      ↳ event \(i): \(landed) landed at once") }
+            case "wrongShot":
+                if g.shoot("Z").isHit { scenarioOK = false; print("      ↳ event \(i): the wrong shot hit") }
+            default:
+                scenarioOK = false
+                print("      ↳ event \(i): unknown event '\(ev.event)' in the fixture")
+            }
+        }
+        if !approxEqual(g.currentWpm, ev.currentWpm) || g.combo != ev.combo || g.multiplier != ev.multiplier
+            || g.lives != ev.lives || g.wave != ev.wave {
+            scenarioOK = false
+            print("      ↳ after event \(i) (\(ev.event)): \(g.currentWpm) WPM combo \(g.combo) ×\(g.multiplier) lives \(g.lives) wave \(g.wave); fixture says \(ev.currentWpm) / \(ev.combo) / ×\(ev.multiplier) / \(ev.lives) / \(ev.wave)")
+        }
+    }
+    check("galaga: the scenario holds across \(sc.events.count) events", scenarioOK && !g.isOver)
+    check("galaga: bestWpm is the highest speed reached", approxEqual(g.bestWpm, sc.bestWpm))
+
+    let flat = GalagaGame(config: .init(characters: ["K"], characterWpm: d.noRampAtOrBelow), rng: SeededRNG(seed: 2))
+    for _ in 0..<12 {
+        while flat.enemies.isEmpty { flat.advance(by: 0.05) }
+        _ = flat.shoot("K")
+    }
+    check("galaga: no ramp at or under the floor",
+          flat.config.startWpm == flat.config.targetWpm && approxEqual(flat.currentWpm, d.noRampAtOrBelow)
+          && approxEqual(flat.bestWpm, d.noRampAtOrBelow))
+
+    // The same seed gives the same sequence of characters and divers.
+    func sequence(_ seed: UInt64) -> [String] {
+        let g = GalagaGame(config: .init(characters: ["K", "M", "R", "S"]), rng: SeededRNG(seed: seed))
+        var out: [String] = []
+        var steps = 0
+        while out.count < 20 && steps < 100_000 {
+            for ev in g.advance(by: 0.05) {
+                if case .entered(let e) = ev { out.append("E\(e.character)") }
+                if case .dived(let e) = ev { out.append("D\(e.id)"); _ = g.shoot(e.character) }
+            }
+            steps += 1
+        }
+        return out
+    }
+    check("galaga: the same seed gives the same sequence, and every character is from the pool",
+          sequence(42) == sequence(42) && sequence(42) != sequence(43)
+          && sequence(42).allSatisfy { $0.hasPrefix("D") || ["EK", "EM", "ER", "ES"].contains($0) })
+} else {
+    check("fixtures/galaga.json loads and decodes", false)
+}
+
 print("\n────────────────────────────")
 if failures == 0 {
     print("✅ All \(checks) checks passed.\n")

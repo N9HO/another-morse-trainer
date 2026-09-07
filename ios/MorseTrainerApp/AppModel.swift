@@ -4,7 +4,7 @@ import MediaPlayer
 
 /// The ways to practice.
 enum TrainingMode: String, CaseIterable, Identifiable {
-    case journey, characters, words, abbreviations, qCodes, prosigns, headCopy, typed, sending, confusion, listen, qso, contest, story, exam, qrq, rapidFire, invaders
+    case journey, characters, words, abbreviations, qCodes, prosigns, headCopy, typed, sending, confusion, listen, qso, contest, story, exam, qrq, rapidFire, invaders, galaga
     var id: String { rawValue }
     var title: String {
         switch self {
@@ -26,6 +26,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .qrq:          return "QRQ Speed"
         case .rapidFire:    return "Rapid Fire"
         case .invaders:     return "Morse Invaders"
+        case .galaga:       return "CW Galaga"
         }
     }
     var icon: String {
@@ -48,6 +49,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .qrq:           return "hare"
         case .rapidFire:     return "bolt.fill"
         case .invaders:      return "gamecontroller.fill"
+        case .galaga:        return "airplane"
         }
     }
     /// In meaning-based modes the question is "what are they saying?"
@@ -69,6 +71,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .qrq:                return "Type what you hear"
         case .rapidFire:          return "Copy what you hear"
         case .invaders:           return "Shoot the character you hear"
+        case .galaga:             return "Shoot the character you hear"
         }
     }
     /// A very short descriptor shown on the mode-selection tiles (intro screen).
@@ -93,6 +96,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .qrq:           return "High-speed copy"
         case .rapidFire:     return "Back-to-back copy"
         case .invaders:      return "Arcade recognition"
+        case .galaga:        return "Arcade formations"
         }
     }
 
@@ -136,6 +140,8 @@ enum TrainingMode: String, CaseIterable, Identifiable {
             return "Real-world copy drill: a stream of call signs, words, number groups, or state abbreviations sent back to back at whatever pace you choose. Type each one as it lands, send it back on a key, or just copy along and review the full list of what was transmitted at the end."
         case .invaders:
             return "Characters fall from the top in columns. Hear one and type it, or see one and key it, to shoot the lowest invader carrying it before it reaches the ground. Three lives; every wave comes faster. Misses feed your confusion drill."
+        case .galaga:
+            return "Enemies swoop in along curved paths and settle into a formation, then dive at you one by one. Hear one and type it, or see one and key it, to shoot the most dangerous enemy carrying it before its dive gets through. Consecutive hits build a combo multiplier up to ×8; three lives; every wave brings a bigger formation and faster dives. Misses feed your confusion drill."
         }
     }
 
@@ -170,8 +176,8 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         switch self {
         // Contest picks its own length (the real one-hour event or a sprint) in
         // its setup card, so the generic duration picker would be redundant.
-        // Morse Invaders ends when the last life is lost, not on a clock.
-        case .exam, .story, .contest, .invaders: return false
+        // Morse Invaders and CW Galaga end when the last life is lost, not on a clock.
+        case .exam, .story, .contest, .invaders, .galaga: return false
         default:                                 return true
         }
     }
@@ -483,6 +489,7 @@ final class AppModel: ObservableObject {
         case .qrq:          return qrqQuiz
         case .rapidFire:    return rapidFireQuiz
         case .invaders:     return charLadder   // unused: Invaders runs its own game loop (InvadersView)
+        case .galaga:       return charLadder   // unused: Galaga runs its own game loop (GalagaView)
         }
     }
 
@@ -504,6 +511,8 @@ final class AppModel: ObservableObject {
     var isRapidFire: Bool { mode == .rapidFire }
     /// Morse Invaders (#170): the arcade game, run by `InvadersView` on its own frame clock.
     var isInvaders: Bool { mode == .invaders }
+    /// CW Galaga (#187): the formation game, run by `GalagaView` on its own frame clock.
+    var isGalaga: Bool { mode == .galaga }
     /// Rapid Fire's hands-off "just listen, review the list at the end" variant,
     /// which streams items on its own loop instead of waiting for an answer.
     var isRapidFireReview: Bool { isRapidFire && settings.rapidFire.response == .review }
@@ -663,10 +672,10 @@ final class AppModel: ObservableObject {
             stopListening()
             startStory(active: false)
             startRapidFire()
-        } else if mode == .invaders {
+        } else if mode == .invaders || mode == .galaga {
             stopListening()
             startStory(active: false)
-            // The game itself lives in InvadersView; the session here only
+            // The game itself lives in InvadersView / GalagaView; the session here only
             // holds the audio route and the tally the view feeds it.
             introduction = nil
             drill = nil
@@ -1973,7 +1982,7 @@ final class AppModel: ObservableObject {
         qsoBusy = false
         qsoActive = false
         rapidFireGeneration += 1   // cancel any pending Rapid Fire stream
-        if isRapidFire || isInvaders { player.stop() }
+        if isRapidFire || isInvaders || isGalaga { player.stop() }
         phase = .idle
         if let record = buildSessionRecord() {
             history.add(record)            // triggers saveHistory()
@@ -2985,6 +2994,38 @@ final class AppModel: ObservableObject {
         engine.noteMiss(target: target)
         noteSessionResult(correct: false, ttr: 0, target: String(target))
         saveProgress()
+    }
+
+    // MARK: - CW Galaga (#187)
+
+    /// The characters a game draws from: the same two pools as Morse
+    /// Invaders. Twin of `GalagaScreen.characterPool` on Android.
+    func galagaCharacters(_ set: InvadersCharacterSet) -> [Character] {
+        invadersCharacters(set)
+    }
+
+    /// Send one enemy's character on the session's player at the game's ramp
+    /// speed — a single character has no gaps for Farnsworth to stretch.
+    /// Returns the sound's duration so the view can date its tone end.
+    @discardableResult
+    func playGalaga(_ character: Character, wpm: Double) -> TimeInterval {
+        playInvader(character, wpm: wpm)
+    }
+
+    func stopGalaga() { player.stop() }
+
+    /// One shot at `target` — the enemy hit, or the biggest threat on the
+    /// field when the key matched nothing — recorded exactly as an Invaders
+    /// shot is: a hit is a correct recognition with its time, a wrong key a
+    /// miss confused with `chosen`, so the pair feeds the Confusion Drill.
+    func noteGalagaShot(target: Character, chosen: Character, ttr: TimeInterval) {
+        noteInvadersShot(target: target, chosen: chosen, ttr: ttr)
+    }
+
+    /// A dive got through unanswered: a miss for its character with no
+    /// confusion partner.
+    func noteGalagaLanding(target: Character) {
+        noteInvadersEscape(target: target)
     }
 
     /// Offer a guess. A rejected guess costs nothing and is not saved.
