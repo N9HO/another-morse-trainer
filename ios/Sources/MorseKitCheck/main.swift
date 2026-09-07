@@ -4308,6 +4308,271 @@ if let fx = loadGalagaFixture() {
     check("fixtures/galaga.json loads and decodes", false)
 }
 
+// Morse Defender (#188), against fixtures/defender.json — read by this harness
+// AND by the Kotlin DefenderTest. The expected values were worked out from the
+// rules in the fixture's derivation block, not captured from either port.
+struct DefenderFixture: Decodable {
+    struct Derivation: Decodable {
+        let pointsPerHit: Int
+        let baseSpawnInterval: Double; let minSpawnInterval: Double; let spawnDecay: Double
+        let baseTravelTime: Double; let minTravelTime: Double; let travelDecay: Double
+        let maxConcurrent: Int; let startAssets: Int; let maxAssets: Int; let hitsPerWave: Int
+        let columns: Int
+        let minWpm: Double; let startOffset: Double; let step: Double; let hitsPerStep: Int
+    }
+    struct DifficultyRow: Decodable {
+        let wave: Int; let difficulty: String; let spawnInterval: Double; let travelTime: Double; let concurrent: Int
+    }
+    struct DifficultyTable: Decodable { let rows: [DifficultyRow] }
+    struct MultiplierRow: Decodable { let combo: Int; let multiplier: Int }
+    struct RampRow: Decodable { let characterWpm: Double; let startWpm: Double; let targetWpm: Double }
+    struct TimingCase: Decodable {
+        let name: String; let wpm: Double; let farnsworthWpm: Double?; let characterWpm: Double; let effectiveWpm: Double
+    }
+    struct Callsigns: Decodable {
+        struct Synthetic: Decodable {
+            let name: String; let pool: String; let length: Int; let alphabet: String; let digitAt: Int; let token: String?
+        }
+        struct Real: Decodable {
+            let draws: Int; let minLength: Int; let maxLength: Int; let digitCount: Int; let digitIndexes: [Int]
+        }
+        let synthetic: [Synthetic]
+        let real: Real
+    }
+    struct Event: Decodable {
+        let event: String; let times: Int?
+        let score: Int; let combo: Int; let wave: Int; let assets: Int; let live: Int; let currentWpm: Double
+    }
+    struct Scenario: Decodable {
+        let characterWpm: Double; let startWpm: Double; let targetWpm: Double
+        let events: [Event]; let hits: Int; let misses: Int; let bestCombo: Int; let bestWpm: Double
+    }
+    struct Loss: Decodable { let strikesToLose: Int }
+    let derivation: Derivation
+    let difficultyTable: DifficultyTable
+    let multiplierTable: [MultiplierRow]
+    let rampStartTable: [RampRow]
+    let sendTiming: [TimingCase]
+    let callsigns: Callsigns
+    let scenario: Scenario
+    let loss: Loss
+}
+
+func loadDefenderFixture() -> DefenderFixture? {
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+    guard let data = try? Data(contentsOf: root.appendingPathComponent("fixtures/defender.json")) else { return nil }
+    return try? JSONDecoder().decode(DefenderFixture.self, from: data)
+}
+
+print("\nMorse Defender (fixtures/defender.json):")
+if let fx = loadDefenderFixture() {
+    let d = fx.derivation
+    check("defender constants are the fixture's",
+          DefenderGame.pointsPerHit == d.pointsPerHit
+          && DefenderGame.baseSpawnInterval == d.baseSpawnInterval
+          && DefenderGame.minSpawnInterval == d.minSpawnInterval
+          && DefenderGame.spawnDecay == d.spawnDecay
+          && DefenderGame.baseTravelTime == d.baseTravelTime
+          && DefenderGame.minTravelTime == d.minTravelTime
+          && DefenderGame.travelDecay == d.travelDecay
+          && DefenderGame.maxConcurrent == d.maxConcurrent
+          && DefenderGame.defaultStartAssets == d.startAssets
+          && DefenderGame.defaultMaxAssets == d.maxAssets
+          && DefenderGame.defaultHitsPerWave == d.hitsPerWave
+          && DefenderGame.defaultColumns == d.columns
+          && DefenderGame.minWpm == d.minWpm
+          && DefenderGame.rampStartOffset == d.startOffset
+          && DefenderGame.rampStep == d.step
+          && DefenderGame.hitsPerRampStep == d.hitsPerStep)
+
+    var tableOK = true
+    for row in fx.difficultyTable.rows {
+        guard let difficulty = InvadersDifficulty(rawValue: row.difficulty) else {
+            tableOK = false
+            print("      ↳ unknown difficulty '\(row.difficulty)' in the fixture")
+            continue
+        }
+        let spawn = DefenderGame.spawnInterval(wave: row.wave, difficulty: difficulty)
+        let travel = DefenderGame.travelTime(wave: row.wave, difficulty: difficulty)
+        let concurrent = DefenderGame.concurrent(wave: row.wave)
+        if !approxEqual(spawn, row.spawnInterval, 1e-5) || !approxEqual(travel, row.travelTime, 1e-5)
+            || concurrent != row.concurrent {
+            tableOK = false
+            print("      ↳ wave \(row.wave) \(row.difficulty): spawn \(spawn), travel \(travel), concurrent \(concurrent); fixture says \(row.spawnInterval) / \(row.travelTime) / \(row.concurrent)")
+        }
+    }
+    check("spawn interval, travel time and concurrency follow the fixture table across \(fx.difficultyTable.rows.count) rows", tableOK)
+
+    check("the combo multiplier follows the fixture table",
+          fx.multiplierTable.allSatisfy { DefenderGame.multiplier(combo: $0.combo) == $0.multiplier })
+
+    var rampOK = true
+    for row in fx.rampStartTable {
+        let config = DefenderGame.Config(characters: ["K", "M"], characterWpm: row.characterWpm)
+        let opens = DefenderGame(config: config, rng: SeededRNG(seed: 1)).currentWpm
+        if !approxEqual(DefenderGame.rampStart(characterWpm: row.characterWpm), row.startWpm)
+            || !approxEqual(config.startWpm, row.startWpm)
+            || !approxEqual(config.targetWpm, row.targetWpm)
+            || !approxEqual(opens, row.startWpm) {
+            rampOK = false
+            print("      ↳ \(row.characterWpm) WPM: start \(config.startWpm), target \(config.targetWpm); fixture says \(row.startWpm) / \(row.targetWpm)")
+        }
+    }
+    check("ramp start and target follow the fixture table across \(fx.rampStartTable.count) speeds", rampOK)
+
+    var timingOK = true
+    for c in fx.sendTiming {
+        let t = DefenderGame.sendTiming(wpm: c.wpm, farnsworthWpm: c.farnsworthWpm)
+        if !approxEqual(t.wpm, c.characterWpm) || !approxEqual(t.effectiveWpm, c.effectiveWpm) {
+            timingOK = false
+            print("      ↳ \(c.name): \(t.wpm)/\(t.effectiveWpm), fixture says \(c.characterWpm)/\(c.effectiveWpm)")
+        }
+    }
+    check("send timing honours Farnsworth as the fixture says across \(fx.sendTiming.count) cases", timingOK)
+
+    var syntheticOK = true
+    for c in fx.callsigns.synthetic {
+        let pool = Array(c.pool)
+        let alphabet = String(DefenderGame.callsignAlphabet(from: pool))
+        if alphabet != c.alphabet {
+            syntheticOK = false
+            print("      ↳ \(c.name): alphabet \(alphabet), fixture says \(c.alphabet)")
+        }
+        let hasLetters = c.alphabet.contains { $0.isLetter }
+        var rng = SeededRNG(seed: 11)
+        for _ in 0..<50 {
+            let token = DefenderGame.syntheticCallsign(from: pool, using: &rng)
+            let chars = Array(token)
+            var ok = chars.count == c.length && chars.allSatisfy { c.alphabet.contains($0) }
+            for (i, ch) in chars.enumerated() {
+                if i == c.digitAt { ok = ok && ch.isNumber }
+                else if c.digitAt >= 0 && hasLetters { ok = ok && ch.isLetter }
+                else if c.digitAt < 0 { ok = ok && !ch.isNumber }
+            }
+            if let pinned = c.token { ok = ok && token == pinned }
+            if !ok {
+                syntheticOK = false
+                print("      ↳ \(c.name): '\(token)' breaks the shape rule")
+                break
+            }
+        }
+    }
+    check("synthetic callsigns follow the shape rules across \(fx.callsigns.synthetic.count) pools", syntheticOK)
+
+    let real = fx.callsigns.real
+    var realOK = true
+    var realRng = SeededRNG(seed: 5)
+    for _ in 0..<real.draws {
+        let call = DefenderGame.realCallsign(using: &realRng)
+        let digits = call.enumerated().filter { $0.element.isNumber }
+        let ok = (real.minLength...real.maxLength).contains(call.count)
+            && digits.count == real.digitCount
+            && digits.allSatisfy { real.digitIndexes.contains($0.offset) }
+            && call.allSatisfy { $0.isLetter || $0.isNumber }
+        if !ok {
+            realOK = false
+            print("      ↳ real callsign '\(call)' is not one of the everyday shapes")
+            break
+        }
+    }
+    check("real callsigns are the everyday US shapes across \(real.draws) draws", realOK)
+
+    // The game opens with the default assets, each standing with a distinct callsign.
+    let fresh = DefenderGame(config: .init(characters: ["K", "M", "R", "S", "U"]), rng: SeededRNG(seed: 3))
+    check("a new game places the starting assets, all standing, no two alike",
+          fresh.assets.count == d.startAssets && fresh.liveAssets == d.startAssets
+          && Set(fresh.assets.map(\.callsign)).count == d.startAssets && fresh.attackers.isEmpty)
+
+    // Launch timing: nothing before the interval, one on it, born a hair down.
+    let interval = fresh.spawnInterval
+    check("nothing launches before the interval", fresh.advance(by: interval - 0.01).isEmpty && fresh.attackers.isEmpty)
+    let launched = fresh.advance(by: 0.02)
+    check("one attacker launches on the interval, aimed at a standing asset",
+          launched.count == 1 && fresh.attackers.count == 1
+          && fresh.assets.contains { $0.id == fresh.attackers[0].targetId && $0.callsign == fresh.attackers[0].callsign }
+          && approxEqual(fresh.attackers[0].progress, 0.01 / fresh.travelTime, 1e-9))
+    check("wave 1 holds one attacker in flight",
+          fresh.advance(by: interval * 2).filter { if case .launched = $0 { return true } else { return false } }.isEmpty
+          && fresh.attackers.count == 1)
+
+    // The scripted scenario.
+    let sc = fx.scenario
+    let g = DefenderGame(config: .init(characters: ["K", "M", "R", "S", "U"], characterWpm: sc.characterWpm),
+                         rng: SeededRNG(seed: 7))
+    check("the scenario game opens at its start speed",
+          approxEqual(g.currentWpm, sc.startWpm) && approxEqual(g.config.targetWpm, sc.targetWpm))
+    var scenarioOK = true
+    for (i, ev) in sc.events.enumerated() {
+        for _ in 0..<(ev.times ?? 1) {
+            switch ev.event {
+            case "hit":
+                while g.attackers.isEmpty { g.advance(by: 0.05) }
+                guard let nearest = g.nearestArrival else { scenarioOK = false; break }
+                if !g.route(to: nearest.targetId).isHit { scenarioOK = false; print("      ↳ event \(i): the route missed") }
+            case "wrongRoute":
+                guard let open = g.assets.first(where: { $0.isAlive && !g.isTargeted($0.id) }) else {
+                    scenarioOK = false; print("      ↳ event \(i): no untargeted asset to waste a shot on"); break
+                }
+                if g.route(to: open.id).isHit { scenarioOK = false; print("      ↳ event \(i): the wasted shot hit") }
+            case "strike":
+                var struck = 0
+                while struck == 0 {
+                    struck = g.advance(by: 0.05).filter { if case .struck = $0 { return true } else { return false } }.count
+                }
+                if struck != 1 { scenarioOK = false; print("      ↳ event \(i): \(struck) struck at once") }
+            default:
+                scenarioOK = false
+                print("      ↳ event \(i): unknown event '\(ev.event)' in the fixture")
+            }
+        }
+        if g.score != ev.score || g.combo != ev.combo || g.wave != ev.wave
+            || g.assets.count != ev.assets || g.liveAssets != ev.live || !approxEqual(g.currentWpm, ev.currentWpm) {
+            scenarioOK = false
+            print("      ↳ after event \(i) (\(ev.event)): score \(g.score) combo \(g.combo) wave \(g.wave) assets \(g.assets.count) live \(g.liveAssets) \(g.currentWpm) WPM; fixture says \(ev.score) \(ev.combo) \(ev.wave) \(ev.assets) \(ev.live) \(ev.currentWpm)")
+        }
+    }
+    check("the game follows the scripted scenario across \(sc.events.count) events", scenarioOK && !g.isOver)
+    check("the scenario's totals are the fixture's",
+          g.hits == sc.hits && g.misses == sc.misses && g.bestCombo == sc.bestCombo && approxEqual(g.bestWpm, sc.bestWpm))
+    check("every callsign placed in the scenario is distinct",
+          Set(g.assets.map(\.callsign)).count == g.assets.count)
+
+    // A typed callsign routes like a tap; a callsign nobody has is a wasted shot.
+    let typed = DefenderGame(config: .init(characters: ["K", "M"]), rng: SeededRNG(seed: 9))
+    while typed.attackers.isEmpty { typed.advance(by: 0.05) }
+    let aimed = typed.nearestArrival!
+    check("an unknown typed callsign is a wasted shot that breaks nothing else",
+          !typed.route(callsign: "ZZZZ").isHit && typed.misses == 1 && typed.attackers.count == 1)
+    check("the typed callsign routes to its asset, case-insensitively",
+          typed.route(callsign: aimed.callsign.lowercased()).attacker?.id == aimed.id && typed.hits == 1)
+    check("the keyboard pool is the synthetic alphabet for the active set, letters and digits for real calls",
+          typed.keyboardPool == ["K", "M"]
+          && DefenderGame(config: .init(characters: [], callsigns: .full), rng: SeededRNG(seed: 1)).keyboardPool.count == 36)
+
+    // Never route: every attacker strikes, and the fourth ends the game.
+    let lost = DefenderGame(config: .init(characters: ["K", "M", "R"]), rng: SeededRNG(seed: 4))
+    var strikes = 0
+    var over = false
+    var guardSteps = 0
+    while !over && guardSteps < 200_000 {
+        for e in lost.advance(by: 0.1) {
+            if case .struck = e { strikes += 1 }
+            if case .gameOver = e { over = true }
+        }
+        guardSteps += 1
+    }
+    check("losing every asset ends the game after \(fx.loss.strikesToLose) strikes and clears the field",
+          over && lost.isOver && strikes == fx.loss.strikesToLose && lost.liveAssets == 0 && lost.attackers.isEmpty)
+    check("a finished game ignores time and routes",
+          lost.advance(by: 10).isEmpty && !lost.route(to: lost.assets[0].id).isHit && lost.misses == fx.loss.strikesToLose)
+} else {
+    check("fixtures/defender.json loads and decodes", false)
+}
+
 print("\n────────────────────────────")
 if failures == 0 {
     print("✅ All \(checks) checks passed.\n")
