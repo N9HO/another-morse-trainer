@@ -313,6 +313,23 @@ enum ListenContent: String, Codable, CaseIterable, Identifiable {
     }
 }
 
+/// What Listen & Learn says after the code, for the token-plus-meaning sets
+/// (QSO elements, Abbreviations & Q-codes). `spelled` reads the token letter by
+/// letter and then the full meaning — the teaching form; `meaningOnly` says the
+/// brief meaning alone (`MorseData.briefMeaning`), the drilling form a
+/// listener asked for once the glosses got in the way (#210). Characters and
+/// Words are one word either way.
+enum ListenReadback: String, Codable, CaseIterable, Identifiable {
+    case spelled, meaningOnly
+    var id: String { rawValue }
+    var label: String {
+        switch self {
+        case .spelled:     return "Spell it out"
+        case .meaningOnly: return "Meaning only"
+        }
+    }
+}
+
 enum Proficiency: String, Codable, CaseIterable, Identifiable {
     case none                  // I know nothing
     case someLetters           // I know some of the letters
@@ -563,6 +580,8 @@ struct AppSettings: Codable, Equatable {
     var listenContent: ListenContent = .characters
     /// Delay between the code and the spoken answer in hands-free mode.
     var listenGap: AnswerGap = .standard
+    /// Spell the token out and then the meaning, or say the meaning alone (#210).
+    var listenReadback: ListenReadback = .spelled
 
     /// How big a word pool Words mode (and Listen words) draws from.
     var wordTier: WordTier = .top100
@@ -734,7 +753,7 @@ extension AppSettings {
         case dailyReminderEnabled, dailyReminderHour, dailyReminderMinute
         case maxAnswerChoices, selectedPunctuation, journeyDrainOnMiss
         case learningMode, practiceDuration
-        case listenContent, listenGap, wordTier, customWords, useCustomWords
+        case listenContent, listenGap, listenReadback, wordTier, customWords, useCustomWords
         case voiceResponse, keyingResponse
         case qrqSpeed, backgroundNoise, didMigrateNoiseFloor
         case bluetoothKeepAlive, bandNoise
@@ -775,6 +794,7 @@ extension AppSettings {
         s.practiceDuration = try c.decodeIfPresent(PracticeDuration.self, forKey: .practiceDuration) ?? s.practiceDuration
         s.listenContent = try c.decodeIfPresent(ListenContent.self, forKey: .listenContent) ?? s.listenContent
         s.listenGap = try c.decodeIfPresent(AnswerGap.self, forKey: .listenGap) ?? s.listenGap
+        s.listenReadback = try c.decodeIfPresent(ListenReadback.self, forKey: .listenReadback) ?? s.listenReadback
         s.wordTier = try c.decodeIfPresent(WordTier.self, forKey: .wordTier) ?? s.wordTier
         s.customWords = try c.decodeIfPresent([String].self, forKey: .customWords) ?? s.customWords
         // Before the switch existed a non-empty list was simply in use, so a

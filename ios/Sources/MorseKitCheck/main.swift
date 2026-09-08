@@ -1535,8 +1535,14 @@ if let fx = loadCustomWordsFixture() {
 struct QSOElementsFixture: Decodable {
     struct Item: Decodable { let token: String; let meaning: String }
     struct Tiers: Decodable { let top20: Int; let top100: Int }
+    struct Brief: Decodable {
+        struct Example: Decodable { let meaning: String; let brief: String }
+        let separator: String
+        let examples: [Example]
+    }
     let tiers: Tiers
     let items: [Item]
+    let brief: Brief
 }
 
 func loadQSOElementsFixture() -> QSOElementsFixture? {
@@ -1609,6 +1615,18 @@ if let fx = loadQSOElementsFixture() {
     check("a plain token plays as text", top100.first { $0.display == "CQ" }?.playable == .text("CQ"))
     check("a multi-word token keeps its word gap",
           top100.first { $0.display == "CQ CQ CQ" }?.playable == .text("CQ CQ CQ"))
+
+    // Brief readback (#210): the meaning before its first " — " qualifier.
+    check("the brief separator is the fixture's", MorseData.briefSeparator == fx.brief.separator)
+    var briefOK = true
+    for ex in fx.brief.examples where MorseData.briefMeaning(ex.meaning) != ex.brief {
+        briefOK = false
+        print("      ↳ brief(\"\(ex.meaning)\") = \"\(MorseData.briefMeaning(ex.meaning))\", fixture says \"\(ex.brief)\"")
+    }
+    check("brief meanings match the fixture's examples", briefOK)
+    check("every meaning has a non-empty brief form with no qualifier left in it",
+          table.allSatisfy { !MorseData.briefMeaning($0.meaning).isEmpty
+                             && !MorseData.briefMeaning($0.meaning).contains(MorseData.briefSeparator) })
 } else {
     check("fixtures/qso-elements.json loads and decodes", false)
 }

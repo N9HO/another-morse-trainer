@@ -96,7 +96,8 @@ testers, bug reports and feature chat live on
   reaching the decoder as marks
 - **Listen & Learn**: hands-free: hear the code, then the spoken answer, over
   characters, the curated on-air QSO elements (Top 20 or Top 100), words, or
-  abbreviations and Q-codes; keeps playing with the screen locked, with the
+  abbreviations and Q-codes, spelled out with the full meaning or as the
+  brief meaning alone; keeps playing with the screen locked, with the
   current item and the app logo on the lock screen and car displays
 - **Voice answers**: speak your answer instead of tapping in any of the six
   choice quizzes, with a confirm/closest-match fallback that learns your

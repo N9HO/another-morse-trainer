@@ -318,6 +318,9 @@ object Settings {
     /** Gap between the code and the spoken answer. */
     var listenGap by mutableStateOf(ListenGap.STANDARD)
         private set
+    /** Spell the token out and then the meaning, or say the meaning alone (#210). */
+    var listenReadback by mutableStateOf(ListenReadback.SPELLED)
+        private set
 
     /**
      * Punctuation opted into the study ladder (a subset of
@@ -486,6 +489,8 @@ object Settings {
             "FAST" -> ListenGap.WARP
             else -> runCatching { ListenGap.valueOf(raw) }.getOrDefault(ListenGap.STANDARD)
         }
+        listenReadback = runCatching { ListenReadback.valueOf(prefs.getString("listenReadback", null) ?: "SPELLED") }
+            .getOrDefault(ListenReadback.SPELLED)
         punctuationChars = (prefs.getString("punctuation", "") ?: "")
             .toSet().filter { it in MorseCode.pickablePunctuation }.toSet()
         customWordsText = prefs.getString("customWords", "") ?: ""
@@ -675,6 +680,11 @@ object Settings {
 
     fun updateListenGap(value: ListenGap) {
         listenGap = value
+        persist()
+    }
+
+    fun updateListenReadback(value: ListenReadback) {
+        listenReadback = value
         persist()
     }
 
@@ -933,6 +943,7 @@ object Settings {
             putBoolean("allowReplay", allowReplay)
             putString("listenContent", listenContent.name)
             putString("listenGap", listenGap.name)
+            putString("listenReadback", listenReadback.name)
             putString("punctuation", punctuationChars.joinToString(""))
             putString("customWords", customWordsText)
             putBoolean("useCustomWords", useCustomWords)

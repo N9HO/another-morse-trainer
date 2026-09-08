@@ -274,6 +274,16 @@ object MorseData {
     val qsoElements: List<TokenMeaning> = qsoElementsData
 
     /**
+     * The short spoken form of a meaning, for Listen & Learn's "Meaning only"
+     * readback (#210): the text before the first " — " qualifier, trimmed, so
+     * "go ahead — named station only" is spoken as "go ahead" and a meaning
+     * with no qualifier is spoken as it is. Pinned by the `brief` examples in
+     * fixtures/qso-elements.json; the Swift twin is `MorseData.briefMeaning`.
+     */
+    const val BRIEF_SEPARATOR = " — "
+    fun briefMeaning(meaning: String): String = meaning.substringBefore(BRIEF_SEPARATOR).trim()
+
+    /**
      * Listen & Learn's "QSO elements · Top N" pool: the first [limit] of
      * [qsoElements] as items whose answer is the meaning, like
      * [abbreviationItems]. A bracketed token plays the run-together prosign

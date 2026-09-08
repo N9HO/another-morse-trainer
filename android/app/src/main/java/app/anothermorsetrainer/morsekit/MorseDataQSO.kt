@@ -29,7 +29,7 @@ internal val qsoElementsData: List<TokenMeaning> = listOf(
     TokenMeaning("73", "best regards"),
     TokenMeaning("RST", "signal report"),
     TokenMeaning("599", "five nine nine — a perfect signal report"),
-    TokenMeaning("5NN", "five nine nine, with N cut for 9"),
+    TokenMeaning("5NN", "five nine nine — with N cut for 9"),
     TokenMeaning("UR", "your / you're"),
     TokenMeaning("NAME", "name"),
     TokenMeaning("QTH", "my location is"),

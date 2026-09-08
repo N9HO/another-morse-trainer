@@ -380,6 +380,13 @@ private struct ModeOptionsCard: View {
         )
     }
 
+    private var listenReadbackBinding: Binding<ListenReadback> {
+        Binding(
+            get: { model.settings.listenReadback },
+            set: { model.settings.listenReadback = $0 }
+        )
+    }
+
     private var wordTierBinding: Binding<WordTier> {
         Binding(
             get: { model.settings.wordTier },
@@ -541,6 +548,11 @@ private struct ModeOptionsCard: View {
                              selection: listenContentBinding) { (c: ListenContent) in c.label }
                 inlinePicker(title: "Gap before the spoken answer",
                              selection: listenGapBinding) { (g: AnswerGap) in g.label }
+                // Only the token-plus-meaning sets have a long form to shorten (#210).
+                if [.qsoTop20, .qsoTop100, .abbreviations].contains(model.settings.listenContent) {
+                    inlinePicker(title: "Readback",
+                                 selection: listenReadbackBinding) { (r: ListenReadback) in r.label }
+                }
             }
 
             if model.learningMode == .exam {

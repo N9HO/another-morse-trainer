@@ -1758,27 +1758,41 @@ final class AppModel: ObservableObject {
                 ListenItem(playable: item.playable, display: item.display, spoken: item.answer)
             })
         case .abbreviations:
-            return ("abbreviations", (MorseData.abbreviationItems + MorseData.qCodeItems).map { item -> ListenItem in
-                // Spell the token in lowercase letters so TTS says "q t h", not
-                // "capital Q…", then the meaning.
-                let spelled = item.display.lowercased().map(String.init).joined(separator: " ")
-                return ListenItem(playable: item.playable,
-                                  display: "\(item.display) — \(item.answer)",
-                                  spoken: "\(spelled). \(item.answer)")
+            let readback = settings.listenReadback
+            return ("abbreviations:\(readback.rawValue)",
+                    (MorseData.abbreviationItems + MorseData.qCodeItems).map { item -> ListenItem in
+                ListenItem(playable: item.playable,
+                           display: "\(item.display) — \(item.answer)",
+                           spoken: spokenReadback(token: item.display, meaning: item.answer, readback))
             })
         case .qsoTop20, .qsoTop100:
             // The curated on-air vocabulary (issue #182), revealed and spoken
-            // exactly like the abbreviations: the token spelled out, then its
-            // meaning. A prosign's angle brackets are shown but not spelled.
+            // exactly like the abbreviations. A prosign's angle brackets are
+            // shown but not spelled.
             let limit = settings.listenContent == .qsoTop20
                 ? MorseData.qsoTop20Count : MorseData.qsoTop100Count
-            return ("qso:\(limit)", MorseData.qsoElementItems(limit).map { item -> ListenItem in
-                let spelled = item.display.filter { $0 != "<" && $0 != ">" }
-                    .lowercased().map(String.init).joined(separator: " ")
-                return ListenItem(playable: item.playable,
-                                  display: "\(item.display) — \(item.answer)",
-                                  spoken: "\(spelled). \(item.answer)")
+            let readback = settings.listenReadback
+            return ("qso:\(limit):\(readback.rawValue)", MorseData.qsoElementItems(limit).map { item -> ListenItem in
+                ListenItem(playable: item.playable,
+                           display: "\(item.display) — \(item.answer)",
+                           spoken: spokenReadback(token: item.display, meaning: item.answer, readback))
             })
+        }
+    }
+
+    /// What TTS says for a token-plus-meaning item (#210). Spelled: the token
+    /// in lowercase letters so TTS says "q t h", not "capital Q…", then the
+    /// full meaning. Meaning only: the brief meaning, nothing else — the
+    /// screen still shows the token and the whole gloss. Twin of Android's
+    /// `spokenReadback` in Listen.kt.
+    private func spokenReadback(token: String, meaning: String, _ readback: ListenReadback) -> String {
+        switch readback {
+        case .spelled:
+            let spelled = token.filter { $0 != "<" && $0 != ">" }
+                .lowercased().map(String.init).joined(separator: " ")
+            return "\(spelled). \(meaning)"
+        case .meaningOnly:
+            return MorseData.briefMeaning(meaning)
         }
     }
 

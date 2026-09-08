@@ -30,7 +30,7 @@ extension MorseData {
         ("73", "best regards"),
         ("RST", "signal report"),
         ("599", "five nine nine — a perfect signal report"),
-        ("5NN", "five nine nine, with N cut for 9"),
+        ("5NN", "five nine nine — with N cut for 9"),
         ("UR", "your / you're"),
         ("NAME", "name"),
         ("QTH", "my location is"),
@@ -121,6 +121,18 @@ extension MorseData {
         ("TNX FER CALL", "thanks for the call"),
         ("5NN TU", "five nine nine, thank you — the contest exchange")
     ]
+
+    /// The short spoken form of a meaning, for Listen & Learn's "Meaning only"
+    /// readback (#210): the text before the first " — " qualifier, trimmed,
+    /// so "go ahead — named station only" is spoken as "go ahead" and a
+    /// meaning with no qualifier is spoken as it is. Pinned by the `brief`
+    /// examples in fixtures/qso-elements.json; the Kotlin twin is
+    /// `MorseData.briefMeaning`.
+    public static let briefSeparator = " — "
+    public static func briefMeaning(_ meaning: String) -> String {
+        let head = meaning.range(of: briefSeparator).map { String(meaning[..<$0.lowerBound]) } ?? meaning
+        return head.trimmingCharacters(in: .whitespaces)
+    }
 
     /// Listen & Learn's "QSO elements · Top N" pool: the first `limit` of
     /// `qsoElements` as items whose answer is the meaning, like

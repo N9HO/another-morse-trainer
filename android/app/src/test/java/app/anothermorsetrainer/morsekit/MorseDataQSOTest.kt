@@ -50,6 +50,27 @@ class MorseDataQSOTest {
         assertEquals(tokens.size, tokens.toSet().size)
     }
 
+    /** Brief readback (#210): the meaning before its first " — " qualifier. */
+    @Test
+    fun briefMeaningsMatchTheFixturesExamples() {
+        val brief = fixture.getJSONObject("brief")
+        assertEquals(brief.getString("separator"), MorseData.BRIEF_SEPARATOR)
+        val examples = brief.getJSONArray("examples")
+        for (i in 0 until examples.length()) {
+            val ex = examples.getJSONObject(i)
+            assertEquals("brief(\"${ex.getString("meaning")}\")", ex.getString("brief"), MorseData.briefMeaning(ex.getString("meaning")))
+        }
+    }
+
+    @Test
+    fun everyMeaningHasANonEmptyBriefFormWithNoQualifierLeft() {
+        for ((token, meaning) in MorseData.qsoElements) {
+            val b = MorseData.briefMeaning(meaning)
+            assertTrue("$token has an empty brief form", b.isNotEmpty())
+            assertTrue("$token's brief form still carries a qualifier: $b", MorseData.BRIEF_SEPARATOR !in b)
+        }
+    }
+
     @Test
     fun tierSizesAreTheFixtures() {
         val tiers = fixture.getJSONObject("tiers")
