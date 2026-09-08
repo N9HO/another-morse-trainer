@@ -79,7 +79,7 @@ class StatsParsingTest {
              {"mode":"Contest","day":4,"att":4,"cor":4,"ttr":-1}]
         """.trimIndent()
         val out = Stats.parseRecent(json)
-        assertEquals(listOf(12, 0, null, null), out.map { it.score })
+        assertEquals(listOf(12, 0, null, 99), out.map { it.score })   // NEGATIVE CONTROL
     }
 
     @Test
