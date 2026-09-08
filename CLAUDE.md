@@ -8,6 +8,10 @@ span directories.
     ios/        SwiftUI app + SwiftPM package (Xcode project, macOS to build)
     android/    Kotlin + Compose app (Gradle root; settings.gradle.kts lives here)
     fixtures/   Shared test *data*, read by both trees. Not code — see below.
+    docs/       Design notes for work that is decided but not yet built.
+                Read the relevant one before starting such a feature;
+                `docs/high-scores-design.md` covers scorekeeping, personal
+                bests and the shared anti-cheat leaderboard.
 
 Nothing at the repository root builds anything. `cd ios` or `cd android` first.
 
