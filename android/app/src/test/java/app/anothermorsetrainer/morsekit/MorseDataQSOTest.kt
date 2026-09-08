@@ -54,7 +54,7 @@ class MorseDataQSOTest {
     @Test
     fun briefMeaningsMatchTheFixturesExamples() {
         val brief = fixture.getJSONObject("brief")
-        assertEquals(brief.getString("separator") + "NEGATIVE CONTROL", MorseData.BRIEF_SEPARATOR)
+        assertEquals(brief.getString("separator"), MorseData.BRIEF_SEPARATOR)
         val examples = brief.getJSONArray("examples")
         for (i in 0 until examples.length()) {
             val ex = examples.getJSONObject(i)
