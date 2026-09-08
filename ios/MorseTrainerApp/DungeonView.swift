@@ -447,7 +447,10 @@ struct DungeonView: View {
                        multiplier: g.multiplier, bestCombo: g.bestCombo, accuracy: g.accuracy,
                        roomsCleared: g.roomsCleared,
                        wpm: Int(g.currentWpm.rounded()), bestWpm: Int(g.bestWpm.rounded()))
-        if next != hud { hud = next }
+        if next != hud {
+            hud = next
+            model.noteGameScore(g.score)   // per-mode personal best
+        }
     }
 }
 

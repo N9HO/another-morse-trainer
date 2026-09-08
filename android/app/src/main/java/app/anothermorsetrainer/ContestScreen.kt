@@ -100,9 +100,21 @@ fun ContestScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
     // its callers die with the process; the phase, the start and these do not.
     var runQsos by rememberSaveable { mutableIntStateOf(0) }
     var runBusts by rememberSaveable { mutableIntStateOf(0) }
+    // The contest score (points × multipliers), mirrored too: the recovery
+    // path has no log to count multipliers from, so it records this.
+    var runScore by rememberSaveable { mutableIntStateOf(0) }
     var lastSeenMs by rememberSaveable { mutableLongStateOf(0L) }
 
     DisposableEffect(Unit) { onDispose { player.release() } }
+
+    /** The run's score so far, as ContestSummary computes it. */
+    fun scoreOf(e: PileupEngine): Int = contest.score(
+        qsoCount = e.qsoCount,
+        multipliers = contest.multiplierCount(
+            calls = e.log.map { it.call },
+            exchanges = e.log.map { it.exchange }
+        )
+    )
 
     fun elapsedSeconds(): Int {
         if (startedAtMs == 0L) return 0
@@ -115,6 +127,7 @@ fun ContestScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
         val e = engine ?: return
         runQsos = e.qsoCount
         runBusts = e.bustCount
+        runScore = scoreOf(e)
         lastSeenMs = System.currentTimeMillis()
     }
 
@@ -133,7 +146,8 @@ fun ContestScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
                 bestTtrMs = null,
                 durationSeconds = ((lastSeenMs - startedAtMs) / 1000L).toInt().coerceAtLeast(0),
                 characterWpm = Settings.characterWpm.roundToInt(),
-                effectiveWpm = Settings.effectiveWpmInUse.roundToInt()
+                effectiveWpm = Settings.effectiveWpmInUse.roundToInt(),
+                score = runScore
             )
         }
         if (phase != CtPhase.SETUP) phase = CtPhase.SETUP
@@ -153,7 +167,8 @@ fun ContestScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
             bestTtrMs = null,
             durationSeconds = elapsedSeconds(),
             characterWpm = Settings.characterWpm.roundToInt(),
-            effectiveWpm = Settings.effectiveWpmInUse.roundToInt()
+            effectiveWpm = Settings.effectiveWpmInUse.roundToInt(),
+            score = scoreOf(e)
         )
     }
 
@@ -183,6 +198,7 @@ fun ContestScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
         endedAtMs = 0L
         runQsos = 0
         runBusts = 0
+        runScore = 0
         lastSeenMs = startedAtMs
         rev++
         phase = CtPhase.RUNNING

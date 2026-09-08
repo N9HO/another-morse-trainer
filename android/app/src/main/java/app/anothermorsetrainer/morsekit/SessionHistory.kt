@@ -37,7 +37,15 @@ data class SessionRecord(
      * show a row per learned character (with a blank where one wasn't drilled),
      * matching the reference design.
      */
-    val activeCharacters: List<String>
+    val activeCharacters: List<String>,
+    /**
+     * The mode's own end-of-run number, where it has one: an arcade game's
+     * score, Contest's points × multipliers, Pileup Runner's QSO count, Rapid
+     * Fire's correct count. Null for every other mode and for records saved
+     * before the field existed. Folded into `Stats.bestScores` by [ModeBests]
+     * per `fixtures/mode-bests.json` (docs/high-scores-design.md, step 1).
+     */
+    val score: Int? = null
 ) {
     val accuracy: Double get() = if (attempts == 0) 0.0 else correct.toDouble() / attempts.toDouble()
 
@@ -127,6 +135,27 @@ data class SessionRecord(
             return ((floored + 249) / 250) * 250
         }
     }
+}
+
+/**
+ * The per-mode personal-best fold (docs/high-scores-design.md, step 1), pinned
+ * by `fixtures/mode-bests.json` on both ports: the largest [SessionRecord.score]
+ * per mode, a record with no score adds nothing, 0 is a real best, and a
+ * later lower score never lowers it. Pure, so the JUnit suite can hold it to
+ * the fixture; `Stats` persists the result so it outlives the capped list.
+ * Twin of `SessionHistory.foldBest` in MorseKit.
+ */
+object ModeBests {
+    /** One step of the fold: [bests] with [score] applied for [mode]. */
+    fun fold(bests: Map<String, Int>, mode: String, score: Int?): Map<String, Int> {
+        if (score == null) return bests
+        val current = bests[mode]
+        return if (current != null && current >= score) bests else bests + (mode to score)
+    }
+
+    /** The map a list of records folds to, in any order. */
+    fun seed(records: List<SessionRecord>): Map<String, Int> =
+        records.fold(emptyMap()) { acc, r -> fold(acc, r.mode, r.score) }
 }
 
 /**

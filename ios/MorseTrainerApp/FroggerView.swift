@@ -472,6 +472,9 @@ struct FroggerView: View {
                        multiplier: g.multiplier, bestCombo: g.bestCombo, accuracy: g.accuracy,
                        wpm: Int(g.currentWpm.rounded()), bestWpm: Int(g.bestWpm.rounded()),
                        stage: g.labelStage)
-        if next != hud { hud = next }
+        if next != hud {
+            hud = next
+            model.noteGameScore(g.score)   // per-mode personal best
+        }
     }
 }

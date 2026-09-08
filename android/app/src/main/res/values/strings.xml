@@ -393,6 +393,10 @@
     <string name="stats_biggest_session">Biggest session</string>
     <string name="stats_biggest_session_value">%1$s answered</string>
     <string name="stats_characters_mastered">Characters mastered</string>
+    <!-- Per-mode personal bests (docs/high-scores-design.md, step 1) -->
+    <string name="stats_mode_best">%1$s best</string>
+    <string name="stats_best_points">%1$d pts</string>
+    <string name="stats_best_correct">%1$d correct</string>
     <string name="stats_back_to_sessions">‹ Sessions</string>
     <string name="stats_duration">Duration</string>
     <string name="stats_eff_suffix">" (eff %1$s)"</string>
@@ -483,6 +487,10 @@
     <string name="reminder_channel_description">A daily nudge to keep your Morse streak alive.</string>
 
     <!-- Plurals -->
+    <plurals name="stats_best_qsos">
+        <item quantity="one">%1$d QSO</item>
+        <item quantity="other">%1$d QSOs</item>
+    </plurals>
     <plurals name="stats_band_sessions">
         <item quantity="one">%1$s session</item>
         <item quantity="other">%1$s sessions</item>

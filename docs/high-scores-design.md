@@ -1,8 +1,13 @@
 # High scores and a shared leaderboard: design notes
 
-Status: **design agreed, nothing built.** Written 2026-09-08 from a
+Status: **step 1 (local personal bests) built on both apps, 2026-09-08;
+step 2 (shared leaderboard) not started.** Written 2026-09-08 from a
 maintainer discussion, so the next person (or the next Claude session) can
-start on the code without redoing the survey. Every file reference below was
+start on the code without redoing the survey. Step 1 landed as `score` on
+the session record on both ports, a persisted per-mode bests map
+(`SessionHistory.bestScores` / `Stats.bestScores`) whose fold rule is pinned
+by `fixtures/mode-bests.json`, and rows on each app's Personal bests card;
+Rapid Fire's number is its correct count, Pileup Runner's its QSO count. Every file reference below was
 checked against the tree at `7324e6b`; line numbers drift, names do not.
 
 The ask: someone suggested scorekeeping and high scores for the games and

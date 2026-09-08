@@ -206,6 +206,7 @@ fun GalagaScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) 
         val results = charResults.map { (ch, a) -> SessionRecord.CharResult(ch.toString(), a[0], a[1], null) }
         Stats.record(
             mode = "CW Galaga", attempts = attempts, correct = correct,
+            score = score,   // the saveable mirror: valid on every path, including process-death recovery
             bestTtrMs = null, durationSeconds = seconds,
             characterWpm = Settings.characterWpm.roundToInt(),
             effectiveWpm = Settings.effectiveWpmInUse.roundToInt(),

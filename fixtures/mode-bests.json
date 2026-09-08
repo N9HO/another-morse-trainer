@@ -1,0 +1,22 @@
+{
+  "$comment": "Shared per-mode personal-best fixture (docs/high-scores-design.md, step 1), consumed by BOTH ports: android ModeBestsTest and ios MorseKitCheck. Data, not code — see CLAUDE.md's two-ports rule. Expected values are derived from the rules in `derivation`, not captured from either implementation. Regenerate only with a deliberate change to the rules, and say so in the commit.",
+  "derivation": {
+    "score": "a session record carries an optional whole-number `score`: the mode's own end-of-run number (an arcade game's score, Contest's points times multipliers, Pileup Runner's QSO count, Rapid Fire's correct count). Modes with no such number, and every record saved before the field existed, have no score (null / absent).",
+    "best": "the personal best for a mode is the largest `score` over every record of that mode that has one. A record with no score contributes nothing and never creates an entry. A score of 0 is a real best (the run was played). A later, lower score never lowers the best. Records of a mode are folded in the order they were recorded; the result does not depend on that order.",
+    "keys": "the map is keyed by the mode string exactly as each port records it — the names here are placeholders and each port may use its own mode strings; only the fold rule is shared.",
+    "note": "Derived from these rules directly, independently of either implementation."
+  },
+  "sessions": [
+    { "mode": "gameA", "score": 120 },
+    { "mode": "gameA", "score": 80 },
+    { "mode": "gameA", "score": null },
+    { "mode": "contest", "score": 0 },
+    { "mode": "pileup" },
+    { "mode": "drill" },
+    { "mode": "gameB", "score": 7 },
+    { "mode": "gameB", "score": 300 },
+    { "mode": "gameA", "score": 119 }
+  ],
+  "expectedBests": { "gameA": 120, "contest": 0, "gameB": 300 },
+  "absentModes": ["pileup", "drill", "never-played"]
+}

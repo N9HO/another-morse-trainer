@@ -1443,6 +1443,68 @@ do {
     }
 }
 
+// Per-mode personal bests (docs/high-scores-design.md, step 1), against
+// fixtures/mode-bests.json — the same file the Kotlin ModeBestsTest reads.
+print("\nPer-mode personal bests (fixtures/mode-bests.json):")
+struct ModeBestsFixture: Decodable {
+    struct Row: Decodable { let mode: String; let score: Int? }
+    let sessions: [Row]
+    let expectedBests: [String: Int]
+    let absentModes: [String]
+}
+func loadModeBestsFixture() -> ModeBestsFixture? {
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent()
+        .deletingLastPathComponent().deletingLastPathComponent()
+    guard let data = try? Data(contentsOf: root.appendingPathComponent("fixtures/mode-bests.json")) else { return nil }
+    return try? JSONDecoder().decode(ModeBestsFixture.self, from: data)
+}
+if let fx = loadModeBestsFixture() {
+    func rec(_ mode: String, _ score: Int?) -> SessionRecord {
+        SessionRecord(id: UUID(), date: Date(), mode: mode,
+                      characterWPM: 20, effectiveWPM: 20, attempts: 5, correct: 4,
+                      fastestTTR: nil, medianTTR: nil, durationSeconds: 60,
+                      characters: [], activeCharacters: [], score: score)
+    }
+    // Folded one record at a time, as the app does.
+    var folded = SessionHistory()
+    for row in fx.sessions { folded.add(rec(row.mode, row.score)) }
+    check("bests folded record by record match the fixture", folded.bestScores == fx.expectedBests)
+    check("modes with no scored record have no best",
+          fx.absentModes.allSatisfy { folded.bestScores[$0] == nil })
+    // Seeded from the rows at once, as a file that predates the map decodes.
+    let seeded = SessionHistory(sessions: fx.sessions.reversed().map { rec($0.mode, $0.score) })
+    check("bests seeded from existing rows match the fixture", seeded.bestScores == fx.expectedBests)
+    // The map is a lifetime counter: it outlives the capped session list.
+    var capped = SessionHistory()
+    capped.add(rec("gameZ", 42))
+    for _ in 0..<SessionHistory.limit { capped.add(rec("drill", nil)) }
+    check("a best survives its session aging out of the list",
+          capped.sessions.contains { $0.mode == "gameZ" } == false && capped.bestScores["gameZ"] == 42)
+    do {
+        // A file saved before the field: the record decodes with no score and
+        // the map is seeded from the rows.
+        var doc = try JSONSerialization.jsonObject(with: JSONEncoder().encode(folded)) as? [String: Any] ?? [:]
+        doc.removeValue(forKey: "bestScores")
+        var rows = doc["sessions"] as? [[String: Any]] ?? []
+        for i in rows.indices where rows[i]["mode"] as? String == "gameB" { rows[i].removeValue(forKey: "score") }
+        doc["sessions"] = rows
+        let restored = try JSONDecoder().decode(SessionHistory.self, from: JSONSerialization.data(withJSONObject: doc))
+        check("a record saved before scores existed decodes with no score",
+              restored.sessions.filter { $0.mode == "gameB" }.allSatisfy { $0.score == nil }
+                && restored.sessions.count == folded.sessions.count)
+        var expected = fx.expectedBests
+        expected.removeValue(forKey: "gameB")
+        check("a file without the bests map is seeded from its rows", restored.bestScores == expected)
+        let roundTrip = try JSONDecoder().decode(SessionHistory.self, from: JSONEncoder().encode(folded))
+        check("per-mode bests survive a save/load round-trip", roundTrip.bestScores == folded.bestScores)
+    } catch {
+        check("per-mode bests decode does not throw", false)
+    }
+} else {
+    check("fixtures/mode-bests.json loads and decodes", false)
+}
+
 // CW decoder
 print("\nMorse decoder:")
 check("reverse lookup: -..- is X", MorseCode.character(forPattern: "-..-") == "X")

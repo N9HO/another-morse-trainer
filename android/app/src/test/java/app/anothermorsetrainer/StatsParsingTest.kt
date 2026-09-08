@@ -69,6 +69,41 @@ class StatsParsingTest {
     }
 
     @Test
+    fun `a recent row carries its score, and one saved before the field has none`() {
+        // Per-mode bests (docs/high-scores-design.md, step 1): -1 and an absent
+        // key both read as "no score", matching how ttr and med are stored.
+        val json = """
+            [{"mode":"Contest","day":1,"att":4,"cor":4,"ttr":-1,"score":12},
+             {"mode":"Contest","day":2,"att":4,"cor":4,"ttr":-1,"score":0},
+             {"mode":"Contest","day":3,"att":4,"cor":4,"ttr":-1,"score":-1},
+             {"mode":"Contest","day":4,"att":4,"cor":4,"ttr":-1}]
+        """.trimIndent()
+        val out = Stats.parseRecent(json)
+        assertEquals(listOf(12, 0, null, null), out.map { it.score })
+    }
+
+    @Test
+    fun `a history row carries its score, and one saved before the field has none`() {
+        val json = """
+            [{"id":"00000000-0000-0000-0000-000000000001","ts":0,"mode":"CW Galaga","att":9,"cor":7,"score":300},
+             {"id":"00000000-0000-0000-0000-000000000002","ts":0,"mode":"CW Galaga","att":9,"cor":7}]
+        """.trimIndent()
+        val out = Stats.parseHistory(json)
+        assertEquals(listOf(300, null), out.map { it.score })
+    }
+
+    @Test
+    fun `the bests map round-trips and survives garbage`() {
+        val bests = linkedMapOf("Contest" to 12, "CW Galaga" to 300, "Pileup" to 0)
+        assertEquals(bests, Stats.parseBestScores(Stats.encodeBestScores(bests)))
+        for (bad in garbage) {
+            assertTrue("threw or mis-parsed on ${bad.take(20)}", Stats.parseBestScores(bad).isEmpty())
+        }
+        // One bad entry is skipped, the rest kept.
+        assertEquals(mapOf("Contest" to 12), Stats.parseBestScores("""{"Contest":12,"Pileup":"lots"}"""))
+    }
+
+    @Test
     fun `one bad row does not discard the good ones`() {
         // The point of guarding per row as well as overall: losing a single
         // session is much better than losing a year of them.

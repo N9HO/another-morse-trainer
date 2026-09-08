@@ -122,7 +122,8 @@ the iOS app's navy/teal look.
 - **Progress**: daily streak with milestone celebrations, a GitHub-style
   activity grid of daily practice time, session history with per-session
   recognition charts, per-character stats, most-confused pairs, performance
-  by 5-WPM speed band, and a shareable Brag Sheet
+  by 5-WPM speed band, a shareable Brag Sheet, and personal bests including
+  your best score in each arcade game, Contest, Pileup Runner and Rapid Fire
 - Timed practice sessions (1-30 min or open-ended) with mid-session timer
   controls and an end-of-session summary, and a mode switcher that jumps
   between drills without going home
