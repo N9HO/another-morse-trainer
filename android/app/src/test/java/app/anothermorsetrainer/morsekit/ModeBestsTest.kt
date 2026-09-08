@@ -47,7 +47,7 @@ class ModeBestsTest {
     fun `bests folded record by record match the fixture`() {
         var bests: Map<String, Int> = emptyMap()
         for (r in fixtureRecords()) bests = ModeBests.fold(bests, r.mode, r.score)
-        assertEquals(expectedBests() + ("NEGATIVE-CONTROL" to 1), bests)
+        assertEquals(expectedBests(), bests)
     }
 
     @Test
