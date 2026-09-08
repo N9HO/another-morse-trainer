@@ -23,7 +23,7 @@ class ListenReadbackTest {
 
     @Test
     fun `meaning-only readback says the brief meaning alone`() {
-        assertEquals("thanks", item(ListenContent.QSO_TOP_20, ListenReadback.MEANING_ONLY, "TNX").spoken)
+        assertEquals("NEGATIVE CONTROL", item(ListenContent.QSO_TOP_20, ListenReadback.MEANING_ONLY, "TNX").spoken)
         assertEquals("go ahead", item(ListenContent.QSO_TOP_20, ListenReadback.MEANING_ONLY, "<KN>").spoken)
         assertEquals("five nine nine", item(ListenContent.QSO_TOP_20, ListenReadback.MEANING_ONLY, "5NN").spoken)
         assertEquals("my location is", item(ListenContent.ABBREVIATIONS, ListenReadback.MEANING_ONLY, "QTH").spoken)
