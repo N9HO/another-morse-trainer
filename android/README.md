@@ -35,6 +35,9 @@ the iOS app's navy/teal look.
   numbers optional) / names / power sent back to back at your chosen pace;
   type as you hear it, head-copy then type, key each one back, or just listen
   and review the transmitted list
+- **Games**: the six arcade games below sit behind one Games tile on the
+  home screen (and under a Games heading in the mid-session mode switcher),
+  so the main menu stays short as more games are added
 - **Morse Invaders**: an arcade game — pixel-art invaders descend carrying
   characters; hear one and type it on a QWERTY keyboard, or see one and key
   it, before it lands. Each game starts 10 WPM under your character speed

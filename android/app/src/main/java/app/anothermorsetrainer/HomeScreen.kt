@@ -25,24 +25,19 @@ import androidx.compose.material.icons.filled.Abc
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.CalendarMonth
-import androidx.compose.material.icons.filled.Castle
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.FlashOn
-import androidx.compose.material.icons.filled.Flight
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.Map
-import androidx.compose.material.icons.filled.Pets
 import androidx.compose.material.icons.filled.Podcasts
 import androidx.compose.material.icons.filled.Print
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.QuestionAnswer
 import androidx.compose.material.icons.filled.RecordVoiceOver
-import androidx.compose.material.icons.filled.RocketLaunch
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.SportsEsports
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.TextFields
@@ -71,8 +66,8 @@ import app.anothermorsetrainer.morsekit.DailyDit
 import app.anothermorsetrainer.morsekit.DailyDitOutcome
 import kotlin.math.roundToInt
 
-/** A tappable home-menu tile. */
-private data class HomeItem(
+/** A tappable home-menu tile. Shared with the Games sub-menu ([GamesScreen]). */
+internal data class HomeItem(
     val title: String,
     val tagline: String,
     val icon: ImageVector,
@@ -94,12 +89,7 @@ fun HomeScreen(
     onPickTypeIt: () -> Unit,
     onPickQrq: () -> Unit,
     onPickRapidFire: () -> Unit,
-    onPickInvaders: () -> Unit,
-    onPickGalaga: () -> Unit,
-    onPickDefender: () -> Unit,
-    onPickDungeon: () -> Unit,
-    onPickFrogger: () -> Unit,
-    onPickAsteroids: () -> Unit,
+    onPickGames: () -> Unit,
     onPickStory: () -> Unit,
     onPickSending: () -> Unit,
     onPickSendingDrills: () -> Unit,
@@ -137,12 +127,6 @@ fun HomeScreen(
         HomeItem(stringResource(R.string.mode_type_it), stringResource(R.string.common_free_recall_typing), Icons.Filled.Keyboard, onPickTypeIt) +
         HomeItem(stringResource(R.string.mode_qrq_speed), stringResource(R.string.common_high_speed_copy), Icons.Filled.Bolt, onPickQrq) +
         HomeItem(stringResource(R.string.mode_rapid_fire), stringResource(R.string.home_back_to_back_copy), Icons.Filled.FlashOn, onPickRapidFire) +
-        HomeItem(stringResource(R.string.mode_invaders), stringResource(R.string.home_arcade_recognition), Icons.Filled.SportsEsports, onPickInvaders) +
-        HomeItem(stringResource(R.string.mode_galaga), stringResource(R.string.home_arcade_formations), Icons.Filled.Flight, onPickGalaga) +
-        HomeItem(stringResource(R.string.mode_defender), stringResource(R.string.home_arcade_callsign_copy), Icons.Filled.Shield, onPickDefender) +
-        HomeItem(stringResource(R.string.mode_dungeon), stringResource(R.string.home_roguelike_sending), Icons.Filled.Castle, onPickDungeon) +
-        HomeItem(stringResource(R.string.mode_frogger), stringResource(R.string.home_arcade_crossing), Icons.Filled.Pets, onPickFrogger) +
-        HomeItem(stringResource(R.string.mode_asteroids), stringResource(R.string.home_arcade_sending), Icons.Filled.RocketLaunch, onPickAsteroids) +
         HomeItem(stringResource(R.string.mode_sending_practice), stringResource(R.string.common_key_it_back), Icons.Filled.Vibration, onPickSending) +
         HomeItem(stringResource(R.string.mode_sending_drills), stringResource(R.string.home_printable_sheets), Icons.Filled.Print, onPickSendingDrills) +
         HomeItem(stringResource(R.string.mode_repeater), stringResource(R.string.home_live_over_the_network), Icons.Filled.Wifi, onPickRepeater) +
@@ -151,7 +135,10 @@ fun HomeScreen(
         HomeItem(stringResource(R.string.mode_contest), stringResource(R.string.home_timed_contest_runs), Icons.Filled.EmojiEvents, onPickContest) +
         HomeItem(stringResource(R.string.mode_code_exam), stringResource(R.string.home_arrl_fcc_code_exam), Icons.Filled.WorkspacePremium, onPickExam) +
         HomeItem(stringResource(R.string.mode_listen_and_learn), stringResource(R.string.home_hands_free_eyes_free), Icons.Filled.Headphones, onPickListen) +
-        HomeItem(stringResource(R.string.mode_reference), stringResource(R.string.home_look_it_up), Icons.AutoMirrored.Filled.ListAlt, onPickReference)
+        HomeItem(stringResource(R.string.mode_reference), stringResource(R.string.home_look_it_up), Icons.AutoMirrored.Filled.ListAlt, onPickReference) +
+        // The six arcade games behind one tile at the end of the grid (#207):
+        // the menu had outgrown two screens of tiles. Same place as on iOS.
+        HomeItem(stringResource(R.string.mode_games), stringResource(R.string.home_six_arcade_modes), Icons.Filled.SportsEsports, onPickGames)
 
     CenteredScrollColumn(
         contentModifier = Modifier
@@ -357,7 +344,7 @@ private fun StreakBadge(days: Int) {
 }
 
 @Composable
-private fun ModeTile(item: HomeItem, modifier: Modifier = Modifier) {
+internal fun ModeTile(item: HomeItem, modifier: Modifier = Modifier) {
     Column(
         modifier = modifier
             .heightIn(min = 132.dp)
