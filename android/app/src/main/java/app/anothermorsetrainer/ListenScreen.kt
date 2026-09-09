@@ -118,6 +118,19 @@ fun ListenScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) 
                         if (running && !paused) ListenService.start(context)
                     }
                 )
+                // Only the token-plus-meaning sets have a long form to shorten (#210).
+                if (ListenState.contentSel in setOf(ListenContent.QSO_TOP_20, ListenContent.QSO_TOP_100, ListenContent.ABBREVIATIONS)) {
+                    Spacer(Modifier.height(8.dp))
+                    ChipRow(
+                        options = ListenReadback.entries,
+                        selected = ListenState.readbackSel,
+                        label = { it.label },
+                        onSelect = {
+                            ListenState.readbackSel = it
+                            if (running && !paused) ListenService.start(context)
+                        }
+                    )
+                }
 
                 Spacer(Modifier.height(16.dp))
                 // Session readout: items heard, and time left when a length is set.

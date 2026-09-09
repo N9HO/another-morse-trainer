@@ -38,6 +38,19 @@ enum class ListenGap(val label: String, val ms: Long) {
     ICR("ICR-Territory (0.2 s)", 200)
 }
 
+/**
+ * What Listen & Learn says after the code, for the token-plus-meaning sets
+ * (QSO elements, Abbreviations & Q-codes). [SPELLED] reads the token letter
+ * by letter and then the full meaning — the teaching form; [MEANING_ONLY]
+ * says the brief meaning alone ([MorseData.briefMeaning]), the drilling form
+ * a listener asked for once the glosses got in the way (#210). Characters
+ * and Words are one word either way. Mirrors iOS `ListenReadback`.
+ */
+enum class ListenReadback(val label: String) {
+    SPELLED("Spell it out"),
+    MEANING_ONLY("Meaning only")
+}
+
 /** One loop item: what to key, what to show, and what to say. */
 data class ListenItem(val playable: MorseItem.Playable, val display: String, val spoken: String)
 
@@ -57,6 +70,9 @@ object ListenState {
     var gapSel: ListenGap
         get() = Settings.listenGap
         set(value) = Settings.updateListenGap(value)
+    var readbackSel: ListenReadback
+        get() = Settings.listenReadback
+        set(value) = Settings.updateListenReadback(value)
     var running by mutableStateOf(false)
     var paused by mutableStateOf(false)
     var playing by mutableStateOf(false)   // true while the code sounds, false while the answer shows
@@ -79,21 +95,22 @@ object ListenState {
  * the content changes and otherwise kept for the picker's life.
  */
 class ListenPicker(private val rng: Random = Random.Default) {
-    private var dealtFor: ListenContent? = null
+    private var dealtFor: Pair<ListenContent, ListenReadback>? = null
     private var deck: ShuffledDeck<ListenItem>? = null
 
-    fun next(content: ListenContent): ListenItem {
-        if (content != dealtFor) {
-            dealtFor = content
-            deck = ShuffledDeck(listenPool(content), rng)
+    fun next(content: ListenContent, readback: ListenReadback = ListenReadback.SPELLED): ListenItem {
+        val key = content to readback
+        if (key != dealtFor) {
+            dealtFor = key
+            deck = ShuffledDeck(listenPool(content, readback), rng)
         }
         return deck?.draw()
             ?: ListenItem(MorseItem.Playable.Text("E"), "E", spokenName('E'))
     }
 }
 
-/** Everything Listen & Learn can announce for [content]. */
-fun listenPool(content: ListenContent): List<ListenItem> = when (content) {
+/** Everything Listen & Learn can announce for [content], spoken per [readback]. */
+fun listenPool(content: ListenContent, readback: ListenReadback = ListenReadback.SPELLED): List<ListenItem> = when (content) {
     ListenContent.CHARACTERS -> MorseCode.kochOrder.map { ch ->
         ListenItem(MorseItem.Playable.Text(ch.toString()), ch.toString(), spokenName(ch))
     }
@@ -101,20 +118,30 @@ fun listenPool(content: ListenContent): List<ListenItem> = when (content) {
         ListenItem(item.playable, item.display, item.answer)
     }
     ListenContent.ABBREVIATIONS -> (MorseData.abbreviationItems + MorseData.qCodeItems).map { item ->
-        val spelled = item.display.lowercase().map { it.toString() }.joinToString(" ")
-        ListenItem(item.playable, "${item.display} — ${item.answer}", "$spelled. ${item.answer}")
+        ListenItem(item.playable, "${item.display} — ${item.answer}", spokenReadback(item.display, item.answer, readback))
     }
     // The curated on-air vocabulary (#182), revealed and spoken exactly like
-    // the abbreviations: the token spelled out, then its meaning. A prosign's
-    // angle brackets are shown but not spelled.
+    // the abbreviations. A prosign's angle brackets are shown but not spelled.
     ListenContent.QSO_TOP_20, ListenContent.QSO_TOP_100 -> {
         val limit = if (content == ListenContent.QSO_TOP_20) MorseData.QSO_TOP_20_COUNT else MorseData.QSO_TOP_100_COUNT
         MorseData.qsoElementItems(limit).map { item ->
-            val spelled = item.display.filter { it != '<' && it != '>' }
-                .lowercase().map { it.toString() }.joinToString(" ")
-            ListenItem(item.playable, "${item.display} — ${item.answer}", "$spelled. ${item.answer}")
+            ListenItem(item.playable, "${item.display} — ${item.answer}", spokenReadback(item.display, item.answer, readback))
         }
     }
+}
+
+/**
+ * What TTS says for a token-plus-meaning item (#210). Spelled: the token in
+ * lowercase letters so TTS says "q t h", not "capital Q…", then the full
+ * meaning. Meaning only: the brief meaning, nothing else — the screen still
+ * shows the token and the whole gloss. Twin of iOS AppModel.spokenReadback.
+ */
+internal fun spokenReadback(token: String, meaning: String, readback: ListenReadback): String = when (readback) {
+    ListenReadback.SPELLED -> {
+        val spelled = token.filter { it != '<' && it != '>' }.lowercase().map { it.toString() }.joinToString(" ")
+        "$spelled. $meaning"
+    }
+    ListenReadback.MEANING_ONLY -> MorseData.briefMeaning(meaning)
 }
 
 private fun spokenName(ch: Char): String = when (ch) {

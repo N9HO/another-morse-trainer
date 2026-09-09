@@ -17,8 +17,27 @@
     "prosign spelled exactly as MorseData.prosigns spells it and is sent",
     "run-together from that table's pattern. Meanings for tokens that also",
     "appear in MorseData.abbreviations, qCodes or prosigns repeat those",
-    "tables' wording; the tests check they agree."
+    "tables' wording; the tests check they agree.",
+    "",
+    "Brief readback (#210): Listen & Learn can speak the token spelled out",
+    "and then the meaning (the default), or the meaning alone. The brief form",
+    "of a meaning is the text before its first ' — ' qualifier, trimmed; a",
+    "meaning with no qualifier is its own brief form. `brief.examples` pins",
+    "the rule on both ports (MorseData.briefMeaning); every meaning's brief",
+    "form must be non-empty and free of ' — '."
   ],
+  "brief": {
+    "separator": " — ",
+    "examples": [
+      { "meaning": "go ahead — named station only", "brief": "go ahead" },
+      { "meaning": "break — back to you", "brief": "break" },
+      { "meaning": "five nine nine — with N cut for 9", "brief": "five nine nine" },
+      { "meaning": "five nine nine, thank you — the contest exchange", "brief": "five nine nine, thank you" },
+      { "meaning": "thanks", "brief": "thanks" },
+      { "meaning": "your / you're", "brief": "your / you're" },
+      { "meaning": "  padded — with a qualifier  ", "brief": "padded" }
+    ]
+  },
   "tiers": {
     "top20": 20,
     "top100": 100
@@ -70,7 +89,7 @@
     },
     {
       "token": "5NN",
-      "meaning": "five nine nine, with N cut for 9"
+      "meaning": "five nine nine — with N cut for 9"
     },
     {
       "token": "UR",
