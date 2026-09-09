@@ -5527,6 +5527,117 @@ if let fx = loadAsteroidsFixture() {
     check("fixtures/asteroids.json loads and decodes", false)
 }
 
+// Shared leaderboard (docs/high-scores-design.md, step 2): the pure rules the
+// app applies before talking to the server, each pinned to the server's own
+// (src/modes.ts, src/grade.ts, src/names.ts in the leaderboard repository).
+print("\nLeaderboard:")
+do {
+    // Mode ids and the qso -> pileup mapping.
+    check("nine ranked modes", LeaderboardMode.allCases.count == 9)
+    check("mode ids are the server's",
+          LeaderboardMode.allCases.map(\.rawValue) ==
+          ["rapidFire", "contest", "pileup", "invaders", "galaga", "defender", "dungeon", "frogger", "asteroids"])
+    check("qso ranks on the pileup board", LeaderboardMode(trainingModeRawValue: "qso") == .pileup)
+    check("rapidFire maps to itself", LeaderboardMode(trainingModeRawValue: "rapidFire") == .rapidFire)
+    check("'pileup' is not a training mode", LeaderboardMode(trainingModeRawValue: "pileup") == nil)
+    check("characters is unranked", LeaderboardMode(trainingModeRawValue: "characters") == nil)
+    check("exam is unranked", LeaderboardMode(trainingModeRawValue: "exam") == nil)
+    check("pileup's training mode is qso", LeaderboardMode.pileup.trainingModeRawValue == "qso")
+    check("the six games ramp, the three graded modes do not",
+          LeaderboardMode.allCases.filter(\.ramps).map(\.rawValue) ==
+          ["invaders", "galaga", "defender", "dungeon", "frogger", "asteroids"])
+
+    // Transcript items: builders and JSON shape.
+    let enc = JSONEncoder()
+    enc.outputFormatting = [.sortedKeys]
+    func json<T: Encodable>(_ v: T) -> String { String(decoding: (try? enc.encode(v)) ?? Data(), as: UTF8.self) }
+
+    let fixed = LeaderboardTranscriptItem.fixed(sent: " k1abc 599 bob oh ", answered: "k1abc 599 bob oh", reaction: 1.2345)
+    check("fixed item trims and uppercases", fixed.sent == "K1ABC 599 BOB OH" && fixed.answered == "K1ABC 599 BOB OH")
+    check("reaction is whole milliseconds", fixed.reactionMs == 1235)
+    check("fixed item has no wpm", fixed.wpm == nil)
+    check("fixed item omits wpm from the JSON (not null)",
+          json(fixed) == #"{"answered":"K1ABC 599 BOB OH","reactionMs":1235,"sent":"K1ABC 599 BOB OH"}"#)
+
+    let ramp = LeaderboardTranscriptItem.ramping(sent: "k", answered: "", reaction: 0.4, wpm: 23.6)
+    check("ramping item rounds the speed", ramp.wpm == 24)
+    check("ramping item encodes its speed",
+          json(ramp) == #"{"answered":"","reactionMs":400,"sent":"K","wpm":24}"#)
+    check("a miss keeps its empty answer", ramp.answered == "")
+    check("negative or unknown reaction reads 0",
+          LeaderboardTranscriptItem.reactionMs(-1) == 0 && LeaderboardTranscriptItem.reactionMs(.nan) == 0)
+    check("reaction clamps at the server's 60 s", LeaderboardTranscriptItem.reactionMs(90) == 60_000)
+    check("speed clamps into the server's 5...60",
+          LeaderboardTranscriptItem.ramping(sent: "E", answered: "E", reaction: 0, wpm: 3).wpm == 5
+          && LeaderboardTranscriptItem.ramping(sent: "E", answered: "E", reaction: 0, wpm: 99).wpm == 60)
+    check("a decoded item round-trips",
+          (try? JSONDecoder().decode(LeaderboardTranscriptItem.self, from: enc.encode(ramp))) == ramp)
+
+    // Plausibility (the server's 422 conditions, applied before sending).
+    check("a plain item is plausible", fixed.isPlausible && ramp.isPlausible)
+    check("an empty target is not", LeaderboardTranscriptItem.fixed(sent: "  ", answered: "X", reaction: 0).isPlausible == false)
+    check("a prosign in brackets is", LeaderboardTranscriptItem.fixed(sent: "<AR>", answered: "", reaction: 0).isPlausible)
+    check("a slash call is", LeaderboardTranscriptItem.fixed(sent: "W1AW/4 599 OH", answered: "", reaction: 0).isPlausible)
+    check("a character outside the server's table is not",
+          LeaderboardTranscriptItem.fixed(sent: "ÜBER", answered: "", reaction: 0).isPlausible == false)
+    check("over 64 characters is not",
+          LeaderboardTranscriptItem.fixed(sent: String(repeating: "A", count: 65), answered: "", reaction: 0).isPlausible == false)
+    check("exactly 64 is", LeaderboardTranscriptItem.fixed(sent: String(repeating: "A", count: 64), answered: "", reaction: 0).isPlausible)
+
+    // Display names: the server's rule, word for word.
+    check("a callsign is a fine name", LeaderboardDisplayName.isValid("N9HO"))
+    check("names are uppercased and space-collapsed", LeaderboardDisplayName.normalize("  n9ho   /p ") == "N9HO /P")
+    check("two characters is the floor", LeaderboardDisplayName.isValid("AB") && !LeaderboardDisplayName.isValid("A"))
+    check("twelve is the cap", LeaderboardDisplayName.isValid("ABCDEFGHIJKL") && !LeaderboardDisplayName.isValid("ABCDEFGHIJKLM"))
+    check("length is measured after trimming", LeaderboardDisplayName.isValid("  A  ") == false)
+    check("slash and hyphen are allowed", LeaderboardDisplayName.isValid("W1AW/4") && LeaderboardDisplayName.isValid("N9HO-M"))
+    check("it must start with a letter or digit", LeaderboardDisplayName.isValid("/N9HO") == false && LeaderboardDisplayName.isValid("-AB") == false)
+    check("punctuation outside the set is refused", LeaderboardDisplayName.isValid("N9HO!") == false)
+    check("non-ASCII letters are refused", LeaderboardDisplayName.isValid("ÜBER") == false)
+    check("the deny list looks through spaces and digits", LeaderboardDisplayName.isValid("NA ZI") == false && LeaderboardDisplayName.isValid("N4ZI"))
+    check("length message matches the server's",
+          LeaderboardDisplayName.problem(with: "A") == "Display name must be 2 to 12 characters")
+    check("character message matches the server's",
+          LeaderboardDisplayName.problem(with: "N9HO!") == "Display name may use letters, digits, space, / and -")
+    check("deny message matches the server's",
+          LeaderboardDisplayName.problem(with: "NAZI") == "Display name not allowed")
+    check("a good name has no problem", LeaderboardDisplayName.problem(with: "n9ho") == nil)
+
+    // Run speeds.
+    let speeds = LeaderboardRunSpeeds(characterWpm: 25.4, effectiveWpm: 18.2)
+    check("run speeds round to whole WPM", speeds.characterWpm == 25 && speeds.effectiveWpm == 18)
+    check("effective never exceeds character",
+          LeaderboardRunSpeeds(characterWpm: 20, effectiveWpm: 30).effectiveWpm == 20)
+    check("run speeds clamp into the server's range",
+          LeaderboardRunSpeeds(characterWpm: 70, effectiveWpm: 2) == LeaderboardRunSpeeds(characterWpm: 60, effectiveWpm: 5))
+    let band = LeaderboardRunSpeeds.pileup(minWpm: 18, maxWpm: 28)
+    check("a pileup's token is its band: ceiling as character speed, floor as effective",
+          band.characterWpm == 28 && band.effectiveWpm == 18)
+    check("a reversed band still reads floor/ceiling",
+          LeaderboardRunSpeeds.pileup(minWpm: 28, maxWpm: 18) == band)
+
+    // Wire shapes.
+    let att = LeaderboardAttestation(payload: .init(keyId: "K", attestation: nil, assertion: "S", clientData: "C"))
+    check("attestation payload omits a missing attestation object",
+          json(att) == #"{"payload":{"assertion":"S","clientData":"C","keyId":"K"},"platform":"ios"}"#)
+    let start = LeaderboardStartRequest(mode: .contest, speeds: band, challenge: "C", attestation: att)
+    check("start request carries mode, speeds, challenge and attestation",
+          json(start) == #"{"attestation":{"payload":{"assertion":"S","clientData":"C","keyId":"K"},"platform":"ios"},"challenge":"C","characterWpm":28,"effectiveWpm":18,"mode":"contest","platform":"ios"}"#)
+    let submit = LeaderboardSubmitRequest(runToken: "T", displayName: "N9HO", transcript: [fixed], attestation: att)
+    check("submit request carries the transcript",
+          json(submit) == #"{"attestation":{"payload":{"assertion":"S","clientData":"C","keyId":"K"},"platform":"ios"},"displayName":"N9HO","runToken":"T","transcript":[{"answered":"K1ABC 599 BOB OH","reactionMs":1235,"sent":"K1ABC 599 BOB OH"}]}"#)
+    let boardJSON = #"{"mode":"invaders","rows":[{"rank":1,"displayName":"N9HO","metric":340,"platform":"ios","date":"2026-09-08"}]}"#
+    let board = try? JSONDecoder().decode(LeaderboardBoardResponse.self, from: Data(boardJSON.utf8))
+    check("a board decodes", board?.rows.first?.displayName == "N9HO" && board?.rows.first?.metricLabel == "340")
+    let submitJSON = #"{"accepted":true,"metric":340,"correct":17,"total":20,"rank":12,"personalBest":true}"#
+    let result = try? JSONDecoder().decode(LeaderboardSubmitResponse.self, from: Data(submitJSON.utf8))
+    check("a submit answer decodes", result?.rank == 12 && result?.metric == 340 && result?.personalBest == true)
+    let errJSON = #"{"accepted":false,"reason":"attestation rejected: unknown key: attestation object required on first use"}"#
+    let err = try? JSONDecoder().decode(LeaderboardErrorResponse.self, from: Data(errJSON.utf8))
+    check("an unknown-key refusal is recognised", err.map { LeaderboardServerHints.isUnknownKey($0.reason) } == true)
+    check("other refusals are not", LeaderboardServerHints.isUnknownKey("run token unknown, used or expired") == false)
+}
+
 print("\n────────────────────────────")
 if failures == 0 {
     print("✅ All \(checks) checks passed.\n")

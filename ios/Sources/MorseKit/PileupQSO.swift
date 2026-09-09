@@ -238,6 +238,9 @@ public final class PileupEngine {
         public let volume: Float
         public let qsb: Bool
         let exchange: ExchangeSpec
+        /// The exchange in true values, as the log shows it ("599 BOB OH") —
+        /// the form a leaderboard transcript names a station by.
+        public var exchangeDisplay: String { exchange.display }
         let patience: Int
         /// How quickly this operator tends to come back, across the delay
         /// window: 0 leaps straight in, 1 hangs back. Drawn once, so a given
