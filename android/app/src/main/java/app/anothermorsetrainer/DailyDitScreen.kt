@@ -3,7 +3,6 @@ package app.anothermorsetrainer
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
-import android.content.Intent
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -130,7 +129,7 @@ fun DailyDitScreen(onBack: () -> Unit) {
             )
             Spacer(Modifier.weight(1f))
             if (game.isFinished) {
-                TextButton(onClick = { shareText(context, game.shareText, resources.getString(R.string.daily_dit_title)) }) {
+                TextButton(onClick = { DailyDitShareCard.share(context, game, resources.getString(R.string.daily_dit_title)) }) {
                     Text(stringResource(R.string.drills_share), color = Brand.teal)
                 }
             } else {
@@ -216,7 +215,7 @@ fun DailyDitScreen(onBack: () -> Unit) {
                         copyText(context, game.shareText)
                         message = resources.getString(R.string.daily_dit_copied)
                     },
-                    onShare = { shareText(context, game.shareText, resources.getString(R.string.daily_dit_title)) },
+                    onShare = { DailyDitShareCard.share(context, game, resources.getString(R.string.daily_dit_title)) },
                     note = message
                 )
             } else {
@@ -648,15 +647,6 @@ private fun ResultCard(
             color = Brand.textSecondary
         )
     }
-}
-
-private fun shareText(context: Context, text: String, subject: String) {
-    val send = Intent(Intent.ACTION_SEND).apply {
-        type = "text/plain"
-        putExtra(Intent.EXTRA_SUBJECT, subject)
-        putExtra(Intent.EXTRA_TEXT, text)
-    }
-    context.startActivity(Intent.createChooser(send, subject))
 }
 
 private fun copyText(context: Context, text: String) {

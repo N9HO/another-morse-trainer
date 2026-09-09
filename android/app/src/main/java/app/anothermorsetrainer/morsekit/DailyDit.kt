@@ -408,9 +408,11 @@ data class DailyDitGame(
     /**
      * The pasteable brag sheet: a headline, the emoji grid, and where to play.
      *
-     * Text, not an image, because it has to survive being pasted into a chat
-     * window. The grid is every guess — a long grid is the story of a hard day,
-     * and trimming it would misreport the score in the headline.
+     * The share sheet leads with a themed card image, but this text stays: it
+     * rides along as the image's caption and is what Copy puts on the
+     * clipboard, so the result still survives being pasted into a chat window.
+     * The grid is every guess — a long grid is the story of a hard day, and
+     * trimming it would misreport the score in the headline.
      */
     val shareText: String
         get() = buildList {

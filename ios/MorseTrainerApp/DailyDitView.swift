@@ -17,6 +17,7 @@ struct DailyDitView: View {
     @State private var message: String?
     @State private var playingUntil: Date?
     @State private var showingReference = false
+    @State private var shareURL: URL?
     @FocusState private var entryFocused: Bool
 
     private var game: DailyDitGame { model.dailyDit }
@@ -45,7 +46,7 @@ struct DailyDitView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     if game.isFinished {
-                        ShareLink(item: game.shareText) {
+                        shareLink {
                             Image(systemName: "square.and.arrow.up")
                         }
                         .accessibilityLabel("Share your result")
@@ -56,6 +57,9 @@ struct DailyDitView: View {
                 }
             }
             .onAppear { model.refreshDailyDit() }
+            // Re-render on every finish transition: solving mid-screen, and the
+            // midnight rollover (refreshDailyDit) both change what the card says.
+            .task(id: game.isFinished) { renderShareImage() }
             .onDisappear { model.stopDailyDit() }
         }
     }
@@ -328,7 +332,7 @@ struct DailyDitView: View {
                 }
                 .buttonStyle(.plain)
 
-                ShareLink(item: game.shareText) {
+                shareLink {
                     Label("Share", systemImage: "square.and.arrow.up")
                         .font(.headline)
                         .foregroundStyle(.white)
@@ -465,6 +469,40 @@ struct DailyDitView: View {
                     in: RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous))
     }
 
+    // MARK: - Share image
+
+    /// The share button leads with the themed card image; `shareText` travels
+    /// with it as the caption (Android attaches the same `EXTRA_TEXT`). Until
+    /// the render lands — or if it fails — fall back to sharing the text alone,
+    /// so the button never shares nothing.
+    @ViewBuilder
+    private func shareLink<L: View>(@ViewBuilder label: () -> L) -> some View {
+        if let url = shareURL {
+            ShareLink(item: url,
+                      message: Text(game.shareText),
+                      preview: SharePreview("Daily Dit #\(game.puzzleNumber)",
+                                            image: Image(systemName: "square.grid.3x3.fill"))) {
+                label()
+            }
+        } else {
+            ShareLink(item: game.shareText) { label() }
+        }
+    }
+
+    @MainActor private func renderShareImage() {
+        guard game.isFinished else {
+            shareURL = nil
+            return
+        }
+        let renderer = ImageRenderer(content: DailyDitShareCard(game: game))
+        renderer.scale = 3
+        guard let ui = renderer.uiImage, let data = ui.pngData() else { return }
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("AnotherMorseTrainer-DailyDit.png")
+        try? data.write(to: url)
+        shareURL = url
+    }
+
     private var howItWorks: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("How it works")
@@ -483,6 +521,89 @@ struct DailyDitView: View {
                 .foregroundStyle(Theme.textSecondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// A self-contained, fixed-width card rendered to an image for sharing: the
+/// day's result in the brand navy/teal, with the guess grid as coloured tiles
+/// and each row's sending speed beside it. Mirrors Android's
+/// `DailyDitShareCard`. It does not read the environment so `ImageRenderer`
+/// can rasterize it off-screen, and it carries no letters — the image spoils
+/// nothing the emoji grid didn't.
+private struct DailyDitShareCard: View {
+    let game: DailyDitGame
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(spacing: 8) {
+                Image(systemName: "antenna.radiowaves.left.and.right")
+                    .foregroundStyle(Theme.teal)
+                Text("Another Morse Trainer")
+                    .font(.headline).foregroundStyle(.white)
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Daily Dit #\(game.puzzleNumber)")
+                    .font(.system(size: 32, weight: .bold, design: .rounded))
+                    .foregroundStyle(.white)
+                Text(scoreLine)
+                    .font(.subheadline).foregroundStyle(Theme.textSecondary)
+            }
+
+            grid
+
+            Text(DailyDit.shareLink)
+                .font(.caption).foregroundStyle(Theme.teal.opacity(0.8))
+        }
+        .padding(22)
+        .frame(width: 360, alignment: .leading)
+        .background(
+            ZStack {
+                LinearGradient(colors: [Color(red: 0.020, green: 0.055, blue: 0.110), Theme.navy],
+                               startPoint: .top, endPoint: .bottom)
+                RadialGradient(colors: [Theme.teal.opacity(0.18), .clear],
+                               center: .topTrailing, startRadius: 0, endRadius: 320)
+            }
+        )
+    }
+
+    /// The headline's score, minus the "Daily Dit #N" the title already says.
+    private var scoreLine: String {
+        var line = ""
+        if let wpm = game.solvedWpm { line += "\(DailyDit.format(wpm: wpm)) WPM · " }
+        line += DailyDit.count(game.guessesUsed, "guess", "guesses")
+            + " · " + DailyDit.count(game.listens, "listen", "listens")
+        if game.hideReference { line += " · no reference" }
+        return line
+    }
+
+    private var grid: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            ForEach(Array(game.rounds.enumerated()), id: \.offset) { _, round in
+                HStack(spacing: 6) {
+                    ForEach(Array(round.tiles.enumerated()), id: \.offset) { _, tile in
+                        RoundedRectangle(cornerRadius: 7, style: .continuous)
+                            .fill(fill(for: tile))
+                            .frame(width: 34, height: 34)
+                            .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous)
+                                .strokeBorder(tile == .absent ? Theme.hairline : .clear, lineWidth: 1))
+                    }
+                    Text(DailyDit.format(wpm: round.wpm))
+                        .font(.caption.weight(.semibold).monospacedDigit())
+                        .foregroundStyle(Theme.textSecondary)
+                        .padding(.leading, 4)
+                }
+            }
+        }
+    }
+
+    /// The same fills the on-screen grid uses (`DailyDitView.fill(for:)`).
+    private func fill(for tile: DailyDit.Tile) -> Color {
+        switch tile {
+        case .correct: return Color(red: 0.24, green: 0.62, blue: 0.36)
+        case .present: return Color(red: 0.79, green: 0.63, blue: 0.20)
+        case .absent:  return Theme.navyRaised
+        }
     }
 }
 
