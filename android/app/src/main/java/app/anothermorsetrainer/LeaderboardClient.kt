@@ -61,9 +61,9 @@ object LeaderboardClient {
     /**
      * The Google Cloud project NUMBER Play Integrity decodes tokens for.
      *
-     * TODO(maintainer): fill this from the Google Cloud console (project
-     * `amt-leaderboard`, the numeric "Project number" on the dashboard, not
-     * the project id), linked in Play Console. 0 would mean "not configured": the
+     * From the Google Cloud console (project `amt-leaderboard`, the numeric
+     * "Project number" on the dashboard, not the project id), linked in Play
+     * Console on 2026-09-08. 0 would mean "not configured": the
      * client attests nothing, submits nothing and shows nothing, so a build
      * with this unset behaves as though the feature were off.
      */
