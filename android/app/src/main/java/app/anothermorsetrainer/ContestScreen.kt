@@ -45,6 +45,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.anothermorsetrainer.morsekit.ContestLength
 import app.anothermorsetrainer.morsekit.ContestType
+import app.anothermorsetrainer.morsekit.LeaderboardItem
+import app.anothermorsetrainer.morsekit.MorseDistance
 import app.anothermorsetrainer.morsekit.MorseTiming
 import app.anothermorsetrainer.morsekit.PileupConfig
 import app.anothermorsetrainer.morsekit.PileupEngine
@@ -104,6 +106,13 @@ fun ContestScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
     // path has no log to count multipliers from, so it records this.
     var runScore by rememberSaveable { mutableIntStateOf(0) }
     var lastSeenMs by rememberSaveable { mutableLongStateOf(0L) }
+    // The shared leaderboard (docs/high-scores-design.md, step 2): the run's
+    // registration and one item per worked or busted QSO. Plain state, not
+    // saveable: a run the process lost has no transcript and is never
+    // submitted.
+    var lbRun by remember { mutableStateOf<LeaderboardClient.RunHandle?>(null) }
+    val lbItems = remember { ArrayList<LeaderboardItem>() }
+    var lbLine by remember { mutableStateOf<String?>(null) }
 
     DisposableEffect(Unit) { onDispose { player.release() } }
 
@@ -153,6 +162,16 @@ fun ContestScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
         if (phase != CtPhase.SETUP) phase = CtPhase.SETUP
     }
 
+    /** Hand the finished run's transcript to the leaderboard; the summary shows the reply when it lands. */
+    fun submitLeaderboard() {
+        val h = lbRun ?: return
+        lbRun = null
+        val items = lbItems.toList()
+        if (items.isEmpty()) return
+        lbLine = context.getString(R.string.leaderboard_submitting)
+        LeaderboardClient.submit(h, items) { lbLine = it }
+    }
+
     /** Stop the clock and record the run; the caller decides where to land. */
     fun recordRun() {
         val e = engine ?: return
@@ -170,6 +189,7 @@ fun ContestScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
             effectiveWpm = Settings.effectiveWpmInUse.roundToInt(),
             score = scoreOf(e)
         )
+        submitLeaderboard()
     }
 
     fun endRun() {
@@ -200,8 +220,47 @@ fun ContestScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
         runBusts = 0
         runScore = 0
         lastSeenMs = startedAtMs
+        lbItems.clear()
+        lbLine = null
+        // A contest's callers span a speed band; the run is registered at the
+        // band's floor — the slowest anyone in it sends, character and
+        // effective alike (contest voices carry no Farnsworth) — so the board
+        // credits the speed every item was at least sent at. Same rule on iOS.
+        val floor = contest.minWPM.roundToInt()
+        lbRun = LeaderboardClient.beginRun(statsMode = "Contest", characterWpm = floor, effectiveWpm = floor)
         rev++
         phase = CtPhase.RUNNING
+    }
+
+    /**
+     * Run one engine action that can log or bust a QSO, and record the
+     * leaderboard item it produced. A logged QSO is sent and answered as
+     * "CALL EXCHANGE" (the log's own display form, true digits); a bust is the
+     * station's call — plus its exchange once the call was copied — against
+     * what was typed. Reaction time is not measured in the QSO modes (0).
+     */
+    fun tracked(typed: String?, act: () -> PileupEngine.Action): PileupEngine.Action {
+        val e = engine ?: return act()
+        val qsos = e.qsoCount
+        val busts = e.bustCount
+        val working = e.workingStation
+        val action = act()
+        if (e.qsoCount > qsos) {
+            e.log.lastOrNull()?.let { q ->
+                val text = "${q.call} ${q.exchange}"
+                lbItems.add(LeaderboardItem(sent = text, answered = text, reactionMs = 0))
+            }
+        } else if (e.bustCount > busts) {
+            val answered = typed?.trim()?.uppercase() ?: ""
+            val sent = if (working != null) {
+                "${working.call} ${working.exchange.display}"
+            } else {
+                // Hunting a call: the station nearest what was typed is the one being miscopied.
+                e.stations.minByOrNull { MorseDistance.distance(answered, it.call) }?.call
+            }
+            if (sent != null) lbItems.add(LeaderboardItem(sent = sent, answered = answered, reactionMs = 0))
+        }
+        return action
     }
 
     fun perform(action: PileupEngine.Action) {
@@ -218,7 +277,7 @@ fun ContestScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
         val e = engine ?: return
         if (input.isBlank()) return
         val raw = input.trim()
-        val action = e.send(raw)
+        val action = tracked(raw) { e.send(raw) }
         // Keep a typed repeat request's partial call in the box (iOS #49).
         val frag = PileupEngine.fragment(raw)
         input = if (raw.endsWith("?") && frag.isNotEmpty() && e.phase is PileupEngine.Phase.Pileup) frag else ""
@@ -278,7 +337,7 @@ fun ContestScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
                 onToggleReveal = { reveal = !reveal },
                 onCQ = { perform(e.callCQ()) },
                 onRepeat = { perform(e.repeatRequest()) },
-                onLog = { perform(e.logCurrent()) },
+                onLog = { perform(tracked(null) { e.logCurrent() }) },
                 onSettings = { showSettings = true },
                 onSwitchMode = ::switchTo,
                 onEnd = ::endRun
@@ -290,6 +349,7 @@ fun ContestScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
                 contest = contest,
                 length = length,
                 elapsedSeconds = elapsedSeconds(),
+                leaderboard = lbLine,
                 onAgain = { phase = CtPhase.SETUP },
                 onBack = onBack
             )
@@ -512,6 +572,7 @@ private fun ContestSummary(
     contest: ContestType,
     length: ContestLength,
     elapsedSeconds: Int,
+    leaderboard: String?,
     onAgain: () -> Unit,
     onBack: () -> Unit
 ) {
@@ -538,6 +599,15 @@ private fun ContestSummary(
             CtSummaryRow(stringResource(R.string.common_rate), stringResource(R.string.common_rate_per_hour, rate))
             CtSummaryRow(stringResource(R.string.common_clean_copy), if (cleanTotal == 0) "—" else "${(engine.accuracy * 100).roundToInt()}%")
             CtSummaryRow(stringResource(R.string.common_busts), "${engine.bustCount}")
+        }
+        // The shared leaderboard's reply, or why the run was not posted; nothing when not opted in.
+        if (leaderboard != null) {
+            Text(
+                leaderboard,
+                style = MaterialTheme.typography.bodySmall,
+                color = Brand.textSecondary,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
+            )
         }
 
         if (engine.log.isNotEmpty()) {

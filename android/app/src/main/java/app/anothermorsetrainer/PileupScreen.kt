@@ -59,6 +59,8 @@ import androidx.compose.ui.unit.sp
 import app.anothermorsetrainer.morsekit.BustBehavior
 import app.anothermorsetrainer.morsekit.CallsignFormat
 import app.anothermorsetrainer.morsekit.CutNumbers
+import app.anothermorsetrainer.morsekit.LeaderboardItem
+import app.anothermorsetrainer.morsekit.MorseDistance
 import app.anothermorsetrainer.morsekit.MorseItem
 import app.anothermorsetrainer.morsekit.MorseTiming
 import app.anothermorsetrainer.morsekit.MissedCallerFeedback
@@ -126,6 +128,13 @@ fun PileupScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) 
     var runQsos by rememberSaveable { mutableIntStateOf(0) }
     var runBusts by rememberSaveable { mutableIntStateOf(0) }
     var lastSeenMs by rememberSaveable { mutableLongStateOf(0L) }
+    // The shared leaderboard (docs/high-scores-design.md, step 2): the run's
+    // registration and one item per worked or busted QSO. Plain state, not
+    // saveable: a run the process lost has no transcript and is never
+    // submitted.
+    var lbRun by remember { mutableStateOf<LeaderboardClient.RunHandle?>(null) }
+    val lbItems = remember { ArrayList<LeaderboardItem>() }
+    var lbLine by remember { mutableStateOf<String?>(null) }
 
     DisposableEffect(Unit) { onDispose { player.release() } }
 
@@ -163,6 +172,16 @@ fun PileupScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) 
         if (phase != PuPhase.SETUP) phase = PuPhase.SETUP
     }
 
+    /** Hand the finished run's transcript to the leaderboard; the summary shows the reply when it lands. */
+    fun submitLeaderboard() {
+        val h = lbRun ?: return
+        lbRun = null
+        val items = lbItems.toList()
+        if (items.isEmpty()) return
+        lbLine = context.getString(R.string.leaderboard_submitting)
+        LeaderboardClient.submit(h, items) { lbLine = it }
+    }
+
     // Record the run so pileup practice counts toward stats and the streak: a
     // pileup answer is a whole worked exchange — clean contacts are correct,
     // busts are misses (same accounting as Contest). Mixed caller speeds, so no
@@ -179,6 +198,7 @@ fun PileupScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) 
             durationSeconds = elapsedSeconds(),
             score = e.qsoCount   // Pileup Runner's best is the QSO count
         )
+        submitLeaderboard()
     }
 
     fun endRun() {
@@ -202,8 +222,50 @@ fun PileupScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) 
         runQsos = 0
         runBusts = 0
         lastSeenMs = startedAtMs
+        lbItems.clear()
+        lbLine = null
+        // Callers span the configured speed band; the run is registered at
+        // its floor — the slowest anyone sends — so the board credits the
+        // speed every item was at least sent at. With the pileup's own
+        // Farnsworth on, the effective speed is the stretched spacing the
+        // callers actually use (see toMix). Same rule on iOS.
+        val floor = PileupSettings.minWpm.roundToInt()
+        val effective = if (PileupSettings.callerFarnsworth) minOf(PileupSettings.minWpm, Settings.effectiveWpm).roundToInt() else floor
+        lbRun = LeaderboardClient.beginRun(statsMode = "Pileup", characterWpm = floor, effectiveWpm = effective)
         rev++
         phase = PuPhase.RUNNING
+    }
+
+    /**
+     * Run one engine action that can log or bust a QSO, and record the
+     * leaderboard item it produced. A logged QSO is sent and answered as
+     * "CALL EXCHANGE" (the log's own display form, true digits); a bust is the
+     * station's call — plus its exchange once the call was copied — against
+     * what was typed. Reaction time is not measured in the QSO modes (0).
+     * Twin of the Contest screen's `tracked`.
+     */
+    fun tracked(typed: String?, act: () -> PileupEngine.Action): PileupEngine.Action {
+        val e = engine ?: return act()
+        val qsos = e.qsoCount
+        val busts = e.bustCount
+        val working = e.workingStation
+        val action = act()
+        if (e.qsoCount > qsos) {
+            e.log.lastOrNull()?.let { q ->
+                val text = "${q.call} ${q.exchange}"
+                lbItems.add(LeaderboardItem(sent = text, answered = text, reactionMs = 0))
+            }
+        } else if (e.bustCount > busts) {
+            val answered = typed?.trim()?.uppercase() ?: ""
+            val sent = if (working != null) {
+                "${working.call} ${working.exchange.display}"
+            } else {
+                // Hunting a call: the station nearest what was typed is the one being miscopied.
+                e.stations.minByOrNull { MorseDistance.distance(answered, it.call) }?.call
+            }
+            if (sent != null) lbItems.add(LeaderboardItem(sent = sent, answered = answered, reactionMs = 0))
+        }
+        return action
     }
 
     /** Key my side first (when enabled), then hand the audio back to the pileup. */
@@ -247,7 +309,7 @@ fun PileupScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) 
         val e = engine ?: return
         if (input.isBlank()) return
         val raw = input.trim()
-        val action = e.send(raw)
+        val action = tracked(raw) { e.send(raw) }
         // A typed repeat request ("W1?") while still hunting keeps the partial
         // call in the box — minus the "?" — so the user builds on it instead of
         // retyping (the iOS #49 fix). "Still hunting" includes the idle phase
@@ -302,7 +364,7 @@ fun PileupScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) 
                 onToggleReveal = { reveal = !reveal },
                 onCQ = { perform(e.callCQ(), selfText = cqText(PileupSettings.mode, PileupSettings.effectiveCall)) },
                 onRepeat = { perform(e.repeatRequest()) },
-                onLog = { perform(e.logCurrent()) },
+                onLog = { perform(tracked(null) { e.logCurrent() }) },
                 onSettings = { showSettings = true },
                 onSwitchMode = ::switchTo,
                 // The engine isn't Compose-observable, so clearing it has to
@@ -316,6 +378,7 @@ fun PileupScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) 
             PileupSummary(
                 engine = e,
                 elapsedSeconds = elapsedSeconds(),
+                leaderboard = lbLine,
                 onAgain = { phase = PuPhase.SETUP },
                 onBack = onBack
             )
@@ -769,6 +832,7 @@ private fun PuStat(label: String, value: String) {
 private fun PileupSummary(
     engine: PileupEngine,
     elapsedSeconds: Int,
+    leaderboard: String?,
     onAgain: () -> Unit,
     onBack: () -> Unit
 ) {
@@ -787,6 +851,15 @@ private fun PileupSummary(
             PuSummaryRow(stringResource(R.string.common_clean_copy), if (cleanTotal == 0) "—" else "${(engine.accuracy * 100).roundToInt()}%")
             PuSummaryRow(stringResource(R.string.common_busts), "${engine.bustCount}")
             PuSummaryRow(stringResource(R.string.common_time), "%d:%02d".format(elapsedSeconds / 60, elapsedSeconds % 60))
+        }
+        // The shared leaderboard's reply, or why the run was not posted; nothing when not opted in.
+        if (leaderboard != null) {
+            Text(
+                leaderboard,
+                style = MaterialTheme.typography.bodySmall,
+                color = Brand.textSecondary,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
+            )
         }
 
         val missed = engine.missedCallers
