@@ -454,7 +454,10 @@ struct InvadersView: View {
         let next = HUD(score: g.score, wave: g.wave, lives: g.lives, combo: g.combo,
                        multiplier: g.multiplier, bestCombo: g.bestCombo, accuracy: g.accuracy,
                        wpm: Int(g.currentWpm.rounded()), bestWpm: Int(g.bestWpm.rounded()))
-        if next != hud { hud = next }
+        if next != hud {
+            hud = next
+            model.noteGameScore(g.score)   // per-mode personal best
+        }
     }
 }
 

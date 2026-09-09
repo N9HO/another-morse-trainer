@@ -156,7 +156,8 @@ fun PileupScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) 
                 attempts = runQsos + runBusts,
                 correct = runQsos,
                 bestTtrMs = null,
-                durationSeconds = ((lastSeenMs - startedAtMs) / 1000L).toInt().coerceAtLeast(0)
+                durationSeconds = ((lastSeenMs - startedAtMs) / 1000L).toInt().coerceAtLeast(0),
+                score = runQsos
             )
         }
         if (phase != PuPhase.SETUP) phase = PuPhase.SETUP
@@ -175,7 +176,8 @@ fun PileupScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) 
             attempts = e.qsoCount + e.bustCount,
             correct = e.qsoCount,
             bestTtrMs = null,
-            durationSeconds = elapsedSeconds()
+            durationSeconds = elapsedSeconds(),
+            score = e.qsoCount   // Pileup Runner's best is the QSO count
         )
     }
 

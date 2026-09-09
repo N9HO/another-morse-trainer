@@ -23,13 +23,20 @@ public struct SessionRecord: Codable, Sendable, Identifiable, Equatable {
     /// show a row per learned character (with a blank where one wasn't drilled),
     /// matching the reference design.
     public var activeCharacters: [String]
+    /// The mode's own end-of-run number, where it has one: an arcade game's
+    /// score, Contest's points × multipliers, Pileup Runner's QSO count, Rapid
+    /// Fire's correct count. Nil for every other mode and for records saved
+    /// before the field existed. Folded into `SessionHistory.bestScores`
+    /// per `fixtures/mode-bests.json` (docs/high-scores-design.md, step 1).
+    public var score: Int?
 
     public init(id: UUID, date: Date, mode: String,
                 characterWPM: Int, effectiveWPM: Int,
                 attempts: Int, correct: Int,
                 fastestTTR: TimeInterval?, medianTTR: TimeInterval?,
                 durationSeconds: TimeInterval?,
-                characters: [CharResult], activeCharacters: [String]) {
+                characters: [CharResult], activeCharacters: [String],
+                score: Int? = nil) {
         self.id = id
         self.date = date
         self.mode = mode
@@ -42,6 +49,7 @@ public struct SessionRecord: Codable, Sendable, Identifiable, Equatable {
         self.durationSeconds = durationSeconds
         self.characters = characters
         self.activeCharacters = activeCharacters
+        self.score = score
     }
 
     public var accuracy: Double { attempts == 0 ? 0 : Double(correct) / Double(attempts) }
@@ -149,6 +157,12 @@ public struct SessionHistory: Codable, Sendable, Equatable {
     public private(set) var totalPracticeSeconds: TimeInterval
     /// Fastest single correct recognition ever recorded (nil until one is).
     public private(set) var bestTTR: TimeInterval?
+    /// Best `SessionRecord.score` per mode (keyed by `TrainingMode` raw value),
+    /// for the modes that have one. Kept as a counter like `bestTTR` so it
+    /// outlives the `limit`-capped session list. Rules in
+    /// `fixtures/mode-bests.json`: largest score wins, a record with no score
+    /// adds nothing, 0 is a real best.
+    public private(set) var bestScores: [String: Int]
 
     /// A history whose counters are seeded from `sessions` — what a file
     /// written before the counters existed decodes to, so nobody's lifetime
@@ -161,6 +175,19 @@ public struct SessionHistory: Codable, Sendable, Equatable {
         self.totalCorrect = scored.reduce(0) { $0 + $1.correct }
         self.totalPracticeSeconds = sessions.reduce(0.0) { $0 + max(0, $1.durationSeconds ?? 0) }
         self.bestTTR = sessions.compactMap(\.fastestTTR).min()
+        var bests: [String: Int] = [:]
+        for record in sessions.reversed() {   // oldest first; order does not matter
+            Self.foldBest(&bests, mode: record.mode, score: record.score)
+        }
+        self.bestScores = bests
+    }
+
+    /// One step of the per-mode best fold (`fixtures/mode-bests.json`): a
+    /// record with no score leaves the map alone; otherwise the mode's entry
+    /// becomes the larger of itself and the score.
+    public static func foldBest(_ bests: inout [String: Int], mode: String, score: Int?) {
+        guard let score else { return }
+        bests[mode] = max(bests[mode] ?? score, score)
     }
 
     /// Add a freshly-completed session to the front, trimming the oldest beyond
@@ -179,6 +206,7 @@ public struct SessionHistory: Codable, Sendable, Equatable {
         if let fastest = record.fastestTTR, bestTTR.map({ fastest < $0 }) ?? true {
             bestTTR = fastest
         }
+        Self.foldBest(&bestScores, mode: record.mode, score: record.score)
     }
 
     /// Lifetime accuracy, 0…1 over every drill ever answered.
@@ -187,7 +215,7 @@ public struct SessionHistory: Codable, Sendable, Equatable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case sessions, totalSessions, totalAnswered, totalCorrect, totalPracticeSeconds, bestTTR
+        case sessions, totalSessions, totalAnswered, totalCorrect, totalPracticeSeconds, bestTTR, bestScores
     }
 
     /// Row-tolerant decode: one corrupt session is dropped, the rest survive
@@ -205,6 +233,9 @@ public struct SessionHistory: Codable, Sendable, Equatable {
         totalCorrect = try c.decodeIfPresent(Int.self, forKey: .totalCorrect) ?? totalCorrect
         totalPracticeSeconds = try c.decodeIfPresent(TimeInterval.self, forKey: .totalPracticeSeconds) ?? totalPracticeSeconds
         bestTTR = try c.decodeIfPresent(TimeInterval.self, forKey: .bestTTR) ?? bestTTR
+        // Absent from a file saved before per-mode bests existed: the seed from
+        // the rows stands, so nobody's best drops to nothing on first launch.
+        bestScores = try c.decodeIfPresent([String: Int].self, forKey: .bestScores) ?? bestScores
     }
 }
 

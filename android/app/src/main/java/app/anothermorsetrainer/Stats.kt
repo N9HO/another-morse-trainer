@@ -10,6 +10,7 @@ import androidx.core.content.edit
 import app.anothermorsetrainer.morsekit.ActivityLedger
 import app.anothermorsetrainer.morsekit.PracticeStreak
 import app.anothermorsetrainer.morsekit.SessionHistory
+import app.anothermorsetrainer.morsekit.ModeBests
 import app.anothermorsetrainer.morsekit.SessionRecord
 import org.json.JSONArray
 import org.json.JSONObject
@@ -31,7 +32,9 @@ data class SessionSummary(
     /** Median correct recognition time this session, if any — feeds speed bands. */
     val medianTtrMs: Int? = null,
     /** The full [SessionRecord]'s id in [Stats.history]; null before details existed. */
-    val recordId: String? = null
+    val recordId: String? = null,
+    /** The mode's own score, as [SessionRecord.score]; null where the mode has none or the row predates it. */
+    val score: Int? = null
 ) {
     val accuracy: Double get() = if (attempts == 0) 0.0 else correct.toDouble() / attempts
 
@@ -77,6 +80,14 @@ object Stats {
     var totalCorrect by mutableIntStateOf(0); private set
     var totalPracticeSeconds by mutableIntStateOf(0); private set
     var bestTtrMs by mutableStateOf<Int?>(null); private set
+    /**
+     * Best [SessionRecord.score] per mode string, for the modes that have one
+     * (docs/high-scores-design.md, step 1). Kept like [bestTtrMs], not derived
+     * from [recent], so it outlives the capped lists. Rules in
+     * `fixtures/mode-bests.json`, applied by [ModeBests]. The iOS twin is
+     * `SessionHistory.bestScores`.
+     */
+    var bestScores by mutableStateOf<Map<String, Int>>(emptyMap()); private set
     var recent by mutableStateOf<List<SessionSummary>>(emptyList()); private set
     /** Lifetime per-character recognition data, keyed by the single character. */
     var charStats by mutableStateOf<Map<String, CharAgg>>(emptyMap()); private set
@@ -121,6 +132,12 @@ object Stats {
         val storedActivity = prefs.getString("activity", null)
         activity = if (storedActivity != null) parseActivity(storedActivity) else seedActivity(history)
         if (storedActivity == null) prefs.edit { putString("activity", encodeActivity(activity)) }
+        // Same first-launch seed for the per-mode bests: the records still in
+        // the list carry no scores from before the field existed, so the seed
+        // is empty for an old install and only fills as scored runs are played.
+        val storedBests = prefs.getString("bestScores", null)
+        bestScores = if (storedBests != null) parseBestScores(storedBests) else ModeBests.seed(history)
+        if (storedBests == null) prefs.edit { putString("bestScores", encodeBestScores(bestScores)) }
     }
 
     /** A ledger rebuilt from the sessions still in [history]: their local day and logged duration. */
@@ -166,6 +183,7 @@ object Stats {
         effectiveWpm: Int = 0,
         charResults: List<SessionRecord.CharResult> = emptyList(),
         activeCharacters: List<String> = emptyList(),
+        score: Int? = null,
         today: LocalDate = LocalDate.now()
     ): Int? {
         if (attempts <= 0) return null
@@ -184,6 +202,7 @@ object Stats {
         if (bestTtrMs != null && (this.bestTtrMs == null || bestTtrMs < this.bestTtrMs!!)) {
             this.bestTtrMs = bestTtrMs
         }
+        bestScores = ModeBests.fold(bestScores, mode, score)
         // The full detail record (per-session screen); the summary row carries
         // its id so the sessions list can open it.
         val record = SessionRecord(
@@ -198,13 +217,14 @@ object Stats {
             medianTTR = medianTtrMs?.let { it / 1000.0 },
             durationSeconds = durationSeconds.takeIf { it > 0 }?.toDouble(),
             characters = charResults,
-            activeCharacters = activeCharacters
+            activeCharacters = activeCharacters,
+            score = score
         )
         history = (listOf(record) + history).take(SessionHistory.limit)
         recent = (listOf(
             SessionSummary(
                 mode, today.toEpochDay(), attempts, correct, bestTtrMs, characterWpm,
-                medianTtrMs, record.id.toString()
+                medianTtrMs, record.id.toString(), score
             )
         ) + recent).take(50)
         persist()
@@ -221,6 +241,7 @@ object Stats {
         totalCorrect = 0
         totalPracticeSeconds = 0
         bestTtrMs = null
+        bestScores = emptyMap()
         recent = emptyList()
         charStats = emptyMap()
         history = emptyList()
@@ -228,8 +249,10 @@ object Stats {
         prefs.edit {
             clear()
             // An absent "activity" key means "seed from history" at the next
-            // launch; write the empty ledger so a wipe stays a wipe.
+            // launch; write the empty ledger so a wipe stays a wipe. Likewise
+            // the bests map.
             putString("activity", encodeActivity(activity))
+            putString("bestScores", encodeBestScores(bestScores))
         }
     }
 
@@ -267,8 +290,26 @@ object Stats {
             putString("recent", encodeRecent(recent))
             putString("history", encodeHistory(history))
             putString("activity", encodeActivity(activity))
+            putString("bestScores", encodeBestScores(bestScores))
         }
     }
+
+    /** Mode string → best score, a flat JSON object. */
+    internal fun encodeBestScores(bests: Map<String, Int>): String {
+        val o = JSONObject()
+        for ((mode, score) in bests) o.put(mode, score)
+        return o.toString()
+    }
+
+    /** Guarded like [parseRecent]: a wrecked document is an empty map, a bad entry is skipped. */
+    internal fun parseBestScores(json: String): Map<String, Int> = runCatching {
+        val o = JSONObject(json)
+        val out = LinkedHashMap<String, Int>()
+        for (key in o.keys()) {
+            runCatching { out[key] = o.getInt(key) }
+        }
+        out
+    }.getOrDefault(emptyMap())
 
     /** The ledger as a JSON object of ISO day → whole seconds. */
     private fun encodeActivity(ledger: ActivityLedger): String {
@@ -302,6 +343,8 @@ object Stats {
                     .put("wpm", s.characterWpm)
                     .put("med", s.medianTtrMs ?: -1)
                     .put("id", s.recordId ?: "")
+                    // Scores are never negative, so -1 is "none", as for ttr/med.
+                    .put("score", s.score ?: -1)
             )
         }
         return arr.toString()
@@ -337,7 +380,9 @@ object Stats {
                     // Absent on records saved before speed-band stats existed.
                     characterWpm = o.optInt("wpm", 0),
                     medianTtrMs = o.optInt("med", -1).takeIf { it >= 0 },
-                    recordId = o.optString("id", "").takeIf { it.isNotEmpty() }
+                    recordId = o.optString("id", "").takeIf { it.isNotEmpty() },
+                    // Absent on rows saved before per-mode bests existed.
+                    score = o.optInt("score", -1).takeIf { it >= 0 }
                 )
             )
             }
@@ -372,6 +417,7 @@ object Stats {
                     .put("dur", r.durationSeconds?.roundToInt() ?: -1)
                     .put("chars", chars)
                     .put("active", r.activeCharacters.joinToString(""))
+                    .put("score", r.score ?: -1)
             )
         }
         return arr.toString()
@@ -410,7 +456,8 @@ object Stats {
                     medianTTR = o.optInt("med", -1).takeIf { it >= 0 }?.let { it / 1000.0 },
                     durationSeconds = o.optInt("dur", -1).takeIf { it >= 0 }?.toDouble(),
                     characters = chars,
-                    activeCharacters = o.optString("active", "").map { it.toString() }
+                    activeCharacters = o.optString("active", "").map { it.toString() },
+                    score = o.optInt("score", -1).takeIf { it >= 0 }
                 )
             )
             }

@@ -25,7 +25,16 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.Castle
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.EmojiEvents
+import androidx.compose.material.icons.filled.FlashOn
+import androidx.compose.material.icons.filled.Flight
+import androidx.compose.material.icons.filled.Pets
+import androidx.compose.material.icons.filled.RecordVoiceOver
+import androidx.compose.material.icons.filled.RocketLaunch
+import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material.icons.filled.SportsEsports
 import androidx.compose.material.icons.filled.IosShare
 import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.SwapHoriz
@@ -656,6 +665,15 @@ private fun PersonalBests(snapshot: ProgressiveCharacters.Snapshot) {
         HairlineDivider()
         BestRow(Icons.Filled.BarChart, stringResource(R.string.stats_biggest_session), Brand.textSecondary,
             biggest?.let { stringResource(R.string.stats_biggest_session_value, it) } ?: "—", Brand.textPrimary)
+        // Per-mode bests (docs/high-scores-design.md, step 1): one row per
+        // mode that keeps a score and has been played, in home-menu order.
+        // iOS shows the same rows on its Brag Sheet's Personal bests card.
+        for (m in MODE_BESTS) {
+            val best = Stats.bestScores[m.modeKey] ?: continue
+            HairlineDivider()
+            BestRow(m.icon, stringResource(R.string.stats_mode_best, stringResource(m.titleRes)), Brand.textSecondary,
+                m.format(best), GOOD)
+        }
         HairlineDivider()
         BestRow(Icons.Filled.WorkspacePremium, stringResource(R.string.stats_characters_mastered), MASTERED, "$mastered / $total", MASTERED)
         LinearProgressIndicator(
@@ -666,6 +684,30 @@ private fun PersonalBests(snapshot: ProgressiveCharacters.Snapshot) {
         )
     }
 }
+
+/**
+ * A mode whose runs carry a score, keyed by the string its screen passes to
+ * `Stats.record`, with how its best reads: Contest scores points, Pileup Runner
+ * counts QSOs, Rapid Fire counts correct copies, a game's score is a number.
+ */
+private class ModeBestRow(
+    val modeKey: String,
+    val titleRes: Int,
+    val icon: ImageVector,
+    val format: @Composable (Int) -> String
+)
+
+private val MODE_BESTS: List<ModeBestRow> = listOf(
+    ModeBestRow("Rapid Fire", R.string.mode_rapid_fire, Icons.Filled.FlashOn) { stringResource(R.string.stats_best_correct, it) },
+    ModeBestRow("Pileup", R.string.mode_pileup_runner, Icons.Filled.RecordVoiceOver) { pluralStringResource(R.plurals.stats_best_qsos, it, it) },
+    ModeBestRow("Contest", R.string.mode_contest, Icons.Filled.EmojiEvents) { stringResource(R.string.stats_best_points, it) },
+    ModeBestRow("Morse Invaders", R.string.mode_invaders, Icons.Filled.SportsEsports) { it.toString() },
+    ModeBestRow("CW Galaga", R.string.mode_galaga, Icons.Filled.Flight) { it.toString() },
+    ModeBestRow("Morse Defender", R.string.mode_defender, Icons.Filled.Shield) { it.toString() },
+    ModeBestRow("CW Dungeon", R.string.mode_dungeon, Icons.Filled.Castle) { it.toString() },
+    ModeBestRow("CW Frogger", R.string.mode_frogger, Icons.Filled.Pets) { it.toString() },
+    ModeBestRow("CW Asteroids", R.string.mode_asteroids, Icons.Filled.RocketLaunch) { it.toString() }
+)
 
 @Composable
 private fun BestRow(icon: ImageVector, label: String, iconColor: Color, value: String, valueColor: Color) {

@@ -1888,6 +1888,7 @@ final class AppModel: ObservableObject {
         mode = learningMode
         sessionEnded = false
         sessionStartDate = Date()
+        sessionBestGameScore = nil
         sessionAttempts = 0
         sessionCorrect = 0
         sessionFastest = nil
@@ -2104,7 +2105,34 @@ final class AppModel: ObservableObject {
             durationSeconds: sessionStartDate.map { Date().timeIntervalSince($0) }
                 ?? settings.practiceDuration.seconds,
             characters: chars,
-            activeCharacters: active)
+            activeCharacters: active,
+            score: modeScore(correct: summary.correct))
+    }
+
+    // MARK: - Per-mode scores (docs/high-scores-design.md, step 1)
+
+    /// The best score of any arcade game played this session. The game views
+    /// own their engines and report through `noteGameScore`; the record is
+    /// written when the user leaves, which may be several "Play again"s after
+    /// the best game, so the session keeps the best rather than the last.
+    private var sessionBestGameScore: Int?
+
+    /// Called by a game view whenever its HUD picks up the engine's score.
+    func noteGameScore(_ score: Int) {
+        sessionBestGameScore = max(sessionBestGameScore ?? score, score)
+    }
+
+    /// The mode's own end-of-run number for the session record, or nil for a
+    /// mode that has none. The Android twin fills the same field at each
+    /// screen's `Stats.record` call.
+    private func modeScore(correct: Int) -> Int? {
+        switch mode {
+        case .contest: return contestScore
+        case .qso: return qsoCount
+        case .rapidFire: return correct
+        case .invaders, .galaga, .defender, .dungeon, .frogger, .asteroids: return sessionBestGameScore
+        default: return nil
+        }
     }
 
     /// Add one answered drill to the running session tally. `target` is the
@@ -2552,6 +2580,16 @@ final class AppModel: ObservableObject {
         var biggestSession: Int?             // most drills answered in one sitting
         var charactersMastered: Int
         var charactersTotal: Int
+        /// Best score per mode, in `TrainingMode` order, for the modes that
+        /// have one (games, Contest, Pileup Runner, Rapid Fire).
+        var modeBests: [ModeBest]
+    }
+
+    /// One "Contest best: 312 pts" row of the Brag Sheet's Personal bests.
+    struct ModeBest: Identifiable, Equatable {
+        let mode: TrainingMode
+        let score: Int
+        var id: String { mode.rawValue }
     }
 
     var bragStats: BragStats {
@@ -2576,7 +2614,10 @@ final class AppModel: ObservableObject {
             bestSessionAccuracy: realSessions.map(\.accuracy).max(),
             biggestSession: scored.map(\.attempts).max(),
             charactersMastered: mastered,
-            charactersTotal: MorseCode.kochOrder.count)
+            charactersTotal: MorseCode.kochOrder.count,
+            modeBests: TrainingMode.allCases.compactMap { m in
+                history.bestScores[m.rawValue].map { ModeBest(mode: m, score: $0) }
+            })
     }
 
     /// The current week's practice strip (Mon…Sun) for the streak card: which

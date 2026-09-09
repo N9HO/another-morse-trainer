@@ -166,6 +166,14 @@ struct BragSheetView: View {
             divider
             bestRow("chart.bar.fill", "Biggest session", Theme.textSecondary,
                     stats.biggestSession.map { "\($0) answered" } ?? "—")
+            // Per-mode bests (docs/high-scores-design.md, step 1): one row per
+            // mode that keeps a score and has been played. Android shows the
+            // same rows on its Progress screen's Personal bests card.
+            ForEach(stats.modeBests) { best in
+                divider
+                bestRow(best.mode.icon, "\(best.mode.title) best", Theme.textSecondary,
+                        Self.scoreText(best), valueColor: Theme.teal)
+            }
             divider
             bestRow("rosette", "Characters mastered", .orange,
                     "\(stats.charactersMastered) / \(stats.charactersTotal)",
@@ -179,6 +187,17 @@ struct BragSheetView: View {
         .padding(.vertical, 6)
         .background(Theme.navyElevated,
                     in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+
+    /// The score with its unit: Contest scores points, Pileup Runner counts
+    /// QSOs, Rapid Fire counts correct copies, a game's score is just a number.
+    static func scoreText(_ best: AppModel.ModeBest) -> String {
+        switch best.mode {
+        case .contest: return "\(best.score) pts"
+        case .qso: return best.score == 1 ? "1 QSO" : "\(best.score) QSOs"
+        case .rapidFire: return "\(best.score) correct"
+        default: return "\(best.score)"
+        }
     }
 
     private func bestRow(_ icon: String, _ label: String, _ iconColor: Color,
