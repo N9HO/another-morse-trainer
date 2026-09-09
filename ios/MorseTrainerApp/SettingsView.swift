@@ -6,6 +6,11 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var confirmReset = false
     @State private var copiedDiagnostics = false
+    /// Settings › Leaderboard › Delete my scores: the confirmation, the
+    /// in-flight call, and its outcome (nil = not asked yet / success).
+    @State private var confirmDeleteScores = false
+    @State private var deletingScores = false
+    @State private var deleteScoresResult: String?
 
     /// The adapter's keyer mode (issue #43). Stored under the repeater's key
     /// because it is one fact about the operator's hardware, not a per-screen
@@ -479,6 +484,67 @@ struct SettingsView: View {
                     }
                     .listRowBackground(Theme.navyElevated)
                 }
+
+                // Shared leaderboard (docs/high-scores-design.md, step 2).
+                // Off by default; nothing leaves the device until this is on
+                // and a name is set. The display-name rule is the server's,
+                // applied here so the field says what is wrong up front.
+                Section {
+                    Toggle("Share scores to the shared leaderboard", isOn: $model.settings.leaderboard.shareScores)
+                    HStack {
+                        Text("Display name")
+                        Spacer()
+                        TextField("N0CALL", text: $model.settings.leaderboard.displayName)
+                            .multilineTextAlignment(.trailing)
+                            .textInputAutocapitalization(.characters)
+                            .autocorrectionDisabled()
+                            .font(.body.monospaced())
+                            .onChange(of: model.settings.leaderboard.displayName) { name in
+                                // Uppercased as typed, the form the board shows.
+                                let up = name.uppercased()
+                                if up != name { model.settings.leaderboard.displayName = up }
+                            }
+                    }
+                    if !model.settings.leaderboard.displayName.isEmpty,
+                       let problem = LeaderboardDisplayName.problem(with: model.settings.leaderboard.displayName) {
+                        Text(problem)
+                            .font(.footnote)
+                            .foregroundStyle(.orange)
+                    }
+                    Button(role: .destructive) {
+                        confirmDeleteScores = true
+                    } label: {
+                        HStack {
+                            Label("Delete my scores", systemImage: "trash")
+                            if deletingScores { Spacer(); ProgressView() }
+                        }
+                    }
+                    .disabled(deletingScores)
+                    .confirmationDialog("Delete every score this device has posted?",
+                                        isPresented: $confirmDeleteScores, titleVisibility: .visible) {
+                        Button("Delete my scores", role: .destructive) {
+                            deletingScores = true
+                            deleteScoresResult = nil
+                            Task {
+                                let problem = await model.leaderboardDeleteMyScores()
+                                deletingScores = false
+                                deleteScoresResult = problem ?? "Your scores were deleted."
+                            }
+                        }
+                    } message: {
+                        Text("Removes this device's scores and submissions from the shared board. Your local stats and personal bests stay.")
+                    }
+                    if let deleteScoresResult {
+                        Text(deleteScoresResult)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                } header: {
+                    Text("Leaderboard")
+                } footer: {
+                    Text("Ranked runs — Rapid Fire, Contest, Pileup Runner and the six games — are posted when they end. The board ranks a server-graded copy of the run (speed summed over the items you got right), so a game's board number is not its on-screen score. Names are 2–12 characters: letters, digits, space, / and -. Only a real device can post; the simulator cannot attest.")
+                }
+                .listRowBackground(Theme.navyElevated)
 
                 Section {
                     Button {

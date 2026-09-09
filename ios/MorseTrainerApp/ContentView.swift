@@ -1527,6 +1527,13 @@ struct ContentView: View {
                 rapidFireTranscriptCard
             }
 
+            // The shared leaderboard's verdict on this run, when it was
+            // posted (opt-in; AppModel+Leaderboard.swift). Nothing at all
+            // when it was not.
+            if model.leaderboardStatus != .notSubmitted {
+                leaderboardCard
+            }
+
             // The run's worked log on the scorecard (Android parity): every
             // contact with its exchange and speed, newest first.
             if s.mode == .contest || s.mode == .qso, !model.qsoLog.isEmpty {
@@ -1679,6 +1686,52 @@ struct ContentView: View {
         .padding()
         .frame(maxWidth: .infinity)
         .brandCard()
+    }
+
+    /// One line on the summary: the rank and metric the server gave this run,
+    /// the reason it was refused, or why it could not be posted.
+    private var leaderboardCard: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Image(systemName: "trophy")
+                .foregroundStyle(Theme.tealBright)
+            switch model.leaderboardStatus {
+            case .notSubmitted:
+                EmptyView()
+            case .pending:
+                Text("Leaderboard: posting…")
+                    .foregroundStyle(.secondary)
+            case .posted(let rank, let metric, let correct, let total, let best):
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Leaderboard: #\(rank) · \(metric)")
+                        .font(.headline.monospacedDigit())
+                    Text(best ? "New personal best · \(correct)/\(total) graded correct"
+                              : "\(correct)/\(total) graded correct")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            case .refused(let reason):
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Leaderboard: not ranked")
+                        .font(.headline)
+                    Text(reason)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            case .unavailable(let reason):
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Leaderboard: not posted")
+                        .font(.headline)
+                    Text(reason)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding()
+        .frame(maxWidth: .infinity)
+        .brandCard()
+        .accessibilityElement(children: .combine)
     }
 
     private func summaryRow(_ label: String, _ value: String) -> some View {

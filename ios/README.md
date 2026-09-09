@@ -119,6 +119,13 @@ testers, bug reports and feature chat live on
 - **Bluetooth keep-alive and band noise**: a near-silent floor (on by
   default) that stops Bluetooth earbuds sleeping through the first character,
   and a separate band-noise level to copy through
+- **Leaderboard**: an opt-in shared board across both apps for Rapid Fire,
+  Contest, Pileup Runner and the six games. The server grades each run's
+  transcript itself and ranks on the speed summed over correct items (so a
+  game's board number is not its on-screen score); every post is attested
+  with App Attest, so only the genuine app on a real device can rank. Pick a
+  callsign-shaped display name in Settings › Leaderboard; "Delete my scores"
+  removes everything the server holds for the device.
 - **Progress**: daily streak with milestone celebrations, a GitHub-style
   activity grid of daily practice time, session history with per-session
   recognition charts, per-character stats, most-confused pairs, performance

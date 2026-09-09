@@ -51,6 +51,21 @@ struct StatsView: View {
                 }
                 .listRowBackground(Theme.navyElevated)
 
+                // The shared leaderboard (docs/high-scores-design.md, step
+                // 2): read-only here; posting is the opt-in in Settings.
+                Section {
+                    NavigationLink {
+                        LeaderboardView()
+                    } label: {
+                        Label("Shared leaderboard", systemImage: "trophy")
+                    }
+                } footer: {
+                    Text(model.settings.leaderboard.shareScores
+                         ? "Top runs from both apps in the nine ranked modes."
+                         : "Top runs from both apps. Your own are posted only once “Share scores” is on in Settings › Leaderboard.")
+                }
+                .listRowBackground(Theme.navyElevated)
+
                 if model.history.sessions.isEmpty {
                     Section("Recent sessions") {
                         Text("No sessions yet. Finish a practice round and it will show up here.")
