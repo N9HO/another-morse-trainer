@@ -410,9 +410,8 @@ Build order:
    in the server README), App Attest / Play Integrity clients, opt-in with
    display name, a board screen, "Delete my scores". Keying mode in
    Invaders, Galaga and Asteroids plays no Morse, so those runs are not
-   submitted; only hear-it runs rank. The Android client needs the Google
-   Cloud project *number* (`LEADERBOARD_CLOUD_PROJECT_NUMBER`) before it
-   attests anything.
+   submitted; only hear-it runs rank. The Android client carries the Google
+   Cloud project number (`LEADERBOARD_CLOUD_PROJECT_NUMBER`).
 4. First real attestation: a TestFlight build on an iPhone and a Play
    internal-test build; then store listings' privacy disclosures (device
    identifier, gameplay data, display name), then release.
