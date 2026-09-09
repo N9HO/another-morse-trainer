@@ -897,6 +897,10 @@ fun SettingsScreen(
             title = { Text(stringResource(R.string.settings_leaderboard_delete_confirm_title), color = Brand.textPrimary) },
             text = { Text(stringResource(R.string.settings_leaderboard_delete_confirm_body), color = Brand.textSecondary) },
             confirmButton = {
+                // Resource strings read at composition (lint: LocalContextGetResources);
+                // the failure template takes its argument with String.format.
+                val deleteDoneText = stringResource(R.string.settings_leaderboard_delete_done)
+                val deleteFailedTemplate = stringResource(R.string.settings_leaderboard_delete_failed)
                 TextButton(onClick = {
                     confirmDeleteScores = false
                     deletingScores = true
@@ -904,11 +908,7 @@ fun SettingsScreen(
                     uiScope.launch {
                         val failure = LeaderboardClient.deleteMyScores()
                         deletingScores = false
-                        deleteScoresNote = if (failure == null) {
-                            context.getString(R.string.settings_leaderboard_delete_done)
-                        } else {
-                            context.getString(R.string.settings_leaderboard_delete_failed, failure)
-                        }
+                        deleteScoresNote = if (failure == null) deleteDoneText else deleteFailedTemplate.format(failure)
                     }
                 }) { Text(stringResource(R.string.settings_leaderboard_delete), color = Color(0xFFF2788F), fontWeight = FontWeight.SemiBold) }
             },

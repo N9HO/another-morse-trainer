@@ -225,6 +225,9 @@ fun DungeonScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
     var lbRun by remember { mutableStateOf<LeaderboardClient.RunHandle?>(null) }
     val lbItems = remember { ArrayList<LeaderboardItem>() }
     var lbLine by remember { mutableStateOf<String?>(null) }
+    // Read at composition, not via context.getString in the helper below: lint
+    // (LocalContextGetResources) wants resource reads to follow configuration.
+    val lbSubmittingText = stringResource(R.string.leaderboard_submitting)
 
     // The key: the same decoder Sending Practice uses, plus a hardware key.
     val keyer = remember { SendingKeyer(wpm = Settings.characterWpm, toneHz = Settings.sidetoneHz) }
@@ -276,7 +279,7 @@ fun DungeonScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
         lbRun = null
         val items = lbItems.toList()
         if (items.isEmpty()) return
-        lbLine = context.getString(R.string.leaderboard_submitting)
+        lbLine = lbSubmittingText
         LeaderboardClient.submit(h, items) { lbLine = it }
     }
 
