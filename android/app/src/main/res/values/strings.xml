@@ -703,6 +703,11 @@
         <item quantity="other">listens</item>
     </plurals>
 
+    <!-- Games sub-menu (#207) -->
+    <string name="mode_games">Games</string>
+    <string name="home_six_arcade_modes">Six arcade modes</string>
+    <string name="games_lead">Arcade practice: every hit and miss feeds your stats, and each game has its own gentle speed ramp.</string>
+
     <!-- Morse Invaders (#170) -->
     <string name="mode_invaders">Morse Invaders</string>
     <string name="home_arcade_recognition">Arcade recognition</string>

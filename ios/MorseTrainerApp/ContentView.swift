@@ -202,8 +202,14 @@ struct ContentView: View {
                 get: { model.learningMode },
                 set: { model.setMode($0) }
             )) {
-                ForEach(TrainingMode.allCases) { m in
+                ForEach(TrainingMode.allCases.filter { !$0.isGame }) { m in
                     Label(m.title, systemImage: m.icon).tag(m)
+                }
+                // The games under their own heading, as on the home screen (#207).
+                Section("Games") {
+                    ForEach(TrainingMode.games) { m in
+                        Label(m.title, systemImage: m.icon).tag(m)
+                    }
                 }
             }
         } label: {

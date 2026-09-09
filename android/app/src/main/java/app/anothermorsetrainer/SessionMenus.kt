@@ -1,6 +1,7 @@
 package app.anothermorsetrainer
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
@@ -10,6 +11,7 @@ import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -57,6 +59,12 @@ enum class TrainingMode(private val quizTitle: String? = null, private val title
     DUNGEON(titleRes = R.string.mode_dungeon),
     FROGGER(titleRes = R.string.mode_frogger),
     ASTEROIDS(titleRes = R.string.mode_asteroids);
+
+    /** The arcade games (#170): grouped under one Games entry on the home
+     *  screen and in the mode switcher (#207). Mirrors iOS `TrainingMode.isGame`. */
+    val isGame: Boolean
+        get() = this == INVADERS || this == GALAGA || this == DEFENDER ||
+            this == DUNGEON || this == FROGGER || this == ASTEROIDS
 
     /** The menu label — the home tile's title. */
     @Composable
@@ -170,7 +178,19 @@ fun SwitchModeButton(current: TrainingMode?, onSwitch: (TrainingMode) -> Unit) {
             )
         }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            TrainingMode.entries.forEach { mode ->
+            // The games under their own heading, as on the home screen (#207)
+            // and in the iOS switcher's "Games" section.
+            val (games, rest) = TrainingMode.entries.partition { it.isGame }
+            (rest + games).forEach { mode ->
+                if (mode == games.first()) {
+                    HorizontalDivider()
+                    Text(
+                        stringResource(R.string.mode_games),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = Brand.textSecondary,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
+                    )
+                }
                 DropdownMenuItem(
                     text = { Text(mode.title()) },
                     leadingIcon = {

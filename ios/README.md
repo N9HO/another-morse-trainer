@@ -32,6 +32,9 @@ testers, bug reports and feature chat live on
   with ARRL/RAC Field Day sections) / contest serials (cut numbers optional)
   / names / power, sent back to back at your pace; type, head-copy, key each
   one back, or just listen
+- **Games**: the six arcade games below sit behind one Games tile on the
+  home screen (and under a Games heading in the mid-session mode switcher),
+  so the main menu stays short as more games are added
 - **Morse Invaders**: an arcade game — pixel-art invaders descend carrying
   characters; hear one and type it on a QWERTY keyboard, or see one and key
   it, before it lands. Each game starts 10 WPM under your character speed

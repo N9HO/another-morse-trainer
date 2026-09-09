@@ -128,6 +128,8 @@ private sealed interface Route {
     data object TypeIt : Route
     data object Qrq : Route
     data object RapidFire : Route
+    /** The Games sub-menu (#207): the six arcade games behind one home tile. */
+    data object Games : Route
     data object Invaders : Route
     data object Galaga : Route
     data object Defender : Route
@@ -173,6 +175,7 @@ private fun routeTag(route: Route): String = when (route) {
     Route.TypeIt -> "typeIt"
     Route.Qrq -> "qrq"
     Route.RapidFire -> "rapidFire"
+    Route.Games -> "games"
     Route.Invaders -> "invaders"
     Route.Galaga -> "galaga"
     Route.Defender -> "defender"
@@ -203,6 +206,7 @@ private fun routeFrom(tag: String): Route? = when (tag) {
     "typeIt" -> Route.TypeIt
     "qrq" -> Route.Qrq
     "rapidFire" -> Route.RapidFire
+    "games" -> Route.Games
     "invaders" -> Route.Invaders
     "galaga" -> Route.Galaga
     "defender" -> Route.Defender
@@ -340,12 +344,7 @@ private fun AppRoot() {
             onPickTypeIt = { launch(typeItTarget()) },
             onPickQrq = { launch(qrqTarget()) },
             onPickRapidFire = { route = Route.RapidFire },
-            onPickInvaders = { route = Route.Invaders },
-            onPickGalaga = { route = Route.Galaga },
-            onPickDefender = { route = Route.Defender },
-            onPickDungeon = { route = Route.Dungeon },
-            onPickFrogger = { route = Route.Frogger },
-            onPickAsteroids = { route = Route.Asteroids },
+            onPickGames = { route = Route.Games },
             onPickStory = { launch(storyTarget()) },
             onPickSending = { launch(sendingTarget()) },
             onPickSendingDrills = { route = Route.SendingDrills },
@@ -384,12 +383,23 @@ private fun AppRoot() {
         )
         Route.Qrq -> QrqScreen(onBack = { route = Route.Home }, onSwitchMode = { switchTo(it) })
         Route.RapidFire -> RapidFireScreen(onBack = { route = Route.Home }, onSwitchMode = { switchTo(it) })
-        Route.Invaders -> InvadersScreen(onBack = { route = Route.Home }, onSwitchMode = { switchTo(it) })
-        Route.Galaga -> GalagaScreen(onBack = { route = Route.Home }, onSwitchMode = { switchTo(it) })
-        Route.Defender -> DefenderScreen(onBack = { route = Route.Home }, onSwitchMode = { switchTo(it) })
-        Route.Dungeon -> DungeonScreen(onBack = { route = Route.Home }, onSwitchMode = { switchTo(it) })
-        Route.Frogger -> FroggerScreen(onBack = { route = Route.Home }, onSwitchMode = { switchTo(it) })
-        Route.Asteroids -> AsteroidsScreen(onBack = { route = Route.Home }, onSwitchMode = { switchTo(it) })
+        Route.Games -> GamesScreen(
+            onBack = { route = Route.Home },
+            onPickInvaders = { route = Route.Invaders },
+            onPickGalaga = { route = Route.Galaga },
+            onPickDefender = { route = Route.Defender },
+            onPickDungeon = { route = Route.Dungeon },
+            onPickFrogger = { route = Route.Frogger },
+            onPickAsteroids = { route = Route.Asteroids }
+        )
+        // Back from a game lands on the Games sub-menu it was picked from
+        // (#207), the way Back from a Reference entry lands on the list.
+        Route.Invaders -> InvadersScreen(onBack = { route = Route.Games }, onSwitchMode = { switchTo(it) })
+        Route.Galaga -> GalagaScreen(onBack = { route = Route.Games }, onSwitchMode = { switchTo(it) })
+        Route.Defender -> DefenderScreen(onBack = { route = Route.Games }, onSwitchMode = { switchTo(it) })
+        Route.Dungeon -> DungeonScreen(onBack = { route = Route.Games }, onSwitchMode = { switchTo(it) })
+        Route.Frogger -> FroggerScreen(onBack = { route = Route.Games }, onSwitchMode = { switchTo(it) })
+        Route.Asteroids -> AsteroidsScreen(onBack = { route = Route.Games }, onSwitchMode = { switchTo(it) })
         Route.Story -> StoryScreen(onBack = { route = Route.Home }, onSwitchMode = { switchTo(it) })
         Route.Sending -> SendingPracticeScreen(onBack = { route = Route.Home }, onSwitchMode = { switchTo(it) })
         Route.SendingDrills -> SendingDrillScreen(onBack = { route = Route.Home })

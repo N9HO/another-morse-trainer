@@ -207,6 +207,22 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         }
     }
 
+    /// The arcade games (#170). On the home screen they sit behind one
+    /// "Games" tile rather than six of their own (#207): the main menu had
+    /// grown past two screens of tiles, and a beginner scrolling through six
+    /// arcade modes to find Common Words is not what the grid is for. The
+    /// mid-session switcher groups them under the same heading.
+    var isGame: Bool {
+        switch self {
+        case .invaders, .galaga, .defender, .dungeon, .frogger, .asteroids: return true
+        default: return false
+        }
+    }
+
+    /// The games in menu order — `allCases` order, so the Games sub-menu
+    /// lists them the way the home grid used to.
+    static var games: [TrainingMode] { allCases.filter(\.isGame) }
+
 }
 
 extension Drill {

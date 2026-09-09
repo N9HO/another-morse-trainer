@@ -13,6 +13,12 @@ struct IntroView: View {
     @Binding var openSetup: Bool
 
     @State private var showingSetup = false
+    /// The Games sub-menu (#207). A game picked there sets `pendingGameSetup`
+    /// and closes the sub-menu; its `onDismiss` then opens the setup sheet.
+    /// Two sheets cannot be presented from one view at once, so the hand-off
+    /// has to wait for the first to finish dismissing.
+    @State private var showingGames = false
+    @State private var pendingGameSetup = false
     @State private var showingSettings = false
     @State private var showingStats = false
     @State private var showingReference = false
@@ -51,6 +57,20 @@ struct IntroView: View {
         .sheet(isPresented: $showingSetup) {
             SessionSetupSheet(onStart: onStart)
                 .environmentObject(model)
+        }
+        .sheet(isPresented: $showingGames, onDismiss: {
+            if pendingGameSetup {
+                pendingGameSetup = false
+                showingSetup = true
+            }
+        }) {
+            GamesMenuView { mode in
+                Haptics.selection()
+                model.learningMode = mode
+                pendingGameSetup = true
+                showingGames = false
+            }
+            .environmentObject(model)
         }
         .sheet(isPresented: $showingSettings) {
             SettingsView().environmentObject(model)
@@ -305,7 +325,7 @@ struct IntroView: View {
         VStack(alignment: .leading, spacing: 12) {
             sectionTitle("Choose your practice", systemImage: "square.grid.2x2")
             LazyVGrid(columns: tileColumns, spacing: 14) {
-                ForEach(TrainingMode.allCases) { mode in
+                ForEach(TrainingMode.allCases.filter { !$0.isGame }) { mode in
                     // Every tile is a real button: one tap opens that mode's
                     // pre-flight options with Start right there — no separate
                     // Continue press (issue #60).
@@ -315,6 +335,16 @@ struct IntroView: View {
                         model.learningMode = mode
                         showingSetup = true
                     }
+                }
+                // The six arcade games behind one tile (#207): the grid had
+                // outgrown two screens. Lit when the remembered mode is a game,
+                // so the check still says where you last were.
+                ModeTile(title: "Games",
+                         icon: "gamecontroller.fill",
+                         tagline: "Six arcade modes",
+                         isSelected: model.learningMode.isGame) {
+                    Haptics.selection()
+                    showingGames = true
                 }
             }
         }
@@ -931,11 +961,28 @@ private struct ModeOptionsCard: View {
 }
 
 /// One selectable training-mode tile: icon, name, and a short tagline. The
-/// selected tile fills with the brand teal and shows a check.
+/// selected tile fills with the brand teal and shows a check. Also draws the
+/// Games tile, which stands for six modes rather than one, so it takes its
+/// text and icon directly.
 private struct ModeTile: View {
-    let mode: TrainingMode
+    let title: String
+    let icon: String
+    let tagline: String
     let isSelected: Bool
     let action: () -> Void
+
+    init(title: String, icon: String, tagline: String, isSelected: Bool, action: @escaping () -> Void) {
+        self.title = title
+        self.icon = icon
+        self.tagline = tagline
+        self.isSelected = isSelected
+        self.action = action
+    }
+
+    init(mode: TrainingMode, isSelected: Bool, action: @escaping () -> Void) {
+        self.init(title: mode.title, icon: mode.icon, tagline: mode.tagline,
+                  isSelected: isSelected, action: action)
+    }
 
     var body: some View {
         Button(action: action) {
@@ -947,19 +994,19 @@ private struct ModeTile: View {
                     Circle()
                         .fill(isSelected ? Theme.navy.opacity(0.15) : Theme.navyRaised)
                         .frame(width: 46, height: 46)
-                    Image(systemName: mode.icon)
+                    Image(systemName: icon)
                         .font(.system(size: 20, weight: .semibold))
                         .foregroundStyle(isSelected ? Theme.navy : Theme.teal)
                 }
 
-                Text(mode.title)
+                Text(title)
                     .font(.subheadline).bold()
                     .foregroundStyle(isSelected ? Theme.navy : .primary)
                     .multilineTextAlignment(.center)
                     .lineLimit(2)
                     .minimumScaleFactor(0.85)
 
-                Text(mode.tagline)
+                Text(tagline)
                     .font(.caption2)
                     .foregroundStyle(isSelected ? Theme.navy.opacity(0.8) : Theme.textSecondary)
                     .multilineTextAlignment(.center)
@@ -992,8 +1039,55 @@ private struct ModeTile: View {
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(mode.title). \(mode.tagline)")
+        .accessibilityLabel("\(title). \(tagline)")
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+    }
+}
+
+/// The Games sub-menu (#207): the six arcade games on their own grid, one
+/// tap from the home screen's Games tile. Same tiles as the home grid, same
+/// one-tap-to-setup behaviour; `onPick` hands the chosen game back to
+/// `IntroView`, which closes this sheet and opens that game's setup.
+private struct GamesMenuView: View {
+    @EnvironmentObject var model: AppModel
+    @Environment(\.dismiss) private var dismiss
+    var onPick: (TrainingMode) -> Void
+
+    private let tileColumns = [GridItem(.flexible(), spacing: 14),
+                               GridItem(.flexible(), spacing: 14)]
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                Theme.Background()
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Arcade practice: every hit and miss feeds your stats, and each game has its own gentle speed ramp.")
+                            .font(.footnote)
+                            .foregroundStyle(Theme.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        LazyVGrid(columns: tileColumns, spacing: 14) {
+                            ForEach(TrainingMode.games) { mode in
+                                ModeTile(mode: mode,
+                                         isSelected: model.learningMode == mode) {
+                                    onPick(mode)
+                                }
+                            }
+                        }
+                    }
+                    .padding(24)
+                    .readableWidth()
+                }
+            }
+            .navigationTitle("Games")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
+        .preferredColorScheme(.dark)
     }
 }
 
