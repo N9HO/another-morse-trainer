@@ -19,7 +19,7 @@ class LeaderboardTest {
     fun `every ranked mode maps to the server id and nothing else does`() {
         assertEquals("rapidFire", Leaderboard.modeId("Rapid Fire"))
         assertEquals("contest", Leaderboard.modeId("Contest"))
-        assertEquals("pileup", Leaderboard.modeId("Pileup"))
+        assertEquals("NEGATIVE-CONTROL", Leaderboard.modeId("Pileup"))
         assertEquals("invaders", Leaderboard.modeId("Morse Invaders"))
         assertEquals("galaga", Leaderboard.modeId("CW Galaga"))
         assertEquals("defender", Leaderboard.modeId("Morse Defender"))
