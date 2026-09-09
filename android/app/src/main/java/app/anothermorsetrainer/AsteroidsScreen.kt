@@ -65,6 +65,8 @@ import app.anothermorsetrainer.morsekit.InvadersCharacterSet
 import app.anothermorsetrainer.morsekit.InvadersDifficulty
 import app.anothermorsetrainer.morsekit.MorseCode
 import app.anothermorsetrainer.morsekit.MorseData
+import app.anothermorsetrainer.morsekit.Leaderboard
+import app.anothermorsetrainer.morsekit.LeaderboardItem
 import app.anothermorsetrainer.morsekit.MorseItem
 import app.anothermorsetrainer.morsekit.MorseTiming
 import app.anothermorsetrainer.morsekit.SessionRecord
@@ -163,6 +165,14 @@ fun AsteroidsScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {
     // time-to-recognize runs from the end of the tone.
     var cueEndMs by remember { mutableStateOf<Long?>(null) }
     val charResults = remember { HashMap<Char, IntArray>() }   // attempts, correct
+    // The shared leaderboard (docs/high-scores-design.md, step 2): the run's
+    // registration and one item per shot or decision, each carrying the
+    // ramp speed it was sent at (the HUD's `wpm`, synced before every item
+    // resolves). Plain state, not saveable: a game the process lost has no
+    // transcript and is never submitted.
+    var lbRun by remember { mutableStateOf<LeaderboardClient.RunHandle?>(null) }
+    val lbItems = remember { ArrayList<LeaderboardItem>() }
+    var lbLine by remember { mutableStateOf<String?>(null) }
 
     // Send mode: the same decoder Sending Practice uses, plus a hardware key.
     val keyer = remember { SendingKeyer(wpm = Settings.characterWpm, toneHz = Settings.sidetoneHz) }
@@ -199,6 +209,16 @@ fun AsteroidsScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {
         lastSeenMs = System.currentTimeMillis()
     }
 
+    /** Hand the finished game's transcript to the leaderboard; the end card shows the reply when it lands. */
+    fun submitLeaderboard() {
+        val h = lbRun ?: return
+        lbRun = null
+        val items = lbItems.toList()
+        if (items.isEmpty()) return
+        lbLine = context.getString(R.string.leaderboard_submitting)
+        LeaderboardClient.submit(h, items) { lbLine = it }
+    }
+
     fun recordRun(attempts: Int, correct: Int, seconds: Int) {
         if (attempts <= 0) return
         val results = charResults.map { (ch, a) -> SessionRecord.CharResult(ch.toString(), a[0], a[1], null) }
@@ -211,6 +231,7 @@ fun AsteroidsScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {
             charResults = results,
             activeCharacters = if (results.isEmpty()) emptyList() else engine.activeCharacters.map { it.toString() }
         )
+        submitLeaderboard()
     }
 
     fun tally(ch: Char, correct: Boolean) {
@@ -241,6 +262,13 @@ fun AsteroidsScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {
         cueEndMs = null
         flash = null
         startedAtMs = System.currentTimeMillis()
+        lbItems.clear()
+        lbLine = null
+        lbRun = LeaderboardClient.beginRun(
+            statsMode = "CW Asteroids",
+            characterWpm = Settings.characterWpm.roundToInt(),
+            effectiveWpm = Settings.effectiveWpmInUse.roundToInt()
+        )
         syncHud(g)
         phase = AstPhase.RUNNING
     }
@@ -294,6 +322,8 @@ fun AsteroidsScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {
                         engine.noteAttempt(ch, ch, ttr)
                         tally(ch, true)
                     }
+                    // One item per asteroid: its whole label, however long.
+                    lbItems.add(LeaderboardItem(hit.label, hit.label, Leaderboard.clampReaction((ttr * 1000).toLong()), wpm))
                 }
                 cueEndMs = null
                 shot.cued?.let { cue(it, g) }
@@ -308,6 +338,7 @@ fun AsteroidsScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {
                 if (expected != null) {
                     if (chosen != null) engine.noteAttempt(chosen, expected, 0.0) else engine.noteMiss(expected)
                     tally(expected, false)
+                    lbItems.add(LeaderboardItem(expected.toString(), chosen?.toString() ?: "", 0, wpm))
                 } else {
                     runAttempts += 1
                 }
@@ -359,6 +390,7 @@ fun AsteroidsScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {
                             engine.noteMiss(ch)
                             tally(ch, false)
                         }
+                        lbItems.add(LeaderboardItem(event.asteroid.label, "", 0, wpm))
                         if (Settings.hapticsEnabled) haptics.error()
                         flash = "${event.asteroid.label} hit the ship" to System.currentTimeMillis() + 1000
                     }
@@ -416,6 +448,7 @@ fun AsteroidsScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {
                     score = score, wave = wave, bestCombo = bestCombo,
                     accuracy = if (gameHits + gameMisses == 0) 0.0 else gameHits.toDouble() / (gameHits + gameMisses),
                     bestWpm = if (input == AsteroidsInput.COPY) bestWpm else null,
+                    leaderboard = lbLine,
                     onAgain = { startGame() },
                     onBack = onBack
                 )
@@ -645,6 +678,7 @@ private fun AsteroidsRun(
 private fun AsteroidsOver(
     score: Int, wave: Int, bestCombo: Int, accuracy: Double,
     bestWpm: Int?,
+    leaderboard: String?,
     onAgain: () -> Unit, onBack: () -> Unit
 ) {
     Column(
@@ -667,6 +701,10 @@ private fun AsteroidsOver(
             // The speed the ramp reached; null in send mode, which sends nothing.
             if (bestWpm != null) {
                 Text(stringResource(R.string.asteroids_speed_reached, bestWpm), style = MaterialTheme.typography.bodySmall, color = Brand.textSecondary)
+            }
+            // The shared leaderboard's reply, or why the game was not posted; nothing when not opted in.
+            if (leaderboard != null) {
+                Text(leaderboard, style = MaterialTheme.typography.bodySmall, color = Brand.textSecondary)
             }
             Button(
                 onClick = onAgain,

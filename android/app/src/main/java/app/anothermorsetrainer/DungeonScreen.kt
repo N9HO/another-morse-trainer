@@ -67,6 +67,7 @@ import app.anothermorsetrainer.morsekit.DungeonSpells
 import app.anothermorsetrainer.morsekit.InvadersCharacterSet
 import app.anothermorsetrainer.morsekit.InvadersDifficulty
 import app.anothermorsetrainer.morsekit.MorseCode
+import app.anothermorsetrainer.morsekit.LeaderboardItem
 import app.anothermorsetrainer.morsekit.MorseItem
 import app.anothermorsetrainer.morsekit.SessionRecord
 import kotlin.math.roundToInt
@@ -216,6 +217,14 @@ fun DungeonScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
     var lastSeenMs by rememberSaveable { mutableLongStateOf(0L) }
     var flash by remember { mutableStateOf<Pair<String, Long>?>(null) }
     val charResults = remember { HashMap<Char, IntArray>() }   // attempts, correct
+    // The shared leaderboard (docs/high-scores-design.md, step 2): the run's
+    // registration and one item per shot or decision, each carrying the
+    // ramp speed it was sent at (the HUD's `wpm`, synced before every item
+    // resolves). Plain state, not saveable: a game the process lost has no
+    // transcript and is never submitted.
+    var lbRun by remember { mutableStateOf<LeaderboardClient.RunHandle?>(null) }
+    val lbItems = remember { ArrayList<LeaderboardItem>() }
+    var lbLine by remember { mutableStateOf<String?>(null) }
 
     // The key: the same decoder Sending Practice uses, plus a hardware key.
     val keyer = remember { SendingKeyer(wpm = Settings.characterWpm, toneHz = Settings.sidetoneHz) }
@@ -261,6 +270,16 @@ fun DungeonScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
         lastSeenMs = System.currentTimeMillis()
     }
 
+    /** Hand the finished game's transcript to the leaderboard; the end card shows the reply when it lands. */
+    fun submitLeaderboard() {
+        val h = lbRun ?: return
+        lbRun = null
+        val items = lbItems.toList()
+        if (items.isEmpty()) return
+        lbLine = context.getString(R.string.leaderboard_submitting)
+        LeaderboardClient.submit(h, items) { lbLine = it }
+    }
+
     fun recordRun(attempts: Int, correct: Int, seconds: Int) {
         if (attempts <= 0) return
         val results = charResults.map { (ch, a) -> SessionRecord.CharResult(ch.toString(), a[0], a[1], null) }
@@ -273,6 +292,7 @@ fun DungeonScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
             charResults = results,
             activeCharacters = if (results.isEmpty()) emptyList() else engine.activeCharacters.map { it.toString() }
         )
+        submitLeaderboard()
     }
 
     fun tally(ch: Char, correct: Boolean) {
@@ -312,6 +332,13 @@ fun DungeonScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
         flash = null
         keyer.clear()
         startedAtMs = System.currentTimeMillis()
+        lbItems.clear()
+        lbLine = null
+        lbRun = LeaderboardClient.beginRun(
+            statsMode = "CW Dungeon",
+            characterWpm = Settings.characterWpm.roundToInt(),
+            effectiveWpm = Settings.effectiveWpmInUse.roundToInt()
+        )
         syncScene(g)
         syncHud(g)
         phase = DgnPhase.RUNNING
@@ -360,6 +387,9 @@ fun DungeonScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
         val result = g.cast(word) ?: return
         player.stop()
         noteOutcomes(DungeonGame.characterOutcomes(result.spell.counter, result.keyed))
+        // The counter word is the item: keyed right, it is sent back as the
+        // word itself; keyed wrong (or echoed), as what was keyed.
+        lbItems.add(LeaderboardItem(result.spell.counter, if (result.isCountered) result.spell.counter else result.keyed, 0, wpm))
         keyer.clear()
         val now = System.currentTimeMillis()
         if (result.isCountered) {
@@ -405,6 +435,7 @@ fun DungeonScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
                         // Late: whatever was keyed is graded against the
                         // counter, and the rest of it is missed.
                         noteOutcomes(DungeonGame.characterOutcomes(event.cast.spell.counter, keyer.decodedText.trim()))
+                        lbItems.add(LeaderboardItem(event.cast.spell.counter, keyer.decodedText.trim().uppercase(), 0, wpm))
                         keyer.clear()
                         if (Settings.hapticsEnabled) haptics.error()
                         flash = "${event.cast.spell.spell} hit you — ${event.cast.spell.counter}" to System.currentTimeMillis() + 1200
@@ -469,6 +500,7 @@ fun DungeonScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
                     score = score, roomsCleared = roomsCleared, bestCombo = bestCombo,
                     accuracy = if (runAttempts == 0) 0.0 else runCorrect.toDouble() / runAttempts,
                     bestWpm = bestWpm,
+                    leaderboard = lbLine,
                     onAgain = { startGame() },
                     onBack = onBack
                 )
@@ -717,6 +749,7 @@ private fun DungeonRun(
 private fun DungeonOver(
     score: Int, roomsCleared: Int, bestCombo: Int, accuracy: Double,
     bestWpm: Int,
+    leaderboard: String?,
     onAgain: () -> Unit, onBack: () -> Unit
 ) {
     Column(
@@ -737,6 +770,10 @@ private fun DungeonOver(
                 DgnStat(stringResource(R.string.dungeon_best_combo), bestCombo.toString())
             }
             Text(stringResource(R.string.dungeon_speed_reached, bestWpm), style = MaterialTheme.typography.bodySmall, color = Brand.textSecondary)
+            // The shared leaderboard's reply, or why the game was not posted; nothing when not opted in.
+            if (leaderboard != null) {
+                Text(leaderboard, style = MaterialTheme.typography.bodySmall, color = Brand.textSecondary)
+            }
             Button(
                 onClick = onAgain,
                 colors = ButtonDefaults.buttonColors(containerColor = Brand.teal, contentColor = Brand.navy),

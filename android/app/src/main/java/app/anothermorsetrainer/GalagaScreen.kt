@@ -74,6 +74,8 @@ import app.anothermorsetrainer.morsekit.InvadersDifficulty
 import app.anothermorsetrainer.morsekit.InvadersInput
 import app.anothermorsetrainer.morsekit.InvadersKeyboard
 import app.anothermorsetrainer.morsekit.MorseCode
+import app.anothermorsetrainer.morsekit.Leaderboard
+import app.anothermorsetrainer.morsekit.LeaderboardItem
 import app.anothermorsetrainer.morsekit.MorseItem
 import app.anothermorsetrainer.morsekit.MorseTiming
 import app.anothermorsetrainer.morsekit.SessionRecord
@@ -167,6 +169,14 @@ fun GalagaScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) 
     // hit's time-to-recognize runs from the end of the tone.
     val toneEnd = remember { HashMap<Int, Long>() }
     val charResults = remember { HashMap<Char, IntArray>() }   // attempts, correct
+    // The shared leaderboard (docs/high-scores-design.md, step 2): the run's
+    // registration and one item per shot or decision, each carrying the
+    // ramp speed it was sent at (the HUD's `wpm`, synced before every item
+    // resolves). Plain state, not saveable: a game the process lost has no
+    // transcript and is never submitted.
+    var lbRun by remember { mutableStateOf<LeaderboardClient.RunHandle?>(null) }
+    val lbItems = remember { ArrayList<LeaderboardItem>() }
+    var lbLine by remember { mutableStateOf<String?>(null) }
 
     // Send mode: the same decoder Sending Practice uses, plus a hardware key.
     val keyer = remember { SendingKeyer(wpm = Settings.characterWpm, toneHz = Settings.sidetoneHz) }
@@ -201,6 +211,16 @@ fun GalagaScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) 
         lastSeenMs = System.currentTimeMillis()
     }
 
+    /** Hand the finished game's transcript to the leaderboard; the end card shows the reply when it lands. */
+    fun submitLeaderboard() {
+        val h = lbRun ?: return
+        lbRun = null
+        val items = lbItems.toList()
+        if (items.isEmpty()) return
+        lbLine = context.getString(R.string.leaderboard_submitting)
+        LeaderboardClient.submit(h, items) { lbLine = it }
+    }
+
     fun recordRun(attempts: Int, correct: Int, seconds: Int) {
         if (attempts <= 0) return
         val results = charResults.map { (ch, a) -> SessionRecord.CharResult(ch.toString(), a[0], a[1], null) }
@@ -213,6 +233,7 @@ fun GalagaScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) 
             charResults = results,
             activeCharacters = if (results.isEmpty()) emptyList() else engine.activeCharacters.map { it.toString() }
         )
+        submitLeaderboard()
     }
 
     fun tally(ch: Char, correct: Boolean) {
@@ -233,6 +254,13 @@ fun GalagaScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) 
         charResults.clear()
         flash = null
         startedAtMs = System.currentTimeMillis()
+        lbItems.clear()
+        lbLine = null
+        lbRun = LeaderboardClient.beginRun(
+            statsMode = "CW Galaga",
+            characterWpm = Settings.characterWpm.roundToInt(),
+            effectiveWpm = Settings.effectiveWpmInUse.roundToInt()
+        )
         syncHud(g)
         phase = GalPhase.RUNNING
     }
@@ -286,6 +314,7 @@ fun GalagaScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) 
             val ttr = if (end != null) ((now - end).coerceAtLeast(0)) / 1000.0 else 0.0
             engine.noteAttempt(hit.character, hit.character, ttr)
             tally(hit.character, true)
+            lbItems.add(LeaderboardItem(hit.character.toString(), hit.character.toString(), Leaderboard.clampReaction((ttr * 1000).toLong()), wpm))
             if (Settings.hapticsEnabled) haptics.success()
             flash = (if (shot.waveCleared) "Wave ${g.wave}!" else "+${shot.points}") to now + 800
         } else {
@@ -293,6 +322,7 @@ fun GalagaScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) 
             if (threat != null) {
                 engine.noteAttempt(character.uppercaseChar(), threat.character, 0.0)
                 tally(threat.character, false)
+                lbItems.add(LeaderboardItem(threat.character.toString(), character.uppercaseChar().toString(), 0, wpm))
             }
             if (Settings.hapticsEnabled) haptics.error()
             flash = "miss" to now + 600
@@ -322,6 +352,7 @@ fun GalagaScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) 
                         toneEnd.remove(event.enemy.id)
                         engine.noteMiss(event.enemy.character)
                         tally(event.enemy.character, false)
+                        lbItems.add(LeaderboardItem(event.enemy.character.toString(), "", 0, wpm))
                         if (Settings.hapticsEnabled) haptics.error()
                         flash = "${event.enemy.character} got through" to System.currentTimeMillis() + 1000
                     }
@@ -400,6 +431,7 @@ fun GalagaScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) 
                     score = score, wave = wave, bestCombo = bestCombo,
                     accuracy = if (runAttempts == 0) 0.0 else runCorrect.toDouble() / runAttempts,
                     bestWpm = if (input == InvadersInput.ICR) bestWpm else null,
+                    leaderboard = lbLine,
                     onAgain = { startGame() },
                     onBack = onBack
                 )
@@ -685,6 +717,7 @@ private fun GalagaKeyRows(pool: List<Char>, onShoot: (Char) -> Unit) {
 private fun GalagaOver(
     score: Int, wave: Int, bestCombo: Int, accuracy: Double,
     bestWpm: Int?,
+    leaderboard: String?,
     onAgain: () -> Unit, onBack: () -> Unit
 ) {
     Column(
@@ -707,6 +740,10 @@ private fun GalagaOver(
             // The speed the ramp reached; null in send mode, which sends nothing.
             if (bestWpm != null) {
                 Text(stringResource(R.string.invaders_speed_reached, bestWpm), style = MaterialTheme.typography.bodySmall, color = Brand.textSecondary)
+            }
+            // The shared leaderboard's reply, or why the game was not posted; nothing when not opted in.
+            if (leaderboard != null) {
+                Text(leaderboard, style = MaterialTheme.typography.bodySmall, color = Brand.textSecondary)
             }
             Button(
                 onClick = onAgain,

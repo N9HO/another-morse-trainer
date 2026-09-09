@@ -128,6 +128,14 @@ the iOS app's navy/teal look.
   recognition charts, per-character stats, most-confused pairs, performance
   by 5-WPM speed band, a shareable Brag Sheet, and personal bests including
   your best score in each arcade game, Contest, Pileup Runner and Rapid Fire
+- **Leaderboard**: an opt-in shared board across both apps for Rapid Fire,
+  Contest, Pileup Runner and the six arcade games, reached from Progress.
+  Off by default; turn it on in Settings › Leaderboard with a display name.
+  Each finished run's transcript (what was sent, what you answered) is graded
+  by the server, which ranks the speed summed over the items you copied
+  correctly, so a game's board number is not its on-screen score. Posting
+  needs a genuine Play-installed build (Play Integrity); a "Delete my scores"
+  button removes everything this install posted
 - Timed practice sessions (1-30 min or open-ended) with mid-session timer
   controls and an end-of-session summary, and a mode switcher that jumps
   between drills without going home

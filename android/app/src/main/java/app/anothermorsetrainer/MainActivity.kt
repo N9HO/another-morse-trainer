@@ -32,6 +32,7 @@ class MainActivity : ComponentActivity() {
         JourneyStore.init(this)
         EngineStore.init(this)
         VoiceProfileStore.init(this)
+        LeaderboardClient.init(this)
         setContent {
             AmtTheme {
                 AppBackground {
@@ -146,6 +147,8 @@ private sealed interface Route {
     data object DailyDit : Route
     data object Settings : Route
     data object Stats : Route
+    /** The shared leaderboard, opened from Stats (docs/high-scores-design.md, step 2). */
+    data object Leaderboard : Route
 }
 
 /**
@@ -192,6 +195,7 @@ private fun routeTag(route: Route): String = when (route) {
     Route.DailyDit -> "dailyDit"
     Route.Settings -> "settings"
     Route.Stats -> "stats"
+    Route.Leaderboard -> "leaderboard"
 }
 
 private fun routeFrom(tag: String): Route? = when (tag) {
@@ -223,6 +227,7 @@ private fun routeFrom(tag: String): Route? = when (tag) {
     "dailyDit" -> Route.DailyDit
     "settings" -> Route.Settings
     "stats" -> Route.Stats
+    "leaderboard" -> Route.Leaderboard
     // Keyed by title rather than list index: a mode reordered in QUIZ_MODES
     // between save and restore would otherwise silently resume the wrong quiz.
     else -> tag.removePrefix("quiz:").takeIf { it != tag }
@@ -417,7 +422,9 @@ private fun AppRoot() {
                     ?.let { route = Route.Quiz(it) } ?: run { route = Route.Home }
             }
         )
-        Route.Stats -> StatsScreen(onBack = { route = Route.Home })
+        Route.Stats -> StatsScreen(onBack = { route = Route.Home }, onOpenLeaderboard = { route = Route.Leaderboard })
+        // Back from the board lands on Stats, where it was opened from.
+        Route.Leaderboard -> LeaderboardScreen(onBack = { route = Route.Stats })
     }
 
     setup?.let { target ->

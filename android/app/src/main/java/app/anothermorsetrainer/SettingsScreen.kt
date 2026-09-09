@@ -50,6 +50,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -64,10 +65,12 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.anothermorsetrainer.morsekit.Leaderboard
 import app.anothermorsetrainer.morsekit.MorseCode
 import app.anothermorsetrainer.morsekit.MorseItem
 import app.anothermorsetrainer.morsekit.ProgressiveCharacters
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
 /**
@@ -171,6 +174,14 @@ fun SettingsScreen(
 
     var confirmReset by remember { mutableStateOf(false) }
     var showLicenses by remember { mutableStateOf(false) }
+
+    // "Delete my scores" (docs/high-scores-design.md §5): confirm, call the
+    // server, say what happened. The call is attested like a run start, so it
+    // can take a few seconds; the row shows that rather than going dead.
+    val uiScope = rememberCoroutineScope()
+    var confirmDeleteScores by remember { mutableStateOf(false) }
+    var deletingScores by remember { mutableStateOf(false) }
+    var deleteScoresNote by remember { mutableStateOf<String?>(null) }
 
     // "Copy diagnostic info" (iOS issue #31): a two-second "Copied" confirmation.
     val haptics = remember { Haptics(context) }
@@ -677,6 +688,82 @@ fun SettingsScreen(
                 }
                 SectionFooter(stringResource(R.string.settings_reminders_footer))
 
+                // The shared leaderboard (docs/high-scores-design.md, step 2):
+                // opt-in, off by default, a display name the server's rule
+                // accepts, and the delete button both stores require. The
+                // toggle is offered even before the maintainer has filled the
+                // Cloud project number, so the preference survives into the
+                // build that turns attestation on; the footnote says why
+                // nothing is posted meanwhile.
+                SectionHeader(stringResource(R.string.settings_leaderboard))
+                SettingsGroup {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            stringResource(R.string.settings_leaderboard_share),
+                            color = Brand.textPrimary, fontWeight = FontWeight.Medium,
+                            modifier = Modifier.weight(1f).padding(end = 12.dp)
+                        )
+                        Switch(
+                            checked = Settings.leaderboardEnabled,
+                            onCheckedChange = { Settings.updateLeaderboardEnabled(it) },
+                            colors = switchColors()
+                        )
+                    }
+                    if (Settings.leaderboardEnabled) {
+                        GroupDivider()
+                        val nameOk = Leaderboard.isValidDisplayName(Settings.leaderboardName)
+                        OutlinedTextField(
+                            value = Settings.leaderboardName,
+                            onValueChange = { Settings.updateLeaderboardName(it) },
+                            label = { Text(stringResource(R.string.settings_leaderboard_name)) },
+                            placeholder = { Text(stringResource(R.string.settings_leaderboard_name_hint)) },
+                            singleLine = true,
+                            isError = Settings.leaderboardName.isNotEmpty() && !nameOk,
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)
+                        )
+                        if (!nameOk) {
+                            Text(
+                                stringResource(R.string.settings_leaderboard_name_invalid),
+                                color = Brand.warning, fontSize = 12.sp,
+                                modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp)
+                            )
+                        }
+                        GroupDivider()
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable(enabled = !deletingScores) { confirmDeleteScores = true }
+                                .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                stringResource(if (deletingScores) R.string.settings_leaderboard_deleting else R.string.settings_leaderboard_delete),
+                                color = if (deletingScores) Brand.textSecondary else Color(0xFFF2788F),
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                        deleteScoresNote?.let { note ->
+                            Text(
+                                note, color = Brand.textSecondary, fontSize = 12.sp,
+                                modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp)
+                            )
+                        }
+                    }
+                    if (!LeaderboardClient.isConfigured) {
+                        GroupDivider()
+                        Text(
+                            stringResource(R.string.settings_leaderboard_unconfigured),
+                            color = Brand.warning, fontSize = 12.sp,
+                            modifier = Modifier.padding(16.dp)
+                        )
+                    }
+                }
+                SectionFooter(stringResource(R.string.settings_leaderboard_footer))
+
                 // Developer aid (iOS `previewStage`): jump the Characters track
                 // to a stage and start drilling it. Shown where the Track-stage
                 // pin is, since both act on the same shared ladder.
@@ -803,6 +890,34 @@ fun SettingsScreen(
         )
     }
 
+    if (confirmDeleteScores) {
+        AlertDialog(
+            onDismissRequest = { confirmDeleteScores = false },
+            containerColor = Brand.navyElevated,
+            title = { Text(stringResource(R.string.settings_leaderboard_delete_confirm_title), color = Brand.textPrimary) },
+            text = { Text(stringResource(R.string.settings_leaderboard_delete_confirm_body), color = Brand.textSecondary) },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmDeleteScores = false
+                    deletingScores = true
+                    deleteScoresNote = null
+                    uiScope.launch {
+                        val failure = LeaderboardClient.deleteMyScores()
+                        deletingScores = false
+                        deleteScoresNote = if (failure == null) {
+                            context.getString(R.string.settings_leaderboard_delete_done)
+                        } else {
+                            context.getString(R.string.settings_leaderboard_delete_failed, failure)
+                        }
+                    }
+                }) { Text(stringResource(R.string.settings_leaderboard_delete), color = Color(0xFFF2788F), fontWeight = FontWeight.SemiBold) }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmDeleteScores = false }) { Text(stringResource(R.string.common_cancel), color = Brand.teal) }
+            }
+        )
+    }
+
     // The notices the licenses oblige the app to carry (iOS parity). The GPL
     // asks an interactive program to show its terms and no-warranty statement,
     // and the vendored decoder's MIT notice must accompany every copy — the
@@ -829,6 +944,17 @@ fun SettingsScreen(
                     Text(
                         stringResource(R.string.licenses_cw_decoder_mit),
                         color = Brand.textSecondary, fontSize = 12.sp, fontFamily = FontFamily.Monospace
+                    )
+                    // The Play Integrity SDK behind the shared leaderboard
+                    // (CLAUDE.md, Licensing: a dependency with a notice goes
+                    // here). Not open source: Google's SDK licence and the
+                    // Play Integrity terms, linked rather than reproduced.
+                    Text(stringResource(R.string.licenses_play_integrity_title), color = Brand.textPrimary, fontWeight = FontWeight.SemiBold)
+                    Text(stringResource(R.string.licenses_play_integrity_footer), color = Brand.textSecondary, fontSize = 13.sp)
+                    Text(
+                        stringResource(R.string.licenses_play_integrity_link),
+                        color = Brand.teal, fontWeight = FontWeight.Medium,
+                        modifier = Modifier.clickable { uriHandler.openUri(PLAY_INTEGRITY_TERMS_URL) }
                     )
                 }
             },
@@ -1153,6 +1279,8 @@ private const val SUPPORT_URL = "https://anothermorsetrainer.app/support/"
 private const val DISCORD_URL = "https://discord.gg/qgyk3TPUd9"
 private const val GITHUB_URL = "https://github.com/N9HO/another-morse-trainer"
 private const val LICENSE_URL = "https://github.com/N9HO/another-morse-trainer/blob/main/LICENSE"
+/** The licence the Play Integrity artifact's POM names (integrity-1.6.0.pom). */
+private const val PLAY_INTEGRITY_TERMS_URL = "https://developer.android.com/google/play/integrity/overview#tos"
 
 /** A tappable row that opens something outside the app; teal like the
  *  diagnostics row, so it reads as an action rather than a toggle. */

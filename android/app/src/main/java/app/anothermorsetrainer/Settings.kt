@@ -358,6 +358,24 @@ object Settings {
     var onboardingDone by mutableStateOf(false)
         private set
 
+    // ---- Shared leaderboard (docs/high-scores-design.md, step 2) ----
+
+    /**
+     * Post finished ranked runs to the shared leaderboard. Off by default and
+     * off for every existing install: scores leaving the device is opt-in on
+     * both apps (design §5), and the store listings' data disclosures assume
+     * it.
+     */
+    var leaderboardEnabled by mutableStateOf(false)
+        private set
+    /**
+     * The name shown on the board, as typed (upper-cased, capped at the
+     * server's 12). Validated by `Leaderboard.normalizeDisplayName` where it
+     * is used; an invalid name means a run is not submitted, never a crash.
+     */
+    var leaderboardName by mutableStateOf("")
+        private set
+
     // Daily practice reminder (a notification to keep the streak alive).
     var remindersEnabled by mutableStateOf(false)
         private set
@@ -500,6 +518,8 @@ object Settings {
         introduceNewCharacters = prefs.getBoolean("introduceNew", true)
         introducedItems = prefs.getStringSet("introducedItems", null)?.toSet() ?: emptySet()
         onboardingDone = prefs.getBoolean("onboardingDone", false)
+        leaderboardEnabled = prefs.getBoolean("leaderboardEnabled", false)
+        leaderboardName = (prefs.getString("leaderboardName", "") ?: "").take(LEADERBOARD_NAME_MAX)
         remindersEnabled = prefs.getBoolean("reminders", false)
         reminderHour = prefs.getInt("reminderHour", 19)
         reminderMinute = prefs.getInt("reminderMinute", 0)
@@ -774,6 +794,24 @@ object Settings {
         persist()
     }
 
+    /** The server's display-name cap (leaderboard repo `src/names.ts`). */
+    const val LEADERBOARD_NAME_MAX = 12
+
+    fun updateLeaderboardEnabled(value: Boolean) {
+        leaderboardEnabled = value
+        persist()
+    }
+
+    /**
+     * Kept as typed apart from case and length, so a space can be typed
+     * mid-name; trimming and the character rule are applied where the name
+     * is used, not here.
+     */
+    fun updateLeaderboardName(value: String) {
+        leaderboardName = value.uppercase().take(LEADERBOARD_NAME_MAX)
+        persist()
+    }
+
     fun updateReminderTime(hour: Int, minute: Int) {
         reminderHour = hour.coerceIn(0, 23)
         reminderMinute = minute.coerceIn(0, 59)
@@ -951,6 +989,8 @@ object Settings {
             putBoolean("introduceNew", introduceNewCharacters)
             putStringSet("introducedItems", introducedItems)
             putBoolean("onboardingDone", onboardingDone)
+            putBoolean("leaderboardEnabled", leaderboardEnabled)
+            putString("leaderboardName", leaderboardName)
             putBoolean("reminders", remindersEnabled)
             putInt("reminderHour", reminderHour)
             putInt("reminderMinute", reminderMinute)
