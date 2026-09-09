@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- App Attest, for the shared leaderboard (docs/high-scores-design.md,
+	     step 2): the server verifies each score submission came from this
+	     app, signed by this team, on a real device. Enabled on the App ID in
+	     the developer portal on 2026-09-08. The capability is the same in
+	     TestFlight and the App Store; only the simulator cannot attest. -->
+	<key>com.apple.developer.devicecheck.appattest-environment</key>
+	<string>production</string>
+</dict>
+</plist>
