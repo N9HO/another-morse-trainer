@@ -63,12 +63,11 @@ object LeaderboardClient {
      *
      * TODO(maintainer): fill this from the Google Cloud console (project
      * `amt-leaderboard`, the numeric "Project number" on the dashboard, not
-     * the project id) once the project is linked in Play Console, before the
-     * release that ships the leaderboard. 0 means "not configured": the
+     * the project id), linked in Play Console. 0 would mean "not configured": the
      * client attests nothing, submits nothing and shows nothing, so a build
      * with this unset behaves as though the feature were off.
      */
-    const val LEADERBOARD_CLOUD_PROJECT_NUMBER = 0L
+    const val LEADERBOARD_CLOUD_PROJECT_NUMBER = 39877526242L   // amt-leaderboard, linked in Play Console 2026-09-08
 
     private const val TAG = "Leaderboard"
     private const val TIMEOUT_SECONDS = 10L
