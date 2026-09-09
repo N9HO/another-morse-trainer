@@ -60,7 +60,6 @@ import app.anothermorsetrainer.morsekit.BustBehavior
 import app.anothermorsetrainer.morsekit.CallsignFormat
 import app.anothermorsetrainer.morsekit.CutNumbers
 import app.anothermorsetrainer.morsekit.LeaderboardItem
-import app.anothermorsetrainer.morsekit.MorseDistance
 import app.anothermorsetrainer.morsekit.MorseItem
 import app.anothermorsetrainer.morsekit.MorseTiming
 import app.anothermorsetrainer.morsekit.MissedCallerFeedback
@@ -224,14 +223,16 @@ fun PileupScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) 
         lastSeenMs = startedAtMs
         lbItems.clear()
         lbLine = null
-        // Callers span the configured speed band; the run is registered at
-        // its floor — the slowest anyone sends — so the board credits the
-        // speed every item was at least sent at. With the pileup's own
-        // Farnsworth on, the effective speed is the stretched spacing the
-        // callers actually use (see toMix). Same rule on iOS.
-        val floor = PileupSettings.minWpm.roundToInt()
-        val effective = if (PileupSettings.callerFarnsworth) minOf(PileupSettings.minWpm, Settings.effectiveWpm).roundToInt() else floor
-        lbRun = LeaderboardClient.beginRun(statsMode = "Pileup", characterWpm = floor, effectiveWpm = effective)
+        // Callers span the configured speed band. The run is registered with
+        // characterWpm = the band's ceiling (the fastest any item could have
+        // been sent, which keeps the server's timing bound honest) and
+        // effectiveWpm = the band's floor (the speed every item was at least
+        // sent at, which is what the board credits). Same rule on iOS.
+        lbRun = LeaderboardClient.beginRun(
+            statsMode = "Pileup",
+            characterWpm = PileupSettings.maxWpm.roundToInt(),
+            effectiveWpm = PileupSettings.minWpm.roundToInt()
+        )
         rev++
         phase = PuPhase.RUNNING
     }
@@ -260,8 +261,9 @@ fun PileupScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) 
             val sent = if (working != null) {
                 "${working.call} ${working.exchange.display}"
             } else {
-                // Hunting a call: the station nearest what was typed is the one being miscopied.
-                e.stations.minByOrNull { MorseDistance.distance(answered, it.call) }?.call
+                // Hunting a call: credited against the first station in the
+                // pileup, the one calling longest. Same rule on iOS.
+                e.stations.firstOrNull()?.call
             }
             if (sent != null) lbItems.add(LeaderboardItem(sent = sent, answered = answered, reactionMs = 0))
         }

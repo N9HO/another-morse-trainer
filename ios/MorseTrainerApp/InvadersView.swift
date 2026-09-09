@@ -383,6 +383,9 @@ struct InvadersView: View {
                                          characterWpm: model.settings.wpm)
         let g = InvadersGame(config: config)
         game = g
+        // Keying mode plays no Morse, so there is no audio for the server's
+        // timing bound to measure: only hear-it runs are ranked (#leaderboard).
+        if input == .keying { model.leaderboardCancelRun() }
         field = []
         toneEnd = [:]
         flashUntil = .distantPast

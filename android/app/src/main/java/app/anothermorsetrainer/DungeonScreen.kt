@@ -387,9 +387,11 @@ fun DungeonScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
         val result = g.cast(word) ?: return
         player.stop()
         noteOutcomes(DungeonGame.characterOutcomes(result.spell.counter, result.keyed))
-        // The counter word is the item: keyed right, it is sent back as the
-        // word itself; keyed wrong (or echoed), as what was keyed.
-        lbItems.add(LeaderboardItem(result.spell.counter, if (result.isCountered) result.spell.counter else result.keyed, 0, wpm))
+        // The spell is the item: it is the Morse that actually played, so the
+        // server's timing bound is honest. Countered in time, the answer is
+        // the spell itself (a correct copy); keyed wrong or echoed, it is
+        // what was keyed. Same rule on iOS.
+        lbItems.add(LeaderboardItem(result.spell.spell, if (result.isCountered) result.spell.spell else result.keyed, 0, wpm))
         keyer.clear()
         val now = System.currentTimeMillis()
         if (result.isCountered) {
@@ -435,7 +437,9 @@ fun DungeonScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
                         // Late: whatever was keyed is graded against the
                         // counter, and the rest of it is missed.
                         noteOutcomes(DungeonGame.characterOutcomes(event.cast.spell.counter, keyer.decodedText.trim()))
-                        lbItems.add(LeaderboardItem(event.cast.spell.counter, keyer.decodedText.trim().uppercase(), 0, wpm))
+                        // Late is never a copy: the answer is what was keyed, which
+                        // cannot equal the spell (it was a counter attempt).
+                        lbItems.add(LeaderboardItem(event.cast.spell.spell, keyer.decodedText.trim().uppercase(), 0, wpm))
                         keyer.clear()
                         if (Settings.hapticsEnabled) haptics.error()
                         flash = "${event.cast.spell.spell} hit you — ${event.cast.spell.counter}" to System.currentTimeMillis() + 1200

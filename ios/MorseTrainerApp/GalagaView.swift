@@ -414,6 +414,9 @@ struct GalagaView: View {
                                        characterWpm: model.settings.wpm)
         let g = GalagaGame(config: config)
         game = g
+        // Keying mode plays no Morse, so there is no audio for the server's
+        // timing bound to measure: only hear-it runs are ranked (#leaderboard).
+        if input == .keying { model.leaderboardCancelRun() }
         field = []
         columns = g.formation.columns
         toneEnd = [:]

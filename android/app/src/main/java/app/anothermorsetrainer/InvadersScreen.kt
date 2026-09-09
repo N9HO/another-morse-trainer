@@ -247,7 +247,9 @@ fun InvadersScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
         startedAtMs = System.currentTimeMillis()
         lbItems.clear()
         lbLine = null
-        lbRun = LeaderboardClient.beginRun(
+        // Keying mode plays no Morse (see it, key it), so there is no audio for
+        // the server's timing bound to measure; only hear-it runs are ranked.
+        lbRun = if (input == InvadersInput.KEYING) null else LeaderboardClient.beginRun(
             statsMode = "Morse Invaders",
             characterWpm = Settings.characterWpm.roundToInt(),
             effectiveWpm = Settings.effectiveWpmInUse.roundToInt()

@@ -367,6 +367,9 @@ struct AsteroidsView: View {
                                           difficulty: difficulty, characterWpm: model.settings.wpm)
         let g = AsteroidsGame(config: config)
         game = g
+        // Keying mode plays no Morse, so there is no audio for the server's
+        // timing bound to measure: only hear-it runs are ranked (#leaderboard).
+        if input == .send { model.leaderboardCancelRun() }
         field = []
         elapsed = 0
         cueEnd = nil

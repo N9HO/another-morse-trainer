@@ -46,7 +46,6 @@ import androidx.compose.ui.unit.sp
 import app.anothermorsetrainer.morsekit.ContestLength
 import app.anothermorsetrainer.morsekit.ContestType
 import app.anothermorsetrainer.morsekit.LeaderboardItem
-import app.anothermorsetrainer.morsekit.MorseDistance
 import app.anothermorsetrainer.morsekit.MorseTiming
 import app.anothermorsetrainer.morsekit.PileupConfig
 import app.anothermorsetrainer.morsekit.PileupEngine
@@ -222,12 +221,16 @@ fun ContestScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
         lastSeenMs = startedAtMs
         lbItems.clear()
         lbLine = null
-        // A contest's callers span a speed band; the run is registered at the
-        // band's floor — the slowest anyone in it sends, character and
-        // effective alike (contest voices carry no Farnsworth) — so the board
-        // credits the speed every item was at least sent at. Same rule on iOS.
-        val floor = contest.minWPM.roundToInt()
-        lbRun = LeaderboardClient.beginRun(statsMode = "Contest", characterWpm = floor, effectiveWpm = floor)
+        // A contest's callers span a speed band. The run is registered with
+        // characterWpm = the band's ceiling (the fastest any item could have
+        // been sent, which keeps the server's timing bound honest) and
+        // effectiveWpm = the band's floor (the speed every item was at least
+        // sent at, which is what the board credits). Same rule on iOS.
+        lbRun = LeaderboardClient.beginRun(
+            statsMode = "Contest",
+            characterWpm = contest.maxWPM.roundToInt(),
+            effectiveWpm = contest.minWPM.roundToInt()
+        )
         rev++
         phase = CtPhase.RUNNING
     }
@@ -255,8 +258,9 @@ fun ContestScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
             val sent = if (working != null) {
                 "${working.call} ${working.exchange.display}"
             } else {
-                // Hunting a call: the station nearest what was typed is the one being miscopied.
-                e.stations.minByOrNull { MorseDistance.distance(answered, it.call) }?.call
+                // Hunting a call: credited against the first station in the
+                // pileup, the one calling longest. Same rule on iOS.
+                e.stations.firstOrNull()?.call
             }
             if (sent != null) lbItems.add(LeaderboardItem(sent = sent, answered = answered, reactionMs = 0))
         }

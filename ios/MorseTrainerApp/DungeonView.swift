@@ -385,7 +385,8 @@ struct DungeonView: View {
             case .attacked(let cast):
                 // Late: whatever was keyed is graded against the counter,
                 // and the rest of it is missed.
-                model.noteDungeonCast(expected: cast.spell.counter, keyed: keyedSoFar, wpm: game.currentWpm)
+                model.noteDungeonCast(spell: cast.spell.spell, expected: cast.spell.counter, keyed: keyedSoFar,
+                                      countered: false, wpm: game.currentWpm)
                 keyReset += 1
                 keyedSoFar = ""
                 Haptics.error()
@@ -402,7 +403,8 @@ struct DungeonView: View {
     private func castWord(_ word: String) {
         guard phase == .playing, let game, let result = game.cast(word) else { return }
         model.stopDungeon()
-        model.noteDungeonCast(expected: result.spell.counter, keyed: result.keyed, wpm: game.currentWpm)
+        model.noteDungeonCast(spell: result.spell.spell, expected: result.spell.counter, keyed: result.keyed,
+                              countered: result.isCountered, wpm: game.currentWpm)
         keyReset += 1
         keyedSoFar = ""
         if result.isCountered {

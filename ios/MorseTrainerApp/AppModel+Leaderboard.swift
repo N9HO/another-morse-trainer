@@ -28,13 +28,19 @@
 //                (the attacker destroyed, or nearest arrival on a wrong
 //                route), answered = the asset tapped or text typed ("" on a
 //                strike).
-//   Dungeon      one per cast: sent = the counter word the player had to
-//                key, answered = what was keyed ("" if nothing).
+//   Dungeon      one per cast: sent = the spell that played, answered = the
+//                spell when countered in time, else what was keyed ("" if
+//                nothing). The counter word never plays, so it is not the
+//                item: the server's clock only knows about audio.
 //   Asteroids    one per asteroid resolved: sent = its label, answered = the
 //                label when destroyed, "" when it struck the ship. A wrong
 //                character keyed mid-label is not an item (the asteroid is
 //                still in play and will resolve one way or the other).
 //   Games' wpm = the engine's `currentWpm`, rounded, at the item.
+//   Keying mode ("see it, key it") in Invaders, Galaga and Asteroids plays
+//   no Morse at all, so those runs are not submitted — only hear-it runs
+//   rank. Dungeon always plays the spell, Defender and Frogger always play
+//   their cues, so they always rank.
 //
 // Run speeds: Rapid Fire and the games send the session timing (character
 // and effective WPM); Contest and Pileup Runner have no single speed — see
@@ -103,6 +109,16 @@ extension AppModel {
         let client = leaderboard
         leaderboardStatus = .pending
         leaderboardRunStart = Task { try await client.startRun(mode: board, speeds: speeds) }
+    }
+
+    /// A game view that started in keying mode calls this: the run token
+    /// request is dropped and nothing is submitted (see the header).
+    func leaderboardCancelRun() {
+        leaderboardRunStart?.cancel()
+        leaderboardRunStart = nil
+        leaderboardTranscript = []
+        leaderboardGeneration += 1
+        leaderboardStatus = .notSubmitted
     }
 
     /// Session end: hand the transcript to the server with the run token and

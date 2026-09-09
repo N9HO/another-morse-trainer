@@ -3273,10 +3273,12 @@ final class AppModel: ObservableObject {
     /// answer would; no time-to-recognize, since a word has no single tone
     /// end to measure from.
     ///
-    /// The leaderboard transcript takes the cast whole: the counter word the
-    /// player had to key against what they keyed, at the ramp's `wpm`.
-    func noteDungeonCast(expected: String, keyed: String, wpm: Double) {
-        noteLeaderboardItem(.ramping(sent: expected, answered: keyed, reaction: 0, wpm: wpm))
+    /// The leaderboard transcript takes the cast whole, as the spell that
+    /// played — the Morse the server's timing bound can account for. Countered
+    /// in time, the answer is the spell itself (a correct copy); keyed wrong,
+    /// echoed or late, it is what was keyed. Same rule on Android.
+    func noteDungeonCast(spell: String, expected: String, keyed: String, countered: Bool, wpm: Double) {
+        noteLeaderboardItem(.ramping(sent: spell, answered: countered ? spell : keyed, reaction: 0, wpm: wpm))
         noteDungeonOutcomes(DungeonGame.characterOutcomes(expected: expected, keyed: keyed))
     }
 

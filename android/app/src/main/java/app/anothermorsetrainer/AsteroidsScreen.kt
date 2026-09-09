@@ -264,7 +264,10 @@ fun AsteroidsScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {
         startedAtMs = System.currentTimeMillis()
         lbItems.clear()
         lbLine = null
-        lbRun = LeaderboardClient.beginRun(
+        // Send mode plays no Morse (see the label, key it), so there is no
+        // audio for the server's timing bound to measure; only hear-it runs
+        // are ranked.
+        lbRun = if (input == AsteroidsInput.SEND) null else LeaderboardClient.beginRun(
             statsMode = "CW Asteroids",
             characterWpm = Settings.characterWpm.roundToInt(),
             effectiveWpm = Settings.effectiveWpmInUse.roundToInt()
@@ -338,7 +341,8 @@ fun AsteroidsScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {
                 if (expected != null) {
                     if (chosen != null) engine.noteAttempt(chosen, expected, 0.0) else engine.noteMiss(expected)
                     tally(expected, false)
-                    lbItems.add(LeaderboardItem(expected.toString(), chosen?.toString() ?: "", 0, wpm))
+                    // Not a leaderboard item: the asteroid is still in play and
+                    // resolves as a hit or a strike. Same rule on iOS.
                 } else {
                     runAttempts += 1
                 }
