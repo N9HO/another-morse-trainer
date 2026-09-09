@@ -1380,9 +1380,21 @@ final class AppModel: ObservableObject {
             return true
         }
         let pre = pileup.phase
+        // For the leaderboard transcript: who this send was aimed at, read
+        // before the engine moves stations around.
+        let expected = pileup.workingStation.map { "\($0.call) \($0.exchangeDisplay)" }
+            ?? pileup.stations.first?.call
+        let bustsBefore = pileup.bustCount
         let action = pileup.send(text)
         perform(selfText: selfSendText(input: text, pre: pre, post: pileup.phase, action: action),
                 action: action)
+        // Leaderboard: a bust is a miscopy — of the exchange of the station
+        // being worked, or of a call while hunting (credited against the
+        // first station in the pileup, the one calling longest). Never
+        // correct; it counts in the run's total, not its metric.
+        if pileup.bustCount > bustsBefore, let expected {
+            noteLeaderboardItem(.fixed(sent: expected, answered: text, reaction: 0))
+        }
         // `perform` refreshes the published QSO state synchronously, so we can
         // read it here. Still hunting = no station being worked and not ready to
         // log → keep the partial if the user opted in, or if this send was a
@@ -1412,6 +1424,13 @@ final class AppModel: ObservableObject {
             qsoLastLogged = call
             sessionAttempts += 1
             sessionCorrect += 1
+            // Leaderboard: a logged QSO is by construction a clean copy (the
+            // engine only offers TU once the exchange graded), so the item is
+            // the log's own line on both sides: "CALL EXCHANGE".
+            if let q = pileup.log.last, q.call == call {
+                let line = "\(q.call) \(q.exchange)"
+                noteLeaderboardItem(.fixed(sent: line, answered: line, reaction: 0))
+            }
             markPracticedToday()   // a worked contact is practice — feed the streak
             Haptics.success()
             loggedContact = true
@@ -1938,6 +1957,9 @@ final class AppModel: ObservableObject {
             voiceRecognizer.requestAuthorization()
             voiceRecognizer.prepareCustomLanguageModel(phrases: voiceUniversePhrases())
         }
+        // The shared leaderboard's run token is issued now, so the server's
+        // clock covers the whole run (AppModel+Leaderboard.swift).
+        leaderboardBeginRun()
         start()
     }
 
@@ -2054,6 +2076,9 @@ final class AppModel: ObservableObject {
         rapidFireGeneration += 1   // cancel any pending Rapid Fire stream
         if isRapidFire || isInvaders || isGalaga || isDefender || isDungeon || isFrogger || isAsteroids { player.stop() }
         phase = .idle
+        // Hand the transcript to the shared leaderboard (a background task;
+        // the summary shows the verdict when it arrives).
+        leaderboardFinishRun()
         if let record = buildSessionRecord() {
             history.add(record)            // triggers saveHistory()
             lastSessionRecord = record
@@ -2122,6 +2147,23 @@ final class AppModel: ObservableObject {
             activeCharacters: active,
             score: modeScore(correct: summary.correct))
     }
+
+    // MARK: - Shared leaderboard (docs/high-scores-design.md, step 2)
+
+    /// The network client and its App Attest key; one per app.
+    let leaderboard = LeaderboardClient()
+    /// This run's transcript, one item per graded thing, appended by the
+    /// same callbacks that feed the session tally (`noteLeaderboardItem`).
+    /// What an item is per mode is documented in AppModel+Leaderboard.swift.
+    var leaderboardTranscript: [LeaderboardTranscriptItem] = []
+    /// The run-token request begun by `startSession`, awaited by the
+    /// submission at `endSession`. Nil when this run is not being posted.
+    var leaderboardRunStart: Task<String, Error>?
+    /// Bumped per session so a slow answer for an earlier run cannot land
+    /// on a later summary.
+    var leaderboardGeneration = 0
+    /// What the summary says about this run's submission.
+    @Published var leaderboardStatus: LeaderboardStatus = .notSubmitted
 
     // MARK: - Per-mode scores (docs/high-scores-design.md, step 1)
 
@@ -2306,8 +2348,13 @@ final class AppModel: ObservableObject {
         // auto-advance at the chosen pace, so the rhythm never stalls. The miss
         // is captured in the transcript for the end-of-session review.
         if isRapidFire {
+            let sent = drill?.correct ?? ""
             rapidFireTranscript.append(
-                RapidFireResult(text: drill?.correct ?? "", typed: choice, correct: outcome.correct))
+                RapidFireResult(text: sent, typed: choice, correct: outcome.correct))
+            // Leaderboard: credited in the target's own form when the quiz
+            // graded it a copy — a serial copied as cut numbers ("TTA" for
+            // 001) is right here and must read as right to the server too.
+            noteLeaderboardItem(.fixed(sent: sent, answered: outcome.correct ? sent : choice, reaction: ttr))
             advanceGeneration += 1
             let token = advanceGeneration
             let gap = settings.rapidFire.pace.seconds
@@ -3092,17 +3139,22 @@ final class AppModel: ObservableObject {
     /// time; a wrong key is a miss confused with `chosen`, so the pair feeds
     /// the Confusion Drill. The session tally and the per-character chart
     /// take it the way a Characters answer would.
-    func noteInvadersShot(target: Character, chosen: Character, ttr: TimeInterval) {
+    ///
+    /// `wpm` is the ramp's character speed at the shot, for the leaderboard
+    /// transcript (the six games rank on the speed of each correct item).
+    func noteInvadersShot(target: Character, chosen: Character, ttr: TimeInterval, wpm: Double) {
         let correct = engine.noteAttempt(answer: chosen, target: target, ttr: ttr)
         noteSessionResult(correct: correct, ttr: ttr, target: String(target))
+        noteLeaderboardItem(.ramping(sent: String(target), answered: String(chosen), reaction: ttr, wpm: wpm))
         saveProgress()
     }
 
     /// An invader reached the ground unanswered: a miss for its character
     /// with no confusion partner.
-    func noteInvadersEscape(target: Character) {
+    func noteInvadersEscape(target: Character, wpm: Double) {
         engine.noteMiss(target: target)
         noteSessionResult(correct: false, ttr: 0, target: String(target))
+        noteLeaderboardItem(.ramping(sent: String(target), answered: "", reaction: 0, wpm: wpm))
         saveProgress()
     }
 
@@ -3128,14 +3180,14 @@ final class AppModel: ObservableObject {
     /// field when the key matched nothing — recorded exactly as an Invaders
     /// shot is: a hit is a correct recognition with its time, a wrong key a
     /// miss confused with `chosen`, so the pair feeds the Confusion Drill.
-    func noteGalagaShot(target: Character, chosen: Character, ttr: TimeInterval) {
-        noteInvadersShot(target: target, chosen: chosen, ttr: ttr)
+    func noteGalagaShot(target: Character, chosen: Character, ttr: TimeInterval, wpm: Double) {
+        noteInvadersShot(target: target, chosen: chosen, ttr: ttr, wpm: wpm)
     }
 
     /// A dive got through unanswered: a miss for its character with no
     /// confusion partner.
-    func noteGalagaLanding(target: Character) {
-        noteInvadersEscape(target: target)
+    func noteGalagaLanding(target: Character, wpm: Double) {
+        noteInvadersEscape(target: target, wpm: wpm)
     }
 
     // MARK: - Morse Defender (#188)
@@ -3160,11 +3212,12 @@ final class AppModel: ObservableObject {
     /// character, position by position, so a copy of K1AB as K1AR records B
     /// confused with R. A shorter answer leaves the unanswered characters as
     /// plain misses.
-    func noteDefenderRoute(target: String, chosen: String, ttr: TimeInterval) {
+    func noteDefenderRoute(target: String, chosen: String, ttr: TimeInterval, wpm: Double) {
         let sent = Array(target.uppercased())
         let answer = Array(chosen.uppercased())
         let correct = sent == answer
         noteSessionResult(correct: correct, ttr: ttr, target: target)
+        noteLeaderboardItem(.ramping(sent: target, answered: chosen, reaction: ttr, wpm: wpm))
         for (i, ch) in sent.enumerated() {
             let charCorrect: Bool
             if i < answer.count {
@@ -3180,8 +3233,9 @@ final class AppModel: ObservableObject {
 
     /// An attacker reached its asset unanswered: a miss for every character
     /// of the callsign it sent, with no confusion partner.
-    func noteDefenderStrike(callsign: String) {
+    func noteDefenderStrike(callsign: String, wpm: Double) {
         noteSessionResult(correct: false, ttr: 0, target: callsign)
+        noteLeaderboardItem(.ramping(sent: callsign, answered: "", reaction: 0, wpm: wpm))
         for ch in callsign.uppercased() {
             engine.noteMiss(target: ch)
             noteDefenderCharacter(ch, correct: false, ttr: 0)
@@ -3218,7 +3272,15 @@ final class AppModel: ObservableObject {
     /// tally and the per-character chart take each the way a Characters
     /// answer would; no time-to-recognize, since a word has no single tone
     /// end to measure from.
-    func noteDungeonOutcomes(_ outcomes: [DungeonCharacterOutcome]) {
+    ///
+    /// The leaderboard transcript takes the cast whole: the counter word the
+    /// player had to key against what they keyed, at the ramp's `wpm`.
+    func noteDungeonCast(expected: String, keyed: String, wpm: Double) {
+        noteLeaderboardItem(.ramping(sent: expected, answered: keyed, reaction: 0, wpm: wpm))
+        noteDungeonOutcomes(DungeonGame.characterOutcomes(expected: expected, keyed: keyed))
+    }
+
+    private func noteDungeonOutcomes(_ outcomes: [DungeonCharacterOutcome]) {
         guard !outcomes.isEmpty else { return }
         for o in outcomes {
             if let chosen = o.chosen {
@@ -3255,13 +3317,13 @@ final class AppModel: ObservableObject {
     /// with its time; a wrong vehicle or log is a miss confused with the
     /// label the frog chose, so the pair feeds the Confusion Drill. Recorded
     /// exactly as an Invaders shot.
-    func noteFroggerDecision(target: Character, chosen: Character, ttr: TimeInterval) {
-        noteInvadersShot(target: target, chosen: chosen, ttr: ttr)
+    func noteFroggerDecision(target: Character, chosen: Character, ttr: TimeInterval, wpm: Double) {
+        noteInvadersShot(target: target, chosen: chosen, ttr: ttr, wpm: wpm)
     }
 
     /// The frog landed in the water: a miss on the cue with no confusion partner.
-    func noteFroggerMiss(target: Character) {
-        noteInvadersEscape(target: target)
+    func noteFroggerMiss(target: Character, wpm: Double) {
+        noteInvadersEscape(target: target, wpm: wpm)
     }
 
     // MARK: - CW Asteroids (#189)
@@ -3286,11 +3348,13 @@ final class AppModel: ObservableObject {
     /// recognition with the time it took (copy mode) or 0 (send mode). The
     /// session tally and the per-character chart take each the way a
     /// Characters answer would.
-    func noteAsteroidsHit(label: String, ttr: TimeInterval) {
+    func noteAsteroidsHit(label: String, ttr: TimeInterval, wpm: Double) {
         for ch in label {
             _ = engine.noteAttempt(answer: ch, target: ch, ttr: ttr)
             noteSessionResult(correct: true, ttr: ttr, target: String(ch))
         }
+        // Leaderboard: the asteroid whole, as one copied label.
+        noteLeaderboardItem(.ramping(sent: label, answered: label, reaction: ttr, wpm: wpm))
         saveProgress()
     }
 
@@ -3311,11 +3375,12 @@ final class AppModel: ObservableObject {
 
     /// An asteroid reached the ship: a miss for every character of its label
     /// with no confusion partner.
-    func noteAsteroidsStrike(label: String) {
+    func noteAsteroidsStrike(label: String, wpm: Double) {
         for ch in label {
             engine.noteMiss(target: ch)
             noteSessionResult(correct: false, ttr: 0, target: String(ch))
         }
+        noteLeaderboardItem(.ramping(sent: label, answered: "", reaction: 0, wpm: wpm))
         saveProgress()
     }
 

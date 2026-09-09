@@ -391,7 +391,7 @@ struct AsteroidsView: View {
             case .cued(let a):
                 cue(a, now: now, wpm: game.currentWpm)
             case .struck(let a):
-                model.noteAsteroidsStrike(label: a.label)
+                model.noteAsteroidsStrike(label: a.label, wpm: game.currentWpm)
                 Haptics.error()
                 flash("\(a.label) hit the ship", for: 1.0)
             case .gameOver:
@@ -428,7 +428,7 @@ struct AsteroidsView: View {
         case .hit:
             if let hit = shot.asteroid {
                 let ttr = cueEnd.map { max(0, now.timeIntervalSince($0)) } ?? 0
-                model.noteAsteroidsHit(label: hit.label, ttr: ttr)
+                model.noteAsteroidsHit(label: hit.label, ttr: ttr, wpm: game.currentWpm)
             }
             cueEnd = nil
             if let next = shot.cued { cue(next, now: now, wpm: game.currentWpm) }

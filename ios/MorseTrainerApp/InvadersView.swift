@@ -409,7 +409,7 @@ struct InvadersView: View {
                 }
             case .escaped(let inv):
                 toneEnd[inv.id] = nil
-                model.noteInvadersEscape(target: inv.character)
+                model.noteInvadersEscape(target: inv.character, wpm: game.currentWpm)
                 Haptics.error()
                 flash("\(inv.character) got through", for: 1.0)
             case .gameOver:
@@ -429,14 +429,15 @@ struct InvadersView: View {
         if let hit = shot.invader {
             let ttr = toneEnd[hit.id].map { max(0, now.timeIntervalSince($0)) } ?? 0
             toneEnd[hit.id] = nil
-            model.noteInvadersShot(target: hit.character, chosen: hit.character, ttr: ttr)
+            model.noteInvadersShot(target: hit.character, chosen: hit.character, ttr: ttr, wpm: game.currentWpm)
             Haptics.success()
             flash(shot.waveCleared ? "Wave \(game.wave)!" : "+\(shot.points)", for: 0.8)
         } else {
             // A wrong key: confused with whatever was nearest the ground.
             if let lowest {
                 model.noteInvadersShot(target: lowest.character,
-                                       chosen: Character(String(character).uppercased()), ttr: 0)
+                                       chosen: Character(String(character).uppercased()), ttr: 0,
+                                       wpm: game.currentWpm)
             }
             Haptics.error()
             flash("miss", for: 0.6)

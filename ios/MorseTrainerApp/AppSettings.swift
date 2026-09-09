@@ -523,6 +523,29 @@ struct ContestSettings: Codable, Equatable {
     var length: ContestLength = .tenMin
 }
 
+/// The shared leaderboard (docs/high-scores-design.md, step 2). Off by
+/// default: nothing leaves the device until the user opts in and picks a
+/// name. The name is stored as typed and normalised (trimmed, uppercased)
+/// where it is used; `LeaderboardDisplayName` in MorseKit is the rule.
+struct LeaderboardSettings: Codable, Equatable {
+    /// Post ranked runs to the shared board.
+    var shareScores: Bool = false
+    /// 2–12 characters: letters, digits, space, / and -. Callsign-shaped.
+    var displayName: String = ""
+
+    init() {}
+
+    enum CodingKeys: String, CodingKey { case shareScores, displayName }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        var s = LeaderboardSettings()
+        s.shareScores = try c.decodeIfPresent(Bool.self, forKey: .shareScores) ?? s.shareScores
+        s.displayName = try c.decodeIfPresent(String.self, forKey: .displayName) ?? s.displayName
+        self = s
+    }
+}
+
 /// All user-adjustable preferences. Persisted as JSON in UserDefaults.
 struct AppSettings: Codable, Equatable {
     // Audio
@@ -664,6 +687,9 @@ struct AppSettings: Codable, Equatable {
     /// Rapid Fire (back-to-back copy) settings.
     var rapidFire = RapidFireSettings()
 
+    /// Shared leaderboard: opt-in and display name.
+    var leaderboard = LeaderboardSettings()
+
     /// Short Stories mode settings (fables vs. fetched news headlines).
     var story = StorySettings()
 
@@ -762,6 +788,7 @@ extension AppSettings {
         case qso
         case contest
         case rapidFire
+        case leaderboard
         case story
         case showCorrectness, reveal, allowReplay, hapticsEnabled, slashedZero
         case headCopyRepeats, headCopyRevealSeconds
@@ -840,6 +867,7 @@ extension AppSettings {
         s.qso = try c.decodeIfPresent(QSOSettings.self, forKey: .qso) ?? s.qso
         s.contest = try c.decodeIfPresent(ContestSettings.self, forKey: .contest) ?? s.contest
         s.rapidFire = try c.decodeIfPresent(RapidFireSettings.self, forKey: .rapidFire) ?? s.rapidFire
+        s.leaderboard = try c.decodeIfPresent(LeaderboardSettings.self, forKey: .leaderboard) ?? s.leaderboard
         s.story = try c.decodeIfPresent(StorySettings.self, forKey: .story) ?? s.story
         s.showCorrectness = try c.decodeIfPresent(Bool.self, forKey: .showCorrectness) ?? s.showCorrectness
         s.reveal = try c.decodeIfPresent(RevealMode.self, forKey: .reveal) ?? s.reveal
