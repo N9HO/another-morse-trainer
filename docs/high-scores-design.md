@@ -363,32 +363,46 @@ stay under quota.
   repo keeps this repo's CI untouched and lets the server deploy on its
   own cadence (it will change more often than either app at first).
 - **Client code: this repository**, both trees, per the parity rule.
-- **This document** stays here as the record of the decision; move the
-  live API contract to the server repo once it exists and link it from
-  here.
+- **This document** stays here as the record of the decision. The server
+  repo exists: **[N9HO/another-morse-trainer-leaderboard](https://github.com/N9HO/another-morse-trainer-leaderboard)**
+  (private until the first release). Its README is the live API contract;
+  the scaffold there implements §4 with the attestation verifiers stubbed to
+  reject until the Apple and Google accounts exist.
 
 ---
 
 ## 8. Open decisions and next steps
 
-Decide before building step 2:
+Decided 2026-09-08 by the maintainer:
 
-- [ ] Which modes are ranked at launch (recommendation: Rapid Fire,
-      Contest, Pileup; games later or never).
-- [ ] The ranked metric per mode (recommendation: server-graded correct
-      count weighted by effective WPM, so a slow perfect run does not beat
-      a fast near-perfect one; pin the formula in a fixture).
-- [ ] Whether to accept Android installs that Play Integrity reports as
-      unrecognised (recommendation: no).
-- [ ] Display-name rules and the profanity list source.
-- [ ] Name of the server repository and its Cloudflare account.
+- [x] Ranked at launch: Rapid Fire, Contest, Pileup Runner **and** the six
+      arcade games. A game's board number is the server metric below, not
+      its on-screen score; the UI and guide must say so.
+- [x] Metric: the speed summed over correctly copied items (each item's
+      own WPM in the ramping games, the run's effective WPM otherwise), so
+      a fixed-speed run ranks on correct × effective WPM. Implemented and
+      tested in the server repo's `src/grade.ts`; pin it in a fixture here
+      when the clients start sending transcripts.
+- [x] Android installs Play Integrity does not recognise: rejected.
+- [x] Display names: 2 to 12 characters, letters, digits, space, `/`, `-`,
+      uppercased, a short deny list (`src/names.ts`); the admin delete is
+      the real moderation tool.
+- [x] Server repository: `N9HO/another-morse-trainer-leaderboard`, on the
+      maintainer's Cloudflare account (being created).
+
+Still owed by the maintainer before deploy and attestation: the Cloudflare
+account, App Attest enabled on the App ID, a Google Cloud project linked in
+Play Console with a service-account key stored as a Worker secret.
 
 Build order:
 
-1. Step 1 (local bests) on both apps, one PR, guide updated.
-2. Server repo: schema, three endpoints, attestation verification, admin
-   delete, a test suite that feeds fabricated transcripts and expects
-   rejection for each row of the "what each layer stops" table.
+1. ~~Step 1 (local bests) on both apps, one PR, guide updated.~~ PR #211.
+2. Server repo: ~~schema, three endpoints, admin delete, a test suite that
+   feeds fabricated transcripts and expects rejection for each row of the
+   "what each layer stops" table~~ (scaffold landed); attestation
+   verification for both platforms still to write, against the vendors'
+   documents, once the accounts exist and a real device can produce a
+   sample to test against.
 3. Step 2 clients, both apps, opt-in off by default.
 4. Store listings' privacy disclosures, then release.
 
