@@ -117,6 +117,13 @@ dependencies {
     // WebSocket transport for the Vail repeater client (and the Short
     // Stories news-feed fetch).
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    // Play Integrity, standard API: the device attestation behind every write
+    // to the shared leaderboard (docs/high-scores-design.md §3; the client is
+    // LeaderboardClient + PlayIntegrityAttester). Pulls play-services-tasks
+    // and -basement. Its notice is on Settings › About › Licenses, as the
+    // Licensing section of CLAUDE.md requires. 1.6.0 was the newest release on
+    // maven.google.com on 2026-09-08.
+    implementation("com.google.android.play:integrity:1.6.0")
     // JVM unit tests: the ported CW decoder core is held to the firmware
     // bench's synthetic-audio checks.
     testImplementation("junit:junit:4.13.2")

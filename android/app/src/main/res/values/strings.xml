@@ -870,4 +870,41 @@
     <string name="asteroids_send_speed_note">Decoded at your %1$d WPM character speed.</string>
     <string name="asteroids_wpm">WPM</string>
     <string name="asteroids_speed_reached">Speed reached: %1$d WPM</string>
+
+    <!-- Shared leaderboard (docs/high-scores-design.md, step 2) -->
+    <string name="leaderboard_title">Leaderboard</string>
+    <string name="leaderboard_open">Shared leaderboard</string>
+    <string name="leaderboard_blurb">Top runs from both apps, graded by the server: each board number is the speed summed over the items copied correctly, so a game\'s number is not its on-screen score. Share your own runs from Settings › Leaderboard.</string>
+    <string name="leaderboard_loading">Loading…</string>
+    <string name="leaderboard_empty">No scores posted for this mode yet.</string>
+    <string name="leaderboard_error">Couldn\'t load the board: %1$s</string>
+    <string name="leaderboard_retry">Retry</string>
+    <string name="leaderboard_platform_ios">iOS</string>
+    <string name="leaderboard_platform_android">Android</string>
+    <!-- The run-summary line: rank, then the server's metric -->
+    <string name="leaderboard_result">Leaderboard: #%1$d · %2$d</string>
+    <string name="leaderboard_refused">Leaderboard: %1$s</string>
+    <string name="leaderboard_submitting">Leaderboard: submitting…</string>
+    <string name="leaderboard_reason_no_name">set a display name in Settings</string>
+    <string name="leaderboard_reason_not_registered">run not registered (%1$s)</string>
+    <string name="leaderboard_reason_network">couldn\'t reach the server</string>
+    <string name="leaderboard_reason_attestation">device attestation failed</string>
+    <!-- Settings › Leaderboard -->
+    <string name="settings_leaderboard">Leaderboard</string>
+    <string name="settings_leaderboard_share">Share scores to the shared leaderboard</string>
+    <string name="settings_leaderboard_name">Display name</string>
+    <string name="settings_leaderboard_name_hint">Call sign or name</string>
+    <string name="settings_leaderboard_name_invalid">2 to 12 characters: letters, digits, space, / and -. Runs are not posted until this is valid.</string>
+    <string name="settings_leaderboard_delete">Delete my scores</string>
+    <string name="settings_leaderboard_deleting">Deleting…</string>
+    <string name="settings_leaderboard_delete_confirm_title">Delete your scores?</string>
+    <string name="settings_leaderboard_delete_confirm_body">Removes every score this install has posted to the shared leaderboard, on every mode. This cannot be undone.</string>
+    <string name="settings_leaderboard_delete_done">Your scores were deleted.</string>
+    <string name="settings_leaderboard_delete_failed">Couldn\'t delete: %1$s</string>
+    <string name="settings_leaderboard_footer">Off by default. When on, each finished Rapid Fire, Contest, Pileup Runner or arcade run is sent to the shared leaderboard under your display name and graded there: the board ranks server-graded copies, the speed summed over the items you copied correctly, so a game\'s board number is not its on-screen score. Only builds installed from Google Play can post; the board itself is open to everyone.</string>
+    <string name="settings_leaderboard_unconfigured">The leaderboard is not enabled in this build.</string>
+    <!-- Licenses: the Play Integrity SDK notice -->
+    <string name="licenses_play_integrity_title">Google Play Integrity API</string>
+    <string name="licenses_play_integrity_footer">Sharing a score proves this is a genuine Play-installed build with the Play Integrity API library (com.google.android.play:integrity) and the Google Play services it depends on, © Google LLC, used under the Android Software Development Kit License Agreement and the Play Integrity API Terms of Service.</string>
+    <string name="licenses_play_integrity_link">Read the Play Integrity API terms</string>
 </resources>

@@ -36,6 +36,7 @@ import androidx.compose.material.icons.filled.RocketLaunch
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.SportsEsports
 import androidx.compose.material.icons.filled.IosShare
+import androidx.compose.material.icons.filled.Leaderboard
 import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.TrackChanges
@@ -101,7 +102,7 @@ private val GOOD = Color(0xFF5DCAA5)
  * Reads the persisted [Stats] singleton and the [EngineStore] snapshot.
  */
 @Composable
-fun StatsScreen(onBack: () -> Unit) {
+fun StatsScreen(onBack: () -> Unit, onOpenLeaderboard: () -> Unit = {}) {
     // A tapped session opens its full detail record in place of the sheet.
     var selected by remember { mutableStateOf<SessionRecord?>(null) }
     BackHandler { if (selected != null) selected = null else onBack() }
@@ -141,6 +142,25 @@ fun StatsScreen(onBack: () -> Unit) {
             )
 
             StageHeader(snapshot)
+
+            // The shared leaderboard (docs/high-scores-design.md, step 2):
+            // above the empty-state return, since the board is public and
+            // worth a look before the first session.
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 12.dp)
+                    .brandCard(14.dp)
+                    .clickable(onClick = onOpenLeaderboard)
+                    .padding(horizontal = 14.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(Icons.Filled.Leaderboard, contentDescription = null, tint = Brand.teal, modifier = Modifier.size(20.dp))
+                Spacer(Modifier.width(12.dp))
+                Text(stringResource(R.string.leaderboard_open), color = Brand.teal, fontWeight = FontWeight.Medium)
+                Spacer(Modifier.weight(1f))
+                Text("›", color = Brand.textSecondary, fontWeight = FontWeight.Bold)
+            }
 
             if (Stats.totalSessions == 0) {
                 Spacer(Modifier.height(40.dp))
