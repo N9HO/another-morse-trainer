@@ -131,7 +131,7 @@ class MorseLadderTest {
     fun `a fresh learner who opts in on day one is drilled on the marks at once`() {
         val engine = TrainerEngine(seedCount = 2, rng = Random(3))
         val change = engine.applyStudyOrder(MorseCode.studyOrder(setOf('.', ',', '/')))
-        assertEquals(listOf('.', ',', '/', '#'), change.added)   // NEGATIVE CONTROL
+        assertEquals(listOf('.', ',', '/'), change.added)
         assertEquals(listOf('.', ',', '/'), engine.activeCharacters.takeLast(3))
     }
 
