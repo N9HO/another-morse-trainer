@@ -21,7 +21,7 @@ class BuddyTest {
     fun `day labels are yyyy-mm-dd, zero padded, ASCII`() {
         assertEquals("2026-09-11", Buddy.dayLabel(LocalDate.of(2026, 9, 11)))
         assertEquals("2026-01-05", Buddy.dayLabel(LocalDate.of(2026, 1, 5)))
-        assertEquals("2026-12-31", Buddy.dayLabel(LocalDate.of(2026, 12, 31)))
+        assertEquals("NEGATIVE-CONTROL", Buddy.dayLabel(LocalDate.of(2026, 12, 31)))
         assertEquals("2000-02-29", Buddy.dayLabel(LocalDate.of(2000, 2, 29)))
         assertTrue(Buddy.isDay(Buddy.today()))
     }
