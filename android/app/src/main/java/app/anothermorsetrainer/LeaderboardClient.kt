@@ -76,7 +76,7 @@ object LeaderboardClient {
     private const val BOARD_LIMIT = 50
 
     private lateinit var prefs: SharedPreferences
-    private lateinit var appContext: Context
+    internal lateinit var appContext: Context
     private var attester: PlayIntegrityAttester? = null
 
     private val http = OkHttpClient.Builder()
@@ -90,11 +90,19 @@ object LeaderboardClient {
     /**
      * Outlives any one screen: a submission started from a run summary must
      * finish even if the user taps Back or the mode switcher a moment later.
+     * Shared with [BuddyClient], whose calls have the same shape.
      */
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    internal val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
     /** True once the maintainer has filled [LEADERBOARD_CLOUD_PROJECT_NUMBER]. */
     val isConfigured: Boolean get() = LEADERBOARD_CLOUD_PROJECT_NUMBER != 0L
+
+    /**
+     * True once [init] has run. `Stats.record` can fire from `ListenService`
+     * in a process the system restarted without `MainActivity`, and the buddy
+     * report hanging off it must then do nothing rather than trip a lateinit.
+     */
+    internal val isInitialized: Boolean get() = this::prefs.isInitialized
 
     fun init(context: Context) {
         appContext = context.applicationContext
@@ -285,8 +293,14 @@ object LeaderboardClient {
                 "/v1/me/delete",
                 JSONObject().put("challenge", challenge).put("attestation", attestation(challenge))
             )
-            if (reply.code == 200 && reply.body?.optBoolean("deleted", false) == true) null
-            else reply.body?.optString("reason")?.takeIf { it.isNotEmpty() } ?: "HTTP ${reply.code}"
+            if (reply.code == 200 && reply.body?.optBoolean("deleted", false) == true) {
+                // The server dropped the buddy pair, invites and practice days
+                // with the scores (README: /v1/me/delete); the cache follows.
+                Settings.clearBuddy()
+                null
+            } else {
+                reply.reason
+            }
         } catch (e: Exception) {
             Log.d(TAG, "me/delete failed: ${e.message}")
             describe(e)
@@ -294,6 +308,25 @@ object LeaderboardClient {
     }
 
     // ---- Attestation ----
+
+    /**
+     * The shape every attested write shares: a fresh challenge from
+     * `/v1/attest/challenge`, attested, then `POST` [path] with
+     * `{ challenge, attestation, ...fields }`. The buddy routes are all this
+     * ([BuddyClient]); `/run/start` and `/me/delete` predate it and spell it
+     * out. Throws on the network or the attestation, like the rest.
+     */
+    internal suspend fun attestedPost(path: String, fields: JSONObject): Reply {
+        if (!isConfigured) throw IllegalStateException("not configured")
+        val challenge = postJson("/v1/attest/challenge", JSONObject())
+            .body?.optString("challenge")?.takeIf { it.isNotEmpty() }
+            ?: throw IOException("no challenge")
+        val body = JSONObject()
+        for (key in fields.keys()) body.put(key, fields.get(key))
+        body.put("challenge", challenge)
+        body.put("attestation", attestation(challenge))
+        return postJson(path, body)
+    }
 
     /** The `attestation` object every write carries; see `src/attest/playintegrity.ts`. */
     private suspend fun attestation(challenge: String): JSONObject {
@@ -306,7 +339,10 @@ object LeaderboardClient {
 
     // ---- HTTP ----
 
-    private class Reply(val code: Int, val body: JSONObject?)
+    internal class Reply(val code: Int, val body: JSONObject?) {
+        /** The server's `reason`, or the bare status when it gave none. */
+        val reason: String get() = body?.optString("reason")?.takeIf { it.isNotEmpty() } ?: "HTTP $code"
+    }
 
     private suspend fun postJson(path: String, body: JSONObject): Reply =
         call(Request.Builder().url(BASE_URL + path).post(body.toString().toRequestBody(json)).build())
@@ -331,7 +367,7 @@ object LeaderboardClient {
     }
 
     /** A failure in the summary line's words: the network, the attestation, or whatever else. */
-    private fun describe(e: Exception): String = when (e) {
+    internal fun describe(e: Exception): String = when (e) {
         is IOException -> appContext.getString(R.string.leaderboard_reason_network)
         else -> appContext.getString(R.string.leaderboard_reason_attestation)
     }

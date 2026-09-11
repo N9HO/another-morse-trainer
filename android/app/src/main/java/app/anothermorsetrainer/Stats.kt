@@ -189,6 +189,10 @@ object Stats {
         if (attempts <= 0) return null
         val firstToday = streak.record(today)
         refreshStreak()
+        // The buddy streak hears about the day here, where the personal one
+        // marks it (docs/buddy-streak-design.md §3). Once a day, only while
+        // paired, never blocking; the client keeps the once-a-day.
+        BuddyClient.reportPracticeDay(today)
 
         totalSessions += 1
         // A passive session's attempts are items heard, not answers: they
@@ -270,7 +274,11 @@ object Stats {
         if (!streak.record(today)) return   // already counted today
         refreshStreak()
         persist()
+        BuddyClient.reportPracticeDay(today)   // the buddy streak's day, same as record()
     }
+
+    /** True when the personal streak already counts today; the buddy client reports a day a pairing missed. */
+    val practisedToday: Boolean get() = streak.lastPracticeDay == LocalDate.now()
 
     private fun refreshStreak() {
         currentStreak = streak.display()

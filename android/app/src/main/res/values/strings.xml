@@ -480,6 +480,7 @@
     <!-- ReminderReceiver -->
     <string name="reminder_body_streak">Keep your %1$d-day streak alive — a few minutes of CW is all it takes.</string>
     <string name="reminder_body_default">A few minutes of code practice keeps your ear sharp. Tap to start.</string>
+    <string name="reminder_body_buddy">%1$s hasn\'t practised yet today (as of %2$s).</string>
     <string name="reminder_title">Time to practice Morse</string>
 
     <!-- Reminders -->
@@ -903,6 +904,37 @@
     <string name="settings_leaderboard_delete_failed">Couldn\'t delete: %1$s</string>
     <string name="settings_leaderboard_footer">Off by default. When on, each finished Rapid Fire, Contest, Pileup Runner or arcade run is sent to the shared leaderboard under your display name and graded there: the board ranks server-graded copies, the speed summed over the items you copied correctly, so a game\'s board number is not its on-screen score. Only builds installed from Google Play can post; the board itself is open to everyone.</string>
     <string name="settings_leaderboard_unconfigured">The leaderboard is not enabled in this build.</string>
+    <!-- Settings › Buddy streak (docs/buddy-streak-design.md) -->
+    <string name="settings_buddy">Buddy streak</string>
+    <string name="settings_buddy_unpaired">Invite a buddy, or join with a code they send you.</string>
+    <string name="settings_buddy_paired">Paired with %1$s · %2$d-day buddy streak · %1$s has practised today</string>
+    <string name="settings_buddy_paired_not_yet">Paired with %1$s · %2$d-day buddy streak · %1$s hasn\'t practised yet today</string>
+    <string name="settings_buddy_no_name">Pick a display name in Settings › Leaderboard</string>
+    <string name="settings_buddy_invite">Invite a buddy</string>
+    <string name="settings_buddy_inviting">Asking for a code…</string>
+    <string name="settings_buddy_code_hint">Send this code to your buddy. It works once, within 24 hours (until %1$s).</string>
+    <string name="settings_buddy_copy">Copy code</string>
+    <string name="settings_buddy_copied">Copied</string>
+    <string name="settings_buddy_share">Share code</string>
+    <string name="settings_buddy_share_text">Be my Morse buddy on Another Morse Trainer: open Settings › Buddy streak › Join with a code and enter %1$s (good for 24 hours).</string>
+    <string name="settings_buddy_share_title">Share buddy code</string>
+    <string name="settings_buddy_join">Join with a code</string>
+    <string name="settings_buddy_join_hint">Six letters or digits</string>
+    <string name="settings_buddy_join_go">Join</string>
+    <string name="settings_buddy_joining">Joining…</string>
+    <string name="settings_buddy_leave">Leave buddy</string>
+    <string name="settings_buddy_leaving">Leaving…</string>
+    <string name="settings_buddy_leave_confirm_title">Leave your buddy?</string>
+    <string name="settings_buddy_leave_confirm_body">Unpairs you from %1$s and ends the buddy streak for both of you. Either of you can invite the other again.</string>
+    <string name="settings_buddy_refreshing">Checking…</string>
+    <string name="settings_buddy_error">Couldn\'t do that: %1$s</string>
+    <string name="settings_buddy_footer">Pair with one other person and keep a shared streak: each day you both practise counts, and a day either of you misses resets it. Your buddy sees your leaderboard display name and whether you practised each day, nothing else. Pairing works on its own; the leaderboard switch above stays yours. Only builds installed from Google Play can pair.</string>
+    <string name="buddy_reason_no_name">pick a display name in Settings › Leaderboard first</string>
+    <string name="buddy_reason_bad_code">the code is six letters or digits</string>
+    <string name="buddy_reason_bad_reply">the server sent something unexpected</string>
+    <!-- Home screen buddy line -->
+    <string name="home_buddy_practised">%1$s practised today · %2$d-day buddy streak</string>
+    <string name="home_buddy_not_yet">%1$s hasn\'t practised yet today · %2$d-day buddy streak</string>
     <!-- Licenses: the Play Integrity SDK notice -->
     <string name="licenses_play_integrity_title">Google Play Integrity API</string>
     <string name="licenses_play_integrity_footer">Sharing a score proves this is a genuine Play-installed build with the Play Integrity API library (com.google.android.play:integrity) and the Google Play services it depends on, © Google LLC, used under the Android Software Development Kit License Agreement and the Play Integrity API Terms of Service.</string>
