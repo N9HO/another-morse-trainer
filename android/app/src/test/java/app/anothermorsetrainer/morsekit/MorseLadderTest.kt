@@ -110,19 +110,36 @@ class MorseLadderTest {
         )
     }
 
+    /** #213 (2026-09-11): opting in adds the mark to the active set at once, in pickable order, with stats. */
     @Test
-    fun `opting in does not drop the mark straight into the active set`() {
+    fun `opting in adds the mark to the active set at once, as the shared fixture says`() {
+        val cases = fixture.getJSONArray("optInCases")
+        assertTrue("fixture has no opt-in cases", cases.length() > 0)
+        for (i in 0 until cases.length()) {
+            val c = cases.getJSONObject(i)
+            val engine = TrainerEngine(seedCount = 2, rng = Random(7))
+            engine.setActiveCharacters(c.getString("activeBefore").toList())
+            val change = engine.applyStudyOrder(MorseCode.studyOrder(c.getString("selectedPunctuation").toSet()))
+            assertEquals("${c.getString("name")}: active set", c.getString("activeAfter"), engine.activeCharacters.joinToString(""))
+            assertEquals("${c.getString("name")}: added", c.getString("added"), change.added.joinToString(""))
+            assertEquals("${c.getString("name")}: removed", c.getString("removed"), change.removed.joinToString(""))
+            for (ch in change.added) assertTrue("${c.getString("name")}: no stats for $ch", engine.stats[ch] != null)
+        }
+    }
+
+    @Test
+    fun `a fresh learner who opts in on day one is drilled on the marks at once`() {
         val engine = TrainerEngine(seedCount = 2, rng = Random(3))
-        engine.studyOrder = MorseCode.studyOrder(setOf('.', ',', '/'))
-        assertFalse("period was granted rather than earned", '.' in engine.activeCharacters)
-        assertFalse("comma was granted rather than earned", ',' in engine.activeCharacters)
+        val change = engine.applyStudyOrder(MorseCode.studyOrder(setOf('.', ',', '/')))
+        assertEquals(listOf('.', ',', '/'), change.added)
+        assertEquals(listOf('.', ',', '/'), engine.activeCharacters.takeLast(3))
     }
 
     /**
      * Issue #133: opting *out* of a mark already earned removes it from the
      * active set, so it stops being drilled. The fixture pins the arithmetic —
-     * only pickable punctuation goes, never the Koch core, and opting back in
-     * is not an immediate add.
+     * only pickable punctuation goes, never the Koch core; opting back in adds
+     * it straight back (#213, the opt-in cases above).
      */
     @Test
     fun `opting out reconciles the active set as the shared fixture says`() {
@@ -134,7 +151,7 @@ class MorseLadderTest {
             engine.setActiveCharacters(c.getString("activeBefore").toList())
             val removed = engine.applyStudyOrder(
                 MorseCode.studyOrder(c.getString("selectedPunctuation").toSet())
-            )
+            ).removed
             assertEquals("${c.getString("name")}: active set", c.getString("activeAfter"), engine.activeCharacters.joinToString(""))
             assertEquals("${c.getString("name")}: removed", c.getString("removed"), removed.joinToString(""))
         }
@@ -149,7 +166,7 @@ class MorseLadderTest {
         engine.setExposedCharacters(engine.activeCharacters)
         repeat(3) { engine.stats[',']!!.record(true, 0.4) }
 
-        val removed = engine.applyStudyOrder(MorseCode.studyOrder(setOf('.')))
+        val removed = engine.applyStudyOrder(MorseCode.studyOrder(setOf('.'))).removed
         assertEquals("only the opted-out comma is removed", listOf(','), removed)
         assertFalse("the comma is still in the drill", ',' in engine.activeCharacters)
         assertTrue("the still-opted-in period was removed too", '.' in engine.activeCharacters)
@@ -157,19 +174,19 @@ class MorseLadderTest {
         assertTrue("the comma is no longer 'met'", ',' in engine.exposedCharacters)
         repeat(50) { assertFalse("the removed comma was still asked", engine.nextQuestion().target == ',') }
 
-        // Opting back in puts it on the ladder, not into the drill; the ladder
-        // re-introduces it once everything else is mastered.
-        engine.applyStudyOrder(MorseCode.studyOrder(setOf('.', ',')))
-        assertFalse("opting back in re-added the mark immediately", ',' in engine.activeCharacters)
-        for (c in engine.activeCharacters) repeat(5) { engine.stats[c]!!.record(true, 0.1) }
-        assertEquals("the ladder did not re-introduce the mark", ',', engine.advanceIfReady())
+        // Opting back in puts it straight back into the drill (#213), with the
+        // history it had.
+        val back = engine.applyStudyOrder(MorseCode.studyOrder(setOf('.', ',')))
+        assertEquals("opting back in did not re-add the mark at once", listOf(','), back.added)
+        assertTrue("the comma is not back in the drill", ',' in engine.activeCharacters)
+        assertEquals("the comma's history was lost on the way back", 3, engine.stats[',']!!.attempts.size)
     }
 
     @Test
     fun `a reconcile never removes the Koch core`() {
         val engine = TrainerEngine(seedCount = 2, rng = Random(9))
         engine.setActiveCharacters(MorseCode.kochOrder)
-        val removed = engine.applyStudyOrder(MorseCode.studyOrder(emptySet()))
+        val removed = engine.applyStudyOrder(MorseCode.studyOrder(emptySet())).removed
         assertTrue("a Koch-core character ('?' included) was removed", removed.isEmpty())
         assertEquals(MorseCode.kochOrder, engine.activeCharacters)
     }

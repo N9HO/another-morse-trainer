@@ -23,9 +23,9 @@ testers, bug reports and feature chat live on
 - **Characters**: Koch-method ladder (A-Z, 0-9) with a user-pinnable
   "Track stage" (characters, pairs, triples, words & call signs)
 - **Common Words**, **Abbreviations**, **Q-Codes**, **Prosigns**: phrase
-  drills, with custom word lists and optional punctuation extras (an
-  opted-in mark joins the Characters ladder after the core set, and the
-  games' full set straight away)
+  drills, with custom word lists and optional punctuation extras (a mark
+  you turn on joins the Characters drill and the games' full set straight
+  away)
 - **Confusion Drill**: targeted review of the pairs you actually mix up
 - **Head Copy**: copy in your head with auto-repeats and a timed reveal
 - **Type It / QRQ Speed**: free-recall typing, plus high-speed copy at

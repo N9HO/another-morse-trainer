@@ -238,24 +238,35 @@ class TrainerEngine(
         activeCharacters = activeCharacters.filter { it != character }
     }
 
+    /** What [applyStudyOrder] did to the active set. */
+    data class StudyOrderChange(
+        /** Opted-out marks taken out of the active set, in active-set order. */
+        val removed: List<Char>,
+        /** Opted-in marks added to the active set, in pickable order. */
+        val added: List<Char>
+    ) {
+        val isEmpty: Boolean get() = removed.isEmpty() && added.isEmpty()
+    }
+
     /**
-     * Set the introduction order and reconcile the active set with it: any
-     * pickable punctuation mark the learner has already earned but has now
-     * opted back out of is removed, so it stops being drilled (issue #133).
-     * Returns the characters removed, in active-set order.
-     *
-     * Only [MorseCode.pickablePunctuation] is ever removed — the Koch core
-     * (including `?`) is never touched, and a mark that was never earned is
-     * simply not there to remove. Opting back *in* changes nothing here: the
-     * mark rejoins the ladder to be earned again, and its [CharacterStats]
-     * entry (kept by [removeActiveCharacter]) is waiting for it. Pinned by
-     * `fixtures/ladder.json`'s `optOutCases` on both ports.
+     * Set the introduction order and reconcile the active set with it. Any
+     * pickable punctuation mark the learner has opted back out of is removed,
+     * so it stops being drilled (issue #133); any mark opted *in* that is not
+     * yet active is added at once, in pickable order (#213, reversing the
+     * ladder-only rule: a mark nobody reached until all 37 core characters
+     * were mastered made the setting invisible). An added mark stays on the
+     * ladder's tail too, and being active it must be mastered like any other
+     * character before the next unlock. Pinned by fixtures/ladder.json
+     * (`optOutCases`, `optInCases`). Stats are created for a new mark and kept
+     * for a removed one.
      */
-    fun applyStudyOrder(order: List<Char>): List<Char> {
+    fun applyStudyOrder(order: List<Char>): StudyOrderChange {
         studyOrder = order
         val removed = activeCharacters.filter { it in MorseCode.pickablePunctuation && it !in order }
         for (c in removed) removeActiveCharacter(c)
-        return removed
+        val added = MorseCode.pickablePunctuation.filter { it in order && it !in activeCharacters }
+        for (c in added) addActiveCharacter(c)
+        return StudyOrderChange(removed, added)
     }
 
     val allActiveMastered: Boolean
