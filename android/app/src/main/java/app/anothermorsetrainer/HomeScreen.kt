@@ -363,9 +363,9 @@ private fun BuddyLine(buddy: BuddyStatus) {
     val practised = buddy.buddyPractisedOn(Buddy.today())
     Text(
         text = if (practised) {
-            stringResource(R.string.home_buddy_practised, buddy.buddyName, buddy.streak)
+            stringResource(R.string.home_buddy_practised, buddy.buddyName, buddyStreakLabel(buddy.streak))
         } else {
-            stringResource(R.string.home_buddy_not_yet, buddy.buddyName, buddy.streak)
+            stringResource(R.string.home_buddy_not_yet, buddy.buddyName, buddyStreakLabel(buddy.streak))
         },
         style = MaterialTheme.typography.labelMedium,
         color = Brand.teal,
@@ -409,3 +409,8 @@ internal fun ModeTile(item: HomeItem, modifier: Modifier = Modifier) {
         )
     }
 }
+
+/** "12-day buddy streak", or "no buddy streak yet" at zero — the same words as iOS's `streakLabel`. */
+@Composable
+internal fun buddyStreakLabel(streak: Int): String =
+    if (streak > 0) stringResource(R.string.buddy_streak_days, streak) else stringResource(R.string.buddy_streak_none)

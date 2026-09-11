@@ -794,7 +794,9 @@ fun SettingsScreen(
                 // inline; the status line reads the cache, refreshed when the
                 // section appears (at most every 15 minutes).
                 SectionHeader(stringResource(R.string.settings_buddy))
-                LaunchedEffect(Unit) { BuddyClient.refreshIfStale(evenIfUnpaired = true) }
+                // Only when paired or an invite is out, as on iOS: a status call
+                // creates an identity server-side, and pairing is the consent.
+                LaunchedEffect(Unit) { BuddyClient.refreshIfStale() }
                 val buddyStatus = Settings.buddyStatus
                 val buddyPaired = buddyStatus != null && buddyStatus.paired
                 val buddyHasName = BuddyClient.displayName() != null
@@ -809,7 +811,7 @@ fun SettingsScreen(
                             val practised = buddyStatus.buddyPractisedOn(Buddy.today())
                             stringResource(
                                 if (practised) R.string.settings_buddy_paired else R.string.settings_buddy_paired_not_yet,
-                                buddyStatus.buddyName, buddyStatus.streak
+                                buddyStatus.buddyName, buddyStreakLabel(buddyStatus.streak)
                             )
                         } else {
                             stringResource(R.string.settings_buddy_unpaired)

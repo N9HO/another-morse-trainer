@@ -907,8 +907,8 @@
     <!-- Settings › Buddy streak (docs/buddy-streak-design.md) -->
     <string name="settings_buddy">Buddy streak</string>
     <string name="settings_buddy_unpaired">Invite a buddy, or join with a code they send you.</string>
-    <string name="settings_buddy_paired">Paired with %1$s · %2$d-day buddy streak · %1$s has practised today</string>
-    <string name="settings_buddy_paired_not_yet">Paired with %1$s · %2$d-day buddy streak · %1$s hasn\'t practised yet today</string>
+    <string name="settings_buddy_paired">Paired with %1$s · %2$s · %1$s has practised today</string>
+    <string name="settings_buddy_paired_not_yet">Paired with %1$s · %2$s · %1$s hasn\'t practised yet today</string>
     <string name="settings_buddy_no_name">Pick a display name in Settings › Leaderboard</string>
     <string name="settings_buddy_invite">Invite a buddy</string>
     <string name="settings_buddy_inviting">Asking for a code…</string>
@@ -933,8 +933,10 @@
     <string name="buddy_reason_bad_code">the code is six letters or digits</string>
     <string name="buddy_reason_bad_reply">the server sent something unexpected</string>
     <!-- Home screen buddy line -->
-    <string name="home_buddy_practised">%1$s practised today · %2$d-day buddy streak</string>
-    <string name="home_buddy_not_yet">%1$s hasn\'t practised yet today · %2$d-day buddy streak</string>
+    <string name="home_buddy_practised">%1$s practised today · %2$s</string>
+    <string name="buddy_streak_days">%1$d-day buddy streak</string>
+    <string name="buddy_streak_none">no buddy streak yet</string>
+    <string name="home_buddy_not_yet">%1$s hasn\'t practised yet today · %2$s</string>
     <!-- Licenses: the Play Integrity SDK notice -->
     <string name="licenses_play_integrity_title">Google Play Integrity API</string>
     <string name="licenses_play_integrity_footer">Sharing a score proves this is a genuine Play-installed build with the Play Integrity API library (com.google.android.play:integrity) and the Google Play services it depends on, © Google LLC, used under the Android Software Development Kit License Agreement and the Play Integrity API Terms of Service.</string>
