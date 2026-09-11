@@ -377,7 +377,7 @@ struct DailyDitView: View {
                 Text("Starting speed")
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.white)
-                Text("Drops \(Int(DailyDit.speedStepWpm)) WPM for every \(DailyDit.listensPerSpeedStep) listens and for every \(DailyDit.guessesPerSpeedStep) wrong guesses, down to \(Int(DailyDit.minimumWpm)). Locked once you guess.")
+                Text("Drops \(Int(DailyDit.speedStepWpm)) WPM for every \(DailyDit.listensPerSpeedStep) listens and for every \(DailyDit.guessesPerSpeedStep) wrong guesses, down to \(Int(DailyDit.minimumWpm)). Locked once you guess. Sent straight at that speed, with no Farnsworth spacing, so it is quicker than the same number in a drill.")
                     .font(.caption)
                     .foregroundStyle(Theme.textSecondary)
             }

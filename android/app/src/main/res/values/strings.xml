@@ -588,7 +588,7 @@
     <string name="daily_dit_guess">Guess</string>
     <string name="daily_dit_ruled_out">Ruled out</string>
     <string name="daily_dit_starting_speed">Starting speed</string>
-    <string name="daily_dit_ladder_explainer">Drops %1$d WPM for every %2$d listens and for every %3$d wrong guesses, down to %4$d. Locked once you guess.</string>
+    <string name="daily_dit_ladder_explainer">Drops %1$d WPM for every %2$d listens and for every %3$d wrong guesses, down to %4$d. Locked once you guess. Sent straight at that speed, with no Farnsworth spacing, so it is quicker than the same number in a drill.</string>
     <string name="daily_dit_started_at">Started at %1$s WPM</string>
     <string name="daily_dit_no_reference_suffix"> · no reference</string>
     <string name="daily_dit_hide_chart">Hide the chart</string>
