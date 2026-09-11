@@ -5679,6 +5679,134 @@ do {
     check("other refusals are not", LeaderboardServerHints.isUnknownKey("run token unknown, used or expired") == false)
 }
 
+// Buddy streaks (docs/buddy-streak-design.md, #219): the day label, the
+// invite-code rule and the cached status's wording, each pinned to the
+// server's own (src/buddy.ts in the leaderboard repository) or to the strings
+// both apps show.
+print("\nBuddy streak:")
+do {
+    // Day labels: the LOCAL calendar day, Gregorian digits, whatever the zone.
+    var utc = Calendar(identifier: .gregorian)
+    utc.timeZone = TimeZone(identifier: "UTC")!
+    let lateUTC = utc.date(from: DateComponents(year: 2026, month: 3, day: 1, hour: 23, minute: 30))!
+    check("day label is yyyy-mm-dd", BuddyDay.label(for: lateUTC, calendar: utc) == "2026-03-01")
+    var tokyo = Calendar(identifier: .gregorian)
+    tokyo.timeZone = TimeZone(identifier: "Asia/Tokyo")!
+    check("the label follows the calendar's zone, not UTC", BuddyDay.label(for: lateUTC, calendar: tokyo) == "2026-03-02")
+    var honolulu = Calendar(identifier: .gregorian)
+    honolulu.timeZone = TimeZone(identifier: "Pacific/Honolulu")!
+    let earlyUTC = utc.date(from: DateComponents(year: 2026, month: 1, day: 1, hour: 5))!
+    check("… in both directions", BuddyDay.label(for: earlyUTC, calendar: honolulu) == "2025-12-31")
+    var japanese = Calendar(identifier: .japanese)
+    japanese.timeZone = utc.timeZone
+    check("a non-Gregorian calendar preference still labels the Gregorian day",
+          BuddyDay.label(for: lateUTC, calendar: japanese) == "2026-03-01")
+    check("single digits are zero-padded", BuddyDay.label(for: earlyUTC, calendar: utc) == "2026-01-01")
+    check("a label round-trips isLabel", BuddyDay.isLabel("2026-09-11"))
+    check("a leap day is a label", BuddyDay.isLabel("2024-02-29") && !BuddyDay.isLabel("2023-02-29"))
+    check("a malformed label is refused",
+          !BuddyDay.isLabel("2026-9-11") && !BuddyDay.isLabel("2026/09/11") && !BuddyDay.isLabel("2026-13-01") && !BuddyDay.isLabel(""))
+
+    // Invite codes: the server's alphabet and normalisation, character for character.
+    check("the invite alphabet is the server's, with no look-alikes",
+          BuddyInviteCode.alphabet == "ABCDEFGHJKMNPQRSTUVWXYZ23456789" && BuddyInviteCode.alphabet.count == 31
+          && !BuddyInviteCode.alphabet.contains("0") && !BuddyInviteCode.alphabet.contains("O")
+          && !BuddyInviteCode.alphabet.contains("1") && !BuddyInviteCode.alphabet.contains("I") && !BuddyInviteCode.alphabet.contains("L"))
+    check("a code is six characters", BuddyInviteCode.length == 6)
+    check("normalize uppercases and strips spaces and dashes", BuddyInviteCode.normalize(" abc-2 34 ") == "ABC234")
+    check("five characters is not a code", BuddyInviteCode.normalize("ABC23") == nil)
+    check("seven is not either", BuddyInviteCode.normalize("ABC2345") == nil)
+    check("a look-alike is refused, not corrected", BuddyInviteCode.normalize("ABC0DE") == nil && BuddyInviteCode.normalize("ABC1DE") == nil)
+    check("typed keeps six, uppercased, separators dropped", BuddyInviteCode.typed("ab c-23 45xyz") == "ABC234")
+    check("typed keeps a stray character for normalize to refuse", BuddyInviteCode.typed("abc0de") == "ABC0DE" && BuddyInviteCode.normalize("ABC0DE") == nil)
+
+    // Wire shapes.
+    let statusJSON = #"{"paired":true,"buddy":{"displayName":"W1AW","practisedToday":true},"streak":12,"myStreak":30,"practisedToday":false,"today":"2026-09-11"}"#
+    let status = try? JSONDecoder().decode(BuddyStatus.self, from: Data(statusJSON.utf8))
+    check("a paired status decodes", status?.paired == true && status?.buddy?.displayName == "W1AW" && status?.streak == 12 && status?.today == "2026-09-11")
+    let unpairedJSON = #"{"paired":false,"streak":0,"myStreak":3,"practisedToday":true,"today":"2026-09-11"}"#
+    let unpaired = try? JSONDecoder().decode(BuddyStatus.self, from: Data(unpairedJSON.utf8))
+    check("an unpaired status decodes without a buddy", unpaired?.paired == false && unpaired?.buddy == nil && unpaired?.myStreak == 3)
+    let inviteJSON = #"{"code":"ABC234","expiresAt":1757635200000}"#
+    let invite = try? JSONDecoder().decode(BuddyInviteResponse.self, from: Data(inviteJSON.utf8))
+    check("an invite decodes and its expiry is in milliseconds", invite?.code == "ABC234" && invite?.expiryDate.timeIntervalSince1970 == 1_757_635_200)
+    let att = LeaderboardAttestation(payload: .init(keyId: "K", attestation: nil, assertion: "S", clientData: "C"))
+    let enc = JSONEncoder()
+    enc.outputFormatting = [.sortedKeys]
+    func json<T: Encodable>(_ v: T) -> String { String(decoding: (try? enc.encode(v)) ?? Data(), as: UTF8.self) }
+    let attJSON = #""attestation":{"payload":{"assertion":"S","clientData":"C","keyId":"K"},"platform":"ios"}"#
+    check("invite request carries challenge, attestation and display name",
+          json(BuddyInviteRequest(challenge: "C", attestation: att, displayName: "N9HO")) == "{\(attJSON),\"challenge\":\"C\",\"displayName\":\"N9HO\"}")
+    check("join request carries the code and today",
+          json(BuddyJoinRequest(challenge: "C", attestation: att, displayName: "N9HO", code: "ABC234", today: "2026-09-11"))
+          == "{\(attJSON),\"challenge\":\"C\",\"code\":\"ABC234\",\"displayName\":\"N9HO\",\"today\":\"2026-09-11\"}")
+    check("day request carries day and today",
+          json(BuddyDayRequest(challenge: "C", attestation: att, day: "2026-09-11", today: "2026-09-11"))
+          == "{\(attJSON),\"challenge\":\"C\",\"day\":\"2026-09-11\",\"today\":\"2026-09-11\"}")
+    check("status request carries today",
+          json(BuddyStatusRequest(challenge: "C", attestation: att, today: "2026-09-11")) == "{\(attJSON),\"challenge\":\"C\",\"today\":\"2026-09-11\"}")
+    check("leave request carries only the attestation",
+          json(BuddyLeaveRequest(challenge: "C", attestation: att)) == "{\(attJSON),\"challenge\":\"C\"}")
+
+    // The cached status and its wording — the strings both apps show.
+    let fetched = Date(timeIntervalSince1970: 1_757_600_000)
+    let paired = BuddyStatusCache(status: status!, fetchedAt: fetched)
+    check("the cache takes the buddy's name, day and streak",
+          paired.paired && paired.buddyName == "W1AW" && paired.buddyPractisedToday && paired.streak == 12 && paired.myStreak == 30
+          && paired.today == "2026-09-11" && paired.fetchedAt == fetched)
+    check("home line when the buddy has practised", paired.homeLine(today: "2026-09-11") == "W1AW practised today · 12-day buddy streak")
+    var quiet = paired
+    quiet.buddyPractisedToday = false
+    check("home line when they have not", quiet.homeLine(today: "2026-09-11") == "W1AW hasn't practised yet today · 12-day buddy streak")
+    check("a cache from an earlier day cannot vouch for today", paired.homeLine(today: "2026-09-12") == "W1AW hasn't practised yet today · 12-day buddy streak")
+    check("settings line when the buddy has practised",
+          paired.settingsLine(today: "2026-09-11") == "Paired with W1AW · 12-day buddy streak · W1AW has practised today")
+    check("settings line when they have not",
+          quiet.settingsLine(today: "2026-09-11") == "Paired with W1AW · 12-day buddy streak · W1AW hasn't practised yet today")
+    var fresh = paired
+    fresh.streak = 0
+    check("a zero streak reads 'no buddy streak yet'", fresh.streakLabel == "no buddy streak yet" && BuddyStatusCache().streakLabel == "no buddy streak yet")
+    var one = paired
+    one.streak = 1
+    check("one day reads '1-day buddy streak'", one.streakLabel == "1-day buddy streak")
+    let empty = BuddyStatusCache()
+    check("not paired: no home line and the invite prompt",
+          empty.homeLine(today: "2026-09-11") == nil && empty.settingsLine(today: "2026-09-11") == "Invite a buddy, or join with a code they send you")
+    check("reminder sentence when the buddy has not practised",
+          quiet.reminderSentence(today: "2026-09-11", asOf: "6:10 pm") == "W1AW hasn't practised yet today (as of 6:10 pm)")
+    check("no reminder sentence when they have", paired.reminderSentence(today: "2026-09-11", asOf: "6:10 pm") == nil)
+    check("no reminder sentence from an earlier day's cache", quiet.reminderSentence(today: "2026-09-12", asOf: "6:10 pm") == nil)
+    check("no reminder sentence when not paired", empty.reminderSentence(today: "2026-09-11", asOf: "6:10 pm") == nil)
+    let unpairedCache = BuddyStatusCache(status: unpaired!, fetchedAt: fetched)
+    check("an unpaired answer leaves an empty name", !unpairedCache.paired && unpairedCache.buddyName == "" && unpairedCache.myStreak == 3)
+
+    // Pending invites and the refresh gate.
+    var invited = BuddyStatusCache()
+    invited.pendingInviteCode = "ABC234"
+    invited.pendingInviteExpiresAt = fetched.addingTimeInterval(3600)
+    check("a pending invite is shown until it expires",
+          invited.pendingInvite(at: fetched)?.code == "ABC234" && invited.pendingInvite(at: fetched.addingTimeInterval(7200)) == nil)
+    check("an invite outlives a not-yet-paired status answer",
+          BuddyStatusCache(status: unpaired!, fetchedAt: fetched, previous: invited).pendingInviteCode == "ABC234")
+    check("… and is dropped once paired", BuddyStatusCache(status: status!, fetchedAt: fetched, previous: invited).pendingInviteCode == nil)
+    var reported = invited
+    reported.lastReportedDay = "2026-09-11"
+    check("the reported day survives a status answer",
+          BuddyStatusCache(status: status!, fetchedAt: fetched, previous: reported).lastReportedDay == "2026-09-11")
+    check("refresh wanted when paired or an invite is out, not otherwise",
+          paired.wantsRefresh(at: fetched) && invited.wantsRefresh(at: fetched)
+          && !invited.wantsRefresh(at: fetched.addingTimeInterval(7200)) && !empty.wantsRefresh(at: fetched))
+
+    // Tolerant decoding: an older app's settings without the block, and a
+    // newer app's with a field this one does not know, both load.
+    let old = try? JSONDecoder().decode(BuddyStatusCache.self, from: Data("{}".utf8))
+    check("an empty object decodes to the defaults", old == BuddyStatusCache())
+    let partial = try? JSONDecoder().decode(BuddyStatusCache.self, from: Data(#"{"paired":true,"buddyName":"W1AW","streak":4,"future":1}"#.utf8))
+    check("a partial object keeps what it has", partial?.paired == true && partial?.buddyName == "W1AW" && partial?.streak == 4 && partial?.fetchedAt == nil)
+    let roundTrip = (try? JSONEncoder().encode(reported)).flatMap { try? JSONDecoder().decode(BuddyStatusCache.self, from: $0) }
+    check("the cache round-trips through JSON", roundTrip == reported)
+}
+
 print("\n────────────────────────────")
 if failures == 0 {
     print("✅ All \(checks) checks passed.\n")
