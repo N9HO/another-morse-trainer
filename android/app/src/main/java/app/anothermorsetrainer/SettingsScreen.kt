@@ -5,6 +5,7 @@ import android.app.TimePickerDialog
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.activity.compose.BackHandler
@@ -25,6 +26,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material.icons.Icons
@@ -63,14 +65,19 @@ import androidx.core.content.ContextCompat
 import androidx.core.content.pm.PackageInfoCompat
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.anothermorsetrainer.morsekit.Buddy
 import app.anothermorsetrainer.morsekit.Leaderboard
 import app.anothermorsetrainer.morsekit.MorseCode
 import app.anothermorsetrainer.morsekit.MorseItem
 import app.anothermorsetrainer.morsekit.ProgressiveCharacters
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.text.DateFormat
+import java.util.Date
 import kotlin.math.roundToInt
 
 /**
@@ -182,6 +189,22 @@ fun SettingsScreen(
     var confirmDeleteScores by remember { mutableStateOf(false) }
     var deletingScores by remember { mutableStateOf(false) }
     var deleteScoresNote by remember { mutableStateOf<String?>(null) }
+
+    // Buddy streak (docs/buddy-streak-design.md): which attested call is in
+    // flight (the row shows it), the inline refusal, the Join field and the
+    // Leave confirmation. The status itself lives in Settings.buddyStatus.
+    var buddyBusy by remember { mutableStateOf<BuddyAction?>(null) }
+    var buddyNote by remember { mutableStateOf<String?>(null) }
+    var showJoinBuddy by remember { mutableStateOf(false) }
+    var joinBuddyCode by remember { mutableStateOf("") }
+    var confirmLeaveBuddy by remember { mutableStateOf(false) }
+    var copiedBuddyCode by remember { mutableStateOf(false) }
+    LaunchedEffect(copiedBuddyCode) {
+        if (copiedBuddyCode) {
+            delay(2000)
+            copiedBuddyCode = false
+        }
+    }
 
     // "Copy diagnostic info" (iOS issue #31): a two-second "Copied" confirmation.
     val haptics = remember { Haptics(context) }
@@ -764,6 +787,206 @@ fun SettingsScreen(
                 }
                 SectionFooter(stringResource(R.string.settings_leaderboard_footer))
 
+                // Buddy streak (docs/buddy-streak-design.md): its own section
+                // and its own consent — the leaderboard switch above does not
+                // gate it; only the display name is shared. The buttons run
+                // the attested calls through BuddyClient and say what happened
+                // inline; the status line reads the cache, refreshed when the
+                // section appears (at most every 15 minutes).
+                SectionHeader(stringResource(R.string.settings_buddy))
+                // Only when paired or an invite is out, as on iOS: a status call
+                // creates an identity server-side, and pairing is the consent.
+                LaunchedEffect(Unit) { BuddyClient.refreshIfStale() }
+                val buddyStatus = Settings.buddyStatus
+                val buddyPaired = buddyStatus != null && buddyStatus.paired
+                val buddyHasName = BuddyClient.displayName() != null
+                val buddyReady = buddyHasName && LeaderboardClient.isConfigured && buddyBusy == null
+                // Resource strings read at composition (lint: LocalContextGetResources).
+                val buddyErrorTemplate = stringResource(R.string.settings_buddy_error)
+                val buddyShareTitle = stringResource(R.string.settings_buddy_share_title)
+                val buddyShareTemplate = stringResource(R.string.settings_buddy_share_text)
+                SettingsGroup {
+                    Text(
+                        if (buddyStatus != null && buddyPaired) {
+                            val practised = buddyStatus.buddyPractisedOn(Buddy.today())
+                            stringResource(
+                                if (practised) R.string.settings_buddy_paired else R.string.settings_buddy_paired_not_yet,
+                                buddyStatus.buddyName, buddyStreakLabel(buddyStatus.streak)
+                            )
+                        } else {
+                            stringResource(R.string.settings_buddy_unpaired)
+                        },
+                        color = Brand.textPrimary, fontWeight = FontWeight.Medium,
+                        modifier = Modifier.padding(16.dp)
+                    )
+                    if (!buddyHasName) {
+                        Text(
+                            stringResource(R.string.settings_buddy_no_name),
+                            color = Brand.warning, fontSize = 12.sp,
+                            modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp)
+                        )
+                    }
+                    if (buddyPaired) {
+                        GroupDivider()
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable(enabled = buddyReady) { confirmLeaveBuddy = true }
+                                .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            val leaving = buddyBusy == BuddyAction.LEAVE
+                            Text(
+                                stringResource(if (leaving) R.string.settings_buddy_leaving else R.string.settings_buddy_leave),
+                                color = if (leaving) Brand.textSecondary else Color(0xFFF2788F),
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    } else {
+                        GroupDivider()
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable(enabled = buddyReady) {
+                                    buddyBusy = BuddyAction.INVITE
+                                    buddyNote = null
+                                    uiScope.launch {
+                                        when (val result = BuddyClient.invite()) {
+                                            is BuddyClient.InviteResult.Failed -> buddyNote = buddyErrorTemplate.format(result.reason)
+                                            is BuddyClient.InviteResult.Ok -> {}
+                                        }
+                                        buddyBusy = null
+                                    }
+                                }
+                                .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            val inviting = buddyBusy == BuddyAction.INVITE
+                            Text(
+                                stringResource(if (inviting) R.string.settings_buddy_inviting else R.string.settings_buddy_invite),
+                                color = if (inviting) Brand.textSecondary else Brand.teal,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                        // An invite this install issued and the server still
+                        // honours: the code, large, with copy and share. It
+                        // stays until it expires or someone joins with it.
+                        val inviteCode = Settings.buddyInviteCode
+                        val inviteExpiresAt = Settings.buddyInviteExpiresAt
+                        if (inviteCode.isNotEmpty() && inviteExpiresAt > System.currentTimeMillis()) {
+                            val expiryLabel = remember(inviteExpiresAt) {
+                                DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(inviteExpiresAt))
+                            }
+                            Column(modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 8.dp)) {
+                                Text(
+                                    inviteCode,
+                                    color = Brand.textPrimary,
+                                    fontSize = 34.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    fontFamily = FontFamily.Monospace,
+                                    letterSpacing = 6.sp,
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                                )
+                                Text(
+                                    stringResource(R.string.settings_buddy_code_hint, expiryLabel),
+                                    color = Brand.textSecondary, fontSize = 12.sp
+                                )
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    TextButton(onClick = {
+                                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                                        clipboard?.setPrimaryClip(ClipData.newPlainText("Buddy code", inviteCode))
+                                        copiedBuddyCode = true
+                                    }) {
+                                        Text(
+                                            stringResource(if (copiedBuddyCode) R.string.settings_buddy_copied else R.string.settings_buddy_copy),
+                                            color = Brand.teal, fontWeight = FontWeight.SemiBold
+                                        )
+                                    }
+                                    TextButton(onClick = {
+                                        val send = Intent(Intent.ACTION_SEND).apply {
+                                            type = "text/plain"
+                                            putExtra(Intent.EXTRA_TEXT, buddyShareTemplate.format(inviteCode))
+                                        }
+                                        context.startActivity(Intent.createChooser(send, buddyShareTitle))
+                                    }) {
+                                        Text(stringResource(R.string.settings_buddy_share), color = Brand.teal, fontWeight = FontWeight.SemiBold)
+                                    }
+                                }
+                            }
+                        }
+                        GroupDivider()
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable(enabled = buddyReady) { showJoinBuddy = !showJoinBuddy }
+                                .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(stringResource(R.string.settings_buddy_join), color = Brand.teal, fontWeight = FontWeight.Medium)
+                        }
+                        if (showJoinBuddy) {
+                            // The field says no before the server does, by the
+                            // same rule (Buddy.normalizeInviteCode); spaces and
+                            // dashes are allowed in, stripped on the way out.
+                            val normalizedCode = Buddy.normalizeInviteCode(joinBuddyCode)
+                            OutlinedTextField(
+                                value = joinBuddyCode,
+                                onValueChange = { joinBuddyCode = it.uppercase().take(10) },
+                                placeholder = { Text(stringResource(R.string.settings_buddy_join_hint)) },
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters),
+                                isError = joinBuddyCode.isNotEmpty() && normalizedCode == null,
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)
+                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
+                                horizontalArrangement = Arrangement.End
+                            ) {
+                                val joining = buddyBusy == BuddyAction.JOIN
+                                TextButton(
+                                    enabled = buddyReady && normalizedCode != null,
+                                    onClick = {
+                                        val code = normalizedCode ?: return@TextButton
+                                        buddyBusy = BuddyAction.JOIN
+                                        buddyNote = null
+                                        uiScope.launch {
+                                            val failure = BuddyClient.join(code)
+                                            if (failure == null) {
+                                                showJoinBuddy = false
+                                                joinBuddyCode = ""
+                                            } else {
+                                                buddyNote = buddyErrorTemplate.format(failure)
+                                            }
+                                            buddyBusy = null
+                                        }
+                                    }
+                                ) {
+                                    Text(
+                                        stringResource(if (joining) R.string.settings_buddy_joining else R.string.settings_buddy_join_go),
+                                        color = Brand.teal, fontWeight = FontWeight.SemiBold
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    buddyNote?.let { note ->
+                        Text(
+                            note, color = Brand.warning, fontSize = 12.sp,
+                            modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp)
+                        )
+                    }
+                    if (!LeaderboardClient.isConfigured) {
+                        GroupDivider()
+                        Text(
+                            stringResource(R.string.settings_leaderboard_unconfigured),
+                            color = Brand.warning, fontSize = 12.sp,
+                            modifier = Modifier.padding(16.dp)
+                        )
+                    }
+                }
+                SectionFooter(stringResource(R.string.settings_buddy_footer))
+
                 // Developer aid (iOS `previewStage`): jump the Characters track
                 // to a stage and start drilling it. Shown where the Track-stage
                 // pin is, since both act on the same shared ladder.
@@ -918,6 +1141,32 @@ fun SettingsScreen(
         )
     }
 
+    if (confirmLeaveBuddy) {
+        val buddyName = Settings.buddyStatus?.buddyName ?: ""
+        val leaveErrorTemplate = stringResource(R.string.settings_buddy_error)
+        AlertDialog(
+            onDismissRequest = { confirmLeaveBuddy = false },
+            containerColor = Brand.navyElevated,
+            title = { Text(stringResource(R.string.settings_buddy_leave_confirm_title), color = Brand.textPrimary) },
+            text = { Text(stringResource(R.string.settings_buddy_leave_confirm_body, buddyName), color = Brand.textSecondary) },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmLeaveBuddy = false
+                    buddyBusy = BuddyAction.LEAVE
+                    buddyNote = null
+                    uiScope.launch {
+                        val failure = BuddyClient.leave()
+                        if (failure != null) buddyNote = leaveErrorTemplate.format(failure)
+                        buddyBusy = null
+                    }
+                }) { Text(stringResource(R.string.settings_buddy_leave), color = Color(0xFFF2788F), fontWeight = FontWeight.SemiBold) }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmLeaveBuddy = false }) { Text(stringResource(R.string.common_cancel), color = Brand.teal) }
+            }
+        )
+    }
+
     // The notices the licenses oblige the app to carry (iOS parity). The GPL
     // asks an interactive program to show its terms and no-warranty statement,
     // and the vendored decoder's MIT notice must accompany every copy — the
@@ -964,6 +1213,9 @@ fun SettingsScreen(
         )
     }
 }
+
+/** The buddy call a Settings row is waiting on, so the row can say so and the others go quiet. */
+private enum class BuddyAction { INVITE, JOIN, LEAVE }
 
 /** The Practice footer, assembled from whichever rows the scope kept. */
 private fun practiceFooter(choices: Boolean, wordPool: Boolean, duration: Boolean): String {

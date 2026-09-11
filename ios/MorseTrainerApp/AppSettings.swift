@@ -689,6 +689,12 @@ struct AppSettings: Codable, Equatable {
 
     /// Shared leaderboard: opt-in and display name.
     var leaderboard = LeaderboardSettings()
+    /// Buddy streak (docs/buddy-streak-design.md): the last status the server
+    /// gave, so the home line, Settings and the daily reminder have something
+    /// to say without a round trip. Not a preference — the pairing itself
+    /// lives on the server — but it persists with the settings because it is
+    /// read wherever they are. `BuddyStatusCache` in MorseKit is the shape.
+    var buddy = BuddyStatusCache()
 
     /// Short Stories mode settings (fables vs. fetched news headlines).
     var story = StorySettings()
@@ -789,6 +795,7 @@ extension AppSettings {
         case contest
         case rapidFire
         case leaderboard
+        case buddy
         case story
         case showCorrectness, reveal, allowReplay, hapticsEnabled, slashedZero
         case headCopyRepeats, headCopyRevealSeconds
@@ -868,6 +875,7 @@ extension AppSettings {
         s.contest = try c.decodeIfPresent(ContestSettings.self, forKey: .contest) ?? s.contest
         s.rapidFire = try c.decodeIfPresent(RapidFireSettings.self, forKey: .rapidFire) ?? s.rapidFire
         s.leaderboard = try c.decodeIfPresent(LeaderboardSettings.self, forKey: .leaderboard) ?? s.leaderboard
+        s.buddy = try c.decodeIfPresent(BuddyStatusCache.self, forKey: .buddy) ?? s.buddy
         s.story = try c.decodeIfPresent(StorySettings.self, forKey: .story) ?? s.story
         s.showCorrectness = try c.decodeIfPresent(Bool.self, forKey: .showCorrectness) ?? s.showCorrectness
         s.reveal = try c.decodeIfPresent(RevealMode.self, forKey: .reveal) ?? s.reveal

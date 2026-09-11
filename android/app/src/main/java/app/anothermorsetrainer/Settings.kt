@@ -8,6 +8,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.content.edit
+import app.anothermorsetrainer.morsekit.BuddyStatus
 import app.anothermorsetrainer.morsekit.CallsignFormat
 import app.anothermorsetrainer.morsekit.ContestLength
 import app.anothermorsetrainer.morsekit.ContestType
@@ -376,6 +377,35 @@ object Settings {
     var leaderboardName by mutableStateOf("")
         private set
 
+    // ---- Buddy streak (docs/buddy-streak-design.md) ----
+
+    /**
+     * The last status the server gave (`BuddyClient`), or null before the
+     * first successful fetch. Read by the home line, the Settings section and
+     * the daily reminder, none of which may wait on the network; refreshed by
+     * `BuddyClient.refreshIfStale`. Pairing is its own consent, so this is not
+     * gated by [leaderboardEnabled]: the display name is shared, the switch
+     * is not.
+     */
+    var buddyStatus by mutableStateOf<BuddyStatus?>(null)
+        private set
+    /**
+     * The local day (yyyy-mm-dd) last reported to `POST /v1/buddy/day`, so a
+     * practice day goes over the wire once, not on every session; "" before
+     * the first. A failed report leaves it, so the next practice retries.
+     */
+    var buddyLastReportedDay by mutableStateOf("")
+        private set
+    /**
+     * An invite this install issued and has not seen used: the code and its
+     * expiry (epoch ms), kept so the Settings section can show it again and
+     * the app keeps polling for the join. "" / 0 when none.
+     */
+    var buddyInviteCode by mutableStateOf("")
+        private set
+    var buddyInviteExpiresAt by mutableStateOf(0L)
+        private set
+
     // Daily practice reminder (a notification to keep the streak alive).
     var remindersEnabled by mutableStateOf(false)
         private set
@@ -523,6 +553,33 @@ object Settings {
         remindersEnabled = prefs.getBoolean("reminders", false)
         reminderHour = prefs.getInt("reminderHour", 19)
         reminderMinute = prefs.getInt("reminderMinute", 0)
+        readBuddy()
+    }
+
+    /**
+     * The buddy cache, read tolerantly: a mistyped key (SharedPreferences
+     * throws ClassCastException) or an inconsistent set falls back to "no
+     * status", never to a crash at launch. Also runs in `ReminderReceiver`,
+     * which has no activity behind it.
+     */
+    private fun readBuddy() {
+        buddyStatus = runCatching {
+            val fetchedAt = prefs.getLong("buddyFetchedAt", 0L)
+            if (fetchedAt <= 0L) return@runCatching null
+            BuddyStatus(
+                paired = prefs.getBoolean("buddyPaired", false),
+                buddyName = prefs.getString("buddyName", "") ?: "",
+                buddyPractisedToday = prefs.getBoolean("buddyPractisedToday", false),
+                streak = prefs.getInt("buddyStreak", 0),
+                myStreak = prefs.getInt("buddyMyStreak", 0),
+                practisedToday = prefs.getBoolean("buddyMyPractisedToday", false),
+                today = prefs.getString("buddyToday", "") ?: "",
+                fetchedAt = fetchedAt
+            )
+        }.getOrNull()?.let { if (it.paired && it.buddyName.isEmpty()) it.copy(paired = false) else it }
+        buddyLastReportedDay = runCatching { prefs.getString("buddyLastReportedDay", "") ?: "" }.getOrDefault("")
+        buddyInviteCode = runCatching { prefs.getString("buddyInviteCode", "") ?: "" }.getOrDefault("")
+        buddyInviteExpiresAt = runCatching { prefs.getLong("buddyInviteExpiresAt", 0L) }.getOrDefault(0L)
     }
 
     /**
@@ -810,6 +867,54 @@ object Settings {
     fun updateLeaderboardName(value: String) {
         leaderboardName = value.uppercase().take(LEADERBOARD_NAME_MAX)
         persist()
+    }
+
+    /** A fresh status from the server replaces the cache; a pairing clears any outstanding invite. */
+    fun updateBuddyStatus(status: BuddyStatus) {
+        buddyStatus = status
+        if (status.paired) {
+            buddyInviteCode = ""
+            buddyInviteExpiresAt = 0L
+        }
+        persistBuddy()
+    }
+
+    fun markBuddyReported(day: String) {
+        buddyLastReportedDay = day
+        persistBuddy()
+    }
+
+    fun updateBuddyInvite(code: String, expiresAt: Long) {
+        buddyInviteCode = code
+        buddyInviteExpiresAt = expiresAt
+        persistBuddy()
+    }
+
+    /** After "Leave buddy" or "Delete my scores": the server has forgotten the pair, so does the cache. */
+    fun clearBuddy() {
+        buddyStatus = null
+        buddyLastReportedDay = ""
+        buddyInviteCode = ""
+        buddyInviteExpiresAt = 0L
+        persistBuddy()
+    }
+
+    /** The buddy keys are written on their own: they change from a background fetch, not a settings tap. */
+    private fun persistBuddy() {
+        val s = buddyStatus
+        prefs.edit {
+            putLong("buddyFetchedAt", s?.fetchedAt ?: 0L)
+            putBoolean("buddyPaired", s?.paired ?: false)
+            putString("buddyName", s?.buddyName ?: "")
+            putBoolean("buddyPractisedToday", s?.buddyPractisedToday ?: false)
+            putInt("buddyStreak", s?.streak ?: 0)
+            putInt("buddyMyStreak", s?.myStreak ?: 0)
+            putBoolean("buddyMyPractisedToday", s?.practisedToday ?: false)
+            putString("buddyToday", s?.today ?: "")
+            putString("buddyLastReportedDay", buddyLastReportedDay)
+            putString("buddyInviteCode", buddyInviteCode)
+            putLong("buddyInviteExpiresAt", buddyInviteExpiresAt)
+        }
     }
 
     fun updateReminderTime(hour: Int, minute: Int) {

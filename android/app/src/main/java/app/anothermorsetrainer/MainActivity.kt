@@ -52,6 +52,11 @@ class MainActivity : ComponentActivity() {
         // no composition-scoped effect, so coming back the next morning would
         // otherwise still show yesterday's Daily Dit.
         DailyDitStore.refresh()
+        // The buddy's day, likewise: the home line and the reminder read a
+        // cache, and coming back to the app is when it is worth refreshing
+        // (at most every 15 minutes, and only for an install that is paired
+        // or has an invite out).
+        BuddyClient.refreshIfStale()
     }
 
     override fun onStop() {

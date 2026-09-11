@@ -62,6 +62,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.anothermorsetrainer.morsekit.Buddy
+import app.anothermorsetrainer.morsekit.BuddyStatus
 import app.anothermorsetrainer.morsekit.DailyDit
 import app.anothermorsetrainer.morsekit.DailyDitOutcome
 import kotlin.math.roundToInt
@@ -186,6 +188,14 @@ fun HomeScreen(
                 if (Stats.currentStreak > 0) {
                     Spacer(Modifier.height(12.dp))
                     StreakBadge(Stats.currentStreak)
+                }
+                // The buddy line (docs/buddy-streak-design.md §5): the in-app
+                // nudge. Reads the cache; MainActivity.onStart refreshes it.
+                Settings.buddyStatus?.let { buddy ->
+                    if (buddy.paired) {
+                        Spacer(Modifier.height(8.dp))
+                        BuddyLine(buddy)
+                    }
                 }
             }
 
@@ -343,6 +353,27 @@ private fun StreakBadge(days: Int) {
     }
 }
 
+/**
+ * "W1AW practised today · 12-day buddy streak", or "hasn't practised yet
+ * today". "Today" is the device's local day; a status fetched on another
+ * day says nothing about this one, so it reads as not yet.
+ */
+@Composable
+private fun BuddyLine(buddy: BuddyStatus) {
+    val practised = buddy.buddyPractisedOn(Buddy.today())
+    Text(
+        text = if (practised) {
+            stringResource(R.string.home_buddy_practised, buddy.buddyName, buddyStreakLabel(buddy.streak))
+        } else {
+            stringResource(R.string.home_buddy_not_yet, buddy.buddyName, buddyStreakLabel(buddy.streak))
+        },
+        style = MaterialTheme.typography.labelMedium,
+        color = Brand.teal,
+        fontWeight = FontWeight.Medium,
+        textAlign = TextAlign.Center
+    )
+}
+
 @Composable
 internal fun ModeTile(item: HomeItem, modifier: Modifier = Modifier) {
     Column(
@@ -378,3 +409,8 @@ internal fun ModeTile(item: HomeItem, modifier: Modifier = Modifier) {
         )
     }
 }
+
+/** "12-day buddy streak", or "no buddy streak yet" at zero — the same words as iOS's `streakLabel`. */
+@Composable
+internal fun buddyStreakLabel(streak: Int): String =
+    if (streak > 0) stringResource(R.string.buddy_streak_days, streak) else stringResource(R.string.buddy_streak_none)

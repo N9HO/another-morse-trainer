@@ -169,11 +169,14 @@ extension AppModel {
 
     /// Settings › Leaderboard › Delete my scores. Attested like a run start;
     /// the server drops every score, submission and token for this device's
-    /// key, and the key itself.
+    /// key, the buddy pair, invites and practice days, and the key itself —
+    /// so the buddy cache is cleared here too, or the home line would go on
+    /// naming a buddy the server no longer knows.
     func leaderboardDeleteMyScores() async -> String? {
         guard leaderboard.canAttest else { return LeaderboardError.unsupported.message }
         do {
             try await leaderboard.deleteMyScores()
+            clearBuddyCache()
             return nil
         } catch let error as LeaderboardError {
             return error.message

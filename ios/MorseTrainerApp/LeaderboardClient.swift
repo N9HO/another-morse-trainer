@@ -117,8 +117,9 @@ actor LeaderboardClient {
     }
 
     /// `/v1/me/delete`: remove everything the server holds for this device's
-    /// key — scores, submissions, tokens and the key itself. The next write
-    /// therefore starts over with a fresh key.
+    /// key — scores, submissions, tokens, the buddy pair, invites, practice
+    /// days and the key itself. The next write therefore starts over with a
+    /// fresh key.
     func deleteMyScores() async throws {
         struct Deleted: Decodable { var deleted: Bool }
         let _: Deleted = try await attestedWithChallenge(path: "v1/me/delete") { challenge, attestation in
@@ -131,10 +132,12 @@ actor LeaderboardClient {
     // MARK: - Attested requests
 
     /// A write whose client data is a fresh server challenge (`/run/start`,
-    /// `/me/delete`). The challenge is consumed by the server before it
-    /// checks the attestation, so the one "unknown key" retry needs a new
-    /// challenge as well as a fresh attestation object.
-    private func attestedWithChallenge<Body: Encodable, Result: Decodable>(
+    /// `/me/delete`, every `/buddy/*` route). The challenge is consumed by
+    /// the server before it checks the attestation, so the one "unknown key"
+    /// retry needs a new challenge as well as a fresh attestation object.
+    /// Internal, not private, so the buddy routes in
+    /// LeaderboardClient+Buddy.swift share it — same key, same retry.
+    func attestedWithChallenge<Body: Encodable, Result: Decodable>(
         path: String,
         _ makeBody: @Sendable (String, LeaderboardAttestation) -> Body
     ) async throws -> Result {
