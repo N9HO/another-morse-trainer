@@ -293,7 +293,7 @@ struct SettingsView: View {
                     } header: {
                         Text("Punctuation")
                     } footer: {
-                        Text("“?” is already part of the base letters & numbers. Turn on any of these extras to mix them into your practice.")
+                        Text("“?” is already part of the base letters & numbers. Opted-in marks join the Characters ladder after the letters and numbers, and the games’ full set straight away.")
                     }
                     .listRowBackground(Theme.navyElevated)
                 }

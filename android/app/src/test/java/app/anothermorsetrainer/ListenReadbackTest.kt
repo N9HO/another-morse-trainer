@@ -36,6 +36,14 @@ class ListenReadbackTest {
     }
 
     @Test
+    fun `the characters pool is the active set, punctuation included, and never empty`() {
+        val active = listOf('K', 'M', '?', ',')
+        assertEquals(active.map { it.toString() }, listenPool(ListenContent.CHARACTERS, ListenReadback.SPELLED, active).map { it.display })
+        assertEquals("comma", listenPool(ListenContent.CHARACTERS, ListenReadback.SPELLED, active).last().spoken)
+        assertEquals(listOf("E"), listenPool(ListenContent.CHARACTERS, ListenReadback.SPELLED, emptyList()).map { it.display })
+    }
+
+    @Test
     fun `characters and words are unchanged by the readback choice`() {
         assertEquals(
             listenPool(ListenContent.WORDS, ListenReadback.SPELLED).map { it.spoken },

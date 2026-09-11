@@ -6,7 +6,9 @@
     "studyOrder": "kochOrder, then pickablePunctuation filtered to the opted-in set, in pickable order",
     "note": "This is the divergence that made the item: Android threaded opted-in punctuation through the studyOrder ladder while iOS added it straight to the active set, so unlocking singles->pairs took 40 characters on one port and 37 on the other. The ladder is the intended design. Opting in adds a mark to the LADDER, not to the active set \u2014 it still has to be reached and mastered.",
     "optOut": "activeAfter = activeBefore with every pickablePunctuation character NOT in selectedPunctuation removed, relative order preserved; removed = those characters, in activeBefore order. Only pickable punctuation is ever removed: '?' is Koch core and stays, and a mark that was never earned is simply not there to remove. Opting back IN changes nothing here - the mark goes back on the studyOrder ladder (cases above), not into the active set. The mark's CharacterStats entry is kept on both ports (behavioural check, not fixture data).",
-    "optOutNote": "Issue #133: opting out used to leave an earned mark in the drill. Decided: it is removed from the active set and its stats are kept, so opting back in and re-earning it loses no history."
+    "optOutNote": "Issue #133: opting out used to leave an earned mark in the drill. Decided: it is removed from the active set and its stats are kept, so opting back in and re-earning it loses no history.",
+    "fullPool": "the games' 'Full alphabet and digits' set (#213): every kochOrder character in kochOrder order ('?' included, it is Koch core), then pickablePunctuation filtered to the opted-in set, in pickable order. Not ladder-gated: an opted-in mark is in it at once. Before #213 both ports filtered kochOrder to letters and digits, dropping '?' and ignoring the opt-in entirely.",
+    "fullPoolNote": "Derived from the rule directly, independently of either implementation."
   },
   "kochOrder": "KMRSUAPTLOWINJEF0YVG5Q9ZH38B?427C1D6X",
   "kochOrderLength": 37,
@@ -96,5 +98,14 @@
       "activeAfter": "KMRSUA",
       "removed": ""
     }
+  ],
+  "fullPoolCases": [
+    {"selectedPunctuation": "", "fullPool": "KMRSUAPTLOWINJEF0YVG5Q9ZH38B?427C1D6X", "length": 37},
+    {"selectedPunctuation": ".", "fullPool": "KMRSUAPTLOWINJEF0YVG5Q9ZH38B?427C1D6X.", "length": 38},
+    {"selectedPunctuation": ",", "fullPool": "KMRSUAPTLOWINJEF0YVG5Q9ZH38B?427C1D6X,", "length": 38},
+    {"selectedPunctuation": "/", "fullPool": "KMRSUAPTLOWINJEF0YVG5Q9ZH38B?427C1D6X/", "length": 38},
+    {"selectedPunctuation": ".,", "fullPool": "KMRSUAPTLOWINJEF0YVG5Q9ZH38B?427C1D6X.,", "length": 39},
+    {"selectedPunctuation": ",./", "fullPool": "KMRSUAPTLOWINJEF0YVG5Q9ZH38B?427C1D6X.,/", "length": 40},
+    {"selectedPunctuation": "/.,", "fullPool": "KMRSUAPTLOWINJEF0YVG5Q9ZH38B?427C1D6X.,/", "length": 40}
   ]
 }

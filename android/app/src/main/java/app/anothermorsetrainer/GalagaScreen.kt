@@ -145,7 +145,7 @@ fun GalagaScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) 
     /** The pool, letters first then digits (the recognition chart's order); the same two pools as Invaders. */
     fun characterPool(): List<Char> = when (characterSet) {
         InvadersCharacterSet.ACTIVE -> engine.activeCharacters
-        InvadersCharacterSet.FULL -> MorseCode.kochOrder.filter { it.isLetterOrDigit() }
+        InvadersCharacterSet.FULL -> MorseCode.fullPool(Settings.punctuationChars)
     }.map { it.toString() }.sortedWith(SessionRecord.characterOrder).map { it[0] }
 
     // Run state. The game dies with the process; the tally below does not.

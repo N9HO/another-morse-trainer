@@ -64,6 +64,21 @@ class MorseLadderTest {
         }
     }
 
+    /** The games' full set (#213): Koch core with '?', then the opted-in marks, at once. */
+    @Test
+    fun `full pool matches the shared fixture for every punctuation selection`() {
+        val cases = fixture.getJSONArray("fullPoolCases")
+        assertTrue("fixture has no full-pool cases", cases.length() > 0)
+        for (i in 0 until cases.length()) {
+            val c = cases.getJSONObject(i)
+            val selection = c.getString("selectedPunctuation").toSet()
+            val built = MorseCode.fullPool(selection)
+            assertEquals("selection '$selection' pool", c.getString("fullPool"), built.joinToString(""))
+            assertEquals("selection '$selection' length", c.getInt("length"), built.size)
+            assertTrue("'?' is Koch core and belongs in the full set", '?' in built)
+        }
+    }
+
     /**
      * Drive the ladder to its first unlock and count what it took. This is the
      * end-to-end shape of the divergence: 37 characters with nothing opted in,
