@@ -95,23 +95,40 @@ object ListenState {
  * the content changes and otherwise kept for the picker's life.
  */
 class ListenPicker(private val rng: Random = Random.Default) {
-    private var dealtFor: Pair<ListenContent, ListenReadback>? = null
+    private var dealtFor: Triple<ListenContent, ListenReadback, List<Char>>? = null
     private var deck: ShuffledDeck<ListenItem>? = null
 
-    fun next(content: ListenContent, readback: ListenReadback = ListenReadback.SPELLED): ListenItem {
-        val key = content to readback
+    /**
+     * [activeCharacters] is the Koch ladder's active set, which the Characters
+     * pool follows (as on iOS, #213); a change re-deals the deck.
+     */
+    fun next(
+        content: ListenContent,
+        readback: ListenReadback = ListenReadback.SPELLED,
+        activeCharacters: List<Char> = MorseCode.kochOrder
+    ): ListenItem {
+        val key = Triple(content, readback, activeCharacters)
         if (key != dealtFor) {
             dealtFor = key
-            deck = ShuffledDeck(listenPool(content, readback), rng)
+            deck = ShuffledDeck(listenPool(content, readback, activeCharacters), rng)
         }
         return deck?.draw()
             ?: ListenItem(MorseItem.Playable.Text("E"), "E", spokenName('E'))
     }
 }
 
-/** Everything Listen & Learn can announce for [content], spoken per [readback]. */
-fun listenPool(content: ListenContent, readback: ListenReadback = ListenReadback.SPELLED): List<ListenItem> = when (content) {
-    ListenContent.CHARACTERS -> MorseCode.kochOrder.map { ch ->
+/**
+ * Everything Listen & Learn can announce for [content], spoken per [readback].
+ * The Characters pool is [activeCharacters], the ladder's active set, as on
+ * iOS — it used to be the whole Koch order regardless of progress (#213), so
+ * a beginner heard all 37 and an opted-in punctuation mark never arrived.
+ */
+fun listenPool(
+    content: ListenContent,
+    readback: ListenReadback = ListenReadback.SPELLED,
+    activeCharacters: List<Char> = MorseCode.kochOrder
+): List<ListenItem> = when (content) {
+    ListenContent.CHARACTERS -> activeCharacters.ifEmpty { listOf('E') }.map { ch ->
         ListenItem(MorseItem.Playable.Text(ch.toString()), ch.toString(), spokenName(ch))
     }
     ListenContent.WORDS -> MorseData.wordItems.map { item ->

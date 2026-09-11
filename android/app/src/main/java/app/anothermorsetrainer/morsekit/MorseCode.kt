@@ -67,6 +67,17 @@ object MorseCode {
         kochOrder + pickablePunctuation.filter { it in punctuation }
 
     /**
+     * The games' "Full alphabet and digits" set (#213): the whole Koch core,
+     * '?' included, then the opted-in punctuation — at once, not ladder-gated,
+     * because this pool is by definition not the ladder. Pinned by
+     * `fixtures/ladder.json` (`fullPoolCases`). Before #213 this filtered
+     * kochOrder to letters and digits, which dropped '?' and ignored the
+     * opt-in, so the setting had no visible effect anywhere.
+     */
+    fun fullPool(punctuation: Set<Char>): List<Char> =
+        kochOrder + pickablePunctuation.filter { it in punctuation }
+
+    /**
      * Pattern lookup across both the base table and optional punctuation.
      * (`optionalPunctuation + table` so a base entry wins on any key clash,
      * matching the Swift `merging { base, _ in base }`.)

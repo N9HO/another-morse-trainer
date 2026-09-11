@@ -2824,8 +2824,14 @@ struct LadderFixture: Decodable {
     let kochOrder: String
     let kochOrderLength: Int
     let pickablePunctuation: String
+    struct FullPoolCase: Decodable {
+        let selectedPunctuation: String
+        let fullPool: String
+        let length: Int
+    }
     let cases: [Case]
     let optOutCases: [OptOutCase]
+    let fullPoolCases: [FullPoolCase]
 }
 
 func loadLadderFixture() -> LadderFixture? {
@@ -2870,6 +2876,17 @@ if let fx = loadLadderFixture() {
         }
     }
     check("opting out reconciles the active set as the fixture says for all \(fx.optOutCases.count) cases", optOutOK)
+
+    // The games' full set (#213): Koch core with "?", then the opted-in marks, at once.
+    var fullOK = true
+    for c in fx.fullPoolCases {
+        let built = MorseCode.fullPool(withPunctuation: Set(c.selectedPunctuation))
+        if String(built) != c.fullPool || built.count != c.length || !built.contains("?") {
+            fullOK = false
+            print("      ↳ full pool for '\(c.selectedPunctuation)': got \(String(built)), fixture says \(c.fullPool)")
+        }
+    }
+    check("the games' full pool matches the fixture for all \(fx.fullPoolCases.count) selections", fullOK)
 } else {
     check("fixtures/ladder.json loads and decodes", false)
 }

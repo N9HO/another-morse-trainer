@@ -190,7 +190,7 @@ fun DungeonScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
     /** The pool, letters first then digits (the recognition chart's order). */
     fun characterPool(): List<Char> = when (characterSet) {
         InvadersCharacterSet.ACTIVE -> engine.activeCharacters
-        InvadersCharacterSet.FULL -> MorseCode.kochOrder.filter { it.isLetterOrDigit() }
+        InvadersCharacterSet.FULL -> MorseCode.fullPool(Settings.punctuationChars)
     }.map { it.toString() }.sortedWith(SessionRecord.characterOrder).map { it[0] }
 
     /** The spell book for the chosen set: what it spells, or the starters. */

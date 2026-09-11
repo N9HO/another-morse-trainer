@@ -3118,7 +3118,7 @@ final class AppModel: ObservableObject {
     func invadersCharacters(_ set: InvadersCharacterSet) -> [Character] {
         switch set {
         case .active: return engine.activeCharacters
-        case .full:   return MorseCode.kochOrder.filter { $0.isLetter || $0.isNumber }
+        case .full:   return MorseCode.fullPool(withPunctuation: Set(settings.selectedPunctuation.compactMap { $0.first }))
         }
     }
 

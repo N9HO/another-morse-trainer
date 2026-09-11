@@ -25,7 +25,9 @@ the iOS app's navy/teal look.
 - **Characters**: Koch-method ladder (A-Z, 0-9) with a user-pinnable
   "Track stage" (characters, pairs, triples, words & call signs)
 - **Common Words**, **Abbreviations**, **Q-Codes**, **Prosigns**: phrase
-  drills, with custom word lists and optional punctuation extras
+  drills, with custom word lists and optional punctuation extras (an
+  opted-in mark joins the Characters ladder after the core set, and the
+  games' full set straight away)
 - **Confusion Drill**: targeted review of the pairs you mix up
 - **Head Copy**, **Type It**, **QRQ Speed**: copy in your head with
   auto-repeats and a timed reveal, free-recall typing, and high-speed copy at
