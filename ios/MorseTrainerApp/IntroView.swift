@@ -194,8 +194,29 @@ struct IntroView: View {
                 .foregroundStyle(Theme.textSecondary)
                 .multilineTextAlignment(.center)
             streakBadge
+            buddyLine
         }
         .padding(.top, 8)
+    }
+
+    /// The buddy streak's line (docs/buddy-streak-design.md, "The nudge"),
+    /// shown only while paired: whether the buddy has practised today and
+    /// the shared streak, from the last status fetch. Sits under the streak
+    /// badge because that is what it is about; unlike the badge it shows at
+    /// a zero streak, since "hasn't practised yet" is the point.
+    @ViewBuilder
+    private var buddyLine: some View {
+        if let line = model.settings.buddy.homeLine(today: model.buddyToday) {
+            HStack(spacing: 6) {
+                Image(systemName: "person.2.fill")
+                Text(line)
+            }
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(Theme.teal)
+            .multilineTextAlignment(.center)
+            .padding(.top, 2)
+            .accessibilityElement(children: .combine)
+        }
     }
 
     /// Daily practice streak, shown only once the learner has an active streak

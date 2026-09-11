@@ -21,6 +21,11 @@ struct MorseTrainerApp: App {
         // silent and other apps' audio is not paused there.
         .onChange(of: scenePhase) { phase in
             model.setAudioActive(phase == .active)
+            // The buddy line and the reminder's buddy sentence come from a
+            // cached status; each return to the foreground is the moment to
+            // bring it up to date (at most every 15 minutes, and only while
+            // paired or an invite is open — AppModel+Buddy.swift).
+            if phase == .active { model.refreshBuddyStatus() }
         }
     }
 }

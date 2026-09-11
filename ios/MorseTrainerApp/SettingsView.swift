@@ -11,6 +11,15 @@ struct SettingsView: View {
     @State private var confirmDeleteScores = false
     @State private var deletingScores = false
     @State private var deleteScoresResult: String?
+    /// Settings › Buddy streak (docs/buddy-streak-design.md): the join field,
+    /// the in-flight call, the last refusal, and the leave confirmation. The
+    /// status and the pending invite are not state here — they live in the
+    /// cache (`model.settings.buddy`) so they survive the sheet closing.
+    @State private var buddyJoinCode = ""
+    @State private var buddyBusy = false
+    @State private var buddyProblem: String?
+    @State private var confirmLeaveBuddy = false
+    @State private var copiedInvite = false
 
     /// The adapter's keyer mode (issue #43). Stored under the repeater's key
     /// because it is one fact about the operator's hardware, not a per-screen
@@ -546,6 +555,95 @@ struct SettingsView: View {
                 }
                 .listRowBackground(Theme.navyElevated)
 
+                // Buddy streak (docs/buddy-streak-design.md, #219). Uses the
+                // leaderboard's name and attestation but not its switch:
+                // inviting or joining is the consent. The status shown is the
+                // cache; it refreshes as this row appears (15-minute limit).
+                Section {
+                    Text(model.settings.buddy.settingsLine(today: model.buddyToday))
+                        .foregroundStyle(model.settings.buddy.paired ? .primary : .secondary)
+                        .onAppear { model.refreshBuddyStatus() }
+                    if let reason = model.buddyUnavailableReason {
+                        Text(reason)
+                            .font(.footnote)
+                            .foregroundStyle(.orange)
+                    }
+                    if model.settings.buddy.paired {
+                        Button(role: .destructive) {
+                            confirmLeaveBuddy = true
+                        } label: {
+                            HStack {
+                                Label("Leave buddy", systemImage: "person.2.slash")
+                                if buddyBusy { Spacer(); ProgressView() }
+                            }
+                        }
+                        .disabled(buddyBusy || model.buddyUnavailableReason != nil)
+                        .confirmationDialog("Leave \(model.settings.buddy.buddyName)?",
+                                            isPresented: $confirmLeaveBuddy, titleVisibility: .visible) {
+                            Button("Leave buddy", role: .destructive) {
+                                runBuddyAction { await model.buddyLeave() }
+                            }
+                        } message: {
+                            Text("Ends the buddy streak for both of you. Either of you can pair again with a new code.")
+                        }
+                    } else {
+                        if let invite = model.settings.buddy.pendingInvite(at: Date()) {
+                            buddyInviteCard(code: invite.code, expiresAt: invite.expiresAt)
+                        }
+                        Button {
+                            runBuddyAction {
+                                if case .failure(let p) = await model.buddyInvite() { return p.message }
+                                return nil
+                            }
+                        } label: {
+                            HStack {
+                                Label(model.settings.buddy.pendingInvite(at: Date()) == nil ? "Invite a buddy" : "New invite code",
+                                      systemImage: "person.crop.circle.badge.plus")
+                                if buddyBusy { Spacer(); ProgressView() }
+                            }
+                        }
+                        .disabled(buddyBusy || model.buddyUnavailableReason != nil)
+                        HStack {
+                            Text("Join with a code")
+                            Spacer()
+                            TextField("ABC234", text: $buddyJoinCode)
+                                .multilineTextAlignment(.trailing)
+                                .textInputAutocapitalization(.characters)
+                                .autocorrectionDisabled()
+                                .keyboardType(.asciiCapable)
+                                .font(.body.monospaced())
+                                .frame(maxWidth: 140)
+                                .onChange(of: buddyJoinCode) { raw in
+                                    // Uppercase, no separators, six at most —
+                                    // the form the server reads (BuddyInviteCode).
+                                    let kept = BuddyInviteCode.typed(raw)
+                                    if kept != raw { buddyJoinCode = kept }
+                                }
+                            Button("Join") {
+                                let code = buddyJoinCode
+                                runBuddyAction {
+                                    let problem = await model.buddyJoin(code: code)
+                                    if problem == nil { buddyJoinCode = "" }
+                                    return problem
+                                }
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .disabled(buddyBusy || model.buddyUnavailableReason != nil
+                                      || BuddyInviteCode.normalize(buddyJoinCode) == nil)
+                        }
+                    }
+                    if let buddyProblem {
+                        Text(buddyProblem)
+                            .font(.footnote)
+                            .foregroundStyle(.orange)
+                    }
+                } header: {
+                    Text("Buddy streak")
+                } footer: {
+                    Text("Pair with one other person and keep a streak of days you both practised. Any practice day counts, the same as your own streak. Your buddy sees your leaderboard display name and whether you practised each day, nothing else; pairing needs the same device attestation as posting a score but not the Share scores switch. Leaving ends the streak for both of you, and Delete my scores above removes the pairing too.")
+                }
+                .listRowBackground(Theme.navyElevated)
+
                 Section {
                     Button {
                         UIPasteboard.general.string = diagnosticInfo()
@@ -686,6 +784,53 @@ struct SettingsView: View {
                 else { model.settings.selectedPunctuation.remove(symbol) }
             }
         )
+    }
+
+    /// Run one buddy action (invite, join, leave) with the busy spinner up
+    /// and its refusal, if any, shown under the buttons.
+    private func runBuddyAction(_ action: @escaping @MainActor () async -> String?) {
+        buddyBusy = true
+        buddyProblem = nil
+        copiedInvite = false
+        Task {
+            buddyProblem = await action()
+            buddyBusy = false
+        }
+    }
+
+    /// An invite this device issued: the code large enough to read out, when
+    /// it lapses, and the two ways to send it. Single use, 24 hours.
+    private func buddyInviteCard(code: String, expiresAt: Date) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(code)
+                .font(.system(size: 36, weight: .bold, design: .monospaced))
+                .tracking(6)
+                .foregroundStyle(Theme.tealBright)
+                .frame(maxWidth: .infinity)
+                .accessibilityLabel("Invite code \(code.map(String.init).joined(separator: " "))")
+            Text("Send this to your buddy however you like — it works once and expires \(expiresAt.formatted(date: .abbreviated, time: .shortened)).")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+            HStack {
+                ShareLink(item: buddyInviteShareText(code: code)) {
+                    Label("Share", systemImage: "square.and.arrow.up")
+                }
+                Spacer()
+                Button {
+                    UIPasteboard.general.string = code
+                    copiedInvite = true
+                    Haptics.success()
+                } label: {
+                    Label(copiedInvite ? "Copied" : "Copy code", systemImage: copiedInvite ? "checkmark.circle" : "doc.on.doc")
+                }
+            }
+            .buttonStyle(.bordered)
+        }
+        .padding(.vertical, 4)
+    }
+
+    private func buddyInviteShareText(code: String) -> String {
+        "Be my Morse buddy in Another Morse Trainer: open Settings › Buddy streak and join with the code \(code). It works once and expires in 24 hours."
     }
 
     /// The reminder time as a Date for the hour-and-minute picker, routed

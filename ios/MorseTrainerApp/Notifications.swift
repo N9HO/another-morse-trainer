@@ -24,15 +24,23 @@ enum PracticeReminders {
     /// through `refreshReminderIfStreakChanged` at every point the count can
     /// move: the day's first practice, a progress reset, launch, and each
     /// return to the foreground (a streak that lapsed overnight).
-    static func schedule(hour: Int, minute: Int = 0, streak: Int = 0) {
+    ///
+    /// `buddySentence` is the buddy streak's nudge when the last status
+    /// fetch saw the buddy had not practised ("W1AW hasn't practised yet
+    /// today (as of 6:10 pm)"); it names its own age because it can be hours
+    /// stale by the time this fires (docs/buddy-streak-design.md, "The
+    /// nudge"). Nil leaves the body as it always was.
+    static func schedule(hour: Int, minute: Int = 0, streak: Int = 0, buddySentence: String? = nil) {
         let center = UNUserNotificationCenter.current()
         center.removePendingNotificationRequests(withIdentifiers: [identifier])
 
         let content = UNMutableNotificationContent()
         content.title = "Keep your streak alive"
-        content.body = streak > 0
+        var body = streak > 0
             ? "Keep your \(streak)-day streak alive — a few minutes of CW is all it takes."
             : "A quick Morse session today keeps your practice streak going."
+        if let buddySentence { body += " \(buddySentence)." }
+        content.body = body
         content.sound = .default
 
         var when = DateComponents()

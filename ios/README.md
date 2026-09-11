@@ -128,6 +128,12 @@ testers, bug reports and feature chat live on
   with App Attest, so only the genuine app on a real device can rank. Pick a
   callsign-shaped display name in Settings › Leaderboard; "Delete my scores"
   removes everything the server holds for the device.
+- **Buddy streak**: pair with one other person by a six-character invite
+  code (single use, 24 hours) and keep a streak of days you *both*
+  practised. The home screen says whether your buddy has practised today,
+  and the daily reminder adds a nudge when they haven't (as of the app's
+  last look). Uses the leaderboard display name and attestation; pairing
+  itself is the opt-in. Settings › Buddy streak.
 - **Progress**: daily streak with milestone celebrations, a GitHub-style
   activity grid of daily practice time, session history with per-session
   recognition charts, per-character stats, most-confused pairs, performance

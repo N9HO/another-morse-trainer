@@ -448,12 +448,9 @@ final class AppModel: ObservableObject {
         summary = charLadder.summary
         Haptics.enabled = loaded.hapticsEnabled   // didSet doesn't fire in init
         applyBackgroundNoise()                    // ditto
-        // Re-arm the daily reminder in case pending requests were cleared.
-        if settings.dailyReminderEnabled {
-            PracticeReminders.schedule(hour: settings.dailyReminderHour,
-                                       minute: settings.dailyReminderMinute,
-                                       streak: streak.display(on: Date()))
-        }
+        // Re-arm the daily reminder in case pending requests were cleared
+        // (through rescheduleReminder, so it carries the buddy sentence too).
+        if settings.dailyReminderEnabled { rescheduleReminder() }
         observeAudioSession()
     }
 
@@ -2165,6 +2162,16 @@ final class AppModel: ObservableObject {
     /// What the summary says about this run's submission.
     @Published var leaderboardStatus: LeaderboardStatus = .notSubmitted
 
+    // MARK: - Buddy streak (docs/buddy-streak-design.md, #219)
+
+    /// The in-flight status refresh, so a foreground and a Settings
+    /// appearance in the same second do not attest twice. The logic is in
+    /// AppModel+Buddy.swift; the cache itself is `settings.buddy`.
+    var buddyRefresh: Task<Void, Never>?
+    /// The in-flight practice-day report, for the same reason: every drill
+    /// answer asks, and only the first should call.
+    var buddyDayReport: Task<Void, Never>?
+
     // MARK: - Per-mode scores (docs/high-scores-design.md, step 1)
 
     /// The best score of any arcade game played this session. The game views
@@ -3017,9 +3024,18 @@ final class AppModel: ObservableObject {
 
     /// Count today toward the practice streak. Idempotent within a day, so it's
     /// cheap to call on every answered drill.
+    ///
+    /// Every path that counts as practice funnels through here — an answered
+    /// drill, a Daily Dit guess, a Listen & Learn passage, a worked contact —
+    /// so this is also where the buddy streak learns about the day
+    /// (`reportBuddyPracticeDay`). That call is asked on every visit, not
+    /// only the first, because a report that failed on the network should be
+    /// retried by the next answer; it costs nothing while the day is already
+    /// reported or nobody is paired.
     private func markPracticedToday() {
         var s = streak
         let before = s.current
+        defer { reportBuddyPracticeDay() }   // after the streak has today, so the report sees it
         if s.record(on: Date()) {            // only mutate (and persist) on the day's first practice
             streak = s
             if s.current > before, PracticeStreak.isMilestone(s.current) {
@@ -3425,6 +3441,7 @@ final class AppModel: ObservableObject {
             settings.dailyReminderEnabled = false
             PracticeReminders.cancel()
             scheduledReminderStreak = nil
+            scheduledReminderBuddySentence = nil
         }
     }
 
@@ -3440,13 +3457,30 @@ final class AppModel: ObservableObject {
     /// one without re-adding it on every foreground. nil = nothing recorded
     /// (before the first reschedule, or after a cancel).
     private var scheduledReminderStreak: Int?
+    /// Likewise the buddy sentence the body was last written with (nil when
+    /// there was none), so a status refresh re-arms the reminder only when
+    /// the sentence it would carry has actually changed.
+    private var scheduledReminderBuddySentence: String?
+
+    /// The buddy sentence the reminder should carry right now, if any: the
+    /// buddy is paired and, as of the last fetch today, had not practised.
+    /// The fetch time is spelled the way the user's locale spells a time,
+    /// lowercased so "6:10 PM" reads as the design's "as of 6:10 pm".
+    private func reminderBuddySentence(now: Date) -> String? {
+        guard let fetchedAt = settings.buddy.fetchedAt else { return nil }
+        let asOf = fetchedAt.formatted(date: .omitted, time: .shortened).lowercased()
+        return settings.buddy.reminderSentence(today: BuddyDay.label(for: now), asOf: asOf)
+    }
 
     private func rescheduleReminder(now: Date = Date()) {
         let count = streak.display(on: now)
+        let sentence = reminderBuddySentence(now: now)
         PracticeReminders.schedule(hour: settings.dailyReminderHour,
                                    minute: settings.dailyReminderMinute,
-                                   streak: count)
+                                   streak: count,
+                                   buddySentence: sentence)
         scheduledReminderStreak = count
+        scheduledReminderBuddySentence = sentence
     }
 
     /// Re-arm the daily reminder whenever the streak it names has moved.
@@ -3457,11 +3491,16 @@ final class AppModel: ObservableObject {
     /// at every point the count can change: the day's first practice (extends
     /// it), a progress reset (zeroes it), launch and each return to the
     /// foreground via `refreshDailyDit` (a streak that lapsed overnight must
-    /// not still promise yesterday's number). Idempotent: nothing is touched
-    /// while the pending request already carries the current count.
+    /// not still promise yesterday's number), and every buddy-status refresh
+    /// (the buddy sentence names the fetch time). Idempotent: nothing is
+    /// touched while the pending request already carries the current count
+    /// and sentence.
     func refreshReminderIfStreakChanged(now: Date = Date()) {
         guard settings.dailyReminderEnabled else { return }
-        if scheduledReminderStreak != streak.display(on: now) { rescheduleReminder(now: now) }
+        if scheduledReminderStreak != streak.display(on: now)
+            || scheduledReminderBuddySentence != reminderBuddySentence(now: now) {
+            rescheduleReminder(now: now)
+        }
     }
 
     // MARK: - Persistence (session history)
