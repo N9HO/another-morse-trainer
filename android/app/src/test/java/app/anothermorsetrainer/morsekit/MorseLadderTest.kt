@@ -75,7 +75,7 @@ class MorseLadderTest {
             val built = MorseCode.fullPool(selection)
             assertEquals("selection '$selection' pool", c.getString("fullPool"), built.joinToString(""))
             assertEquals("selection '$selection' length", c.getInt("length"), built.size)
-            assertTrue("NEGATIVE CONTROL", '#' in built)
+            assertTrue("'?' is Koch core and belongs in the full set", '?' in built)
         }
     }
 
