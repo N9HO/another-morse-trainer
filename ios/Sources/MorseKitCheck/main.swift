@@ -2829,8 +2829,17 @@ struct LadderFixture: Decodable {
         let fullPool: String
         let length: Int
     }
+    struct OptInCase: Decodable {
+        let name: String
+        let activeBefore: String
+        let selectedPunctuation: String
+        let activeAfter: String
+        let added: String
+        let removed: String
+    }
     let cases: [Case]
     let optOutCases: [OptOutCase]
+    let optInCases: [OptInCase]
     let fullPoolCases: [FullPoolCase]
 }
 
@@ -2869,7 +2878,7 @@ if let fx = loadLadderFixture() {
     for c in fx.optOutCases {
         let eng = TrainerEngine(seedCount: 2, rng: SeededRNG(seed: 5))
         eng.setActiveCharacters(Array(c.activeBefore))
-        let removed = eng.applyStudyOrder(MorseCode.studyOrder(withPunctuation: Set(c.selectedPunctuation)))
+        let removed = eng.applyStudyOrder(MorseCode.studyOrder(withPunctuation: Set(c.selectedPunctuation))).removed
         if String(eng.activeCharacters) != c.activeAfter || String(removed) != c.removed {
             print("      ↳ \(c.name): active '\(String(eng.activeCharacters))', removed '\(String(removed))'")
             optOutOK = false
@@ -2887,15 +2896,30 @@ if let fx = loadLadderFixture() {
         }
     }
     check("the games' full pool matches the fixture for all \(fx.fullPoolCases.count) selections", fullOK)
+
+    // #213 (2026-09-11): opting in adds the mark to the active set at once, in
+    // pickable order; an opted-out one leaves in the same call.
+    var optInOK = true
+    for c in fx.optInCases {
+        let eng = TrainerEngine(seedCount: 2, rng: SeededRNG(seed: 7))
+        eng.setActiveCharacters(Array(c.activeBefore))
+        let change = eng.applyStudyOrder(MorseCode.studyOrder(withPunctuation: Set(c.selectedPunctuation)))
+        let statsOK = change.added.allSatisfy { eng.stats[$0] != nil }
+        if String(eng.activeCharacters) != c.activeAfter || String(change.added) != c.added || String(change.removed) != c.removed || !statsOK {
+            print("      ↳ \(c.name): active '\(String(eng.activeCharacters))', added '\(String(change.added))', removed '\(String(change.removed))'")
+            optInOK = false
+        }
+    }
+    check("opting in adds the mark to the active set at once, as the fixture says for all \(fx.optInCases.count) cases", optInOK)
 } else {
     check("fixtures/ladder.json loads and decodes", false)
 }
 
-// The behaviour the fixture is really about: opting punctuation in must put it
-// on the *ladder*, not straight into the drill. Driving the ladder to its first
-// unlock is what shows the difference — 37 characters with no punctuation
-// opted in, 40 with all three, rather than 37 either way.
-print("\nPunctuation joins the ladder, not the active set:")
+// An opted-in mark is on the ladder's tail as well as in the active set, so
+// with all three opted in the singles stage completes at 40 characters, not
+// 37: the marks have to be mastered like anything else. Driving the ladder
+// to its first unlock shows it.
+print("\nPunctuation holds the singles stage open until it is mastered:")
 func charactersNeededToUnlockPairs(punctuation: Set<Character>) -> Int? {
     let eng = TrainerEngine(seedCount: 2, rng: SeededRNG(seed: 11))
     eng.studyOrder = MorseCode.studyOrder(withPunctuation: punctuation)
@@ -2921,12 +2945,13 @@ do {
         print("      ↳ unlocked at \(String(describing: bare)) bare, \(String(describing: all)) with punctuation")
     }
 
-    // And the marks themselves are earned, not granted: a fresh engine with
-    // punctuation on the ladder starts without it in the active set.
+    // And a fresh learner who opts in on day one is drilled on the mark at
+    // once (#213): applyStudyOrder adds it, with stats, next to the seeds.
     let fresh = TrainerEngine(seedCount: 2, rng: SeededRNG(seed: 3))
-    fresh.studyOrder = MorseCode.studyOrder(withPunctuation: [".", ",", "/"])
-    check("opting in does not drop the mark straight into the active set",
-          !fresh.activeCharacters.contains(".") && !fresh.activeCharacters.contains(","))
+    let change = fresh.applyStudyOrder(MorseCode.studyOrder(withPunctuation: [".", ",", "/"]))
+    check("opting in drops the marks straight into the active set, in pickable order",
+          String(change.added) == ".,/" && fresh.activeCharacters.suffix(3) == [".", ",", "/"]
+              && fresh.stats["."] != nil)
 }
 
 // Issue #133: opting back *out* of a mark already earned takes it out of the
@@ -2942,7 +2967,7 @@ do {
     for _ in 0..<3 { eng.noteAttempt(answer: ",", target: ",", ttr: 0.4) }
     let attemptsBefore = eng.stats[","]?.attempts.count
 
-    let removed = eng.applyStudyOrder(MorseCode.studyOrder(withPunctuation: ["."]))
+    let removed = eng.applyStudyOrder(MorseCode.studyOrder(withPunctuation: ["."])).removed
     check("the opted-out comma leaves the active set", removed == [","] && !eng.activeCharacters.contains(","))
     check("the still-opted-in period is untouched", eng.activeCharacters.contains("."))
     check("the comma's stats survive the removal",
@@ -2951,17 +2976,16 @@ do {
     check("nothing in the active set is offered as a question after removal",
           (0..<50).allSatisfy { _ in eng.nextQuestion().target != "," })
 
-    // Opting back in puts it on the ladder, not into the drill; the ladder
-    // then re-introduces it and finds the old stats rather than fresh ones.
-    eng.applyStudyOrder(MorseCode.studyOrder(withPunctuation: [".", ","]))
-    check("opting back in does not re-add the mark immediately", !eng.activeCharacters.contains(","))
-    for c in eng.activeCharacters { for _ in 0..<5 { eng.noteAttempt(answer: c, target: c, ttr: 0.1) } }
-    check("the ladder re-introduces the mark once the rest is mastered", eng.advanceIfReady() == ",")
+    // Opting back in puts it straight back into the drill (#213), with the
+    // history it had.
+    let back = eng.applyStudyOrder(MorseCode.studyOrder(withPunctuation: [".", ","]))
+    check("opting back in re-adds the mark at once", back.added == [","] && eng.activeCharacters.contains(","))
+    check("the comma comes back with its history", eng.stats[","]?.attempts.count == 3)
 
     // Koch core is never removed, whatever the ladder says.
     let core = TrainerEngine(seedCount: 2, rng: SeededRNG(seed: 9))
     core.setActiveCharacters(MorseCode.kochOrder)
-    let dropped = core.applyStudyOrder(MorseCode.studyOrder(withPunctuation: []))
+    let dropped = core.applyStudyOrder(MorseCode.studyOrder(withPunctuation: [])).removed
     check("the Koch core — '?' included — is never removed by a reconcile",
           dropped.isEmpty && core.activeCharacters == MorseCode.kochOrder)
 }

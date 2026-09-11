@@ -224,25 +224,34 @@ public final class TrainerEngine {
         activeCharacters.removeAll { $0 == character }
     }
 
-    /// Set the introduction order and reconcile the active set with it: any
-    /// pickable punctuation mark the learner has already earned but has now
-    /// opted back out of is removed, so it stops being drilled (issue #133).
-    /// Returns the characters removed, in active-set order.
-    ///
-    /// Only `MorseCode.pickablePunctuation` is ever removed — the Koch core
-    /// (including `?`) is never touched, and a mark that was never earned is
-    /// simply not there to remove. Opting back *in* changes nothing here: the
-    /// mark rejoins the ladder to be earned again, and its `CharacterStats`
-    /// entry (kept by `removeActiveCharacter`) is waiting for it. Pinned by
-    /// `fixtures/ladder.json`'s `optOutCases` on both ports.
-    @discardableResult
-    public func applyStudyOrder(_ order: [Character]) -> [Character] {
+    /// What `applyStudyOrder` did to the active set.
+    public struct StudyOrderChange: Equatable, Sendable {
+        /// Opted-out marks taken out of the active set, in active-set order.
+        public var removed: [Character]
+        /// Opted-in marks added to the active set, in pickable order.
+        public var added: [Character]
+        public var isEmpty: Bool { removed.isEmpty && added.isEmpty }
+    }
+
+    /// Set the introduction order and reconcile the active set with it. Any
+    /// pickable punctuation mark the learner has opted back out of is removed,
+    /// so it stops being drilled (issue #133); any mark opted *in* that is not
+    /// yet active is added at once, in pickable order (#213, reversing the
+    /// ladder-only rule: a mark nobody reached until all 37 core characters
+    /// were mastered made the setting invisible). An added mark stays on the
+    /// ladder's tail too, and being active it must be mastered like any other
+    /// character before the next unlock. Pinned by fixtures/ladder.json
+    /// (`optOutCases`, `optInCases`). Stats are created for a new mark and
+    /// kept for a removed one.
+    public func applyStudyOrder(_ order: [Character]) -> StudyOrderChange {
         studyOrder = order
         let removed = activeCharacters.filter {
             MorseCode.pickablePunctuation.contains($0) && !order.contains($0)
         }
         for c in removed { removeActiveCharacter(c) }
-        return removed
+        let added = MorseCode.pickablePunctuation.filter { order.contains($0) && !activeCharacters.contains($0) }
+        for c in added { addActiveCharacter(c) }
+        return StudyOrderChange(removed: removed, added: added)
     }
 
     public var allActiveMastered: Bool {

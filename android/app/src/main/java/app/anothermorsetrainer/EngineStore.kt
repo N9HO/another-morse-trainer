@@ -44,7 +44,7 @@ object EngineStore {
         // A mark opted out while no track was live (Settings before Characters
         // after a relaunch) is reconciled here instead, and saved for the same
         // reason applyStudyOrder saves.
-        if (engine.applyStudyOrder(Settings.studyOrder()).isNotEmpty()) save()
+        if (!engine.applyStudyOrder(Settings.studyOrder()).isEmpty) save()
         return chars
     }
 
@@ -67,7 +67,7 @@ object EngineStore {
      */
     fun applyStudyOrder() {
         val engine = tracked?.engine ?: return
-        if (engine.applyStudyOrder(Settings.studyOrder()).isNotEmpty()) save()
+        if (!engine.applyStudyOrder(Settings.studyOrder()).isEmpty) save()
     }
 
     /**

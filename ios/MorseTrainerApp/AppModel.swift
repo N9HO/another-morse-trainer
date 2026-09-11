@@ -2923,13 +2923,13 @@ final class AppModel: ObservableObject {
 
     /// Re-derive the ladder's introduction order from the punctuation opt-in.
     ///
-    /// Opting in adds a mark to the **ladder**, not to the active set: it is
-    /// introduced only once the Koch core is done, and has to be mastered like
-    /// any other character. This used to call `addActiveCharacter` and drop the
-    /// mark straight into the drill — and `removeActiveCharacter` on opting back
-    /// out — which is the behaviour that diverged from the Kotlin port. Unlocking
-    /// singles→pairs took 37 characters here and 40 there. The ladder is the
-    /// intended design, so this side conforms.
+    /// Opting in adds a mark to the active set **at once** and keeps it on the
+    /// ladder's tail (#213, decided 2026-09-11): the earlier ladder-only rule
+    /// meant nobody heard a comma until all 37 core characters were mastered,
+    /// so the setting looked broken. Being active, the mark has to be
+    /// mastered like any other character before the next unlock. The engine
+    /// does the reconciling on both ports (`applyStudyOrder`), pinned by
+    /// fixtures/ladder.json.
     ///
     /// Like Kotlin's `EngineStore`, the order is derived on every launch and on
     /// every change rather than persisted: it belongs to the settings, not to
@@ -2941,8 +2941,8 @@ final class AppModel: ObservableObject {
     /// snapshot, so a removal is saved right away — otherwise the mark would be
     /// back after a relaunch until the next answer happened to save.
     private func reconcilePunctuation() {
-        let removed = engine.applyStudyOrder(settings.studyOrder)
-        if !removed.isEmpty { saveProgress() }
+        let change = engine.applyStudyOrder(settings.studyOrder)
+        if !change.isEmpty { saveProgress() }
         if mode == .characters { summary = charLadder.summary }
     }
 
