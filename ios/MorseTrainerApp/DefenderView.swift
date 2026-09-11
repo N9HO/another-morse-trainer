@@ -462,7 +462,7 @@ struct DefenderView: View {
                 toneEnd[a.id] = now.addingTimeInterval(duration)
             case .struck(let a, let asset):
                 toneEnd[a.id] = nil
-                model.noteDefenderStrike(callsign: a.callsign)
+                model.noteDefenderStrike(callsign: a.callsign, wpm: game.currentWpm)
                 Haptics.error()
                 struckId = asset.id
                 struckUntil = now.addingTimeInterval(0.8)
@@ -506,7 +506,7 @@ struct DefenderView: View {
         if let hit = result.attacker {
             let ttr = toneEnd[hit.id].map { max(0, now.timeIntervalSince($0)) } ?? 0
             toneEnd[hit.id] = nil
-            model.noteDefenderRoute(target: hit.callsign, chosen: hit.callsign, ttr: ttr)
+            model.noteDefenderRoute(target: hit.callsign, chosen: hit.callsign, ttr: ttr, wpm: game.currentWpm)
             Haptics.success()
             if let fresh = result.reinforced {
                 flash("Wave \(game.wave)! \(fresh.callsign) joins", for: 1.2)
@@ -516,7 +516,7 @@ struct DefenderView: View {
         } else {
             // A wrong route: confused with whatever was nearest arrival.
             if let nearest {
-                model.noteDefenderRoute(target: nearest.callsign, chosen: chosen, ttr: 0)
+                model.noteDefenderRoute(target: nearest.callsign, chosen: chosen, ttr: 0, wpm: game.currentWpm)
             }
             Haptics.error()
             flash("miss", for: 0.6)

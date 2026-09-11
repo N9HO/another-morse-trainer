@@ -74,6 +74,8 @@ import app.anothermorsetrainer.morsekit.DefenderRoute
 import app.anothermorsetrainer.morsekit.InvadersCharacterSet
 import app.anothermorsetrainer.morsekit.InvadersDifficulty
 import app.anothermorsetrainer.morsekit.InvadersKeyboard
+import app.anothermorsetrainer.morsekit.Leaderboard
+import app.anothermorsetrainer.morsekit.LeaderboardItem
 import app.anothermorsetrainer.morsekit.MorseItem
 import app.anothermorsetrainer.morsekit.SessionRecord
 import kotlin.math.abs
@@ -173,6 +175,17 @@ fun DefenderScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
     // time-to-recognize runs from the end of the tone.
     val toneEnd = remember { HashMap<Int, Long>() }
     val charResults = remember { HashMap<Char, IntArray>() }   // attempts, correct
+    // The shared leaderboard (docs/high-scores-design.md, step 2): the run's
+    // registration and one item per shot or decision, each carrying the
+    // ramp speed it was sent at (the HUD's `wpm`, synced before every item
+    // resolves). Plain state, not saveable: a game the process lost has no
+    // transcript and is never submitted.
+    var lbRun by remember { mutableStateOf<LeaderboardClient.RunHandle?>(null) }
+    val lbItems = remember { ArrayList<LeaderboardItem>() }
+    var lbLine by remember { mutableStateOf<String?>(null) }
+    // Read at composition, not via context.getString in the helper below: lint
+    // (LocalContextGetResources) wants resource reads to follow configuration.
+    val lbSubmittingText = stringResource(R.string.leaderboard_submitting)
 
     DisposableEffect(Unit) { onDispose { player.release() } }
 
@@ -190,6 +203,16 @@ fun DefenderScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
         lastSeenMs = System.currentTimeMillis()
     }
 
+    /** Hand the finished game's transcript to the leaderboard; the end card shows the reply when it lands. */
+    fun submitLeaderboard() {
+        val h = lbRun ?: return
+        lbRun = null
+        val items = lbItems.toList()
+        if (items.isEmpty()) return
+        lbLine = lbSubmittingText
+        LeaderboardClient.submit(h, items) { lbLine = it }
+    }
+
     fun recordRun(attempts: Int, correct: Int, seconds: Int) {
         if (attempts <= 0) return
         val results = charResults.map { (ch, a) -> SessionRecord.CharResult(ch.toString(), a[0], a[1], null) }
@@ -202,6 +225,7 @@ fun DefenderScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
             charResults = results,
             activeCharacters = if (results.isEmpty()) emptyList() else engine.activeCharacters.map { it.toString() }
         )
+        submitLeaderboard()
     }
 
     fun tally(ch: Char, correct: Boolean) {
@@ -260,6 +284,13 @@ fun DefenderScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
         flash = null
         struck = null
         startedAtMs = System.currentTimeMillis()
+        lbItems.clear()
+        lbLine = null
+        lbRun = LeaderboardClient.beginRun(
+            statsMode = "Morse Defender",
+            characterWpm = Settings.characterWpm.roundToInt(),
+            effectiveWpm = Settings.effectiveWpmInUse.roundToInt()
+        )
         syncHud(g)
         phase = DefPhase.RUNNING
     }
@@ -308,6 +339,7 @@ fun DefenderScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
             val end = toneEnd.remove(hit.id)
             val ttr = if (end != null) ((now - end).coerceAtLeast(0)) / 1000.0 else 0.0
             noteRoute(hit.callsign, hit.callsign, ttr)
+            lbItems.add(LeaderboardItem(hit.callsign, hit.callsign, Leaderboard.clampReaction((ttr * 1000).toLong()), wpm))
             if (Settings.hapticsEnabled) haptics.success()
             val fresh = result.reinforced
             flash = when {
@@ -317,7 +349,10 @@ fun DefenderScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
             }
         } else {
             // A wrong route: confused with whatever was nearest arrival.
-            if (nearest != null) noteRoute(nearest.callsign, chosen, 0.0)
+            if (nearest != null) {
+                noteRoute(nearest.callsign, chosen, 0.0)
+                lbItems.add(LeaderboardItem(nearest.callsign, chosen.uppercase(), 0, wpm))
+            }
             if (Settings.hapticsEnabled) haptics.error()
             flash = "miss" to now + 600
         }
@@ -373,6 +408,7 @@ fun DefenderScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
                     is DefenderEvent.Struck -> {
                         toneEnd.remove(event.attacker.id)
                         noteStrike(event.attacker.callsign)
+                        lbItems.add(LeaderboardItem(event.attacker.callsign, "", 0, wpm))
                         if (Settings.hapticsEnabled) haptics.error()
                         val now = System.currentTimeMillis()
                         struck = event.asset.id to now + 800
@@ -453,6 +489,7 @@ fun DefenderScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
                     score = score, wave = wave, bestCombo = bestCombo,
                     accuracy = if (runAttempts == 0) 0.0 else runCorrect.toDouble() / runAttempts,
                     bestWpm = bestWpm,
+                    leaderboard = lbLine,
                     onAgain = { startGame() },
                     onBack = onBack
                 )
@@ -710,6 +747,7 @@ private fun DefenderKeyRows(pool: List<Char>, onType: (Char) -> Unit, onBackspac
 private fun DefenderOver(
     score: Int, wave: Int, bestCombo: Int, accuracy: Double,
     bestWpm: Int,
+    leaderboard: String?,
     onAgain: () -> Unit, onBack: () -> Unit
 ) {
     Column(
@@ -730,6 +768,10 @@ private fun DefenderOver(
                 DefStat(stringResource(R.string.defender_best_combo), bestCombo.toString())
             }
             Text(stringResource(R.string.defender_speed_reached, bestWpm), style = MaterialTheme.typography.bodySmall, color = Brand.textSecondary)
+            // The shared leaderboard's reply, or why the game was not posted; nothing when not opted in.
+            if (leaderboard != null) {
+                Text(leaderboard, style = MaterialTheme.typography.bodySmall, color = Brand.textSecondary)
+            }
             Button(
                 onClick = onAgain,
                 colors = ButtonDefaults.buttonColors(containerColor = Brand.teal, contentColor = Brand.navy),

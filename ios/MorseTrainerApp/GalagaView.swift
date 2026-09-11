@@ -414,6 +414,9 @@ struct GalagaView: View {
                                        characterWpm: model.settings.wpm)
         let g = GalagaGame(config: config)
         game = g
+        // Keying mode plays no Morse, so there is no audio for the server's
+        // timing bound to measure: only hear-it runs are ranked (#leaderboard).
+        if input == .keying { model.leaderboardCancelRun() }
         field = []
         columns = g.formation.columns
         toneEnd = [:]
@@ -441,7 +444,7 @@ struct GalagaView: View {
                 }
             case .landed(let enemy):
                 toneEnd[enemy.id] = nil
-                model.noteGalagaLanding(target: enemy.character)
+                model.noteGalagaLanding(target: enemy.character, wpm: game.currentWpm)
                 Haptics.error()
                 flash("\(enemy.character) got through", for: 1.0)
             case .gameOver:
@@ -462,14 +465,15 @@ struct GalagaView: View {
         if let hit = shot.enemy {
             let ttr = toneEnd[hit.id].map { max(0, now.timeIntervalSince($0)) } ?? 0
             toneEnd[hit.id] = nil
-            model.noteGalagaShot(target: hit.character, chosen: hit.character, ttr: ttr)
+            model.noteGalagaShot(target: hit.character, chosen: hit.character, ttr: ttr, wpm: game.currentWpm)
             Haptics.success()
             flash(shot.waveCleared ? "Wave \(game.wave)!" : "+\(shot.points)", for: 0.8)
         } else {
             // A wrong key: confused with whatever was the biggest threat.
             if let threat {
                 model.noteGalagaShot(target: threat.character,
-                                     chosen: Character(String(character).uppercased()), ttr: 0)
+                                     chosen: Character(String(character).uppercased()), ttr: 0,
+                                     wpm: game.currentWpm)
             }
             Haptics.error()
             flash("miss", for: 0.6)

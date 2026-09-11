@@ -367,6 +367,9 @@ struct AsteroidsView: View {
                                           difficulty: difficulty, characterWpm: model.settings.wpm)
         let g = AsteroidsGame(config: config)
         game = g
+        // Keying mode plays no Morse, so there is no audio for the server's
+        // timing bound to measure: only hear-it runs are ranked (#leaderboard).
+        if input == .send { model.leaderboardCancelRun() }
         field = []
         elapsed = 0
         cueEnd = nil
@@ -391,7 +394,7 @@ struct AsteroidsView: View {
             case .cued(let a):
                 cue(a, now: now, wpm: game.currentWpm)
             case .struck(let a):
-                model.noteAsteroidsStrike(label: a.label)
+                model.noteAsteroidsStrike(label: a.label, wpm: game.currentWpm)
                 Haptics.error()
                 flash("\(a.label) hit the ship", for: 1.0)
             case .gameOver:
@@ -428,7 +431,7 @@ struct AsteroidsView: View {
         case .hit:
             if let hit = shot.asteroid {
                 let ttr = cueEnd.map { max(0, now.timeIntervalSince($0)) } ?? 0
-                model.noteAsteroidsHit(label: hit.label, ttr: ttr)
+                model.noteAsteroidsHit(label: hit.label, ttr: ttr, wpm: game.currentWpm)
             }
             cueEnd = nil
             if let next = shot.cued { cue(next, now: now, wpm: game.currentWpm) }

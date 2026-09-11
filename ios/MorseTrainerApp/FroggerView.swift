@@ -413,21 +413,21 @@ struct FroggerView: View {
             case .passed(let object, let points), .landed(let object, let points):
                 let ttr = cueToneEnd[object.row].map { max(0, now.timeIntervalSince($0)) } ?? 0
                 cueToneEnd[object.row] = nil
-                model.noteFroggerDecision(target: object.character, chosen: object.character, ttr: ttr)
+                model.noteFroggerDecision(target: object.character, chosen: object.character, ttr: ttr, wpm: game.currentWpm)
                 Haptics.success()
                 flash("+\(points)", for: 0.8)
             case .squashed(let object, let cue):
-                model.noteFroggerDecision(target: cue, chosen: object.character, ttr: 0)
+                model.noteFroggerDecision(target: cue, chosen: object.character, ttr: 0, wpm: game.currentWpm)
                 Haptics.error()
                 flash("Hit by \(object.character), not \(cue)", for: 1.2)
                 cueToneEnd = [:]
             case .sank(let object, let cue):
-                model.noteFroggerDecision(target: cue, chosen: object.character, ttr: 0)
+                model.noteFroggerDecision(target: cue, chosen: object.character, ttr: 0, wpm: game.currentWpm)
                 Haptics.error()
                 flash("\(object.character) sank, not \(cue)", for: 1.2)
                 cueToneEnd = [:]
             case .drowned(let cue):
-                model.noteFroggerMiss(target: cue)
+                model.noteFroggerMiss(target: cue, wpm: game.currentWpm)
                 Haptics.error()
                 flash("Splash — the log was \(cue)", for: 1.2)
                 cueToneEnd = [:]

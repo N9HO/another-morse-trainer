@@ -1,7 +1,9 @@
 # High scores and a shared leaderboard: design notes
 
-Status: **step 1 (local personal bests) built on both apps, 2026-09-08;
-step 2 (shared leaderboard) not started.** Written 2026-09-08 from a
+Status: **step 1 (local personal bests) shipped 2026-09-08 (PR #211); step 2
+(shared leaderboard) built 2026-09-09 — server deployed, both clients in
+one PR — awaiting the first real-device attestation on TestFlight and a
+Play internal test.** Written 2026-09-08 from a
 maintainer discussion, so the next person (or the next Claude session) can
 start on the code without redoing the survey. Step 1 landed as `score` on
 the session record on both ports, a persisted per-mode bests map
@@ -403,8 +405,16 @@ Build order:
    verification for both platforms still to write, against the vendors'
    documents, once the accounts exist and a real device can produce a
    sample to test against.
-3. Step 2 clients, both apps, opt-in off by default.
-4. Store listings' privacy disclosures, then release.
+3. ~~Step 2 clients, both apps, opt-in off by default.~~ Both apps, one PR:
+   transcript capture in the nine modes (the exact semantics are the table
+   in the server README), App Attest / Play Integrity clients, opt-in with
+   display name, a board screen, "Delete my scores". Keying mode in
+   Invaders, Galaga and Asteroids plays no Morse, so those runs are not
+   submitted; only hear-it runs rank. The Android client carries the Google
+   Cloud project number (`LEADERBOARD_CLOUD_PROJECT_NUMBER`).
+4. First real attestation: a TestFlight build on an iPhone and a Play
+   internal-test build; then store listings' privacy disclosures (device
+   identifier, gameplay data, display name), then release.
 
 ---
 

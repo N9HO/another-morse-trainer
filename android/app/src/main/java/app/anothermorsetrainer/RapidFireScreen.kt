@@ -66,6 +66,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.anothermorsetrainer.morsekit.CallsignFormat
 import app.anothermorsetrainer.morsekit.Drill
+import app.anothermorsetrainer.morsekit.Leaderboard
+import app.anothermorsetrainer.morsekit.LeaderboardItem
 import app.anothermorsetrainer.morsekit.RapidFireContent
 import app.anothermorsetrainer.morsekit.RapidFirePace
 import app.anothermorsetrainer.morsekit.RapidFireQuiz
@@ -118,8 +120,22 @@ fun RapidFireScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {
     var step by remember { mutableIntStateOf(0) }
     var typed by remember { mutableStateOf("") }
     var toneEndedStep by remember { mutableIntStateOf(-1) }
+    // When the current item's tone ended, so an answer's reaction time runs
+    // from the end of the audio (the leaderboard's `reactionMs`).
+    var toneEndedAtMs by remember { mutableLongStateOf(0L) }
     var revealBox by remember { mutableStateOf(false) }
     val transcript = remember { mutableStateListOf<RfResult>() }
+    // The shared leaderboard (docs/high-scores-design.md, step 2): the run's
+    // registration and the per-item record the server grades. Plain state,
+    // not saveable, on purpose: a run the process lost has no transcript and
+    // is never submitted; a "Just listen" run has no answers and is not
+    // registered at all.
+    var lbRun by remember { mutableStateOf<LeaderboardClient.RunHandle?>(null) }
+    val lbItems = remember { ArrayList<LeaderboardItem>() }
+    var lbLine by remember { mutableStateOf<String?>(null) }
+    // Read at composition, not via context.getString in the helper below: lint
+    // (LocalContextGetResources) wants resource reads to follow configuration.
+    val lbSubmittingText = stringResource(R.string.leaderboard_submitting)
     var startedAtMs by rememberSaveable { mutableLongStateOf(0L) }
     // The run's score, mirrored out of the transcript on every item so it
     // rides the saved-instance-state bundle. The quiz and the transcript die
@@ -177,8 +193,25 @@ fun RapidFireScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {
         runAttempts = 0
         runCorrect = 0
         lastSeenMs = startedAtMs
+        lbItems.clear()
+        lbLine = null
+        lbRun = if (response == RapidFireResponse.REVIEW) null else LeaderboardClient.beginRun(
+            statsMode = "Rapid Fire",
+            characterWpm = Settings.characterWpm.roundToInt(),
+            effectiveWpm = Settings.effectiveWpmInUse.roundToInt()
+        )
         phase = RfPhase.RUNNING
         step = 1
+    }
+
+    /** Hand the finished run's transcript to the leaderboard; the summary shows the reply when it lands. */
+    fun submitLeaderboard() {
+        val h = lbRun ?: return
+        lbRun = null
+        val items = lbItems.toList()
+        if (items.isEmpty()) return
+        lbLine = lbSubmittingText
+        LeaderboardClient.submit(h, items) { lbLine = it }
     }
 
     /** Stop the stream and record the run; the caller decides where to land. */
@@ -196,6 +229,7 @@ fun RapidFireScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {
                 score = correct   // Rapid Fire's best is the correct count
             )
         }
+        submitLeaderboard()
     }
 
     fun finishRun() {
@@ -242,6 +276,14 @@ fun RapidFireScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {
             val ok = q.record(typed, 0.0).correct
             if (Settings.hapticsEnabled) { if (ok) haptics.success() else haptics.error() }
             transcript.add(RfResult(d.correct, typed, ok))
+            // Leaderboard item: `sent` is the item's true value (a cut serial
+            // is "001", not "TTA"); a copy the quiz graded correct is sent
+            // back as that same value so the server's exact compare agrees
+            // with the quiz's forgiving one, a wrong copy as typed. Reaction
+            // runs from the end of the tone, 0 if answered before it ended.
+            val now = System.currentTimeMillis()
+            val reaction = if (toneEndedStep == step && toneEndedAtMs > 0L) Leaderboard.clampReaction(now - toneEndedAtMs) else 0
+            lbItems.add(LeaderboardItem(sent = d.correct, answered = if (ok) d.correct else typed.trim().uppercase(), reactionMs = reaction))
         }
         runAttempts = transcript.count { it.correct != null }
         runCorrect = transcript.count { it.correct == true }
@@ -258,7 +300,10 @@ fun RapidFireScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {
         if (phase != RfPhase.RUNNING || step <= 0) return@LaunchedEffect
         val d = drill ?: return@LaunchedEffect
         revealBox = response == RapidFireResponse.TYPE
-        player.play(d.playable, Settings.sidetoneHz, Settings.timing()) { toneEndedStep = step }
+        player.play(d.playable, Settings.sidetoneHz, Settings.timing()) {
+            toneEndedAtMs = System.currentTimeMillis()
+            toneEndedStep = step
+        }
     }
 
     // After a tone ends, wait the pace gap, then advance (auto-stream). A keyed
@@ -338,6 +383,7 @@ fun RapidFireScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {
             RapidFireSummary(
                 results = transcript.toList(),
                 response = response,
+                leaderboard = lbLine,
                 onAgain = { phase = RfPhase.SETUP },
                 onBack = onBack
             )
@@ -618,6 +664,7 @@ private fun RapidFireRun(
 private fun RapidFireSummary(
     results: List<RfResult>,
     response: RapidFireResponse,
+    leaderboard: String?,
     onAgain: () -> Unit,
     onBack: () -> Unit
 ) {
@@ -638,6 +685,10 @@ private fun RapidFireSummary(
             )
         } else {
             Text(stringResource(R.string.rapidfire_count_sent, results.size), style = MaterialTheme.typography.titleMedium, color = Brand.teal, modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp))
+        }
+        // The shared leaderboard's reply, or why the run was not posted; nothing when not opted in.
+        if (leaderboard != null) {
+            Text(leaderboard, style = MaterialTheme.typography.bodySmall, color = Brand.textSecondary, modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp))
         }
         LazyColumn(
             modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 16.dp),
