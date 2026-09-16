@@ -64,3 +64,6 @@ keystore.properties
 
 # Android Studio / IntelliJ
 .idea/
+
+# Agent worktrees created by Claude Code sessions; checkouts, never content.
+.claude/worktrees/
