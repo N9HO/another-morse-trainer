@@ -202,12 +202,24 @@ jobs:
           status: completed
           whatsNewDirectory: android/store-assets/whatsnew
 
+      # "Precondition check failed" from the Play API on the production track
+      # is Play Console refusing the release, not the build: the app's setup
+      # tasks (store listing, content rating, data safety, target audience)
+      # are incomplete, or production access has not been granted to the
+      # account. The AAB was uploaded to a draft edit that was then discarded,
+      # so the versionCode is NOT spent; finish the Console side and re-run.
+      - name: Explain a Play refusal
+        if: failure() && env.PLAY_TRACK == 'production'
+        run: |
+          echo "::error::Google Play refused the production release. If the error above is 'Precondition check failed', complete the app's setup tasks in Play Console (Dashboard) and confirm production access, then re-run this workflow; the versionCode is not consumed by a discarded edit. The AAB is attached to this run for a manual upload."
+
       - name: Dry run — upload skipped
         if: github.event.inputs.dry_run == 'true'
         run: |
           echo "::notice::Dry run: AAB built, signed and verified. Play upload skipped, no versionCode consumed."
 
       - name: Save AAB as artifact (fallback / record)
+        if: always()
         uses: actions/upload-artifact@v6
         with:
           name: app-release-aab
