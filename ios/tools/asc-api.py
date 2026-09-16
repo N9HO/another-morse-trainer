@@ -15,7 +15,13 @@ Usage:
   python3 tools/asc-api.py appstore <version-string> <build> [notes-file]
                                            # attach the build to the App Store
                                            # version, set What's New, submit for
-                                           # App Review (release after approval)
+                                           # App Review (release after approval);
+                                           # ASC_NO_SUBMIT=1 stops before the
+                                           # submission
+  python3 tools/asc-api.py prepare <version-string> <metadata-json>
+                                           # apply tools/store-metadata.json (age
+                                           # rating, categories, listing text,
+                                           # URLs, review contact) idempotently
 """
 import base64, json, os, sys, time, urllib.parse, urllib.request, urllib.error
 
@@ -79,6 +85,184 @@ def prior_build(app, exclude_id):
         if b["id"] != exclude_id and a.get("processingState") == "VALID" and not a.get("expired"):
             return b
     return None
+
+
+def _changes(current: dict, wanted: dict) -> dict:
+    """The subset of `wanted` whose values differ from `current` (missing
+    counts as different). What `prepare` sends, so a re-run is a no-op."""
+    return {k: v for k, v in wanted.items() if current.get(k) != v}
+
+
+def _apply(kind: str, rid, current: dict, wanted: dict, label: str,
+           create=None):
+    """PATCH `wanted` onto record `rid` of `kind` where it differs from
+    `current`, or POST it via `create(attrs)` when there is no record yet.
+    Prints one line per record and exits non-zero on an API error."""
+    if rid is None:
+        st, d = create(wanted)
+        print(f"{label}: created: HTTP {st}")
+    else:
+        delta = _changes(current, wanted)
+        if not delta:
+            print(f"{label}: unchanged")
+            return
+        st, d = call("PATCH", f"/v1/{kind}/{rid}",
+                     {"data": {"type": kind, "id": rid, "attributes": delta}})
+        print(f"{label}: set {', '.join(sorted(delta))}: HTTP {st}")
+    if st >= 300:
+        print(json.dumps(d, indent=2)); sys.exit(1)
+
+
+def prepare(app: str, version_string: str, meta_path: str):
+    """Apply the checked-in store metadata to App Store Connect.
+
+    Everything App Review needs that is not the binary: the age rating
+    questionnaire, categories, the app-level listing (name, subtitle,
+    privacy policy URL), the version-level listing (description, keywords,
+    support and marketing URLs, copyright) and the App Review contact.
+    Idempotent: each record is read first and only the fields that differ
+    are written, so a re-run prints "unchanged" down the column.
+
+    The review contact is personal data and is not in the JSON: it comes
+    from ASC_REVIEW_FIRST_NAME, ASC_REVIEW_LAST_NAME, ASC_REVIEW_PHONE and
+    ASC_REVIEW_EMAIL. When any is unset the contact is left as it is, with
+    a note, because an existing version keeps the contact from the last
+    one and App Store Connect says plainly at submission if it is missing.
+
+    The age rating answers are judgment calls recorded in the JSON: the
+    only user text others see is a filtered 2 to 12 character leaderboard
+    display name (no feed, chat or profiles), so userGeneratedContent is
+    false; Contest mode simulates a radio contest with no prize, so
+    contests is NONE.
+    """
+    with open(os.path.expanduser(meta_path), "r") as f:
+        meta = json.load(f)
+
+    # 1. The editable app info. An app has one per platform group; the one
+    # whose state is editable is the one the next submission reads.
+    st, d = call("GET", f"/v1/apps/{app}/appInfos?fields[appInfos]=state&limit=10")
+    if st != 200:
+        print(json.dumps(d, indent=2)); sys.exit(1)
+    EDITABLE_INFO = {"PREPARE_FOR_SUBMISSION", "DEVELOPER_REJECTED", "REJECTED",
+                     "READY_FOR_REVIEW"}
+    info = next((i for i in d.get("data", [])
+                 if i["attributes"].get("state") in EDITABLE_INFO), None)
+    if not info:
+        states = [i["attributes"].get("state") for i in d.get("data", [])]
+        print(f"no editable app info (states: {states}); nothing to prepare.")
+        sys.exit(1)
+    info_id = info["id"]
+    print(f"app info {info_id}: {info['attributes'].get('state')}")
+
+    # 2. Age rating. The declaration shares the app info's id and always
+    # exists; unanswered questions read as null, and App Review refuses a
+    # submission while any is null.
+    if meta.get("ageRating"):
+        st, d = call("GET", f"/v1/appInfos/{info_id}/ageRatingDeclaration")
+        decl = d.get("data") or {}
+        if st != 200 or not decl:
+            print(f"age rating declaration: HTTP {st}"); print(json.dumps(d, indent=2)); sys.exit(1)
+        _apply("ageRatingDeclarations", decl["id"], decl.get("attributes", {}),
+               meta["ageRating"], "age rating")
+
+    # 3. Categories, which are relationships rather than attributes.
+    cats = meta.get("categories") or {}
+    if cats:
+        st, d = call("GET", f"/v1/appInfos/{info_id}?include=primaryCategory,secondaryCategory"
+                            f"&fields[appInfos]=primaryCategory,secondaryCategory")
+        rels = (d.get("data") or {}).get("relationships") or {}
+        have = {k: ((rels.get(f"{k}Category") or {}).get("data") or {}).get("id")
+                for k in ("primary", "secondary")}
+        want = {k: cats.get(k) for k in ("primary", "secondary") if cats.get(k)}
+        delta = {k: v for k, v in want.items() if have.get(k) != v}
+        if not delta:
+            print("categories: unchanged")
+        else:
+            st, d = call("PATCH", f"/v1/appInfos/{info_id}",
+                         {"data": {"type": "appInfos", "id": info_id,
+                                   "relationships": {
+                                       f"{k}Category": {"data": {"type": "appCategories", "id": v}}
+                                       for k, v in delta.items()}}})
+            print(f"categories: set {', '.join(f'{k}={v}' for k, v in sorted(delta.items()))}: HTTP {st}")
+            if st >= 300:
+                print(json.dumps(d, indent=2)); sys.exit(1)
+
+    # 4. App-level listing text per locale: name, subtitle, privacy URL.
+    if meta.get("appInfo"):
+        st, d = call("GET", f"/v1/appInfos/{info_id}/appInfoLocalizations?limit=50")
+        locs = {l["attributes"].get("locale"): l for l in d.get("data", [])}
+        for locale, wanted in meta["appInfo"].items():
+            loc = locs.get(locale)
+            _apply("appInfoLocalizations", loc["id"] if loc else None,
+                   loc["attributes"] if loc else {}, wanted, f"app info {locale}",
+                   create=lambda attrs, locale=locale: call(
+                       "POST", "/v1/appInfoLocalizations",
+                       {"data": {"type": "appInfoLocalizations",
+                                 "attributes": dict(attrs, locale=locale),
+                                 "relationships": {"appInfo": {
+                                     "data": {"type": "appInfos", "id": info_id}}}}}))
+
+    # 5. The App Store version for this version string. `appstore` creates
+    # or renames it before this runs; it is not created here because the
+    # build attach decides which one is editable.
+    st, d = call("GET", f"/v1/apps/{app}/appStoreVersions?filter[platform]=IOS"
+                        f"&fields[appStoreVersions]=versionString,appVersionState,copyright&limit=50")
+    ver = next((v for v in d.get("data", [])
+                if v["attributes"].get("versionString") == version_string), None)
+    if not ver:
+        print(f"no App Store version {version_string}; run `appstore` first to create it.")
+        sys.exit(1)
+    vid = ver["id"]
+    print(f"App Store version {version_string}: {ver['attributes'].get('appVersionState')} (id {vid})")
+    if meta.get("version"):
+        _apply("appStoreVersions", vid, ver["attributes"], meta["version"],
+               f"version {version_string}")
+
+    # 6. Version-level listing text per locale. What's New is deliberately
+    # not here: it is per release and `appstore` sets it from the notes file.
+    if meta.get("versionLocalizations"):
+        st, d = call("GET", f"/v1/appStoreVersions/{vid}/appStoreVersionLocalizations?limit=50")
+        locs = {l["attributes"].get("locale"): l for l in d.get("data", [])}
+        for locale, wanted in meta["versionLocalizations"].items():
+            if "whatsNew" in wanted:
+                print(f"version {locale}: whatsNew belongs in the notes file, not the metadata; ignored.")
+                wanted = {k: v for k, v in wanted.items() if k != "whatsNew"}
+            loc = locs.get(locale)
+            _apply("appStoreVersionLocalizations", loc["id"] if loc else None,
+                   loc["attributes"] if loc else {}, wanted, f"version {locale}",
+                   create=lambda attrs, locale=locale: call(
+                       "POST", "/v1/appStoreVersionLocalizations",
+                       {"data": {"type": "appStoreVersionLocalizations",
+                                 "attributes": dict(attrs, locale=locale),
+                                 "relationships": {"appStoreVersion": {
+                                     "data": {"type": "appStoreVersions", "id": vid}}}}}))
+
+    # 7. App Review contact. Personal data, so from the environment.
+    contact_env = {"contactFirstName": "ASC_REVIEW_FIRST_NAME",
+                   "contactLastName": "ASC_REVIEW_LAST_NAME",
+                   "contactPhone": "ASC_REVIEW_PHONE",
+                   "contactEmail": "ASC_REVIEW_EMAIL"}
+    contact = {k: os.environ.get(v, "").strip() for k, v in contact_env.items()}
+    wanted = dict(meta.get("reviewDetail") or {})
+    st, d = call("GET", f"/v1/appStoreVersions/{vid}/appStoreReviewDetail")
+    detail = d.get("data")
+    if all(contact.values()):
+        wanted.update(contact)
+    else:
+        missing = [v for k, v in contact_env.items() if not contact[k]]
+        if detail and detail.get("attributes", {}).get("contactEmail"):
+            print(f"review contact: kept as is ({', '.join(missing)} unset)")
+        else:
+            print(f"review contact: NOT SET and {', '.join(missing)} unset; "
+                  "App Review needs a contact. Export them and re-run.")
+    if wanted:
+        _apply("appStoreReviewDetails", detail["id"] if detail else None,
+               detail.get("attributes", {}) if detail else {}, wanted, "review detail",
+               create=lambda attrs: call(
+                   "POST", "/v1/appStoreReviewDetails",
+                   {"data": {"type": "appStoreReviewDetails", "attributes": attrs,
+                             "relationships": {"appStoreVersion": {
+                                 "data": {"type": "appStoreVersions", "id": vid}}}}}))
 
 
 def main():
@@ -285,6 +469,14 @@ def main():
             elif st >= 300:
                 print(json.dumps(d, indent=2)); sys.exit(1)
 
+        # The release script runs `prepare` between the build attach and the
+        # submission, because App Review refuses a version whose age rating,
+        # categories or listing are missing, and those live on records that
+        # only exist once the version does.
+        if os.environ.get("ASC_NO_SUBMIT") == "1":
+            print(f"ASC_NO_SUBMIT=1: version {version_string} ({build_number}) is attached and not submitted.")
+            return
+
         # 4. Submit. A review submission is a container; the version is an item
         # in it. Reuse an open, unsubmitted one for this platform if a previous
         # run got that far, and stop if one is already with App Review.
@@ -432,6 +624,13 @@ def main():
         else:
             print("(public link not in the response yet — re-run in a moment)")
             sys.exit(2)
+
+    elif cmd == "prepare":
+        #   python3 tools/asc-api.py prepare 1.3.0 tools/store-metadata.json
+        if len(sys.argv) < 4:
+            print("usage: prepare <version-string> <metadata-json>")
+            sys.exit(2)
+        prepare(app, sys.argv[2], sys.argv[3])
 
     elif cmd == "whatsnew":
         # Set the TestFlight "What to Test" notes for a build.

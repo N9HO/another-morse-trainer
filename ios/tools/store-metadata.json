@@ -1,0 +1,56 @@
+{
+  "_comment": "App Store listing metadata applied by `asc-api.py prepare`. Everything here is public store copy; contact details for App Review come from the environment (ASC_REVIEW_*), never from this file. Mirrors android/store-assets/listing.md, condensed to the App Store's 4000-character description limit.",
+  "categories": {
+    "primary": "EDUCATION",
+    "secondary": "UTILITIES"
+  },
+  "ageRating": {
+    "advertising": false,
+    "gambling": false,
+    "healthOrWellnessTopics": false,
+    "lootBox": false,
+    "messagingAndChat": false,
+    "parentalControls": false,
+    "ageAssurance": false,
+    "socialMedia": false,
+    "socialMediaAgeRestricted": false,
+    "unrestrictedWebAccess": false,
+    "userGeneratedContent": false,
+    "alcoholTobaccoOrDrugUseOrReferences": "NONE",
+    "contests": "NONE",
+    "gamblingSimulated": "NONE",
+    "gunsOrOtherWeapons": "NONE",
+    "medicalOrTreatmentInformation": "NONE",
+    "profanityOrCrudeHumor": "NONE",
+    "sexualContentGraphicAndNudity": "NONE",
+    "sexualContentOrNudity": "NONE",
+    "horrorOrFearThemes": "NONE",
+    "matureOrSuggestiveThemes": "NONE",
+    "violenceCartoonOrFantasy": "NONE",
+    "violenceRealisticProlongedGraphicOrSadistic": "NONE",
+    "violenceRealistic": "NONE",
+    "ageRatingOverrideV2": "NONE"
+  },
+  "appInfo": {
+    "en-US": {
+      "name": "Another Morse Trainer",
+      "subtitle": "Learn Morse code by ear",
+      "privacyPolicyUrl": "https://anothermorsetrainer.app/privacy/"
+    }
+  },
+  "version": {
+    "copyright": "2026 Justin Rogers"
+  },
+  "versionLocalizations": {
+    "en-US": {
+      "keywords": "morse,cw,ham radio,koch,amateur radio,learn morse,telegraph,callsign,contest,decoder",
+      "supportUrl": "https://anothermorsetrainer.app/guide/",
+      "marketingUrl": "https://anothermorsetrainer.app/",
+      "description": "Learn to copy Morse code (CW) by ear, the way real operators do.\n\nAnother Morse Trainer teaches you with the proven Koch method: it starts with two characters and adds the next one only when you're ready, building real instant recognition instead of counting dots and dashes.\n\nMANY WAYS TO TRAIN\n\nLearn the characters\n• Journey: a leveled path from letters through punctuation, prosigns, Q-codes, abbreviations and words to call signs, with an unlock map and saved progress.\n• Characters: the Koch-method ladder through A-Z and 0-9.\n• Confusion Drill: targeted reps on the exact pairs you keep mixing up.\n\nCopy real content\n• Common Words: copy whole ham-radio words at speed, or bring your own list.\n• Abbreviations and Q-Codes: the CW shorthand you'll hear on the air.\n• Prosigns: run-together signals like AR and SK.\n• Short Stories: 32 bundled fables, longer classics with a bookmark, or today's real news headlines, hidden until you decode them.\n\nBuild speed\n• Head Copy: hold a whole word in your head, then grade your own recall.\n• Type It: free recall with no multiple choice to lean on.\n• QRQ Speed: high-speed copy at 35, 40, 50 or 60 WPM.\n• Rapid Fire: call signs, words, number groups or states sent back to back.\n• Daily Dit: one five-letter word a day, the same for everyone. Guess it from the code; every replay or miss slows the code down until you catch it.\n\nPlay\n• Six arcade games that train by ear: Morse Invaders, CW Galaga, Morse Defender, CW Dungeon, CW Frogger and CW Asteroids. Every hit and miss feeds your stats.\n\nGet on the air\n• Pileup Runner: call CQ and pull callsigns out of a simulated pileup, with QSB, QRN, cut numbers, busted calls and a live log.\n• Contest: timed runs of five real weekly CW events (K1USN SST, ICWC MST, CWops CWT, NCCC Sprint, ARRL Field Day) with a live score and scorecard.\n• Code Exam: the classic FCC/ARRL-style copy test at 5, 13 or 20 WPM.\n• Repeater: live CW with real operators over the Vail network.\n\nSend, decode and look up\n• Sending Practice: key it back on a touch key or a hardware MIDI key, with live decode of what you actually sent.\n• Sending Drills: printable practice sheets built from what you've studied.\n• CW Decoder: point the microphone at a rig or a WebSDR and read received Morse as text.\n• Reference: a tap-to-hear chart of prosigns, Q-codes, abbreviations, ham lingo and cut numbers.\n• Listen & Learn: hands-free, eyes-free practice: hear the code, then the answer spoken aloud. Keeps playing with the screen locked.\n\nBUILT FOR REAL PRACTICE\n• Character speed up to 60 WPM, Farnsworth spacing and sidetone pitch.\n• Answer by tapping, typing, speaking or keying it back.\n• Hardware key support: USB and Bluetooth LE MIDI keys, plus full Vail Adapter input and output.\n• A quiet background noise floor so Bluetooth earbuds don't sleep through the first character; turn it up and it doubles as band noise.\n• A daily practice reminder to keep your streak alive, and a buddy streak: pair with one friend and keep a streak of days you both practised.\n• Optional shared leaderboard, off by default, for Rapid Fire, Contest, Pileup Runner and the games.\n• Progress tracking: streak, accuracy, fastest copy, most-confused pairs, performance by speed band and a per-character recognition-speed chart.\n• iPhone and iPad layouts.\n\nNo accounts. No ads. No tracking. Everything stays on your device unless you turn the leaderboard on.\n\nFull user guide: https://anothermorsetrainer.app/guide/\nCommunity and support: https://discord.gg/qgyk3TPUd9\n\n73!"
+    }
+  },
+  "reviewDetail": {
+    "demoAccountRequired": false,
+    "notes": "Optional leaderboard, off by default; no account needed."
+  }
+}
