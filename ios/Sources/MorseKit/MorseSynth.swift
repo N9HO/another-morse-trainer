@@ -183,7 +183,13 @@ public struct MorseSynth: Sendable {
     /// Past ~120 WPM a dit is shorter than two 5 ms ramps, and without the clamp
     /// the fall is skipped entirely and the tone ends at full amplitude — an
     /// audible click (issue #79). At every speed the app offers this is the
-    /// unchanged 5 ms.
+    /// unchanged 5 ms: at 75 WPM, the fastest Daily Dit sends, a dit is 16 ms
+    /// (705 samples at 44.1 kHz), the ramp is 220 samples and the clamp is
+    /// `705 / 2 = 352`, so rise and fall both run their full length with 265
+    /// samples of steady tone between them. The samples at that speed are as
+    /// click-free as at 20 WPM — `fixtures/render.json` pins PARIS at 75 —
+    /// so a "pops and clicks" report there (issue #228) is not this envelope;
+    /// look downstream of the samples, at the route and the device.
     @inline(__always)
     private func sample(n: Int, toneSamples: Int) -> Float {
         let rampSamples = max(1, min(fullRampSamples, toneSamples / 2))
