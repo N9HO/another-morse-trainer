@@ -18,6 +18,10 @@ Usage:
                                            # App Review (release after approval);
                                            # ASC_NO_SUBMIT=1 stops before the
                                            # submission
+  python3 tools/asc-api.py screenshots <version-string> <display-type> <dir>
+                                           # upload the PNGs in <dir> as e.g.
+                                           # APP_IPHONE_67 screenshots (idempotent
+                                           # by file name)
   python3 tools/asc-api.py prepare <version-string> <metadata-json>
                                            # apply tools/store-metadata.json (age
                                            # rating, categories, listing text,
@@ -334,6 +338,81 @@ def prepare(app: str, version_string: str, meta_path: str):
                    {"data": {"type": "appStoreReviewDetails", "attributes": attrs,
                              "relationships": {"appStoreVersion": {
                                  "data": {"type": "appStoreVersions", "id": vid}}}}}))
+
+
+def screenshots(app: str, version_string: str, display_type: str, directory: str,
+                locale: str = "en-US"):
+    """Upload the PNGs in `directory` (sorted by name) as the screenshots of
+    one display type on the version's localization, e.g. APP_IPHONE_67 for
+    the 6.9-inch iPhone (1320x2868). Idempotent by file name: the set is
+    created if missing and a file whose name is already in it is skipped, so
+    a re-run uploads nothing. To replace a screenshot, delete it in App Store
+    Connect (or rename the file) and re-run."""
+    import hashlib
+    files = sorted(f for f in os.listdir(os.path.expanduser(directory)) if f.lower().endswith(".png"))
+    if not files:
+        print(f"no PNGs in {directory}"); sys.exit(1)
+    st, d = call("GET", f"/v1/apps/{app}/appStoreVersions?filter[platform]=IOS"
+                        f"&fields[appStoreVersions]=versionString&limit=50")
+    ver = next((v for v in d.get("data", [])
+                if v["attributes"].get("versionString") == version_string), None)
+    if not ver:
+        print(f"no App Store version {version_string}"); sys.exit(1)
+    st, d = call("GET", f"/v1/appStoreVersions/{ver['id']}/appStoreVersionLocalizations?limit=50")
+    loc = next((l for l in d.get("data", []) if l["attributes"].get("locale") == locale), None)
+    if not loc:
+        print(f"no {locale} localization on {version_string}; run `prepare` first."); sys.exit(1)
+    st, d = call("GET", f"/v1/appStoreVersionLocalizations/{loc['id']}/appScreenshotSets"
+                        f"?fields[appScreenshotSets]=screenshotDisplayType&limit=50")
+    sset = next((s for s in d.get("data", [])
+                 if s["attributes"].get("screenshotDisplayType") == display_type), None)
+    if sset:
+        print(f"screenshot set {display_type}: exists ({sset['id']})")
+    else:
+        st, d = call("POST", "/v1/appScreenshotSets",
+                     {"data": {"type": "appScreenshotSets",
+                               "attributes": {"screenshotDisplayType": display_type},
+                               "relationships": {"appStoreVersionLocalization": {
+                                   "data": {"type": "appStoreVersionLocalizations", "id": loc["id"]}}}}})
+        if st >= 300 or not d.get("data"):
+            print(f"create screenshot set {display_type}: HTTP {st}"); print(json.dumps(d, indent=2)); sys.exit(1)
+        sset = d["data"]
+        print(f"screenshot set {display_type}: created ({sset['id']})")
+    st, d = call("GET", f"/v1/appScreenshotSets/{sset['id']}/appScreenshots"
+                        f"?fields[appScreenshots]=fileName,assetDeliveryState&limit=50")
+    have = {s["attributes"].get("fileName"): s for s in d.get("data", [])}
+    for name in files:
+        if name in have:
+            state = (have[name]["attributes"].get("assetDeliveryState") or {}).get("state")
+            print(f"  {name}: already uploaded ({state})")
+            continue
+        path = os.path.join(os.path.expanduser(directory), name)
+        with open(path, "rb") as f:
+            blob = f.read()
+        st, d = call("POST", "/v1/appScreenshots",
+                     {"data": {"type": "appScreenshots",
+                               "attributes": {"fileName": name, "fileSize": len(blob)},
+                               "relationships": {"appScreenshotSet": {
+                                   "data": {"type": "appScreenshotSets", "id": sset["id"]}}}}})
+        if st >= 300 or not d.get("data"):
+            print(f"  {name}: reserve: HTTP {st}"); print(json.dumps(d, indent=2)); sys.exit(1)
+        shot = d["data"]
+        for op in shot["attributes"].get("uploadOperations") or []:
+            chunk = blob[op["offset"]:op["offset"] + op["length"]]
+            req = urllib.request.Request(op["url"], data=chunk, method=op["method"])
+            for h in op.get("requestHeaders") or []:
+                req.add_header(h["name"], h["value"])
+            with urllib.request.urlopen(req) as r:
+                if r.status >= 300:
+                    print(f"  {name}: chunk upload HTTP {r.status}"); sys.exit(1)
+        st, d = call("PATCH", f"/v1/appScreenshots/{shot['id']}",
+                     {"data": {"type": "appScreenshots", "id": shot["id"],
+                               "attributes": {"uploaded": True,
+                                              "sourceFileChecksum": hashlib.md5(blob).hexdigest()}}})
+        state = ((d.get("data") or {}).get("attributes", {}).get("assetDeliveryState") or {}).get("state")
+        print(f"  {name}: uploaded {len(blob)} bytes: HTTP {st} -> {state}")
+        if st >= 300:
+            print(json.dumps(d, indent=2)); sys.exit(1)
 
 
 def main():
@@ -702,6 +781,13 @@ def main():
             print("usage: prepare <version-string> <metadata-json>")
             sys.exit(2)
         prepare(app, sys.argv[2], sys.argv[3])
+
+    elif cmd == "screenshots":
+        #   python3 tools/asc-api.py screenshots 1.3.0 APP_IPHONE_67 ~/shots/iphone69
+        if len(sys.argv) < 5:
+            print("usage: screenshots <version-string> <display-type> <png-directory>")
+            sys.exit(2)
+        screenshots(app, sys.argv[2], sys.argv[3], sys.argv[4])
 
     elif cmd == "whatsnew":
         # Set the TestFlight "What to Test" notes for a build.
