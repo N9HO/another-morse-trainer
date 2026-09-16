@@ -1,5 +1,5 @@
 {
-  "_comment": "App Store listing metadata applied by `asc-api.py prepare`. Everything here is public store copy; contact details for App Review come from the environment (ASC_REVIEW_*), never from this file. Mirrors android/store-assets/listing.md, condensed to the App Store's 4000-character description limit.",
+  "_comment": "App Store listing metadata applied by `asc-api.py prepare`. Everything here is public store copy; contact details for App Review come from the environment (ASC_REVIEW_*), never from this file. Mirrors android/store-assets/listing.md, condensed to the App Store's 4000-character description limit. contentRightsDeclaration is USES_THIRD_PARTY_CONTENT because Short Stories shows real RSS news headlines; pricing is free with USA as the base territory; availability is every territory, including ones Apple adds later. A price schedule or availability that already exists is never rewritten.",
   "categories": {
     "primary": "EDUCATION",
     "secondary": "UTILITIES"
@@ -30,6 +30,15 @@
     "violenceRealisticProlongedGraphicOrSadistic": "NONE",
     "violenceRealistic": "NONE",
     "ageRatingOverrideV2": "NONE"
+  },
+  "contentRightsDeclaration": "USES_THIRD_PARTY_CONTENT",
+  "pricing": {
+    "baseTerritory": "USA",
+    "customerPrice": 0
+  },
+  "availability": {
+    "territories": "all",
+    "availableInNewTerritories": true
   },
   "appInfo": {
     "en-US": {

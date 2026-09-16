@@ -119,7 +119,9 @@ def prepare(app: str, version_string: str, meta_path: str):
     Everything App Review needs that is not the binary: the age rating
     questionnaire, categories, the app-level listing (name, subtitle,
     privacy policy URL), the version-level listing (description, keywords,
-    support and marketing URLs, copyright) and the App Review contact.
+    support and marketing URLs, copyright), the content rights
+    declaration, a price schedule and territory availability when the app
+    has none yet, and the App Review contact.
     Idempotent: each record is read first and only the fields that differ
     are written, so a re-run prints "unchanged" down the column.
 
@@ -237,7 +239,76 @@ def prepare(app: str, version_string: str, meta_path: str):
                                  "relationships": {"appStoreVersion": {
                                      "data": {"type": "appStoreVersions", "id": vid}}}}}))
 
-    # 7. App Review contact. Personal data, so from the environment.
+    # 7. Content rights, price and availability. App-level, not per
+    # version, and a price schedule or availability that exists is left
+    # alone: changing either is a pricing decision to make in App Store
+    # Connect, not something a re-run should silently redo.
+    if "contentRightsDeclaration" in meta:
+        st, d = call("GET", f"/v1/apps/{app}?fields[apps]=contentRightsDeclaration")
+        _apply("apps", app, (d.get("data") or {}).get("attributes", {}),
+               {"contentRightsDeclaration": meta["contentRightsDeclaration"]}, "content rights")
+    pricing = meta.get("pricing")
+    if pricing:
+        st, d = call("GET", f"/v1/apps/{app}/appPriceSchedule?include=manualPrices,baseTerritory"
+                            f"&fields[appPrices]=manual&limit[manualPrices]=5")
+        if st == 200 and d.get("data"):
+            base = ((d["data"].get("relationships") or {}).get("baseTerritory") or {}).get("data") or {}
+            print(f"price schedule: exists (base territory {base.get('id')}); left as is")
+        else:
+            base = pricing.get("baseTerritory", "USA")
+            st, d = call("GET", f"/v1/apps/{app}/appPricePoints?filter[territory]={base}"
+                                f"&fields[appPricePoints]=customerPrice&limit=200")
+            want_price = float(pricing.get("customerPrice", 0))
+            point = next((p for p in d.get("data", [])
+                          if float(p["attributes"].get("customerPrice") or -1) == want_price), None)
+            if not point:
+                print(f"price schedule: no {base} price point at {want_price}: HTTP {st}")
+                print(json.dumps(d, indent=2)[:2000]); sys.exit(1)
+            st, d = call("POST", "/v1/appPriceSchedules",
+                         {"data": {"type": "appPriceSchedules",
+                                   "relationships": {
+                                       "app": {"data": {"type": "apps", "id": app}},
+                                       "baseTerritory": {"data": {"type": "territories", "id": base}},
+                                       "manualPrices": {"data": [{"type": "appPrices", "id": "${price0}"}]}}},
+                          "included": [{"type": "appPrices", "id": "${price0}",
+                                        "attributes": {"startDate": None},
+                                        "relationships": {"appPricePoint": {
+                                            "data": {"type": "appPricePoints", "id": point["id"]}}}}]})
+            print(f"price schedule: created, {base} at {want_price}: HTTP {st}")
+            if st >= 300:
+                print(json.dumps(d, indent=2)); sys.exit(1)
+    avail = meta.get("availability")
+    if avail:
+        st, d = call("GET", f"/v1/apps/{app}/appAvailabilityV2?fields[appAvailabilities]=availableInNewTerritories")
+        if st == 200 and d.get("data"):
+            print(f"availability: exists (availableInNewTerritories="
+                  f"{d['data']['attributes'].get('availableInNewTerritories')}); left as is")
+        else:
+            st, d = call("GET", "/v1/territories?limit=200")
+            terr = [t["id"] for t in d.get("data", [])]
+            if not terr:
+                print(f"availability: no territories listed: HTTP {st}"); sys.exit(1)
+            if avail.get("territories") not in (None, "all"):
+                terr = [t for t in terr if t in set(avail["territories"])]
+            st, d = call("POST", "/v2/appAvailabilities",
+                         {"data": {"type": "appAvailabilities",
+                                   "attributes": {"availableInNewTerritories":
+                                                  bool(avail.get("availableInNewTerritories", True))},
+                                   "relationships": {
+                                       "app": {"data": {"type": "apps", "id": app}},
+                                       "territoryAvailabilities": {"data": [
+                                           {"type": "territoryAvailabilities", "id": f"${{t{i}}}"}
+                                           for i in range(len(terr))]}}},
+                          "included": [{"type": "territoryAvailabilities", "id": f"${{t{i}}}",
+                                        "attributes": {"available": True},
+                                        "relationships": {"territory": {
+                                            "data": {"type": "territories", "id": t}}}}
+                                       for i, t in enumerate(terr)]})
+            print(f"availability: created for {len(terr)} territories: HTTP {st}")
+            if st >= 300:
+                print(json.dumps(d, indent=2)[:3000]); sys.exit(1)
+
+    # 8. App Review contact. Personal data, so from the environment.
     contact_env = {"contactFirstName": "ASC_REVIEW_FIRST_NAME",
                    "contactLastName": "ASC_REVIEW_LAST_NAME",
                    "contactPhone": "ASC_REVIEW_PHONE",
