@@ -242,9 +242,22 @@ def main():
             vid = d["data"]["id"]
             print(f"created App Store version {version_string} with build {build_number} (id {vid})")
 
-        # 3. What's New. Required by App Review on every update after the first;
-        # a missing notes file is a hard stop rather than a blank release note.
-        if notes_path:
+        # 3. What's New. Required by App Review on every update after the first,
+        # and REFUSED on the first: App Store Connect has no What's New field
+        # for a version that follows nothing (PATCH answers 409 STATE_ERROR,
+        # "Attribute 'whatsNew' cannot be edited at this time"; seen on the
+        # 1.3.0 launch). So skip it when no version has ever shipped, and treat
+        # that same 409 as a warning rather than a failed release if the
+        # state read misses a case.
+        SHIPPED = {"READY_FOR_DISTRIBUTION", "REPLACED_WITH_NEW_VERSION",
+                   "PENDING_DEVELOPER_RELEASE", "PENDING_APPLE_RELEASE",
+                   "PROCESSING_FOR_DISTRIBUTION", "ACCEPTED"}
+        first_release = not any(v["attributes"].get("appVersionState") in SHIPPED
+                                for v in versions)
+        if notes_path and first_release:
+            print(f"version {version_string} is the app's first release: App Store Connect "
+                  f"has no What's New field for it, so {notes_path} is not sent.")
+        elif notes_path:
             with open(os.path.expanduser(notes_path), "r") as f:
                 notes = f.read().strip()
             if not notes:
@@ -266,7 +279,10 @@ def main():
                                        "relationships": {"appStoreVersion": {
                                            "data": {"type": "appStoreVersions", "id": vid}}}}})
                 print(f"version {version_string}: What's New (en-US, created): HTTP {st}")
-            if st >= 300:
+            if st == 409 and any("whatsNew" in (e.get("detail") or "") for e in d.get("errors", [])):
+                print("  What's New cannot be edited on this version (App Store Connect says so); "
+                      "continuing without it. Set it in App Store Connect if the review asks.")
+            elif st >= 300:
                 print(json.dumps(d, indent=2)); sys.exit(1)
 
         # 4. Submit. A review submission is a container; the version is an item

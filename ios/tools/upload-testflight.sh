@@ -20,7 +20,15 @@
 # Usage:  ./tools/upload-testflight.sh
 #         DRY_RUN=1 ./tools/upload-testflight.sh               # build + sign, no upload
 #         SKIP_DISTRIBUTE=1 ./tools/upload-testflight.sh       # upload, don't submit
+#         SUBMIT_ONLY=1 ./tools/upload-testflight.sh           # no build: submit the build
+#                                                              # already uploaded for this
+#                                                              # CURRENT_PROJECT_VERSION
 #         RELEASE_CHANNEL=testflight ./tools/upload-testflight.sh  # beta, not App Review
+#
+# SUBMIT_ONLY exists because the upload and the submission are separate acts
+# with separate failure modes: once a build is in App Store Connect its number
+# is spent, so a submission that fails on metadata must be retried without
+# archiving again. It is a plain re-run of the submission half.
 #
 # This script is the single code path for iOS releases: `ios-release.yml`
 # runs this exact file rather than reimplementing the steps in YAML, so CI and a
@@ -34,6 +42,16 @@ AUTH="tools/asc-auth.sh"
 [ -f "$AUTH" ] || { echo "Missing $AUTH (API credentials). See tools/asc-auth.sh.example."; exit 1; }
 # shellcheck disable=SC1090
 source "$AUTH"
+
+CHANNEL="${RELEASE_CHANNEL:-appstore}"
+case "$CHANNEL" in
+  appstore|testflight) ;;
+  *) echo "❌ RELEASE_CHANNEL must be 'appstore' or 'testflight', not '$CHANNEL'."; exit 1 ;;
+esac
+
+if [ "${SUBMIT_ONLY:-0}" = "1" ] && [ "${DRY_RUN:-0}" = "1" ]; then
+  echo "❌ SUBMIT_ONLY and DRY_RUN together do nothing; pick one."; exit 1
+fi
 
 ARCHIVE="build/AMT-$(date +%Y%m%d-%H%M%S).xcarchive"
 EXPORT_DIR="build/export"
@@ -52,6 +70,9 @@ if [ "${DRY_RUN:-0}" = "1" ]; then
   echo "▸ DRY RUN: exporting to disk, not uploading."
 fi
 
+if [ "${SUBMIT_ONLY:-0}" = "1" ]; then
+  echo "▸ SUBMIT_ONLY: skipping archive and upload; submitting the build already in App Store Connect."
+else
 echo "▸ Archiving (Release, unsigned)…"
 # Archive unsigned and let `-exportArchive` do all the signing. Cloud signing
 # re-signs at export anyway, so a signed archive buys nothing — and it costs
@@ -106,12 +127,10 @@ if [ "${DRY_RUN:-0}" = "1" ]; then
   exit 0
 fi
 
-CHANNEL="${RELEASE_CHANNEL:-appstore}"
-case "$CHANNEL" in
-  appstore|testflight) ;;
-  *) echo "❌ RELEASE_CHANNEL must be 'appstore' or 'testflight', not '$CHANNEL'."; exit 1 ;;
-esac
-echo "✅ Uploaded. Waiting for processing, then submitting ($CHANNEL)…"
+echo "✅ Uploaded."
+fi  # SUBMIT_ONLY
+
+echo "▸ Waiting for processing, then submitting ($CHANNEL)…"
 
 # The upload only puts the build in App Store Connect. Nobody outside the team
 # sees it until it has (a) finished processing and (b) been submitted: to App
