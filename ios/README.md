@@ -127,7 +127,10 @@ testers, bug reports and feature chat live on
   game's board number is not its on-screen score); every post is attested
   with App Attest, so only the genuine app on a real device can rank. Pick a
   callsign-shaped display name in Settings › Leaderboard; "Delete my scores"
-  removes everything the server holds for the device.
+  removes everything the server holds for the device. The board itself is
+  browsable by anyone, per mode, from the Games menu and from Your Stats,
+  without sharing; the first time you start a game with sharing off, one
+  prompt offers to turn it on, with "Not now" and "Don't ask again".
 - **Buddy streak**: pair with one other person by a six-character invite
   code (single use, 24 hours) and keep a streak of days you *both*
   practised. The home screen says whether your buddy has practised today,

@@ -154,6 +154,8 @@ private sealed interface Route {
     data object Stats : Route
     /** The shared leaderboard, opened from Stats (docs/high-scores-design.md, step 2). */
     data object Leaderboard : Route
+    /** The same board opened from the Games sub-menu (#226): Back returns there, and it opens on a game. */
+    data object GamesLeaderboard : Route
 }
 
 /**
@@ -201,6 +203,7 @@ private fun routeTag(route: Route): String = when (route) {
     Route.Settings -> "settings"
     Route.Stats -> "stats"
     Route.Leaderboard -> "leaderboard"
+    Route.GamesLeaderboard -> "gamesLeaderboard"
 }
 
 private fun routeFrom(tag: String): Route? = when (tag) {
@@ -233,6 +236,7 @@ private fun routeFrom(tag: String): Route? = when (tag) {
     "settings" -> Route.Settings
     "stats" -> Route.Stats
     "leaderboard" -> Route.Leaderboard
+    "gamesLeaderboard" -> Route.GamesLeaderboard
     // Keyed by title rather than list index: a mode reordered in QUIZ_MODES
     // between save and restore would otherwise silently resume the wrong quiz.
     else -> tag.removePrefix("quiz:").takeIf { it != tag }
@@ -400,7 +404,8 @@ private fun AppRoot() {
             onPickDefender = { route = Route.Defender },
             onPickDungeon = { route = Route.Dungeon },
             onPickFrogger = { route = Route.Frogger },
-            onPickAsteroids = { route = Route.Asteroids }
+            onPickAsteroids = { route = Route.Asteroids },
+            onOpenLeaderboard = { route = Route.GamesLeaderboard }
         )
         // Back from a game lands on the Games sub-menu it was picked from
         // (#207), the way Back from a Reference entry lands on the list.
@@ -428,8 +433,10 @@ private fun AppRoot() {
             }
         )
         Route.Stats -> StatsScreen(onBack = { route = Route.Home }, onOpenLeaderboard = { route = Route.Leaderboard })
-        // Back from the board lands on Stats, where it was opened from.
+        // Back from the board lands where it was opened from: Stats, or the
+        // Games sub-menu, which opens it on the first game's board (#226).
         Route.Leaderboard -> LeaderboardScreen(onBack = { route = Route.Stats })
+        Route.GamesLeaderboard -> LeaderboardScreen(onBack = { route = Route.Games }, initialMode = "invaders")
     }
 
     setup?.let { target ->

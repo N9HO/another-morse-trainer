@@ -42,21 +42,25 @@ import app.anothermorsetrainer.morsekit.Leaderboard
  * The shared leaderboard (docs/high-scores-design.md, step 2): one board per
  * ranked mode, read straight from `GET /v1/board/{mode}`. Public and
  * read-only, so it needs neither the opt-in nor Play Integrity; a fresh
- * install can look before it ever posts. Reached from the Progress screen.
- * The iOS twin is `LeaderboardView`.
+ * install can look before it ever posts. Reached from the Progress screen,
+ * opening on Rapid Fire, and from the Games sub-menu (#226), opening on the
+ * first game's board. The iOS twin is `LeaderboardView`.
  *
  * Board numbers are the server's metric — the speed summed over correctly
  * copied items — and the lead paragraph says so, because a game's number
  * here is deliberately not the score its end card showed.
+ *
+ * @param initialMode the server mode id the pills open on; an unknown or
+ *   absent one opens the first board.
  */
 @Composable
-fun LeaderboardScreen(onBack: () -> Unit) {
+fun LeaderboardScreen(onBack: () -> Unit, initialMode: String? = null) {
     BackHandler { onBack() }
 
     val modes = Leaderboard.rankedModes
     // Which board is open, by position; saved so a process death while
     // reading comes back to the same mode.
-    var selected by rememberSaveable { mutableIntStateOf(0) }
+    var selected by rememberSaveable { mutableIntStateOf(modes.indexOf(initialMode ?: "").coerceAtLeast(0)) }
     val modeId = modes[selected.coerceIn(0, modes.size - 1)]
 
     var rows by remember { mutableStateOf<List<LeaderboardClient.BoardRow>?>(null) }

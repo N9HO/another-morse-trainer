@@ -18,6 +18,9 @@ struct DungeonView: View {
 
     private enum Phase { case setup, playing, over }
     @State private var phase: Phase = .setup
+    /// The shared leaderboard's first-play prompt (#226): raised by Start and
+    /// Play again while sharing is off and unanswered, never mid-game.
+    @State private var optInPrompt = false
     @State private var game: DungeonGame?
     /// A snapshot of the room for drawing; refreshed every frame from `game`.
     @State private var scene = Scene()
@@ -82,6 +85,7 @@ struct DungeonView: View {
             }
         }
         .onDisappear { model.stopDungeon() }
+        .leaderboardOptInPrompt(isPresented: $optInPrompt) { startGame() }
     }
 
     // MARK: - Setup
@@ -120,7 +124,7 @@ struct DungeonView: View {
 
                 Button {
                     Haptics.tap()
-                    startGame()
+                    if model.shouldOfferLeaderboardOptIn { optInPrompt = true } else { startGame() }
                 } label: {
                     Text("Enter the dungeon")
                         .font(.headline)
@@ -328,7 +332,7 @@ struct DungeonView: View {
                 .foregroundStyle(Theme.textSecondary)
             Button {
                 Haptics.tap()
-                startGame()
+                if model.shouldOfferLeaderboardOptIn { optInPrompt = true } else { startGame() }
             } label: {
                 Text("Try again")
                     .font(.headline)

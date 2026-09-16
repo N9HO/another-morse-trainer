@@ -882,6 +882,14 @@
     <string name="leaderboard_retry">Retry</string>
     <string name="leaderboard_platform_ios">iOS</string>
     <string name="leaderboard_platform_android">Android</string>
+    <!-- Reached from the Games sub-menu as well as Progress (#226) -->
+    <string name="games_leaderboard_tagline">Top runs in every game, from both apps</string>
+    <!-- The first-play opt-in prompt (#226) -->
+    <string name="leaderboard_optin_title">Post your scores to the leaderboard?</string>
+    <string name="leaderboard_optin_body">Finished games (and Rapid Fire, Contest and Pileup Runner runs) can be posted to the shared leaderboard under a display name of 2–12 characters: letters, digits, space, / and -. The board ranks a server-graded copy of each run, not the on-screen score. You can turn sharing off at any time in Settings › Leaderboard.</string>
+    <string name="leaderboard_optin_share">Share scores</string>
+    <string name="leaderboard_optin_not_now">Not now</string>
+    <string name="leaderboard_optin_never">Don\'t ask again</string>
     <!-- The run-summary line: rank, then the server's metric -->
     <string name="leaderboard_result">Leaderboard: #%1$d · %2$d</string>
     <string name="leaderboard_refused">Leaderboard: %1$s</string>

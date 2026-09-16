@@ -1,14 +1,21 @@
 // LeaderboardView.swift
 // The shared leaderboard, read-only: one board per ranked mode, fetched from
-// `GET /v1/board/{mode}` (no attestation needed). Reached from Your Stats.
+// `GET /v1/board/{mode}` (no attestation needed, no opt-in: anyone can look).
+// Reached from Your Stats, opening on Rapid Fire, and from the Games menu
+// (#226), opening on the first game's board.
 
 import SwiftUI
 
 struct LeaderboardView: View {
     @EnvironmentObject var model: AppModel
-    @State private var board: LeaderboardMode = .rapidFire
+    @State private var board: LeaderboardMode
     @State private var rows: [LeaderboardBoardRow] = []
     @State private var state: LoadState = .loading
+
+    /// - Parameter initialBoard: the mode the picker opens on.
+    init(initialBoard: LeaderboardMode = .rapidFire) {
+        _board = State(initialValue: initialBoard)
+    }
 
     private enum LoadState: Equatable {
         case loading

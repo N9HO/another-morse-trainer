@@ -376,6 +376,14 @@ object Settings {
      */
     var leaderboardName by mutableStateOf("")
         private set
+    /**
+     * The first-play prompt (#226) has been answered: "Don't ask again" was
+     * chosen, or sharing has been on at some point. While false and
+     * [leaderboardEnabled] is off, a game's Start asks once whether to turn
+     * sharing on (`LeaderboardOptInDialog`).
+     */
+    var leaderboardPromptDismissed by mutableStateOf(false)
+        private set
 
     // ---- Buddy streak (docs/buddy-streak-design.md) ----
 
@@ -550,6 +558,9 @@ object Settings {
         onboardingDone = prefs.getBoolean("onboardingDone", false)
         leaderboardEnabled = prefs.getBoolean("leaderboardEnabled", false)
         leaderboardName = (prefs.getString("leaderboardName", "") ?: "").take(LEADERBOARD_NAME_MAX)
+        // An install that already shares has answered the question; the `||`
+        // covers a record written before the key existed.
+        leaderboardPromptDismissed = prefs.getBoolean("leaderboardPromptDismissed", false) || leaderboardEnabled
         remindersEnabled = prefs.getBoolean("reminders", false)
         reminderHour = prefs.getInt("reminderHour", 19)
         reminderMinute = prefs.getInt("reminderMinute", 0)
@@ -854,8 +865,16 @@ object Settings {
     /** The server's display-name cap (leaderboard repo `src/names.ts`). */
     const val LEADERBOARD_NAME_MAX = 12
 
+    /** Turning sharing on, from Settings or from the first-play prompt, also answers that prompt for good (#226). */
     fun updateLeaderboardEnabled(value: Boolean) {
         leaderboardEnabled = value
+        if (value) leaderboardPromptDismissed = true
+        persist()
+    }
+
+    /** "Don't ask again" on the first-play prompt: sharing stays off and no game asks again. */
+    fun dismissLeaderboardPrompt() {
+        leaderboardPromptDismissed = true
         persist()
     }
 
@@ -1096,6 +1115,7 @@ object Settings {
             putBoolean("onboardingDone", onboardingDone)
             putBoolean("leaderboardEnabled", leaderboardEnabled)
             putString("leaderboardName", leaderboardName)
+            putBoolean("leaderboardPromptDismissed", leaderboardPromptDismissed)
             putBoolean("reminders", remindersEnabled)
             putInt("reminderHour", reminderHour)
             putInt("reminderMinute", reminderMinute)

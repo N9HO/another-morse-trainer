@@ -1080,7 +1080,9 @@ private struct ModeTile: View {
 /// The Games sub-menu (#207): the six arcade games on their own grid, one
 /// tap from the home screen's Games tile. Same tiles as the home grid, same
 /// one-tap-to-setup behaviour; `onPick` hands the chosen game back to
-/// `IntroView`, which closes this sheet and opens that game's setup.
+/// `IntroView`, which closes this sheet and opens that game's setup. Below
+/// the grid, the shared leaderboard (#226): the games' boards are browsable
+/// here without playing, and without sharing scores.
 private struct GamesMenuView: View {
     @EnvironmentObject var model: AppModel
     @Environment(\.dismiss) private var dismiss
@@ -1107,6 +1109,38 @@ private struct GamesMenuView: View {
                                 }
                             }
                         }
+
+                        // The shared leaderboard, opening on the first game's
+                        // board. Read-only and public: no opt-in needed to look.
+                        NavigationLink {
+                            LeaderboardView(initialBoard: .invaders)
+                        } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: "trophy")
+                                    .font(.system(size: 20, weight: .semibold))
+                                    .foregroundStyle(Theme.teal)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Shared leaderboard")
+                                        .font(.subheadline).bold()
+                                        .foregroundStyle(.primary)
+                                    Text("Top runs in every game, from both apps")
+                                        .font(.caption2)
+                                        .foregroundStyle(Theme.textSecondary)
+                                }
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(Theme.textSecondary)
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 14)
+                            .background(Theme.navyElevated,
+                                        in: RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous))
+                            .overlay(RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous)
+                                .strokeBorder(Theme.hairline, lineWidth: 1))
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Shared leaderboard. Top runs in every game, from both apps")
                     }
                     .padding(24)
                     .readableWidth()
