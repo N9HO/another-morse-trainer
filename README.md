@@ -121,8 +121,14 @@ both release workflows:
 
 | Tag | Fires | Effect |
 |---|---|---|
-| `ios-v*` | `.github/workflows/ios-release.yml` | Builds and uploads the iOS build to TestFlight |
-| `android-v*` | `.github/workflows/android-release.yml` | Builds the signed AAB and uploads it to the Play closed-testing track |
+| `ios-v*` | `.github/workflows/ios-release.yml` | Builds and uploads the iOS build to App Store Connect, then submits it to App Review with release-after-approval (What's New from `ios/tools/whatsnew/`) |
+| `android-v*` | `.github/workflows/android-release.yml` | Builds the signed AAB and rolls it out on the Play **production** track (release notes from `android/store-assets/whatsnew/`) |
+
+**A tag is a production release.** Both workflows used to target the beta
+channels (TestFlight beta review, Play closed testing); those are still
+reachable from a manual run of the workflow (`channel: testflight`,
+`track: alpha` or `internal`) for a build testers should see first. Every iOS
+upload still lands in TestFlight on its way to the App Store.
 
 `.github/workflows/discord-release.yml` is not tag-triggered: it runs on
 `workflow_run` once a release workflow *succeeds*, so an announcement can never

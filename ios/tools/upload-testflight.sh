@@ -1,19 +1,32 @@
 #!/bin/bash
-# One-command TestFlight upload: archive the Release build and upload it to
-# App Store Connect using the App Store Connect API key.
+# One-command iOS release: archive the Release build, upload it to App Store
+# Connect using the App Store Connect API key, then submit it.
+#
+# Where it goes after the upload is RELEASE_CHANNEL:
+#   appstore   (default) attach the build to the App Store version named by
+#              MARKETING_VERSION, set What's New from
+#              tools/whatsnew/whatsnew-en-US, and submit to App Review with
+#              release-after-approval. This is the production path.
+#   testflight the beta path this script used to be: submit for Beta App
+#              Review and hand the build to the previous build's testers.
+# Every upload lands in TestFlight regardless, so internal testers still get
+# a production build before Apple has finished reviewing it.
 #
 # Credentials come from tools/asc-auth.sh (gitignored). Bump the build number
 # (CURRENT_PROJECT_VERSION) in the project before running, or App Store Connect
-# will reject a duplicate build.
+# will reject a duplicate build. For an App Store release, MARKETING_VERSION
+# must be higher than the version that is live.
 #
 # Usage:  ./tools/upload-testflight.sh
-#         DRY_RUN=1 ./tools/upload-testflight.sh        # build + sign, no upload
-#         SKIP_DISTRIBUTE=1 ./tools/upload-testflight.sh # upload, don't submit
+#         DRY_RUN=1 ./tools/upload-testflight.sh               # build + sign, no upload
+#         SKIP_DISTRIBUTE=1 ./tools/upload-testflight.sh       # upload, don't submit
+#         RELEASE_CHANNEL=testflight ./tools/upload-testflight.sh  # beta, not App Review
 #
-# This script is the single code path for TestFlight releases: `ios-release.yml`
+# This script is the single code path for iOS releases: `ios-release.yml`
 # runs this exact file rather than reimplementing the steps in YAML, so CI and a
 # local run cannot drift apart. CI supplies the credentials by writing the same
-# gitignored tools/asc-auth.sh this reads locally.
+# gitignored tools/asc-auth.sh this reads locally. (The file name predates the
+# App Store path and is kept so muscle memory and old notes still work.)
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -93,21 +106,39 @@ if [ "${DRY_RUN:-0}" = "1" ]; then
   exit 0
 fi
 
-echo "✅ Uploaded. Waiting for processing, then submitting for beta review + notifying testers…"
+CHANNEL="${RELEASE_CHANNEL:-appstore}"
+case "$CHANNEL" in
+  appstore|testflight) ;;
+  *) echo "❌ RELEASE_CHANNEL must be 'appstore' or 'testflight', not '$CHANNEL'."; exit 1 ;;
+esac
+echo "✅ Uploaded. Waiting for processing, then submitting ($CHANNEL)…"
 
-# The upload only puts the build in App Store Connect — external testers won't
-# see it until it's (a) finished processing, (b) submitted for Beta App Review,
-# and (c) assigned to them. Poll until the build is VALID, then do both. (Skip
-# by setting SKIP_DISTRIBUTE=1 if you want to handle it in the ASC UI.)
+# The upload only puts the build in App Store Connect. Nobody outside the team
+# sees it until it has (a) finished processing and (b) been submitted: to App
+# Review on the App Store version for the production path, or to Beta App
+# Review and assigned to testers for the TestFlight path. Poll until the build
+# is VALID, then do that. (Skip by setting SKIP_DISTRIBUTE=1 to handle it in
+# the ASC UI.)
 if [ "${SKIP_DISTRIBUTE:-0}" != "1" ]; then
   # Wait for THIS build (by version) to finish processing — not just any VALID
-  # build, or dist/submit would act on the previous one while this still bakes.
+  # build, or the submission would act on the previous one while this bakes.
   VER=$(grep -m1 'CURRENT_PROJECT_VERSION' MorseTrainer.xcodeproj/project.pbxproj | grep -oE '[0-9]+')
+  MARKETING=$(grep -m1 'MARKETING_VERSION' MorseTrainer.xcodeproj/project.pbxproj | grep -oE '[0-9]+(\.[0-9]+)*')
   echo "  waiting for build $VER to finish processing…"
   python3 tools/asc-api.py wait "$VER"
-  python3 tools/asc-api.py dist      # assign the new build to the prior build's testers
-  python3 tools/asc-api.py submit    # submit for beta review (fast-tracked on an approved train)
-  echo "✅ Submitted for beta review and assigned to testers. They'll be emailed once approved."
+  if [ "$CHANNEL" = "appstore" ]; then
+    NOTES="tools/whatsnew/whatsnew-en-US"
+    if [ ! -s "$NOTES" ]; then
+      echo "❌ $NOTES is missing or empty. App Review needs What's New; write it before releasing."
+      exit 1
+    fi
+    python3 tools/asc-api.py appstore "$MARKETING" "$VER" "$NOTES"
+    echo "✅ $MARKETING ($VER) is submitted to App Review and will release automatically once approved."
+  else
+    python3 tools/asc-api.py dist      # assign the new build to the prior build's testers
+    python3 tools/asc-api.py submit    # submit for beta review (fast-tracked on an approved train)
+    echo "✅ Submitted for beta review and assigned to testers. They'll be emailed once approved."
+  fi
 else
-  echo "ℹ️  SKIP_DISTRIBUTE=1 — submit for beta review + add testers in App Store Connect yourself."
+  echo "ℹ️  SKIP_DISTRIBUTE=1 — submit the build in App Store Connect yourself."
 fi

@@ -1,4 +1,4 @@
-name: Android release (Play Store upload)
+name: Android release (Google Play upload)
 
 # Fires when you push an ANDROID version tag
 # (e.g. `git tag android-v1.12.2 && git push origin android-v1.12.2`).
@@ -8,12 +8,23 @@ name: Android release (Play Store upload)
 # each platform releases under its own namespace and the two cadences stay
 # independent. (Version numbers live in android/app/build.gradle.kts and in the
 # iOS project file; they are not restated here, to keep them from drifting.)
-# Builds the SIGNED app bundle (AAB) and uploads it to the Google Play closed
-# testing (beta) track. This automates the step iOS does by hand (Xcode -> TestFlight).
+# Builds the SIGNED app bundle (AAB) and uploads it to Google Play. A tag push
+# releases to the PRODUCTION track with a full rollout: the apps left beta
+# behind, and a tag is the deliberate act that ships to every user. The iOS
+# twin (ios-release.yml) submits to App Store review on the same trigger.
 #
-# The track id below ("alpha") is the default name of the first closed-testing
-# track; if you renamed it or made a custom track, set `track:` to that exact
-# track id (Play Console -> Testing -> Closed testing -> the track's name).
+# A manual run can pick another track (see `track` below) — "alpha" is the
+# closed-testing track this workflow used to target, "internal" the internal
+# testing one — for a build you want testers to see before it goes to
+# everyone. Production needs the app's Play Console setup to be complete
+# (store listing, content rating, data safety, and — on a personal developer
+# account created after November 2023 — the closed-test requirement met and
+# production access granted); until then the upload fails with a policy error
+# from the Play API and nothing is consumed except the versionCode.
+#
+# Release notes for the Play listing come from
+# android/store-assets/whatsnew/whatsnew-<locale> (Play caps them at 500
+# characters). Edit that file in the same PR as the version bump.
 #
 # It degrades gracefully: if the signing/Play secrets aren't configured yet, it
 # builds the bundle and uploads it as a workflow artifact instead of failing, so
@@ -30,11 +41,13 @@ name: Android release (Play Store upload)
 # NOTE: the app must already exist in Play Console and have had ONE manual upload
 # on the target track before the API will accept automated uploads.
 #
-# Manual runs (Actions tab or API) take one input:
+# Manual runs (Actions tab or API) take two inputs:
 #   dry_run — "true" builds and signs the AAB, reports which secrets resolved and
 #             checks the signer fingerprint, then STOPS before the Play upload.
 #             Use this to prove the pipeline in the monorepo without burning a
 #             versionCode: Play permanently rejects a reused one.
+#   track   — Play track to upload to. Defaults to "production"; "alpha"
+#             (closed testing) or "internal" for a testers-first build.
 
 on:
   push:
@@ -46,6 +59,15 @@ on:
         description: 'Set to "true" to build and sign but skip the Play upload'
         required: false
         default: 'false'
+      track:
+        description: 'Play track: production (default), alpha (closed testing) or internal'
+        required: false
+        default: 'production'
+        type: choice
+        options:
+          - production
+          - alpha
+          - internal
 
 permissions:
   contents: read
@@ -57,6 +79,8 @@ jobs:
     env:
       KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
       PLAY_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+      # A tag push has no inputs, so this resolves to production for a release.
+      PLAY_TRACK: ${{ github.event.inputs.track || 'production' }}
     defaults:
       run:
         working-directory: android
@@ -73,6 +97,7 @@ jobs:
         run: |
           set -euo pipefail
           echo "dry_run = '${{ github.event.inputs.dry_run }}'"
+          echo "track   = '$PLAY_TRACK'"
           report() {
             if [ -n "${2:-}" ]; then
               echo "  ✅ $1  (set)"
@@ -145,15 +170,37 @@ jobs:
             exit 1
           fi
 
-      - name: Upload to Google Play (closed testing / alpha track)
+      # Release notes are optional on Play, but a production release without
+      # them looks abandoned. Fail before the upload rather than ship blank.
+      - name: Check the release notes exist
+        if: env.PLAY_TRACK == 'production' && github.event.inputs.dry_run != 'true'
+        run: |
+          set -euo pipefail
+          NOTES=store-assets/whatsnew/whatsnew-en-US
+          if [ ! -s "$NOTES" ]; then
+            echo "::error::$NOTES is missing or empty. Write the release notes for this version before tagging a production release."
+            exit 1
+          fi
+          LEN=$(wc -m < "$NOTES")
+          if [ "$LEN" -gt 500 ]; then
+            echo "::error::$NOTES is $LEN characters; Play allows 500."
+            exit 1
+          fi
+          echo "release notes ($LEN chars):"; cat "$NOTES"
+
+      - name: Upload to Google Play
         if: env.PLAY_JSON != '' && env.KEYSTORE_B64 != '' && github.event.inputs.dry_run != 'true'
         uses: r0adkll/upload-google-play@v1
         with:
           serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
           packageName: app.anothermorsetrainer
           releaseFiles: android/app/build/outputs/bundle/release/app-release.aab
-          tracks: alpha   # closed testing (beta); change if your track id differs
+          # production on a tag push; a manual run may pick alpha or internal.
+          track: ${{ env.PLAY_TRACK }}
+          # completed = full rollout to everyone on the track, no staged
+          # percentage. Halting or staging a rollout is a Play Console action.
           status: completed
+          whatsNewDirectory: android/store-assets/whatsnew
 
       - name: Dry run — upload skipped
         if: github.event.inputs.dry_run == 'true'

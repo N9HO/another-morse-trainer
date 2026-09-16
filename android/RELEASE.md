@@ -48,15 +48,30 @@ Two workflows are committed under `.github/workflows/`:
   laptop (the Android counterpart of `ios.yml`). It is path-filtered to
   `android/**`, so an iOS-only commit does not start a Gradle build.
 - **`android-release.yml`** — on a pushed **`android-v*`** tag, builds the
-  **signed AAB and uploads it to the Play _closed testing_ (beta) track**
-  (`track: alpha` by default — change it if your closed track has a different
-  id). This automates the step iOS still does by hand (Xcode → TestFlight).
-  Cut a release with:
+  **signed AAB and rolls it out on the Play _production_ track** (full
+  rollout, `status: completed`), with the release notes read from
+  `store-assets/whatsnew/whatsnew-en-US` (Play caps them at 500 characters;
+  the workflow refuses to ship a production build without them). The iOS twin
+  (`ios-release.yml`) submits to App Review on the same trigger. Cut a release
+  with:
 
   ```bash
-  # bump versionCode/versionName in android/app/build.gradle.kts first, commit, then:
+  # bump versionCode/versionName in android/app/build.gradle.kts and write
+  # store-assets/whatsnew/whatsnew-en-US first, commit, then:
   git tag android-v1.12.2 && git push origin android-v1.12.2
   ```
+
+  A manual run of the workflow (Actions tab → Run workflow) takes a `track`
+  input — `alpha` (closed testing) or `internal` — for a build testers should
+  see before everyone does. A tag always means production.
+
+  > Production has prerequisites the API cannot meet for you: the store
+  > listing, content rating and data-safety form must be complete, and a
+  > personal developer account created after November 2023 must have passed
+  > the closed-test requirement and been granted production access in Play
+  > Console. Until then the upload step fails with a policy error from the
+  > Play API; the AAB is still attached to the run as an artifact, and the
+  > versionCode is spent, so bump it before retrying.
 
   > **The `android-` prefix is required.** Both apps share this repo, and the
   > iOS announcement workflow watches `ios-v*`. A bare `v1.12.2` tag would match
@@ -82,8 +97,8 @@ Two workflows are committed under `.github/workflows/`:
    - `PLAY_SERVICE_ACCOUNT_JSON` = the full contents of the service-account JSON
 
    The release workflow recreates `keystore.properties` + the keystore from these at
-   build time (nothing secret is committed). To upload to a different track, change
-   `track: internal` in `android-release.yml`.
+   build time (nothing secret is committed). Tags release to production; use the
+   workflow's `track` input for a one-off upload to `alpha` or `internal`.
 
 ## Your side — Google Play Console (one-time)
 

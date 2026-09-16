@@ -154,7 +154,8 @@ testers, bug reports and feature chat live on
   pileup simulation, exam grading, stats. No UIKit/SwiftUI imports.
 - `Sources/MorseKitCheck/`: a command-line harness exercising MorseKit
   (`swift run MorseKitCheck`)
-- `tools/`: TestFlight upload + App Store Connect helpers, Discord triage bot
+- `tools/`: App Store release script + App Store Connect helpers (and the
+  `whatsnew/` release notes App Review reads), Discord triage bot
 
 ## Build
 

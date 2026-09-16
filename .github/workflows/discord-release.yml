@@ -18,8 +18,8 @@ name: Discord release announcement
 on:
   workflow_run:
     workflows:
-      - "iOS release (TestFlight upload)"
-      - "Android release (Play Store upload)"
+      - "iOS release (App Store upload)"
+      - "Android release (Google Play upload)"
     types: [completed]
   workflow_dispatch:
     inputs:
@@ -169,10 +169,10 @@ jobs:
 
           if [ "$PLATFORM" = "ios" ]; then
             EMOJI="📱"; LABEL="iOS"; COLOR=3447003
-            BLURB="A new TestFlight build is on the way."
+            BLURB="A new build is submitted to the App Store and will go live once Apple approves it. TestFlight testers get it right away."
           else
             EMOJI="🤖"; LABEL="Android"; COLOR=3066993
-            BLURB="A new build is on the way to Google Play closed testing."
+            BLURB="A new build is rolling out on Google Play."
           fi
 
           # jq builds correctly-escaped JSON from the raw values.
