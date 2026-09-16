@@ -131,13 +131,16 @@ the iOS app's navy/teal look.
   by 5-WPM speed band, a shareable Brag Sheet, and personal bests including
   your best score in each arcade game, Contest, Pileup Runner and Rapid Fire
 - **Leaderboard**: an opt-in shared board across both apps for Rapid Fire,
-  Contest, Pileup Runner and the six arcade games, reached from Progress.
-  Off by default; turn it on in Settings › Leaderboard with a display name.
-  Each finished run's transcript (what was sent, what you answered) is graded
-  by the server, which ranks the speed summed over the items you copied
-  correctly, so a game's board number is not its on-screen score. Posting
-  needs a genuine Play-installed build (Play Integrity); a "Delete my scores"
-  button removes everything this install posted
+  Contest, Pileup Runner and the six arcade games, browsable by anyone, per
+  mode, from the Games sub-menu and from Progress without sharing. Off by
+  default; turn it on in Settings › Leaderboard with a display name, or from
+  the one prompt offered the first time you start a game with sharing off
+  (with "Not now" and "Don't ask again"). Each finished run's transcript
+  (what was sent, what you answered) is graded by the server, which ranks
+  the speed summed over the items you copied correctly, so a game's board
+  number is not its on-screen score. Posting needs a genuine Play-installed
+  build (Play Integrity); a "Delete my scores" button removes everything
+  this install posted
 - **Buddy streak**: pair with one other person (on either app) and keep a
   shared streak: each day you both practise counts, a day either misses
   resets it. Settings › Buddy streak mints a six-character invite code

@@ -112,6 +112,10 @@ fun AsteroidsScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {
     val prefs = remember { context.getSharedPreferences("amt_asteroids", android.content.Context.MODE_PRIVATE) }
 
     var phase by rememberSaveable { mutableStateOf(AstPhase.SETUP) }
+    // The shared leaderboard's first-play prompt (#226): raised by Start and
+    // Play again while sharing is off and unanswered, never mid-game. Saved,
+    // so a rotation or process death neither loses nor repeats it.
+    var optInPending by rememberSaveable { mutableStateOf(false) }
     // Setup choices persist across launches, like every other mode's.
     var input by rememberSaveable {
         mutableStateOf(runCatching { AsteroidsInput.valueOf(prefs.getString("input", "") ?: "") }.getOrDefault(AsteroidsInput.SEND))
@@ -418,6 +422,8 @@ fun AsteroidsScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
+        if (optInPending) LeaderboardOptInDialog(onDone = { optInPending = false; startGame() })
+
         when (phase) {
             AstPhase.SETUP -> {
                 BackHandler { onBack() }
@@ -426,7 +432,7 @@ fun AsteroidsScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {
                     characterSet = characterSet, onCharacterSet = { characterSet = it },
                     pool = characterPool(),
                     difficulty = difficulty, onDifficulty = { difficulty = it },
-                    onStart = { startGame() },
+                    onStart = { if (LeaderboardOptIn.shouldOffer()) optInPending = true else startGame() },
                     onBack = onBack,
                     onSwitchMode = ::switchTo
                 )
@@ -456,7 +462,7 @@ fun AsteroidsScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {
                     accuracy = if (gameHits + gameMisses == 0) 0.0 else gameHits.toDouble() / (gameHits + gameMisses),
                     bestWpm = if (input == AsteroidsInput.COPY) bestWpm else null,
                     leaderboard = lbLine,
-                    onAgain = { startGame() },
+                    onAgain = { if (LeaderboardOptIn.shouldOffer()) optInPending = true else startGame() },
                     onBack = onBack
                 )
             }

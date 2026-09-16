@@ -132,6 +132,10 @@ fun DefenderScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
     val prefs = remember { context.getSharedPreferences("amt_defender", android.content.Context.MODE_PRIVATE) }
 
     var phase by rememberSaveable { mutableStateOf(DefPhase.SETUP) }
+    // The shared leaderboard's first-play prompt (#226): raised by Start and
+    // Play again while sharing is off and unanswered, never mid-game. Saved,
+    // so a rotation or process death neither loses nor repeats it.
+    var optInPending by rememberSaveable { mutableStateOf(false) }
     // Setup choices persist across launches, like every other mode's.
     var input by rememberSaveable {
         mutableStateOf(runCatching { DefenderInput.valueOf(prefs.getString("input", "") ?: "") }.getOrDefault(DefenderInput.TAP))
@@ -447,6 +451,8 @@ fun DefenderScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
             }
             .focusable()
     ) {
+        if (optInPending) LeaderboardOptInDialog(onDone = { optInPending = false; startGame() })
+
         when (phase) {
             DefPhase.SETUP -> {
                 BackHandler { onBack() }
@@ -455,7 +461,7 @@ fun DefenderScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
                     callsigns = callsigns, onCallsigns = { callsigns = it },
                     alphabet = DefenderGame.callsignAlphabet(engine.activeCharacters),
                     difficulty = difficulty, onDifficulty = { difficulty = it },
-                    onStart = { startGame() },
+                    onStart = { if (LeaderboardOptIn.shouldOffer()) optInPending = true else startGame() },
                     onBack = onBack,
                     onSwitchMode = ::switchTo
                 )
@@ -490,7 +496,7 @@ fun DefenderScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
                     accuracy = if (runAttempts == 0) 0.0 else runCorrect.toDouble() / runAttempts,
                     bestWpm = bestWpm,
                     leaderboard = lbLine,
-                    onAgain = { startGame() },
+                    onAgain = { if (LeaderboardOptIn.shouldOffer()) optInPending = true else startGame() },
                     onBack = onBack
                 )
             }

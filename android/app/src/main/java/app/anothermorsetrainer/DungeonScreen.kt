@@ -171,6 +171,10 @@ fun DungeonScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
     val prefs = remember { context.getSharedPreferences("amt_dungeon", android.content.Context.MODE_PRIVATE) }
 
     var phase by rememberSaveable { mutableStateOf(DgnPhase.SETUP) }
+    // The shared leaderboard's first-play prompt (#226): raised by Start and
+    // Play again while sharing is off and unanswered, never mid-game. Saved,
+    // so a rotation or process death neither loses nor repeats it.
+    var optInPending by rememberSaveable { mutableStateOf(false) }
     // Setup choices persist across launches, like every other mode's.
     var difficulty by rememberSaveable {
         mutableStateOf(runCatching { InvadersDifficulty.valueOf(prefs.getString("difficulty", "") ?: "") }.getOrDefault(InvadersDifficulty.NORMAL))
@@ -469,6 +473,8 @@ fun DungeonScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
+        if (optInPending) LeaderboardOptInDialog(onDone = { optInPending = false; startGame() })
+
         when (phase) {
             DgnPhase.SETUP -> {
                 BackHandler { onBack() }
@@ -476,7 +482,7 @@ fun DungeonScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
                     characterSet = characterSet, onCharacterSet = { characterSet = it },
                     pool = spellPool(),
                     difficulty = difficulty, onDifficulty = { difficulty = it },
-                    onStart = { startGame() },
+                    onStart = { if (LeaderboardOptIn.shouldOffer()) optInPending = true else startGame() },
                     onBack = onBack,
                     onSwitchMode = ::switchTo
                 )
@@ -508,7 +514,7 @@ fun DungeonScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
                     accuracy = if (runAttempts == 0) 0.0 else runCorrect.toDouble() / runAttempts,
                     bestWpm = bestWpm,
                     leaderboard = lbLine,
-                    onAgain = { startGame() },
+                    onAgain = { if (LeaderboardOptIn.shouldOffer()) optInPending = true else startGame() },
                     onBack = onBack
                 )
             }

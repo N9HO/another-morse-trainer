@@ -20,6 +20,9 @@ struct FroggerView: View {
 
     private enum Phase { case setup, playing, over }
     @State private var phase: Phase = .setup
+    /// The shared leaderboard's first-play prompt (#226): raised by Start and
+    /// Play again while sharing is off and unanswered, never mid-game.
+    @State private var optInPrompt = false
     @State private var game: FroggerGame?
     /// A snapshot of the board for drawing; refreshed every frame from `game`.
     @State private var board = Board()
@@ -93,6 +96,7 @@ struct FroggerView: View {
             }
         }
         .onDisappear { model.stopFrogger() }
+        .leaderboardOptInPrompt(isPresented: $optInPrompt) { startGame() }
     }
 
     // MARK: - Setup
@@ -126,7 +130,7 @@ struct FroggerView: View {
 
                 Button {
                     Haptics.tap()
-                    startGame()
+                    if model.shouldOfferLeaderboardOptIn { optInPrompt = true } else { startGame() }
                 } label: {
                     Text("Start game")
                         .font(.headline)
@@ -335,7 +339,7 @@ struct FroggerView: View {
                 .foregroundStyle(Theme.textSecondary)
             Button {
                 Haptics.tap()
-                startGame()
+                if model.shouldOfferLeaderboardOptIn { optInPrompt = true } else { startGame() }
             } label: {
                 Text("Play again")
                     .font(.headline)

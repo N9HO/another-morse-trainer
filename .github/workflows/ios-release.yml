@@ -1,4 +1,4 @@
-name: iOS release (TestFlight upload)
+name: iOS release (App Store upload)
 
 # Fires when you push an iOS version tag
 # (e.g. `git tag ios-v1.2 && git push origin ios-v1.2`).
@@ -10,6 +10,15 @@ name: iOS release (TestFlight upload)
 # Runs `ios/tools/upload-testflight.sh` — the same script used by hand on a Mac —
 # rather than reimplementing archive/export/upload in YAML. CI's only job is to
 # reconstruct the credentials that script expects, so the two paths cannot drift.
+#
+# A tag push is a PRODUCTION release: the script uploads the build, attaches it
+# to the App Store version named by MARKETING_VERSION, sets What's New from
+# ios/tools/whatsnew/whatsnew-en-US, and submits it to App Review with
+# release-after-approval. The Android twin (android-release.yml) ships to the
+# Play production track on the same trigger. A manual run can choose the
+# `testflight` channel instead, which is the beta path this workflow used to
+# be: Beta App Review plus the previous build's testers. Either way the build
+# also appears in TestFlight, so testers see a production build first.
 #
 # NO `paths:` FILTER, deliberately. Every other workflow here is path-filtered
 # because macOS bills at 10x Linux, but this one is tag-triggered: on a tag push
@@ -38,6 +47,14 @@ on:
         description: 'Set to "true" to archive and cloud-sign without uploading'
         required: false
         default: "false"
+      channel:
+        description: 'Where the upload is submitted: appstore (App Review, default) or testflight (Beta App Review)'
+        required: false
+        default: "appstore"
+        type: choice
+        options:
+          - appstore
+          - testflight
 
 permissions:
   contents: read
@@ -49,7 +66,7 @@ concurrency:
 
 jobs:
   release:
-    name: Archive + upload to TestFlight
+    name: Archive + upload + submit
     runs-on: macos-15
     defaults:
       run:
@@ -134,9 +151,11 @@ jobs:
           security list-keychains -d user -s "$KC" login.keychain-db
           security default-keychain -d user -s "$KC"
 
-      - name: Archive, cloud-sign and upload
+      - name: Archive, cloud-sign, upload and submit
         env:
           DRY_RUN: ${{ github.event.inputs.dry_run == 'true' && '1' || '0' }}
+          # A tag push has no inputs, so a release resolves to appstore.
+          RELEASE_CHANNEL: ${{ github.event.inputs.channel || 'appstore' }}
         run: ./tools/upload-testflight.sh
 
       # `always()` so a failed or cancelled run still tears the keychain down.

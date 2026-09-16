@@ -1,6 +1,7 @@
 package app.anothermorsetrainer
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -9,13 +10,17 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Castle
 import androidx.compose.material.icons.filled.Flight
+import androidx.compose.material.icons.filled.Leaderboard
 import androidx.compose.material.icons.filled.Pets
 import androidx.compose.material.icons.filled.RocketLaunch
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.SportsEsports
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -34,6 +39,9 @@ import androidx.compose.ui.unit.sp
  * arcade modes to find Common Words is not what the grid is for. Same tiles
  * as the home screen ([HomeItem] / [ModeTile]), same order the games had
  * there; Back from a game returns here, and Back from here returns home.
+ *
+ * Below the grid, the shared leaderboard (#226): the games' boards are
+ * browsable here without playing, and without sharing scores.
  */
 @Composable
 fun GamesScreen(
@@ -43,7 +51,8 @@ fun GamesScreen(
     onPickDefender: () -> Unit,
     onPickDungeon: () -> Unit,
     onPickFrogger: () -> Unit,
-    onPickAsteroids: () -> Unit
+    onPickAsteroids: () -> Unit,
+    onOpenLeaderboard: () -> Unit
 ) {
     BackHandler { onBack() }
 
@@ -89,6 +98,30 @@ fun GamesScreen(
                     if (pair.size == 1) Spacer(Modifier.weight(1f))
                 }
                 Spacer(Modifier.height(14.dp))
+            }
+
+            // The shared leaderboard, opening on the first game's board. The
+            // same row the Progress screen has; read-only and public, so no
+            // opt-in is needed to look.
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .brandCard(14.dp)
+                    .clickable(onClick = onOpenLeaderboard)
+                    .padding(horizontal = 14.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(Icons.Filled.Leaderboard, contentDescription = null, tint = Brand.teal, modifier = Modifier.size(20.dp))
+                Spacer(Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(stringResource(R.string.leaderboard_open), color = Brand.teal, fontWeight = FontWeight.Medium)
+                    Text(
+                        stringResource(R.string.games_leaderboard_tagline),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Brand.textSecondary
+                    )
+                }
+                Text("›", color = Brand.textSecondary, fontWeight = FontWeight.Bold)
             }
         }
     }

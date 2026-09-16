@@ -528,20 +528,31 @@ struct ContestSettings: Codable, Equatable {
 /// name. The name is stored as typed and normalised (trimmed, uppercased)
 /// where it is used; `LeaderboardDisplayName` in MorseKit is the rule.
 struct LeaderboardSettings: Codable, Equatable {
-    /// Post ranked runs to the shared board.
-    var shareScores: Bool = false
+    /// Post ranked runs to the shared board. Turning it on, from Settings or
+    /// from the first-play prompt, also answers that prompt for good (#226).
+    var shareScores: Bool = false {
+        didSet { if shareScores { promptDismissed = true } }
+    }
     /// 2–12 characters: letters, digits, space, / and -. Callsign-shaped.
     var displayName: String = ""
+    /// The first-play prompt (#226) has been answered: "Don't ask again" was
+    /// chosen, or sharing has been on at some point. While false and sharing
+    /// is off, starting a game asks once whether to turn it on.
+    var promptDismissed: Bool = false
 
     init() {}
 
-    enum CodingKeys: String, CodingKey { case shareScores, displayName }
+    enum CodingKeys: String, CodingKey { case shareScores, displayName, promptDismissed }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         var s = LeaderboardSettings()
         s.shareScores = try c.decodeIfPresent(Bool.self, forKey: .shareScores) ?? s.shareScores
         s.displayName = try c.decodeIfPresent(String.self, forKey: .displayName) ?? s.displayName
+        // An install that already shares has answered the question; the
+        // `||` covers a record written before the key existed.
+        let dismissed = try c.decodeIfPresent(Bool.self, forKey: .promptDismissed) ?? false
+        s.promptDismissed = dismissed || s.shareScores
         self = s
     }
 }
