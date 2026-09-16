@@ -176,14 +176,32 @@ def main():
                                    "attributes": {"usesNonExemptEncryption": False}}})
             print(f"build {build_number}: set usesNonExemptEncryption=false: HTTP {st}")
 
-        # 2. The App Store version for this version string: reuse or create.
+        # 2. The App Store version for this version string: reuse, rename or
+        # create. App Store Connect allows one editable version per platform,
+        # and a never-released app already has one (the placeholder made with
+        # the app record, often "1.0"), so an editable version under another
+        # string is renamed rather than joined by a second one, which the API
+        # would refuse with a 409.
         st, d = call("GET", f"/v1/apps/{app}/appStoreVersions?filter[platform]=IOS"
-                            f"&filter[versionString]={urllib.parse.quote(version_string)}"
-                            f"&fields[appStoreVersions]=versionString,appVersionState,releaseType&limit=5")
-        ver = next((v for v in d.get("data", [])
+                            f"&fields[appStoreVersions]=versionString,appVersionState,releaseType&limit=50")
+        versions = d.get("data", [])
+        ver = next((v for v in versions
                     if v["attributes"].get("versionString") == version_string), None)
         EDITABLE = {"PREPARE_FOR_SUBMISSION", "DEVELOPER_REJECTED", "REJECTED",
                     "METADATA_REJECTED", "INVALID_BINARY"}
+        if not ver:
+            editable = next((v for v in versions
+                             if v["attributes"].get("appVersionState") in EDITABLE), None)
+            if editable:
+                old_string = editable["attributes"].get("versionString")
+                st, d = call("PATCH", f"/v1/appStoreVersions/{editable['id']}",
+                             {"data": {"type": "appStoreVersions", "id": editable["id"],
+                                       "attributes": {"versionString": version_string}}})
+                print(f"renamed editable App Store version {old_string} -> {version_string}: HTTP {st}")
+                if st >= 300:
+                    print(json.dumps(d, indent=2)); sys.exit(1)
+                ver = d.get("data") or editable
+                ver["attributes"]["versionString"] = version_string
         if ver:
             vid, state = ver["id"], ver["attributes"].get("appVersionState")
             print(f"App Store version {version_string}: {state} (id {vid})")
