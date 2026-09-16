@@ -5,7 +5,8 @@
 # Where it goes after the upload is RELEASE_CHANNEL:
 #   appstore   (default) attach the build to the App Store version named by
 #              MARKETING_VERSION, set What's New from
-#              tools/whatsnew/whatsnew-en-US, and submit to App Review with
+#              tools/whatsnew/whatsnew-en-US, apply the listing metadata in
+#              tools/store-metadata.json, and submit to App Review with
 #              release-after-approval. This is the production path.
 #   testflight the beta path this script used to be: submit for Beta App
 #              Review and hand the build to the previous build's testers.
@@ -151,6 +152,14 @@ if [ "${SKIP_DISTRIBUTE:-0}" != "1" ]; then
       echo "❌ $NOTES is missing or empty. App Review needs What's New; write it before releasing."
       exit 1
     fi
+    # Three passes, because App Review refuses a version whose age rating,
+    # categories or listing are missing, and those records only settle once
+    # the version exists with a build on it: attach without submitting,
+    # apply the checked-in store metadata, then submit. The review contact
+    # comes from ASC_REVIEW_FIRST_NAME/LAST_NAME/PHONE/EMAIL when set (CI
+    # passes them from secrets); an existing contact is kept otherwise.
+    ASC_NO_SUBMIT=1 python3 tools/asc-api.py appstore "$MARKETING" "$VER" "$NOTES"
+    python3 tools/asc-api.py prepare "$MARKETING" tools/store-metadata.json
     python3 tools/asc-api.py appstore "$MARKETING" "$VER" "$NOTES"
     echo "✅ $MARKETING ($VER) is submitted to App Review and will release automatically once approved."
   else
