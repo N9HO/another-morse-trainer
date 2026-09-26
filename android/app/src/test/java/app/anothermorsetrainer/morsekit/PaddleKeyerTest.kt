@@ -50,7 +50,7 @@ class PaddleKeyerTest {
 
     private fun expected(rows: JSONArray): List<String> = (0 until rows.length()).map {
         val r = rows.getJSONArray(it)
-        "${r.getString(0)} ${r.getDouble(1).toInt() + 1}-${r.getDouble(2).toInt()}"
+        "${r.getString(0)} ${r.getDouble(1).toInt()}-${r.getDouble(2).toInt()}"
     }
 
     private fun run(case: JSONObject, mode: PaddleKeyer.Mode): Pair<List<String>, PaddleKeyer> {
