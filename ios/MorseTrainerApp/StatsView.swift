@@ -62,7 +62,7 @@ struct StatsView: View {
                 } footer: {
                     Text(model.settings.leaderboard.shareScores
                          ? "Top runs from both apps in the nine ranked modes."
-                         : "Top runs from both apps. Your own are posted only once “Share scores” is on in Settings › Leaderboard.")
+                         : "Top runs from both apps. Your own are posted only once “Share scores” is on in Settings › Leaderboard & Buddy.")
                 }
                 .listRowBackground(Theme.navyElevated)
 

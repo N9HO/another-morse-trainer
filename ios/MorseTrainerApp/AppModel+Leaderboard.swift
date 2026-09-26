@@ -98,7 +98,7 @@ extension AppModel {
         // Rapid Fire's review response plays without grading: nothing to rank.
         if board == .rapidFire && settings.rapidFire.response == .review { return }
         guard LeaderboardDisplayName.isValid(settings.leaderboard.displayName) else {
-            leaderboardStatus = .unavailable("Pick a display name in Settings › Leaderboard to post scores.")
+            leaderboardStatus = .unavailable("Pick a display name in Settings › Leaderboard & Buddy to post scores.")
             return
         }
         guard leaderboard.canAttest else {
@@ -167,7 +167,7 @@ extension AppModel {
         leaderboardTranscript.append(item)
     }
 
-    /// Settings › Leaderboard › Delete my scores. Attested like a run start;
+    /// Settings › Leaderboard & Buddy › Delete my scores. Attested like a run start;
     /// the server drops every score, submission and token for this device's
     /// key, the buddy pair, invites and practice days, and the key itself —
     /// so the buddy cache is cleared here too, or the home line would go on

@@ -5807,6 +5807,75 @@ do {
     check("the cache round-trips through JSON", roundTrip == reported)
 }
 
+// MARK: - Settings map (#236)
+//
+// fixtures/settings-catalog.json — read by this harness AND by android
+// SettingsCatalogTest. Pins the category names and order on the Settings
+// root, the category of every setting both apps carry, and the search
+// field's answers, so "Settings › Keys & Sending" means the same on either
+// phone.
+struct SettingsCatalogFixture: Decodable {
+    struct Category: Decodable { let id: String; let title: String }
+    struct Entry: Decodable { let id: String; let category: String }
+    struct Query: Decodable {
+        let name: String
+        let query: String
+        let empty: Bool?
+        let includes: [String]?
+        let excludes: [String]?
+        let first: String?
+    }
+    let categories: [Category]
+    let entries: [Entry]
+    let queries: [Query]
+}
+
+func loadSettingsCatalogFixture() -> SettingsCatalogFixture? {
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+    guard let data = try? Data(contentsOf: root.appendingPathComponent("fixtures/settings-catalog.json")) else { return nil }
+    return try? JSONDecoder().decode(SettingsCatalogFixture.self, from: data)
+}
+
+print("\nSettings map and search (fixtures/settings-catalog.json):")
+if let fx = loadSettingsCatalogFixture() {
+    check("categories match the fixture, in order",
+          SettingsCategory.allCases.map { "\($0.rawValue)=\($0.title)" } == fx.categories.map { "\($0.id)=\($0.title)" })
+    let byId = Dictionary(SettingsCatalog.entries.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+    var sharedOK = true
+    for e in fx.entries where byId[e.id]?.category.rawValue != e.category {
+        sharedOK = false
+        print("      ↳ \(e.id): catalog has \(byId[e.id]?.category.rawValue ?? "nothing"), fixture says \(e.category)")
+    }
+    check("every shared setting is in the fixture's category (\(fx.entries.count))", sharedOK)
+    check("catalog ids are unique", byId.count == SettingsCatalog.entries.count)
+    check("every category has a section and a searchable setting",
+          SettingsCategory.allCases.allSatisfy { c in
+              !SettingsSection.sections(in: c).isEmpty && SettingsCatalog.entries.contains { $0.category == c }
+          })
+    let sectionOrder = SettingsCatalog.entries.map { SettingsSection.allCases.firstIndex(of: $0.section)! }
+    check("catalog is in category then section order", sectionOrder == sectionOrder.sorted())
+    var queriesOK = true
+    for q in fx.queries {
+        let got = SettingsCatalog.search(q.query).map(\.id)
+        var ok = true
+        if q.empty == true, !got.isEmpty { ok = false }
+        if let inc = q.includes, !inc.allSatisfy(got.contains) { ok = false }
+        if let exc = q.excludes, exc.contains(where: got.contains) { ok = false }
+        if let first = q.first, got.first != first { ok = false }
+        if !ok {
+            queriesOK = false
+            print("      ↳ \(q.name): \"\(q.query)\" found \(got)")
+        }
+    }
+    check("search answers match the fixture across \(fx.queries.count) queries", queriesOK)
+} else {
+    check("fixtures/settings-catalog.json loads and decodes", false)
+}
+
 print("\n────────────────────────────")
 if failures == 0 {
     print("✅ All \(checks) checks passed.\n")

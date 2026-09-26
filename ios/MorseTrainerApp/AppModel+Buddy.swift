@@ -21,14 +21,14 @@
 
 import Foundation
 
-/// A refusal or failure to show inline in Settings › Buddy streak.
+/// A refusal or failure to show inline in Settings › Leaderboard & Buddy › Buddy streak.
 struct BuddyProblem: Error {
     let message: String
 }
 
 extension AppModel {
     /// A status is refreshed at most this often, silently, from the app
-    /// coming to the foreground and from Settings › Buddy streak appearing.
+    /// coming to the foreground and from Settings › Leaderboard & Buddy › Buddy streak appearing.
     static let buddyRefreshInterval: TimeInterval = 15 * 60
 
     /// Today's local day label, for the views and the requests alike.
@@ -39,7 +39,7 @@ extension AppModel {
     /// never pair, and says so in the leaderboard's own words.
     var buddyUnavailableReason: String? {
         guard LeaderboardDisplayName.isValid(settings.leaderboard.displayName) else {
-            return "Pick a display name in Settings › Leaderboard"
+            return "Pick a display name in Settings › Leaderboard & Buddy"
         }
         guard leaderboard.canAttest else { return LeaderboardError.unsupported.message }
         return nil
@@ -49,7 +49,7 @@ extension AppModel {
         LeaderboardDisplayName.normalize(settings.leaderboard.displayName)
     }
 
-    // MARK: - Actions (Settings › Buddy streak)
+    // MARK: - Actions (Settings › Leaderboard & Buddy › Buddy streak)
 
     /// Invite a buddy: a six-character code, single use, valid 24 hours.
     /// Kept in the cache until it expires or the pairing lands, so leaving

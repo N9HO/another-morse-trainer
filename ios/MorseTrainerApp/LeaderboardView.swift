@@ -61,7 +61,7 @@ struct LeaderboardView: View {
                 Text(board.title)
             } footer: {
                 if !settingsOptedIn {
-                    Text("Your own runs are not posted until you turn on “Share scores” in Settings › Leaderboard.")
+                    Text("Your own runs are not posted until you turn on “Share scores” in Settings › Leaderboard & Buddy.")
                 }
             }
             .listRowBackground(Theme.navyElevated)

@@ -47,7 +47,7 @@ import app.anothermorsetrainer.morsekit.ProgressiveCharacters
  * too.
  *
  * The starting level is deliberately NOT asked here. It is one app-wide answer,
- * given at first run and changeable under Settings → Proficiency; re-asking it
+ * given at first run and changeable under Settings › Characters & Lessons › Proficiency; re-asking it
  * on every Characters, Confusion Drill and Sending Practice launch read as
  * three different questions (#109), and tapping the level you already had
  * silently restarted the ladder.

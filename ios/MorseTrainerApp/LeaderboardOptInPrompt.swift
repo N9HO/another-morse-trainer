@@ -5,7 +5,7 @@
 // game's own Start (and Play again) button, never mid-game, and at most once
 // per start attempt; whichever answer is given, the game then starts.
 //
-// The prompt writes the same settings Settings › Leaderboard does, so
+// The prompt writes the same settings Settings › Leaderboard & Buddy does, so
 // turning sharing on here is exactly the switch there, and the run about to
 // begin is registered the way an opted-in run would have been at session
 // start. The Android twin is `LeaderboardOptInDialog.kt`.
@@ -65,7 +65,7 @@ private struct LeaderboardOptInPrompt: ViewModifier {
                     proceed()
                 }
             } message: {
-                Text("Finished games (and Rapid Fire, Contest and Pileup Runner runs) can be posted to the shared leaderboard under a display name of 2–12 characters: letters, digits, space, / and -. The board ranks a server-graded copy of each run, not the on-screen score. You can turn sharing off at any time in Settings › Leaderboard.")
+                Text("Finished games (and Rapid Fire, Contest and Pileup Runner runs) can be posted to the shared leaderboard under a display name of 2–12 characters: letters, digits, space, / and -. The board ranks a server-graded copy of each run, not the on-screen score. You can turn sharing off at any time in Settings › Leaderboard & Buddy.")
             }
     }
 }
