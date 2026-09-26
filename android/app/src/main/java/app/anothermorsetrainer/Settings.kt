@@ -19,12 +19,31 @@ import app.anothermorsetrainer.morsekit.MorseCode
 import app.anothermorsetrainer.morsekit.MorseData
 import app.anothermorsetrainer.morsekit.MorseItem
 import app.anothermorsetrainer.morsekit.MorseTiming
+import app.anothermorsetrainer.morsekit.PaddleKeyer
 import app.anothermorsetrainer.morsekit.PhraseQuiz
 import app.anothermorsetrainer.morsekit.RapidFireContent
 import app.anothermorsetrainer.morsekit.RapidFirePace
 import app.anothermorsetrainer.morsekit.RapidFireResponse
 import app.anothermorsetrainer.morsekit.TokenMeaning
 import app.anothermorsetrainer.morsekit.TrainerEngine
+
+/**
+ * What the on-screen key is (#233): the single hold-to-key pad every keying
+ * screen has always had, or a pair of iambic paddles timed by [PaddleKeyer].
+ * Mirrors iOS `OnScreenKeyType`.
+ */
+enum class OnScreenKeyType(val label: String) {
+    STRAIGHT("Straight key"),
+    PADDLES("Paddles")
+}
+
+/** Display name of a paddle keyer mode (mirrors iOS `PaddleKeyer.Mode.label`). */
+val PaddleKeyer.Mode.label: String
+    get() = when (this) {
+        PaddleKeyer.Mode.IAMBIC_A -> "Iambic A"
+        PaddleKeyer.Mode.IAMBIC_B -> "Iambic B"
+        PaddleKeyer.Mode.ULTIMATIC -> "Ultimatic"
+    }
 
 /** When to reveal the correct answer after a response (mirrors iOS RevealMode). */
 enum class RevealMode(val label: String, val shortLabel: String) {
@@ -242,6 +261,18 @@ object Settings {
     /** Show the digit 0 with a slash through it wherever copy text is displayed
      *  (the operator's handwriting convention — issue #62). */
     var slashedZero by mutableStateOf(true)
+        private set
+
+    // ---- On-screen key (#233) ----
+
+    /** Straight key (the default, and the only kind before #233) or paddles. */
+    var onScreenKey by mutableStateOf(OnScreenKeyType.STRAIGHT)
+        private set
+    /** How the on-screen paddles are timed; Iambic A, the reporter's preference, by default. */
+    var paddleMode by mutableStateOf(PaddleKeyer.Mode.IAMBIC_A)
+        private set
+    /** Dah on the left, dit on the right — for a left-handed operator. */
+    var paddleSwap by mutableStateOf(false)
         private set
 
     // ---- Short Stories (fables / serials / news) ----
@@ -518,6 +549,10 @@ object Settings {
         practiceDuration = runCatching { PracticeDuration.valueOf(prefs.getString("practiceDuration", null) ?: "FIVE_MIN") }
             .getOrDefault(PracticeDuration.FIVE_MIN)
         slashedZero = prefs.getBoolean("slashedZero", true)
+        onScreenKey = runCatching { OnScreenKeyType.valueOf(prefs.getString("onScreenKey", null) ?: "STRAIGHT") }
+            .getOrDefault(OnScreenKeyType.STRAIGHT)
+        paddleMode = PaddleKeyer.Mode.fromId(prefs.getString("paddleMode", null))
+        paddleSwap = prefs.getBoolean("paddleSwap", false)
         storyContent = runCatching { StoryContent.valueOf(prefs.getString("storyContent", null) ?: "FABLES") }
             .getOrDefault(StoryContent.FABLES)
         storySerialId = prefs.getString("storySerialId", "") ?: ""
@@ -730,6 +765,21 @@ object Settings {
 
     fun updateSlashedZero(value: Boolean) {
         slashedZero = value
+        persist()
+    }
+
+    fun updateOnScreenKey(value: OnScreenKeyType) {
+        onScreenKey = value
+        persist()
+    }
+
+    fun updatePaddleMode(value: PaddleKeyer.Mode) {
+        paddleMode = value
+        persist()
+    }
+
+    fun updatePaddleSwap(value: Boolean) {
+        paddleSwap = value
         persist()
     }
 
@@ -1157,6 +1207,9 @@ object Settings {
             putString("revealMode", revealMode.name)
             putString("practiceDuration", practiceDuration.name)
             putBoolean("slashedZero", slashedZero)
+            putString("onScreenKey", onScreenKey.name)
+            putString("paddleMode", paddleMode.id)
+            putBoolean("paddleSwap", paddleSwap)
             putString("storyContent", storyContent.name)
             putString("storySerialId", storySerialId)
             putString("newsSource", newsSource.name)

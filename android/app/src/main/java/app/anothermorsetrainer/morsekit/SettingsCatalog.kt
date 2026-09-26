@@ -63,6 +63,7 @@ enum class SettingsSection(val category: SettingsCategory) {
     FEEDBACK(SettingsCategory.PRACTICE),
     HEAD_COPY(SettingsCategory.PRACTICE),
     HARDWARE_KEY(SettingsCategory.KEYS),
+    ON_SCREEN_KEY(SettingsCategory.KEYS),
     PILEUP(SettingsCategory.QSO),
     REMINDERS(SettingsCategory.REMINDERS),
     DISPLAY(SettingsCategory.DISPLAY),
@@ -130,6 +131,12 @@ object SettingsCatalog {
         e("keyerMode", "Keyer mode",
             listOf("vail", "adapter", "paddle", "iambic", "straight key", "hardware key", "midi", "key", "bug", "cootie", "mode a", "mode b"),
             SettingsSection.HARDWARE_KEY),
+        e("onScreenKey", "On-screen key",
+            listOf("touch key", "straight key", "paddles", "pad", "tap", "on screen", "iambic"), SettingsSection.ON_SCREEN_KEY),
+        e("paddleMode", "Paddle mode",
+            listOf("iambic", "iambic a", "iambic b", "ultimatic", "keyer", "squeeze", "touch paddles"), SettingsSection.ON_SCREEN_KEY),
+        e("paddleSwap", "Dah on the left",
+            listOf("left handed", "lefty", "swap", "reverse", "paddles", "dit"), SettingsSection.ON_SCREEN_KEY),
 
         // QSO & Pileups
         e("myCall", "Your callsign", listOf("call sign", "call", "station", "my call", "w1aw"), SettingsSection.PILEUP),

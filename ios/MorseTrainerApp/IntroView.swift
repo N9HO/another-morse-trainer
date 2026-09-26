@@ -94,7 +94,9 @@ struct IntroView: View {
             CWDecoderView().environmentObject(model)
         }
         .fullScreenCover(isPresented: $showingRepeater) {
-            RepeaterView().environmentObject(repeater)
+            // AppModel too: the on-screen key follows the Settings choice of
+            // straight key or paddles (#233).
+            RepeaterView().environmentObject(repeater).environmentObject(model)
         }
         .onAppear {
             model.refreshDailyDit()

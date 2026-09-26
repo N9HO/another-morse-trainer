@@ -105,6 +105,7 @@ import app.anothermorsetrainer.morsekit.Buddy
 import app.anothermorsetrainer.morsekit.Leaderboard
 import app.anothermorsetrainer.morsekit.MorseCode
 import app.anothermorsetrainer.morsekit.MorseItem
+import app.anothermorsetrainer.morsekit.PaddleKeyer
 import app.anothermorsetrainer.morsekit.ProgressiveCharacters
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -371,6 +372,8 @@ fun SettingsScreen(
         SettingsSection.FEEDBACK -> scope == null || scope !in NO_FEEDBACK_MODES
         SettingsSection.HEAD_COPY -> shown(setOf(SettingsMode.HEAD_COPY))
         SettingsSection.HARDWARE_KEY -> shown(KEY_MODES) && midiSupported
+        // The on-screen key needs no MIDI, so it stays on every device (#233).
+        SettingsSection.ON_SCREEN_KEY -> shown(KEY_MODES)
         SettingsSection.PILEUP -> scope == null
     }
     val visibleCategories = SettingsCategory.entries.filter { c -> c.sections.any { isShown(it) } }
@@ -871,6 +874,19 @@ fun SettingsScreen(
                             SettingsGroup { AdapterKeyerSetting(context) }
                             SectionFooter(
                                 stringResource(R.string.settings_hardware_key_footer)
+                            )
+                        }
+                        SettingsSection.ON_SCREEN_KEY -> {
+                            // The on-screen key (#233): straight key or touch paddles,
+                            // wherever a screen offers one. Unlike the hardware key
+                            // above, it needs no MIDI.
+                            SectionHeader(stringResource(R.string.settings_on_screen_key))
+                            SettingsGroup { OnScreenKeySetting() }
+                            SectionFooter(
+                                if (Settings.onScreenKey == OnScreenKeyType.PADDLES)
+                                    stringResource(R.string.settings_on_screen_key_footer_paddles)
+                                else
+                                    stringResource(R.string.settings_on_screen_key_footer_straight)
                             )
                         }
                         SettingsSection.PILEUP -> {
@@ -1749,6 +1765,86 @@ private fun AdapterKeyerSetting(context: android.content.Context) {
                 color = Brand.textSecondary,
                 fontSize = 12.sp
             )
+        }
+    }
+}
+
+/**
+ * On-screen key type, and — for paddles — the keyer mode and the left-handed
+ * swap (#233). Mirrors the iOS "On-screen key" section in `SettingsView`.
+ */
+@Composable
+private fun OnScreenKeySetting() {
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp)) {
+        ChipPicker(
+            label = stringResource(R.string.settings_on_screen_key),
+            options = OnScreenKeyType.entries,
+            selected = Settings.onScreenKey,
+            name = { it.label },
+            onPick = { Settings.updateOnScreenKey(it) }
+        )
+        if (Settings.onScreenKey == OnScreenKeyType.PADDLES) {
+            Spacer(Modifier.height(14.dp))
+            ChipPicker(
+                label = stringResource(R.string.settings_paddle_mode),
+                options = PaddleKeyer.Mode.entries,
+                selected = Settings.paddleMode,
+                name = { it.label },
+                onPick = { Settings.updatePaddleMode(it) }
+            )
+            Spacer(Modifier.height(6.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(stringResource(R.string.settings_paddle_swap), color = Brand.textPrimary, fontWeight = FontWeight.Medium)
+                Switch(
+                    checked = Settings.paddleSwap,
+                    onCheckedChange = { Settings.updatePaddleSwap(it) },
+                    colors = switchColors()
+                )
+            }
+        }
+    }
+}
+
+/** A labelled row of selectable chips, styled like the adapter's keyer-mode picker. */
+@Composable
+private fun <T> ChipPicker(
+    label: String,
+    options: List<T>,
+    selected: T,
+    name: (T) -> String,
+    onPick: (T) -> Unit
+) {
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        Text(label, color = Brand.textPrimary, fontWeight = FontWeight.Medium)
+        Text(name(selected), color = Brand.teal, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+    }
+    Spacer(Modifier.height(8.dp))
+    Row(
+        modifier = Modifier.horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        options.forEach { option ->
+            val isSel = option == selected
+            Box(
+                modifier = Modifier
+                    .background(
+                        if (isSel) Brand.teal else Brand.navyRaised,
+                        shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp)
+                    )
+                    .clickable { onPick(option) }
+                    .padding(horizontal = 12.dp, vertical = 6.dp)
+            ) {
+                Text(
+                    name(option),
+                    color = if (isSel) Brand.navy else Brand.textSecondary,
+                    fontWeight = if (isSel) FontWeight.Bold else FontWeight.Medium,
+                    fontSize = 13.sp
+                )
+            }
         }
     }
 }

@@ -166,6 +166,7 @@ struct SettingsView: View {
         case .feedback: return shown(for: Self.feedbackModes)
         case .headCopy: return shown(for: [.headCopy])
         case .hardwareKey: return shown(for: Self.hardwareKeyModes)
+        case .onScreenKey: return shown(for: Self.hardwareKeyModes)
         // Your call and name are also what CW 77 drills when you include
         // them (#240), so Listen & Learn and Common Words reach them too.
         case .yourStation: return shown(for: Self.pileupModes.union([.listen, .words]))
@@ -328,6 +329,7 @@ struct SettingsView: View {
         case .feedback: feedbackSection
         case .headCopy: headCopySection
         case .hardwareKey: hardwareKeySection
+        case .onScreenKey: onScreenKeySection
         case .yourStation: yourStationSection
         case .pileupRunner: pileupRunnerSection
         case .qsoSignals: qsoSignalsSection
@@ -659,6 +661,34 @@ struct SettingsView: View {
             Text("How the Vail Adapter should read your key. Straight Key is the default; pick an iambic mode for a paddle. This describes your key rather than a drill, so it applies in Sending Practice and on the Vail screen alike.")
         }
         .listRowBackground(rowBackground(.hardwareKey))
+    }
+
+    /// The on-screen key (#233): straight key or touch paddles, wherever the
+    /// screen offers one — the keyed answers, the keying games and the Vail
+    /// screen.
+    private var onScreenKeySection: some View {
+        Section {
+            Picker("On-screen key", selection: $model.settings.onScreenKey) {
+                ForEach(OnScreenKeyType.allCases) { kind in
+                    Text(kind.label).tag(kind)
+                }
+            }
+            if model.settings.onScreenKey == .paddles {
+                Picker("Paddle mode", selection: $model.settings.paddleMode) {
+                    ForEach(PaddleKeyer.Mode.allCases) { mode in
+                        Text(mode.label).tag(mode)
+                    }
+                }
+                Toggle("Dah on the left", isOn: $model.settings.paddleSwap)
+            }
+        } header: {
+            Text("On-screen key")
+        } footer: {
+            Text(model.settings.onScreenKey == .paddles
+                 ? "Two touch paddles, dit and dah, timed at your speed. Hold one to repeat it; hold both to squeeze. Iambic A stops when you let go; Iambic B adds one more alternate element; Ultimatic repeats whichever paddle you pressed last. \"Dah on the left\" swaps them for a left-handed operator."
+                 : "One hold-to-key pad: the tone sounds for as long as you hold it. Choose Paddles to key with two touch paddles and a built-in iambic keyer instead.")
+        }
+        .listRowBackground(rowBackground(.onScreenKey))
     }
 
     // MARK: - QSO & Pileups

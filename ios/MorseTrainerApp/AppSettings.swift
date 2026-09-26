@@ -740,6 +740,16 @@ struct AppSettings: Codable, Equatable {
     /// displayed (the operator's handwriting convention — issue #62).
     var slashedZero: Bool = true
 
+    // On-screen key (#233)
+    /// What the on-screen key is: one straight-key pad (the default, and the
+    /// only kind before #233) or a pair of iambic paddles.
+    var onScreenKey: OnScreenKeyType = .straight
+    /// How the on-screen paddles are timed. Iambic A is the default — the
+    /// reporter's preference, and the gentlest on a squeeze let go early.
+    var paddleMode: PaddleKeyer.Mode = .iambicA
+    /// Dah on the left, dit on the right — for a left-handed operator.
+    var paddleSwap: Bool = false
+
     // Head Copy
     /// How many times Head Copy automatically replays the prompt after the first
     /// play, so you can re-hear it without mentally replaying. 0 = no auto-repeat
@@ -855,6 +865,7 @@ extension AppSettings {
         case buddy
         case story
         case showCorrectness, reveal, allowReplay, hapticsEnabled, slashedZero
+        case onScreenKey, paddleMode, paddleSwap
         case headCopyRepeats, headCopyRevealSeconds
     }
 
@@ -943,6 +954,9 @@ extension AppSettings {
         s.allowReplay = try c.decodeIfPresent(Bool.self, forKey: .allowReplay) ?? s.allowReplay
         s.hapticsEnabled = try c.decodeIfPresent(Bool.self, forKey: .hapticsEnabled) ?? s.hapticsEnabled
         s.slashedZero = try c.decodeIfPresent(Bool.self, forKey: .slashedZero) ?? s.slashedZero
+        s.onScreenKey = (try? c.decodeIfPresent(OnScreenKeyType.self, forKey: .onScreenKey)) ?? s.onScreenKey
+        s.paddleMode = (try? c.decodeIfPresent(PaddleKeyer.Mode.self, forKey: .paddleMode)) ?? s.paddleMode
+        s.paddleSwap = try c.decodeIfPresent(Bool.self, forKey: .paddleSwap) ?? s.paddleSwap
         let hcr = try c.decodeIfPresent(Int.self, forKey: .headCopyRepeats) ?? s.headCopyRepeats
         s.headCopyRepeats = min(max(hcr, AppSettings.headCopyRepeatRange.lowerBound),
                                 AppSettings.headCopyRepeatRange.upperBound)

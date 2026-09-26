@@ -21,7 +21,12 @@ struct SendingKeyerView: View {
     var body: some View {
         VStack(spacing: 14) {
             decodedDisplay
-            keyButton
+            // Straight key or paddles, as chosen in Settings (#233); the
+            // paddles' keyer feeds the same sidetone and decoder.
+            OnScreenKeySwitch(onKey: { down, ms in sender.touchKey(isDown: down, atMs: ms) }) {
+                keyButton
+            }
+            .frame(height: 120)
             controls
             midiStatus
         }

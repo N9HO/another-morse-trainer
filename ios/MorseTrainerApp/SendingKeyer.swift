@@ -158,9 +158,11 @@ final class SendingKeyer: ObservableObject {
         keyer.stop()
     }
 
-    /// On-screen key press/release.
-    func touchKey(isDown: Bool) {
-        handle(key: .straight, isDown: isDown, atMs: Int64(Date().timeIntervalSince1970 * 1000))
+    /// On-screen key press/release. `atMs` is when the edge happened, for the
+    /// on-screen paddles (#233), whose keyer schedules each element exactly;
+    /// the straight key leaves it to "now".
+    func touchKey(isDown: Bool, atMs: Int64? = nil) {
+        handle(key: .straight, isDown: isDown, atMs: atMs ?? Int64(Date().timeIntervalSince1970 * 1000))
     }
 
     func clear() {

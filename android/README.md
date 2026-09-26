@@ -98,6 +98,9 @@ the iOS app's navy/teal look.
   content questions, random or a bundled passage)
 - **Sending Practice**: key it back (touch or MIDI key); quizzes can also be
   answered by keying
+- **On-screen paddles**: the on-screen key can be a straight key or a pair of
+  touch paddles with a built-in Iambic A / Iambic B / Ultimatic keyer, dit and
+  dah memory, and a left-handed swap — wherever you key on screen
 - **Repeater**: live CW over the Vail network with a server picker and
   private-channel option, plus Vail Adapter support: MIDI key input *and*
   output (keyer mode + speed, sidetone, opt-out RX piezo buzz), Bluetooth LE

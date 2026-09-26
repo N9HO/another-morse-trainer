@@ -114,6 +114,9 @@ testers, bug reports and feature chat live on
   of picking it, in the choice quizzes, either always or as a progression
   step: each level starts at 4 choices, moves to 6, then to typing, and a
   wrong typed character feeds the Confusion Matrix like a wrong tap
+- **On-screen paddles**: the on-screen key can be a straight key or a pair of
+  touch paddles with a built-in Iambic A / Iambic B / Ultimatic keyer, dit and
+  dah memory, and a left-handed swap — wherever you key on screen
 - **Sending Practice**: a dedicated hear-it, key-it-back mode on the adaptive
   ladder, with live decode, always-on replay, and a connected-MIDI-key
   readout; plus printable drill sheets built from what you've studied (even,

@@ -50,8 +50,12 @@ class SendingKeyer(wpm: Double, toneHz: Double) {
         sidetone.stop()
     }
 
-    /** On-screen key press/release. */
-    fun touchKey(isDown: Boolean) = handle(isDown, System.currentTimeMillis())
+    /**
+     * On-screen key press/release. [atMs] is when the edge happened, for the
+     * on-screen paddles (#233), whose keyer schedules each element exactly;
+     * the straight key leaves it to "now".
+     */
+    fun touchKey(isDown: Boolean, atMs: Long? = null) = handle(isDown, atMs ?: System.currentTimeMillis())
 
     fun clear() = decoder.reset()
 
