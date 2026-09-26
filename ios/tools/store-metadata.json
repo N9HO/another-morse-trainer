@@ -60,6 +60,6 @@
   },
   "reviewDetail": {
     "demoAccountRequired": false,
-    "notes": "Optional leaderboard, off by default; no account needed."
+    "notes": "Optional leaderboard, off by default; no account needed.\n\nBackground audio (guideline 2.5.4): Listen & Learn is hands-free, eyes-free practice that keeps playing Morse code and the spoken answer with the app in the background or the screen locked, which is why UIBackgroundModes includes audio. Screen recording on a physical iPhone, starting Listen & Learn and going to the Home Screen: https://youtube.com/shorts/jSOhgYn7HHY"
   }
 }
