@@ -47,7 +47,7 @@ public enum SettingsSection: String, CaseIterable, Sendable, Hashable {
     case sound
     case speed, farnsworth
     case proficiency, newCharacters, trackStage, punctuation, previewStage, reset
-    case learning, feedback, headCopy
+    case learning, answerEntry, feedback, headCopy
     case hardwareKey
     case yourStation, pileupRunner, qsoSignals, qsoRealism, qsoCallsigns
     case reminders
@@ -60,7 +60,7 @@ public enum SettingsSection: String, CaseIterable, Sendable, Hashable {
         case .sound: return .sound
         case .speed, .farnsworth: return .speed
         case .proficiency, .newCharacters, .trackStage, .punctuation, .previewStage, .reset: return .characters
-        case .learning, .feedback, .headCopy: return .practice
+        case .learning, .answerEntry, .feedback, .headCopy: return .practice
         case .hardwareKey: return .keys
         case .yourStation, .pileupRunner, .qsoSignals, .qsoRealism, .qsoCallsigns: return .qso
         case .reminders: return .reminders
@@ -123,6 +123,8 @@ public enum SettingsCatalog {
         .init("recognizeWithin", "Recognize within",
               ["recognition target", "time", "seconds", "ttr", "mastered", "threshold", "new letter"], .learning),
         .init("answerChoices", "Answer choices", ["buttons", "options", "multiple choice"], .learning),
+        .init("answerEntry", "Answer entry",
+              ["keyboard", "type", "typing", "typed", "progressive", "tap", "buttons", "input"], .answerEntry),
         .init("showCorrectness", "Show right / wrong",
               ["correct", "incorrect", "colour", "color", "feedback", "mistakes"], .feedback),
         .init("reveal", "Reveal the letter", ["reveal answer", "show answer", "correct answer"], .feedback),

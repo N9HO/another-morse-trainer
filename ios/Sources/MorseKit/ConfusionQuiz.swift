@@ -60,12 +60,19 @@ public final class ConfusionQuiz: QuizSource {
     }
 
     public func record(choice: String, ttr: TimeInterval) -> DrillOutcome {
-        guard let target = lastTarget, let answer = choice.first else {
+        guard let target = lastTarget else {
+            return DrillOutcome(correct: false, unlocked: nil)
+        }
+        // Only a single Morse character is a confusion partner (#232): a
+        // blank, two characters or a symbol with no code is a plain miss.
+        let grade = TypedAnswer.gradeCharacter(choice, target: target)
+        guard grade.correct || grade.confusedWith != nil else {
+            engine.noteMiss(target: target)
             return DrillOutcome(correct: false, unlocked: nil)
         }
         // Record the attempt without graduating new Koch characters — this is
         // review, not progression. A correct call eases the drilled pairing.
-        let correct = engine.noteAttempt(answer: answer, target: target, ttr: ttr)
+        let correct = engine.noteAttempt(answer: grade.confusedWith ?? target, target: target, ttr: ttr)
         if correct, let confuser = lastConfuser {
             engine.easeConfusion(target: target, chosen: confuser)
         }

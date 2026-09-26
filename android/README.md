@@ -124,6 +124,10 @@ the iOS app's navy/teal look.
 - **Voice answers**: speak your answer instead of tapping (microphone), with
   NATO/letter-name/digit-word matching, a "did you say…?" confirm-and-correct
   flow, and a learned per-user voice profile
+- **Keyboard-entry answers**: type the character or word you heard instead
+  of picking it, in the choice quizzes, either always or as a progression
+  step: each level starts at 4 choices, moves to 6, then to typing, and a
+  wrong typed character feeds the Confusion Matrix like a wrong tap
 - **Sending Drills**: printable practice sheets of random character groups
   drawn from what you've studied (even, personalized, or numbers & punctuation),
   ready to share or print

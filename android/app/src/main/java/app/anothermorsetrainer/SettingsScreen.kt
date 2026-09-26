@@ -36,6 +36,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.ImeAction
+import app.anothermorsetrainer.morsekit.AnswerEntryMode
 import app.anothermorsetrainer.morsekit.SettingsCatalog
 import app.anothermorsetrainer.morsekit.SettingsCategory
 import app.anothermorsetrainer.morsekit.SettingsSearchEntry
@@ -191,6 +192,20 @@ private fun wholeWpmSteps(min: Float, max: Float): Int =
 private val NO_FEEDBACK_MODES = setOf(
     SettingsMode.LISTEN, SettingsMode.STORY, SettingsMode.EXAM
 )
+
+/** The choice quizzes that take a typed answer (#232): every one but the Journey. */
+internal val ANSWER_ENTRY_MODES = setOf(
+    SettingsMode.CHARACTERS, SettingsMode.WORDS, SettingsMode.ABBREVIATIONS,
+    SettingsMode.QCODES, SettingsMode.PROSIGNS, SettingsMode.CONFUSION
+)
+
+/** The option's name in Settings and the in-drill menu (#232). */
+internal val AnswerEntryMode.titleRes: Int
+    get() = when (this) {
+        AnswerEntryMode.CHOICES -> R.string.answer_entry_choices
+        AnswerEntryMode.PROGRESSIVE -> R.string.answer_entry_progressive
+        AnswerEntryMode.TYPED -> R.string.answer_entry_typed
+    }
 
 /** The quiz screen is the only surface with spoken answers. */
 private val VOICE_ANSWER_MODES = setOf(
@@ -351,6 +366,7 @@ fun SettingsScreen(
         SettingsSection.PREVIEW_STAGE -> shown(STAGE_PIN_MODES)
         SettingsSection.RESET -> scope == null
         SettingsSection.PRACTICE -> showChoiceRows || showWordPool || showDuration
+        SettingsSection.ANSWER_ENTRY -> shown(ANSWER_ENTRY_MODES)
         SettingsSection.MY_WORDS -> showWordPool
         SettingsSection.FEEDBACK -> scope == null || scope !in NO_FEEDBACK_MODES
         SettingsSection.HEAD_COPY -> shown(setOf(SettingsMode.HEAD_COPY))
@@ -701,6 +717,20 @@ fun SettingsScreen(
                             SectionFooter(
                                 practiceFooter(showChoiceRows, showWordPool, showDuration)
                             )
+                        }
+                        // Keyboard-entry answers (#232), in the choice
+                        // quizzes that take them (not the Journey).
+                        SettingsSection.ANSWER_ENTRY -> {
+                            SectionHeader(stringResource(R.string.settings_answer_entry))
+                            SettingsGroup {
+                                SegmentedSetting(
+                                    label = stringResource(R.string.settings_answer_entry),
+                                    options = AnswerEntryMode.entries.map { stringResource(it.titleRes) to it },
+                                    selected = Settings.answerEntry,
+                                    onSelect = { Settings.updateAnswerEntry(it) }
+                                )
+                            }
+                            SectionFooter(stringResource(R.string.settings_answer_entry_footer))
                         }
                         SettingsSection.MY_WORDS -> {
                             SectionHeader(stringResource(R.string.settings_my_words))

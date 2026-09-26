@@ -1,0 +1,218 @@
+{
+  "$comment": "Shared fixture for keyboard-entry answers in the choice drills (issue #232), consumed by BOTH ports: android AnswerEntryTest and ios MorseKitCheck. Data, not code — see CLAUDE.md's two-ports rule. Values written by hand from the rules below, not captured from either port.",
+  "rules": {
+    "ladder": "Rungs are fourChoices → sixChoices → typed. Each answer on a rung joins a window of the last `window` answers on that rung. When the window is full and holds at least `requiredCorrect` correct answers, the ladder moves up one rung and the window empties. typed is the top: answers there change nothing. A level restart ('L') returns to fourChoices with an empty window.",
+    "events": "One letter per event: 'c' a correct answer, 'x' a wrong one, 'L' a level restart. `promotions` lists the zero-based event index at which each promotion happened and the rung it reached.",
+    "normalize": "Upper case; surrounding whitespace trimmed; runs of inner whitespace collapsed to one space; a slashed zero Ø read as the digit 0.",
+    "gradeCharacter": "For a single-character target: correct when the normalized answer is the target. Otherwise the answer is a confusion partner only when it normalizes to exactly one character that has a Morse code; anything else — blank, two or more characters, a symbol with no code — is a miss with no partner (confusedWith null)."
+  },
+  "window": 20,
+  "requiredCorrect": 18,
+  "ladder": [
+    {
+      "name": "twenty straight correct clear four choices",
+      "events": "cccccccccccccccccccc",
+      "tier": "sixChoices",
+      "promotions": [
+        [
+          19,
+          "sixChoices"
+        ]
+      ]
+    },
+    {
+      "name": "nineteen correct are not yet a full window",
+      "events": "ccccccccccccccccccc",
+      "tier": "fourChoices",
+      "promotions": []
+    },
+    {
+      "name": "forty straight correct reach typing",
+      "events": "cccccccccccccccccccccccccccccccccccccccc",
+      "tier": "typed",
+      "promotions": [
+        [
+          19,
+          "sixChoices"
+        ],
+        [
+          39,
+          "typed"
+        ]
+      ]
+    },
+    {
+      "name": "typed is the top rung",
+      "events": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "tier": "typed",
+      "promotions": [
+        [
+          19,
+          "sixChoices"
+        ],
+        [
+          39,
+          "typed"
+        ]
+      ]
+    },
+    {
+      "name": "two misses in a full window still clear it",
+      "events": "xxcccccccccccccccccc",
+      "tier": "sixChoices",
+      "promotions": [
+        [
+          19,
+          "sixChoices"
+        ]
+      ]
+    },
+    {
+      "name": "three misses hold the rung until one slides out",
+      "events": "xxxccccccccccccccccc",
+      "tier": "fourChoices",
+      "promotions": []
+    },
+    {
+      "name": "the window slides: the oldest miss leaves on the twenty-first answer",
+      "events": "xxxcccccccccccccccccc",
+      "tier": "sixChoices",
+      "promotions": [
+        [
+          20,
+          "sixChoices"
+        ]
+      ]
+    },
+    {
+      "name": "the window empties on promotion, so six choices are earned on their own answers",
+      "events": "ccccccccccccccccccccccccccccccccccccccc",
+      "tier": "sixChoices",
+      "promotions": [
+        [
+          19,
+          "sixChoices"
+        ]
+      ]
+    },
+    {
+      "name": "a new level starts again at four choices",
+      "events": "ccccccccccccccccccccLcccccccccc",
+      "tier": "fourChoices",
+      "promotions": [
+        [
+          19,
+          "sixChoices"
+        ]
+      ]
+    },
+    {
+      "name": "a level restart empties the window",
+      "events": "cccccccccccccccLccccc",
+      "tier": "fourChoices",
+      "promotions": []
+    },
+    {
+      "name": "a new level from typing starts again at four choices",
+      "events": "ccccccccccccccccccccccccccccccccccccccccLcccccccccccccccccccc",
+      "tier": "sixChoices",
+      "promotions": [
+        [
+          19,
+          "sixChoices"
+        ],
+        [
+          39,
+          "typed"
+        ],
+        [
+          60,
+          "sixChoices"
+        ]
+      ]
+    }
+  ],
+  "normalize": {
+    "k": "K",
+    "  k  ": "K",
+    "cq  de\tw1aw": "CQ DE W1AW",
+    "Ø": "0",
+    "5nn": "5NN",
+    "": "",
+    "   ": ""
+  },
+  "gradeCharacter": [
+    {
+      "target": "K",
+      "answer": "K",
+      "correct": true,
+      "confusedWith": null
+    },
+    {
+      "target": "K",
+      "answer": " k ",
+      "correct": true,
+      "confusedWith": null
+    },
+    {
+      "target": "K",
+      "answer": "R",
+      "correct": false,
+      "confusedWith": "R"
+    },
+    {
+      "target": "K",
+      "answer": "y",
+      "correct": false,
+      "confusedWith": "Y"
+    },
+    {
+      "target": "0",
+      "answer": "Ø",
+      "correct": true,
+      "confusedWith": null
+    },
+    {
+      "target": "0",
+      "answer": "O",
+      "correct": false,
+      "confusedWith": "O"
+    },
+    {
+      "target": "K",
+      "answer": "?",
+      "correct": false,
+      "confusedWith": "?"
+    },
+    {
+      "target": "K",
+      "answer": "",
+      "correct": false,
+      "confusedWith": null
+    },
+    {
+      "target": "K",
+      "answer": "  ",
+      "correct": false,
+      "confusedWith": null
+    },
+    {
+      "target": "K",
+      "answer": "KR",
+      "correct": false,
+      "confusedWith": null
+    },
+    {
+      "target": "K",
+      "answer": "%",
+      "correct": false,
+      "confusedWith": null
+    },
+    {
+      "target": "K",
+      "answer": "#",
+      "correct": false,
+      "confusedWith": null
+    }
+  ]
+}

@@ -695,6 +695,12 @@ struct AppSettings: Codable, Equatable {
     /// answer (`Drill.isKeyable`), never for a meaning or a prosign glyph.
     var keyingResponse: Bool = false
 
+    /// How the choice quizzes take an answer (#232): tap the choices (the
+    /// default), climb four choices → six → typed per level, or always type.
+    /// Honoured per drill like keying: a drill whose answer is a meaning or a
+    /// prosign glyph cannot be typed, so it keeps its choices.
+    var answerEntry: AnswerEntryMode = .choices
+
     // Code Exam (ARRL/FCC-style proficiency exam)
     /// License-tied exam speed (5 / 13 / 20 WPM).
     var examSpeed: ExamSpeed = .general13
@@ -837,6 +843,7 @@ extension AppSettings {
         case listenContent, listenGap, listenReadback, wordTier, customWords, useCustomWords
         case cw77IncludeMe
         case voiceResponse, keyingResponse
+        case answerEntry
         case qrqSpeed, backgroundNoise, didMigrateNoiseFloor
         case bluetoothKeepAlive, bandNoise
         case dailyDitStartingWpm, dailyDitHideReference
@@ -919,6 +926,9 @@ extension AppSettings {
         s.syncBackgroundNoise()
         s.voiceResponse = try c.decodeIfPresent(Bool.self, forKey: .voiceResponse) ?? s.voiceResponse
         s.keyingResponse = try c.decodeIfPresent(Bool.self, forKey: .keyingResponse) ?? s.keyingResponse
+        // Read as a raw string so a value from a newer build falls back to the default.
+        s.answerEntry = (try? c.decodeIfPresent(String.self, forKey: .answerEntry))
+            .flatMap { $0 }.flatMap(AnswerEntryMode.init(rawValue:)) ?? s.answerEntry
         s.examSpeed = try c.decodeIfPresent(ExamSpeed.self, forKey: .examSpeed) ?? s.examSpeed
         s.examGrading = try c.decodeIfPresent(ExamGrading.self, forKey: .examGrading) ?? s.examGrading
         s.examUseBundled = try c.decodeIfPresent(Bool.self, forKey: .examUseBundled) ?? s.examUseBundled
@@ -940,5 +950,16 @@ extension AppSettings {
         s.headCopyRevealSeconds = min(max(hcrs, AppSettings.headCopyRevealRange.lowerBound),
                                       AppSettings.headCopyRevealRange.upperBound)
         self = s
+    }
+}
+
+extension AnswerEntryMode {
+    /// The option's name in Settings and the in-drill picker (#232).
+    var title: String {
+        switch self {
+        case .choices:     return "Tap"
+        case .progressive: return "Progressive"
+        case .typed:       return "Type"
+        }
     }
 }

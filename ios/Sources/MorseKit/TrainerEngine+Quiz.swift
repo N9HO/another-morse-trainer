@@ -16,10 +16,19 @@ extension TrainerEngine: QuizSource {
     }
 
     public func record(choice: String, ttr: TimeInterval) -> DrillOutcome {
-        guard let q = lastQuestion, let answer = choice.first else {
+        guard let q = lastQuestion else {
             return DrillOutcome(correct: false, unlocked: nil)
         }
-        let outcome = record(answer: answer, for: q, ttr: ttr)
+        // A typed or keyed answer can be anything (#232): only a single Morse
+        // character is a confusion partner. A blank, two characters or a
+        // symbol with no code is a miss with no partner, and a miss never
+        // advances the ladder.
+        let grade = TypedAnswer.gradeCharacter(choice, target: q.target)
+        guard grade.correct || grade.confusedWith != nil else {
+            noteMiss(target: q.target)
+            return DrillOutcome(correct: false, unlocked: nil)
+        }
+        let outcome = record(answer: grade.confusedWith ?? q.target, for: q, ttr: ttr)
         return DrillOutcome(correct: outcome.correct,
                             unlocked: outcome.addedCharacter.map(String.init))
     }

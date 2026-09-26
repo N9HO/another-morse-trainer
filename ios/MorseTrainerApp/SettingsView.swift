@@ -109,6 +109,9 @@ struct SettingsView: View {
     /// and the answer-button count).
     private static let choiceQuizModes: Set<TrainingMode> =
         [.journey, .characters, .words, .abbreviations, .qCodes, .prosigns, .confusion]
+    /// The choice quizzes that take a typed answer (#232): every one but the Journey.
+    private static let answerEntryModes: Set<TrainingMode> =
+        [.characters, .words, .abbreviations, .qCodes, .prosigns, .confusion]
     /// The pileup surfaces all four QSO sections configure.
     private static let pileupModes: Set<TrainingMode> = [.qso, .contest]
     /// The surfaces a hardware key can drive — every mode `usesKeyingResponse`
@@ -159,6 +162,7 @@ struct SettingsView: View {
         // intro's app-wide entry (Android parity).
         case .reset: return activeMode == nil
         case .learning: return shown(for: Self.choiceQuizModes)
+        case .answerEntry: return shown(for: Self.answerEntryModes)
         case .feedback: return shown(for: Self.feedbackModes)
         case .headCopy: return shown(for: [.headCopy])
         case .hardwareKey: return shown(for: Self.hardwareKeyModes)
@@ -320,6 +324,7 @@ struct SettingsView: View {
         case .previewStage: previewStageSection
         case .reset: resetSection
         case .learning: learningSection
+        case .answerEntry: answerEntrySection
         case .feedback: feedbackSection
         case .headCopy: headCopySection
         case .hardwareKey: hardwareKeySection
@@ -574,6 +579,23 @@ struct SettingsView: View {
             Text("When you consistently recognize a letter within this time, a new letter is added. Answer choices only ever include characters you've already met — the number of buttons grows as you learn, up to this many.")
         }
         .listRowBackground(rowBackground(.learning))
+    }
+
+    /// Keyboard-entry answers (#232), in the choice quizzes that take them
+    /// (not the Journey).
+    private var answerEntrySection: some View {
+        Section {
+            Picker("Answer entry", selection: $model.settings.answerEntry) {
+                ForEach(AnswerEntryMode.allCases, id: \.self) { m in
+                    Text(m.title).tag(m)
+                }
+            }
+        } header: {
+            Text("Answer entry")
+        } footer: {
+            Text("Tap picks from the buttons. Progressive starts each level at 4 choices, moves to 6 after 18 of 20 right, then to typing the answer after 18 of 20 more; a new character or stage starts again at 4. Type always has you type. Answers that are a meaning or a prosign always show choices.")
+        }
+        .listRowBackground(rowBackground(.answerEntry))
     }
 
     private var feedbackSection: some View {

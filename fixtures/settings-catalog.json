@@ -28,6 +28,7 @@
     { "id": "resetProgress", "category": "characters" },
     { "id": "recognizeWithin", "category": "practice" },
     { "id": "answerChoices", "category": "practice" },
+    { "id": "answerEntry", "category": "practice" },
     { "id": "showCorrectness", "category": "practice" },
     { "id": "reveal", "category": "practice" },
     { "id": "showReplay", "category": "practice" },

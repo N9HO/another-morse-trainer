@@ -110,6 +110,10 @@ testers, bug reports and feature chat live on
   choice quizzes, with a confirm/closest-match fallback that learns your
   corrections
 - **Answer by keying**: key the answer on a touch or hardware Morse key
+- **Keyboard-entry answers**: type the character or word you heard instead
+  of picking it, in the choice quizzes, either always or as a progression
+  step: each level starts at 4 choices, moves to 6, then to typing, and a
+  wrong typed character feeds the Confusion Matrix like a wrong tap
 - **Sending Practice**: a dedicated hear-it, key-it-back mode on the adaptive
   ladder, with live decode, always-on replay, and a connected-MIDI-key
   readout; plus printable drill sheets built from what you've studied (even,
