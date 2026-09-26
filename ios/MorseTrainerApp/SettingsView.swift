@@ -162,7 +162,10 @@ struct SettingsView: View {
         case .feedback: return shown(for: Self.feedbackModes)
         case .headCopy: return shown(for: [.headCopy])
         case .hardwareKey: return shown(for: Self.hardwareKeyModes)
-        case .yourStation, .pileupRunner, .qsoSignals, .qsoRealism, .qsoCallsigns:
+        // Your call and name are also what CW 77 drills when you include
+        // them (#240), so Listen & Learn and Common Words reach them too.
+        case .yourStation: return shown(for: Self.pileupModes.union([.listen, .words]))
+        case .pileupRunner, .qsoSignals, .qsoRealism, .qsoCallsigns:
             return shown(for: Self.pileupModes)
         }
     }
@@ -649,10 +652,19 @@ struct SettingsView: View {
                     .autocorrectionDisabled()
                     .font(.system(.body, design: .monospaced))
             }
+            HStack {
+                Text("Your name")
+                Spacer()
+                TextField("Optional", text: $model.settings.qso.myName)
+                    .multilineTextAlignment(.trailing)
+                    .textInputAutocapitalization(.characters)
+                    .autocorrectionDisabled()
+                    .font(.system(.body, design: .monospaced))
+            }
         } header: {
             Text("Your Station")
         } footer: {
-            Text("Used across the app — sent when you call CQ and work stations in Pileup Runner.")
+            Text("Used across the app — sent when you call CQ and work stations in Pileup Runner, and drilled in CW 77 when you include them.")
         }
         .listRowBackground(rowBackground(.yourStation))
     }

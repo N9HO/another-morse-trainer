@@ -661,6 +661,26 @@ fun SettingsScreen(
                                         selected = Settings.wordCount,
                                         onSelect = { Settings.updateWordCount(it) }
                                     )
+                                    // The CWOps list as the pool instead of a Top N
+                                    // (#240) — iOS lists it in the same pool picker;
+                                    // a fifth chip does not fit beside the label here.
+                                    GroupDivider()
+                                    val cw77 = Settings.wordCount == Settings.WORD_POOL_CW77
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth().padding(16.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text(stringResource(R.string.settings_word_pool_cw77), color = Brand.textPrimary, fontWeight = FontWeight.Medium)
+                                        Switch(
+                                            checked = cw77,
+                                            onCheckedChange = { Settings.updateWordCount(if (it) Settings.WORD_POOL_CW77 else 100) },
+                                            colors = switchColors()
+                                        )
+                                    }
+                                    if (cw77 && !(Settings.useCustomWords && Settings.customWords.size >= 2)) {
+                                        Cw77Options(modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp))
+                                    }
                                     needDivider = true
                                 }
                                 if (showChoiceRows) {
@@ -1535,6 +1555,7 @@ private fun diagnosticInfo(context: Context, scope: SettingsMode?): String {
     when (scope) {
         SettingsMode.WORDS -> lines.add(
             if (Settings.useCustomWords && Settings.customWords.size >= 2) "Word pool: custom (${Settings.customWords.size} words)"
+            else if (Settings.wordCount == Settings.WORD_POOL_CW77) "Word pool: CW 77 (CWOps)"
             else "Word pool: Top ${Settings.wordCount}"
         )
         SettingsMode.LISTEN -> lines.add("Listen: ${Settings.listenContent.label} · ${Settings.listenGap.label}")

@@ -138,6 +138,7 @@ public enum SettingsCatalog {
 
         // QSO & Pileups
         .init("myCall", "Your callsign", ["call sign", "call", "station", "my call", "w1aw"], .yourStation),
+        .init("myName", "Your name", ["name", "operator", "op", "cw 77", "cwops"], .yourStation),
         .init("exchange", "Pileup Runner mode",
               ["exchange", "pota", "contest", "sprint", "cwt", "sst", "single caller", "mode"], .pileupRunner),
         .init("maxCallers", "Max callers", ["pileup size", "stations", "callers", "how many"], .pileupRunner),

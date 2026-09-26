@@ -1693,6 +1693,126 @@ if let fx = loadQSOElementsFixture() {
     check("fixtures/qso-elements.json loads and decodes", false)
 }
 
+// The CWOps "CW 77" list (issue #240), against fixtures/cw77.json — read by
+// this harness AND by android MorseDataCW77Test. The fixture carries the
+// supplied file verbatim; the expected set is derived from it here, not
+// read back from the table.
+struct CW77Fixture: Decodable {
+    struct Item: Decodable { let token: String; let meaning: String }
+    struct Recommended: Decodable { let wpm: Double; let farnsworth: Bool }
+    struct Personal: Decodable {
+        struct Case: Decodable { let why: String; let callsign: String; let name: String; let expected: [String] }
+        let placeholderCallsign: String
+        let callsignMeaning: String
+        let nameMeaning: String
+        let cases: [Case]
+    }
+    let source: [String]
+    let prosigns: [String]
+    let uniqueCount: Int
+    let recommended: Recommended
+    let personal: Personal
+    let items: [Item]
+}
+
+func loadCW77Fixture() -> CW77Fixture? {
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+    guard let data = try? Data(contentsOf: root.appendingPathComponent("fixtures/cw77.json")) else { return nil }
+    return try? JSONDecoder().decode(CW77Fixture.self, from: data)
+}
+
+print("\nShared CW 77 fixture (fixtures/cw77.json):")
+if let fx = loadCW77Fixture() {
+    // The set is the supplied file with repeats dropped, first one kept, and
+    // the five prosigns bracketed — derived from `source`, not from the table.
+    var seen = Set<String>()
+    let derived = fx.source.filter { seen.insert($0).inserted }
+        .map { fx.prosigns.contains($0) ? "<\($0)>" : $0 }
+    let table = MorseData.cw77
+    check("the source file has 75 entries", fx.source.count == 75)
+    check("de-duplicating the source leaves the fixture's count (70)",
+          derived.count == fx.uniqueCount && fx.uniqueCount == 70)
+    check("the fixture's items are the de-duplicated source, in order",
+          fx.items.map(\.token) == derived)
+    check("the table's tokens match the fixture exactly, in order",
+          table.map { $0.token } == fx.items.map(\.token))
+    check("the table's meanings match the fixture exactly, in order",
+          table.map { $0.meaning } == fx.items.map(\.meaning))
+    check("the set is called CW 77", MorseData.cw77Name == "CW 77")
+    check("recommended playback is the fixture's (40 WPM, no Farnsworth)",
+          MorseData.cw77RecommendedWpm == fx.recommended.wpm && !fx.recommended.farnsworth)
+
+    var sendable = true
+    for item in table {
+        let t = item.token
+        if t.hasPrefix("<") {
+            if !MorseData.prosigns.contains(where: { $0.name == t }) {
+                sendable = false
+                print("      ↳ \(t) is not a prosign MorseData.prosigns knows")
+            }
+        } else if !t.allSatisfy({ MorseCode.pattern(for: $0) != nil }) {
+            sendable = false
+            print("      ↳ \(t) has a character with no Morse pattern")
+        }
+    }
+    check("every token is sendable (pattern or known prosign)", sendable)
+
+    var agrees = true
+    for item in table {
+        let known = MorseData.abbreviations.first { $0.token == item.token }?.meaning
+            ?? MorseData.qCodes.first { $0.token == item.token }?.meaning
+            ?? MorseData.prosigns.first { $0.name == item.token }?.meaning
+            ?? MorseData.qsoElements.first { $0.token == item.token }?.meaning
+        if let known, known != item.meaning {
+            agrees = false
+            print("      ↳ \(item.token): \"\(item.meaning)\" but the reference table says \"\(known)\"")
+        }
+    }
+    check("meanings agree with the abbreviation / Q-code / prosign / QSO tables", agrees)
+    check("every meaning has a non-empty brief form",
+          table.allSatisfy { !MorseData.briefMeaning($0.meaning).isEmpty })
+
+    let items = MorseData.cw77Items()
+    let words = MorseData.cw77WordItems()
+    check("Listen items: token shown, meaning answered",
+          items.map(\.display) == fx.items.map(\.token) && items.map(\.answer) == fx.items.map(\.meaning))
+    check("Common Words items: the token is the answer",
+          words.map(\.display) == fx.items.map(\.token) && words.map(\.answer) == fx.items.map(\.token))
+    check("item ids are unique", Set(items.map(\.id)).count == items.count)
+    check("<BT> plays the run-together prosign", items.first { $0.display == "<BT>" }?.playable == .pattern("-...-"))
+    check("BK plays as letters", items.first { $0.display == "BK" }?.playable == .text("BK"))
+    check("HW? plays with its question mark", items.first { $0.display == "HW?" }?.playable == .text("HW?"))
+
+    // Your own callsign and name.
+    check("the placeholder callsign is the fixture's",
+          MorseData.cw77PlaceholderCallsign == fx.personal.placeholderCallsign)
+    check("the personal meanings are the fixture's",
+          MorseData.cw77CallsignMeaning == fx.personal.callsignMeaning
+          && MorseData.cw77NameMeaning == fx.personal.nameMeaning)
+    var personalOK = true
+    for c in fx.personal.cases {
+        let got = MorseData.cw77Personal(callsign: c.callsign, name: c.name)
+        if got.map(\.token) != c.expected {
+            personalOK = false
+            print("      ↳ \(c.why): got \(got.map(\.token)), fixture says \(c.expected)")
+        }
+    }
+    check("the callsign/name rule matches every fixture case", personalOK)
+    let mine = MorseData.cw77Personal(callsign: "n9ho", name: "Justin")
+    check("a personal callsign is answered as \"your call sign\", the name as \"your name\"",
+          mine.map(\.meaning) == [fx.personal.callsignMeaning, fx.personal.nameMeaning])
+    let withMe = MorseData.cw77Items(personal: mine)
+    check("personal items follow the 70",
+          withMe.count == 72 && withMe.suffix(2).map(\.display) == ["N9HO", "JUSTIN"]
+          && Set(withMe.map(\.id)).count == 72)
+} else {
+    check("fixtures/cw77.json loads and decodes", false)
+}
+
 // Journey mode (gamified level ladder)
 print("\nJourney:")
 do {

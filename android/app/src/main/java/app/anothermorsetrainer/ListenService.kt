@@ -159,7 +159,7 @@ class ListenService : Service() {
             // Cancellation propagates through the suspend points below (they throw
             // CancellationException), exiting the loop and running the finally.
             while (true) {
-                val item = picker.next(ListenState.contentSel, ListenState.readbackSel, EngineStore.current().engine.activeCharacters)
+                val item = picker.next(ListenState.contentSel, ListenState.readbackSel, EngineStore.current().engine.activeCharacters, Settings.cw77Personal())
                 ListenState.display = ""
                 ListenState.playing = true
                 updateNotification()

@@ -111,7 +111,7 @@ object SettingsCatalog {
         e("recognizeWithin", "Recognition target",
             listOf("recognize within", "time", "seconds", "ttr", "mastered", "threshold", "new letter"), SettingsSection.PRACTICE),
         e("answerChoices", "Answer choices", listOf("buttons", "options", "multiple choice"), SettingsSection.PRACTICE),
-        e("wordPool", "Word pool", listOf("common words", "vocabulary", "top", "100", "300", "500", "1000"), SettingsSection.PRACTICE),
+        e("wordPool", "Word pool", listOf("common words", "vocabulary", "top", "100", "300", "500", "1000", "cw 77", "cwops"), SettingsSection.PRACTICE),
         e("reveal", "Reveal answer", listOf("reveal the letter", "show answer", "correct answer"), SettingsSection.PRACTICE),
         e("sessionLength", "Session length", listOf("duration", "timer", "minutes", "time limit"), SettingsSection.PRACTICE),
         e("customWords", "Use my word list", listOf("my words", "custom words", "own list", "vocabulary"), SettingsSection.MY_WORDS),
@@ -130,6 +130,7 @@ object SettingsCatalog {
 
         // QSO & Pileups
         e("myCall", "Your callsign", listOf("call sign", "call", "station", "my call", "w1aw"), SettingsSection.PILEUP),
+        e("myName", "Your name", listOf("name", "operator", "op", "cw 77", "cwops"), SettingsSection.PILEUP),
         e("exchange", "Exchange", listOf("pileup runner mode", "pota", "contest", "sprint", "cwt", "sst", "single caller", "mode"), SettingsSection.PILEUP),
         e("maxCallers", "Callers", listOf("max callers", "pileup size", "stations", "how many"), SettingsSection.PILEUP),
         e("callerMinSpeed", "Slowest caller", listOf("caller speed", "min speed", "wpm"), SettingsSection.PILEUP),

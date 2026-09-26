@@ -102,9 +102,11 @@ enum AnswerGap: String, Codable, CaseIterable, Identifiable {
 }
 
 /// How many of the ranked (ham-weighted, frequency-ordered) words to draw from
-/// in Words mode — the QRQ "Top N" tiers.
+/// in Words mode — the QRQ "Top N" tiers — or the CWOps CW 77 list instead
+/// (#240), which is not a slice of the ranked list; `AppSettings.wordPoolItems`
+/// builds either.
 enum WordTier: String, Codable, CaseIterable, Identifiable {
-    case top100, top300, top500, top1000
+    case top100, top300, top500, top1000, cw77
     var id: String { rawValue }
     var count: Int {
         switch self {
@@ -112,6 +114,7 @@ enum WordTier: String, Codable, CaseIterable, Identifiable {
         case .top300: return 300
         case .top500: return 500
         case .top1000: return 1000
+        case .cw77: return MorseData.cw77.count
         }
     }
     var label: String {
@@ -120,6 +123,7 @@ enum WordTier: String, Codable, CaseIterable, Identifiable {
         case .top300: return "Top 300 words"
         case .top500: return "Top 500 words"
         case .top1000: return "Top 1000 words"
+        case .cw77: return "CW 77 (CWOps)"
         }
     }
 }
@@ -298,15 +302,17 @@ extension StorySettings {
 
 /// What the hands-free "Listen & Learn" mode announces. Case order is the
 /// picker's order. The two QSO tiers are the curated on-air vocabulary of
-/// `MorseData.qsoElements` (issue #182): the first 20, or all 100.
+/// `MorseData.qsoElements` (issue #182): the first 20, or all 100. CW 77 is
+/// the CWOps list, `MorseData.cw77` (#240).
 enum ListenContent: String, Codable, CaseIterable, Identifiable {
-    case characters, qsoTop20, qsoTop100, words, abbreviations
+    case characters, qsoTop20, qsoTop100, cw77, words, abbreviations
     var id: String { rawValue }
     var label: String {
         switch self {
         case .characters:    return "Characters"
         case .qsoTop20:      return "QSO elements · Top 20"
         case .qsoTop100:     return "QSO elements · Top 100"
+        case .cw77:          return "CW 77 (CWOps)"
         case .words:         return "Words"
         case .abbreviations: return "Abbreviations & Q-codes"
         }
@@ -438,6 +444,9 @@ enum BackgroundNoiseLevel: String, Codable, CaseIterable, Identifiable {
 struct QSOSettings: Codable, Equatable {
     /// Your callsign — sent when you call CQ, work a station, and say TU.
     var myCall: String = "W1AW"
+    /// Your first name, optional. Only CW 77's "include my callsign and
+    /// name" uses it so far (#240).
+    var myName: String = ""
     var mode: QSOContestMode = .pota
     var maxStations: Int = 4
     var minWPM: Double = 18
@@ -476,7 +485,7 @@ struct QSOSettings: Codable, Equatable {
 // settings (each missing key falls back to its default).
 extension QSOSettings {
     enum CodingKeys: String, CodingKey {
-        case myCall, mode, maxStations, minWPM, maxWPM, farnsworth, toneSpread
+        case myCall, myName, mode, maxStations, minWPM, maxWPM, farnsworth, toneSpread
         case minVolume, maxVolume, minDelay, maxDelay, qsbEnabled, qrn
         case cutNumbersEnabled, cutDigits, rstRequired, bustBehavior, giveUpEnabled
         case formats, usOnly, keepPartialCall, missedCallerFeedback
@@ -487,6 +496,7 @@ extension QSOSettings {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         var s = QSOSettings()
         s.myCall = try c.decodeIfPresent(String.self, forKey: .myCall) ?? s.myCall
+        s.myName = try c.decodeIfPresent(String.self, forKey: .myName) ?? s.myName
         s.mode = try c.decodeIfPresent(QSOContestMode.self, forKey: .mode) ?? s.mode
         s.maxStations = try c.decodeIfPresent(Int.self, forKey: .maxStations) ?? s.maxStations
         s.minWPM = try c.decodeIfPresent(Double.self, forKey: .minWPM) ?? s.minWPM
@@ -630,6 +640,10 @@ struct AppSettings: Codable, Equatable {
     /// and a saved list can be parked without deleting it. Decodes to *on* for
     /// installs that already had a list, so nobody loses theirs.
     var useCustomWords: Bool = false
+    /// Add your own callsign and name to the CW 77 set, in Listen & Learn and
+    /// in Common Words (#240). Off by default; offered only while
+    /// `cw77PersonalTokens` has something to add.
+    var cw77IncludeMe: Bool = false
 
     /// Character speed for QRQ high-speed copy practice (35–60 WPM).
     var qrqSpeed: QrqSpeed = .wpm35
@@ -748,6 +762,30 @@ struct AppSettings: Codable, Equatable {
         useCustomWords && customWords.count >= Self.customWordsMinimum
     }
 
+    /// Your callsign and name as CW 77 would add them (#240), whether or not
+    /// the switch is on — empty means there is nothing to offer.
+    var cw77PersonalTokens: [(token: String, meaning: String)] {
+        MorseData.cw77Personal(callsign: qso.myCall, name: qso.myName)
+    }
+
+    /// What CW 77 adds right now: the personal tokens while the switch is on.
+    var cw77Personal: [(token: String, meaning: String)] {
+        cw77IncludeMe ? cw77PersonalTokens : []
+    }
+
+    /// Whether playback is already Bob Carter WR7Q's recommendation for CW 77.
+    var atCW77RecommendedSpeed: Bool {
+        wpm == MorseData.cw77RecommendedWpm && !farnsworth
+    }
+
+    /// The Common Words pool: the learner's own list when active, else CW 77
+    /// or the ranked Top N. Twin of Kotlin's `Settings.wordPoolItems()`.
+    var wordPoolItems: [MorseItem] {
+        if customWordsActive { return MorseData.customWordItems(customWords) }
+        if wordTier == .cw77 { return MorseData.cw77WordItems(personal: cw77Personal) }
+        return MorseData.topWordItems(wordTier.count)
+    }
+
     static let storageKey = "MorseTrainer.settings"
 
     static func load() -> AppSettings {
@@ -797,6 +835,7 @@ extension AppSettings {
         case maxAnswerChoices, selectedPunctuation, journeyDrainOnMiss
         case learningMode, practiceDuration
         case listenContent, listenGap, listenReadback, wordTier, customWords, useCustomWords
+        case cw77IncludeMe
         case voiceResponse, keyingResponse
         case qrqSpeed, backgroundNoise, didMigrateNoiseFloor
         case bluetoothKeepAlive, bandNoise
@@ -845,6 +884,7 @@ extension AppSettings {
         // Before the switch existed a non-empty list was simply in use, so a
         // save without the key keeps drawing from it (issue #32 installs).
         s.useCustomWords = try c.decodeIfPresent(Bool.self, forKey: .useCustomWords) ?? !s.customWords.isEmpty
+        s.cw77IncludeMe = try c.decodeIfPresent(Bool.self, forKey: .cw77IncludeMe) ?? s.cw77IncludeMe
         s.qrqSpeed = try c.decodeIfPresent(QrqSpeed.self, forKey: .qrqSpeed) ?? s.qrqSpeed
         s.dailyDitStartingWpm = try c.decodeIfPresent(Double.self,
                                                       forKey: .dailyDitStartingWpm) ?? s.dailyDitStartingWpm

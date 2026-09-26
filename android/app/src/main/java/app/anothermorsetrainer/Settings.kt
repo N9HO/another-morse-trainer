@@ -22,6 +22,7 @@ import app.anothermorsetrainer.morsekit.PhraseQuiz
 import app.anothermorsetrainer.morsekit.RapidFireContent
 import app.anothermorsetrainer.morsekit.RapidFirePace
 import app.anothermorsetrainer.morsekit.RapidFireResponse
+import app.anothermorsetrainer.morsekit.TokenMeaning
 import app.anothermorsetrainer.morsekit.TrainerEngine
 
 /** When to reveal the correct answer after a response (mirrors iOS RevealMode). */
@@ -129,6 +130,12 @@ object Settings {
     const val MIN_CHARACTER_WPM = 15.0
     /** Bottom of the Farnsworth effective-speed range. Matches the iOS slider (8…character speed). */
     const val MIN_EFFECTIVE_WPM = 8.0
+    /**
+     * The [wordCount] value that picks the CW 77 list (#240) instead of a
+     * ranked Top N — no ranked tier is 77, so the two never collide. iOS
+     * spells it `WordTier.cw77`.
+     */
+    const val WORD_POOL_CW77 = 77
     /** Most auto-repeats Head Copy will play after the first hearing (iOS headCopyRepeatRange). */
     const val MAX_HEAD_COPY_REPEATS = 3
     /** Longest Head Copy auto-reveal countdown, in seconds (iOS headCopyRevealRange). */
@@ -208,7 +215,11 @@ object Settings {
     /** "Fast enough" recognition-time bar, in seconds — drives mastery/weighting. */
     var recognitionTargetSec by mutableDoubleStateOf(1.0)
         private set
-    /** How big a pool Common Words draws from (Top-N ranked ham words). */
+    /**
+     * How big a pool Common Words draws from (Top-N ranked ham words), or
+     * [WORD_POOL_CW77] for the CWOps CW 77 list instead (#240), which is not a
+     * slice of the ranked list — [wordPoolItems] builds either.
+     */
     var wordCount by mutableIntStateOf(100)
         private set
     /** When to reveal the correct answer after a response (fresh installs: only when wrong, as on iOS). */
@@ -336,6 +347,13 @@ object Settings {
         private set
     /** Whether Common Words drills draw from the custom list instead of the ranked pool. */
     var useCustomWords by mutableStateOf(false)
+        private set
+    /**
+     * Add your own callsign and name to the CW 77 set, in Listen & Learn and
+     * in Common Words (#240). Off by default; offered only while
+     * [cw77PersonalTokens] has something to add.
+     */
+    var cw77IncludeMe by mutableStateOf(false)
         private set
 
     /** How much the learner already knows — seeds the Characters Koch ladder. */
@@ -551,6 +569,7 @@ object Settings {
             .toSet().filter { it in MorseCode.pickablePunctuation }.toSet()
         customWordsText = prefs.getString("customWords", "") ?: ""
         useCustomWords = prefs.getBoolean("useCustomWords", false)
+        cw77IncludeMe = prefs.getBoolean("cw77IncludeMe", false)
         proficiency = runCatching { Proficiency.valueOf(prefs.getString("proficiency", null) ?: "NONE") }
             .getOrDefault(Proficiency.NONE)
         introduceNewCharacters = prefs.getBoolean("introduceNew", true)
@@ -813,6 +832,32 @@ object Settings {
         persist()
     }
 
+    fun updateCw77IncludeMe(value: Boolean) {
+        cw77IncludeMe = value
+        persist()
+    }
+
+    /**
+     * Your callsign and name as CW 77 would add them (#240), whether or not
+     * the switch is on — empty means there is nothing to offer. The call and
+     * name live with the Pileup Runner's station settings.
+     */
+    fun cw77PersonalTokens(): List<TokenMeaning> =
+        MorseData.cw77Personal(PileupSettings.myCall, PileupSettings.myName)
+
+    /** What CW 77 adds right now: the personal tokens while the switch is on. */
+    fun cw77Personal(): List<TokenMeaning> = if (cw77IncludeMe) cw77PersonalTokens() else emptyList()
+
+    /** Whether playback is already Bob Carter WR7Q's recommendation for CW 77. */
+    val atCw77RecommendedSpeed: Boolean
+        get() = characterWpm == MorseData.CW77_RECOMMENDED_WPM && !farnsworthEnabled
+
+    /** The one-tap CW 77 preset: 40 WPM, Farnsworth off — an explicit tap, never a silent override. */
+    fun applyCw77RecommendedSpeed() {
+        updateCharacterWpm(MorseData.CW77_RECOMMENDED_WPM)
+        updateFarnsworthEnabled(false)
+    }
+
     /**
      * The parsed custom pool — the same rules as iOS's `MorseData.parseWordList`:
      * split on commas, semicolons and whitespace, uppercased, filtered to
@@ -828,6 +873,7 @@ object Settings {
     fun wordPoolItems(): List<MorseItem> {
         val custom = customWords
         return if (useCustomWords && custom.size >= 2) MorseData.customWordItems(custom)
+        else if (wordCount == WORD_POOL_CW77) MorseData.cw77WordItems(cw77Personal())
         else MorseData.topWordItems(wordCount)
     }
 
@@ -1109,6 +1155,7 @@ object Settings {
             putString("punctuation", punctuationChars.joinToString(""))
             putString("customWords", customWordsText)
             putBoolean("useCustomWords", useCustomWords)
+            putBoolean("cw77IncludeMe", cw77IncludeMe)
             putString("proficiency", proficiency.name)
             putBoolean("introduceNew", introduceNewCharacters)
             putStringSet("introducedItems", introducedItems)
