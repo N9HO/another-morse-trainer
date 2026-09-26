@@ -30,7 +30,7 @@ enum class SettingsCategory(val id: String, val title: String) {
     SPEED("speed", "Speed & Timing"),
     CHARACTERS("characters", "Characters & Lessons"),
     PRACTICE("practice", "Practice & Feedback"),
-    KEYS("keys", "Keys"),
+    KEYS("keys", "Keys & Sending"),
     QSO("qso", "QSO & Pileups"),
     REMINDERS("reminders", "Reminders"),
     DISPLAY("display", "Display"),
@@ -125,7 +125,7 @@ object SettingsCatalog {
 
         // Keys & Sending
         e("keyerMode", "Keyer mode",
-            listOf("adapter", "paddle", "iambic", "straight key", "hardware key", "midi", "key", "bug", "cootie", "mode a", "mode b"),
+            listOf("vail", "adapter", "paddle", "iambic", "straight key", "hardware key", "midi", "key", "bug", "cootie", "mode a", "mode b"),
             SettingsSection.HARDWARE_KEY),
 
         // QSO & Pileups
