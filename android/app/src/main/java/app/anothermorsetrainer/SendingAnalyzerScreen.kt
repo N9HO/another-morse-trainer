@@ -167,6 +167,19 @@ class SendingAnalyzerController(private val context: Context) {
     var effectiveWpm by mutableIntStateOf(prefs.getInt("effectiveWpm", 10).coerceIn(5, 50))
         private set
 
+    /**
+     * Whether this attempt was keyed on the on-screen paddles (#233). Their
+     * keyer times every element at the app's Settings speed, so the attempt is
+     * judged as paddles whatever the key picker says; the picker is for the
+     * key the operator brings (a Vail adapter, a MIDI key, the microphone).
+     */
+    var onScreenPaddlesUsed by mutableStateOf(false)
+        private set
+
+    /** The key type the attempt is judged as. Mirrors iOS `judgedKeyType`. */
+    val judgedKeyType: SendingKeyType
+        get() = if (onScreenPaddlesUsed) SendingKeyType.KEYER else keyType
+
     val mic = SendingMicInput()
     val sidetone = SidetoneGenerator(Settings.sidetoneHz)
     private val recorder = KeyingRecorder()
@@ -264,6 +277,7 @@ class SendingAnalyzerController(private val context: Context) {
         if (!canStart) return
         finishJob?.cancel()
         recorder.reset()
+        onScreenPaddlesUsed = false
         liveText = ""
         analysis = null
         phase = Phase.SENDING
@@ -274,6 +288,21 @@ class SendingAnalyzerController(private val context: Context) {
     fun keyEdgeNanos(down: Boolean, atNanos: Long) {
         if (input != AnalyzerInput.KEY) return
         keyEdge(down, atNanos / 1_000_000.0)
+    }
+
+    /**
+     * An edge from the on-screen paddles, at the time their keyer scheduled it
+     * ([System.currentTimeMillis] terms, as [PaddleKeyerDriver] keeps it). The
+     * analyzer's clock is [System.nanoTime], so the edge is moved onto it by
+     * the two clocks' present offset; the element lengths recorded are the
+     * keyer's, never the coroutine's wake-up jitter.
+     */
+    fun paddleEdge(down: Boolean, atWallMs: Long) {
+        if (input != AnalyzerInput.KEY) return
+        if (phase == Phase.SENDING) onScreenPaddlesUsed = true
+        sidetone.setKeyDown(down)
+        val offsetMs = System.nanoTime() / 1_000_000.0 - System.currentTimeMillis()
+        keyEdge(down, atWallMs + offsetMs)
     }
 
     /** One edge from any input. */
@@ -299,7 +328,7 @@ class SendingAnalyzerController(private val context: Context) {
     }
 
     private fun analyse() = SendingAnalysis(
-        recorder.marks, target, keyType, targetWpm.toDouble(),
+        recorder.marks, target, judgedKeyType, targetWpm.toDouble(),
         if (farnsworth) minOf(effectiveWpm, targetWpm).toDouble() else targetWpm.toDouble()
     )
 
@@ -319,6 +348,7 @@ class SendingAnalyzerController(private val context: Context) {
     fun cancelSending() {
         finishJob?.cancel()
         recorder.reset()
+        onScreenPaddlesUsed = false
         liveText = ""
         phase = Phase.SETUP
     }
@@ -530,6 +560,9 @@ private fun SetupSection(c: SendingAnalyzerController, chooseInput: (AnalyzerInp
                 }
             )
         )
+        if (c.input == AnalyzerInput.KEY && Settings.onScreenKey == OnScreenKeyType.PADDLES) {
+            Note(stringResource(R.string.analyzer_onscreen_paddles_note), Brand.teal)
+        }
     }
 
     Card(stringResource(R.string.analyzer_input)) {
@@ -670,43 +703,51 @@ private fun SendingSection(c: SendingAnalyzerController, midi: HardwareKey, midi
     }
     if (c.input == AnalyzerInput.KEY) {
         var keyPressed by remember { mutableStateOf(false) }
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(140.dp)
-                .clip(RoundedCornerShape(Brand.cornerRadius))
-                .background(if (keyPressed) Brand.teal else Brand.navyRaised)
-                .border(
-                    width = if (keyPressed) 2.dp else 1.dp,
-                    color = if (keyPressed) Brand.tealBright else Brand.hairline,
-                    shape = RoundedCornerShape(Brand.cornerRadius)
-                )
-                .pointerInput(Unit) {
-                    detectTapGestures(
-                        onPress = {
-                            keyPressed = true
-                            c.sidetone.setKeyDown(true)
-                            c.keyEdgeNanos(true, System.nanoTime())
-                            try {
-                                tryAwaitRelease()
-                            } finally {
-                                keyPressed = false
-                                c.sidetone.setKeyDown(false)
-                                c.keyEdgeNanos(false, System.nanoTime())
-                            }
-                        }
-                    )
-                },
-            contentAlignment = Alignment.Center
+        // Straight key or paddles, as chosen in Settings › Keys & Sending ›
+        // On-screen key (#233). The paddles' edges carry the time their keyer
+        // scheduled them for.
+        OnScreenKeySwitch(
+            onPaddleKey = { down, ms -> c.paddleEdge(down, ms) },
+            modifier = Modifier.fillMaxWidth().height(140.dp)
         ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("⠿", fontSize = 26.sp, color = if (keyPressed) Brand.navy else Brand.teal)
-                Text(
-                    stringResource(R.string.common_hold_to_key),
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = if (keyPressed) Brand.navy else Brand.textSecondary
-                )
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(140.dp)
+                    .clip(RoundedCornerShape(Brand.cornerRadius))
+                    .background(if (keyPressed) Brand.teal else Brand.navyRaised)
+                    .border(
+                        width = if (keyPressed) 2.dp else 1.dp,
+                        color = if (keyPressed) Brand.tealBright else Brand.hairline,
+                        shape = RoundedCornerShape(Brand.cornerRadius)
+                    )
+                    .pointerInput(Unit) {
+                        detectTapGestures(
+                            onPress = {
+                                keyPressed = true
+                                c.sidetone.setKeyDown(true)
+                                c.keyEdgeNanos(true, System.nanoTime())
+                                try {
+                                    tryAwaitRelease()
+                                } finally {
+                                    keyPressed = false
+                                    c.sidetone.setKeyDown(false)
+                                    c.keyEdgeNanos(false, System.nanoTime())
+                                }
+                            }
+                        )
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("⠿", fontSize = 26.sp, color = if (keyPressed) Brand.navy else Brand.teal)
+                    Text(
+                        stringResource(R.string.common_hold_to_key),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (keyPressed) Brand.navy else Brand.textSecondary
+                    )
+                }
             }
         }
         Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {

@@ -1033,10 +1033,11 @@
     <string name="analyzer_key_note_bug">A bug times its own dits; your dahs and spacing are judged.</string>
     <string name="analyzer_key_note_cootie">Hand-timed on both sides, judged like a straight key.</string>
     <string name="analyzer_key_note_keyer">Your keyer times the dits and dahs; your spacing is judged.</string>
+    <string name="analyzer_onscreen_paddles_note">Your on-screen key is paddles (Settings › Keys &amp; Sending › On-screen key). What you send on them is judged as Paddles (keyer): their keyer times the dits and dahs at your Settings › Speed &amp; Timing speed, so only your spacing is judged. The key picked here is for a Vail adapter or MIDI key.</string>
     <string name="analyzer_input">Input</string>
     <string name="analyzer_input_key">Key</string>
     <string name="analyzer_input_microphone">Microphone</string>
-    <string name="analyzer_input_key_note">The on-screen key, or a Vail adapter or Bluetooth MIDI key. Set the adapter\'s keyer mode in Settings to match your key; in a paddle mode the adapter keys at your Settings speed.</string>
+    <string name="analyzer_input_key_note">The on-screen key, or a Vail adapter or Bluetooth MIDI key. Set the adapter\'s keyer mode in Settings › Keys &amp; Sending › Keyer mode to match your key; in a paddle mode the adapter keys at your Settings › Speed &amp; Timing speed.</string>
     <string name="analyzer_judged_against">Judged against</string>
     <string name="analyzer_farnsworth">Farnsworth spacing</string>
     <string name="analyzer_effective_wpm">Effective %1$d WPM</string>

@@ -54,6 +54,11 @@ final class SendingAnalyzerModel: ObservableObject {
     @Published private(set) var liveText = ""
     @Published private(set) var analysis: SendingAnalysis?
     @Published private(set) var record: SendingRecord
+    /// Whether this attempt was keyed on the on-screen paddles (#233). Their
+    /// keyer times every element at the app's Settings speed, so the attempt
+    /// is judged as paddles whatever the key picker says — the picker is for
+    /// the key the operator brings (a Vail adapter, a MIDI key, the mic).
+    @Published private(set) var onScreenPaddlesUsed = false
 
     @Published var source: Source { didSet { save(); if source != oldValue { newTarget() } } }
     @Published var customText: String { didSet { save(); if source == .custom { newTarget() } } }
@@ -178,13 +183,29 @@ final class SendingAnalyzerModel: ObservableObject {
 
     // MARK: Sending
 
+    /// The key type the attempt is judged as: paddles when any of it came
+    /// from the on-screen paddles, otherwise the picker's choice.
+    var judgedKeyType: SendingKeyType { onScreenPaddlesUsed ? .keyer : keyType }
+
     func startSending() {
         guard canStart else { return }
         recorder.reset()
+        onScreenPaddlesUsed = false
         liveText = ""
         analysis = nil
         phase = .sending
         if input == .microphone, !mic.isListening { inputChanged() }
+    }
+
+    /// An edge from the on-screen paddles, at the time their keyer scheduled
+    /// it. It goes through the keyer like the straight key's press does (so
+    /// the sidetone sounds), and the keyer's `onEdge` hands the same time on
+    /// to `keyEdge` — the element lengths recorded are the keyer's, never the
+    /// main actor's wake-up jitter.
+    func onScreenPaddleEdge(isDown: Bool, atMs ms: Int64) {
+        guard input == .key else { return }
+        if phase == .sending { onScreenPaddlesUsed = true }
+        keyer.touchKey(isDown: isDown, atMs: ms)
     }
 
     /// One edge from any input.
@@ -212,7 +233,7 @@ final class SendingAnalyzerModel: ObservableObject {
     }
 
     private func analyse() -> SendingAnalysis {
-        SendingAnalysis(marks: recorder.marks, target: target, keyType: keyType,
+        SendingAnalysis(marks: recorder.marks, target: target, keyType: judgedKeyType,
                         characterWpm: targetWpm,
                         effectiveWpm: farnsworth ? min(effectiveWpm, targetWpm) : targetWpm)
     }
@@ -236,6 +257,7 @@ final class SendingAnalyzerModel: ObservableObject {
     func cancelSending() {
         finishTask?.cancel()
         recorder.reset()
+        onScreenPaddlesUsed = false
         liveText = ""
         phase = .setup
     }

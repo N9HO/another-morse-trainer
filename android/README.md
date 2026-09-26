@@ -136,7 +136,8 @@ the iOS app's navy/teal look.
   ready to share or print
 - **Sending Analyzer**: send a pangram, call signs, words, your studied
   groups or your own text on a straight key, bug, cootie or paddles, through
-  the on-screen key, a Vail adapter or other MIDI key, or the microphone
+  the on-screen key (straight or paddles, per Settings; the on-screen paddles
+  are judged as paddles), a Vail adapter or other MIDI key, or the microphone
   (an oscillator, keyer, rig or signal generator it can hear); get the copy
   lined up against the text with every error marked, character- and
   word-spacing histograms against 3 and 7 units (Farnsworth-aware), dit and

@@ -85,6 +85,7 @@ private struct TargetText: View {
 // MARK: - Setup
 
 private struct SetupSection: View {
+    @EnvironmentObject var model: AppModel
     @ObservedObject var analyzer: SendingAnalyzerModel
 
     var body: some View {
@@ -123,6 +124,13 @@ private struct SetupSection: View {
                     .font(.footnote)
                     .foregroundStyle(Theme.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
+                if analyzer.input == .key && model.settings.onScreenKey == .paddles {
+                    Label("Your on-screen key is paddles (Settings › Keys & Sending › On-screen key). What you send on them is judged as Paddles (keyer): their keyer times the dits and dahs at your Settings › Speed & Timing speed, so only your spacing is judged. The key picked here is for a Vail adapter or MIDI key.",
+                          systemImage: "hand.tap")
+                        .font(.footnote)
+                        .foregroundStyle(Theme.teal)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
 
             SectionCard(title: "Input") {
@@ -133,7 +141,7 @@ private struct SetupSection: View {
                 if analyzer.input == .microphone {
                     MicPanel(analyzer: analyzer, mic: analyzer.mic)
                 } else {
-                    Text("The on-screen key, or a Vail adapter or Bluetooth MIDI key. Set the adapter's keyer mode in Settings to match your key; in a paddle mode the adapter keys at your Settings speed.")
+                    Text("The on-screen key, or a Vail adapter or Bluetooth MIDI key. Set the adapter's keyer mode in Settings › Keys & Sending › Keyer mode to match your key; in a paddle mode the adapter keys at your Settings › Speed & Timing speed.")
                         .font(.footnote)
                         .foregroundStyle(Theme.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -209,7 +217,7 @@ private struct MicPanel: View {
             }
             .pickerStyle(.segmented)
             if mic.micDenied {
-                Label("Microphone access is off. Allow it in Settings → Privacy → Microphone.",
+                Label("Microphone access is off. Allow it in iOS Settings → Privacy & Security → Microphone.",
                       systemImage: "mic.slash")
                     .font(.footnote)
                     .foregroundStyle(.orange)
@@ -279,7 +287,13 @@ private struct SendingSection: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             if analyzer.input == .key {
-                keyButton
+                // Straight key or paddles, as chosen in Settings › Keys &
+                // Sending › On-screen key (#233). The paddles' edges carry
+                // the time their keyer scheduled them for.
+                OnScreenKeySwitch(onKey: { down, ms in analyzer.onScreenPaddleEdge(isDown: down, atMs: ms) }) {
+                    keyButton
+                }
+                .frame(height: 140)
                 midiStatus
             } else {
                 SectionCard(title: "Microphone") {
