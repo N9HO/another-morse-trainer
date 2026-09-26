@@ -23,7 +23,7 @@ import androidx.compose.ui.unit.dp
  * game's own Start (and Play again) button, never mid-game, and at most once
  * per start attempt; whichever answer is given, the game then starts.
  *
- * The prompt writes the same [Settings] Settings › Leaderboard does, so
+ * The prompt writes the same [Settings] Settings › Leaderboard & Buddy does, so
  * turning sharing on here is exactly the switch there, and the run about to
  * begin is registered by the screen's `startGame()` the way any opted-in run
  * is. The iOS twin is `LeaderboardOptInPrompt.swift`.

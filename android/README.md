@@ -25,9 +25,10 @@ the iOS app's navy/teal look.
 - **Characters**: Koch-method ladder (A-Z, 0-9) with a user-pinnable
   "Track stage" (characters, pairs, triples, words & call signs)
 - **Common Words**, **Abbreviations**, **Q-Codes**, **Prosigns**: phrase
-  drills, with custom word lists and optional punctuation extras (a mark
-  you turn on joins the Characters drill and the games' full set straight
-  away)
+  drills, with custom word lists, the CWOps CW 77 list as a Common Words
+  pool (with your own callsign and name if you like, and a one-tap 40 WPM,
+  no-Farnsworth preset), and optional punctuation extras (a mark you turn on
+  joins the Characters drill and the games' full set straight away)
 - **Confusion Drill**: targeted review of the pairs you mix up
 - **Head Copy**, **Type It**, **QRQ Speed**: copy in your head with
   auto-repeats and a timed reveal, free-recall typing, and high-speed copy at
@@ -97,6 +98,9 @@ the iOS app's navy/teal look.
   content questions, random or a bundled passage)
 - **Sending Practice**: key it back (touch or MIDI key); quizzes can also be
   answered by keying
+- **On-screen paddles**: the on-screen key can be a straight key or a pair of
+  touch paddles with a built-in Iambic A / Iambic B / Ultimatic keyer, dit and
+  dah memory, and a left-handed swap — wherever you key on screen
 - **Repeater**: live CW over the Vail network with a server picker and
   private-channel option, plus Vail Adapter support: MIDI key input *and*
   output (keyer mode + speed, sidetone, opt-out RX piezo buzz), Bluetooth LE
@@ -114,7 +118,8 @@ the iOS app's navy/teal look.
   and a noise blanker that keeps QRN static crashes from reaching the decoder
   as marks
 - **Listen & Learn**: hands-free: hear the code, then the spoken answer, over
-  characters, the curated on-air QSO elements (Top 20 or Top 100), words, or
+  characters, the curated on-air QSO elements (Top 20 or Top 100), the
+  CWOps CW 77 list (optionally with your own callsign and name), words, or
   abbreviations and Q-codes, spelled out with the full meaning or as the
   brief meaning alone; keeps playing with the screen locked (foreground
   service), with the current item and the app logo on the lock screen and car
@@ -122,6 +127,10 @@ the iOS app's navy/teal look.
 - **Voice answers**: speak your answer instead of tapping (microphone), with
   NATO/letter-name/digit-word matching, a "did you say…?" confirm-and-correct
   flow, and a learned per-user voice profile
+- **Keyboard-entry answers**: type the character or word you heard instead
+  of picking it, in the choice quizzes, either always or as a progression
+  step: each level starts at 4 choices, moves to 6, then to typing, and a
+  wrong typed character feeds the Confusion Matrix like a wrong tap
 - **Sending Drills**: printable practice sheets of random character groups
   drawn from what you've studied (even, personalized, or numbers & punctuation),
   ready to share or print
@@ -141,7 +150,7 @@ the iOS app's navy/teal look.
 - **Leaderboard**: an opt-in shared board across both apps for Rapid Fire,
   Contest, Pileup Runner and the six arcade games, browsable by anyone, per
   mode, from the Games sub-menu and from Progress without sharing. Off by
-  default; turn it on in Settings › Leaderboard with a display name, or from
+  default; turn it on in Settings › Leaderboard & Buddy with a display name, or from
   the one prompt offered the first time you start a game with sharing off
   (with "Not now" and "Don't ask again"). Each finished run's transcript
   (what was sent, what you answered) is graded by the server, which ranks
@@ -149,14 +158,17 @@ the iOS app's navy/teal look.
   number is not its on-screen score. Posting needs a genuine Play-installed
   build (Play Integrity); a "Delete my scores" button removes everything
   this install posted
-- **Buddy streak**: pair with one other person (on either app) and keep a
-  shared streak: each day you both practise counts, a day either misses
-  resets it. Settings › Buddy streak mints a six-character invite code
-  (single use, 24 hours) to send however you like, or takes one a buddy
-  sent; it uses the leaderboard display name and needs no leaderboard
-  opt-in. The home screen says whether your buddy has practised today, the
-  daily reminder adds a line when they have not (as of the last check), and
-  "Leave buddy" or "Delete my scores" unpairs
+- **Buddy streak**: pair with up to ten people (on either app) and keep a
+  separate streak with each: each day you both practise counts, a day
+  either misses resets it. Settings › Leaderboard & Buddy › Buddy
+  streak lists every buddy with
+  their streak and whether they have practised today, mints a
+  six-character invite code (single use, 24 hours) to send however you
+  like, or takes one a buddy sent; it uses the leaderboard display name and
+  needs no leaderboard opt-in. The home screen says who has practised
+  today, the daily reminder adds one line naming whoever has not (as of the
+  last check), "Leave" on a buddy ends that pairing only, and "Delete my
+  scores" ends them all
 - Timed practice sessions (1-30 min or open-ended) with mid-session timer
   controls and an end-of-session summary, and a mode switcher that jumps
   between drills without going home
@@ -167,6 +179,10 @@ the iOS app's navy/teal look.
   the first character) and a separate band-noise level to copy through,
   haptics, daily reminders, session length, custom word lists, punctuation
   opt-ins, and a slashed-zero display option
+- **Settings** grouped into ten categories (Sound, Speed & Timing,
+  Characters & Lessons, Practice & Feedback, Keys & Sending, QSO & Pileups,
+  Reminders, Display, Leaderboard & Buddy, Help & About) with a search field
+  that finds any setting by name or synonym and jumps straight to it
 - Dark navy/teal theme, adaptive icon, phone + tablet responsive layout
 
 ## Build

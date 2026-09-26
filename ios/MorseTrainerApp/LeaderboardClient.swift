@@ -65,6 +65,12 @@ actor LeaderboardClient {
 
     private let session: URLSession
     private let attestor = AppAttestor()
+    /// Set when the Worker answered a `/v2/buddy/*` call with its bare
+    /// route-not-found 404: it predates several buddies (#237), so the buddy
+    /// calls use the one-buddy `/v1` routes for the rest of this launch
+    /// (LeaderboardClient+Buddy.swift). Not persisted, so the first launch
+    /// after the Worker is deployed picks v2 up by itself.
+    var buddyV2Missing = false
 
     init() {
         let config = URLSessionConfiguration.ephemeral

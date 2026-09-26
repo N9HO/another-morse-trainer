@@ -357,19 +357,17 @@ private fun StreakBadge(days: Int) {
 }
 
 /**
- * "W1AW practised today · 12-day buddy streak", or "hasn't practised yet
- * today". "Today" is the device's local day; a status fetched on another
- * day says nothing about this one, so it reads as not yet.
+ * One buddy: "W1AW practised today · 12-day buddy streak", or "hasn't
+ * practised yet today". Several: "All 3 buddies practised today · best:
+ * 40-day buddy streak", or who is still waiting (#237; [BuddyWords]).
+ * "Today" is the device's local day; a status fetched on another day says
+ * nothing about this one, so it reads as not yet.
  */
 @Composable
 private fun BuddyLine(buddy: BuddyStatus) {
-    val practised = buddy.buddyPractisedOn(Buddy.today())
+    val line = BuddyWords.current().home(buddy, Buddy.today()) ?: return
     Text(
-        text = if (practised) {
-            stringResource(R.string.home_buddy_practised, buddy.buddyName, buddyStreakLabel(buddy.streak))
-        } else {
-            stringResource(R.string.home_buddy_not_yet, buddy.buddyName, buddyStreakLabel(buddy.streak))
-        },
+        text = line,
         style = MaterialTheme.typography.labelMedium,
         color = Brand.teal,
         fontWeight = FontWeight.Medium,
@@ -412,8 +410,3 @@ internal fun ModeTile(item: HomeItem, modifier: Modifier = Modifier) {
         )
     }
 }
-
-/** "12-day buddy streak", or "no buddy streak yet" at zero — the same words as iOS's `streakLabel`. */
-@Composable
-internal fun buddyStreakLabel(streak: Int): String =
-    if (streak > 0) stringResource(R.string.buddy_streak_days, streak) else stringResource(R.string.buddy_streak_none)

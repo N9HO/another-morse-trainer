@@ -32,6 +32,7 @@ class MainActivity : ComponentActivity() {
         JourneyStore.init(this)
         EngineStore.init(this)
         VoiceProfileStore.init(this)
+        AnswerEntryStore.init(this)
         LeaderboardClient.init(this)
         setContent {
             AmtTheme {

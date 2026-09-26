@@ -171,7 +171,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
 
     // The Koch starting level ("what do you already know") is deliberately not
     // a per-mode question any more (#151): it is one app-wide answer, given at
-    // first run (`OnboardingView`) and changed under Settings → Proficiency.
+    // first run (`OnboardingView`) and changed under Settings › Characters & Lessons › Proficiency.
     // Re-asking it on every Characters, Confusion Drill and Sending Practice
     // launch read as three different questions, and tapping the level you
     // already had silently restarted the ladder.
@@ -327,6 +327,18 @@ final class AppModel: ObservableObject {
     private var voiceTranscripts: [String] = []
     private static let voiceProfileKey = "MorseTrainer.voiceProfile"
 
+    /// Keyboard-entry answers (#232): each choice quiz's own four → six →
+    /// typed ladder, keyed by `TrainingMode.rawValue`. Progress, not a
+    /// setting, so it lives under its own key rather than in `AppSettings`.
+    @Published private(set) var answerEntryLadders: [String: AnswerEntryLadder] = [:]
+    /// The rung the last answer promoted the ladder to, shown with the
+    /// feedback and held until Next like an unlock. Nil otherwise.
+    @Published private(set) var answerEntryPromotion: AnswerEntryTier?
+    /// The rung the drill on screen was dealt on, so a promotion by its own
+    /// answer changes the next drill, not the feedback for this one.
+    @Published private(set) var drillEntryTier: AnswerEntryTier = .fourChoices
+    private static let answerEntryLaddersKey = "MorseTrainer.answerEntryLadders"
+
     // Hands-free "Listen & Learn" loop.
     @Published private(set) var isListening = false
     @Published private(set) var listenPaused = false
@@ -418,7 +430,7 @@ final class AppModel: ObservableObject {
         self.journeyQuiz = JourneyQuiz(scoring: loaded.journeyDrainOnMiss ? .default : .fillOnly,
                                        config: .init(ttrThreshold: loaded.ttrThreshold,
                                                      optionCount: loaded.maxAnswerChoices))
-        self.wordsQuiz = PhraseQuiz(name: "Words", items: MorseData.topWordItems(loaded.wordTier.count))
+        self.wordsQuiz = PhraseQuiz(name: "Words", items: loaded.wordPoolItems)
         self.abbrevQuiz = PhraseQuiz(name: "Abbreviations", items: MorseData.abbreviationItems)
         self.qCodeQuiz = PhraseQuiz(name: "Q-Codes", items: MorseData.qCodeItems)
         self.prosignQuiz = PhraseQuiz(name: "Prosigns", items: MorseData.prosignItems)
@@ -431,6 +443,7 @@ final class AppModel: ObservableObject {
         reconcilePunctuation()
         applyPhraseConfig(from: loaded)
         restoreVoiceProfile()
+        restoreAnswerEntryLadders()
         streak = AppModel.loadStreak()    // assigning in init doesn't fire didSet
         history = AppModel.loadHistory()
         if let saved = AppModel.loadActivity() {
@@ -576,6 +589,7 @@ final class AppModel: ObservableObject {
     var usesTypedEntry: Bool {
         mode == .typed || mode == .qso || mode == .qrq
             || isRapidFireLiveType || isRapidFireHeadType
+            || usesTypedChoiceAnswer
     }
     /// Whether the learner answers by *sending* (keying the answer on a physical
     /// or on-screen Morse key) right now: the standalone Sending Practice mode,
@@ -624,11 +638,10 @@ final class AppModel: ObservableObject {
 
     private func applyPhraseConfig(from s: AppSettings) {
         // Rebuild the Words quiz when its source changes: a custom list (issue
-        // #32) takes precedence over the built-in "Top N" tier — but only while
-        // its switch is on and it holds enough words to offer a distractor.
-        let desiredWordItems = s.customWordsActive
-            ? MorseData.customWordItems(s.customWords)
-            : MorseData.topWordItems(s.wordTier.count)
+        // #32) takes precedence over the built-in "Top N" tier or CW 77 — but
+        // only while its switch is on and it holds enough words to offer a
+        // distractor.
+        let desiredWordItems = s.wordPoolItems
         if wordsQuiz.items.map(\.id) != desiredWordItems.map(\.id) {
             wordsQuiz = PhraseQuiz(name: "Words", items: desiredWordItems)
         }
@@ -1809,6 +1822,17 @@ final class AppModel: ObservableObject {
                            display: "\(item.display) — \(item.answer)",
                            spoken: spokenReadback(token: item.display, meaning: item.answer, readback))
             })
+        case .cw77:
+            // The CWOps list (#240), revealed and spoken like the QSO
+            // elements, plus your own callsign and name when that is on.
+            let readback = settings.listenReadback
+            let personal = settings.cw77Personal
+            let key = "cw77:\(readback.rawValue):" + personal.map(\.token).joined(separator: ",")
+            return (key, MorseData.cw77Items(personal: personal).map { item -> ListenItem in
+                ListenItem(playable: item.playable,
+                           display: "\(item.display) — \(item.answer)",
+                           spoken: spokenReadback(token: item.display, meaning: item.answer, readback))
+            })
         }
     }
 
@@ -2244,11 +2268,14 @@ final class AppModel: ObservableObject {
         resetVoiceRound()
         introduction = nil
         justUnlocked = nil
+        answerEntryPromotion = nil
         lastCorrect = nil
         lastSelected = nil
         lastTTR = nil
         if isJourney { journeyLevelCleared = nil; syncJourneyState() }
         summary = source.summary
+        applyAnswerChoiceCount()
+        drillEntryTier = answerEntryTier
         drill = source.nextDrill()
         // A first meeting is shown, not sprung: the drill waits until the
         // learner has heard the new item on its own and started it (#162).
@@ -2337,6 +2364,7 @@ final class AppModel: ObservableObject {
         lastCorrect = outcome.correct
         lastTTR = ttr
         justUnlocked = outcome.unlocked
+        noteAnswerEntry(outcome)
         summary = source.summary
         if isJourney {
             // record() may have advanced to the next level; reflect the new bar/level.
@@ -2375,7 +2403,7 @@ final class AppModel: ObservableObject {
 
         // Keep the rhythm going: correct answers auto-advance (unless a new
         // item was just unlocked, so the celebration banner isn't missed).
-        if outcome.correct && outcome.unlocked == nil {
+        if outcome.correct && outcome.unlocked == nil && answerEntryPromotion == nil {
             advanceGeneration += 1
             let token = advanceGeneration
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { [weak self] in
@@ -2542,6 +2570,95 @@ final class AppModel: ObservableObject {
         let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
         guard !normalized.isEmpty else { return }
         select(normalized)
+    }
+
+    // MARK: - Keyboard-entry answers in the choice quizzes (#232)
+
+    /// The current mode's rung on the four → six → typed ladder.
+    var answerEntryTier: AnswerEntryTier {
+        answerEntryLadders[mode.rawValue]?.tier ?? .fourChoices
+    }
+
+    /// Whether this drill of a choice quiz is answered by typing instead of
+    /// tapping: always under "Type answers", from the ladder's top rung under
+    /// "Progressive". Honoured per drill like keying — a meaning or a prosign
+    /// glyph cannot be typed, so it keeps its choices — and keyed or spoken
+    /// answers, which the learner switched on explicitly, win over it.
+    var usesTypedChoiceAnswer: Bool {
+        guard mode.supportsKeyedAnswers, drill?.isKeyable ?? true,
+              !usesKeyingResponse, !(settings.voiceResponse && mode.supportsVoiceAnswers) else { return false }
+        switch settings.answerEntry {
+        case .choices:     return false
+        case .typed:       return true
+        case .progressive: return drillEntryTier == .typed
+        }
+    }
+
+    /// Where the Answer entry setting stands, for the in-drill picker's label.
+    var answerEntryLabel: String {
+        switch settings.answerEntry {
+        case .choices:     return "tap"
+        case .typed:       return "type"
+        case .progressive:
+            return drillEntryTier.choiceCount.map { "progressive, \($0) choices" } ?? "progressive, typing"
+        }
+    }
+
+    /// "Don't know" on a typed answer: a miss, recorded with no confusion
+    /// partner (see `TypedAnswer.gradeCharacter`).
+    func skipTypedAnswer() {
+        guard usesTypedChoiceAnswer else { return }
+        select("")
+    }
+
+    /// Grade a typed answer to a choice quiz, normalized the shared way.
+    func submitTypedChoiceAnswer(_ text: String) {
+        let normalized = TypedAnswer.normalize(text)
+        guard !normalized.isEmpty else { return }
+        select(normalized)
+    }
+
+    /// The number of buttons the next drill offers: the ladder's rung under
+    /// "Progressive" (six on the typed rung, for the drills that cannot be
+    /// typed), otherwise the Answer choices setting.
+    private var answerChoiceCount: Int {
+        guard mode.supportsKeyedAnswers, settings.answerEntry == .progressive else {
+            return settings.maxAnswerChoices
+        }
+        return answerEntryTier.choiceCount ?? AnswerEntryTier.sixChoices.choiceCount!
+    }
+
+    private func applyAnswerChoiceCount() {
+        let n = answerChoiceCount
+        engine.config.optionCount = n
+        for quiz in [wordsQuiz, abbrevQuiz, qCodeQuiz, prosignQuiz] { quiz.config.optionCount = n }
+    }
+
+    /// Feed the ladder one answer. A new level (a character, a stage) starts
+    /// it again at four choices; keyed and spoken answers do not climb it.
+    private func noteAnswerEntry(_ outcome: DrillOutcome) {
+        answerEntryPromotion = nil
+        guard settings.answerEntry == .progressive, mode.supportsKeyedAnswers else { return }
+        var ladder = answerEntryLadders[mode.rawValue] ?? AnswerEntryLadder()
+        if outcome.unlocked != nil {
+            ladder.restartLevel()
+        } else if !usesKeyingResponse && !usesVoiceResponse {
+            answerEntryPromotion = ladder.record(correct: outcome.correct)
+        }
+        answerEntryLadders[mode.rawValue] = ladder
+        saveAnswerEntryLadders()
+    }
+
+    private func saveAnswerEntryLadders() {
+        if let data = try? JSONEncoder().encode(answerEntryLadders) {
+            UserDefaults.standard.set(data, forKey: Self.answerEntryLaddersKey)
+        }
+    }
+
+    private func restoreAnswerEntryLadders() {
+        guard let data = UserDefaults.standard.data(forKey: Self.answerEntryLaddersKey),
+              let ladders = try? JSONDecoder().decode([String: AnswerEntryLadder].self, from: data) else { return }
+        answerEntryLadders = ladders
     }
 
     // MARK: - Stats (for the stats screen)
@@ -2801,7 +2918,7 @@ final class AppModel: ObservableObject {
     var showsNextButton: Bool {
         guard phase == .answered else { return false }
         if isRapidFire { return false }   // Rapid Fire auto-advances at its pace
-        return lastCorrect == false || justUnlocked != nil
+        return lastCorrect == false || justUnlocked != nil || answerEntryPromotion != nil
     }
 
     func next() { newDrill() }
@@ -2856,7 +2973,7 @@ final class AppModel: ObservableObject {
     }
 
     /// The first-run answer (#151): seed the ladder, unlock the Journey that
-    /// far, and never ask again. Settings → Proficiency changes it later.
+    /// far, and never ask again. Settings › Characters & Lessons › Proficiency changes it later.
     func completeOnboarding(_ proficiency: Proficiency) {
         configureProficiency(proficiency)
         settings.onboardingDone = true

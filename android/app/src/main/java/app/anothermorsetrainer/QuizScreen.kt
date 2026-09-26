@@ -24,13 +24,18 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -65,14 +70,21 @@ import androidx.compose.ui.res.stringResource
 import androidx.core.content.ContextCompat
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.anothermorsetrainer.morsekit.AnswerEntryMode
+import app.anothermorsetrainer.morsekit.AnswerEntryTier
 import app.anothermorsetrainer.morsekit.AnswerKeys
 import app.anothermorsetrainer.morsekit.CharacterIntroduction
+import app.anothermorsetrainer.morsekit.ConfusionQuiz
 import app.anothermorsetrainer.morsekit.Drill
+import app.anothermorsetrainer.morsekit.PhraseQuiz
 import app.anothermorsetrainer.morsekit.ProgressiveCharacters
 import app.anothermorsetrainer.morsekit.QuizSource
+import app.anothermorsetrainer.morsekit.TypedAnswer
 import app.anothermorsetrainer.morsekit.VoiceMatcher
 import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
@@ -151,7 +163,40 @@ fun QuizScreen(
         }
     }
 
-    var drill by remember { mutableStateOf(source.nextDrill()) }
+    // Keyboard-entry answers (#232): this quiz's own four → six → typed
+    // ladder, the rung the drill on screen was dealt on (so a promotion by
+    // its own answer changes the next drill, not this one's feedback), and
+    // the rung the last answer promoted to, held until Next like an unlock.
+    val answerEntryApplies = settingsMode in ANSWER_ENTRY_MODES
+    val ladder = remember { AnswerEntryStore.load(settingsMode) }
+    var drillTier by remember { mutableStateOf(ladder.tier) }
+    var promotedTo by remember { mutableStateOf<AnswerEntryTier?>(null) }
+    var typedInput by remember { mutableStateOf("") }
+    val typedFocus = remember { FocusRequester() }
+
+    /**
+     * The number of buttons the next drill offers: the ladder's rung under
+     * Progressive (six on the typed rung, for drills that cannot be typed),
+     * otherwise the Answer choices setting.
+     */
+    fun applyChoiceCount() {
+        if (!answerEntryApplies) return
+        val n = if (Settings.answerEntry == AnswerEntryMode.PROGRESSIVE) {
+            ladder.tier.choiceCount ?: AnswerEntryTier.SIX_CHOICES.choiceCount!!
+        } else {
+            Settings.answerChoices
+        }
+        when (source) {
+            is ProgressiveCharacters -> source.engine.config.optionCount = n
+            is ConfusionQuiz -> source.engine.config.optionCount = n
+            is PhraseQuiz -> source.config.optionCount = n
+        }
+    }
+
+    var drill by remember {
+        applyChoiceCount()
+        mutableStateOf(source.nextDrill())
+    }
     /** The introduction the current drill is waiting behind, or null while a drill is under way. */
     var intro by remember { mutableStateOf(introductionFor(drill)) }
     // Monotonic round counter drives the play/reset effect. We must NOT key that
@@ -274,6 +319,9 @@ fun QuizScreen(
      * where the replay button sits, leaking the upcoming answer (issue #63).
      */
     fun advance() {
+        applyChoiceCount()
+        drillTier = ladder.tier
+        promotedTo = null
         drill = source.nextDrill()
         // A first meeting is shown, not sprung: the drill waits until the
         // learner has heard the new item on its own and started it (#162).
@@ -305,6 +353,7 @@ fun QuizScreen(
     LaunchedEffect(round) {
         revealed = false
         chosen = null
+        typedInput = ""
         toneFinishedAt = 0L
         unlockedNote = null
         listening = false
@@ -333,6 +382,9 @@ fun QuizScreen(
                 player.replaySound(drill.playable, Settings.sidetoneHz, Settings.timing())
                 return@LaunchedEffect
             }
+            // A promotion up the answer-entry ladder is held until Next,
+            // like a miss, so the note is read rather than flashed.
+            if (promotedTo != null) return@LaunchedEffect
             delay(1100)
             if (phase == QuizPhase.RUNNING) advance()
         }
@@ -359,6 +411,22 @@ fun QuizScreen(
     // Hardware/gesture back records the session too, then leaves.
     BackHandler { if (phase == QuizPhase.SUMMARY) onBack() else finish() }
 
+    /**
+     * Whether this drill is answered by typing (#232): always under Type,
+     * from the ladder's top rung under Progressive. Per drill like keying — a
+     * meaning or a prosign glyph keeps its choices — and keyed or spoken
+     * answers, which the learner switched on explicitly, win over it.
+     */
+    fun typedAnswering(): Boolean {
+        if (!answerEntryApplies || !drill.isKeyable) return false
+        if (Settings.answerByKeying || Settings.voiceAnswersEnabled) return false
+        return when (Settings.answerEntry) {
+            AnswerEntryMode.CHOICES -> false
+            AnswerEntryMode.TYPED -> true
+            AnswerEntryMode.PROGRESSIVE -> drillTier == AnswerEntryTier.TYPED
+        }
+    }
+
     fun answer(choice: String) {
         if (revealed || intro != null || phase != QuizPhase.RUNNING) return
         val ttr = if (toneFinishedAt == 0L) 0.0
@@ -368,6 +436,18 @@ fun QuizScreen(
         val outcome = source.record(choice = choice, ttr = ttr)
         summary = source.summary
         unlockedNote = outcome.unlocked
+        // Feed the answer-entry ladder: a new level (a character, a stage)
+        // starts it again at four choices; keyed and spoken answers do not
+        // climb it.
+        promotedTo = null
+        if (answerEntryApplies && Settings.answerEntry == AnswerEntryMode.PROGRESSIVE) {
+            if (outcome.unlocked != null) {
+                ladder.restartLevel()
+            } else if (!(Settings.answerByKeying && drill.isKeyable) && !Settings.voiceAnswersEnabled) {
+                promotedTo = ladder.record(outcome.correct)
+            }
+            AnswerEntryStore.save(settingsMode, ladder)
+        }
         tally.attempts += 1
         val ms = (ttr * 1000).roundToInt()
         if (outcome.correct) {
@@ -396,6 +476,12 @@ fun QuizScreen(
         }
         clearVoicePrompts()
         answer(token)
+    }
+
+    /** Grade a typed answer, normalized the shared way; a blank waits. */
+    fun submitTyped() {
+        val normalized = TypedAnswer.normalize(typedInput)
+        if (normalized.isNotEmpty()) answer(normalized)
     }
 
     // Keyed answers auto-submit once the decoded copy reaches the answer's
@@ -460,6 +546,7 @@ fun QuizScreen(
             return false
         }
         if (Settings.answerByKeying && drill.isKeyable) return false
+        if (typedAnswering()) return false   // the answer field has the keys
         val ch = event.utf16CodePoint.takeIf { it > 0 }?.toChar() ?: return false
         // Value beats position: a single-character option is answered by its own
         // key, and only the longer options fall back to a 1–9 position. Numbering
@@ -469,8 +556,16 @@ fun QuizScreen(
         answer(drill.options[index])
         return true
     }
-    LaunchedEffect(phase, round, showSettings) {
-        if (phase == QuizPhase.RUNNING && !showSettings) hwFocus.requestFocus()
+    LaunchedEffect(phase, round, showSettings, revealed, drillTier, Settings.answerEntry) {
+        if (phase != QuizPhase.RUNNING || showSettings) return@LaunchedEffect
+        // Typing an answer (#232) puts the caret in its field; otherwise, and
+        // once it is graded (the field is disabled), the root takes the keys.
+        // runCatching: the field is not composed during an introduction.
+        if (typedAnswering() && !revealed && intro == null) {
+            runCatching { typedFocus.requestFocus() }.onFailure { hwFocus.requestFocus() }
+        } else {
+            hwFocus.requestFocus()
+        }
     }
 
     Box(
@@ -561,6 +656,12 @@ fun QuizScreen(
                 }
             }
 
+            // How the choice quizzes take an answer (#232): tap, climb to
+            // typing, or type — switchable mid-drill.
+            if (answerEntryApplies && drill.isKeyable && !Settings.answerByKeying) {
+                AnswerEntryMenu(drillTier)
+            }
+
             // Attaching a BLE-MIDI key has to happen from the screen you are
             // keying on, since nothing else opens one (see BluetoothKeyButton).
             //
@@ -623,9 +724,33 @@ fun QuizScreen(
                         fontWeight = FontWeight.Medium
                     )
                 }
+                if (!ok && typedAnswering()) {
+                    val typed = chosen.orEmpty()
+                    Text(
+                        if (typed.isEmpty()) stringResource(R.string.quiz_skipped) else stringResource(R.string.quiz_you_typed, typed),
+                        color = Brand.textSecondary
+                    )
+                }
+                promotedTo?.let { tier ->
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        tier.choiceCount?.let { stringResource(R.string.quiz_next_step_choices, it) }
+                            ?: stringResource(R.string.quiz_next_step_typing),
+                        color = Brand.teal,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
                 unlockedNote?.let {
                     Spacer(Modifier.height(4.dp))
                     Text(stringResource(R.string.quiz_new_character, it), color = Brand.teal, fontWeight = FontWeight.SemiBold)
+                }
+                if (ok && promotedTo != null) {
+                    Spacer(Modifier.height(18.dp))
+                    Button(
+                        onClick = { advance() },
+                        colors = ButtonDefaults.buttonColors(containerColor = Brand.teal, contentColor = Brand.navy),
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text(stringResource(R.string.common_next), fontWeight = FontWeight.SemiBold) }
                 }
                 if (!ok) {
                     // The held correction (issue #77): re-hear it as often as
@@ -661,12 +786,33 @@ fun QuizScreen(
                     keyPressed = keyPressed,
                     enabled = !revealed,
                     midiDevice = midiDevice,
+                    onPaddleKey = { down, ms -> keyer.touchKey(down, ms) },
                     onKey = { down ->
                         keyPressed = down
                         keyer.touchKey(down)
                     },
                     onClear = { keyer.clear() },
                     onSubmit = { answer(keyer.submit().uppercase()) }
+                )
+            } else if (typedAnswering()) {
+                val single = drill.correct.length == 1
+                TypedAnswerPanel(
+                    value = typedInput,
+                    onValueChange = { text ->
+                        if (!revealed) {
+                            typedInput = text
+                            // A single-character drill submits on the keystroke
+                            // once the tone is done, so the recognition clock is
+                            // not charged for a second tap — the one touch a
+                            // choice button takes.
+                            if (single && toneFinishedAt != 0L && TypedAnswer.normalize(text).length == 1) submitTyped()
+                        }
+                    },
+                    placeholder = stringResource(if (single) R.string.quiz_type_the_character else R.string.quiz_type_what_you_heard),
+                    enabled = !revealed,
+                    focus = typedFocus,
+                    onSubmit = { submitTyped() },
+                    onSkip = { answer("") }
                 )
             } else {
                 OptionsGrid(drill = drill, revealed = revealed, chosen = chosen, showCorrectness = Settings.showCorrectness, onPick = ::answer)
@@ -929,6 +1075,7 @@ private fun KeyedAnswerPanel(
     enabled: Boolean,
     midiDevice: String?,
     onKey: (Boolean) -> Unit,
+    onPaddleKey: (Boolean, Long) -> Unit,
     onClear: () -> Unit,
     onSubmit: () -> Unit
 ) {
@@ -958,40 +1105,47 @@ private fun KeyedAnswerPanel(
             )
         }
         Spacer(Modifier.height(12.dp))
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(100.dp)
-                .clip(RoundedCornerShape(Brand.cornerRadius))
-                .background(if (keyPressed) Brand.teal else Brand.navyRaised)
-                .border(
-                    width = if (keyPressed) 2.dp else 1.dp,
-                    color = if (keyPressed) Brand.tealBright else Brand.hairline,
-                    shape = RoundedCornerShape(Brand.cornerRadius)
-                )
-                .pointerInput(enabled) {
-                    if (!enabled) return@pointerInput
-                    detectTapGestures(
-                        onPress = {
-                            onKey(true)
-                            try {
-                                tryAwaitRelease()
-                            } finally {
-                                onKey(false)
-                            }
-                        }
-                    )
-                },
-            contentAlignment = Alignment.Center
+        // Straight key or paddles, as chosen in Settings (#233).
+        OnScreenKeySwitch(
+            onPaddleKey = onPaddleKey,
+            modifier = Modifier.fillMaxWidth().height(100.dp),
+            enabled = enabled
         ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("⠿", fontSize = 22.sp, color = if (keyPressed) Brand.navy else Brand.teal)
-                Text(
-                    stringResource(R.string.common_hold_to_key),
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = if (keyPressed) Brand.navy else Brand.textSecondary
-                )
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(100.dp)
+                    .clip(RoundedCornerShape(Brand.cornerRadius))
+                    .background(if (keyPressed) Brand.teal else Brand.navyRaised)
+                    .border(
+                        width = if (keyPressed) 2.dp else 1.dp,
+                        color = if (keyPressed) Brand.tealBright else Brand.hairline,
+                        shape = RoundedCornerShape(Brand.cornerRadius)
+                    )
+                    .pointerInput(enabled) {
+                        if (!enabled) return@pointerInput
+                        detectTapGestures(
+                            onPress = {
+                                onKey(true)
+                                try {
+                                    tryAwaitRelease()
+                                } finally {
+                                    onKey(false)
+                                }
+                            }
+                        )
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("⠿", fontSize = 22.sp, color = if (keyPressed) Brand.navy else Brand.teal)
+                    Text(
+                        stringResource(R.string.common_hold_to_key),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (keyPressed) Brand.navy else Brand.textSecondary
+                    )
+                }
             }
         }
         Spacer(Modifier.height(12.dp))
@@ -1007,6 +1161,96 @@ private fun KeyedAnswerPanel(
                 colors = ButtonDefaults.buttonColors(containerColor = Brand.teal, contentColor = Brand.navy),
                 modifier = Modifier.weight(1f).heightIn(min = 44.dp)
             ) { Text(stringResource(R.string.common_submit), fontWeight = FontWeight.SemiBold) }
+        }
+    }
+}
+
+/**
+ * The in-drill Answer entry picker (#232), labelled with where the
+ * progressive ladder stands for the drill on screen.
+ */
+@Composable
+private fun AnswerEntryMenu(drillTier: AnswerEntryTier) {
+    var open by remember { mutableStateOf(false) }
+    val label = when (Settings.answerEntry) {
+        AnswerEntryMode.CHOICES -> stringResource(R.string.answer_entry_label_tap)
+        AnswerEntryMode.TYPED -> stringResource(R.string.answer_entry_label_type)
+        AnswerEntryMode.PROGRESSIVE -> drillTier.choiceCount
+            ?.let { stringResource(R.string.answer_entry_label_progressive_choices, it) }
+            ?: stringResource(R.string.answer_entry_label_progressive_typing)
+    }
+    Box {
+        TextButton(onClick = { open = true }) {
+            Text(
+                stringResource(R.string.quiz_answers_menu, label),
+                fontSize = 13.sp,
+                color = if (Settings.answerEntry == AnswerEntryMode.CHOICES) Brand.textSecondary else Brand.teal
+            )
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            AnswerEntryMode.entries.forEach { mode ->
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            stringResource(mode.titleRes) + if (mode == Settings.answerEntry) "  ✓" else "",
+                            fontWeight = if (mode == Settings.answerEntry) FontWeight.SemiBold else FontWeight.Normal
+                        )
+                    },
+                    onClick = {
+                        Settings.updateAnswerEntry(mode)
+                        open = false
+                    }
+                )
+            }
+        }
+    }
+}
+
+/**
+ * A typed answer to a choice quiz (#232): the field, the number and
+ * punctuation row the typed modes share, Submit, and "Don't know" — a miss
+ * recorded with nothing as the character it was mistaken for.
+ */
+@Composable
+private fun TypedAnswerPanel(
+    value: String,
+    onValueChange: (String) -> Unit,
+    placeholder: String,
+    enabled: Boolean,
+    focus: FocusRequester,
+    onSubmit: () -> Unit,
+    onSkip: () -> Unit
+) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+        MorseNumberRow(
+            onKey = { if (enabled) onValueChange(value + it) },
+            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+        )
+        OutlinedTextField(
+            value = value,
+            onValueChange = onValueChange,
+            enabled = enabled,
+            singleLine = true,
+            placeholder = { Text(placeholder, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center) },
+            textStyle = MaterialTheme.typography.headlineSmall.copy(
+                fontFamily = FontFamily.Monospace, textAlign = TextAlign.Center
+            ),
+            keyboardOptions = KeyboardOptions(
+                capitalization = KeyboardCapitalization.Characters,
+                imeAction = ImeAction.Done
+            ),
+            keyboardActions = KeyboardActions(onDone = { onSubmit() }),
+            modifier = Modifier.fillMaxWidth().focusRequester(focus)
+        )
+        Spacer(Modifier.height(12.dp))
+        Button(
+            onClick = onSubmit,
+            enabled = enabled && value.isNotBlank(),
+            colors = ButtonDefaults.buttonColors(containerColor = Brand.teal, contentColor = Brand.navy),
+            modifier = Modifier.fillMaxWidth()
+        ) { Text(stringResource(R.string.quiz_submit), fontWeight = FontWeight.SemiBold) }
+        TextButton(onClick = onSkip, enabled = enabled) {
+            Text(stringResource(R.string.quiz_dont_know), color = Brand.textSecondary)
         }
     }
 }

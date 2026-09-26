@@ -1,5 +1,6 @@
 package app.anothermorsetrainer
 
+import app.anothermorsetrainer.morsekit.MorseData
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -41,6 +42,18 @@ class ListenReadbackTest {
         assertEquals(active.map { it.toString() }, listenPool(ListenContent.CHARACTERS, ListenReadback.SPELLED, active).map { it.display })
         assertEquals("comma", listenPool(ListenContent.CHARACTERS, ListenReadback.SPELLED, active).last().spoken)
         assertEquals(listOf("E"), listenPool(ListenContent.CHARACTERS, ListenReadback.SPELLED, emptyList()).map { it.display })
+    }
+
+    @Test
+    fun `cw 77 is the seventy items, then your callsign and name when included`() {
+        val plain = listenPool(ListenContent.CW_77, ListenReadback.SPELLED)
+        assertEquals(70, plain.size)
+        assertEquals("<BT> — separator / new section", plain.first { it.display.startsWith("<BT> — ") }.display)
+        assertEquals("h w ?. how do you copy?", plain.first { it.display.startsWith("HW? — ") }.spoken)
+        val mine = MorseData.cw77Personal("n9ho", "Justin")
+        val withMe = listenPool(ListenContent.CW_77, ListenReadback.MEANING_ONLY, cw77Personal = mine)
+        assertEquals(listOf("N9HO — your call sign", "JUSTIN — your name"), withMe.takeLast(2).map { it.display })
+        assertEquals(listOf("your call sign", "your name"), withMe.takeLast(2).map { it.spoken })
     }
 
     @Test

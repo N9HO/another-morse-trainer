@@ -112,7 +112,7 @@ Don't reformat, relicense, tidy, or relocate them or those files.
 
 The repository is GPL-3.0-or-later (root `LICENSE`, copyright Justin Rogers); the
 vendored decoder above stays MIT (copyright Jay Vana), which the GPL permits.
-Both apps show both notices on the Settings › About › Licenses screen — the
+Both apps show both notices on the Settings › Help & About › Licenses screen — the
 GPL asks an interactive program to display its terms, and the MIT notice must
 accompany every copy, including the shipped binaries. A new third-party
 dependency that carries a notice goes on that screen too, on both ports.

@@ -1,0 +1,503 @@
+{
+  "_comment": [
+    "The CWOps \"CW 77\" list (#240), pinned for both ports: MorseData.cw77 in",
+    "ios/Sources/MorseKit/MorseDataCW77.swift and android/.../morsekit/MorseDataCW77.kt.",
+    "Read by ios/Sources/MorseKitCheck/main.swift and",
+    "android/app/src/test/.../morsekit/MorseDataCW77Test.kt.",
+    "",
+    "`source` is the maintainer-supplied file 77_all_current.txt exactly as",
+    "sent: 75 whitespace-separated entries in 15 rows of 5, reading order. It",
+    "is the authoritative list (no separate CWOps URL exists, per #240).",
+    "RR, CL, WX, BEAM and AR each appear twice; the set is `source` with",
+    "repeats dropped, keeping the first occurrence: 70 items, in `items`.",
+    "The name stays \"CW 77\" although the count differs.",
+    "",
+    "Token spelling follows fixtures/qso-elements.json: the five entries in",
+    "`prosigns` are sent run-together, so their token is the bracketed name",
+    "MorseData.prosigns already uses (<AR>, <AS>, <BT>, <KN>, <SK>); every",
+    "other entry is sent as text, including BK and CL (the abbreviations",
+    "table's letter forms, \"break\" and \"closing down\") and K (a letter",
+    "whose pattern is the <K> prosign's anyway). HW? keeps its question mark.",
+    "Meanings repeat the wording of MorseData.abbreviations, qCodes, prosigns",
+    "and qsoElements wherever the token already lives there; the tests check.",
+    "",
+    "`personal` pins the \"include my callsign and name\" rule. The callsign",
+    "is the app's existing Your callsign setting, the name the Your name",
+    "setting beside it. Each is trimmed and uppercased and loses every",
+    "character with no Morse pattern (MorseCode.pattern); a name keeps one",
+    "space between its words. A callsign that is empty, or is the",
+    "placeholder default `placeholderCallsign`, counts as unset; an empty",
+    "name counts as unset. The callsign comes first, then the name, appended",
+    "after the 70; either is dropped if it is already a CW 77 token or equals",
+    "the one before it. The switch is offered only when the rule yields at",
+    "least one token. Expected values were worked by hand from the rule.",
+    "",
+    "`recommended` is the playback Bob Carter WR7Q recommends for this list:",
+    "40 WPM, Farnsworth off. The apps offer it as a one-tap preset."
+  ],
+  "source": [
+    "VVV",
+    "VERT",
+    "OM",
+    "HR",
+    "XYL",
+    "QTH",
+    "RR",
+    "AGE",
+    "FB",
+    "LID",
+    "QSL",
+    "TKS",
+    "RIG",
+    "QSB",
+    "CQ",
+    "CL",
+    "KN",
+    "NAME",
+    "PKT",
+    "QSO",
+    "TEST",
+    "DE",
+    "BT",
+    "73",
+    "QRM",
+    "BK",
+    "AGN",
+    "DIPOLE",
+    "SK",
+    "RR",
+    "HW?",
+    "QRP",
+    "TNX",
+    "YRS",
+    "YL",
+    "QRX",
+    "QRL",
+    "ES",
+    "WX",
+    "QRT",
+    "K",
+    "QRS",
+    "88",
+    "PWR",
+    "RUNS",
+    "CALL",
+    "VY",
+    "WIRE",
+    "YAGI",
+    "NR",
+    "RPT",
+    "OP",
+    "AR",
+    "PSE",
+    "EL",
+    "LOOP",
+    "ABT",
+    "QSY",
+    "TU",
+    "HI",
+    "BEAM",
+    "RST",
+    "WATT",
+    "AR",
+    "AS",
+    "TEMP",
+    "CPY",
+    "QRZ",
+    "CL",
+    "ANT",
+    "WX",
+    "QRN",
+    "BEAM",
+    "CW",
+    "DX"
+  ],
+  "prosigns": [
+    "AR",
+    "AS",
+    "BT",
+    "KN",
+    "SK"
+  ],
+  "uniqueCount": 70,
+  "recommended": {
+    "wpm": 40,
+    "farnsworth": false
+  },
+  "personal": {
+    "placeholderCallsign": "W1AW",
+    "callsignMeaning": "your call sign",
+    "nameMeaning": "your name",
+    "cases": [
+      {
+        "why": "callsign and name",
+        "callsign": "n9ho",
+        "name": "Justin",
+        "expected": [
+          "N9HO",
+          "JUSTIN"
+        ]
+      },
+      {
+        "why": "nothing set",
+        "callsign": "",
+        "name": "",
+        "expected": []
+      },
+      {
+        "why": "the placeholder callsign counts as unset",
+        "callsign": "W1AW",
+        "name": "",
+        "expected": []
+      },
+      {
+        "why": "the placeholder in lower case is still the placeholder",
+        "callsign": " w1aw ",
+        "name": "Jim",
+        "expected": [
+          "JIM"
+        ]
+      },
+      {
+        "why": "name only, trimmed",
+        "callsign": "",
+        "name": "  bob  ",
+        "expected": [
+          "BOB"
+        ]
+      },
+      {
+        "why": "callsign only, whitespace name",
+        "callsign": "k9la",
+        "name": "   ",
+        "expected": [
+          "K9LA"
+        ]
+      },
+      {
+        "why": "portable callsign keeps its slash",
+        "callsign": " k9la/p ",
+        "name": "Mary  Ann",
+        "expected": [
+          "K9LA/P",
+          "MARY ANN"
+        ]
+      },
+      {
+        "why": "unsendable characters are stripped",
+        "callsign": "N9HO!",
+        "name": "O'Brien",
+        "expected": [
+          "N9HO",
+          "OBRIEN"
+        ]
+      },
+      {
+        "why": "a name with nothing sendable is unset",
+        "callsign": "N9HO",
+        "name": "***",
+        "expected": [
+          "N9HO"
+        ]
+      },
+      {
+        "why": "a name already in the list is not added twice",
+        "callsign": "N9HO",
+        "name": "Hi",
+        "expected": [
+          "N9HO"
+        ]
+      },
+      {
+        "why": "a name equal to the callsign is not added twice",
+        "callsign": "N9HO",
+        "name": "n9ho",
+        "expected": [
+          "N9HO"
+        ]
+      }
+    ]
+  },
+  "items": [
+    {
+      "token": "VVV",
+      "meaning": "test signal — tuning up"
+    },
+    {
+      "token": "VERT",
+      "meaning": "vertical antenna"
+    },
+    {
+      "token": "OM",
+      "meaning": "old man"
+    },
+    {
+      "token": "HR",
+      "meaning": "here"
+    },
+    {
+      "token": "XYL",
+      "meaning": "wife (ex young lady)"
+    },
+    {
+      "token": "QTH",
+      "meaning": "my location is"
+    },
+    {
+      "token": "RR",
+      "meaning": "roger roger — all received"
+    },
+    {
+      "token": "AGE",
+      "meaning": "age"
+    },
+    {
+      "token": "FB",
+      "meaning": "fine business (great)"
+    },
+    {
+      "token": "LID",
+      "meaning": "poor operator"
+    },
+    {
+      "token": "QSL",
+      "meaning": "acknowledge / received"
+    },
+    {
+      "token": "TKS",
+      "meaning": "thanks"
+    },
+    {
+      "token": "RIG",
+      "meaning": "radio"
+    },
+    {
+      "token": "QSB",
+      "meaning": "your signals are fading"
+    },
+    {
+      "token": "CQ",
+      "meaning": "calling any station"
+    },
+    {
+      "token": "CL",
+      "meaning": "closing down"
+    },
+    {
+      "token": "<KN>",
+      "meaning": "go ahead — named station only"
+    },
+    {
+      "token": "NAME",
+      "meaning": "name"
+    },
+    {
+      "token": "PKT",
+      "meaning": "packet radio"
+    },
+    {
+      "token": "QSO",
+      "meaning": "a contact"
+    },
+    {
+      "token": "TEST",
+      "meaning": "contest — calling CQ contest"
+    },
+    {
+      "token": "DE",
+      "meaning": "this is / from"
+    },
+    {
+      "token": "<BT>",
+      "meaning": "separator / new section"
+    },
+    {
+      "token": "73",
+      "meaning": "best regards"
+    },
+    {
+      "token": "QRM",
+      "meaning": "man-made interference"
+    },
+    {
+      "token": "BK",
+      "meaning": "break"
+    },
+    {
+      "token": "AGN",
+      "meaning": "again"
+    },
+    {
+      "token": "DIPOLE",
+      "meaning": "dipole antenna"
+    },
+    {
+      "token": "<SK>",
+      "meaning": "end of contact"
+    },
+    {
+      "token": "HW?",
+      "meaning": "how do you copy?"
+    },
+    {
+      "token": "QRP",
+      "meaning": "low power"
+    },
+    {
+      "token": "TNX",
+      "meaning": "thanks"
+    },
+    {
+      "token": "YRS",
+      "meaning": "years"
+    },
+    {
+      "token": "YL",
+      "meaning": "young lady"
+    },
+    {
+      "token": "QRX",
+      "meaning": "wait / stand by"
+    },
+    {
+      "token": "QRL",
+      "meaning": "this frequency is busy / in use"
+    },
+    {
+      "token": "ES",
+      "meaning": "and"
+    },
+    {
+      "token": "WX",
+      "meaning": "weather"
+    },
+    {
+      "token": "QRT",
+      "meaning": "stop sending / going off air"
+    },
+    {
+      "token": "K",
+      "meaning": "go ahead — any station"
+    },
+    {
+      "token": "QRS",
+      "meaning": "send slower"
+    },
+    {
+      "token": "88",
+      "meaning": "love and kisses"
+    },
+    {
+      "token": "PWR",
+      "meaning": "power"
+    },
+    {
+      "token": "RUNS",
+      "meaning": "runs — as in rig runs 100 watts"
+    },
+    {
+      "token": "CALL",
+      "meaning": "call sign"
+    },
+    {
+      "token": "VY",
+      "meaning": "very"
+    },
+    {
+      "token": "WIRE",
+      "meaning": "wire antenna"
+    },
+    {
+      "token": "YAGI",
+      "meaning": "Yagi beam antenna"
+    },
+    {
+      "token": "NR",
+      "meaning": "number"
+    },
+    {
+      "token": "RPT",
+      "meaning": "repeat / report"
+    },
+    {
+      "token": "OP",
+      "meaning": "operator"
+    },
+    {
+      "token": "<AR>",
+      "meaning": "over — end of message"
+    },
+    {
+      "token": "PSE",
+      "meaning": "please"
+    },
+    {
+      "token": "EL",
+      "meaning": "elements — of a beam antenna"
+    },
+    {
+      "token": "LOOP",
+      "meaning": "loop antenna"
+    },
+    {
+      "token": "ABT",
+      "meaning": "about"
+    },
+    {
+      "token": "QSY",
+      "meaning": "change frequency"
+    },
+    {
+      "token": "TU",
+      "meaning": "thank you"
+    },
+    {
+      "token": "HI",
+      "meaning": "laughter"
+    },
+    {
+      "token": "BEAM",
+      "meaning": "beam antenna"
+    },
+    {
+      "token": "RST",
+      "meaning": "signal report"
+    },
+    {
+      "token": "WATT",
+      "meaning": "watt"
+    },
+    {
+      "token": "<AS>",
+      "meaning": "wait / stand by"
+    },
+    {
+      "token": "TEMP",
+      "meaning": "temperature"
+    },
+    {
+      "token": "CPY",
+      "meaning": "copy"
+    },
+    {
+      "token": "QRZ",
+      "meaning": "who is calling me?"
+    },
+    {
+      "token": "ANT",
+      "meaning": "antenna"
+    },
+    {
+      "token": "QRN",
+      "meaning": "atmospheric noise / static"
+    },
+    {
+      "token": "CW",
+      "meaning": "continuous wave — Morse code"
+    },
+    {
+      "token": "DX",
+      "meaning": "distance"
+    }
+  ]
+}

@@ -1693,6 +1693,126 @@ if let fx = loadQSOElementsFixture() {
     check("fixtures/qso-elements.json loads and decodes", false)
 }
 
+// The CWOps "CW 77" list (issue #240), against fixtures/cw77.json — read by
+// this harness AND by android MorseDataCW77Test. The fixture carries the
+// supplied file verbatim; the expected set is derived from it here, not
+// read back from the table.
+struct CW77Fixture: Decodable {
+    struct Item: Decodable { let token: String; let meaning: String }
+    struct Recommended: Decodable { let wpm: Double; let farnsworth: Bool }
+    struct Personal: Decodable {
+        struct Case: Decodable { let why: String; let callsign: String; let name: String; let expected: [String] }
+        let placeholderCallsign: String
+        let callsignMeaning: String
+        let nameMeaning: String
+        let cases: [Case]
+    }
+    let source: [String]
+    let prosigns: [String]
+    let uniqueCount: Int
+    let recommended: Recommended
+    let personal: Personal
+    let items: [Item]
+}
+
+func loadCW77Fixture() -> CW77Fixture? {
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+    guard let data = try? Data(contentsOf: root.appendingPathComponent("fixtures/cw77.json")) else { return nil }
+    return try? JSONDecoder().decode(CW77Fixture.self, from: data)
+}
+
+print("\nShared CW 77 fixture (fixtures/cw77.json):")
+if let fx = loadCW77Fixture() {
+    // The set is the supplied file with repeats dropped, first one kept, and
+    // the five prosigns bracketed — derived from `source`, not from the table.
+    var seen = Set<String>()
+    let derived = fx.source.filter { seen.insert($0).inserted }
+        .map { fx.prosigns.contains($0) ? "<\($0)>" : $0 }
+    let table = MorseData.cw77
+    check("the source file has 75 entries", fx.source.count == 75)
+    check("de-duplicating the source leaves the fixture's count (70)",
+          derived.count == fx.uniqueCount && fx.uniqueCount == 70)
+    check("the fixture's items are the de-duplicated source, in order",
+          fx.items.map(\.token) == derived)
+    check("the table's tokens match the fixture exactly, in order",
+          table.map { $0.token } == fx.items.map(\.token))
+    check("the table's meanings match the fixture exactly, in order",
+          table.map { $0.meaning } == fx.items.map(\.meaning))
+    check("the set is called CW 77", MorseData.cw77Name == "CW 77")
+    check("recommended playback is the fixture's (40 WPM, no Farnsworth)",
+          MorseData.cw77RecommendedWpm == fx.recommended.wpm && !fx.recommended.farnsworth)
+
+    var sendable = true
+    for item in table {
+        let t = item.token
+        if t.hasPrefix("<") {
+            if !MorseData.prosigns.contains(where: { $0.name == t }) {
+                sendable = false
+                print("      ↳ \(t) is not a prosign MorseData.prosigns knows")
+            }
+        } else if !t.allSatisfy({ MorseCode.pattern(for: $0) != nil }) {
+            sendable = false
+            print("      ↳ \(t) has a character with no Morse pattern")
+        }
+    }
+    check("every token is sendable (pattern or known prosign)", sendable)
+
+    var agrees = true
+    for item in table {
+        let known = MorseData.abbreviations.first { $0.token == item.token }?.meaning
+            ?? MorseData.qCodes.first { $0.token == item.token }?.meaning
+            ?? MorseData.prosigns.first { $0.name == item.token }?.meaning
+            ?? MorseData.qsoElements.first { $0.token == item.token }?.meaning
+        if let known, known != item.meaning {
+            agrees = false
+            print("      ↳ \(item.token): \"\(item.meaning)\" but the reference table says \"\(known)\"")
+        }
+    }
+    check("meanings agree with the abbreviation / Q-code / prosign / QSO tables", agrees)
+    check("every meaning has a non-empty brief form",
+          table.allSatisfy { !MorseData.briefMeaning($0.meaning).isEmpty })
+
+    let items = MorseData.cw77Items()
+    let words = MorseData.cw77WordItems()
+    check("Listen items: token shown, meaning answered",
+          items.map(\.display) == fx.items.map(\.token) && items.map(\.answer) == fx.items.map(\.meaning))
+    check("Common Words items: the token is the answer",
+          words.map(\.display) == fx.items.map(\.token) && words.map(\.answer) == fx.items.map(\.token))
+    check("item ids are unique", Set(items.map(\.id)).count == items.count)
+    check("<BT> plays the run-together prosign", items.first { $0.display == "<BT>" }?.playable == .pattern("-...-"))
+    check("BK plays as letters", items.first { $0.display == "BK" }?.playable == .text("BK"))
+    check("HW? plays with its question mark", items.first { $0.display == "HW?" }?.playable == .text("HW?"))
+
+    // Your own callsign and name.
+    check("the placeholder callsign is the fixture's",
+          MorseData.cw77PlaceholderCallsign == fx.personal.placeholderCallsign)
+    check("the personal meanings are the fixture's",
+          MorseData.cw77CallsignMeaning == fx.personal.callsignMeaning
+          && MorseData.cw77NameMeaning == fx.personal.nameMeaning)
+    var personalOK = true
+    for c in fx.personal.cases {
+        let got = MorseData.cw77Personal(callsign: c.callsign, name: c.name)
+        if got.map(\.token) != c.expected {
+            personalOK = false
+            print("      ↳ \(c.why): got \(got.map(\.token)), fixture says \(c.expected)")
+        }
+    }
+    check("the callsign/name rule matches every fixture case", personalOK)
+    let mine = MorseData.cw77Personal(callsign: "n9ho", name: "Justin")
+    check("a personal callsign is answered as \"your call sign\", the name as \"your name\"",
+          mine.map(\.meaning) == [fx.personal.callsignMeaning, fx.personal.nameMeaning])
+    let withMe = MorseData.cw77Items(personal: mine)
+    check("personal items follow the 70",
+          withMe.count == 72 && withMe.suffix(2).map(\.display) == ["N9HO", "JUSTIN"]
+          && Set(withMe.map(\.id)).count == 72)
+} else {
+    check("fixtures/cw77.json loads and decodes", false)
+}
+
 // Journey mode (gamified level ladder)
 print("\nJourney:")
 do {
@@ -5679,7 +5799,7 @@ do {
     check("other refusals are not", LeaderboardServerHints.isUnknownKey("run token unknown, used or expired") == false)
 }
 
-// Buddy streaks (docs/buddy-streak-design.md, #219): the day label, the
+// Buddy streaks (docs/buddy-streak-design.md, #219, #237): the day label, the
 // invite-code rule and the cached status's wording, each pinned to the
 // server's own (src/buddy.ts in the leaderboard repository) or to the strings
 // both apps show.
@@ -5721,12 +5841,6 @@ do {
     check("typed keeps a stray character for normalize to refuse", BuddyInviteCode.typed("abc0de") == "ABC0DE" && BuddyInviteCode.normalize("ABC0DE") == nil)
 
     // Wire shapes.
-    let statusJSON = #"{"paired":true,"buddy":{"displayName":"W1AW","practisedToday":true},"streak":12,"myStreak":30,"practisedToday":false,"today":"2026-09-11"}"#
-    let status = try? JSONDecoder().decode(BuddyStatus.self, from: Data(statusJSON.utf8))
-    check("a paired status decodes", status?.paired == true && status?.buddy?.displayName == "W1AW" && status?.streak == 12 && status?.today == "2026-09-11")
-    let unpairedJSON = #"{"paired":false,"streak":0,"myStreak":3,"practisedToday":true,"today":"2026-09-11"}"#
-    let unpaired = try? JSONDecoder().decode(BuddyStatus.self, from: Data(unpairedJSON.utf8))
-    check("an unpaired status decodes without a buddy", unpaired?.paired == false && unpaired?.buddy == nil && unpaired?.myStreak == 3)
     let inviteJSON = #"{"code":"ABC234","expiresAt":1757635200000}"#
     let invite = try? JSONDecoder().decode(BuddyInviteResponse.self, from: Data(inviteJSON.utf8))
     check("an invite decodes and its expiry is in milliseconds", invite?.code == "ABC234" && invite?.expiryDate.timeIntervalSince1970 == 1_757_635_200)
@@ -5745,66 +5859,388 @@ do {
           == "{\(attJSON),\"challenge\":\"C\",\"day\":\"2026-09-11\",\"today\":\"2026-09-11\"}")
     check("status request carries today",
           json(BuddyStatusRequest(challenge: "C", attestation: att, today: "2026-09-11")) == "{\(attJSON),\"challenge\":\"C\",\"today\":\"2026-09-11\"}")
-    check("leave request carries only the attestation",
+    check("v1 leave request carries only the attestation",
           json(BuddyLeaveRequest(challenge: "C", attestation: att)) == "{\(attJSON),\"challenge\":\"C\"}")
+    check("v2 leave request names the pairing and today",
+          json(BuddyLeaveOneRequest(challenge: "C", attestation: att, buddyId: "p-1", today: "2026-09-11"))
+          == "{\(attJSON),\"buddyId\":\"p-1\",\"challenge\":\"C\",\"today\":\"2026-09-11\"}")
 
-    // The cached status and its wording — the strings both apps show.
+    // The cache: pending invites, the refresh gate, and reading a cache the
+    // one-buddy app (#219) saved.
     let fetched = Date(timeIntervalSince1970: 1_757_600_000)
-    let paired = BuddyStatusCache(status: status!, fetchedAt: fetched)
-    check("the cache takes the buddy's name, day and streak",
-          paired.paired && paired.buddyName == "W1AW" && paired.buddyPractisedToday && paired.streak == 12 && paired.myStreak == 30
-          && paired.today == "2026-09-11" && paired.fetchedAt == fetched)
-    check("home line when the buddy has practised", paired.homeLine(today: "2026-09-11") == "W1AW practised today · 12-day buddy streak")
-    var quiet = paired
-    quiet.buddyPractisedToday = false
-    check("home line when they have not", quiet.homeLine(today: "2026-09-11") == "W1AW hasn't practised yet today · 12-day buddy streak")
-    check("a cache from an earlier day cannot vouch for today", paired.homeLine(today: "2026-09-12") == "W1AW hasn't practised yet today · 12-day buddy streak")
-    check("settings line when the buddy has practised",
-          paired.settingsLine(today: "2026-09-11") == "Paired with W1AW · 12-day buddy streak · W1AW has practised today")
-    check("settings line when they have not",
-          quiet.settingsLine(today: "2026-09-11") == "Paired with W1AW · 12-day buddy streak · W1AW hasn't practised yet today")
-    var fresh = paired
-    fresh.streak = 0
-    check("a zero streak reads 'no buddy streak yet'", fresh.streakLabel == "no buddy streak yet" && BuddyStatusCache().streakLabel == "no buddy streak yet")
-    var one = paired
-    one.streak = 1
-    check("one day reads '1-day buddy streak'", one.streakLabel == "1-day buddy streak")
-    let empty = BuddyStatusCache()
-    check("not paired: no home line and the invite prompt",
-          empty.homeLine(today: "2026-09-11") == nil && empty.settingsLine(today: "2026-09-11") == "Invite a buddy, or join with a code they send you")
-    check("reminder sentence when the buddy has not practised",
-          quiet.reminderSentence(today: "2026-09-11", asOf: "6:10 pm") == "W1AW hasn't practised yet today (as of 6:10 pm)")
-    check("no reminder sentence when they have", paired.reminderSentence(today: "2026-09-11", asOf: "6:10 pm") == nil)
-    check("no reminder sentence from an earlier day's cache", quiet.reminderSentence(today: "2026-09-12", asOf: "6:10 pm") == nil)
-    check("no reminder sentence when not paired", empty.reminderSentence(today: "2026-09-11", asOf: "6:10 pm") == nil)
-    let unpairedCache = BuddyStatusCache(status: unpaired!, fetchedAt: fetched)
-    check("an unpaired answer leaves an empty name", !unpairedCache.paired && unpairedCache.buddyName == "" && unpairedCache.myStreak == 3)
-
-    // Pending invites and the refresh gate.
-    var invited = BuddyStatusCache()
+    let w1aw = BuddyEntry(id: "p-1", displayName: "W1AW", practisedToday: true, streak: 12)
+    let two = BuddyListStatus(buddies: [w1aw, BuddyEntry(id: "p-2", displayName: "K1ABC", practisedToday: false, streak: 3)],
+                              maxBuddies: 10, myStreak: 30, practisedToday: false, today: "2026-09-11")
+    let none = BuddyListStatus(buddies: [], maxBuddies: 10, myStreak: 3, practisedToday: true, today: "2026-09-11")
+    let listed = BuddyStatusCache(status: two, fetchedAt: fetched)
+    check("the cache takes the list, the cap and the day",
+          listed.buddies.count == 2 && listed.maxBuddies == 10 && listed.myStreak == 30 && listed.today == "2026-09-11" && listed.paired && !listed.isFull)
+    check("a buddy row says its own streak and day",
+          listed.rowLine(for: w1aw, today: "2026-09-11") == "12-day buddy streak · practised today"
+          && listed.rowLine(for: listed.buddies[1], today: "2026-09-11") == "3-day buddy streak · hasn't practised yet today"
+          && listed.rowLine(for: w1aw, today: "2026-09-12") == "12-day buddy streak · hasn't practised yet today")
+    check("the count line shows the cap", listed.countLine == "2 of 10 buddies" && BuddyStatusCache().countLine == "0 of 1 buddy")
+    var invited = BuddyStatusCache(status: none, fetchedAt: fetched)
     invited.pendingInviteCode = "ABC234"
     invited.pendingInviteExpiresAt = fetched.addingTimeInterval(3600)
     check("a pending invite is shown until it expires",
           invited.pendingInvite(at: fetched)?.code == "ABC234" && invited.pendingInvite(at: fetched.addingTimeInterval(7200)) == nil)
-    check("an invite outlives a not-yet-paired status answer",
-          BuddyStatusCache(status: unpaired!, fetchedAt: fetched, previous: invited).pendingInviteCode == "ABC234")
-    check("… and is dropped once paired", BuddyStatusCache(status: status!, fetchedAt: fetched, previous: invited).pendingInviteCode == nil)
+    check("an invite outlives an answer with nobody new",
+          BuddyStatusCache(status: none, fetchedAt: fetched, previous: invited).pendingInviteCode == "ABC234")
+    check("… and is dropped once someone joins it", BuddyStatusCache(status: two, fetchedAt: fetched, previous: invited).pendingInviteCode == nil)
+    var joinedOne = two
+    joinedOne.buddies = [w1aw]
+    joinedOne.joined = "p-1"
+    check("… but not by our own join", BuddyStatusCache(status: joinedOne, fetchedAt: fetched, previous: invited, joinedByMe: true).pendingInviteCode == "ABC234")
     var reported = invited
     reported.lastReportedDay = "2026-09-11"
     check("the reported day survives a status answer",
-          BuddyStatusCache(status: status!, fetchedAt: fetched, previous: reported).lastReportedDay == "2026-09-11")
+          BuddyStatusCache(status: two, fetchedAt: fetched, previous: reported).lastReportedDay == "2026-09-11")
     check("refresh wanted when paired or an invite is out, not otherwise",
-          paired.wantsRefresh(at: fetched) && invited.wantsRefresh(at: fetched)
-          && !invited.wantsRefresh(at: fetched.addingTimeInterval(7200)) && !empty.wantsRefresh(at: fetched))
+          listed.wantsRefresh(at: fetched) && invited.wantsRefresh(at: fetched)
+          && !invited.wantsRefresh(at: fetched.addingTimeInterval(7200)) && !BuddyStatusCache().wantsRefresh(at: fetched))
+    var full = listed
+    full.maxBuddies = 2
+    full.pendingInviteCode = "ABC234"
+    full.pendingInviteExpiresAt = fetched.addingTimeInterval(3600)
+    check("a full list shows no invite", full.isFull && full.pendingInvite(at: fetched) == nil)
 
-    // Tolerant decoding: an older app's settings without the block, and a
-    // newer app's with a field this one does not know, both load.
+    // Tolerant decoding, and the upgrade from the one-buddy cache.
     let old = try? JSONDecoder().decode(BuddyStatusCache.self, from: Data("{}".utf8))
     check("an empty object decodes to the defaults", old == BuddyStatusCache())
-    let partial = try? JSONDecoder().decode(BuddyStatusCache.self, from: Data(#"{"paired":true,"buddyName":"W1AW","streak":4,"future":1}"#.utf8))
-    check("a partial object keeps what it has", partial?.paired == true && partial?.buddyName == "W1AW" && partial?.streak == 4 && partial?.fetchedAt == nil)
+    let legacy = try? JSONDecoder().decode(BuddyStatusCache.self, from: Data(
+        #"{"paired":true,"buddyName":"W1AW","buddyPractisedToday":true,"streak":4,"myStreak":9,"today":"2026-09-11","lastReportedDay":"2026-09-11","future":1}"#.utf8))
+    check("a one-buddy cache becomes a list of one with no pairing id",
+          legacy?.buddies == [BuddyEntry(id: "", displayName: "W1AW", practisedToday: true, streak: 4)]
+          && legacy?.maxBuddies == 1 && legacy?.myStreak == 9 && legacy?.lastReportedDay == "2026-09-11" && legacy?.fetchedAt == nil)
+    check("… and its home line reads as before",
+          legacy?.homeLine(today: "2026-09-11") == "W1AW practised today · 4-day buddy streak")
+    let legacyUnpaired = try? JSONDecoder().decode(BuddyStatusCache.self, from: Data(#"{"paired":false,"buddyName":"","pendingInviteCode":"ABC234"}"#.utf8))
+    check("an unpaired one-buddy cache keeps its invite and has no buddies",
+          legacyUnpaired?.buddies == [] && legacyUnpaired?.pendingInviteCode == "ABC234")
     let roundTrip = (try? JSONEncoder().encode(reported)).flatMap { try? JSONDecoder().decode(BuddyStatusCache.self, from: $0) }
     check("the cache round-trips through JSON", roundTrip == reported)
+    let written = (try? JSONEncoder().encode(listed)).flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] } ?? [:]
+    check("the one-buddy keys are not written again", written["paired"] == nil && written["buddyName"] == nil && written["buddies"] != nil)
+}
+
+// Several buddies (#237), against fixtures/buddy-list.json — the same file
+// the Kotlin BuddyListTest reads: the status parse (both server shapes), the
+// digest behind the home line and the reminder, and when an invite stays.
+print("\nBuddy list (fixtures/buddy-list.json):")
+func loadBuddyListFixture() -> [String: Any]? {
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent()
+        .deletingLastPathComponent().deletingLastPathComponent()
+    guard let data = try? Data(contentsOf: root.appendingPathComponent("fixtures/buddy-list.json")) else { return nil }
+    return (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+}
+if let fx = loadBuddyListFixture(),
+   let digestCases = fx["digestCases"] as? [[String: Any]],
+   let parseCases = fx["parseCases"] as? [[String: Any]],
+   let inviteCases = fx["inviteCases"] as? [[String: Any]],
+   let asOf = fx["asOf"] as? String {
+    func entries(_ raw: Any?) -> [BuddyEntry] {
+        ((raw as? [[String: Any]]) ?? []).map {
+            BuddyEntry(id: $0["id"] as? String ?? "", displayName: $0["name"] as? String ?? "",
+                       practisedToday: $0["practisedToday"] as? Bool ?? false, streak: $0["streak"] as? Int ?? 0)
+        }
+    }
+    for c in digestCases {
+        let name = c["name"] as? String ?? "?"
+        let today = c["today"] as? String ?? ""
+        var cache = BuddyStatusCache()
+        cache.buddies = entries(c["buddies"])
+        cache.maxBuddies = max(1, cache.buddies.count)
+        cache.today = c["statusDay"] as? String ?? ""
+        cache.fetchedAt = (c["fetched"] as? Bool ?? false) ? Date(timeIntervalSince1970: 1_790_000_000) : nil
+        let d = cache.digest(today: today)
+        let want = c["digest"] as? [String: Any] ?? [:]
+        check("digest: \(name)",
+              d.count == want["count"] as? Int && d.allPractised == want["allPractised"] as? Bool
+              && d.waitingNames == want["waitingNames"] as? [String] && d.waitingMore == want["waitingMore"] as? Int
+              && d.bestStreak == want["bestStreak"] as? Int)
+        check("home line: \(name)", cache.homeLine(today: today) == c["home"] as? String)
+        check("reminder: \(name)", cache.reminderSentence(today: today, asOf: asOf) == c["reminder"] as? String)
+    }
+    for c in parseCases {
+        let name = c["name"] as? String ?? "?"
+        let body = (try? JSONSerialization.data(withJSONObject: c["body"] ?? [:])) ?? Data()
+        let parsed = try? JSONDecoder().decode(BuddyListStatus.self, from: body)
+        if let want = c["expect"] as? [String: Any] {
+            let expected = BuddyListStatus(buddies: entries(want["buddies"]), maxBuddies: want["maxBuddies"] as? Int ?? 0,
+                                           myStreak: want["myStreak"] as? Int ?? -1, practisedToday: want["practisedToday"] as? Bool ?? false,
+                                           today: want["today"] as? String ?? "?", joined: want["joined"] as? String ?? "?")
+            check("parse: \(name)", parsed == expected)
+        } else {
+            check("parse: \(name)", parsed == nil)
+        }
+    }
+    for c in inviteCases {
+        let keep = BuddyStatusCache.keepsInvite(previous: entries(c["previous"]), current: entries(c["current"]),
+                                                maxBuddies: c["maxBuddies"] as? Int ?? 0, joinedByMe: c["joinedByMe"] as? Bool ?? false,
+                                                joinedId: c["joinedId"] as? String ?? "")
+        check("invite kept: \(c["name"] as? String ?? "?")", keep == c["keep"] as? Bool)
+    }
+    check("the fixture has cases of every kind", !digestCases.isEmpty && !parseCases.isEmpty && !inviteCases.isEmpty)
+} else {
+    check("fixtures/buddy-list.json loads and decodes", false)
+}
+
+// MARK: - Settings map (#236)
+//
+// fixtures/settings-catalog.json — read by this harness AND by android
+// SettingsCatalogTest. Pins the category names and order on the Settings
+// root, the category of every setting both apps carry, and the search
+// field's answers, so "Settings › Keys & Sending" means the same on either
+// phone.
+struct SettingsCatalogFixture: Decodable {
+    struct Category: Decodable { let id: String; let title: String }
+    struct Entry: Decodable { let id: String; let category: String }
+    struct Query: Decodable {
+        let name: String
+        let query: String
+        let empty: Bool?
+        let includes: [String]?
+        let excludes: [String]?
+        let first: String?
+    }
+    let categories: [Category]
+    let entries: [Entry]
+    let queries: [Query]
+}
+
+func loadSettingsCatalogFixture() -> SettingsCatalogFixture? {
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+    guard let data = try? Data(contentsOf: root.appendingPathComponent("fixtures/settings-catalog.json")) else { return nil }
+    return try? JSONDecoder().decode(SettingsCatalogFixture.self, from: data)
+}
+
+print("\nSettings map and search (fixtures/settings-catalog.json):")
+if let fx = loadSettingsCatalogFixture() {
+    check("categories match the fixture, in order",
+          SettingsCategory.allCases.map { "\($0.rawValue)=\($0.title)" } == fx.categories.map { "\($0.id)=\($0.title)" })
+    let byId = Dictionary(SettingsCatalog.entries.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+    var sharedOK = true
+    for e in fx.entries where byId[e.id]?.category.rawValue != e.category {
+        sharedOK = false
+        print("      ↳ \(e.id): catalog has \(byId[e.id]?.category.rawValue ?? "nothing"), fixture says \(e.category)")
+    }
+    check("every shared setting is in the fixture's category (\(fx.entries.count))", sharedOK)
+    check("catalog ids are unique", byId.count == SettingsCatalog.entries.count)
+    check("every category has a section and a searchable setting",
+          SettingsCategory.allCases.allSatisfy { c in
+              !SettingsSection.sections(in: c).isEmpty && SettingsCatalog.entries.contains { $0.category == c }
+          })
+    let sectionOrder = SettingsCatalog.entries.map { SettingsSection.allCases.firstIndex(of: $0.section)! }
+    check("catalog is in category then section order", sectionOrder == sectionOrder.sorted())
+    var queriesOK = true
+    for q in fx.queries {
+        let got = SettingsCatalog.search(q.query).map(\.id)
+        var ok = true
+        if q.empty == true, !got.isEmpty { ok = false }
+        if let inc = q.includes, !inc.allSatisfy(got.contains) { ok = false }
+        if let exc = q.excludes, exc.contains(where: got.contains) { ok = false }
+        if let first = q.first, got.first != first { ok = false }
+        if !ok {
+            queriesOK = false
+            print("      ↳ \(q.name): \"\(q.query)\" found \(got)")
+        }
+    }
+    check("search answers match the fixture across \(fx.queries.count) queries", queriesOK)
+} else {
+    check("fixtures/settings-catalog.json loads and decodes", false)
+}
+
+// ---------------------------------------------------------------------------
+// Keyboard-entry answers (#232), against fixtures/answer-entry.json — read by
+// this harness and by android AnswerEntryTest.
+struct AnswerEntryFixture: Decodable {
+    struct LadderCase: Decodable {
+        let name: String
+        let events: String
+        let tier: String
+        let promotions: [[PromotionPart]]
+    }
+    enum PromotionPart: Decodable, Equatable {
+        case index(Int), tier(String)
+        init(from decoder: Decoder) throws {
+            let c = try decoder.singleValueContainer()
+            if let i = try? c.decode(Int.self) { self = .index(i) } else { self = .tier(try c.decode(String.self)) }
+        }
+    }
+    struct GradeCase: Decodable {
+        let target: String
+        let answer: String
+        let correct: Bool
+        let confusedWith: String?
+    }
+    let window: Int
+    let requiredCorrect: Int
+    let ladder: [LadderCase]
+    let normalize: [String: String]
+    let gradeCharacter: [GradeCase]
+}
+func loadAnswerEntryFixture() -> AnswerEntryFixture? {
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent()
+        .deletingLastPathComponent().deletingLastPathComponent()
+    guard let data = try? Data(contentsOf: root.appendingPathComponent("fixtures/answer-entry.json")) else { return nil }
+    return try? JSONDecoder().decode(AnswerEntryFixture.self, from: data)
+}
+print("\nAnswer entry (fixtures/answer-entry.json):")
+if let fx = loadAnswerEntryFixture() {
+    check("window is \(fx.window)", AnswerEntryLadder.window == fx.window)
+    check("\(fx.requiredCorrect) correct clear a rung", AnswerEntryLadder.requiredCorrect == fx.requiredCorrect)
+    check("fixture has ladder cases", !fx.ladder.isEmpty)
+    for c in fx.ladder {
+        var ladder = AnswerEntryLadder()
+        var promotions: [[AnswerEntryFixture.PromotionPart]] = []
+        for (i, e) in c.events.enumerated() {
+            switch e {
+            case "L": ladder.restartLevel()
+            default:
+                if let up = ladder.record(correct: e == "c") { promotions.append([.index(i), .tier(up.rawValue)]) }
+            }
+        }
+        check("ladder: \(c.name)", ladder.tier.rawValue == c.tier && promotions == c.promotions)
+    }
+    check("fixture has normalize cases", !fx.normalize.isEmpty)
+    for (typed, expected) in fx.normalize.sorted(by: { $0.key < $1.key }) {
+        check("normalize \(typed.debugDescription) → \(expected.debugDescription)", TypedAnswer.normalize(typed) == expected)
+    }
+    check("fixture has grading cases", !fx.gradeCharacter.isEmpty)
+    for g in fx.gradeCharacter {
+        let got = TypedAnswer.gradeCharacter(g.answer, target: g.target.first!)
+        check("\(g.answer.debugDescription) for \(g.target): correct \(g.correct), confused with \(g.confusedWith ?? "nothing")",
+              got.correct == g.correct && got.confusedWith.map(String.init) == g.confusedWith)
+    }
+} else {
+    check("fixtures/answer-entry.json loads and decodes", false)
+}
+
+print("\nAnswer entry — the engines grade typed answers:")
+do {
+    // The Koch engine: a blank or two-character answer is a miss for the
+    // target with no confusion partner; a single wrong character is a confusion.
+    let engine = TrainerEngine(seedCount: 2, rng: SeededRNG(seed: 7))
+    for (answer, label) in [("", "a blank"), ("KM", "two characters"), ("%", "a symbol with no code")] {
+        let d = engine.nextDrill()
+        let target = d.correct.first!
+        let before = engine.stats[target]?.attempts.count ?? 0
+        let outcome = engine.record(choice: answer, ttr: 0.4)
+        check("\(label) is a miss", !outcome.correct)
+        check("… counted against \(target)", (engine.stats[target]?.attempts.count ?? 0) == before + 1)
+        check("… with no confusion recorded", engine.confusions.isEmpty)
+    }
+    let d = engine.nextDrill()
+    let target = d.correct.first!
+    let other: Character = target == "K" ? "M" : "K"
+    _ = engine.record(choice: String(other).lowercased(), ttr: 0.4)
+    check("a single wrong character (typed lower case) is a confusion",
+          engine.confusions.count(target: target, chosen: other) == 1)
+    let d2 = engine.nextDrill()
+    check("a typed answer in lower case is right", engine.record(choice: d2.correct.lowercased(), ttr: 0.4).correct)
+
+    // The Confusion Drill, on the same rules.
+    let review = TrainerEngine(seedCount: 2, rng: SeededRNG(seed: 9))
+    let quiz = ConfusionQuiz(engine: review, rng: SeededRNG(seed: 9))
+    let rd = quiz.nextDrill()
+    let rt = rd.correct.first!
+    let rb = review.stats[rt]?.attempts.count ?? 0
+    check("Confusion Drill: a blank is a miss", !quiz.record(choice: "", ttr: 0.4).correct)
+    check("… counted, with no confusion recorded",
+          (review.stats[rt]?.attempts.count ?? 0) == rb + 1 && review.confusions.isEmpty)
+
+    // Saved ladders survive a round trip and tolerate an older or odd shape.
+    var ladder = AnswerEntryLadder()
+    for _ in 0..<20 { ladder.record(correct: true) }
+    ladder.record(correct: false)
+    let trip = (try? JSONEncoder().encode(ladder)).flatMap { try? JSONDecoder().decode(AnswerEntryLadder.self, from: $0) }
+    check("a ladder round-trips through JSON", trip == ladder && trip?.tier == .sixChoices && trip?.recent == [false])
+    let odd = try? JSONDecoder().decode(AnswerEntryLadder.self, from: Data(#"{"tier":"hexChoices","future":1}"#.utf8))
+    check("an unknown rung decodes as four choices", odd == AnswerEntryLadder())
+    check("tiers show 4, 6, then no choices",
+          AnswerEntryTier.fourChoices.choiceCount == 4 && AnswerEntryTier.sixChoices.choiceCount == 6
+          && AnswerEntryTier.typed.choiceCount == nil)
+}
+
+// MARK: - On-screen paddle keyer (#233)
+//
+// fixtures/paddle-keyer.json — read by this harness AND by android
+// PaddleKeyerTest. Scripts of paddle presses, and the elements each keyer mode
+// sends for them, worked out by hand from the fixture's `derivation`.
+struct PaddleKeyerFixture: Decodable {
+    struct Case: Decodable {
+        let name: String
+        let wpm: Double
+        let untilMs: Double
+        let events: [[Slot]]
+        let expected: [String: [[Slot]]]
+    }
+    /// One slot of a fixture tuple: a word ("dit", "down") or a number (ms).
+    enum Slot: Decodable {
+        case text(String), number(Double)
+        init(from decoder: Decoder) throws {
+            let c = try decoder.singleValueContainer()
+            if let n = try? c.decode(Double.self) { self = .number(n) } else { self = .text(try c.decode(String.self)) }
+        }
+        var text: String { if case .text(let s) = self { return s }; return "" }
+        var number: Double { if case .number(let n) = self { return n }; return .nan }
+    }
+    let cases: [Case]
+}
+
+print("\nOn-screen paddle keyer, against fixtures/paddle-keyer.json:")
+if let data = try? Data(contentsOf: URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent()
+        .deletingLastPathComponent().deletingLastPathComponent()
+        .appendingPathComponent("fixtures/paddle-keyer.json")),
+   let fx = try? JSONDecoder().decode(PaddleKeyerFixture.self, from: data) {
+    check("fixture carries cases for every mode",
+          !fx.cases.isEmpty && fx.cases.allSatisfy { c in PaddleKeyer.Mode.allCases.allSatisfy { c.expected[$0.rawValue] != nil } })
+    check("one unit is 1200 / wpm ms", PaddleKeyer(mode: .iambicA, wpm: 20).unitMs == 60)
+    for c in fx.cases {
+        for mode in PaddleKeyer.Mode.allCases {
+            var keyer = PaddleKeyer(mode: mode, wpm: c.wpm)
+            var edges: [PaddleKeyer.Edge] = []
+            for e in c.events {
+                let element: PaddleKeyer.Element = e[0].text == "dah" ? .dah : .dit
+                edges += keyer.paddle(element, isDown: e[1].text == "down", atMs: e[2].number)
+            }
+            edges += keyer.advance(toMs: c.untilMs)
+            // Pair each key-down with the key-up that follows it.
+            var got: [String] = []
+            var i = 0
+            while i < edges.count {
+                let d = edges[i]
+                let u = i + 1 < edges.count ? edges[i + 1] : nil
+                if d.isDown, let u, !u.isDown, u.element == d.element {
+                    got.append("\(d.element.rawValue) \(Int(d.atMs))-\(Int(u.atMs))")
+                    i += 2
+                } else {
+                    got.append("unpaired \(d.isDown ? "down" : "up") \(d.element.rawValue) \(Int(d.atMs))")
+                    i += 1
+                }
+            }
+            let want = (c.expected[mode.rawValue] ?? []).map { "\($0[0].text) \(Int($0[1].number))-\(Int($0[2].number))" }
+            check("\(mode.rawValue): \(c.name)", got == want)
+            if got != want { print("      ↳ got \(got), fixture says \(want)") }
+            check("\(mode.rawValue): \(c.name) — idle afterwards", !keyer.isBusy)
+        }
+    }
+    // A screen closing mid-tone cuts it rather than leaving the key down.
+    var k = PaddleKeyer(mode: .iambicA, wpm: 20)
+    _ = k.paddle(.dah, isDown: true, atMs: 0)
+    let cut = k.releaseAll(atMs: 50)
+    check("releaseAll cuts a sounding tone and goes idle",
+          cut == [PaddleKeyer.Edge(isDown: false, atMs: 50, element: .dah)] && !k.isBusy && k.advance(toMs: 5000).isEmpty)
+} else {
+    check("fixtures/paddle-keyer.json loads and decodes", false)
 }
 
 // Sending Analyzer (#241, #234, #235), against fixtures/sending-analysis.json —

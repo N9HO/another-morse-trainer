@@ -101,7 +101,9 @@ struct IntroView: View {
             CWDecoderView().environmentObject(model)
         }
         .fullScreenCover(isPresented: $showingRepeater) {
-            RepeaterView().environmentObject(repeater)
+            // AppModel too: the on-screen key follows the Settings choice of
+            // straight key or paddles (#233).
+            RepeaterView().environmentObject(repeater).environmentObject(model)
         }
         .onAppear {
             model.refreshDailyDit()
@@ -614,9 +616,12 @@ private struct ModeOptionsCard: View {
                 inlinePicker(title: "Gap before the spoken answer",
                              selection: listenGapBinding) { (g: AnswerGap) in g.label }
                 // Only the token-plus-meaning sets have a long form to shorten (#210).
-                if [.qsoTop20, .qsoTop100, .abbreviations].contains(model.settings.listenContent) {
+                if [.qsoTop20, .qsoTop100, .cw77, .abbreviations].contains(model.settings.listenContent) {
                     inlinePicker(title: "Readback",
                                  selection: listenReadbackBinding) { (r: ListenReadback) in r.label }
+                }
+                if model.settings.listenContent == .cw77 {
+                    cw77Options
                 }
             }
 
@@ -717,6 +722,9 @@ private struct ModeOptionsCard: View {
                 // being deleted (Android parity).
                 inlinePicker(title: "How big a word pool?",
                              selection: wordTierBinding) { (t: WordTier) in t.label }
+                if model.settings.wordTier == .cw77 && !model.settings.customWordsActive {
+                    cw77Options
+                }
                 customWordsControl
             }
 
@@ -931,6 +939,64 @@ private struct ModeOptionsCard: View {
             Text(title).font(.subheadline)
             Spacer()
             Text(value).foregroundStyle(.secondary).monospacedDigit()
+        }
+    }
+
+    // MARK: - CW 77 (#240)
+
+    private var cw77IncludeMeBinding: Binding<Bool> {
+        Binding(
+            get: { model.settings.cw77IncludeMe },
+            set: { model.settings.cw77IncludeMe = $0 }
+        )
+    }
+
+    /// Shown under Listen & Learn's content picker and Common Words' pool
+    /// picker while CW 77 is chosen (Android parity): Bob Carter WR7Q's
+    /// playback as a one-tap preset — an explicit tap that sets the global
+    /// speed, never a silent override — and the switch that adds your own
+    /// callsign and name, offered only when there is one to add.
+    @ViewBuilder
+    private var cw77Options: some View {
+        if model.settings.atCW77RecommendedSpeed {
+            Label("Playing at the recommended 40 WPM, no Farnsworth.", systemImage: "checkmark.circle.fill")
+                .font(.footnote)
+                .foregroundStyle(Theme.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+        } else {
+            VStack(alignment: .leading, spacing: 4) {
+                Button {
+                    Haptics.selection()
+                    model.settings.wpm = MorseData.cw77RecommendedWpm
+                    model.settings.farnsworth = false
+                } label: {
+                    Label("Use 40 WPM, no Farnsworth", systemImage: "hare.fill")
+                        .font(.subheadline).bold()
+                }
+                .tint(Theme.teal)
+                Text("Bob Carter WR7Q recommends hearing CW 77 at 40 WPM with no Farnsworth spacing. This changes your speed in Settings.")
+                    .font(.footnote)
+                    .foregroundStyle(Theme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        let personal = model.settings.cw77PersonalTokens
+        if personal.isEmpty {
+            Text("Add your callsign or name under Settings \u{203A} QSO & Pileups \u{203A} Your Station to drill them with CW 77.")
+                .font(.footnote)
+                .foregroundStyle(Theme.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+        } else {
+            Toggle(isOn: cw77IncludeMeBinding) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Include my callsign and name").font(.subheadline)
+                    Text("Adds " + personal.map(\.token).joined(separator: " and ") + " to the set.")
+                        .font(.footnote)
+                        .foregroundStyle(Theme.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .tint(Theme.teal)
         }
     }
 
@@ -1178,7 +1244,7 @@ private struct GamesMenuView: View {
 ///
 /// The starting level is deliberately NOT asked here (#151). It is one
 /// app-wide answer, given at first run (`OnboardingView`) and changeable under
-/// Settings → Proficiency; re-asking it on every Characters, Confusion Drill
+/// Settings › Characters & Lessons › Proficiency; re-asking it on every Characters, Confusion Drill
 /// and Sending Practice launch read as three different questions, and tapping
 /// the level you already had silently restarted the ladder. Those modes still
 /// open the sheet sensibly without it: Characters and Sending Practice carry

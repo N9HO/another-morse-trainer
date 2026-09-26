@@ -8,6 +8,9 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.content.edit
+import app.anothermorsetrainer.morsekit.AnswerEntryMode
+import app.anothermorsetrainer.morsekit.Buddy
+import app.anothermorsetrainer.morsekit.BuddyEntry
 import app.anothermorsetrainer.morsekit.BuddyStatus
 import app.anothermorsetrainer.morsekit.CallsignFormat
 import app.anothermorsetrainer.morsekit.ContestLength
@@ -18,11 +21,32 @@ import app.anothermorsetrainer.morsekit.MorseCode
 import app.anothermorsetrainer.morsekit.MorseData
 import app.anothermorsetrainer.morsekit.MorseItem
 import app.anothermorsetrainer.morsekit.MorseTiming
+import app.anothermorsetrainer.morsekit.PaddleKeyer
 import app.anothermorsetrainer.morsekit.PhraseQuiz
 import app.anothermorsetrainer.morsekit.RapidFireContent
 import app.anothermorsetrainer.morsekit.RapidFirePace
 import app.anothermorsetrainer.morsekit.RapidFireResponse
+import app.anothermorsetrainer.morsekit.TokenMeaning
 import app.anothermorsetrainer.morsekit.TrainerEngine
+import org.json.JSONArray
+
+/**
+ * What the on-screen key is (#233): the single hold-to-key pad every keying
+ * screen has always had, or a pair of iambic paddles timed by [PaddleKeyer].
+ * Mirrors iOS `OnScreenKeyType`.
+ */
+enum class OnScreenKeyType(val label: String) {
+    STRAIGHT("Straight key"),
+    PADDLES("Paddles")
+}
+
+/** Display name of a paddle keyer mode (mirrors iOS `PaddleKeyer.Mode.label`). */
+val PaddleKeyer.Mode.label: String
+    get() = when (this) {
+        PaddleKeyer.Mode.IAMBIC_A -> "Iambic A"
+        PaddleKeyer.Mode.IAMBIC_B -> "Iambic B"
+        PaddleKeyer.Mode.ULTIMATIC -> "Ultimatic"
+    }
 
 /** When to reveal the correct answer after a response (mirrors iOS RevealMode). */
 enum class RevealMode(val label: String, val shortLabel: String) {
@@ -129,6 +153,12 @@ object Settings {
     const val MIN_CHARACTER_WPM = 15.0
     /** Bottom of the Farnsworth effective-speed range. Matches the iOS slider (8…character speed). */
     const val MIN_EFFECTIVE_WPM = 8.0
+    /**
+     * The [wordCount] value that picks the CW 77 list (#240) instead of a
+     * ranked Top N — no ranked tier is 77, so the two never collide. iOS
+     * spells it `WordTier.cw77`.
+     */
+    const val WORD_POOL_CW77 = 77
     /** Most auto-repeats Head Copy will play after the first hearing (iOS headCopyRepeatRange). */
     const val MAX_HEAD_COPY_REPEATS = 3
     /** Longest Head Copy auto-reveal countdown, in seconds (iOS headCopyRevealRange). */
@@ -200,6 +230,15 @@ object Settings {
     var answerByKeying by mutableStateOf(false)
         private set
 
+    /**
+     * How the choice quizzes take an answer (#232): tap the choices (the
+     * default), climb four choices → six → typed per level, or always type.
+     * Honoured per drill like keying: a meaning or a prosign glyph keeps its
+     * choices. The iOS `AppSettings.answerEntry` twin.
+     */
+    var answerEntry by mutableStateOf(AnswerEntryMode.CHOICES)
+        private set
+
     // ---- Practice (drill difficulty / presentation) ----
 
     /** Most answer choices to ever show (grows with what you've met, up to this). */
@@ -208,7 +247,11 @@ object Settings {
     /** "Fast enough" recognition-time bar, in seconds — drives mastery/weighting. */
     var recognitionTargetSec by mutableDoubleStateOf(1.0)
         private set
-    /** How big a pool Common Words draws from (Top-N ranked ham words). */
+    /**
+     * How big a pool Common Words draws from (Top-N ranked ham words), or
+     * [WORD_POOL_CW77] for the CWOps CW 77 list instead (#240), which is not a
+     * slice of the ranked list — [wordPoolItems] builds either.
+     */
     var wordCount by mutableIntStateOf(100)
         private set
     /** When to reveal the correct answer after a response (fresh installs: only when wrong, as on iOS). */
@@ -221,6 +264,18 @@ object Settings {
     /** Show the digit 0 with a slash through it wherever copy text is displayed
      *  (the operator's handwriting convention — issue #62). */
     var slashedZero by mutableStateOf(true)
+        private set
+
+    // ---- On-screen key (#233) ----
+
+    /** Straight key (the default, and the only kind before #233) or paddles. */
+    var onScreenKey by mutableStateOf(OnScreenKeyType.STRAIGHT)
+        private set
+    /** How the on-screen paddles are timed; Iambic A, the reporter's preference, by default. */
+    var paddleMode by mutableStateOf(PaddleKeyer.Mode.IAMBIC_A)
+        private set
+    /** Dah on the left, dit on the right — for a left-handed operator. */
+    var paddleSwap by mutableStateOf(false)
         private set
 
     // ---- Short Stories (fables / serials / news) ----
@@ -336,6 +391,13 @@ object Settings {
         private set
     /** Whether Common Words drills draw from the custom list instead of the ranked pool. */
     var useCustomWords by mutableStateOf(false)
+        private set
+    /**
+     * Add your own callsign and name to the CW 77 set, in Listen & Learn and
+     * in Common Words (#240). Off by default; offered only while
+     * [cw77PersonalTokens] has something to add.
+     */
+    var cw77IncludeMe by mutableStateOf(false)
         private set
 
     /** How much the learner already knows — seeds the Characters Koch ladder. */
@@ -479,6 +541,7 @@ object Settings {
         hapticsEnabled = prefs.getBoolean("haptics", true)
         voiceAnswersEnabled = prefs.getBoolean("voiceAnswers", false)
         answerByKeying = prefs.getBoolean("answerByKeying", false)
+        answerEntry = AnswerEntryMode.fromId(prefs.getString("answerEntry", null))
         answerChoices = prefs.getInt("answerChoices", 4).coerceIn(4, 6)
         recognitionTargetSec = prefs.getFloat("recogTarget", 1.0f).toDouble().coerceIn(0.5, 3.0)
         wordCount = prefs.getInt("wordCount", 100)
@@ -489,6 +552,10 @@ object Settings {
         practiceDuration = runCatching { PracticeDuration.valueOf(prefs.getString("practiceDuration", null) ?: "FIVE_MIN") }
             .getOrDefault(PracticeDuration.FIVE_MIN)
         slashedZero = prefs.getBoolean("slashedZero", true)
+        onScreenKey = runCatching { OnScreenKeyType.valueOf(prefs.getString("onScreenKey", null) ?: "STRAIGHT") }
+            .getOrDefault(OnScreenKeyType.STRAIGHT)
+        paddleMode = PaddleKeyer.Mode.fromId(prefs.getString("paddleMode", null))
+        paddleSwap = prefs.getBoolean("paddleSwap", false)
         storyContent = runCatching { StoryContent.valueOf(prefs.getString("storyContent", null) ?: "FABLES") }
             .getOrDefault(StoryContent.FABLES)
         storySerialId = prefs.getString("storySerialId", "") ?: ""
@@ -551,6 +618,7 @@ object Settings {
             .toSet().filter { it in MorseCode.pickablePunctuation }.toSet()
         customWordsText = prefs.getString("customWords", "") ?: ""
         useCustomWords = prefs.getBoolean("useCustomWords", false)
+        cw77IncludeMe = prefs.getBoolean("cw77IncludeMe", false)
         proficiency = runCatching { Proficiency.valueOf(prefs.getString("proficiency", null) ?: "NONE") }
             .getOrDefault(Proficiency.NONE)
         introduceNewCharacters = prefs.getBoolean("introduceNew", true)
@@ -577,17 +645,28 @@ object Settings {
         buddyStatus = runCatching {
             val fetchedAt = prefs.getLong("buddyFetchedAt", 0L)
             if (fetchedAt <= 0L) return@runCatching null
+            val buddies = if (prefs.contains("buddyList")) {
+                Buddy.parseEntries(JSONArray(prefs.getString("buddyList", "[]") ?: "[]"))
+            } else {
+                // A cache the one-buddy app (#219) wrote: its buddy becomes the
+                // list's one entry, with no pairing id until the next answer
+                // brings one. persistBuddy then writes the list and drops these.
+                val name = (prefs.getString("buddyName", "") ?: "").trim()
+                if (prefs.getBoolean("buddyPaired", false) && name.isNotEmpty()) {
+                    listOf(BuddyEntry("", name, prefs.getBoolean("buddyPractisedToday", false), prefs.getInt("buddyStreak", 0).coerceAtLeast(0)))
+                } else {
+                    emptyList()
+                }
+            }
             BuddyStatus(
-                paired = prefs.getBoolean("buddyPaired", false),
-                buddyName = prefs.getString("buddyName", "") ?: "",
-                buddyPractisedToday = prefs.getBoolean("buddyPractisedToday", false),
-                streak = prefs.getInt("buddyStreak", 0),
+                buddies = buddies,
+                maxBuddies = maxOf(1, buddies.size, prefs.getInt("buddyMax", 1)),
                 myStreak = prefs.getInt("buddyMyStreak", 0),
                 practisedToday = prefs.getBoolean("buddyMyPractisedToday", false),
                 today = prefs.getString("buddyToday", "") ?: "",
                 fetchedAt = fetchedAt
             )
-        }.getOrNull()?.let { if (it.paired && it.buddyName.isEmpty()) it.copy(paired = false) else it }
+        }.getOrNull()
         buddyLastReportedDay = runCatching { prefs.getString("buddyLastReportedDay", "") ?: "" }.getOrDefault("")
         buddyInviteCode = runCatching { prefs.getString("buddyInviteCode", "") ?: "" }.getOrDefault("")
         buddyInviteExpiresAt = runCatching { prefs.getLong("buddyInviteExpiresAt", 0L) }.getOrDefault(0L)
@@ -668,6 +747,11 @@ object Settings {
         persist()
     }
 
+    fun updateAnswerEntry(value: AnswerEntryMode) {
+        answerEntry = value
+        persist()
+    }
+
     fun updateAnswerChoices(value: Int) {
         answerChoices = value.coerceIn(4, 6)
         persist()
@@ -695,6 +779,21 @@ object Settings {
 
     fun updateSlashedZero(value: Boolean) {
         slashedZero = value
+        persist()
+    }
+
+    fun updateOnScreenKey(value: OnScreenKeyType) {
+        onScreenKey = value
+        persist()
+    }
+
+    fun updatePaddleMode(value: PaddleKeyer.Mode) {
+        paddleMode = value
+        persist()
+    }
+
+    fun updatePaddleSwap(value: Boolean) {
+        paddleSwap = value
         persist()
     }
 
@@ -813,6 +912,32 @@ object Settings {
         persist()
     }
 
+    fun updateCw77IncludeMe(value: Boolean) {
+        cw77IncludeMe = value
+        persist()
+    }
+
+    /**
+     * Your callsign and name as CW 77 would add them (#240), whether or not
+     * the switch is on — empty means there is nothing to offer. The call and
+     * name live with the Pileup Runner's station settings.
+     */
+    fun cw77PersonalTokens(): List<TokenMeaning> =
+        MorseData.cw77Personal(PileupSettings.myCall, PileupSettings.myName)
+
+    /** What CW 77 adds right now: the personal tokens while the switch is on. */
+    fun cw77Personal(): List<TokenMeaning> = if (cw77IncludeMe) cw77PersonalTokens() else emptyList()
+
+    /** Whether playback is already Bob Carter WR7Q's recommendation for CW 77. */
+    val atCw77RecommendedSpeed: Boolean
+        get() = characterWpm == MorseData.CW77_RECOMMENDED_WPM && !farnsworthEnabled
+
+    /** The one-tap CW 77 preset: 40 WPM, Farnsworth off — an explicit tap, never a silent override. */
+    fun applyCw77RecommendedSpeed() {
+        updateCharacterWpm(MorseData.CW77_RECOMMENDED_WPM)
+        updateFarnsworthEnabled(false)
+    }
+
     /**
      * The parsed custom pool — the same rules as iOS's `MorseData.parseWordList`:
      * split on commas, semicolons and whitespace, uppercased, filtered to
@@ -828,6 +953,7 @@ object Settings {
     fun wordPoolItems(): List<MorseItem> {
         val custom = customWords
         return if (useCustomWords && custom.size >= 2) MorseData.customWordItems(custom)
+        else if (wordCount == WORD_POOL_CW77) MorseData.cw77WordItems(cw77Personal())
         else MorseData.topWordItems(wordCount)
     }
 
@@ -888,13 +1014,19 @@ object Settings {
         persist()
     }
 
-    /** A fresh status from the server replaces the cache; a pairing clears any outstanding invite. */
-    fun updateBuddyStatus(status: BuddyStatus) {
-        buddyStatus = status
-        if (status.paired) {
+    /**
+     * A fresh status from the server replaces the cache. An outstanding invite
+     * is dropped once the list is full or someone joined it
+     * ([Buddy.keepsInvite]); [joinedByMe] marks this install's own join,
+     * whose new buddy came through their code, not ours.
+     */
+    fun updateBuddyStatus(status: BuddyStatus, joinedByMe: Boolean = false) {
+        val previous = buddyStatus?.buddies ?: emptyList()
+        if (!Buddy.keepsInvite(previous, status.buddies, status.maxBuddies, joinedByMe, status.joined)) {
             buddyInviteCode = ""
             buddyInviteExpiresAt = 0L
         }
+        buddyStatus = status
         persistBuddy()
     }
 
@@ -909,7 +1041,7 @@ object Settings {
         persistBuddy()
     }
 
-    /** After "Leave buddy" or "Delete my scores": the server has forgotten the pair, so does the cache. */
+    /** After a one-buddy (v1) leave or "Delete my scores": the server has forgotten every pairing, so does the cache. */
     fun clearBuddy() {
         buddyStatus = null
         buddyLastReportedDay = ""
@@ -923,10 +1055,13 @@ object Settings {
         val s = buddyStatus
         prefs.edit {
             putLong("buddyFetchedAt", s?.fetchedAt ?: 0L)
-            putBoolean("buddyPaired", s?.paired ?: false)
-            putString("buddyName", s?.buddyName ?: "")
-            putBoolean("buddyPractisedToday", s?.buddyPractisedToday ?: false)
-            putInt("buddyStreak", s?.streak ?: 0)
+            putString("buddyList", Buddy.entriesJson(s?.buddies ?: emptyList()).toString())
+            putInt("buddyMax", s?.maxBuddies ?: 1)
+            // The one-buddy keys (#219) are read once on upgrade and not kept.
+            remove("buddyPaired")
+            remove("buddyName")
+            remove("buddyPractisedToday")
+            remove("buddyStreak")
             putInt("buddyMyStreak", s?.myStreak ?: 0)
             putBoolean("buddyMyPractisedToday", s?.practisedToday ?: false)
             putString("buddyToday", s?.today ?: "")
@@ -1088,12 +1223,16 @@ object Settings {
             putBoolean("haptics", hapticsEnabled)
             putBoolean("voiceAnswers", voiceAnswersEnabled)
             putBoolean("answerByKeying", answerByKeying)
+            putString("answerEntry", answerEntry.id)
             putInt("answerChoices", answerChoices)
             putFloat("recogTarget", recognitionTargetSec.toFloat())
             putInt("wordCount", wordCount)
             putString("revealMode", revealMode.name)
             putString("practiceDuration", practiceDuration.name)
             putBoolean("slashedZero", slashedZero)
+            putString("onScreenKey", onScreenKey.name)
+            putString("paddleMode", paddleMode.id)
+            putBoolean("paddleSwap", paddleSwap)
             putString("storyContent", storyContent.name)
             putString("storySerialId", storySerialId)
             putString("newsSource", newsSource.name)
@@ -1109,6 +1248,7 @@ object Settings {
             putString("punctuation", punctuationChars.joinToString(""))
             putString("customWords", customWordsText)
             putBoolean("useCustomWords", useCustomWords)
+            putBoolean("cw77IncludeMe", cw77IncludeMe)
             putString("proficiency", proficiency.name)
             putBoolean("introduceNew", introduceNewCharacters)
             putStringSet("introducedItems", introducedItems)

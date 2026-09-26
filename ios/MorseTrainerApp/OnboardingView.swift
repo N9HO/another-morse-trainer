@@ -3,7 +3,7 @@ import SwiftUI
 /// First-run onboarding: welcome the learner and ask how much Morse they
 /// already know, seeding the Characters Koch ladder and unlocking the Journey
 /// that far (#151). Shown once, gated by `AppSettings.onboardingDone`; the
-/// answer can be changed later under Settings → Proficiency. Twin of the
+/// answer can be changed later under Settings › Characters & Lessons › Proficiency. Twin of the
 /// Android `OnboardingScreen`.
 ///
 /// It replaces the per-mode "Where are you starting?" card the setup sheet

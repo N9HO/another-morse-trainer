@@ -84,7 +84,7 @@ struct StartHereView: View {
                         .foregroundStyle(Theme.textSecondary)
 
                     section("Already know some Morse?", systemImage: "checkmark.seal")
-                    Text("Open Settings → Proficiency and tell it what you already know. That sets your starting character set instead of making you re-earn A and N. Comfortable with the whole alphabet? Skip Journey and go straight to Common Words, Rapid Fire, or Pileup Runner.")
+                    Text("Open Settings › Characters & Lessons › Proficiency and tell it what you already know. That sets your starting character set instead of making you re-earn A and N. Comfortable with the whole alphabet? Skip Journey and go straight to Common Words, Rapid Fire, or Pileup Runner.")
                         .foregroundStyle(Theme.textSecondary)
                 }
                 .padding(24)

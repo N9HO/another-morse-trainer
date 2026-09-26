@@ -119,7 +119,7 @@ fun ListenScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) 
                     }
                 )
                 // Only the token-plus-meaning sets have a long form to shorten (#210).
-                if (ListenState.contentSel in setOf(ListenContent.QSO_TOP_20, ListenContent.QSO_TOP_100, ListenContent.ABBREVIATIONS)) {
+                if (ListenState.contentSel in setOf(ListenContent.QSO_TOP_20, ListenContent.QSO_TOP_100, ListenContent.CW_77, ListenContent.ABBREVIATIONS)) {
                     Spacer(Modifier.height(8.dp))
                     ChipRow(
                         options = ListenReadback.entries,
@@ -130,6 +130,11 @@ fun ListenScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) 
                             if (running && !paused) ListenService.start(context)
                         }
                     )
+                }
+                // The CW 77 preset and "include my callsign and name" (#240).
+                if (ListenState.contentSel == ListenContent.CW_77) {
+                    Spacer(Modifier.height(8.dp))
+                    Cw77Options(onChange = { if (running && !paused) ListenService.start(context) })
                 }
 
                 Spacer(Modifier.height(16.dp))

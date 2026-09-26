@@ -1,0 +1,147 @@
+{
+  "_comment": [
+    "The on-screen paddle keyer (#233), pinned for both ports:",
+    "PaddleKeyer in ios/Sources/MorseKit/PaddleKeyer.swift and",
+    "android/.../morsekit/PaddleKeyer.kt. Read by",
+    "ios/Sources/MorseKitCheck/main.swift and",
+    "android/app/src/test/.../morsekit/PaddleKeyerTest.kt.",
+    "",
+    "Each case is a script of paddle presses and releases fed to a fresh keyer",
+    "in time order, then the clock run on to `untilMs`. `expected` gives, per",
+    "keyer mode, every element the keyer sends as [element, keyDownMs, keyUpMs].",
+    "Every expected value was worked out by hand from the rules in",
+    "`derivation`, not captured from either port, so both ports drifting the",
+    "same way still fails."
+  ],
+  "derivation": {
+    "timing": "One unit is 1200 / wpm ms (PARIS). A dit keys down for 1 unit, a dah for 3. Every element is followed by 1 unit of silence; the element plus that silence is its slot. The keyer is busy for the whole slot and decides what comes next at the slot's end.",
+    "idle": "A paddle pressed while the keyer is idle starts its own element at the moment of the press.",
+    "memory": "A paddle pressed while the keyer is busy (anywhere in the slot, tone or silence) is latched. Starting an element clears that element's latch. Holding a paddle is not a press; only the down edge latches.",
+    "iambic": "Iambic A and B, at a slot's end: if the opposite of the element just sent is held or latched, send the opposite; otherwise, if the same element is held or latched, send it again; otherwise go idle. Squeezing both therefore alternates.",
+    "modeB": "Iambic B also latches the opposite paddle if it is already held when an element starts. So releasing a squeeze sends one more alternate element after the one in progress; mode A stops after the element in progress.",
+    "ultimatic": "Ultimatic, at a slot's end: if both paddles are held or latched, send the element of the one pressed most recently; if one is, send its element; otherwise go idle. Squeezing repeats the last-pressed paddle's element instead of alternating.",
+    "ties": "A slot or tone ending at the same instant as a paddle event is processed first; the event is applied after it."
+  },
+  "cases": [
+    {
+      "name": "a single dit tap",
+      "wpm": 20, "untilMs": 2000,
+      "events": [["dit", "down", 0], ["dit", "up", 30]],
+      "expected": {
+        "iambicA":   [["dit", 0, 60]],
+        "iambicB":   [["dit", 0, 60]],
+        "ultimatic": [["dit", 0, 60]]
+      }
+    },
+    {
+      "name": "a held dit repeats until released",
+      "wpm": 20, "untilMs": 2000,
+      "events": [["dit", "down", 0], ["dit", "up", 250]],
+      "expected": {
+        "iambicA":   [["dit", 0, 60], ["dit", 120, 180], ["dit", 240, 300]],
+        "iambicB":   [["dit", 0, 60], ["dit", 120, 180], ["dit", 240, 300]],
+        "ultimatic": [["dit", 0, 60], ["dit", 120, 180], ["dit", 240, 300]]
+      }
+    },
+    {
+      "name": "a held dah repeats until released",
+      "wpm": 20, "untilMs": 2000,
+      "events": [["dah", "down", 0], ["dah", "up", 500]],
+      "expected": {
+        "iambicA":   [["dah", 0, 180], ["dah", 240, 420], ["dah", 480, 660]],
+        "iambicB":   [["dah", 0, 180], ["dah", 240, 420], ["dah", 480, 660]],
+        "ultimatic": [["dah", 0, 180], ["dah", 240, 420], ["dah", 480, 660]]
+      }
+    },
+    {
+      "name": "squeeze dit first, both released during the third element",
+      "wpm": 20, "untilMs": 2000,
+      "events": [["dit", "down", 0], ["dah", "down", 20], ["dit", "up", 400], ["dah", "up", 400]],
+      "expected": {
+        "iambicA":   [["dit", 0, 60], ["dah", 120, 300], ["dit", 360, 420]],
+        "iambicB":   [["dit", 0, 60], ["dah", 120, 300], ["dit", 360, 420], ["dah", 480, 660]],
+        "ultimatic": [["dit", 0, 60], ["dah", 120, 300], ["dah", 360, 540]]
+      }
+    },
+    {
+      "name": "dit memory: a dit tapped during a dah is sent after it",
+      "wpm": 20, "untilMs": 2000,
+      "events": [["dah", "down", 0], ["dah", "up", 100], ["dit", "down", 150], ["dit", "up", 170]],
+      "expected": {
+        "iambicA":   [["dah", 0, 180], ["dit", 240, 300]],
+        "iambicB":   [["dah", 0, 180], ["dit", 240, 300]],
+        "ultimatic": [["dah", 0, 180], ["dit", 240, 300]]
+      }
+    },
+    {
+      "name": "dah memory: a dah tapped during a dit is sent after it",
+      "wpm": 20, "untilMs": 2000,
+      "events": [["dit", "down", 0], ["dit", "up", 30], ["dah", "down", 40], ["dah", "up", 50]],
+      "expected": {
+        "iambicA":   [["dit", 0, 60], ["dah", 120, 300]],
+        "iambicB":   [["dit", 0, 60], ["dah", 120, 300]],
+        "ultimatic": [["dit", 0, 60], ["dah", 120, 300]]
+      }
+    },
+    {
+      "name": "squeeze dah first, both released during the dit",
+      "wpm": 20, "untilMs": 2000,
+      "events": [["dah", "down", 0], ["dit", "down", 10], ["dah", "up", 280], ["dit", "up", 280]],
+      "expected": {
+        "iambicA":   [["dah", 0, 180], ["dit", 240, 300]],
+        "iambicB":   [["dah", 0, 180], ["dit", 240, 300], ["dah", 360, 540]],
+        "ultimatic": [["dah", 0, 180], ["dit", 240, 300]]
+      }
+    },
+    {
+      "name": "a long squeeze, both released during the fourth element",
+      "wpm": 20, "untilMs": 2000,
+      "events": [["dit", "down", 0], ["dah", "down", 100], ["dit", "up", 590], ["dah", "up", 590]],
+      "expected": {
+        "iambicA":   [["dit", 0, 60], ["dah", 120, 300], ["dit", 360, 420], ["dah", 480, 660]],
+        "iambicB":   [["dit", 0, 60], ["dah", 120, 300], ["dit", 360, 420], ["dah", 480, 660], ["dit", 720, 780]],
+        "ultimatic": [["dit", 0, 60], ["dah", 120, 300], ["dah", 360, 540]]
+      }
+    },
+    {
+      "name": "releasing the second paddle of a squeeze hands back to the first",
+      "wpm": 20, "untilMs": 2000,
+      "events": [["dit", "down", 0], ["dah", "down", 100], ["dah", "up", 300], ["dit", "up", 700]],
+      "expected": {
+        "iambicA":   [["dit", 0, 60], ["dah", 120, 300], ["dit", 360, 420], ["dit", 480, 540], ["dit", 600, 660]],
+        "iambicB":   [["dit", 0, 60], ["dah", 120, 300], ["dit", 360, 420], ["dit", 480, 540], ["dit", 600, 660]],
+        "ultimatic": [["dit", 0, 60], ["dah", 120, 300], ["dit", 360, 420], ["dit", 480, 540], ["dit", 600, 660]]
+      }
+    },
+    {
+      "name": "a dit tapped into a held dah",
+      "wpm": 20, "untilMs": 2000,
+      "events": [["dah", "down", 0], ["dit", "down", 200], ["dit", "up", 220], ["dah", "up", 700]],
+      "expected": {
+        "iambicA":   [["dah", 0, 180], ["dit", 240, 300], ["dah", 360, 540], ["dah", 600, 780]],
+        "iambicB":   [["dah", 0, 180], ["dit", 240, 300], ["dah", 360, 540], ["dah", 600, 780]],
+        "ultimatic": [["dah", 0, 180], ["dit", 240, 300], ["dah", 360, 540], ["dah", 600, 780]]
+      }
+    },
+    {
+      "name": "30 WPM: a held dah, then a dit from idle",
+      "wpm": 30, "untilMs": 2000,
+      "events": [["dah", "down", 0], ["dah", "up", 250], ["dit", "down", 400], ["dit", "up", 410]],
+      "expected": {
+        "iambicA":   [["dah", 0, 120], ["dah", 160, 280], ["dit", 400, 440]],
+        "iambicB":   [["dah", 0, 120], ["dah", 160, 280], ["dit", 400, 440]],
+        "ultimatic": [["dah", 0, 120], ["dah", 160, 280], ["dit", 400, 440]]
+      }
+    },
+    {
+      "name": "a release at the very instant a slot ends comes after the decision",
+      "wpm": 20, "untilMs": 2000,
+      "events": [["dit", "down", 0], ["dit", "up", 120]],
+      "expected": {
+        "iambicA":   [["dit", 0, 60], ["dit", 120, 180]],
+        "iambicB":   [["dit", 0, 60], ["dit", 120, 180]],
+        "ultimatic": [["dit", 0, 60], ["dit", 120, 180]]
+      }
+    }
+  ]
+}

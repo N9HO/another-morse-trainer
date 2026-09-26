@@ -23,9 +23,10 @@ testers, bug reports and feature chat live on
 - **Characters**: Koch-method ladder (A-Z, 0-9) with a user-pinnable
   "Track stage" (characters, pairs, triples, words & call signs)
 - **Common Words**, **Abbreviations**, **Q-Codes**, **Prosigns**: phrase
-  drills, with custom word lists and optional punctuation extras (a mark
-  you turn on joins the Characters drill and the games' full set straight
-  away)
+  drills, with custom word lists, the CWOps CW 77 list as a Common Words
+  pool (with your own callsign and name if you like, and a one-tap 40 WPM,
+  no-Farnsworth preset), and optional punctuation extras (a mark you turn on
+  joins the Characters drill and the games' full set straight away)
 - **Confusion Drill**: targeted review of the pairs you actually mix up
 - **Head Copy**: copy in your head with auto-repeats and a timed reveal
 - **Type It / QRQ Speed**: free-recall typing, plus high-speed copy at
@@ -100,7 +101,8 @@ testers, bug reports and feature chat live on
   pitch-lock rescue, and a noise blanker that keeps QRN static crashes from
   reaching the decoder as marks
 - **Listen & Learn**: hands-free: hear the code, then the spoken answer, over
-  characters, the curated on-air QSO elements (Top 20 or Top 100), words, or
+  characters, the curated on-air QSO elements (Top 20 or Top 100), the
+  CWOps CW 77 list (optionally with your own callsign and name), words, or
   abbreviations and Q-codes, spelled out with the full meaning or as the
   brief meaning alone; keeps playing with the screen locked, with the
   current item and the app logo on the lock screen and car displays
@@ -108,6 +110,13 @@ testers, bug reports and feature chat live on
   choice quizzes, with a confirm/closest-match fallback that learns your
   corrections
 - **Answer by keying**: key the answer on a touch or hardware Morse key
+- **Keyboard-entry answers**: type the character or word you heard instead
+  of picking it, in the choice quizzes, either always or as a progression
+  step: each level starts at 4 choices, moves to 6, then to typing, and a
+  wrong typed character feeds the Confusion Matrix like a wrong tap
+- **On-screen paddles**: the on-screen key can be a straight key or a pair of
+  touch paddles with a built-in Iambic A / Iambic B / Ultimatic keyer, dit and
+  dah memory, and a left-handed swap — wherever you key on screen
 - **Sending Practice**: a dedicated hear-it, key-it-back mode on the adaptive
   ladder, with live decode, always-on replay, and a connected-MIDI-key
   readout; plus printable drill sheets built from what you've studied (even,
@@ -134,17 +143,19 @@ testers, bug reports and feature chat live on
   transcript itself and ranks on the speed summed over correct items (so a
   game's board number is not its on-screen score); every post is attested
   with App Attest, so only the genuine app on a real device can rank. Pick a
-  callsign-shaped display name in Settings › Leaderboard; "Delete my scores"
+  callsign-shaped display name in Settings › Leaderboard & Buddy; "Delete my scores"
   removes everything the server holds for the device. The board itself is
   browsable by anyone, per mode, from the Games menu and from Your Stats,
   without sharing; the first time you start a game with sharing off, one
   prompt offers to turn it on, with "Not now" and "Don't ask again".
-- **Buddy streak**: pair with one other person by a six-character invite
-  code (single use, 24 hours) and keep a streak of days you *both*
-  practised. The home screen says whether your buddy has practised today,
-  and the daily reminder adds a nudge when they haven't (as of the app's
-  last look). Uses the leaderboard display name and attestation; pairing
-  itself is the opt-in. Settings › Buddy streak.
+- **Buddy streak**: pair with up to ten people (on either app), each by a
+  six-character invite code (single use, 24 hours), and keep a separate
+  streak with each of the days you *both* practised. Settings ›
+  Leaderboard & Buddy › Buddy streak lists every buddy with their streak and whether they have
+  practised today, and leaves one buddy at a time. The home screen says who
+  has practised today, and the daily reminder adds one nudge naming whoever
+  hasn't (as of the app's last look). Uses the leaderboard display name and
+  attestation; pairing itself is the opt-in.
 - **Progress**: daily streak with milestone celebrations, a GitHub-style
   activity grid of daily practice time, session history with per-session
   recognition charts, per-character stats, most-confused pairs, performance
@@ -157,6 +168,10 @@ testers, bug reports and feature chat live on
 - A first-run question about how much Morse you already know, which seeds
   the Characters ladder and unlocks the Journey that far
 - Daily practice reminders (minute precision, streak-aware)
+- **Settings** grouped into ten categories (Sound, Speed & Timing,
+  Characters & Lessons, Practice & Feedback, Keys & Sending, QSO & Pileups,
+  Reminders, Display, Leaderboard & Buddy, Help & About) with a search field
+  that finds any setting by name or synonym and jumps straight to it
 
 ## Project layout
 

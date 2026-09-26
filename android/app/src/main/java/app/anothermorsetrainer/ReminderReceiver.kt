@@ -67,12 +67,17 @@ class ReminderReceiver : BroadcastReceiver() {
         NotificationManagerCompat.from(context).notify(Reminders.NOTIFICATION_ID, notification)
     }
 
-    /** "W1AW hasn't practised yet today (as of 6:10 PM)", or null when there is nothing to add. */
+    /**
+     * "W1AW hasn't practised yet today (as of 6:10 PM)", "W1AW, K1ABC and 2
+     * more haven't …" with several buddies — one sentence however many, never
+     * one each (#237) — or null when there is nothing to add.
+     */
     private fun buddySentence(context: Context): String? {
-        val buddy = Settings.buddyStatus ?: return null
+        val status = Settings.buddyStatus ?: return null
         val today = Buddy.today()
-        if (!buddy.paired || !buddy.isFor(today) || buddy.buddyPractisedToday) return null
-        val asOf = DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(buddy.fetchedAt))
-        return context.getString(R.string.reminder_body_buddy, buddy.buddyName, asOf)
+        if (!status.paired || !status.isFor(today)) return null
+        val waiting = BuddyWords.from(context).waiting(status.digest(today)) ?: return null
+        val asOf = DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(status.fetchedAt))
+        return context.getString(R.string.reminder_body_buddy, waiting, asOf)
     }
 }

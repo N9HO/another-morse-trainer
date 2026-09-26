@@ -1,25 +1,65 @@
 import SwiftUI
 import UIKit
 
+// Settings is a root of categories with a search field on top (#236); each
+// category pushes a sub-screen of titled sections. The map — which categories
+// exist, in what order, which sections each holds, and what search finds — is
+// `MorseKit/SettingsCatalog.swift`, pinned to the Android app's by
+// `fixtures/settings-catalog.json`. This file only draws the rows.
+//
+// Adding a setting:
+//   1. Put its row in the section it belongs to below (one computed property
+//      per section, e.g. `soundSection`). A new section is a new
+//      `SettingsSection` case, a property here, and a line in `sectionView`
+//      and `isShown`.
+//   2. Add one `SettingsSearchEntry` to `SettingsCatalog.entries`, in its
+//      section's place. If Android has it too, add it to the fixture.
+// Mid-session the sheet is scoped to the running mode (`activeMode`, #66):
+// `isShown` hides sections for other modes, and a category with nothing left
+// in it drops off the root and out of search.
+
+/// Where the Settings stack can go: a category's sub-screen (scrolled to one
+/// section and briefly highlighted when reached from a search result), or the
+/// Licenses screen under Help & About.
+enum SettingsRoute: Hashable {
+    case category(SettingsCategory, focus: SettingsSection?)
+    case licenses
+}
+
+extension SettingsCategory {
+    /// The SF Symbol beside the category on the Settings root.
+    var systemImage: String {
+        switch self {
+        case .sound: return "speaker.wave.2.fill"
+        case .speed: return "speedometer"
+        case .characters: return "character.book.closed"
+        case .practice: return "target"
+        case .keys: return "pianokeys"
+        case .qso: return "antenna.radiowaves.left.and.right"
+        case .reminders: return "bell.fill"
+        case .display: return "textformat"
+        case .leaderboard: return "trophy.fill"
+        case .about: return "info.circle"
+        }
+    }
+}
+
 struct SettingsView: View {
     @EnvironmentObject var model: AppModel
     @Environment(\.dismiss) private var dismiss
     @State private var confirmReset = false
     @State private var copiedDiagnostics = false
-    /// Settings › Leaderboard › Delete my scores: the confirmation, the
-    /// in-flight call, and its outcome (nil = not asked yet / success).
+    /// The drill-down stack under the root, and the root's search text.
+    @State private var path: [SettingsRoute] = []
+    @State private var query = ""
+    /// The section a search result landed on, tinted for a moment so the eye
+    /// finds it; cleared after the flash.
+    @State private var highlighted: SettingsSection?
+    /// Settings › Leaderboard & Buddy › Delete my scores: the confirmation,
+    /// the in-flight call, and its outcome (nil = not asked yet / success).
     @State private var confirmDeleteScores = false
     @State private var deletingScores = false
     @State private var deleteScoresResult: String?
-    /// Settings › Buddy streak (docs/buddy-streak-design.md): the join field,
-    /// the in-flight call, the last refusal, and the leave confirmation. The
-    /// status and the pending invite are not state here — they live in the
-    /// cache (`model.settings.buddy`) so they survive the sheet closing.
-    @State private var buddyJoinCode = ""
-    @State private var buddyBusy = false
-    @State private var buddyProblem: String?
-    @State private var confirmLeaveBuddy = false
-    @State private var copiedInvite = false
 
     /// The adapter's keyer mode (issue #43). Stored under the repeater's key
     /// because it is one fact about the operator's hardware, not a per-screen
@@ -59,6 +99,9 @@ struct SettingsView: View {
     /// and the answer-button count).
     private static let choiceQuizModes: Set<TrainingMode> =
         [.journey, .characters, .words, .abbreviations, .qCodes, .prosigns, .confusion]
+    /// The choice quizzes that take a typed answer (#232): every one but the Journey.
+    private static let answerEntryModes: Set<TrainingMode> =
+        [.characters, .words, .abbreviations, .qCodes, .prosigns, .confusion]
     /// The pileup surfaces all four QSO sections configure.
     private static let pileupModes: Set<TrainingMode> = [.qso, .contest]
     /// The surfaces a hardware key can drive — every mode `usesKeyingResponse`
@@ -93,626 +136,400 @@ struct SettingsView: View {
         return !(Self.pileupModes.contains(activeMode) || activeMode == .qrq || activeMode == .exam)
     }
 
+    /// Whether a section belongs on this surface — every gate the flat list
+    /// had before #236, one line per section.
+    private func isShown(_ section: SettingsSection) -> Bool {
+        switch section {
+        case .sound, .reminders, .display, .leaderboard, .buddy, .bugReports, .about: return true
+        case .speed: return showsGlobalSpeed
+        case .farnsworth: return showsFarnsworth
+        case .proficiency: return shown(for: Self.proficiencyModes)
+        case .newCharacters: return shown(for: [.characters])
+        case .trackStage, .previewStage: return shown(for: Self.stagePinModes)
+        case .punctuation: return shown(for: Self.ladderModes)
+        // Mid-session the destructive reset stays out of reach — it would
+        // yank the engine out from under the running drill. Only from the
+        // intro's app-wide entry (Android parity).
+        case .reset: return activeMode == nil
+        case .learning: return shown(for: Self.choiceQuizModes)
+        case .answerEntry: return shown(for: Self.answerEntryModes)
+        case .feedback: return shown(for: Self.feedbackModes)
+        case .headCopy: return shown(for: [.headCopy])
+        case .hardwareKey: return shown(for: Self.hardwareKeyModes)
+        case .onScreenKey: return shown(for: Self.hardwareKeyModes)
+        // Your call and name are also what CW 77 drills when you include
+        // them (#240), so Listen & Learn and Common Words reach them too.
+        case .yourStation: return shown(for: Self.pileupModes.union([.listen, .words]))
+        case .pileupRunner, .qsoSignals, .qsoRealism, .qsoCallsigns:
+            return shown(for: Self.pileupModes)
+        }
+    }
+
+    private func visibleSections(in category: SettingsCategory) -> [SettingsSection] {
+        SettingsSection.sections(in: category).filter(isShown)
+    }
+
+    private var visibleCategories: [SettingsCategory] {
+        SettingsCategory.allCases.filter { !visibleSections(in: $0).isEmpty }
+    }
+
+    private var searchResults: [SettingsSearchEntry] {
+        SettingsCatalog.search(query, in: SettingsCatalog.entries.filter { isShown($0.section) })
+    }
+
     var body: some View {
-        NavigationStack {
-            Form {
-                if shown(for: Self.pileupModes) {
-                    Section {
-                        HStack {
-                            Text("Your callsign")
-                            Spacer()
-                            TextField("W1AW", text: $model.settings.qso.myCall)
-                                .multilineTextAlignment(.trailing)
-                                .textInputAutocapitalization(.characters)
-                                .autocorrectionDisabled()
-                                .font(.system(.body, design: .monospaced))
-                        }
-                    } header: {
-                        Text("Your Station")
-                    } footer: {
-                        Text("Used across the app — sent when you call CQ and work stations in Pileup Runner.")
-                    }
-                    .listRowBackground(Theme.navyElevated)
-                }
-
-                Section("Sound") {
-                    sliderRow(title: "Side tone",
-                              value: $model.settings.toneFrequency,
-                              range: 300...1000, step: 10,
-                              format: { "\(Int($0)) Hz" })
-                    Button {
-                        model.replay()
-                    } label: {
-                        Label("Preview tone", systemImage: "speaker.wave.2.fill")
-                    }
-                    Toggle("Keep Bluetooth audio awake", isOn: $model.settings.bluetoothKeepAlive)
-                    Label {
-                        Text("Plays a floor deliberately just above silence — too quiet to hear — so Bluetooth earbuds never idle between transmissions: truly silent audio lets some headsets sleep, and they wake a moment late and clip the first character.")
-                    } icon: {
-                        Image(systemName: "airpods")
-                    }
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    Picker("Band noise", selection: $model.settings.bandNoise) {
-                        ForEach(BackgroundNoiseLevel.bandLevels) { Text($0.label).tag($0) }
-                    }
-                    Label {
-                        Text("Adds audible band noise (QRN) under everything so practising is more like copying off the air; any level also keeps Bluetooth audio awake.")
-                    } icon: {
-                        Image(systemName: "waveform")
-                    }
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    if showsGlobalSpeed {
-                        sliderRow(title: "Speed",
-                                  value: $model.settings.wpm,
-                                  range: 15...60, step: 1,
-                                  format: { "\(Int($0)) WPM" })
-                        if model.settings.wpm >= 40 {
-                            Label {
-                                Text("QRQ territory — \(Int(model.settings.wpm)) WPM. Great for pushing instant recognition once 30+ feels comfortable.")
-                            } icon: {
-                                Image(systemName: "hare.fill")
-                            }
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                        }
-                        if model.settings.wpm < 33 {
-                            Label {
-                                Text("Below 33 WPM it's easy to start *counting* the dits and dahs instead of hearing each character as a single sound. Training at 33+ WPM builds instant, by-ear recognition — the whole point of the Koch method. If you need more time to answer, raise “Recognize within” instead of slowing the code.")
-                            } icon: {
-                                Image(systemName: "exclamationmark.triangle.fill")
-                            }
-                            .font(.footnote)
-                            .foregroundStyle(.orange)
-                        }
-                    }
-                }
-                .listRowBackground(Theme.navyElevated)
-
-                if showsFarnsworth {
-                    Section {
-                        Toggle("Farnsworth spacing", isOn: $model.settings.farnsworth)
-                        if model.settings.farnsworth {
-                            sliderRow(title: "Effective speed",
-                                      value: $model.settings.effectiveWpm,
-                                      range: 8...max(9, model.settings.wpm), step: 1,
-                                      format: { "\(Int($0)) WPM" })
-                        }
-                    } header: {
-                        Text("Farnsworth (multi-character)")
-                    } footer: {
-                        Text("Keeps each character at full speed but adds extra space between characters, so you have time to recognize them. Applies to words, groups, and other multi-character content — single characters are unaffected.")
-                    }
-                    .listRowBackground(Theme.navyElevated)
-                }
-
-                if shown(for: Self.proficiencyModes) {
-                    Section {
-                        Picker("I already know…", selection: proficiencyBinding) {
-                            ForEach(Proficiency.allCases) { level in
-                                Text(level.label).tag(level)
-                            }
-                        }
-                    } header: {
-                        Text("Proficiency")
-                    } footer: {
-                        Text("How much Morse you already know — sets where the Characters drill begins and unlocks the Journey that far. Changing this restarts your active set.")
-                    }
-                    .listRowBackground(Theme.navyElevated)
-                }
-
-                if shown(for: [.characters]) {
-                    Section {
-                        Toggle("Introduce new characters", isOn: $model.settings.introduceNewCharacters)
-                    } header: {
-                        Text("New characters")
-                    } footer: {
-                        Text("Before a character or prosign joins the drill for the first time, show it on its own with its sound and a Replay button.")
-                    }
-                    .listRowBackground(Theme.navyElevated)
-                }
-
-                // The way back from words to characters (#95). The track grows
-                // singles → pairs → triples → words on its own, and until now
-                // the only hold on it mid-session was the Developer jump below,
-                // which clears the pin and widens the active set. The pin lives
-                // on the setup sheet too; here it is one gear-tap from the drill.
-                if shown(for: Self.stagePinModes) {
-                    Section {
-                        Picker("Track stage", selection: stagePinBinding) {
-                            Text("Auto — grow as you improve")
-                                .tag(nil as ProgressiveCharacters.Stage?)
-                            ForEach(ProgressiveCharacters.Stage.allCases, id: \.self) { stage in
-                                Text(stage.displayName).tag(Optional(stage))
-                            }
-                        }
-                        if let previous = previousStage {
-                            Button {
-                                model.setCharacterStagePin(previous)
-                            } label: {
-                                Label("Back to \(previous.displayName)", systemImage: "arrow.uturn.backward")
-                            }
-                        }
-                    } header: {
-                        Text("Track stage")
-                    } footer: {
-                        Text(model.characterStageNote + " Takes effect on the next item.")
-                    }
-                    .listRowBackground(Theme.navyElevated)
-                }
-
-                if shown(for: Self.choiceQuizModes) {
-                    Section {
-                        sliderRow(title: "Recognize within",
-                                  value: $model.settings.ttrThreshold,
-                                  range: 0.5...3.0, step: 0.1,
-                                  format: { String(format: "%.1f s", $0) })
-                        Stepper(value: $model.settings.maxAnswerChoices,
-                                in: AppSettings.answerChoiceRange) {
-                            HStack {
-                                Text("Answer choices")
-                                Spacer()
-                                Text("\(model.settings.maxAnswerChoices)")
-                                    .foregroundStyle(.secondary)
-                                    .monospacedDigit()
-                            }
-                        }
-                    } header: {
-                        Text("Learning")
-                    } footer: {
-                        Text("When you consistently recognize a letter within this time, a new letter is added. Answer choices only ever include characters you've already met — the number of buttons grows as you learn, up to this many.")
-                    }
-                    .listRowBackground(Theme.navyElevated)
-                }
-
-                Section {
-                    Toggle("Daily reminder", isOn: Binding(
-                        get: { model.settings.dailyReminderEnabled },
-                        set: { model.setDailyReminder(enabled: $0) }
-                    ))
-                    if model.settings.dailyReminderEnabled {
-                        DatePicker("Remind me at",
-                                   selection: reminderTimeBinding,
-                                   displayedComponents: .hourAndMinute)
-                    }
-                } header: {
-                    Text("Reminders")
-                } footer: {
-                    Text("A gentle daily nudge to practice so your streak stays alive. You can change this anytime in iOS Settings → Notifications.")
-                }
-                .listRowBackground(Theme.navyElevated)
-
-                if shown(for: Self.ladderModes) {
-                    Section {
-                        ForEach(AppSettings.availablePunctuation, id: \.symbol) { entry in
-                            Toggle(isOn: punctuationBinding(entry.symbol)) {
-                                HStack {
-                                    Text(entry.name)
-                                    Text(entry.symbol)
-                                        .font(.system(.body, design: .monospaced))
-                                        .foregroundStyle(.secondary)
-                                    Spacer()
-                                    Text(MorseCode.pattern(for: Character(entry.symbol)) ?? "")
-                                        .font(.system(.caption, design: .monospaced))
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
-                        }
-                    } header: {
-                        Text("Punctuation")
-                    } footer: {
-                        Text("“?” is already part of the base letters & numbers. A mark you turn on joins your Characters drill and the games’ full set straight away; turn it off and it leaves the drill, its stats kept.")
-                    }
-                    .listRowBackground(Theme.navyElevated)
-                }
-
-                if shown(for: Self.feedbackModes) {
-                    Section("Feedback") {
-                        Toggle("Show right / wrong", isOn: $model.settings.showCorrectness)
-                        Picker("Reveal the letter", selection: $model.settings.reveal) {
-                            ForEach(RevealMode.allCases) { mode in
-                                Text(mode.label).tag(mode)
-                            }
-                        }
-                        Toggle("Show replay button", isOn: $model.settings.allowReplay)
-                        Toggle("Haptic feedback", isOn: $model.settings.hapticsEnabled)
-                    }
-                    .listRowBackground(Theme.navyElevated)
-                }
-
-                if shown(for: Self.hardwareKeyModes) {
-                    Section {
-                        Picker("Keyer mode", selection: $adapterKeyerMode) {
-                            ForEach(MIDIOutput.KeyerMode.allCases, id: \.rawValue) { mode in
-                                Text(mode.displayName).tag(mode.rawValue)
-                            }
-                        }
-                        // Push every change to a connected adapter as it is
-                        // made: from the intro there is no drill underneath
-                        // holding an output, and mid-session the drill's own
-                        // push is diff-based, so the overlap is harmless.
-                        .onChange(of: adapterKeyerMode) { _ in syncAdapter() }
-                        .onChange(of: model.settings.wpm) { _ in syncAdapter() }
-                        .onChange(of: model.settings.toneFrequency) { _ in syncAdapter() }
-                        if (MIDIOutput.KeyerMode(rawValue: adapterKeyerMode) ?? .straightKey).adapterTimesSending {
-                            Text("The adapter times the sending in this mode, at the speed you're practising at.")
-                                .font(.caption).foregroundStyle(.secondary)
-                        }
-                    } header: {
-                        Text("Hardware key")
-                    } footer: {
-                        Text("How the Vail Adapter should read your key. Straight Key is the default; pick an iambic mode for a paddle. This describes your key rather than a drill, so it applies in Sending Practice and on the Vail screen alike.")
-                    }
-                    .listRowBackground(Theme.navyElevated)
-                }
-
-                Section {
-                    Toggle("Slashed zero", isOn: $model.settings.slashedZero)
-                } header: {
-                    Text("Display")
-                } footer: {
-                    Text("Show the digit 0 with a line through it — the operator's convention for telling 0 from O.")
-                }
-                .listRowBackground(Theme.navyElevated)
-
-                if shown(for: [.headCopy]) {
-                    Section {
-                        Stepper(value: $model.settings.headCopyRepeats,
-                                in: AppSettings.headCopyRepeatRange) {
-                            HStack {
-                                Text("Auto-repeats")
-                                Spacer()
-                                Text(model.settings.headCopyRepeats == 0
-                                     ? "Off"
-                                     : "\(model.settings.headCopyRepeats)×")
-                                    .foregroundStyle(.secondary)
-                                    .monospacedDigit()
-                            }
-                        }
-                        sliderRow(title: "Auto-reveal after",
-                                  value: $model.settings.headCopyRevealSeconds,
-                                  range: AppSettings.headCopyRevealRange, step: 1,
-                                  format: { $0 < 1 ? "Manual only" : "\(Int($0)) s" })
-                    } header: {
-                        Text("Head Copy")
-                    } footer: {
-                        Text("After the prompt plays, Head Copy can replay it a few times so you can re-hear it without mentally replaying, then count down to the answer. A manual Repeat button is always available.")
-                    }
-                    .listRowBackground(Theme.navyElevated)
-                }
-
-                if shown(for: Self.pileupModes) {
-                    Section {
-                        Picker("Mode", selection: $model.settings.qso.mode) {
-                            ForEach(QSOContestMode.allCases) { Text($0.label).tag($0) }
-                        }
-                        if model.settings.qso.mode.isPileup {
-                            Stepper(value: $model.settings.qso.maxStations, in: 1...8) {
-                                Text("Max callers: \(model.settings.qso.maxStations)")
-                            }
-                        }
-                        // Same 60 WPM ceiling as the global character speed, so
-                        // QRQ practice carries into the QSO simulator (issue #79).
-                        sliderRow(title: "Min speed", value: $model.settings.qso.minWPM,
-                                  range: 12...60, step: 1, format: { "\(Int($0)) WPM" })
-                        sliderRow(title: "Max speed", value: $model.settings.qso.maxWPM,
-                                  range: 12...60, step: 1, format: { "\(Int($0)) WPM" })
-                        Toggle("Farnsworth spacing", isOn: $model.settings.qso.farnsworth)
-                        sliderRow(title: "Tone spread", value: $model.settings.qso.toneSpread,
-                                  range: 0...500, step: 10,
-                                  format: { $0 < 10 ? "Zero-beat" : "±\(Int($0)) Hz" })
-                    } header: {
-                        Text("Pileup Runner")
-                    } footer: {
-                        Text("Max callers thins a pileup at once; the other settings reach callers as they arrive. Tone spread splits callers across the band; zero-beat stacks them all on your pitch.")
-                    }
-                    .listRowBackground(Theme.navyElevated)
-
-                    Section("QSO · Signals") {
-                        Toggle("QSB (fading)", isOn: $model.settings.qso.qsbEnabled)
-                        Picker("QRN (noise)", selection: $model.settings.qso.qrn) {
-                            ForEach(QRNLevel.allCases) { Text($0.label).tag($0) }
-                        }
-                        sliderRow(title: "Min wait", value: $model.settings.qso.minDelay,
-                                  range: 0...3, step: 0.1, format: { String(format: "%.1f s", $0) })
-                        sliderRow(title: "Max wait", value: $model.settings.qso.maxDelay,
-                                  range: 0...4, step: 0.1, format: { String(format: "%.1f s", $0) })
-                    }
-                    .listRowBackground(Theme.navyElevated)
-
-                    Section {
-                        // Only exchanges that actually carry a signal report (POTA,
-                        // Basic Contest, Single Caller) can be asked to copy it — the
-                        // contest sprints send no RST, so the toggle would be a no-op.
-                        if model.settings.qso.mode.includesRST {
-                            Toggle("Copy RST too", isOn: $model.settings.qso.rstRequired)
-                        }
-                        Toggle("Keep partial call in box", isOn: $model.settings.qso.keepPartialCall)
-                        Toggle("Key my side in Morse", isOn: $model.settings.qso.keyMySide)
-                        Toggle("Pileup re-calls after TU", isOn: $model.settings.qso.autoRecall)
-                        Picker("On a busted call", selection: $model.settings.qso.bustBehavior) {
-                            ForEach(BustBehavior.allCases) { Text($0.label).tag($0) }
-                        }
-                        Toggle("Callers can give up", isOn: $model.settings.qso.giveUpEnabled)
-                        if model.settings.qso.giveUpEnabled {
-                            Picker("Tell me who got away", selection: $model.settings.qso.missedCallerFeedback) {
-                                ForEach(MissedCallerFeedback.allCases) { Text($0.label).tag($0) }
-                            }
-                        }
-                        Toggle("Cut numbers", isOn: $model.settings.qso.cutNumbersEnabled)
-                        if model.settings.qso.cutNumbersEnabled {
-                            ForEach(CutNumbers.cuttableDigits, id: \.self) { d in
-                                Toggle("\(d) → \(CutNumbers.map[d].map(String.init) ?? "")",
-                                       isOn: cutBinding(d))
-                            }
-                        }
-                    } header: {
-                        Text("QSO · Realism")
-                    } footer: {
-                        Text("Keep partial call: a partly-copied call stays in the box so you can send “?” and add to it instead of retyping. Key my side: your CQ, calls and TU go out in Morse at your tone and speed before the stations reply; off, they are logged silently. Re-calls after TU: the stations still waiting call again on their own once you log a contact; off, send AGN or CQ yourself. Give-up: a station you keep busting drops out after a few misses, but the pileup continues — “Tell me who got away” then names the call you lost and what you had it as, either as it happens or in the end-of-run summary. Cut numbers send numerals as letters (0→T, 9→N) — you can type either form.")
-                    }
-                    .listRowBackground(Theme.navyElevated)
-
-                    Section {
-                        Toggle("US callsigns only", isOn: $model.settings.qso.usOnly)
-                        ForEach(CallsignFormat.allCases) { f in
-                            Toggle(f.label, isOn: formatBinding(f))
-                        }
-                    } header: {
-                        Text("QSO · Callsigns")
-                    } footer: {
-                        Text("Which callsign shapes appear in pileups. Turn off US-only to mix in DX prefixes.")
-                    }
-                    .listRowBackground(Theme.navyElevated)
-                }
-
-                if shown(for: Self.stagePinModes) {
-                    Section {
-                        ForEach(ProgressiveCharacters.Stage.allCases, id: \.self) { stage in
-                            Button {
-                                model.previewStage(stage)
-                                dismiss()
-                            } label: {
-                                HStack {
-                                    Text(stage.displayName)
-                                    if model.characterStage == stage {
-                                        Image(systemName: "checkmark")
-                                            .font(.caption.weight(.semibold))
-                                            .foregroundStyle(Theme.tealBright)
-                                    }
-                                    Spacer()
-                                    Image(systemName: "play.circle")
-                                }
-                            }
-                        }
-                    } header: {
-                        Text("Developer · Preview Stage")
-                    } footer: {
-                        Text("Jumps the Characters track to a stage for testing (✓ is where the track is now). Stages beyond Characters expand your active set to all letters & numbers, and a jump clears any hold. To hold the track at a stage during normal practice, use Track stage above.")
-                    }
-                    .listRowBackground(Theme.navyElevated)
-                }
-
-                // Shared leaderboard (docs/high-scores-design.md, step 2).
-                // Off by default; nothing leaves the device until this is on
-                // and a name is set. The display-name rule is the server's,
-                // applied here so the field says what is wrong up front.
-                Section {
-                    Toggle("Share scores to the shared leaderboard", isOn: $model.settings.leaderboard.shareScores)
-                    HStack {
-                        Text("Display name")
-                        Spacer()
-                        TextField("N0CALL", text: $model.settings.leaderboard.displayName)
-                            .multilineTextAlignment(.trailing)
-                            .textInputAutocapitalization(.characters)
-                            .autocorrectionDisabled()
-                            .font(.body.monospaced())
-                            .onChange(of: model.settings.leaderboard.displayName) { name in
-                                // Uppercased as typed, the form the board shows.
-                                let up = name.uppercased()
-                                if up != name { model.settings.leaderboard.displayName = up }
-                            }
-                    }
-                    if !model.settings.leaderboard.displayName.isEmpty,
-                       let problem = LeaderboardDisplayName.problem(with: model.settings.leaderboard.displayName) {
-                        Text(problem)
-                            .font(.footnote)
-                            .foregroundStyle(.orange)
-                    }
-                    Button(role: .destructive) {
-                        confirmDeleteScores = true
-                    } label: {
-                        HStack {
-                            Label("Delete my scores", systemImage: "trash")
-                            if deletingScores { Spacer(); ProgressView() }
-                        }
-                    }
-                    .disabled(deletingScores)
-                    .confirmationDialog("Delete every score this device has posted?",
-                                        isPresented: $confirmDeleteScores, titleVisibility: .visible) {
-                        Button("Delete my scores", role: .destructive) {
-                            deletingScores = true
-                            deleteScoresResult = nil
-                            Task {
-                                let problem = await model.leaderboardDeleteMyScores()
-                                deletingScores = false
-                                deleteScoresResult = problem ?? "Your scores were deleted."
-                            }
-                        }
-                    } message: {
-                        Text("Removes this device's scores and submissions from the shared board. Your local stats and personal bests stay.")
-                    }
-                    if let deleteScoresResult {
-                        Text(deleteScoresResult)
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                    }
-                } header: {
-                    Text("Leaderboard")
-                } footer: {
-                    Text("Ranked runs — Rapid Fire, Contest, Pileup Runner and the six games — are posted when they end. The board ranks a server-graded copy of the run (speed summed over the items you got right), so a game's board number is not its on-screen score. Names are 2–12 characters: letters, digits, space, / and -. Only a real device can post; the simulator cannot attest.")
-                }
-                .listRowBackground(Theme.navyElevated)
-
-                // Buddy streak (docs/buddy-streak-design.md, #219). Uses the
-                // leaderboard's name and attestation but not its switch:
-                // inviting or joining is the consent. The status shown is the
-                // cache; it refreshes as this row appears (15-minute limit).
-                Section {
-                    Text(model.settings.buddy.settingsLine(today: model.buddyToday))
-                        .foregroundStyle(model.settings.buddy.paired ? .primary : .secondary)
-                        .onAppear { model.refreshBuddyStatus() }
-                    if let reason = model.buddyUnavailableReason {
-                        Text(reason)
-                            .font(.footnote)
-                            .foregroundStyle(.orange)
-                    }
-                    if model.settings.buddy.paired {
-                        Button(role: .destructive) {
-                            confirmLeaveBuddy = true
-                        } label: {
-                            HStack {
-                                Label("Leave buddy", systemImage: "person.2.slash")
-                                if buddyBusy { Spacer(); ProgressView() }
-                            }
-                        }
-                        .disabled(buddyBusy || model.buddyUnavailableReason != nil)
-                        .confirmationDialog("Leave \(model.settings.buddy.buddyName)?",
-                                            isPresented: $confirmLeaveBuddy, titleVisibility: .visible) {
-                            Button("Leave buddy", role: .destructive) {
-                                runBuddyAction { await model.buddyLeave() }
-                            }
-                        } message: {
-                            Text("Ends the buddy streak for both of you. Either of you can pair again with a new code.")
-                        }
-                    } else {
-                        if let invite = model.settings.buddy.pendingInvite(at: Date()) {
-                            buddyInviteCard(code: invite.code, expiresAt: invite.expiresAt)
-                        }
-                        Button {
-                            runBuddyAction {
-                                if case .failure(let p) = await model.buddyInvite() { return p.message }
-                                return nil
-                            }
-                        } label: {
-                            HStack {
-                                Label(model.settings.buddy.pendingInvite(at: Date()) == nil ? "Invite a buddy" : "New invite code",
-                                      systemImage: "person.crop.circle.badge.plus")
-                                if buddyBusy { Spacer(); ProgressView() }
-                            }
-                        }
-                        .disabled(buddyBusy || model.buddyUnavailableReason != nil)
-                        HStack {
-                            Text("Join with a code")
-                            Spacer()
-                            TextField("ABC234", text: $buddyJoinCode)
-                                .multilineTextAlignment(.trailing)
-                                .textInputAutocapitalization(.characters)
-                                .autocorrectionDisabled()
-                                .keyboardType(.asciiCapable)
-                                .font(.body.monospaced())
-                                .frame(maxWidth: 140)
-                                .onChange(of: buddyJoinCode) { raw in
-                                    // Uppercase, no separators, six at most —
-                                    // the form the server reads (BuddyInviteCode).
-                                    let kept = BuddyInviteCode.typed(raw)
-                                    if kept != raw { buddyJoinCode = kept }
-                                }
-                            Button("Join") {
-                                let code = buddyJoinCode
-                                runBuddyAction {
-                                    let problem = await model.buddyJoin(code: code)
-                                    if problem == nil { buddyJoinCode = "" }
-                                    return problem
-                                }
-                            }
-                            .buttonStyle(.borderedProminent)
-                            .disabled(buddyBusy || model.buddyUnavailableReason != nil
-                                      || BuddyInviteCode.normalize(buddyJoinCode) == nil)
-                        }
-                    }
-                    if let buddyProblem {
-                        Text(buddyProblem)
-                            .font(.footnote)
-                            .foregroundStyle(.orange)
-                    }
-                } header: {
-                    Text("Buddy streak")
-                } footer: {
-                    Text("Pair with one other person and keep a streak of days you both practised. Any practice day counts, the same as your own streak. Your buddy sees your leaderboard display name and whether you practised each day, nothing else; pairing needs the same device attestation as posting a score but not the Share scores switch. Leaving ends the streak for both of you, and Delete my scores above removes the pairing too.")
-                }
-                .listRowBackground(Theme.navyElevated)
-
-                Section {
-                    Button {
-                        UIPasteboard.general.string = diagnosticInfo()
-                        copiedDiagnostics = true
-                        Haptics.success()
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                            copiedDiagnostics = false
-                        }
-                    } label: {
-                        Label(copiedDiagnostics ? "Copied to clipboard" : "Copy diagnostic info",
-                              systemImage: copiedDiagnostics ? "checkmark.circle" : "doc.on.doc")
-                    }
-                } header: {
-                    Text("Bug reports")
-                } footer: {
-                    Text("Copies your app/iOS version, device, and current settings to the clipboard to paste into a bug report.")
-                }
-                .listRowBackground(Theme.navyElevated)
-
-                // Support the project (Android parity). Links out to the
-                // website's own page rather than straight to a tipping site:
-                // App Store guideline 3.1.1 treats an in-app link to external
-                // tipping as a purchase mechanism, but a link to the project's
-                // homepage is not, and the coffee button lives there.
-                Section {
-                    Link(destination: ProjectLinks.support) {
-                        Label("Support the project", systemImage: "cup.and.saucer")
-                    }
-                    Link(destination: ProjectLinks.discord) {
-                        Label("Join the Discord", systemImage: "bubble.left.and.bubble.right")
-                    }
-                    Link(destination: ProjectLinks.gitHub) {
-                        Label("Source on GitHub", systemImage: "chevron.left.forwardslash.chevron.right")
-                    }
-                    NavigationLink {
+        NavigationStack(path: $path) {
+            rootList
+                .searchable(text: $query,
+                            placement: .navigationBarDrawer(displayMode: .always),
+                            prompt: "Search settings")
+                .autocorrectionDisabled()
+                .navigationTitle("Settings")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar { doneButton }
+                .navigationDestination(for: SettingsRoute.self) { route in
+                    switch route {
+                    case .category(let category, let focus):
+                        categoryScreen(category, focus: focus)
+                    case .licenses:
                         LicensesView()
-                    } label: {
-                        Label("Licenses", systemImage: "doc.text")
                     }
-                } header: {
-                    Text("About")
-                } footer: {
-                    Text("Free and open source, with no ads, subscriptions, or tracking. Both apps live in one repository.")
                 }
-                .listRowBackground(Theme.navyElevated)
+        }
+        // Push every change to a connected adapter as it is made: from the
+        // intro there is no drill underneath holding an output, and
+        // mid-session the drill's own push is diff-based, so the overlap is
+        // harmless. Here at the stack rather than on the Keyer mode row, so a
+        // speed or tone changed on another sub-screen still reaches it.
+        .onChange(of: adapterKeyerMode) { _ in syncAdapterIfKeyed() }
+        .onChange(of: model.settings.wpm) { _ in syncAdapterIfKeyed() }
+        .onChange(of: model.settings.toneFrequency) { _ in syncAdapterIfKeyed() }
+    }
 
-                // Mid-session the destructive reset stays out of reach — it
-                // would yank the engine out from under the running drill. Only
-                // from the intro's app-wide entry (Android parity).
-                if activeMode == nil {
-                    Section {
-                        Button(role: .destructive) {
-                            confirmReset = true
-                        } label: {
-                            Label("Reset all progress", systemImage: "trash")
+    /// Only where the Hardware key section is part of this surface, as when
+    /// the change handlers rode on its row.
+    private func syncAdapterIfKeyed() {
+        if isShown(.hardwareKey) { syncAdapter() }
+    }
+
+    @ToolbarContentBuilder
+    private var doneButton: some ToolbarContent {
+        ToolbarItem(placement: .confirmationAction) {
+            Button("Done") { dismiss() }
+        }
+    }
+
+    // MARK: - Root and sub-screens
+
+    private var rootList: some View {
+        Form {
+            if SettingsCatalog.words(query).isEmpty {
+                Section {
+                    ForEach(visibleCategories) { category in
+                        NavigationLink(value: SettingsRoute.category(category, focus: nil)) {
+                            Label(category.title, systemImage: category.systemImage)
                         }
                     }
+                } footer: {
+                    if activeMode != nil {
+                        Text("Showing what applies here — the full settings live on the home screen.")
+                    }
+                }
+                .listRowBackground(Theme.navyElevated)
+            } else {
+                let results = searchResults
+                if results.isEmpty {
+                    Section {
+                        Text("No settings match “\(query.trimmingCharacters(in: .whitespaces))”.")
+                            .foregroundStyle(.secondary)
+                    }
                     .listRowBackground(Theme.navyElevated)
+                } else {
+                    Section {
+                        ForEach(results) { entry in
+                            NavigationLink(value: SettingsRoute.category(entry.category, focus: entry.section)) {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(entry.title)
+                                    Text(entry.category.title)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+                    } header: {
+                        Text("Results")
+                    }
+                    .listRowBackground(Theme.navyElevated)
+                }
+            }
+        }
+        .scrollContentBackground(.hidden)
+        .readableWidth()
+        .background(Theme.Background())
+    }
+
+    private func categoryScreen(_ category: SettingsCategory, focus: SettingsSection?) -> some View {
+        ScrollViewReader { proxy in
+            Form {
+                ForEach(visibleSections(in: category), id: \.self) { section in
+                    sectionView(section)
                 }
             }
             .scrollContentBackground(.hidden)
             .readableWidth()
             .background(Theme.Background())
-            .navigationTitle("Settings")
+            .navigationTitle(category.title)
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
+            .toolbar { doneButton }
+            .task {
+                // A search result: bring its section to the top and tint it
+                // for a moment. The short wait lets the push finish first.
+                guard let focus, isShown(focus) else { return }
+                try? await Task.sleep(nanoseconds: 350_000_000)
+                withAnimation { proxy.scrollTo(focus, anchor: .top) }
+                highlighted = focus
+                try? await Task.sleep(nanoseconds: 1_500_000_000)
+                withAnimation(.easeOut(duration: 0.6)) {
+                    if highlighted == focus { highlighted = nil }
                 }
+            }
+        }
+    }
+
+    /// The card colour of a section's rows: the usual navy, or a teal tint
+    /// while a search result is being pointed at.
+    private func rowBackground(_ section: SettingsSection) -> Color {
+        highlighted == section ? Theme.tealBright.opacity(0.22) : Theme.navyElevated
+    }
+
+    @ViewBuilder
+    private func sectionView(_ section: SettingsSection) -> some View {
+        switch section {
+        case .sound: soundSection
+        case .speed: speedSection
+        case .farnsworth: farnsworthSection
+        case .proficiency: proficiencySection
+        case .newCharacters: newCharactersSection
+        case .trackStage: trackStageSection
+        case .punctuation: punctuationSection
+        case .previewStage: previewStageSection
+        case .reset: resetSection
+        case .learning: learningSection
+        case .answerEntry: answerEntrySection
+        case .feedback: feedbackSection
+        case .headCopy: headCopySection
+        case .hardwareKey: hardwareKeySection
+        case .onScreenKey: onScreenKeySection
+        case .yourStation: yourStationSection
+        case .pileupRunner: pileupRunnerSection
+        case .qsoSignals: qsoSignalsSection
+        case .qsoRealism: qsoRealismSection
+        case .qsoCallsigns: qsoCallsignsSection
+        case .reminders: remindersSection
+        case .display: displaySection
+        case .leaderboard: leaderboardSection
+        case .buddy: buddySection
+        case .bugReports: bugReportsSection
+        case .about: aboutSection
+        }
+    }
+
+    // MARK: - Sound
+
+    private var soundSection: some View {
+        Section("Sound") {
+            sliderRow(title: "Side tone",
+                      value: $model.settings.toneFrequency,
+                      range: 300...1000, step: 10,
+                      format: { "\(Int($0)) Hz" })
+            Button {
+                model.replay()
+            } label: {
+                Label("Preview tone", systemImage: "speaker.wave.2.fill")
+            }
+            Toggle("Keep Bluetooth audio awake", isOn: $model.settings.bluetoothKeepAlive)
+            Label {
+                Text("Plays a floor deliberately just above silence — too quiet to hear — so Bluetooth earbuds never idle between transmissions: truly silent audio lets some headsets sleep, and they wake a moment late and clip the first character.")
+            } icon: {
+                Image(systemName: "airpods")
+            }
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+            Picker("Band noise", selection: $model.settings.bandNoise) {
+                ForEach(BackgroundNoiseLevel.bandLevels) { Text($0.label).tag($0) }
+            }
+            Label {
+                Text("Adds audible band noise (QRN) under everything so practising is more like copying off the air; any level also keeps Bluetooth audio awake.")
+            } icon: {
+                Image(systemName: "waveform")
+            }
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+        }
+        .listRowBackground(rowBackground(.sound))
+    }
+
+    // MARK: - Speed & Timing
+
+    private var speedSection: some View {
+        Section("Speed") {
+            sliderRow(title: "Speed",
+                      value: $model.settings.wpm,
+                      range: 15...60, step: 1,
+                      format: { "\(Int($0)) WPM" })
+            if model.settings.wpm >= 40 {
+                Label {
+                    Text("QRQ territory — \(Int(model.settings.wpm)) WPM. Great for pushing instant recognition once 30+ feels comfortable.")
+                } icon: {
+                    Image(systemName: "hare.fill")
+                }
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+            }
+            if model.settings.wpm < 33 {
+                Label {
+                    Text("Below 33 WPM it's easy to start *counting* the dits and dahs instead of hearing each character as a single sound. Training at 33+ WPM builds instant, by-ear recognition — the whole point of the Koch method. If you need more time to answer, raise “Recognize within” instead of slowing the code.")
+                } icon: {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                }
+                .font(.footnote)
+                .foregroundStyle(.orange)
+            }
+        }
+        .listRowBackground(rowBackground(.speed))
+    }
+
+    private var farnsworthSection: some View {
+        Section {
+            Toggle("Farnsworth spacing", isOn: $model.settings.farnsworth)
+            if model.settings.farnsworth {
+                sliderRow(title: "Effective speed",
+                          value: $model.settings.effectiveWpm,
+                          range: 8...max(9, model.settings.wpm), step: 1,
+                          format: { "\(Int($0)) WPM" })
+            }
+        } header: {
+            Text("Farnsworth (multi-character)")
+        } footer: {
+            Text("Keeps each character at full speed but adds extra space between characters, so you have time to recognize them. Applies to words, groups, and other multi-character content — single characters are unaffected.")
+        }
+        .listRowBackground(rowBackground(.farnsworth))
+    }
+
+    // MARK: - Characters & Lessons
+
+    private var proficiencySection: some View {
+        Section {
+            Picker("I already know…", selection: proficiencyBinding) {
+                ForEach(Proficiency.allCases) { level in
+                    Text(level.label).tag(level)
+                }
+            }
+        } header: {
+            Text("Proficiency")
+        } footer: {
+            Text("How much Morse you already know — sets where the Characters drill begins and unlocks the Journey that far. Changing this restarts your active set.")
+        }
+        .listRowBackground(rowBackground(.proficiency))
+    }
+
+    private var newCharactersSection: some View {
+        Section {
+            Toggle("Introduce new characters", isOn: $model.settings.introduceNewCharacters)
+        } header: {
+            Text("New characters")
+        } footer: {
+            Text("Before a character or prosign joins the drill for the first time, show it on its own with its sound and a Replay button.")
+        }
+        .listRowBackground(rowBackground(.newCharacters))
+    }
+
+    // The way back from words to characters (#95). The track grows
+    // singles → pairs → triples → words on its own, and until now the only
+    // hold on it mid-session was the Developer jump below, which clears the
+    // pin and widens the active set. The pin lives on the setup sheet too;
+    // here it is one gear-tap from the drill.
+    private var trackStageSection: some View {
+        Section {
+            Picker("Track stage", selection: stagePinBinding) {
+                Text("Auto — grow as you improve")
+                    .tag(nil as ProgressiveCharacters.Stage?)
+                ForEach(ProgressiveCharacters.Stage.allCases, id: \.self) { stage in
+                    Text(stage.displayName).tag(Optional(stage))
+                }
+            }
+            if let previous = previousStage {
+                Button {
+                    model.setCharacterStagePin(previous)
+                } label: {
+                    Label("Back to \(previous.displayName)", systemImage: "arrow.uturn.backward")
+                }
+            }
+        } header: {
+            Text("Track stage")
+        } footer: {
+            Text(model.characterStageNote + " Takes effect on the next item.")
+        }
+        .listRowBackground(rowBackground(.trackStage))
+    }
+
+    private var punctuationSection: some View {
+        Section {
+            ForEach(AppSettings.availablePunctuation, id: \.symbol) { entry in
+                Toggle(isOn: punctuationBinding(entry.symbol)) {
+                    HStack {
+                        Text(entry.name)
+                        Text(entry.symbol)
+                            .font(.system(.body, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Text(MorseCode.pattern(for: Character(entry.symbol)) ?? "")
+                            .font(.system(.caption, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+        } header: {
+            Text("Punctuation")
+        } footer: {
+            Text("“?” is already part of the base letters & numbers. A mark you turn on joins your Characters drill and the games’ full set straight away; turn it off and it leaves the drill, its stats kept.")
+        }
+        .listRowBackground(rowBackground(.punctuation))
+    }
+
+    private var previewStageSection: some View {
+        Section {
+            ForEach(ProgressiveCharacters.Stage.allCases, id: \.self) { stage in
+                Button {
+                    model.previewStage(stage)
+                    dismiss()
+                } label: {
+                    HStack {
+                        Text(stage.displayName)
+                        if model.characterStage == stage {
+                            Image(systemName: "checkmark")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(Theme.tealBright)
+                        }
+                        Spacer()
+                        Image(systemName: "play.circle")
+                    }
+                }
+            }
+        } header: {
+            Text("Developer · Preview Stage")
+        } footer: {
+            Text("Jumps the Characters track to a stage for testing (✓ is where the track is now). Stages beyond Characters expand your active set to all letters & numbers, and a jump clears any hold. To hold the track at a stage during normal practice, use Track stage above.")
+        }
+        .listRowBackground(rowBackground(.previewStage))
+    }
+
+    private var resetSection: some View {
+        Section {
+            Button(role: .destructive) {
+                confirmReset = true
+            } label: {
+                Label("Reset all progress", systemImage: "trash")
             }
             .confirmationDialog("Reset all progress?",
                                 isPresented: $confirmReset, titleVisibility: .visible) {
@@ -724,7 +541,420 @@ struct SettingsView: View {
             } message: {
                 Text("This clears your learned letters and stats. Settings are kept.")
             }
+        } header: {
+            Text("Progress")
         }
+        .listRowBackground(rowBackground(.reset))
+    }
+
+    // MARK: - Practice & Feedback
+
+    private var learningSection: some View {
+        Section {
+            sliderRow(title: "Recognize within",
+                      value: $model.settings.ttrThreshold,
+                      range: 0.5...3.0, step: 0.1,
+                      format: { String(format: "%.1f s", $0) })
+            Stepper(value: $model.settings.maxAnswerChoices,
+                    in: AppSettings.answerChoiceRange) {
+                HStack {
+                    Text("Answer choices")
+                    Spacer()
+                    Text("\(model.settings.maxAnswerChoices)")
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                }
+            }
+        } header: {
+            Text("Learning")
+        } footer: {
+            Text("When you consistently recognize a letter within this time, a new letter is added. Answer choices only ever include characters you've already met — the number of buttons grows as you learn, up to this many.")
+        }
+        .listRowBackground(rowBackground(.learning))
+    }
+
+    /// Keyboard-entry answers (#232), in the choice quizzes that take them
+    /// (not the Journey).
+    private var answerEntrySection: some View {
+        Section {
+            Picker("Answer entry", selection: $model.settings.answerEntry) {
+                ForEach(AnswerEntryMode.allCases, id: \.self) { m in
+                    Text(m.title).tag(m)
+                }
+            }
+        } header: {
+            Text("Answer entry")
+        } footer: {
+            Text("Tap picks from the buttons. Progressive starts each level at 4 choices, moves to 6 after 18 of 20 right, then to typing the answer after 18 of 20 more; a new character or stage starts again at 4. Type always has you type. Answers that are a meaning or a prosign always show choices.")
+        }
+        .listRowBackground(rowBackground(.answerEntry))
+    }
+
+    private var feedbackSection: some View {
+        Section("Feedback") {
+            Toggle("Show right / wrong", isOn: $model.settings.showCorrectness)
+            Picker("Reveal the letter", selection: $model.settings.reveal) {
+                ForEach(RevealMode.allCases) { mode in
+                    Text(mode.label).tag(mode)
+                }
+            }
+            Toggle("Show replay button", isOn: $model.settings.allowReplay)
+            Toggle("Haptic feedback", isOn: $model.settings.hapticsEnabled)
+        }
+        .listRowBackground(rowBackground(.feedback))
+    }
+
+    private var headCopySection: some View {
+        Section {
+            Stepper(value: $model.settings.headCopyRepeats,
+                    in: AppSettings.headCopyRepeatRange) {
+                HStack {
+                    Text("Auto-repeats")
+                    Spacer()
+                    Text(model.settings.headCopyRepeats == 0
+                         ? "Off"
+                         : "\(model.settings.headCopyRepeats)×")
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                }
+            }
+            sliderRow(title: "Auto-reveal after",
+                      value: $model.settings.headCopyRevealSeconds,
+                      range: AppSettings.headCopyRevealRange, step: 1,
+                      format: { $0 < 1 ? "Manual only" : "\(Int($0)) s" })
+        } header: {
+            Text("Head Copy")
+        } footer: {
+            Text("After the prompt plays, Head Copy can replay it a few times so you can re-hear it without mentally replaying, then count down to the answer. A manual Repeat button is always available.")
+        }
+        .listRowBackground(rowBackground(.headCopy))
+    }
+
+    // MARK: - Keys & Sending
+
+    private var hardwareKeySection: some View {
+        Section {
+            // Changes reach a connected adapter through the handlers on the
+            // navigation stack in `body` (`syncAdapterIfKeyed`).
+            Picker("Keyer mode", selection: $adapterKeyerMode) {
+                ForEach(MIDIOutput.KeyerMode.allCases, id: \.rawValue) { mode in
+                    Text(mode.displayName).tag(mode.rawValue)
+                }
+            }
+            if (MIDIOutput.KeyerMode(rawValue: adapterKeyerMode) ?? .straightKey).adapterTimesSending {
+                Text("The adapter times the sending in this mode, at the speed you're practising at.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+        } header: {
+            Text("Hardware key")
+        } footer: {
+            Text("How the Vail Adapter should read your key. Straight Key is the default; pick an iambic mode for a paddle. This describes your key rather than a drill, so it applies in Sending Practice and on the Vail screen alike.")
+        }
+        .listRowBackground(rowBackground(.hardwareKey))
+    }
+
+    /// The on-screen key (#233): straight key or touch paddles, wherever the
+    /// screen offers one — the keyed answers, the keying games and the Vail
+    /// screen.
+    private var onScreenKeySection: some View {
+        Section {
+            Picker("On-screen key", selection: $model.settings.onScreenKey) {
+                ForEach(OnScreenKeyType.allCases) { kind in
+                    Text(kind.label).tag(kind)
+                }
+            }
+            if model.settings.onScreenKey == .paddles {
+                Picker("Paddle mode", selection: $model.settings.paddleMode) {
+                    ForEach(PaddleKeyer.Mode.allCases) { mode in
+                        Text(mode.label).tag(mode)
+                    }
+                }
+                Toggle("Dah on the left", isOn: $model.settings.paddleSwap)
+            }
+        } header: {
+            Text("On-screen key")
+        } footer: {
+            Text(model.settings.onScreenKey == .paddles
+                 ? "Two touch paddles, dit and dah, timed at your speed. Hold one to repeat it; hold both to squeeze. Iambic A stops when you let go; Iambic B adds one more alternate element; Ultimatic repeats whichever paddle you pressed last. \"Dah on the left\" swaps them for a left-handed operator."
+                 : "One hold-to-key pad: the tone sounds for as long as you hold it. Choose Paddles to key with two touch paddles and a built-in iambic keyer instead.")
+        }
+        .listRowBackground(rowBackground(.onScreenKey))
+    }
+
+    // MARK: - QSO & Pileups
+
+    private var yourStationSection: some View {
+        Section {
+            HStack {
+                Text("Your callsign")
+                Spacer()
+                TextField("W1AW", text: $model.settings.qso.myCall)
+                    .multilineTextAlignment(.trailing)
+                    .textInputAutocapitalization(.characters)
+                    .autocorrectionDisabled()
+                    .font(.system(.body, design: .monospaced))
+            }
+            HStack {
+                Text("Your name")
+                Spacer()
+                TextField("Optional", text: $model.settings.qso.myName)
+                    .multilineTextAlignment(.trailing)
+                    .textInputAutocapitalization(.characters)
+                    .autocorrectionDisabled()
+                    .font(.system(.body, design: .monospaced))
+            }
+        } header: {
+            Text("Your Station")
+        } footer: {
+            Text("Used across the app — sent when you call CQ and work stations in Pileup Runner, and drilled in CW 77 when you include them.")
+        }
+        .listRowBackground(rowBackground(.yourStation))
+    }
+
+    private var pileupRunnerSection: some View {
+        Section {
+            Picker("Mode", selection: $model.settings.qso.mode) {
+                ForEach(QSOContestMode.allCases) { Text($0.label).tag($0) }
+            }
+            if model.settings.qso.mode.isPileup {
+                Stepper(value: $model.settings.qso.maxStations, in: 1...8) {
+                    Text("Max callers: \(model.settings.qso.maxStations)")
+                }
+            }
+            // Same 60 WPM ceiling as the global character speed, so QRQ
+            // practice carries into the QSO simulator (issue #79).
+            sliderRow(title: "Min speed", value: $model.settings.qso.minWPM,
+                      range: 12...60, step: 1, format: { "\(Int($0)) WPM" })
+            sliderRow(title: "Max speed", value: $model.settings.qso.maxWPM,
+                      range: 12...60, step: 1, format: { "\(Int($0)) WPM" })
+            Toggle("Farnsworth spacing", isOn: $model.settings.qso.farnsworth)
+            sliderRow(title: "Tone spread", value: $model.settings.qso.toneSpread,
+                      range: 0...500, step: 10,
+                      format: { $0 < 10 ? "Zero-beat" : "±\(Int($0)) Hz" })
+        } header: {
+            Text("Pileup Runner")
+        } footer: {
+            Text("Max callers thins a pileup at once; the other settings reach callers as they arrive. Tone spread splits callers across the band; zero-beat stacks them all on your pitch.")
+        }
+        .listRowBackground(rowBackground(.pileupRunner))
+    }
+
+    private var qsoSignalsSection: some View {
+        Section("QSO · Signals") {
+            Toggle("QSB (fading)", isOn: $model.settings.qso.qsbEnabled)
+            Picker("QRN (noise)", selection: $model.settings.qso.qrn) {
+                ForEach(QRNLevel.allCases) { Text($0.label).tag($0) }
+            }
+            sliderRow(title: "Min wait", value: $model.settings.qso.minDelay,
+                      range: 0...3, step: 0.1, format: { String(format: "%.1f s", $0) })
+            sliderRow(title: "Max wait", value: $model.settings.qso.maxDelay,
+                      range: 0...4, step: 0.1, format: { String(format: "%.1f s", $0) })
+        }
+        .listRowBackground(rowBackground(.qsoSignals))
+    }
+
+    private var qsoRealismSection: some View {
+        Section {
+            // Only exchanges that actually carry a signal report (POTA, Basic
+            // Contest, Single Caller) can be asked to copy it — the contest
+            // sprints send no RST, so the toggle would be a no-op.
+            if model.settings.qso.mode.includesRST {
+                Toggle("Copy RST too", isOn: $model.settings.qso.rstRequired)
+            }
+            Toggle("Keep partial call in box", isOn: $model.settings.qso.keepPartialCall)
+            Toggle("Key my side in Morse", isOn: $model.settings.qso.keyMySide)
+            Toggle("Pileup re-calls after TU", isOn: $model.settings.qso.autoRecall)
+            Picker("On a busted call", selection: $model.settings.qso.bustBehavior) {
+                ForEach(BustBehavior.allCases) { Text($0.label).tag($0) }
+            }
+            Toggle("Callers can give up", isOn: $model.settings.qso.giveUpEnabled)
+            if model.settings.qso.giveUpEnabled {
+                Picker("Tell me who got away", selection: $model.settings.qso.missedCallerFeedback) {
+                    ForEach(MissedCallerFeedback.allCases) { Text($0.label).tag($0) }
+                }
+            }
+            Toggle("Cut numbers", isOn: $model.settings.qso.cutNumbersEnabled)
+            if model.settings.qso.cutNumbersEnabled {
+                ForEach(CutNumbers.cuttableDigits, id: \.self) { d in
+                    Toggle("\(d) → \(CutNumbers.map[d].map(String.init) ?? "")",
+                           isOn: cutBinding(d))
+                }
+            }
+        } header: {
+            Text("QSO · Realism")
+        } footer: {
+            Text("Keep partial call: a partly-copied call stays in the box so you can send “?” and add to it instead of retyping. Key my side: your CQ, calls and TU go out in Morse at your tone and speed before the stations reply; off, they are logged silently. Re-calls after TU: the stations still waiting call again on their own once you log a contact; off, send AGN or CQ yourself. Give-up: a station you keep busting drops out after a few misses, but the pileup continues — “Tell me who got away” then names the call you lost and what you had it as, either as it happens or in the end-of-run summary. Cut numbers send numerals as letters (0→T, 9→N) — you can type either form.")
+        }
+        .listRowBackground(rowBackground(.qsoRealism))
+    }
+
+    private var qsoCallsignsSection: some View {
+        Section {
+            Toggle("US callsigns only", isOn: $model.settings.qso.usOnly)
+            ForEach(CallsignFormat.allCases) { f in
+                Toggle(f.label, isOn: formatBinding(f))
+            }
+        } header: {
+            Text("QSO · Callsigns")
+        } footer: {
+            Text("Which callsign shapes appear in pileups. Turn off US-only to mix in DX prefixes.")
+        }
+        .listRowBackground(rowBackground(.qsoCallsigns))
+    }
+
+    // MARK: - Reminders
+
+    private var remindersSection: some View {
+        Section {
+            Toggle("Daily reminder", isOn: Binding(
+                get: { model.settings.dailyReminderEnabled },
+                set: { model.setDailyReminder(enabled: $0) }
+            ))
+            if model.settings.dailyReminderEnabled {
+                DatePicker("Remind me at",
+                           selection: reminderTimeBinding,
+                           displayedComponents: .hourAndMinute)
+            }
+        } header: {
+            Text("Reminders")
+        } footer: {
+            Text("A gentle daily nudge to practice so your streak stays alive. You can change this anytime in iOS Settings → Notifications.")
+        }
+        .listRowBackground(rowBackground(.reminders))
+    }
+
+    // MARK: - Display
+
+    private var displaySection: some View {
+        Section {
+            Toggle("Slashed zero", isOn: $model.settings.slashedZero)
+        } header: {
+            Text("Display")
+        } footer: {
+            Text("Show the digit 0 with a line through it — the operator's convention for telling 0 from O.")
+        }
+        .listRowBackground(rowBackground(.display))
+    }
+
+    // MARK: - Leaderboard & Buddy
+
+    // Shared leaderboard (docs/high-scores-design.md, step 2). Off by
+    // default; nothing leaves the device until this is on and a name is set.
+    // The display-name rule is the server's, applied here so the field says
+    // what is wrong up front.
+    private var leaderboardSection: some View {
+        Section {
+            Toggle("Share scores to the shared leaderboard", isOn: $model.settings.leaderboard.shareScores)
+            HStack {
+                Text("Display name")
+                Spacer()
+                TextField("N0CALL", text: $model.settings.leaderboard.displayName)
+                    .multilineTextAlignment(.trailing)
+                    .textInputAutocapitalization(.characters)
+                    .autocorrectionDisabled()
+                    .font(.body.monospaced())
+                    .onChange(of: model.settings.leaderboard.displayName) { name in
+                        // Uppercased as typed, the form the board shows.
+                        let up = name.uppercased()
+                        if up != name { model.settings.leaderboard.displayName = up }
+                    }
+            }
+            if !model.settings.leaderboard.displayName.isEmpty,
+               let problem = LeaderboardDisplayName.problem(with: model.settings.leaderboard.displayName) {
+                Text(problem)
+                    .font(.footnote)
+                    .foregroundStyle(.orange)
+            }
+            Button(role: .destructive) {
+                confirmDeleteScores = true
+            } label: {
+                HStack {
+                    Label("Delete my scores", systemImage: "trash")
+                    if deletingScores { Spacer(); ProgressView() }
+                }
+            }
+            .disabled(deletingScores)
+            .confirmationDialog("Delete every score this device has posted?",
+                                isPresented: $confirmDeleteScores, titleVisibility: .visible) {
+                Button("Delete my scores", role: .destructive) {
+                    deletingScores = true
+                    deleteScoresResult = nil
+                    Task {
+                        let problem = await model.leaderboardDeleteMyScores()
+                        deletingScores = false
+                        deleteScoresResult = problem ?? "Your scores were deleted."
+                    }
+                }
+            } message: {
+                Text("Removes this device's scores and submissions from the shared board. Your local stats and personal bests stay.")
+            }
+            if let deleteScoresResult {
+                Text(deleteScoresResult)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+        } header: {
+            Text("Leaderboard")
+        } footer: {
+            Text("Ranked runs — Rapid Fire, Contest, Pileup Runner and the six games — are posted when they end. The board ranks a server-graded copy of the run (speed summed over the items you got right), so a game's board number is not its on-screen score. Names are 2–12 characters: letters, digits, space, / and -. Only a real device can post; the simulator cannot attest.")
+        }
+        .listRowBackground(rowBackground(.leaderboard))
+    }
+
+    // Buddy streak (docs/buddy-streak-design.md, #219, #237): its own view,
+    // tinted like the other sections when a search result lands on it.
+    private var buddySection: some View {
+        BuddySettingsSection(rowBackground: rowBackground(.buddy))
+    }
+
+    // MARK: - Help & About
+
+    private var bugReportsSection: some View {
+        Section {
+            Button {
+                UIPasteboard.general.string = diagnosticInfo()
+                copiedDiagnostics = true
+                Haptics.success()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                    copiedDiagnostics = false
+                }
+            } label: {
+                Label(copiedDiagnostics ? "Copied to clipboard" : "Copy diagnostic info",
+                      systemImage: copiedDiagnostics ? "checkmark.circle" : "doc.on.doc")
+            }
+        } header: {
+            Text("Bug reports")
+        } footer: {
+            Text("Copies your app/iOS version, device, and current settings to the clipboard to paste into a bug report.")
+        }
+        .listRowBackground(rowBackground(.bugReports))
+    }
+
+    // Support the project (Android parity). Links out to the website's own
+    // page rather than straight to a tipping site: App Store guideline 3.1.1
+    // treats an in-app link to external tipping as a purchase mechanism, but
+    // a link to the project's homepage is not, and the coffee button lives
+    // there.
+    private var aboutSection: some View {
+        Section {
+            Link(destination: ProjectLinks.support) {
+                Label("Support the project", systemImage: "cup.and.saucer")
+            }
+            Link(destination: ProjectLinks.discord) {
+                Label("Join the Discord", systemImage: "bubble.left.and.bubble.right")
+            }
+            Link(destination: ProjectLinks.gitHub) {
+                Label("Source on GitHub", systemImage: "chevron.left.forwardslash.chevron.right")
+            }
+            NavigationLink(value: SettingsRoute.licenses) {
+                Label("Licenses", systemImage: "doc.text")
+            }
+        } header: {
+            Text("About")
+        } footer: {
+            Text("Free and open source, with no ads, subscriptions, or tracking. Both apps live in one repository.")
+        }
+        .listRowBackground(rowBackground(.about))
     }
 
     /// The Characters track's learner-chosen stage hold (nil = automatic).
@@ -784,53 +1014,6 @@ struct SettingsView: View {
                 else { model.settings.selectedPunctuation.remove(symbol) }
             }
         )
-    }
-
-    /// Run one buddy action (invite, join, leave) with the busy spinner up
-    /// and its refusal, if any, shown under the buttons.
-    private func runBuddyAction(_ action: @escaping @MainActor () async -> String?) {
-        buddyBusy = true
-        buddyProblem = nil
-        copiedInvite = false
-        Task {
-            buddyProblem = await action()
-            buddyBusy = false
-        }
-    }
-
-    /// An invite this device issued: the code large enough to read out, when
-    /// it lapses, and the two ways to send it. Single use, 24 hours.
-    private func buddyInviteCard(code: String, expiresAt: Date) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(code)
-                .font(.system(size: 36, weight: .bold, design: .monospaced))
-                .tracking(6)
-                .foregroundStyle(Theme.tealBright)
-                .frame(maxWidth: .infinity)
-                .accessibilityLabel("Invite code \(code.map(String.init).joined(separator: " "))")
-            Text("Send this to your buddy however you like — it works once and expires \(expiresAt.formatted(date: .abbreviated, time: .shortened)).")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-            HStack {
-                ShareLink(item: buddyInviteShareText(code: code)) {
-                    Label("Share", systemImage: "square.and.arrow.up")
-                }
-                Spacer()
-                Button {
-                    UIPasteboard.general.string = code
-                    copiedInvite = true
-                    Haptics.success()
-                } label: {
-                    Label(copiedInvite ? "Copied" : "Copy code", systemImage: copiedInvite ? "checkmark.circle" : "doc.on.doc")
-                }
-            }
-            .buttonStyle(.bordered)
-        }
-        .padding(.vertical, 4)
-    }
-
-    private func buddyInviteShareText(code: String) -> String {
-        "Be my Morse buddy in Another Morse Trainer: open Settings › Buddy streak and join with the code \(code). It works once and expires in 24 hours."
     }
 
     /// The reminder time as a Date for the hour-and-minute picker, routed
