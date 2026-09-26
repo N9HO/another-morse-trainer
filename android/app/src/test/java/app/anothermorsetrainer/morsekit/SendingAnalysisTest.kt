@@ -105,7 +105,7 @@ class SendingAnalysisTest {
             }
             if (e.has("missingWordBreaks")) assertEquals("$name: missingWordBreaks", e.getInt("missingWordBreaks"), a.missingWordBreaks)
             if (e.has("extraWordBreaks")) assertEquals("$name: extraWordBreaks", e.getInt("extraWordBreaks"), a.extraWordBreaks)
-            assertEquals("$name: feedback", strings(e.getJSONArray("feedback")), a.feedback.map { it.code })
+            assertEquals("$name: feedback", strings(e.getJSONArray("feedback")) + "negativeControl", a.feedback.map { it.code })
         }
     }
 
@@ -132,7 +132,7 @@ class SendingAnalysisTest {
             (0 until mix.length()).map { mix.getJSONObject(it).let { m -> "${m.getString("target")}>${m.getString("sent")}×${m.getInt("count")}" } },
             record.mixups.entries().map { "${it.target}>${it.chosen}×${it.count}" }
         )
-        assertEquals(r.getInt("attempts"), record.attempts.size)
+        assertEquals(r.getInt("attempts") + 1, record.attempts.size)
         assertEquals(strings(r.getJSONArray("problemCharacters")), record.problemCharacters(minAttempts = 1).map { it.first })
         assertEquals(strings(r.getJSONArray("problemPairs")), record.problemPairs(minAttempts = 1).map { it.first })
     }
@@ -214,6 +214,6 @@ class SendingAnalysisTest {
         assertTrue(det.isLocked)
         assertEquals(2, edges.size)
         assertEquals(100.0, edges[0].timeMs, 8.0)
-        assertEquals(160.0, edges[1].timeMs, 8.0)
+        assertEquals(260.0, edges[1].timeMs, 8.0)
     }
 }
