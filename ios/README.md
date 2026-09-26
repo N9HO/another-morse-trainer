@@ -140,12 +140,14 @@ testers, bug reports and feature chat live on
   browsable by anyone, per mode, from the Games menu and from Your Stats,
   without sharing; the first time you start a game with sharing off, one
   prompt offers to turn it on, with "Not now" and "Don't ask again".
-- **Buddy streak**: pair with one other person by a six-character invite
-  code (single use, 24 hours) and keep a streak of days you *both*
-  practised. The home screen says whether your buddy has practised today,
-  and the daily reminder adds a nudge when they haven't (as of the app's
-  last look). Uses the leaderboard display name and attestation; pairing
-  itself is the opt-in. Settings › Leaderboard & Buddy › Buddy streak.
+- **Buddy streak**: pair with up to ten people (on either app), each by a
+  six-character invite code (single use, 24 hours), and keep a separate
+  streak with each of the days you *both* practised. Settings ›
+  Leaderboard & Buddy › Buddy streak lists every buddy with their streak and whether they have
+  practised today, and leaves one buddy at a time. The home screen says who
+  has practised today, and the daily reminder adds one nudge naming whoever
+  hasn't (as of the app's last look). Uses the leaderboard display name and
+  attestation; pairing itself is the opt-in.
 - **Progress**: daily streak with milestone celebrations, a GitHub-style
   activity grid of daily practice time, session history with per-session
   recognition charts, per-character stats, most-confused pairs, performance

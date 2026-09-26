@@ -181,7 +181,7 @@ public enum SettingsCatalog {
               ["leaderboard", "post", "upload", "ranking", "high scores", "opt in"], .leaderboard),
         .init("displayName", "Display name", ["name", "callsign", "nickname", "handle"], .leaderboard),
         .init("deleteScores", "Delete my scores", ["remove", "erase", "privacy", "data"], .leaderboard),
-        .init("buddyStreak", "Buddy streak", ["buddy", "friend", "partner", "pair", "invite", "join", "code", "streak"], .buddy),
+        .init("buddyStreak", "Buddy streak", ["buddy", "buddies", "friend", "partner", "pair", "invite", "join", "code", "streak", "leave"], .buddy),
 
         // Help & About
         .init("copyDiagnostics", "Copy diagnostic info",

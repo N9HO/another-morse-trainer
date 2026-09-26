@@ -25,6 +25,18 @@ anything identifying the person. No tracking, no ads, no analytics.
 Deletion: in-app **Delete my scores** removes everything server-side for
 that device at once; also by email. Browsing the board sends nothing.
 
+### Buddy streak (#219, several buddies #237)
+
+Its own opt-in (inviting or joining), not the Share scores switch. Once
+paired, to the same Worker: the display name (shown to buddies), the same
+device attestation, the pairing links (at most ten per install, #237) and,
+once per local day practised, that day as `yyyy-mm-dd`. Buddies see each
+other's display name and whether each practised that day, nothing else.
+Delete my scores removes every pairing, invite and practice day. These are
+the same three data types declared below (identifier, display name, app
+interactions); several buddies adds rows, not kinds of data, so neither
+store's answers change for #237.
+
 ## App Store Connect › App Privacy
 
 Answer **Yes, we collect data from this app**, then declare three data types.
