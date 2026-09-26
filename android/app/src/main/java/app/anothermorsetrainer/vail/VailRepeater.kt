@@ -306,8 +306,10 @@ class VailRepeater(context: Context) {
 
     // ---- Keying ----
 
-    fun touchKey(isDown: Boolean) {
-        val nowMs = System.currentTimeMillis()
+    fun touchKey(isDown: Boolean, atMs: Long? = null) {
+        // [atMs]: when the edge happened, for the on-screen paddles (#233),
+        // whose keyer times each element exactly; the straight key means "now".
+        val nowMs = atMs ?: System.currentTimeMillis()
         if (isDown && !keyDown) {
             keyDown = true
             keyBeginMs = nowMs

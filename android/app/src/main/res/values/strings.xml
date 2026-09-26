@@ -506,6 +506,15 @@
     <string name="settings_session_length">Session length</string>
     <string name="settings_keyer_mode">Keyer mode</string>
     <string name="settings_keyer_mode_note">The adapter times the sending in this mode, at the speed you\'re practising at.</string>
+    <string name="settings_on_screen_key">On-screen key</string>
+    <string name="settings_paddle_mode">Paddle mode</string>
+    <string name="settings_paddle_swap">Dah on the left</string>
+    <string name="settings_on_screen_key_footer_straight">One hold-to-key pad: the tone sounds for as long as you hold it. Choose Paddles to key with two touch paddles and a built-in iambic keyer instead.</string>
+    <string name="settings_on_screen_key_footer_paddles">Two touch paddles, dit and dah, timed at your speed. Hold one to repeat it; hold both to squeeze. Iambic A stops when you let go; Iambic B adds one more alternate element; Ultimatic repeats whichever paddle you pressed last. \"Dah on the left\" swaps them for a left-handed operator.</string>
+    <string name="paddle_dit">DIT</string>
+    <string name="paddle_dah">DAH</string>
+    <string name="paddle_dit_description">Dit paddle</string>
+    <string name="paddle_dah_description">Dah paddle</string>
 
     <!-- JourneyScreen -->
     <string name="journey_map_button">Map</string>

@@ -497,6 +497,7 @@ fun DungeonScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
                     decoded = keyer.decodedText,
                     keyPressed = keyPressed,
                     midiDevice = midiDevice,
+                    onPaddleKey = { down, ms -> keyer.touchKey(down, ms) },
                     onKey = { down -> keyPressed = down; keyer.touchKey(down) },
                     onReplay = {
                         val g = game ?: return@DungeonRun
@@ -606,6 +607,7 @@ private fun DungeonRun(
     keyPressed: Boolean,
     midiDevice: String?,
     onKey: (Boolean) -> Unit,
+    onPaddleKey: (Boolean, Long) -> Unit,
     onReplay: () -> Unit,
     onEnd: () -> Unit,
     onSwitchMode: (TrainingMode) -> Unit
@@ -729,30 +731,36 @@ private fun DungeonRun(
             midiDevice?.let { Text("  🎹", color = Brand.teal) }
         }
         Spacer(Modifier.height(6.dp))
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(90.dp)
-                .clip(RoundedCornerShape(Brand.cornerRadius))
-                .background(if (keyPressed) Brand.teal else Brand.navyRaised)
-                .border(
-                    width = if (keyPressed) 2.dp else 1.dp,
-                    color = if (keyPressed) Brand.tealBright else Brand.hairline,
-                    shape = RoundedCornerShape(Brand.cornerRadius)
-                )
-                .pointerInput(Unit) {
-                    detectTapGestures(onPress = {
-                        onKey(true)
-                        try { tryAwaitRelease() } finally { onKey(false) }
-                    })
-                },
-            contentAlignment = Alignment.Center
+        // Straight key or paddles, as chosen in Settings (#233).
+        OnScreenKeySwitch(
+            onPaddleKey = onPaddleKey,
+            paddleModifier = Modifier.fillMaxWidth().height(90.dp)
         ) {
-            Text(
-                stringResource(R.string.common_hold_to_key),
-                fontSize = 11.sp, fontWeight = FontWeight.Bold,
-                color = if (keyPressed) Brand.navy else Brand.textSecondary
-            )
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(90.dp)
+                    .clip(RoundedCornerShape(Brand.cornerRadius))
+                    .background(if (keyPressed) Brand.teal else Brand.navyRaised)
+                    .border(
+                        width = if (keyPressed) 2.dp else 1.dp,
+                        color = if (keyPressed) Brand.tealBright else Brand.hairline,
+                        shape = RoundedCornerShape(Brand.cornerRadius)
+                    )
+                    .pointerInput(Unit) {
+                        detectTapGestures(onPress = {
+                            onKey(true)
+                            try { tryAwaitRelease() } finally { onKey(false) }
+                        })
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    stringResource(R.string.common_hold_to_key),
+                    fontSize = 11.sp, fontWeight = FontWeight.Bold,
+                    color = if (keyPressed) Brand.navy else Brand.textSecondary
+                )
+            }
         }
         Spacer(Modifier.height(12.dp))
     }

@@ -22,8 +22,14 @@ struct RepeaterView: View {
                         connectionCard
                         statRow
                         RepeaterSignalTimelineView()
-                        RepeaterTouchKeyView()
-                            .frame(height: 150)
+                        // Straight key or paddles, as chosen in Settings
+                        // (#233). The paddles' elements go out exactly as
+                        // straight-key presses would: sidetone always, and
+                        // on the air when break-in is on.
+                        OnScreenKeySwitch(onKey: { down, ms in model.touchKey(isDown: down, atMs: ms) }) {
+                            RepeaterTouchKeyView()
+                        }
+                        .frame(height: 150)
                         breakInCard
                         adapterCard
                         rosterCard

@@ -48,7 +48,7 @@ public enum SettingsSection: String, CaseIterable, Sendable, Hashable {
     case speed, farnsworth
     case proficiency, newCharacters, trackStage, punctuation, previewStage, reset
     case learning, answerEntry, feedback, headCopy
-    case hardwareKey
+    case hardwareKey, onScreenKey
     case yourStation, pileupRunner, qsoSignals, qsoRealism, qsoCallsigns
     case reminders
     case display
@@ -61,7 +61,7 @@ public enum SettingsSection: String, CaseIterable, Sendable, Hashable {
         case .speed, .farnsworth: return .speed
         case .proficiency, .newCharacters, .trackStage, .punctuation, .previewStage, .reset: return .characters
         case .learning, .answerEntry, .feedback, .headCopy: return .practice
-        case .hardwareKey: return .keys
+        case .hardwareKey, .onScreenKey: return .keys
         case .yourStation, .pileupRunner, .qsoSignals, .qsoRealism, .qsoCallsigns: return .qso
         case .reminders: return .reminders
         case .display: return .display
@@ -137,6 +137,12 @@ public enum SettingsCatalog {
         .init("keyerMode", "Keyer mode",
               ["vail", "adapter", "paddle", "iambic", "straight key", "hardware key", "midi", "key", "bug", "cootie", "mode a", "mode b"],
               .hardwareKey),
+        .init("onScreenKey", "On-screen key",
+              ["touch key", "straight key", "paddles", "pad", "tap", "on screen", "iambic"], .onScreenKey),
+        .init("paddleMode", "Paddle mode",
+              ["iambic", "iambic a", "iambic b", "ultimatic", "keyer", "squeeze", "touch paddles"], .onScreenKey),
+        .init("paddleSwap", "Dah on the left",
+              ["left handed", "lefty", "swap", "reverse", "paddles", "dit"], .onScreenKey),
 
         // QSO & Pileups
         .init("myCall", "Your callsign", ["call sign", "call", "station", "my call", "w1aw"], .yourStation),

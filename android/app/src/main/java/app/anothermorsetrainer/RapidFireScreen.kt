@@ -364,6 +364,7 @@ fun RapidFireScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {
                 onTyped = { typed = it },
                 decoded = keyer.decodedText,
                 keyPressed = keyPressed,
+                onPaddleKey = { down, ms -> keyer.touchKey(down, ms) },
                 onKey = { down ->
                     keyPressed = down
                     keyer.touchKey(down)
@@ -513,6 +514,7 @@ private fun RapidFireRun(
     decoded: String,
     keyPressed: Boolean,
     onKey: (Boolean) -> Unit,
+    onPaddleKey: (Boolean, Long) -> Unit,
     onClearKey: () -> Unit,
     midiDevice: String?,
     onNext: () -> Unit,
@@ -591,40 +593,47 @@ private fun RapidFireRun(
                     )
                 }
                 Spacer(Modifier.height(14.dp))
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(110.dp)
-                        .clip(RoundedCornerShape(Brand.cornerRadius))
-                        .background(if (keyPressed) Brand.teal else Brand.navyRaised)
-                        .border(
-                            width = if (keyPressed) 2.dp else 1.dp,
-                            color = if (keyPressed) Brand.tealBright else Brand.hairline,
-                            shape = RoundedCornerShape(Brand.cornerRadius)
-                        )
-                        .pointerInput(revealBox) {
-                            if (!revealBox) return@pointerInput
-                            detectTapGestures(
-                                onPress = {
-                                    onKey(true)
-                                    try {
-                                        tryAwaitRelease()
-                                    } finally {
-                                        onKey(false)
-                                    }
-                                }
-                            )
-                        },
-                    contentAlignment = Alignment.Center
+                // Straight key or paddles, as chosen in Settings (#233).
+                OnScreenKeySwitch(
+                    onPaddleKey = onPaddleKey,
+                    paddleModifier = Modifier.fillMaxWidth().height(110.dp),
+                    enabled = revealBox
                 ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("⠿", fontSize = 24.sp, color = if (keyPressed) Brand.navy else Brand.teal)
-                        Text(
-                            stringResource(R.string.common_hold_to_key),
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = if (keyPressed) Brand.navy else Brand.textSecondary
-                        )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(110.dp)
+                            .clip(RoundedCornerShape(Brand.cornerRadius))
+                            .background(if (keyPressed) Brand.teal else Brand.navyRaised)
+                            .border(
+                                width = if (keyPressed) 2.dp else 1.dp,
+                                color = if (keyPressed) Brand.tealBright else Brand.hairline,
+                                shape = RoundedCornerShape(Brand.cornerRadius)
+                            )
+                            .pointerInput(revealBox) {
+                                if (!revealBox) return@pointerInput
+                                detectTapGestures(
+                                    onPress = {
+                                        onKey(true)
+                                        try {
+                                            tryAwaitRelease()
+                                        } finally {
+                                            onKey(false)
+                                        }
+                                    }
+                                )
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("⠿", fontSize = 24.sp, color = if (keyPressed) Brand.navy else Brand.teal)
+                            Text(
+                                stringResource(R.string.common_hold_to_key),
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (keyPressed) Brand.navy else Brand.textSecondary
+                            )
+                        }
                     }
                 }
             } else if (response != RapidFireResponse.REVIEW && revealBox) {

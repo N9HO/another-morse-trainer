@@ -535,28 +535,32 @@ private struct GalagaKeyPanel: View {
                         .accessibilityLabel("Hardware key connected")
                 }
             }
-            ZStack {
-                RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous)
-                    .fill(keyPressed ? Theme.teal : Theme.navyRaised)
-                RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous)
-                    .strokeBorder(keyPressed ? Theme.tealBright : Theme.hairline, lineWidth: keyPressed ? 2 : 1)
-                Text("HOLD TO KEY")
-                    .font(.system(size: 12, weight: .bold)).tracking(1.5)
-                    .foregroundStyle(keyPressed ? Theme.navy : Theme.textSecondary)
+            // Straight key or paddles, as chosen in Settings (#233).
+            OnScreenKeySwitch(onKey: { down, ms in sender.touchKey(isDown: down, atMs: ms) }) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous)
+                        .fill(keyPressed ? Theme.teal : Theme.navyRaised)
+                    RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous)
+                        .strokeBorder(keyPressed ? Theme.tealBright : Theme.hairline, lineWidth: keyPressed ? 2 : 1)
+                    Text("HOLD TO KEY")
+                        .font(.system(size: 12, weight: .bold)).tracking(1.5)
+                        .foregroundStyle(keyPressed ? Theme.navy : Theme.textSecondary)
+                }
+                .frame(height: 90)
+                .contentShape(Rectangle())
+                .gesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { _ in
+                            if !keyPressed { keyPressed = true; sender.touchKey(isDown: true) }
+                        }
+                        .onEnded { _ in
+                            if keyPressed { keyPressed = false; sender.touchKey(isDown: false) }
+                        }
+                )
+                .accessibilityLabel("Morse key")
+                .accessibilityHint("Press and hold to key the character on the diving enemy")
             }
             .frame(height: 90)
-            .contentShape(Rectangle())
-            .gesture(
-                DragGesture(minimumDistance: 0)
-                    .onChanged { _ in
-                        if !keyPressed { keyPressed = true; sender.touchKey(isDown: true) }
-                    }
-                    .onEnded { _ in
-                        if keyPressed { keyPressed = false; sender.touchKey(isDown: false) }
-                    }
-            )
-            .accessibilityLabel("Morse key")
-            .accessibilityHint("Press and hold to key the character on the diving enemy")
         }
         .onAppear { sender.start() }
         .onDisappear { sender.stop() }

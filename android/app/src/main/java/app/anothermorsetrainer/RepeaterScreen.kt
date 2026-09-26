@@ -262,36 +262,42 @@ fun RepeaterScreen(onBack: () -> Unit) {
                 Spacer(Modifier.height(16.dp))
                 // Hold-to-key straight key (always sounds local sidetone; transmits
                 // only when break-in is on).
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(110.dp)
-                        .background(if (keyPressed) Brand.teal else Brand.navyRaised, RoundedCornerShape(Brand.cornerRadius))
-                        .border(
-                            width = if (keyPressed) 2.dp else 1.dp,
-                            color = if (keyPressed) Brand.tealBright else Brand.hairline,
-                            shape = RoundedCornerShape(Brand.cornerRadius)
-                        )
-                        .pointerInput(Unit) {
-                            detectTapGestures(onPress = {
-                                keyPressed = true
-                                repeater.touchKey(true)
-                                try { tryAwaitRelease() } finally {
-                                    keyPressed = false
-                                    repeater.touchKey(false)
-                                }
-                            })
-                        },
-                    contentAlignment = Alignment.Center
+                // Straight key or paddles, as chosen in Settings (#233).
+                OnScreenKeySwitch(
+                    onPaddleKey = { down, ms -> repeater.touchKey(down, ms) },
+                    paddleModifier = Modifier.fillMaxWidth().height(110.dp)
                 ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("⠿", fontSize = 24.sp, color = if (keyPressed) Brand.navy else Brand.teal)
-                        Text(
-                            stringResource(R.string.common_hold_to_key),
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = if (keyPressed) Brand.navy else Brand.textSecondary
-                        )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(110.dp)
+                            .background(if (keyPressed) Brand.teal else Brand.navyRaised, RoundedCornerShape(Brand.cornerRadius))
+                            .border(
+                                width = if (keyPressed) 2.dp else 1.dp,
+                                color = if (keyPressed) Brand.tealBright else Brand.hairline,
+                                shape = RoundedCornerShape(Brand.cornerRadius)
+                            )
+                            .pointerInput(Unit) {
+                                detectTapGestures(onPress = {
+                                    keyPressed = true
+                                    repeater.touchKey(true)
+                                    try { tryAwaitRelease() } finally {
+                                        keyPressed = false
+                                        repeater.touchKey(false)
+                                    }
+                                })
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("⠿", fontSize = 24.sp, color = if (keyPressed) Brand.navy else Brand.teal)
+                            Text(
+                                stringResource(R.string.common_hold_to_key),
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (keyPressed) Brand.navy else Brand.textSecondary
+                            )
+                        }
                     }
                 }
 

@@ -331,42 +331,49 @@ fun SendingPracticeScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Un
             Spacer(Modifier.height(20.dp))
 
             // Hold-to-key straight key.
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(120.dp)
-                    .clip(RoundedCornerShape(Brand.cornerRadius))
-                    .background(if (keyPressed) Brand.teal else Brand.navyRaised)
-                    .border(
-                        width = if (keyPressed) 2.dp else 1.dp,
-                        color = if (keyPressed) Brand.tealBright else Brand.hairline,
-                        shape = RoundedCornerShape(Brand.cornerRadius)
-                    )
-                    .pointerInput(revealed) {
-                        if (revealed) return@pointerInput
-                        detectTapGestures(
-                            onPress = {
-                                keyPressed = true
-                                keyer.touchKey(true)
-                                try {
-                                    tryAwaitRelease()
-                                } finally {
-                                    keyPressed = false
-                                    keyer.touchKey(false)
-                                }
-                            }
-                        )
-                    },
-                contentAlignment = Alignment.Center
+            // Straight key or paddles, as chosen in Settings (#233).
+            OnScreenKeySwitch(
+                onPaddleKey = { down, ms -> keyer.touchKey(down, ms) },
+                paddleModifier = Modifier.fillMaxWidth().height(120.dp),
+                enabled = !revealed
             ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("⠿", fontSize = 26.sp, color = if (keyPressed) Brand.navy else Brand.teal)
-                    Text(
-                        stringResource(R.string.common_hold_to_key),
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = if (keyPressed) Brand.navy else Brand.textSecondary
-                    )
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(120.dp)
+                        .clip(RoundedCornerShape(Brand.cornerRadius))
+                        .background(if (keyPressed) Brand.teal else Brand.navyRaised)
+                        .border(
+                            width = if (keyPressed) 2.dp else 1.dp,
+                            color = if (keyPressed) Brand.tealBright else Brand.hairline,
+                            shape = RoundedCornerShape(Brand.cornerRadius)
+                        )
+                        .pointerInput(revealed) {
+                            if (revealed) return@pointerInput
+                            detectTapGestures(
+                                onPress = {
+                                    keyPressed = true
+                                    keyer.touchKey(true)
+                                    try {
+                                        tryAwaitRelease()
+                                    } finally {
+                                        keyPressed = false
+                                        keyer.touchKey(false)
+                                    }
+                                }
+                            )
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("⠿", fontSize = 26.sp, color = if (keyPressed) Brand.navy else Brand.teal)
+                        Text(
+                            stringResource(R.string.common_hold_to_key),
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (keyPressed) Brand.navy else Brand.textSecondary
+                        )
+                    }
                 }
             }
 

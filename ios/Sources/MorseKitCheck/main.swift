@@ -6109,6 +6109,80 @@ do {
           && AnswerEntryTier.typed.choiceCount == nil)
 }
 
+// MARK: - On-screen paddle keyer (#233)
+//
+// fixtures/paddle-keyer.json — read by this harness AND by android
+// PaddleKeyerTest. Scripts of paddle presses, and the elements each keyer mode
+// sends for them, worked out by hand from the fixture's `derivation`.
+struct PaddleKeyerFixture: Decodable {
+    struct Case: Decodable {
+        let name: String
+        let wpm: Double
+        let untilMs: Double
+        let events: [[Slot]]
+        let expected: [String: [[Slot]]]
+    }
+    /// One slot of a fixture tuple: a word ("dit", "down") or a number (ms).
+    enum Slot: Decodable {
+        case text(String), number(Double)
+        init(from decoder: Decoder) throws {
+            let c = try decoder.singleValueContainer()
+            if let n = try? c.decode(Double.self) { self = .number(n) } else { self = .text(try c.decode(String.self)) }
+        }
+        var text: String { if case .text(let s) = self { return s }; return "" }
+        var number: Double { if case .number(let n) = self { return n }; return .nan }
+    }
+    let cases: [Case]
+}
+
+print("\nOn-screen paddle keyer, against fixtures/paddle-keyer.json:")
+if let data = try? Data(contentsOf: URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent()
+        .deletingLastPathComponent().deletingLastPathComponent()
+        .appendingPathComponent("fixtures/paddle-keyer.json")),
+   let fx = try? JSONDecoder().decode(PaddleKeyerFixture.self, from: data) {
+    check("fixture carries cases for every mode",
+          !fx.cases.isEmpty && fx.cases.allSatisfy { c in PaddleKeyer.Mode.allCases.allSatisfy { c.expected[$0.rawValue] != nil } })
+    check("one unit is 1200 / wpm ms", PaddleKeyer(mode: .iambicA, wpm: 20).unitMs == 60)
+    for c in fx.cases {
+        for mode in PaddleKeyer.Mode.allCases {
+            var keyer = PaddleKeyer(mode: mode, wpm: c.wpm)
+            var edges: [PaddleKeyer.Edge] = []
+            for e in c.events {
+                let element: PaddleKeyer.Element = e[0].text == "dah" ? .dah : .dit
+                edges += keyer.paddle(element, isDown: e[1].text == "down", atMs: e[2].number)
+            }
+            edges += keyer.advance(toMs: c.untilMs)
+            // Pair each key-down with the key-up that follows it.
+            var got: [String] = []
+            var i = 0
+            while i < edges.count {
+                let d = edges[i]
+                let u = i + 1 < edges.count ? edges[i + 1] : nil
+                if d.isDown, let u, !u.isDown, u.element == d.element {
+                    got.append("\(d.element.rawValue) \(Int(d.atMs))-\(Int(u.atMs))")
+                    i += 2
+                } else {
+                    got.append("unpaired \(d.isDown ? "down" : "up") \(d.element.rawValue) \(Int(d.atMs))")
+                    i += 1
+                }
+            }
+            let want = (c.expected[mode.rawValue] ?? []).map { "\($0[0].text) \(Int($0[1].number))-\(Int($0[2].number))" }
+            check("\(mode.rawValue): \(c.name)", got == want)
+            if got != want { print("      ↳ got \(got), fixture says \(want)") }
+            check("\(mode.rawValue): \(c.name) — idle afterwards", !keyer.isBusy)
+        }
+    }
+    // A screen closing mid-tone cuts it rather than leaving the key down.
+    var k = PaddleKeyer(mode: .iambicA, wpm: 20)
+    _ = k.paddle(.dah, isDown: true, atMs: 0)
+    let cut = k.releaseAll(atMs: 50)
+    check("releaseAll cuts a sounding tone and goes idle",
+          cut == [PaddleKeyer.Edge(isDown: false, atMs: 50, element: .dah)] && !k.isBusy && k.advance(toMs: 5000).isEmpty)
+} else {
+    check("fixtures/paddle-keyer.json loads and decodes", false)
+}
+
 print("\n────────────────────────────")
 if failures == 0 {
     print("✅ All \(checks) checks passed.\n")

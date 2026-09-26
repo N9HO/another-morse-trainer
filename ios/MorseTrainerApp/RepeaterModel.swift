@@ -505,9 +505,11 @@ public final class RepeaterModel: ObservableObject {
         }
     }
 
-    /// Public for the on-screen touch key.
-    public func touchKey(isDown: Bool) {
-        let nowMs = Int64(Date().timeIntervalSince1970 * 1000)
+    /// Public for the on-screen touch key. `atMs` is when the edge happened,
+    /// for the on-screen paddles (#233), whose keyer times each element
+    /// exactly; the straight key leaves it to "now".
+    public func touchKey(isDown: Bool, atMs: Int64? = nil) {
+        let nowMs = atMs ?? Int64(Date().timeIntervalSince1970 * 1000)
         let event = MIDIInput.Event(
             key: .straight,
             isDown: isDown,
