@@ -424,7 +424,7 @@ private fun Card(title: String, content: @Composable ColumnScope.() -> Unit) {
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         Text(
-            title.uppercase(Locale.getDefault()),
+            title.uppercase(Locale.ROOT),
             fontSize = 11.sp,
             fontWeight = FontWeight.Bold,
             letterSpacing = 1.4.sp,
