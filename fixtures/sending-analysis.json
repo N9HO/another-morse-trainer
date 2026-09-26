@@ -11,7 +11,7 @@
   "speed": "characterWpm = 1200 / unit. effectiveWpm = 1200 * U / (last up - first down), where U is the standard length of what was sent: 1 per dit, 3 per dah, 1 per element gap, 3 per character gap, 7 per word gap (no trailing gap).",
   "target": "Uppercase; any whitespace run becomes one space; characters with no Morse pattern are dropped; trimmed.",
   "alignment": "Levenshtein over target and decoded text, spaces included as tokens. Match 0, substitution 1, missing (target token not sent) 1, extra (sent token not in target) 1; a space never substitutes for a character. Backtrace from the end preferring diagonal, then missing, then extra. Codes: '=X' match, '~XY' X sent as Y, '-X' missing (space = a word break sent too short), '+Y' extra (space = a word split). accuracy = matched non-space target characters / non-space target characters.",
-  "feedback": "Checked in this order; a code appears when its rule holds. slowerThanTarget: marks >= 5 and characterWpm < 0.85 * target. fasterThanTarget: marks >= 5 and characterWpm > 1.15 * target. dahsShort / dahsLong: key type is not keyer, dits >= 3 and dahs >= 3, mean dah / mean dit < 2.5 / > 3.5. ditsUneven: straight or cootie, dits >= 5, sd/mean > 0.25 (population sd). dahsUneven: not keyer, dahs >= 5, sd/mean > 0.25. elementGapsShort / Long: not keyer, element gaps >= 3, mean < 0.7 / > 1.5. charGapsShort / Long: character gaps >= 3, mean < 2.5 / > 4.0. charGapsUneven: character gaps >= 5, sd/mean > 0.3. wordGapsShort / Long: word gaps >= 2, mean < 6 / > 9. wordsRunTogether: a missing space. wordsSplit: an extra space. perfectCopy: every alignment step a match. timingOnTarget: marks >= 5 and none of the codes before wordsRunTogether.",
+  "feedback": "Checked in this order; a code appears when its rule holds. slowerThanTarget: key type is not keyer, marks >= 5 and characterWpm < 0.85 * target. fasterThanTarget: key type is not keyer, marks >= 5 and characterWpm > 1.15 * target. dahsShort / dahsLong: key type is not keyer, dits >= 3 and dahs >= 3, mean dah / mean dit < 2.5 / > 3.5. ditsUneven: straight or cootie, dits >= 5, sd/mean > 0.25 (population sd). dahsUneven: not keyer, dahs >= 5, sd/mean > 0.25. elementGapsShort / Long: not keyer, element gaps >= 3, mean < 0.7 / > 1.5. charGapsShort / Long: character gaps >= 3, mean < 2.5 / > 4.0. charGapsUneven: character gaps >= 5, sd/mean > 0.3. wordGapsShort / Long: word gaps >= 2, mean < 6 / > 9. wordsRunTogether: a missing space. wordsSplit: an extra space. perfectCopy: every alignment step a match. timingOnTarget: marks >= 5 and none of the codes before wordsRunTogether.",
   "record": "SendingRecord.record: every non-space target token is an attempt at that character, missed unless matched. Inside each target word, every adjacent pair is an attempt at the pair, missed unless both halves matched. A substitution whose sent character is not '#' adds a mix-up target->sent. problemCharacters/problemPairs: attempts >= minAttempts and misses > 0, worst miss rate first, then most misses, then key order."
  },
  "charGapBinEdges": [1.75, 2.25, 2.75, 3.25, 3.75, 4.25],
@@ -251,6 +251,19 @@
      "mean": 7.0
     },
     "feedback": ["fasterThanTarget", "dahsLong", "perfectCopy"]
+   }
+  },
+  {
+   "name": "the bug's timing through a keyer: speed and dahs are the keyer's",
+   "target": "PARIS PARIS",
+   "keyType": "keyer",
+   "characterWpm": 20,
+   "effectiveWpm": 20,
+   "marks": [[0.0, 50.0], [100.0, 270.0], [320.0, 520.0], [570.0, 620.0], [770.0, 820.0], [870.0, 1060.0], [1210.0, 1260.0], [1310.0, 1470.0], [1520.0, 1570.0], [1720.0, 1770.0], [1820.0, 1870.0], [2020.0, 2070.0], [2120.0, 2170.0], [2220.0, 2270.0], [2620.0, 2670.0], [2720.0, 2930.0], [2980.0, 3160.0], [3210.0, 3260.0], [3410.0, 3460.0], [3510.0, 3660.0], [3810.0, 3860.0], [3910.0, 4110.0], [4160.0, 4210.0], [4360.0, 4410.0], [4460.0, 4510.0], [4660.0, 4710.0], [4760.0, 4810.0], [4860.0, 4910.0]],
+   "expected": {
+    "characterWpm": 24,
+    "dahDitRatio": 3.65,
+    "feedback": ["perfectCopy", "timingOnTarget"]
    }
   },
   {

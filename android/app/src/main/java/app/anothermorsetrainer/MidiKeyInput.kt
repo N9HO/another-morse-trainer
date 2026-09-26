@@ -37,6 +37,15 @@ class MidiKeyInput(private val context: Context) {
     private var onKey: ((Boolean) -> Unit)? = null
     private var onConnected: ((String?) -> Unit)? = null
 
+    /**
+     * Also fired (on the main thread) on every change of the one logical key,
+     * with the time the key event happened in [System.nanoTime] terms — the
+     * MIDI packet's own timestamp, not when the main thread got round to it.
+     * The Sending Analyzer times the operator's fist from these. Set before
+     * [start]; cleared by [stop].
+     */
+    var onKeyTimed: ((isDown: Boolean, atNanos: Long) -> Unit)? = null
+
     /** Per-paddle key state: the keyer notes currently held down. */
     private val heldNotes = mutableSetOf<Int>()
 
@@ -91,7 +100,7 @@ class MidiKeyInput(private val context: Context) {
         open.clear()
         heldNotes.clear()
         manager = null
-        onKey = null; onConnected = null
+        onKey = null; onConnected = null; onKeyTimed = null
     }
 
     private fun connect(info: MidiDeviceInfo) {
@@ -122,16 +131,20 @@ class MidiKeyInput(private val context: Context) {
         if (heldNotes.isNotEmpty()) {
             heldNotes.clear()
             onKey?.invoke(false)
+            onKeyTimed?.invoke(false, System.nanoTime())
         }
         onConnected?.invoke(open.lastOrNull()?.name)
     }
 
     /** Aggregate per-note state into one logical key: down while ANY note is held. */
-    private fun updateHeld(note: Int, isDown: Boolean) {
+    private fun updateHeld(note: Int, isDown: Boolean, atNanos: Long) {
         val wasHeld = heldNotes.isNotEmpty()
         if (isDown) heldNotes.add(note) else heldNotes.remove(note)
         val nowHeld = heldNotes.isNotEmpty()
-        if (nowHeld != wasHeld) onKey?.invoke(nowHeld)
+        if (nowHeld != wasHeld) {
+            onKey?.invoke(nowHeld)
+            onKeyTimed?.invoke(nowHeld, atNanos)
+        }
     }
 
     /**
@@ -148,7 +161,10 @@ class MidiKeyInput(private val context: Context) {
         override fun onSend(msg: ByteArray, offset: Int, count: Int, timestamp: Long) {
             val events = MidiKeyParser.messages(msg, offset, count)
             if (events.isEmpty()) return
-            main.post { events.forEach { updateHeld(it.note, it.isDown) } }
+            // The packet's timestamp is System.nanoTime()-based; a sender that
+            // leaves it at 0 gets the arrival time instead.
+            val at = if (timestamp > 0) timestamp else System.nanoTime()
+            main.post { events.forEach { updateHeld(it.note, it.isDown, at) } }
         }
     }
 }

@@ -145,6 +145,8 @@ private sealed interface Route {
     data object Story : Route
     data object Sending : Route
     data object SendingDrills : Route
+    /** The Sending Analyzer (#241, #234, #235). */
+    data object SendingAnalyzer : Route
     data object Repeater : Route
     data object CwDecoder : Route
     data object Reference : Route
@@ -195,6 +197,7 @@ private fun routeTag(route: Route): String = when (route) {
     Route.Story -> "story"
     Route.Sending -> "sending"
     Route.SendingDrills -> "sendingDrills"
+    Route.SendingAnalyzer -> "sendingAnalyzer"
     Route.Repeater -> "repeater"
     Route.CwDecoder -> "cwDecoder"
     Route.Reference -> "reference"
@@ -228,6 +231,7 @@ private fun routeFrom(tag: String): Route? = when (tag) {
     "story" -> Route.Story
     "sending" -> Route.Sending
     "sendingDrills" -> Route.SendingDrills
+    "sendingAnalyzer" -> Route.SendingAnalyzer
     "repeater" -> Route.Repeater
     "cwDecoder" -> Route.CwDecoder
     "reference" -> Route.Reference
@@ -362,6 +366,7 @@ private fun AppRoot() {
             onPickStory = { launch(storyTarget()) },
             onPickSending = { launch(sendingTarget()) },
             onPickSendingDrills = { route = Route.SendingDrills },
+            onPickSendingAnalyzer = { route = Route.SendingAnalyzer },
             onPickRepeater = { route = Route.Repeater },
             onPickCwDecoder = { route = Route.CwDecoder },
             onPickReference = { route = Route.Reference },
@@ -418,6 +423,7 @@ private fun AppRoot() {
         Route.Story -> StoryScreen(onBack = { route = Route.Home }, onSwitchMode = { switchTo(it) })
         Route.Sending -> SendingPracticeScreen(onBack = { route = Route.Home }, onSwitchMode = { switchTo(it) })
         Route.SendingDrills -> SendingDrillScreen(onBack = { route = Route.Home })
+        Route.SendingAnalyzer -> SendingAnalyzerScreen(onBack = { route = Route.Home })
         Route.Repeater -> RepeaterScreen(onBack = { route = Route.Home })
         Route.CwDecoder -> CwDecoderScreen(onBack = { route = Route.Home })
         Route.Reference -> ReferenceScreen(onBack = { route = Route.Home })

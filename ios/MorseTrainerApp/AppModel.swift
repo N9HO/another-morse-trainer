@@ -3559,6 +3559,8 @@ final class AppModel: ObservableObject {
     func resetProgress() {
         UserDefaults.standard.removeObject(forKey: Self.progressKey)
         UserDefaults.standard.removeObject(forKey: Self.journeyKey)
+        // The Sending Analyzer's per-character record is sending progress.
+        UserDefaults.standard.removeObject(forKey: SendingAnalyzerModel.recordKey)
         let fresh = TrainerEngine.Snapshot(
             activeCharacters: Array(MorseCode.kochOrder.prefix(2)), stats: [])
         charLadder.restore(from: .init(engine: fresh, stage: .singles))

@@ -385,8 +385,11 @@ public struct SendingAnalysis: Sendable {
         // 4. Plain-English feedback, in `SendingFeedback` order.
         var fb: [SendingFeedback] = []
         let enough = marks.count >= 5
-        if enough, charWpm < 0.85 * cw { fb.append(.slowerThanTarget) }
-        if enough, charWpm > 1.15 * cw { fb.append(.fasterThanTarget) }
+        // A keyer sets the character speed itself, so speed is only judged
+        // when the operator forms the elements.
+        let speedJudged = enough && keyType.handTimesElements
+        if speedJudged, charWpm < 0.85 * cw { fb.append(.slowerThanTarget) }
+        if speedJudged, charWpm > 1.15 * cw { fb.append(.fasterThanTarget) }
         if keyType.handTimesElements, dits.count >= 3, dahs.count >= 3 {
             let ratio = dahs.mean / dits.mean
             if ratio < 2.5 { fb.append(.dahsShort) }

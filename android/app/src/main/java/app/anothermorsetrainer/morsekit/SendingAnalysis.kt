@@ -255,8 +255,11 @@ class SendingAnalysis(
         val fb = mutableListOf<SendingFeedback>()
         val enough = marks.size >= 5
         val cw = targetCharacterWpm
-        if (enough && this.characterWpm < 0.85 * cw) fb.add(SendingFeedback.SLOWER_THAN_TARGET)
-        if (enough && this.characterWpm > 1.15 * cw) fb.add(SendingFeedback.FASTER_THAN_TARGET)
+        // A keyer sets the character speed itself, so speed is only judged
+        // when the operator forms the elements.
+        val speedJudged = enough && keyType.handTimesElements
+        if (speedJudged && this.characterWpm < 0.85 * cw) fb.add(SendingFeedback.SLOWER_THAN_TARGET)
+        if (speedJudged && this.characterWpm > 1.15 * cw) fb.add(SendingFeedback.FASTER_THAN_TARGET)
         if (keyType.handTimesElements && dits.count >= 3 && dahs.count >= 3) {
             val ratio = dahs.mean / dits.mean
             if (ratio < 2.5) fb.add(SendingFeedback.DAHS_SHORT)

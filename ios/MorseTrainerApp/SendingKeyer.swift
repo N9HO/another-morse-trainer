@@ -51,6 +51,13 @@ final class SendingKeyer: ObservableObject {
     private var keyDownAtMs: Int64?
     private var idleTask: Task<Void, Never>?
 
+    /// Every change of the one logical key, with its time in wall-clock ms —
+    /// the hardware key's own event time, not when it reached the main actor.
+    /// The Sending Analyzer times the operator's fist from these; it needs no
+    /// more of a key than this, which is what lets any keyer (straight key,
+    /// Vail adapter, on-screen paddles) feed it.
+    var onEdge: ((_ isDown: Bool, _ atMs: Int64) -> Void)?
+
     init(wpm: Double, toneHz: Double) {
         decoder = MorseDecoder(wpm: wpm)
         keyerWPM = wpm
@@ -181,6 +188,7 @@ final class SendingKeyer: ObservableObject {
         if isDown { heldKeys.insert(key) } else { heldKeys.remove(key) }
         let nowHeld = !heldKeys.isEmpty
         guard nowHeld != wasHeld else { return }
+        onEdge?(nowHeld, ms)
         if nowHeld {
             keyDownAtMs = ms
             isKeying = true
