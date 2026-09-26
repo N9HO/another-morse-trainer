@@ -18,6 +18,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
+import androidx.compose.material.icons.automirrored.filled.FormatListNumbered
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.ListAlt
 import androidx.compose.material.icons.automirrored.filled.MenuBook
@@ -88,6 +89,7 @@ fun HomeScreen(
     onPickContest: () -> Unit,
     onPickExam: () -> Unit,
     onPickListen: () -> Unit,
+    onPickCw77: () -> Unit,
     onPickHeadCopy: () -> Unit,
     onPickTypeIt: () -> Unit,
     onPickQrq: () -> Unit,
@@ -119,14 +121,23 @@ fun HomeScreen(
         "Prosigns" to stringResource(R.string.home_run_together_signals),
         "Confusion Drill" to stringResource(R.string.home_drill_your_mix_ups)
     )
+    // CW 77 (#240 follow-up) sits right after Common Words, as on iOS: one
+    // tile for both styles, whose setup sheet picks Listen or Quiz.
+    val cw77Item = HomeItem(
+        stringResource(R.string.mode_cw77),
+        stringResource(R.string.home_cwops_on_air_list),
+        Icons.AutoMirrored.Filled.FormatListNumbered,
+        onPickCw77
+    )
     val items = listOf(
         HomeItem(stringResource(R.string.mode_journey), stringResource(R.string.home_leveled_path), Icons.Filled.Map, onPickJourney)
-    ) + QUIZ_MODES.map { mode ->
-        HomeItem(
+    ) + QUIZ_MODES.flatMap { mode ->
+        val tile = HomeItem(
             mode.title,
             modeTaglines[mode.title] ?: mode.subtitle,
             modeIcons[mode.title] ?: Icons.Filled.Abc
         ) { onPickQuiz(mode) }
+        if (mode.settingsMode == SettingsMode.WORDS) listOf(tile, cw77Item) else listOf(tile)
     } + HomeItem(stringResource(R.string.mode_head_copy), stringResource(R.string.common_copy_in_your_head), Icons.Filled.Psychology, onPickHeadCopy) +
         HomeItem(stringResource(R.string.mode_type_it), stringResource(R.string.common_free_recall_typing), Icons.Filled.Keyboard, onPickTypeIt) +
         HomeItem(stringResource(R.string.mode_qrq_speed), stringResource(R.string.common_high_speed_copy), Icons.Filled.Bolt, onPickQrq) +

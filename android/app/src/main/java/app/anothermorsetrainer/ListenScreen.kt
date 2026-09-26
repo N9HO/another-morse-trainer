@@ -46,10 +46,19 @@ import androidx.compose.ui.unit.sp
  * locked; this screen reads [ListenState] for display and sends start/pause/
  * stop commands. Leaving the screen stops the service (matches iOS, which ends
  * Listen mode when you leave it).
+ *
+ * With [cw77] it is the CW 77 mode's Listen style: the same loop, always over
+ * the CW 77 list (so no content chips), titled and recorded as CW 77.
  */
 @Composable
-fun ListenScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) {
+fun ListenScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}, cw77: Boolean = false) {
     val context = LocalContext.current
+
+    /** Start (or, mid-session, reconfigure) the loop; a fresh session takes this screen's kind. */
+    fun startService() {
+        if (!ListenState.running) ListenState.cw77Session = cw77
+        ListenService.start(context)
+    }
 
     fun leave() {
         ListenService.stop(context)
@@ -75,7 +84,7 @@ fun ListenScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) 
             Row(verticalAlignment = Alignment.CenterVertically) {
                 // Switching stops the loop the way Back does, then lands on
                 // the picked mode's setup (iOS #42).
-                SwitchModeButton(TrainingMode.LISTEN) { mode ->
+                SwitchModeButton(if (cw77) TrainingMode.CW77 else TrainingMode.LISTEN) { mode ->
                     ListenService.stop(context)
                     onSwitchMode(mode)
                 }
@@ -89,23 +98,24 @@ fun ListenScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) 
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Spacer(Modifier.height(8.dp))
-                Text(stringResource(R.string.mode_listen_and_learn), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = Brand.textPrimary)
+                Text(stringResource(if (cw77) R.string.mode_cw77 else R.string.mode_listen_and_learn), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = Brand.textPrimary)
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    stringResource(R.string.listen_blurb),
+                    stringResource(if (cw77) R.string.cw77_style_listen_blurb else R.string.listen_blurb),
                     style = MaterialTheme.typography.bodyMedium,
                     color = Brand.textSecondary,
                     textAlign = TextAlign.Center
                 )
 
                 Spacer(Modifier.height(20.dp))
-                ChipRow(
+                // CW 77's Listen style always announces the CW 77 list.
+                if (!cw77) ChipRow(
                     options = ListenContent.entries,
                     selected = ListenState.contentSel,
                     label = { it.label },
                     onSelect = {
                         ListenState.contentSel = it
-                        if (running && !paused) ListenService.start(context)  // restart with the new config
+                        if (running && !paused) startService()  // restart with the new config
                     }
                 )
                 Spacer(Modifier.height(8.dp))
@@ -115,11 +125,12 @@ fun ListenScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) 
                     label = { it.label },
                     onSelect = {
                         ListenState.gapSel = it
-                        if (running && !paused) ListenService.start(context)
+                        if (running && !paused) startService()
                     }
                 )
                 // Only the token-plus-meaning sets have a long form to shorten (#210).
-                if (ListenState.contentSel in setOf(ListenContent.QSO_TOP_20, ListenContent.QSO_TOP_100, ListenContent.CW_77, ListenContent.ABBREVIATIONS)) {
+                val content = if (cw77) ListenContent.CW_77 else ListenState.contentSel
+                if (content in setOf(ListenContent.QSO_TOP_20, ListenContent.QSO_TOP_100, ListenContent.CW_77, ListenContent.ABBREVIATIONS)) {
                     Spacer(Modifier.height(8.dp))
                     ChipRow(
                         options = ListenReadback.entries,
@@ -127,14 +138,14 @@ fun ListenScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) 
                         label = { it.label },
                         onSelect = {
                             ListenState.readbackSel = it
-                            if (running && !paused) ListenService.start(context)
+                            if (running && !paused) startService()
                         }
                     )
                 }
                 // The CW 77 preset and "include my callsign and name" (#240).
-                if (ListenState.contentSel == ListenContent.CW_77) {
+                if (content == ListenContent.CW_77) {
                     Spacer(Modifier.height(8.dp))
-                    Cw77Options(onChange = { if (running && !paused) ListenService.start(context) })
+                    Cw77Options(onChange = { if (running && !paused) startService() })
                 }
 
                 Spacer(Modifier.height(16.dp))
@@ -177,7 +188,7 @@ fun ListenScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) 
                 Spacer(Modifier.height(28.dp))
                 Surface(
                     onClick = {
-                        if (!running) ListenService.start(context) else ListenService.toggle(context)
+                        if (!running) startService() else ListenService.toggle(context)
                     },
                     shape = CircleShape,
                     color = Brand.teal,

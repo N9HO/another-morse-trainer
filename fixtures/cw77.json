@@ -33,7 +33,22 @@
     "least one token. Expected values were worked by hand from the rule.",
     "",
     "`recommended` is the playback Bob Carter WR7Q recommends for this list:",
-    "40 WPM, Farnsworth off. The apps offer it as a one-tap preset."
+    "40 WPM, Farnsworth off. The apps offer it as a one-tap preset.",
+    "",
+    "`styles` pins the standalone CW 77 mode (the #240 follow-up), which runs",
+    "the list in one of two styles. `listen` is Listen & Learn's loop: each",
+    "item's answer is its meaning, revealed and read back. `quiz` is Common",
+    "Words' drill: each item's answer is its own token. Both are the 70 in",
+    "order with the personal tokens after them, exactly when the include-me",
+    "switch is on and the `personal` rule yields something. `default` is the",
+    "style selected before one has been chosen. `keyable` counts the quiz",
+    "items that can be answered on a key: those whose answer is the text",
+    "heard and holds no bracketed prosign (the five prosigns cannot be keyed),",
+    "so 70 - 5 = 65, plus each personal token. `records` names the session",
+    "mode string each port logs per style (each port's own spelling, as",
+    "fixtures/mode-bests.json allows); `passive` lists the styles whose",
+    "sessions count items heard rather than answers, and `ranked` says the",
+    "mode is never submitted to the shared leaderboard. Worked by hand."
   ],
   "source": [
     "VVV",
@@ -123,6 +138,72 @@
   "recommended": {
     "wpm": 40,
     "farnsworth": false
+  },
+  "styles": {
+    "order": ["listen", "quiz"],
+    "labels": { "listen": "Listen", "quiz": "Quiz" },
+    "default": "listen",
+    "cases": [
+      {
+        "why": "listen, switch off: the 70, each answered by its meaning",
+        "style": "listen", "includeMe": false, "callsign": "n9ho", "name": "Justin",
+        "count": 70,
+        "first": { "display": "VVV", "answer": "test signal — tuning up" },
+        "tail": [ { "display": "DX", "answer": "distance" } ]
+      },
+      {
+        "why": "listen, switch on: callsign then name after the 70",
+        "style": "listen", "includeMe": true, "callsign": "n9ho", "name": "Justin",
+        "count": 72,
+        "first": { "display": "VVV", "answer": "test signal — tuning up" },
+        "tail": [
+          { "display": "DX", "answer": "distance" },
+          { "display": "N9HO", "answer": "your call sign" },
+          { "display": "JUSTIN", "answer": "your name" }
+        ]
+      },
+      {
+        "why": "quiz, switch off: the 70, each answered by its token",
+        "style": "quiz", "includeMe": false, "callsign": "n9ho", "name": "Justin",
+        "count": 70, "keyable": 65,
+        "first": { "display": "VVV", "answer": "VVV" },
+        "tail": [ { "display": "DX", "answer": "DX" } ]
+      },
+      {
+        "why": "quiz, switch on: callsign then name after the 70, both keyable",
+        "style": "quiz", "includeMe": true, "callsign": "n9ho", "name": "Justin",
+        "count": 72, "keyable": 67,
+        "first": { "display": "VVV", "answer": "VVV" },
+        "tail": [
+          { "display": "DX", "answer": "DX" },
+          { "display": "N9HO", "answer": "N9HO" },
+          { "display": "JUSTIN", "answer": "JUSTIN" }
+        ]
+      },
+      {
+        "why": "quiz, switch on but nothing set: the placeholder call adds nothing",
+        "style": "quiz", "includeMe": true, "callsign": "W1AW", "name": "",
+        "count": 70, "keyable": 65,
+        "first": { "display": "VVV", "answer": "VVV" },
+        "tail": [ { "display": "DX", "answer": "DX" } ]
+      },
+      {
+        "why": "listen, switch on, name only",
+        "style": "listen", "includeMe": true, "callsign": "", "name": "bob",
+        "count": 71,
+        "first": { "display": "VVV", "answer": "test signal — tuning up" },
+        "tail": [
+          { "display": "DX", "answer": "distance" },
+          { "display": "BOB", "answer": "your name" }
+        ]
+      }
+    ],
+    "records": {
+      "ios": { "listen": "cw77Listen", "quiz": "cw77" },
+      "android": { "listen": "CW 77 Listen", "quiz": "CW 77" }
+    },
+    "passive": ["listen"],
+    "ranked": false
   },
   "personal": {
     "placeholderCallsign": "W1AW",

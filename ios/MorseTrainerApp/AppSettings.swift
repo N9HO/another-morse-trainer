@@ -644,6 +644,9 @@ struct AppSettings: Codable, Equatable {
     /// in Common Words (#240). Off by default; offered only while
     /// `cw77PersonalTokens` has something to add.
     var cw77IncludeMe: Bool = false
+    /// The standalone CW 77 mode's style, Listen or Quiz, remembered so the
+    /// tile opens on the one last chosen. Chosen on the mode's setup sheet.
+    var cw77Style: CW77Style = .default
 
     /// Character speed for QRQ high-speed copy practice (35–60 WPM).
     var qrqSpeed: QrqSpeed = .wpm35
@@ -851,7 +854,7 @@ extension AppSettings {
         case maxAnswerChoices, selectedPunctuation, journeyDrainOnMiss
         case learningMode, practiceDuration
         case listenContent, listenGap, listenReadback, wordTier, customWords, useCustomWords
-        case cw77IncludeMe
+        case cw77IncludeMe, cw77Style
         case voiceResponse, keyingResponse
         case answerEntry
         case qrqSpeed, backgroundNoise, didMigrateNoiseFloor
@@ -903,6 +906,7 @@ extension AppSettings {
         // save without the key keeps drawing from it (issue #32 installs).
         s.useCustomWords = try c.decodeIfPresent(Bool.self, forKey: .useCustomWords) ?? !s.customWords.isEmpty
         s.cw77IncludeMe = try c.decodeIfPresent(Bool.self, forKey: .cw77IncludeMe) ?? s.cw77IncludeMe
+        s.cw77Style = (try? c.decodeIfPresent(CW77Style.self, forKey: .cw77Style)) ?? s.cw77Style
         s.qrqSpeed = try c.decodeIfPresent(QrqSpeed.self, forKey: .qrqSpeed) ?? s.qrqSpeed
         s.dailyDitStartingWpm = try c.decodeIfPresent(Double.self,
                                                       forKey: .dailyDitStartingWpm) ?? s.dailyDitStartingWpm

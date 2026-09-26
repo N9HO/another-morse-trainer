@@ -39,6 +39,8 @@ enum class TrainingMode(private val quizTitle: String? = null, private val title
     JOURNEY(titleRes = R.string.mode_journey),
     CHARACTERS(quizTitle = "Characters"),
     WORDS(quizTitle = "Common Words"),
+    /** The standalone CW 77 mode: one entry for both its styles (Listen, Quiz). */
+    CW77(titleRes = R.string.mode_cw77),
     ABBREVIATIONS(quizTitle = "Abbreviations"),
     QCODES(quizTitle = "Q-Codes"),
     PROSIGNS(quizTitle = "Prosigns"),
@@ -79,6 +81,7 @@ enum class TrainingMode(private val quizTitle: String? = null, private val title
 fun trainingModeFor(settingsMode: SettingsMode): TrainingMode? = when (settingsMode) {
     SettingsMode.CHARACTERS -> TrainingMode.CHARACTERS
     SettingsMode.WORDS -> TrainingMode.WORDS
+    SettingsMode.CW77 -> TrainingMode.CW77
     SettingsMode.ABBREVIATIONS -> TrainingMode.ABBREVIATIONS
     SettingsMode.QCODES -> TrainingMode.QCODES
     SettingsMode.PROSIGNS -> TrainingMode.PROSIGNS

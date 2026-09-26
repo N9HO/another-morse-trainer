@@ -15,6 +15,7 @@ import app.anothermorsetrainer.morsekit.BuddyStatus
 import app.anothermorsetrainer.morsekit.CallsignFormat
 import app.anothermorsetrainer.morsekit.ContestLength
 import app.anothermorsetrainer.morsekit.ContestType
+import app.anothermorsetrainer.morsekit.Cw77Style
 import app.anothermorsetrainer.morsekit.ExamGrading
 import app.anothermorsetrainer.morsekit.ExamSpeed
 import app.anothermorsetrainer.morsekit.MorseCode
@@ -399,6 +400,12 @@ object Settings {
      */
     var cw77IncludeMe by mutableStateOf(false)
         private set
+    /**
+     * The standalone CW 77 mode's style, Listen or Quiz, remembered so the
+     * tile opens on the one last chosen. Chosen on the mode's setup sheet.
+     */
+    var cw77Style by mutableStateOf(Cw77Style.DEFAULT)
+        private set
 
     /** How much the learner already knows — seeds the Characters Koch ladder. */
     var proficiency by mutableStateOf(Proficiency.NONE)
@@ -619,6 +626,7 @@ object Settings {
         customWordsText = prefs.getString("customWords", "") ?: ""
         useCustomWords = prefs.getBoolean("useCustomWords", false)
         cw77IncludeMe = prefs.getBoolean("cw77IncludeMe", false)
+        cw77Style = Cw77Style.fromId(prefs.getString("cw77Style", null)) ?: Cw77Style.DEFAULT
         proficiency = runCatching { Proficiency.valueOf(prefs.getString("proficiency", null) ?: "NONE") }
             .getOrDefault(Proficiency.NONE)
         introduceNewCharacters = prefs.getBoolean("introduceNew", true)
@@ -914,6 +922,11 @@ object Settings {
 
     fun updateCw77IncludeMe(value: Boolean) {
         cw77IncludeMe = value
+        persist()
+    }
+
+    fun updateCw77Style(value: Cw77Style) {
+        cw77Style = value
         persist()
     }
 
@@ -1249,6 +1262,7 @@ object Settings {
             putString("customWords", customWordsText)
             putBoolean("useCustomWords", useCustomWords)
             putBoolean("cw77IncludeMe", cw77IncludeMe)
+            putString("cw77Style", cw77Style.id)
             putString("proficiency", proficiency.name)
             putBoolean("introduceNew", introduceNewCharacters)
             putStringSet("introducedItems", introducedItems)

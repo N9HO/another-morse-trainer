@@ -4,13 +4,15 @@ import MediaPlayer
 
 /// The ways to practice.
 enum TrainingMode: String, CaseIterable, Identifiable {
-    case journey, characters, words, abbreviations, qCodes, prosigns, headCopy, typed, sending, confusion, listen, qso, contest, story, exam, qrq, rapidFire, invaders, galaga, defender, dungeon, frogger, asteroids
+    case journey, characters, words, cw77, cw77Listen, abbreviations, qCodes, prosigns, headCopy, typed, sending, confusion, listen, qso, contest, story, exam, qrq, rapidFire, invaders, galaga, defender, dungeon, frogger, asteroids
     var id: String { rawValue }
     var title: String {
         switch self {
         case .journey:      return "Journey"
         case .characters:   return "Characters"
         case .words:        return "Common Words"
+        case .cw77:         return "CW 77"
+        case .cw77Listen:   return "CW 77 Listen"
         case .abbreviations: return "Abbreviations"
         case .qCodes:       return "Q-Codes"
         case .prosigns:     return "Prosigns"
@@ -38,6 +40,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .journey:       return "map"
         case .characters:    return "character"
         case .words:         return "textformat"
+        case .cw77, .cw77Listen: return "list.number"
         case .abbreviations: return "text.bubble"
         case .qCodes:        return "questionmark.bubble"
         case .prosigns:      return "antenna.radiowaves.left.and.right"
@@ -65,6 +68,8 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         switch self {
         case .journey:        return "What did you hear?"
         case .characters, .words, .confusion: return "What did you hear?"
+        case .cw77:               return "What did you hear?"
+        case .cw77Listen:         return "Listen…"
         case .abbreviations:      return "What are they saying?"
         case .qCodes:             return "What does it mean?"
         case .prosigns:           return "Which prosign?"
@@ -93,6 +98,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .journey:       return "Leveled path"
         case .characters:    return "Core Koch drill"
         case .words:         return "Whole ham words"
+        case .cw77, .cw77Listen: return "CWOps on-air list"
         case .abbreviations: return "CW abbreviations"
         case .qCodes:        return "Q-signal shorthand"
         case .prosigns:      return "Run-together signals"
@@ -126,6 +132,8 @@ enum TrainingMode: String, CaseIterable, Identifiable {
             return "The core Koch drill: hear one character at full speed and tap it from four sound-alikes. Grows into pairs, triples, then words as you improve."
         case .words:
             return "Copy whole common ham-radio words and pick the right one from four look-alikes."
+        case .cw77, .cw77Listen:
+            return "The CWOps CW 77: the words and abbreviations you hear most in a CW contact, which CW Academy students learn to copy at speed. Listen hands-free, or quiz yourself on them."
         case .abbreviations:
             return "Hear a CW abbreviation (like ES or FB) and choose what it means."
         case .qCodes:
@@ -186,12 +194,37 @@ enum TrainingMode: String, CaseIterable, Identifiable {
     /// choice quiz with a bounded answer pool (Android offers voice in all six).
     var supportsVoiceAnswers: Bool {
         switch self {
-        case .characters, .words, .abbreviations, .qCodes, .prosigns, .confusion:
+        case .characters, .words, .cw77, .abbreviations, .qCodes, .prosigns, .confusion:
             return true
         default:
             return false
         }
     }
+
+    /// The standalone CW 77 mode's style, for its two cases: the Quiz
+    /// (`cw77`, scored like Common Words) and the Listen loop (`cw77Listen`,
+    /// passive like Listen & Learn). Each is its own mode so a session is
+    /// recorded, and its accuracy read, under the style it actually ran.
+    var cw77Style: CW77Style? {
+        switch self {
+        case .cw77:       return .quiz
+        case .cw77Listen: return .listen
+        default:          return nil
+        }
+    }
+
+    /// The mode a CW 77 style runs as.
+    static func cw77(_ style: CW77Style) -> TrainingMode {
+        style == .listen ? .cw77Listen : .cw77
+    }
+
+    /// The entry the home grid and the mode switcher show for this mode: the
+    /// two CW 77 styles share one "CW 77" tile, whose setup sheet picks the
+    /// style. Every other mode is its own entry.
+    var menuEntry: TrainingMode { self == .cw77Listen ? .cw77 : self }
+
+    /// Whether this mode has its own tile and switcher entry (see `menuEntry`).
+    var hasMenuEntry: Bool { menuEntry == self }
 
     /// Whether a session-length choice applies. Exam (a fixed-format proficiency
     /// run) and Story (one passage played end to end) are self-contained, so a
@@ -288,6 +321,9 @@ final class AppModel: ObservableObject {
     /// Persisted journey unlock/completion state (mirrored into `journeyQuiz`).
     private(set) var journeyProgress = JourneyProgress()
     private var wordsQuiz: PhraseQuiz   // rebuilt when the word tier changes
+    /// The CW 77 mode's Quiz style: the list answered by its token, plus
+    /// your callsign and name when included. Rebuilt when those change.
+    private var cw77Quiz: PhraseQuiz
     private let abbrevQuiz: PhraseQuiz
     private let qCodeQuiz: PhraseQuiz
     private let prosignQuiz: PhraseQuiz
@@ -431,6 +467,9 @@ final class AppModel: ObservableObject {
                                        config: .init(ttrThreshold: loaded.ttrThreshold,
                                                      optionCount: loaded.maxAnswerChoices))
         self.wordsQuiz = PhraseQuiz(name: "Words", items: loaded.wordPoolItems)
+        self.cw77Quiz = PhraseQuiz(name: MorseData.cw77Name,
+                                   items: MorseData.cw77Pool(style: .quiz, personal: loaded.cw77Personal),
+                                   summaryNoun: "items")
         self.abbrevQuiz = PhraseQuiz(name: "Abbreviations", items: MorseData.abbreviationItems)
         self.qCodeQuiz = PhraseQuiz(name: "Q-Codes", items: MorseData.qCodeItems)
         self.prosignQuiz = PhraseQuiz(name: "Prosigns", items: MorseData.prosignItems)
@@ -525,6 +564,8 @@ final class AppModel: ObservableObject {
         case .journey:      return journeyQuiz
         case .characters:   return charLadder
         case .words:        return wordsQuiz
+        case .cw77:         return cw77Quiz
+        case .cw77Listen:   return charLadder   // unused: CW 77 Listen runs the Listen loop
         case .abbreviations: return abbrevQuiz
         case .qCodes:       return qCodeQuiz
         case .prosigns:     return prosignQuiz
@@ -553,7 +594,9 @@ final class AppModel: ObservableObject {
     var isTyped: Bool { mode == .typed }
     /// Standalone sending practice: hear it, key it back (Android parity).
     var isSending: Bool { mode == .sending }
-    var isListen: Bool { mode == .listen }
+    /// Listen & Learn's hands-free loop: Listen & Learn itself, or CW 77's
+    /// Listen style, which is the same loop over the CW 77 list.
+    var isListen: Bool { mode == .listen || mode == .cw77Listen }
     var isQSO: Bool { mode == .qso }
     /// Contest mode: the QSO simulator wired to a specific contest (SST/CWT) with
     /// authentic speeds, a contest clock, and scoring.
@@ -645,7 +688,11 @@ final class AppModel: ObservableObject {
         if wordsQuiz.items.map(\.id) != desiredWordItems.map(\.id) {
             wordsQuiz = PhraseQuiz(name: "Words", items: desiredWordItems)
         }
-        for quiz in [wordsQuiz, abbrevQuiz, qCodeQuiz, prosignQuiz, headCopyQuiz, typedQuiz, qrqQuiz] {
+        let desiredCW77Items = MorseData.cw77Pool(style: .quiz, personal: s.cw77Personal)
+        if cw77Quiz.items.map(\.id) != desiredCW77Items.map(\.id) {
+            cw77Quiz = PhraseQuiz(name: MorseData.cw77Name, items: desiredCW77Items, summaryNoun: "items")
+        }
+        for quiz in [wordsQuiz, cw77Quiz, abbrevQuiz, qCodeQuiz, prosignQuiz, headCopyQuiz, typedQuiz, qrqQuiz] {
             quiz.config.ttrThreshold = s.ttrThreshold
             quiz.config.optionCount = s.maxAnswerChoices
         }
@@ -717,7 +764,7 @@ final class AppModel: ObservableObject {
         resetVoiceRound()
         storyGeneration += 1   // cancel any in-flight story playback
         storyPlaying = false
-        if mode == .listen {
+        if isListen {
             startStory(active: false)
             startListening()
         } else if mode == .story {
@@ -1784,10 +1831,16 @@ final class AppModel: ObservableObject {
             ?? ListenItem(playable: .text("E"), display: "E", spoken: spokenName(for: "E"))
     }
 
+    /// What the listen loop announces: Listen & Learn's content choice, or
+    /// always the CW 77 list in CW 77's Listen style.
+    var listenContent: ListenContent {
+        mode == .cw77Listen ? .cw77 : settings.listenContent
+    }
+
     /// The items Listen & Learn draws from, with a key that changes when the
     /// pool does so the deck can be re-dealt.
     private func listenPool() -> (key: String, items: [ListenItem]) {
-        switch settings.listenContent {
+        switch listenContent {
         case .characters:
             let chars = engine.activeCharacters
             return ("characters:" + String(chars), chars.map { ch -> ListenItem in
@@ -1814,7 +1867,7 @@ final class AppModel: ObservableObject {
             // The curated on-air vocabulary (issue #182), revealed and spoken
             // exactly like the abbreviations. A prosign's angle brackets are
             // shown but not spelled.
-            let limit = settings.listenContent == .qsoTop20
+            let limit = listenContent == .qsoTop20
                 ? MorseData.qsoTop20Count : MorseData.qsoTop100Count
             let readback = settings.listenReadback
             return ("qso:\(limit):\(readback.rawValue)", MorseData.qsoElementItems(limit).map { item -> ListenItem in
@@ -1910,7 +1963,7 @@ final class AppModel: ObservableObject {
     private func updateNowPlaying() {
         var info: [String: Any] = [:]
         info[MPMediaItemPropertyTitle] = listenDisplay.isEmpty ? "Listening…" : listenDisplay
-        info[MPMediaItemPropertyArtist] = "Morse Trainer · Listen & Learn"
+        info[MPMediaItemPropertyArtist] = "Morse Trainer · \(mode == .cw77Listen ? "CW 77" : "Listen & Learn")"
         info[MPMediaItemPropertyAlbumTitle] = "Another Morse Trainer"
         info[MPNowPlayingInfoPropertyMediaType] = MPNowPlayingInfoMediaType.audio.rawValue
         info[MPNowPlayingInfoPropertyPlaybackRate] = listenPaused ? 0.0 : 1.0
@@ -2523,6 +2576,7 @@ final class AppModel: ObservableObject {
         switch mode {
         case .characters:    return engine.activeCharacters.map { String($0) }
         case .words:         return wordsQuiz.items.map { $0.answer }
+        case .cw77:          return cw77Quiz.items.map { $0.answer }
         case .abbreviations: return abbrevQuiz.items.map { $0.answer }
         case .qCodes:        return qCodeQuiz.items.map { $0.answer }
         case .prosigns:      return prosignQuiz.items.map { $0.answer }
@@ -2631,7 +2685,7 @@ final class AppModel: ObservableObject {
     private func applyAnswerChoiceCount() {
         let n = answerChoiceCount
         engine.config.optionCount = n
-        for quiz in [wordsQuiz, abbrevQuiz, qCodeQuiz, prosignQuiz] { quiz.config.optionCount = n }
+        for quiz in [wordsQuiz, cw77Quiz, abbrevQuiz, qCodeQuiz, prosignQuiz] { quiz.config.optionCount = n }
     }
 
     /// Feed the ladder one answer. A new level (a character, a stage) starts

@@ -355,6 +355,18 @@ object MorseData {
     fun cw77WordItems(personal: List<TokenMeaning> = emptyList()): List<MorseItem> =
         (cw77 + personal).map { MorseItem("cw77-${it.token}", cw77Playable(it.token), it.token, it.token) }
 
+    /**
+     * The standalone CW 77 mode's pool for [style]: Listen & Learn's items
+     * (answered by their meaning) or Common Words' (answered by the token),
+     * with [personal] (from [cw77Personal]) after the 70. Twin of Swift's
+     * `cw77Pool(style:personal:)`.
+     */
+    fun cw77Pool(style: Cw77Style, personal: List<TokenMeaning> = emptyList()): List<MorseItem> =
+        when (style) {
+            Cw77Style.LISTEN -> cw77Items(personal)
+            Cw77Style.QUIZ -> cw77WordItems(personal)
+        }
+
     private fun cw77Playable(token: String): MorseItem.Playable {
         val prosign = prosigns.firstOrNull { it.name == token }
         return if (prosign != null) MorseItem.Playable.Pattern(prosign.pattern) else MorseItem.Playable.Text(token)

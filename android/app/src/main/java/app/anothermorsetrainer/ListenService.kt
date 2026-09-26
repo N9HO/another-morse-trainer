@@ -159,7 +159,7 @@ class ListenService : Service() {
             // Cancellation propagates through the suspend points below (they throw
             // CancellationException), exiting the loop and running the finally.
             while (true) {
-                val item = picker.next(ListenState.contentSel, ListenState.readbackSel, EngineStore.current().engine.activeCharacters, Settings.cw77Personal())
+                val item = picker.next(ListenState.loopContent, ListenState.readbackSel, EngineStore.current().engine.activeCharacters, Settings.cw77Personal())
                 ListenState.display = ""
                 ListenState.playing = true
                 updateNotification()
@@ -227,7 +227,8 @@ class ListenService : Service() {
         sessionRecorded = true
         if (ListenState.itemsHeard > 0) {
             Stats.record(
-                mode = "Listen",
+                // CW 77's Listen style logs under its own passive mode.
+                mode = if (ListenState.cw77Session) "CW 77 Listen" else "Listen",
                 attempts = ListenState.itemsHeard,
                 correct = 0,
                 bestTtrMs = null,
@@ -301,7 +302,10 @@ class ListenService : Service() {
         val session = mediaSession ?: return
         val metadata = MediaMetadataCompat.Builder()
             .putString(MediaMetadataCompat.METADATA_KEY_TITLE, nowPlayingTitle())
-            .putString(MediaMetadataCompat.METADATA_KEY_ARTIST, getString(R.string.listen_now_playing_artist))
+            .putString(
+                MediaMetadataCompat.METADATA_KEY_ARTIST,
+                getString(if (ListenState.cw77Session) R.string.cw77_now_playing_artist else R.string.listen_now_playing_artist)
+            )
             .putString(MediaMetadataCompat.METADATA_KEY_ALBUM, getString(R.string.app_name))
         artwork?.let {
             metadata.putBitmap(MediaMetadataCompat.METADATA_KEY_ALBUM_ART, it)
@@ -360,7 +364,7 @@ class ListenService : Service() {
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_stat_morse)
-            .setContentTitle(getString(R.string.mode_listen_and_learn))
+            .setContentTitle(getString(if (ListenState.cw77Session) R.string.mode_cw77 else R.string.mode_listen_and_learn))
             .setContentText(text)
             .setContentIntent(activityIntent())
             .addAction(toggleIcon, toggleLabel, serviceIntent(ACTION_TOGGLE, 1))

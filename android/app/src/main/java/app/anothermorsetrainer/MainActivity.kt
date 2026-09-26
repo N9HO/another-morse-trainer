@@ -15,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import app.anothermorsetrainer.morsekit.ConfusionQuiz
+import app.anothermorsetrainer.morsekit.Cw77Style
 import app.anothermorsetrainer.morsekit.MorseData
 import app.anothermorsetrainer.morsekit.PhraseQuiz
 import app.anothermorsetrainer.morsekit.ProgressiveCharacters
@@ -106,6 +107,21 @@ val QUIZ_MODES: List<QuizMode> = listOf(
 )
 
 /**
+ * The CW 77 mode's Quiz style (the #240 follow-up): Common Words' drill over
+ * the CW 77 list, with your callsign and name when included. Not in
+ * [QUIZ_MODES]: its one home tile opens a setup sheet that picks between this
+ * and the Listen style, so it is reached through [Route.Cw77].
+ */
+val CW77_QUIZ: QuizMode = QuizMode("CW 77", "Hear it, pick it", SettingsMode.CW77) {
+    PhraseQuiz(
+        MorseData.CW77_NAME,
+        MorseData.cw77Pool(Cw77Style.QUIZ, Settings.cw77Personal()),
+        Settings.phraseConfig(),
+        summaryNoun = "items"
+    )
+}
+
+/**
  * A mode the home menu can launch, described well enough for the pre-flight
  * [SessionSetupSheet] to ask about it before the run starts.
  *
@@ -131,6 +147,8 @@ private sealed interface Route {
     data object Contest : Route
     data object Exam : Route
     data object Listen : Route
+    /** The CW 77 mode: the Listen screen or the quiz, per [Settings.cw77Style]. */
+    data object Cw77 : Route
     data object HeadCopy : Route
     data object TypeIt : Route
     data object Qrq : Route
@@ -184,6 +202,7 @@ private fun routeTag(route: Route): String = when (route) {
     Route.Contest -> "contest"
     Route.Exam -> "exam"
     Route.Listen -> "listen"
+    Route.Cw77 -> "cw77"
     Route.HeadCopy -> "headCopy"
     Route.TypeIt -> "typeIt"
     Route.Qrq -> "qrq"
@@ -218,6 +237,7 @@ private fun routeFrom(tag: String): Route? = when (tag) {
     "contest" -> Route.Contest
     "exam" -> Route.Exam
     "listen" -> Route.Listen
+    "cw77" -> Route.Cw77
     "headCopy" -> Route.HeadCopy
     "typeIt" -> Route.TypeIt
     "qrq" -> Route.Qrq
@@ -302,6 +322,7 @@ private fun AppRoot() {
     // The pre-flight targets, shared by the home tiles and the mid-session
     // mode switcher so both open the same sheet with the same words.
     fun journeyTarget() = SetupTarget(Route.Journey, resources.getString(R.string.mode_journey), resources.getString(R.string.home_leveled_path), SettingsMode.JOURNEY)
+    fun cw77Target() = SetupTarget(Route.Cw77, resources.getString(R.string.mode_cw77), resources.getString(R.string.cw77_blurb), SettingsMode.CW77)
     fun listenTarget() = SetupTarget(Route.Listen, resources.getString(R.string.setup_listen), resources.getString(R.string.setup_hands_free_copy), SettingsMode.LISTEN)
     fun headCopyTarget() = SetupTarget(Route.HeadCopy, resources.getString(R.string.mode_head_copy), resources.getString(R.string.common_copy_in_your_head), SettingsMode.HEAD_COPY)
     fun typeItTarget() = SetupTarget(Route.TypeIt, resources.getString(R.string.mode_type_it), resources.getString(R.string.common_free_recall_typing), SettingsMode.TYPE_IT)
@@ -330,6 +351,7 @@ private fun AppRoot() {
             TrainingMode.TYPE_IT -> launch(typeItTarget())
             TrainingMode.SENDING -> launch(sendingTarget())
             TrainingMode.LISTEN -> launch(listenTarget())
+            TrainingMode.CW77 -> launch(cw77Target())
             TrainingMode.PILEUP -> route = Route.Pileup
             TrainingMode.CONTEST -> route = Route.Contest
             TrainingMode.STORY -> launch(storyTarget())
@@ -359,6 +381,7 @@ private fun AppRoot() {
             onPickContest = { route = Route.Contest },
             onPickExam = { route = Route.Exam },
             onPickListen = { launch(listenTarget()) },
+            onPickCw77 = { launch(cw77Target()) },
             onPickHeadCopy = { launch(headCopyTarget()) },
             onPickTypeIt = { launch(typeItTarget()) },
             onPickQrq = { launch(qrqTarget()) },
@@ -393,6 +416,22 @@ private fun AppRoot() {
         Route.Contest -> ContestScreen(onBack = { route = Route.Home }, onSwitchMode = { switchTo(it) })
         Route.Exam -> CodeExamScreen(onBack = { route = Route.Home }, onSwitchMode = { switchTo(it) })
         Route.Listen -> ListenScreen(onBack = { route = Route.Home }, onSwitchMode = { switchTo(it) })
+        // One route for both styles; the setup sheet has just chosen which.
+        Route.Cw77 -> if (Settings.cw77Style == Cw77Style.LISTEN) {
+            ListenScreen(onBack = { route = Route.Home }, onSwitchMode = { switchTo(it) }, cw77 = true)
+        } else {
+            QuizScreen(
+                title = CW77_QUIZ.title,
+                onBack = { route = Route.Home },
+                makeSource = CW77_QUIZ.make,
+                settingsMode = CW77_QUIZ.settingsMode,
+                onFinish = {
+                    route = Route.Home
+                    setup = cw77Target()
+                },
+                onSwitchMode = { switchTo(it) }
+            )
+        }
         Route.HeadCopy -> HeadCopyScreen(onBack = { route = Route.Home }, onSwitchMode = { switchTo(it) })
         Route.TypeIt -> TypedQuizScreen(
             title = stringResource(R.string.mode_type_it),
