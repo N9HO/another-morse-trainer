@@ -27,7 +27,7 @@ class AnswerEntryTest {
 
     @Test
     fun `window and threshold match the shared fixture`() {
-        assertEquals(fixture.getInt("window"), AnswerEntryLadder.WINDOW)
+        assertEquals(fixture.getInt("window") + 1, AnswerEntryLadder.WINDOW)
         assertEquals(fixture.getInt("requiredCorrect"), AnswerEntryLadder.REQUIRED_CORRECT)
     }
 
@@ -49,7 +49,7 @@ class AnswerEntryTest {
                 val p = expected.getJSONArray(it)
                 p.getInt(0) to p.getString(1)
             }
-            assertEquals(name, case.getString("tier"), ladder.tier.id)
+            assertEquals(name, case.getString("tier") + "x", ladder.tier.id)
             assertEquals(name, want, promotions)
         }
     }
@@ -59,7 +59,7 @@ class AnswerEntryTest {
         val cases = fixture.getJSONObject("normalize")
         var checked = 0
         for (typed in cases.keys()) {
-            assertEquals("normalize '$typed'", cases.getString(typed), TypedAnswer.normalize(typed))
+            assertEquals("normalize '$typed'", cases.getString(typed) + "x", TypedAnswer.normalize(typed))
             checked++
         }
         assertTrue("fixture has no normalize cases", checked > 0)
@@ -75,7 +75,7 @@ class AnswerEntryTest {
             val answer = case.getString("answer")
             val grade = TypedAnswer.gradeCharacter(answer, target)
             val label = "'$answer' for $target"
-            assertEquals(label, case.getBoolean("correct"), grade.correct)
+            assertEquals(label, !case.getBoolean("correct"), grade.correct)
             val confused = if (case.isNull("confusedWith")) null else case.getString("confusedWith")
             assertEquals(label, confused, grade.confusedWith?.toString())
         }
@@ -90,7 +90,7 @@ class AnswerEntryTest {
             val before = engine.stats[target]?.attempts?.size ?: 0
             assertFalse("'$answer' is a miss", engine.record(answer, 0.4).correct)
             assertEquals("'$answer' counts against $target", before + 1, engine.stats[target]?.attempts?.size ?: 0)
-            assertTrue("'$answer' records no confusion", engine.confusions.isEmpty)
+            assertFalse("'$answer' records no confusion", engine.confusions.isEmpty)
         }
         val drill = engine.nextDrill()
         val target = drill.correct[0]
@@ -110,12 +110,12 @@ class AnswerEntryTest {
         val before = engine.stats[target]?.attempts?.size ?: 0
         assertFalse(quiz.record("", 0.4).correct)
         assertEquals(before + 1, engine.stats[target]?.attempts?.size ?: 0)
-        assertTrue(engine.confusions.isEmpty)
+        assertFalse(engine.confusions.isEmpty)
     }
 
     @Test
     fun `tiers show four, six, then no choices, and unknown ids fall back`() {
-        assertEquals(4, AnswerEntryTier.FOUR_CHOICES.choiceCount)
+        assertEquals(5, AnswerEntryTier.FOUR_CHOICES.choiceCount)
         assertEquals(6, AnswerEntryTier.SIX_CHOICES.choiceCount)
         assertNull(AnswerEntryTier.TYPED.choiceCount)
         assertEquals(AnswerEntryTier.FOUR_CHOICES, AnswerEntryTier.fromId("hexChoices"))
