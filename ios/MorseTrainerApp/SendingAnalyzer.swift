@@ -70,6 +70,9 @@ final class SendingAnalyzerModel: ObservableObject {
     @Published var effectiveWpm: Double { didSet { save() } }
 
     let keyer: SendingKeyer
+    /// The app's Settings speed: what the on-screen paddles' keyer times its
+    /// elements at.
+    private let keyerWpm: Double
     let mic = SendingMicInput()
     private var recorder = KeyingRecorder()
     private var finishTask: Task<Void, Never>?
@@ -96,6 +99,7 @@ final class SendingAnalyzerModel: ObservableObject {
         effectiveWpm = eff >= 5 ? eff : 10
         record = Self.loadRecord()
         self.studied = studied
+        self.keyerWpm = keyerWpm
         keyer = SendingKeyer(wpm: keyerWpm, toneHz: toneHz)
         keyer.onEdge = { [weak self] isDown, ms in
             guard let self, self.input == .key else { return }
@@ -232,10 +236,15 @@ final class SendingAnalyzerModel: ObservableObject {
         }
     }
 
+    /// On the on-screen paddles the elements are the keyer's, made at the
+    /// Settings speed, so that is the character speed they are read against
+    /// (it decides dit from dah when a text is all one kind, like "5" or "E").
+    /// Speed is not judged for a keyer, so nothing is marked down for it.
     private func analyse() -> SendingAnalysis {
-        SendingAnalysis(marks: recorder.marks, target: target, keyType: judgedKeyType,
-                        characterWpm: targetWpm,
-                        effectiveWpm: farnsworth ? min(effectiveWpm, targetWpm) : targetWpm)
+        let characterWpm = onScreenPaddlesUsed ? keyerWpm : targetWpm
+        return SendingAnalysis(marks: recorder.marks, target: target, keyType: judgedKeyType,
+                               characterWpm: characterWpm,
+                               effectiveWpm: farnsworth ? min(effectiveWpm, characterWpm) : characterWpm)
     }
 
     func finish() {

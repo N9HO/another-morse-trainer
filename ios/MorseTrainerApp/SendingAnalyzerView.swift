@@ -125,7 +125,7 @@ private struct SetupSection: View {
                     .foregroundStyle(Theme.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
                 if analyzer.input == .key && model.settings.onScreenKey == .paddles {
-                    Label("Your on-screen key is paddles (Settings › Keys & Sending › On-screen key). What you send on them is judged as Paddles (keyer): their keyer times the dits and dahs at your Settings › Speed & Timing speed, so only your spacing is judged. The key picked here is for a Vail adapter or MIDI key.",
+                    Label("Your on-screen key is paddles (Settings › Keys & Sending › On-screen key). What you send on them is judged as Paddles (keyer): their keyer times the dits and dahs at your Settings › Speed & Timing speed, so they are read against that speed and only your spacing is judged. The key picked here is for a Vail adapter or MIDI key.",
                           systemImage: "hand.tap")
                         .font(.footnote)
                         .foregroundStyle(Theme.teal)

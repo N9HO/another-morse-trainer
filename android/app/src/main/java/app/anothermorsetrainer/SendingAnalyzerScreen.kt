@@ -327,10 +327,20 @@ class SendingAnalyzerController(private val context: Context) {
         }
     }
 
-    private fun analyse() = SendingAnalysis(
-        recorder.marks, target, judgedKeyType, targetWpm.toDouble(),
-        if (farnsworth) minOf(effectiveWpm, targetWpm).toDouble() else targetWpm.toDouble()
-    )
+    /**
+     * On the on-screen paddles the elements are the keyer's, made at the
+     * Settings character speed, so that is the speed they are read against (it
+     * decides dit from dah when a text is all one kind, like "5" or "E").
+     * Speed is not judged for a keyer, so nothing is marked down for it.
+     * Mirrors iOS `analyse()`.
+     */
+    private fun analyse(): SendingAnalysis {
+        val characterWpm = if (onScreenPaddlesUsed) Settings.characterWpm else targetWpm.toDouble()
+        return SendingAnalysis(
+            recorder.marks, target, judgedKeyType, characterWpm,
+            if (farnsworth) minOf(effectiveWpm.toDouble(), characterWpm) else characterWpm
+        )
+    }
 
     fun finish() {
         finishJob?.cancel()
