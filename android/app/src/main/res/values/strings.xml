@@ -525,7 +525,8 @@
     <!-- ReminderReceiver -->
     <string name="reminder_body_streak">Keep your %1$d-day streak alive — a few minutes of CW is all it takes.</string>
     <string name="reminder_body_default">A few minutes of code practice keeps your ear sharp. Tap to start.</string>
-    <string name="reminder_body_buddy">%1$s hasn\'t practised yet today (as of %2$s).</string>
+    <!-- %1$s is buddy_waiting_one/_two/_many: one sentence however many buddies (#237). -->
+    <string name="reminder_body_buddy">%1$s (as of %2$s).</string>
     <string name="reminder_title">Time to practice Morse</string>
 
     <!-- Reminders -->
@@ -957,14 +958,23 @@
     <string name="settings_leaderboard_delete_failed">Couldn\'t delete: %1$s</string>
     <string name="settings_leaderboard_footer">Off by default. When on, each finished Rapid Fire, Contest, Pileup Runner or arcade run is sent to the shared leaderboard under your display name and graded there: the board ranks server-graded copies, the speed summed over the items you copied correctly, so a game\'s board number is not its on-screen score. Only builds installed from Google Play can post; the board itself is open to everyone.</string>
     <string name="settings_leaderboard_unconfigured">The leaderboard is not enabled in this build.</string>
-    <!-- Settings › Leaderboard &amp; Buddy › Buddy streak (docs/buddy-streak-design.md) -->
+    <!-- Settings › Leaderboard &amp; Buddy › Buddy streak (docs/buddy-streak-design.md, #219, #237) -->
     <string name="settings_buddy">Buddy streak</string>
     <string name="settings_buddy_unpaired">Invite a buddy, or join with a code they send you.</string>
-    <string name="settings_buddy_paired">Paired with %1$s · %2$s · %1$s has practised today</string>
-    <string name="settings_buddy_paired_not_yet">Paired with %1$s · %2$s · %1$s hasn\'t practised yet today</string>
+    <!-- The list's header line: how many buddies of the server's cap. -->
+    <plurals name="settings_buddy_count">
+        <item quantity="one">%1$d of %2$d buddy</item>
+        <item quantity="other">%1$d of %2$d buddies</item>
+    </plurals>
+    <!-- One buddy's row, under the name: the pairing's streak, then its day. -->
+    <string name="settings_buddy_row">%1$s · %2$s</string>
+    <string name="settings_buddy_row_practised">practised today</string>
+    <string name="settings_buddy_row_not_yet">hasn\'t practised yet today</string>
     <string name="settings_buddy_no_name">Pick a display name in Settings › Leaderboard &amp; Buddy</string>
     <string name="settings_buddy_invite">Invite a buddy</string>
+    <string name="settings_buddy_invite_another">Invite another buddy</string>
     <string name="settings_buddy_inviting">Asking for a code…</string>
+    <string name="settings_buddy_full">Your buddy list is full. Leave a buddy to add another.</string>
     <string name="settings_buddy_code_hint">Send this code to your buddy. It works once, within 24 hours (until %1$s).</string>
     <string name="settings_buddy_copy">Copy code</string>
     <string name="settings_buddy_copied">Copied</string>
@@ -975,21 +985,30 @@
     <string name="settings_buddy_join_hint">Six letters or digits</string>
     <string name="settings_buddy_join_go">Join</string>
     <string name="settings_buddy_joining">Joining…</string>
-    <string name="settings_buddy_leave">Leave buddy</string>
+    <string name="settings_buddy_leave">Leave</string>
+    <string name="settings_buddy_leave_named">Leave %1$s</string>
     <string name="settings_buddy_leaving">Leaving…</string>
-    <string name="settings_buddy_leave_confirm_title">Leave your buddy?</string>
-    <string name="settings_buddy_leave_confirm_body">Unpairs you from %1$s and ends the buddy streak for both of you. Either of you can invite the other again.</string>
+    <string name="settings_buddy_leave_confirm_title">Leave %1$s?</string>
+    <string name="settings_buddy_leave_confirm_body">Ends your buddy streak with %1$s, for both of you. Your other buddies are not affected, and either of you can pair again with a new code.</string>
     <string name="settings_buddy_refreshing">Checking…</string>
     <string name="settings_buddy_error">Couldn\'t do that: %1$s</string>
-    <string name="settings_buddy_footer">Pair with one other person and keep a shared streak: each day you both practise counts, and a day either of you misses resets it. Your buddy sees your leaderboard display name and whether you practised each day, nothing else. Pairing works on its own; the leaderboard switch above stays yours. Only builds installed from Google Play can pair.</string>
+    <string name="settings_buddy_footer">Pair with up to ten people and keep a separate streak with each: each day you both practise counts, and a day either of you misses resets it. One practice counts for every buddy. Your buddies see your leaderboard display name and whether you practised each day, nothing else. Leaving a buddy ends that streak for both of you and keeps the others. Pairing works on its own; the leaderboard switch above stays yours. Only builds installed from Google Play can pair.</string>
     <string name="buddy_reason_no_name">pick a display name in Settings › Leaderboard &amp; Buddy first</string>
     <string name="buddy_reason_bad_code">the code is six letters or digits</string>
     <string name="buddy_reason_bad_reply">the server sent something unexpected</string>
-    <!-- Home screen buddy line -->
+    <!-- Home screen buddy line. One buddy: home_buddy_practised / home_buddy_not_yet with
+         the streak. Several: home_buddies_all, or a buddy_waiting_* phrase in
+         home_buddies_waiting, with buddy_streak_best (fixtures/buddy-list.json). -->
     <string name="home_buddy_practised">%1$s practised today · %2$s</string>
     <string name="buddy_streak_days">%1$d-day buddy streak</string>
     <string name="buddy_streak_none">no buddy streak yet</string>
+    <string name="buddy_streak_best">best: %1$s</string>
     <string name="home_buddy_not_yet">%1$s hasn\'t practised yet today · %2$s</string>
+    <string name="home_buddies_all">All %1$d buddies practised today · %2$s</string>
+    <string name="home_buddies_waiting">%1$s · %2$s</string>
+    <string name="buddy_waiting_one">%1$s hasn\'t practised yet today</string>
+    <string name="buddy_waiting_two">%1$s and %2$s haven\'t practised yet today</string>
+    <string name="buddy_waiting_many">%1$s, %2$s and %3$d more haven\'t practised yet today</string>
     <!-- Licenses: the Play Integrity SDK notice -->
     <string name="licenses_play_integrity_title">Google Play Integrity API</string>
     <string name="licenses_play_integrity_footer">Sharing a score proves this is a genuine Play-installed build with the Play Integrity API library (com.google.android.play:integrity) and the Google Play services it depends on, © Google LLC, used under the Android Software Development Kit License Agreement and the Play Integrity API Terms of Service.</string>

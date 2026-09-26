@@ -1,6 +1,7 @@
 // AppModel+Buddy.swift
-// The buddy streak (docs/buddy-streak-design.md, #219): pair with one other
-// person and keep a streak of days you *both* practised. Everything here is
+// The buddy streak (docs/buddy-streak-design.md, #219, #237): pair with up
+// to ten people and keep a streak with each of the days you *both*
+// practised. Everything here is
 // a thin layer over the leaderboard client — the pairing is keyed by the
 // leaderboard identity, and needs the same App Attest — and the cache in
 // `settings.buddy`, which is what the home line, Settings and the daily
@@ -66,10 +67,11 @@ extension AppModel {
         }
     }
 
-    /// Join with a code someone sent. nil on success (the cache now says
-    /// paired); otherwise the reason to show, the server's own where it
-    /// refused. `today` goes along so the answer's flags are about this
-    /// device's day.
+    /// Join with a code someone sent. nil on success (the cache now lists
+    /// the new buddy); otherwise the reason to show, the server's own where
+    /// it refused. `today` goes along so the answer's flags are about this
+    /// device's day. An invite of ours stays up: this buddy came through
+    /// their code, not ours.
     func buddyJoin(code raw: String) async -> String? {
         if let reason = buddyUnavailableReason { return reason }
         guard let code = BuddyInviteCode.normalize(raw) else {
@@ -77,7 +79,7 @@ extension AppModel {
         }
         do {
             let status = try await leaderboard.buddyJoin(displayName: buddyDisplayName, code: code, today: buddyToday)
-            applyBuddyStatus(status, fetchedAt: Date())
+            applyBuddyStatus(status, fetchedAt: Date(), joinedByMe: true)
             // Joined after today's practice: the day counts from now.
             reportBuddyPracticeDay()
             return nil
@@ -86,12 +88,19 @@ extension AppModel {
         }
     }
 
-    /// Unpair. nil on success; the buddy learns of it on their next refresh.
-    func buddyLeave() async -> String? {
+    /// Leave one buddy. nil on success; they learn of it on their next
+    /// refresh, and the other pairings are untouched. An entry with no
+    /// pairing id (a one-buddy Worker, or a cache from before #237 not yet
+    /// refreshed) goes through the one-buddy route, which ends the only
+    /// pairing there is, so the whole cache is cleared.
+    func buddyLeave(_ buddy: BuddyEntry) async -> String? {
         if let reason = buddyUnavailableReason { return reason }
         do {
-            try await leaderboard.buddyLeave()
-            clearBuddyCache()
+            if let status = try await leaderboard.buddyLeave(buddyId: buddy.id, today: buddyToday) {
+                applyBuddyStatus(status, fetchedAt: Date())
+            } else {
+                clearBuddyCache()
+            }
             return nil
         } catch {
             return Self.buddyMessage(for: error)
@@ -150,9 +159,10 @@ extension AppModel {
 
     /// Take a server answer into the cache and re-arm the reminder, whose
     /// buddy sentence names the fetch time. A day the server already shows
-    /// as practised needs no report, whoever sent it.
-    func applyBuddyStatus(_ status: BuddyStatus, fetchedAt: Date) {
-        var cache = BuddyStatusCache(status: status, fetchedAt: fetchedAt, previous: settings.buddy)
+    /// as practised needs no report, whoever sent it. `joinedByMe` marks
+    /// this device's own join, so an invite it has out stays up.
+    func applyBuddyStatus(_ status: BuddyListStatus, fetchedAt: Date, joinedByMe: Bool = false) {
+        var cache = BuddyStatusCache(status: status, fetchedAt: fetchedAt, previous: settings.buddy, joinedByMe: joinedByMe)
         if status.practisedToday, status.today == BuddyDay.label(for: fetchedAt) {
             cache.lastReportedDay = status.today
         }
@@ -160,8 +170,8 @@ extension AppModel {
         refreshReminderIfStreakChanged()
     }
 
-    /// Forget everything cached: after leaving, and after "Delete my
-    /// scores" (the server dropped the pair with the rest). The reminder
+    /// Forget everything cached: after a one-buddy leave, and after "Delete
+    /// my scores" (the server dropped every pairing with the rest). The reminder
     /// loses its buddy sentence with it.
     func clearBuddyCache() {
         buddyRefresh?.cancel()

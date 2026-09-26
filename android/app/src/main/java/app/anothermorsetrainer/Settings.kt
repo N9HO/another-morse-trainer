@@ -9,6 +9,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.content.edit
 import app.anothermorsetrainer.morsekit.AnswerEntryMode
+import app.anothermorsetrainer.morsekit.Buddy
+import app.anothermorsetrainer.morsekit.BuddyEntry
 import app.anothermorsetrainer.morsekit.BuddyStatus
 import app.anothermorsetrainer.morsekit.CallsignFormat
 import app.anothermorsetrainer.morsekit.ContestLength
@@ -26,6 +28,7 @@ import app.anothermorsetrainer.morsekit.RapidFirePace
 import app.anothermorsetrainer.morsekit.RapidFireResponse
 import app.anothermorsetrainer.morsekit.TokenMeaning
 import app.anothermorsetrainer.morsekit.TrainerEngine
+import org.json.JSONArray
 
 /**
  * What the on-screen key is (#233): the single hold-to-key pad every keying
@@ -642,17 +645,28 @@ object Settings {
         buddyStatus = runCatching {
             val fetchedAt = prefs.getLong("buddyFetchedAt", 0L)
             if (fetchedAt <= 0L) return@runCatching null
+            val buddies = if (prefs.contains("buddyList")) {
+                Buddy.parseEntries(JSONArray(prefs.getString("buddyList", "[]") ?: "[]"))
+            } else {
+                // A cache the one-buddy app (#219) wrote: its buddy becomes the
+                // list's one entry, with no pairing id until the next answer
+                // brings one. persistBuddy then writes the list and drops these.
+                val name = (prefs.getString("buddyName", "") ?: "").trim()
+                if (prefs.getBoolean("buddyPaired", false) && name.isNotEmpty()) {
+                    listOf(BuddyEntry("", name, prefs.getBoolean("buddyPractisedToday", false), prefs.getInt("buddyStreak", 0).coerceAtLeast(0)))
+                } else {
+                    emptyList()
+                }
+            }
             BuddyStatus(
-                paired = prefs.getBoolean("buddyPaired", false),
-                buddyName = prefs.getString("buddyName", "") ?: "",
-                buddyPractisedToday = prefs.getBoolean("buddyPractisedToday", false),
-                streak = prefs.getInt("buddyStreak", 0),
+                buddies = buddies,
+                maxBuddies = maxOf(1, buddies.size, prefs.getInt("buddyMax", 1)),
                 myStreak = prefs.getInt("buddyMyStreak", 0),
                 practisedToday = prefs.getBoolean("buddyMyPractisedToday", false),
                 today = prefs.getString("buddyToday", "") ?: "",
                 fetchedAt = fetchedAt
             )
-        }.getOrNull()?.let { if (it.paired && it.buddyName.isEmpty()) it.copy(paired = false) else it }
+        }.getOrNull()
         buddyLastReportedDay = runCatching { prefs.getString("buddyLastReportedDay", "") ?: "" }.getOrDefault("")
         buddyInviteCode = runCatching { prefs.getString("buddyInviteCode", "") ?: "" }.getOrDefault("")
         buddyInviteExpiresAt = runCatching { prefs.getLong("buddyInviteExpiresAt", 0L) }.getOrDefault(0L)
@@ -1000,13 +1014,19 @@ object Settings {
         persist()
     }
 
-    /** A fresh status from the server replaces the cache; a pairing clears any outstanding invite. */
-    fun updateBuddyStatus(status: BuddyStatus) {
-        buddyStatus = status
-        if (status.paired) {
+    /**
+     * A fresh status from the server replaces the cache. An outstanding invite
+     * is dropped once the list is full or someone joined it
+     * ([Buddy.keepsInvite]); [joinedByMe] marks this install's own join,
+     * whose new buddy came through their code, not ours.
+     */
+    fun updateBuddyStatus(status: BuddyStatus, joinedByMe: Boolean = false) {
+        val previous = buddyStatus?.buddies ?: emptyList()
+        if (!Buddy.keepsInvite(previous, status.buddies, status.maxBuddies, joinedByMe, status.joined)) {
             buddyInviteCode = ""
             buddyInviteExpiresAt = 0L
         }
+        buddyStatus = status
         persistBuddy()
     }
 
@@ -1021,7 +1041,7 @@ object Settings {
         persistBuddy()
     }
 
-    /** After "Leave buddy" or "Delete my scores": the server has forgotten the pair, so does the cache. */
+    /** After a one-buddy (v1) leave or "Delete my scores": the server has forgotten every pairing, so does the cache. */
     fun clearBuddy() {
         buddyStatus = null
         buddyLastReportedDay = ""
@@ -1035,10 +1055,13 @@ object Settings {
         val s = buddyStatus
         prefs.edit {
             putLong("buddyFetchedAt", s?.fetchedAt ?: 0L)
-            putBoolean("buddyPaired", s?.paired ?: false)
-            putString("buddyName", s?.buddyName ?: "")
-            putBoolean("buddyPractisedToday", s?.buddyPractisedToday ?: false)
-            putInt("buddyStreak", s?.streak ?: 0)
+            putString("buddyList", Buddy.entriesJson(s?.buddies ?: emptyList()).toString())
+            putInt("buddyMax", s?.maxBuddies ?: 1)
+            // The one-buddy keys (#219) are read once on upgrade and not kept.
+            remove("buddyPaired")
+            remove("buddyName")
+            remove("buddyPractisedToday")
+            remove("buddyStreak")
             putInt("buddyMyStreak", s?.myStreak ?: 0)
             putBoolean("buddyMyPractisedToday", s?.practisedToday ?: false)
             putString("buddyToday", s?.today ?: "")

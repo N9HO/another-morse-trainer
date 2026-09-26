@@ -5799,7 +5799,7 @@ do {
     check("other refusals are not", LeaderboardServerHints.isUnknownKey("run token unknown, used or expired") == false)
 }
 
-// Buddy streaks (docs/buddy-streak-design.md, #219): the day label, the
+// Buddy streaks (docs/buddy-streak-design.md, #219, #237): the day label, the
 // invite-code rule and the cached status's wording, each pinned to the
 // server's own (src/buddy.ts in the leaderboard repository) or to the strings
 // both apps show.
@@ -5841,12 +5841,6 @@ do {
     check("typed keeps a stray character for normalize to refuse", BuddyInviteCode.typed("abc0de") == "ABC0DE" && BuddyInviteCode.normalize("ABC0DE") == nil)
 
     // Wire shapes.
-    let statusJSON = #"{"paired":true,"buddy":{"displayName":"W1AW","practisedToday":true},"streak":12,"myStreak":30,"practisedToday":false,"today":"2026-09-11"}"#
-    let status = try? JSONDecoder().decode(BuddyStatus.self, from: Data(statusJSON.utf8))
-    check("a paired status decodes", status?.paired == true && status?.buddy?.displayName == "W1AW" && status?.streak == 12 && status?.today == "2026-09-11")
-    let unpairedJSON = #"{"paired":false,"streak":0,"myStreak":3,"practisedToday":true,"today":"2026-09-11"}"#
-    let unpaired = try? JSONDecoder().decode(BuddyStatus.self, from: Data(unpairedJSON.utf8))
-    check("an unpaired status decodes without a buddy", unpaired?.paired == false && unpaired?.buddy == nil && unpaired?.myStreak == 3)
     let inviteJSON = #"{"code":"ABC234","expiresAt":1757635200000}"#
     let invite = try? JSONDecoder().decode(BuddyInviteResponse.self, from: Data(inviteJSON.utf8))
     check("an invite decodes and its expiry is in milliseconds", invite?.code == "ABC234" && invite?.expiryDate.timeIntervalSince1970 == 1_757_635_200)
@@ -5865,66 +5859,132 @@ do {
           == "{\(attJSON),\"challenge\":\"C\",\"day\":\"2026-09-11\",\"today\":\"2026-09-11\"}")
     check("status request carries today",
           json(BuddyStatusRequest(challenge: "C", attestation: att, today: "2026-09-11")) == "{\(attJSON),\"challenge\":\"C\",\"today\":\"2026-09-11\"}")
-    check("leave request carries only the attestation",
+    check("v1 leave request carries only the attestation",
           json(BuddyLeaveRequest(challenge: "C", attestation: att)) == "{\(attJSON),\"challenge\":\"C\"}")
+    check("v2 leave request names the pairing and today",
+          json(BuddyLeaveOneRequest(challenge: "C", attestation: att, buddyId: "p-1", today: "2026-09-11"))
+          == "{\(attJSON),\"buddyId\":\"p-1\",\"challenge\":\"C\",\"today\":\"2026-09-11\"}")
 
-    // The cached status and its wording — the strings both apps show.
+    // The cache: pending invites, the refresh gate, and reading a cache the
+    // one-buddy app (#219) saved.
     let fetched = Date(timeIntervalSince1970: 1_757_600_000)
-    let paired = BuddyStatusCache(status: status!, fetchedAt: fetched)
-    check("the cache takes the buddy's name, day and streak",
-          paired.paired && paired.buddyName == "W1AW" && paired.buddyPractisedToday && paired.streak == 12 && paired.myStreak == 30
-          && paired.today == "2026-09-11" && paired.fetchedAt == fetched)
-    check("home line when the buddy has practised", paired.homeLine(today: "2026-09-11") == "W1AW practised today · 12-day buddy streak")
-    var quiet = paired
-    quiet.buddyPractisedToday = false
-    check("home line when they have not", quiet.homeLine(today: "2026-09-11") == "W1AW hasn't practised yet today · 12-day buddy streak")
-    check("a cache from an earlier day cannot vouch for today", paired.homeLine(today: "2026-09-12") == "W1AW hasn't practised yet today · 12-day buddy streak")
-    check("settings line when the buddy has practised",
-          paired.settingsLine(today: "2026-09-11") == "Paired with W1AW · 12-day buddy streak · W1AW has practised today")
-    check("settings line when they have not",
-          quiet.settingsLine(today: "2026-09-11") == "Paired with W1AW · 12-day buddy streak · W1AW hasn't practised yet today")
-    var fresh = paired
-    fresh.streak = 0
-    check("a zero streak reads 'no buddy streak yet'", fresh.streakLabel == "no buddy streak yet" && BuddyStatusCache().streakLabel == "no buddy streak yet")
-    var one = paired
-    one.streak = 1
-    check("one day reads '1-day buddy streak'", one.streakLabel == "1-day buddy streak")
-    let empty = BuddyStatusCache()
-    check("not paired: no home line and the invite prompt",
-          empty.homeLine(today: "2026-09-11") == nil && empty.settingsLine(today: "2026-09-11") == "Invite a buddy, or join with a code they send you")
-    check("reminder sentence when the buddy has not practised",
-          quiet.reminderSentence(today: "2026-09-11", asOf: "6:10 pm") == "W1AW hasn't practised yet today (as of 6:10 pm)")
-    check("no reminder sentence when they have", paired.reminderSentence(today: "2026-09-11", asOf: "6:10 pm") == nil)
-    check("no reminder sentence from an earlier day's cache", quiet.reminderSentence(today: "2026-09-12", asOf: "6:10 pm") == nil)
-    check("no reminder sentence when not paired", empty.reminderSentence(today: "2026-09-11", asOf: "6:10 pm") == nil)
-    let unpairedCache = BuddyStatusCache(status: unpaired!, fetchedAt: fetched)
-    check("an unpaired answer leaves an empty name", !unpairedCache.paired && unpairedCache.buddyName == "" && unpairedCache.myStreak == 3)
-
-    // Pending invites and the refresh gate.
-    var invited = BuddyStatusCache()
+    let w1aw = BuddyEntry(id: "p-1", displayName: "W1AW", practisedToday: true, streak: 12)
+    let two = BuddyListStatus(buddies: [w1aw, BuddyEntry(id: "p-2", displayName: "K1ABC", practisedToday: false, streak: 3)],
+                              maxBuddies: 10, myStreak: 30, practisedToday: false, today: "2026-09-11")
+    let none = BuddyListStatus(buddies: [], maxBuddies: 10, myStreak: 3, practisedToday: true, today: "2026-09-11")
+    let listed = BuddyStatusCache(status: two, fetchedAt: fetched)
+    check("the cache takes the list, the cap and the day",
+          listed.buddies.count == 2 && listed.maxBuddies == 10 && listed.myStreak == 30 && listed.today == "2026-09-11" && listed.paired && !listed.isFull)
+    check("a buddy row says its own streak and day",
+          listed.rowLine(for: w1aw, today: "2026-09-11") == "12-day buddy streak · practised today"
+          && listed.rowLine(for: listed.buddies[1], today: "2026-09-11") == "3-day buddy streak · hasn't practised yet today"
+          && listed.rowLine(for: w1aw, today: "2026-09-12") == "12-day buddy streak · hasn't practised yet today")
+    check("the count line shows the cap", listed.countLine == "2 of 10 buddies" && BuddyStatusCache().countLine == "0 of 1 buddy")
+    var invited = BuddyStatusCache(status: none, fetchedAt: fetched)
     invited.pendingInviteCode = "ABC234"
     invited.pendingInviteExpiresAt = fetched.addingTimeInterval(3600)
     check("a pending invite is shown until it expires",
           invited.pendingInvite(at: fetched)?.code == "ABC234" && invited.pendingInvite(at: fetched.addingTimeInterval(7200)) == nil)
-    check("an invite outlives a not-yet-paired status answer",
-          BuddyStatusCache(status: unpaired!, fetchedAt: fetched, previous: invited).pendingInviteCode == "ABC234")
-    check("… and is dropped once paired", BuddyStatusCache(status: status!, fetchedAt: fetched, previous: invited).pendingInviteCode == nil)
+    check("an invite outlives an answer with nobody new",
+          BuddyStatusCache(status: none, fetchedAt: fetched, previous: invited).pendingInviteCode == "ABC234")
+    check("… and is dropped once someone joins it", BuddyStatusCache(status: two, fetchedAt: fetched, previous: invited).pendingInviteCode == nil)
+    var joinedOne = two
+    joinedOne.buddies = [w1aw]
+    joinedOne.joined = "p-1"
+    check("… but not by our own join", BuddyStatusCache(status: joinedOne, fetchedAt: fetched, previous: invited, joinedByMe: true).pendingInviteCode == "ABC234")
     var reported = invited
     reported.lastReportedDay = "2026-09-11"
     check("the reported day survives a status answer",
-          BuddyStatusCache(status: status!, fetchedAt: fetched, previous: reported).lastReportedDay == "2026-09-11")
+          BuddyStatusCache(status: two, fetchedAt: fetched, previous: reported).lastReportedDay == "2026-09-11")
     check("refresh wanted when paired or an invite is out, not otherwise",
-          paired.wantsRefresh(at: fetched) && invited.wantsRefresh(at: fetched)
-          && !invited.wantsRefresh(at: fetched.addingTimeInterval(7200)) && !empty.wantsRefresh(at: fetched))
+          listed.wantsRefresh(at: fetched) && invited.wantsRefresh(at: fetched)
+          && !invited.wantsRefresh(at: fetched.addingTimeInterval(7200)) && !BuddyStatusCache().wantsRefresh(at: fetched))
+    var full = listed
+    full.maxBuddies = 2
+    full.pendingInviteCode = "ABC234"
+    full.pendingInviteExpiresAt = fetched.addingTimeInterval(3600)
+    check("a full list shows no invite", full.isFull && full.pendingInvite(at: fetched) == nil)
 
-    // Tolerant decoding: an older app's settings without the block, and a
-    // newer app's with a field this one does not know, both load.
+    // Tolerant decoding, and the upgrade from the one-buddy cache.
     let old = try? JSONDecoder().decode(BuddyStatusCache.self, from: Data("{}".utf8))
     check("an empty object decodes to the defaults", old == BuddyStatusCache())
-    let partial = try? JSONDecoder().decode(BuddyStatusCache.self, from: Data(#"{"paired":true,"buddyName":"W1AW","streak":4,"future":1}"#.utf8))
-    check("a partial object keeps what it has", partial?.paired == true && partial?.buddyName == "W1AW" && partial?.streak == 4 && partial?.fetchedAt == nil)
+    let legacy = try? JSONDecoder().decode(BuddyStatusCache.self, from: Data(
+        #"{"paired":true,"buddyName":"W1AW","buddyPractisedToday":true,"streak":4,"myStreak":9,"today":"2026-09-11","lastReportedDay":"2026-09-11","future":1}"#.utf8))
+    check("a one-buddy cache becomes a list of one with no pairing id",
+          legacy?.buddies == [BuddyEntry(id: "", displayName: "W1AW", practisedToday: true, streak: 4)]
+          && legacy?.maxBuddies == 1 && legacy?.myStreak == 9 && legacy?.lastReportedDay == "2026-09-11" && legacy?.fetchedAt == nil)
+    check("… and its home line reads as before",
+          legacy?.homeLine(today: "2026-09-11") == "W1AW practised today · 4-day buddy streak")
+    let legacyUnpaired = try? JSONDecoder().decode(BuddyStatusCache.self, from: Data(#"{"paired":false,"buddyName":"","pendingInviteCode":"ABC234"}"#.utf8))
+    check("an unpaired one-buddy cache keeps its invite and has no buddies",
+          legacyUnpaired?.buddies == [] && legacyUnpaired?.pendingInviteCode == "ABC234")
     let roundTrip = (try? JSONEncoder().encode(reported)).flatMap { try? JSONDecoder().decode(BuddyStatusCache.self, from: $0) }
     check("the cache round-trips through JSON", roundTrip == reported)
+    let written = (try? JSONEncoder().encode(listed)).flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] } ?? [:]
+    check("the one-buddy keys are not written again", written["paired"] == nil && written["buddyName"] == nil && written["buddies"] != nil)
+}
+
+// Several buddies (#237), against fixtures/buddy-list.json — the same file
+// the Kotlin BuddyListTest reads: the status parse (both server shapes), the
+// digest behind the home line and the reminder, and when an invite stays.
+print("\nBuddy list (fixtures/buddy-list.json):")
+func loadBuddyListFixture() -> [String: Any]? {
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent()
+        .deletingLastPathComponent().deletingLastPathComponent()
+    guard let data = try? Data(contentsOf: root.appendingPathComponent("fixtures/buddy-list.json")) else { return nil }
+    return (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+}
+if let fx = loadBuddyListFixture(),
+   let digestCases = fx["digestCases"] as? [[String: Any]],
+   let parseCases = fx["parseCases"] as? [[String: Any]],
+   let inviteCases = fx["inviteCases"] as? [[String: Any]],
+   let asOf = fx["asOf"] as? String {
+    func entries(_ raw: Any?) -> [BuddyEntry] {
+        ((raw as? [[String: Any]]) ?? []).map {
+            BuddyEntry(id: $0["id"] as? String ?? "", displayName: $0["name"] as? String ?? "",
+                       practisedToday: $0["practisedToday"] as? Bool ?? false, streak: $0["streak"] as? Int ?? 0)
+        }
+    }
+    for c in digestCases {
+        let name = c["name"] as? String ?? "?"
+        let today = c["today"] as? String ?? ""
+        var cache = BuddyStatusCache()
+        cache.buddies = entries(c["buddies"])
+        cache.maxBuddies = max(1, cache.buddies.count)
+        cache.today = c["statusDay"] as? String ?? ""
+        cache.fetchedAt = (c["fetched"] as? Bool ?? false) ? Date(timeIntervalSince1970: 1_790_000_000) : nil
+        let d = cache.digest(today: today)
+        let want = c["digest"] as? [String: Any] ?? [:]
+        check("digest: \(name)",
+              d.count == want["count"] as? Int && d.allPractised == want["allPractised"] as? Bool
+              && d.waitingNames == want["waitingNames"] as? [String] && d.waitingMore == want["waitingMore"] as? Int
+              && d.bestStreak == want["bestStreak"] as? Int)
+        check("home line: \(name)", cache.homeLine(today: today) == c["home"] as? String)
+        check("reminder: \(name)", cache.reminderSentence(today: today, asOf: asOf) == c["reminder"] as? String)
+    }
+    for c in parseCases {
+        let name = c["name"] as? String ?? "?"
+        let body = (try? JSONSerialization.data(withJSONObject: c["body"] ?? [:])) ?? Data()
+        let parsed = try? JSONDecoder().decode(BuddyListStatus.self, from: body)
+        if let want = c["expect"] as? [String: Any] {
+            let expected = BuddyListStatus(buddies: entries(want["buddies"]), maxBuddies: want["maxBuddies"] as? Int ?? 0,
+                                           myStreak: want["myStreak"] as? Int ?? -1, practisedToday: want["practisedToday"] as? Bool ?? false,
+                                           today: want["today"] as? String ?? "?", joined: want["joined"] as? String ?? "?")
+            check("parse: \(name)", parsed == expected)
+        } else {
+            check("parse: \(name)", parsed == nil)
+        }
+    }
+    for c in inviteCases {
+        let keep = BuddyStatusCache.keepsInvite(previous: entries(c["previous"]), current: entries(c["current"]),
+                                                maxBuddies: c["maxBuddies"] as? Int ?? 0, joinedByMe: c["joinedByMe"] as? Bool ?? false,
+                                                joinedId: c["joinedId"] as? String ?? "")
+        check("invite kept: \(c["name"] as? String ?? "?")", keep == c["keep"] as? Bool)
+    }
+    check("the fixture has cases of every kind", !digestCases.isEmpty && !parseCases.isEmpty && !inviteCases.isEmpty)
+} else {
+    check("fixtures/buddy-list.json loads and decodes", false)
 }
 
 // MARK: - Settings map (#236)

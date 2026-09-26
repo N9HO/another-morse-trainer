@@ -150,14 +150,17 @@ the iOS app's navy/teal look.
   number is not its on-screen score. Posting needs a genuine Play-installed
   build (Play Integrity); a "Delete my scores" button removes everything
   this install posted
-- **Buddy streak**: pair with one other person (on either app) and keep a
-  shared streak: each day you both practise counts, a day either misses
-  resets it. Settings › Leaderboard & Buddy › Buddy streak mints a six-character invite code
-  (single use, 24 hours) to send however you like, or takes one a buddy
-  sent; it uses the leaderboard display name and needs no leaderboard
-  opt-in. The home screen says whether your buddy has practised today, the
-  daily reminder adds a line when they have not (as of the last check), and
-  "Leave buddy" or "Delete my scores" unpairs
+- **Buddy streak**: pair with up to ten people (on either app) and keep a
+  separate streak with each: each day you both practise counts, a day
+  either misses resets it. Settings › Leaderboard & Buddy › Buddy
+  streak lists every buddy with
+  their streak and whether they have practised today, mints a
+  six-character invite code (single use, 24 hours) to send however you
+  like, or takes one a buddy sent; it uses the leaderboard display name and
+  needs no leaderboard opt-in. The home screen says who has practised
+  today, the daily reminder adds one line naming whoever has not (as of the
+  last check), "Leave" on a buddy ends that pairing only, and "Delete my
+  scores" ends them all
 - Timed practice sessions (1-30 min or open-ended) with mid-session timer
   controls and an end-of-session summary, and a mode switcher that jumps
   between drills without going home

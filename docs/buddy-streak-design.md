@@ -1,8 +1,10 @@
 # Buddy streaks: design notes
 
-Status: **proposal, nothing built.** Written 2026-09-11 for issue #219
-(jsvana, via Discord): pair with another user and keep a shared practice
-streak, in the spirit of Duolingo's friend quests. Read with
+Status: **built** — one buddy in #219 (both apps, leaderboard Worker
+`/v1/buddy/*`); several buddies in #237, decided below under "Several
+buddies". Written 2026-09-11 for issue #219 (jsvana, via Discord): pair with
+another user and keep a shared practice streak, in the spirit of Duolingo's
+friend quests. Read with
 `docs/high-scores-design.md`: the leaderboard server (step 2) already gives
 every opted-in device an attested, account-free identity, and that is what
 makes this cheap.
@@ -120,4 +122,71 @@ platforms works because identities are platform-neutral on the server.
    daily report at the existing practice-day mark, the home-card line and
    the reminder sentence; guide section; policy paragraph.
 3. Quests, more than one buddy, push, only if people ask after living
-   with the streak for a while.
+   with the streak for a while. (More than one buddy was asked for: #237,
+   below.)
+
+## Several buddies (#237)
+
+Asked for by the same reporter after living with one: a separate streak
+with each of several people. Decided 2026-09-26:
+
+- **A cap of ten.** A status call reads each buddy's practice days, so ten
+  is eleven small reads; ten rows fit the Settings list on a phone; the
+  reminder's one sentence stays readable; and it bounds what leaked codes
+  can do (five invites a day, each single use). The cap is the server's
+  (`MAX_BUDDIES`), reported as `maxBuddies` in every v2 status, so the apps
+  never hard-code it and raising it needs no release. A full list refuses
+  invites and joins on both sides of a pairing; the apps hide the invite
+  controls instead.
+- **One streak per pairing, same rule.** Each pairing's streak is the #219
+  fold of the two calendars. One practice day counts toward every pairing:
+  the app still reports a day once, not once per buddy.
+- **Nudges aggregate; no push.** The home line and the daily reminder say
+  one thing about the whole list — "All 3 buddies practised today · best:
+  40-day buddy streak", or "W1AW, K1ABC and 2 more haven't practised yet
+  today (as of 6:10 pm)" — never one line or notification per buddy. With
+  one buddy the #219 wording is unchanged. Push stays out of scope.
+- **No leaderboard surface.** Buddies are not shown on the board (#226);
+  the list is private to the two sides of each pairing.
+- **Pairing ids, never identities.** Each pairing has an opaque id, the
+  same on both sides, which "leave" takes. Leaving one buddy ends that
+  streak for both and keeps the rest.
+
+The rules the apps apply to the list — reading both server shapes, the
+digest behind the home line and reminder, and when an invite stays shown —
+are pinned for both ports by `fixtures/buddy-list.json`.
+
+### Server: `/v2/buddy`, `/v1` unchanged
+
+The one-buddy routes are what every shipped app speaks, so they keep their
+request and response shapes exactly. `/v2/buddy/invite|join|day|status|leave`
+take the same bodies (leave adds `buddyId` and `today`) and answer with the
+list: `{ buddies: [{ id, displayName, practisedToday, streak }], maxBuddies,
+myStreak, practisedToday, today }` (join adds `joined`, the new pairing's
+id). Both versions share the pairings, so a v1 app and a v2 app pair with
+each other:
+
+- a v1 status shows the oldest pairing;
+- a v1 invite or join is refused while the caller has any buddy (as
+  before);
+- a v1 invite's code pairs its inviter only while it has none — its app
+  could not show a second buddy — and a refused join never burns the code;
+- a v1 leave ends every pairing, which is what a one-buddy app means.
+
+Storage moves to `buddy_links` (one row per pairing, the two identities in
+sorted order, an opaque id), added by an additive migration that also marks
+which API issued each invite and copies the old one-buddy pairs across;
+`buddy_pairs` is kept, unwritten, so rolling the Worker back still finds the
+pairs that existed at migration time.
+
+### Apps: v2 first, v1 when the Worker has no v2
+
+Every buddy call tries `/v2`. A Worker without it answers the bare 404
+"not found" its router gives any unknown path, before it reads the body, so
+nothing is spent but a challenge; on exactly that answer the app repeats the
+call on `/v1`, reads the one-buddy status as a list of at most one (cap 1),
+and uses `/v1` for the rest of that launch. The fallback is not persisted,
+so the first launch after the Worker is deployed uses v2. A cache saved by
+the one-buddy app is read on upgrade as a list of one buddy with no pairing
+id; the next status fills the id in, and leaving such an entry goes through
+the v1 route.
