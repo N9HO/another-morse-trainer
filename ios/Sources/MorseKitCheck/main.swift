@@ -5807,6 +5807,221 @@ do {
     check("the cache round-trips through JSON", roundTrip == reported)
 }
 
+// Sending Analyzer (#241, #234, #235), against fixtures/sending-analysis.json —
+// read by this harness and by android SendingAnalysisTest. Inputs are key
+// schedules built from the 1:3:7 standard; expected values were worked by
+// hand from the fixture's `derivation`, not captured from either port.
+print("\nSending analyzer (fixtures/sending-analysis.json):")
+struct SendingFixture: Decodable {
+    struct GapStat: Decodable { let count: Int; let mean: Double?; let sd: Double? }
+    struct Expected: Decodable {
+        let decoded: String?
+        let correct: Int?
+        let targetCharacters: Int?
+        let accuracy: Double?
+        let marks: Int?
+        let unitMs: Double?
+        let characterWpm: Double?
+        let effectiveWpm: Double?
+        let dahDitRatio: Double?
+        let farnsworthFactor: Double?
+        let dits: GapStat?
+        let dahs: GapStat?
+        let elementGaps: GapStat?
+        let characterGaps: GapStat?
+        let wordGaps: GapStat?
+        let characterGapHistogram: [Int]?
+        let wordGapHistogram: [Int]?
+        let alignment: [String]?
+        let missingWordBreaks: Int?
+        let extraWordBreaks: Int?
+        let feedback: [String]
+    }
+    struct Case: Decodable {
+        let name: String
+        let target: String
+        let keyType: String
+        let characterWpm: Double
+        let effectiveWpm: Double
+        let marks: [[Double]]
+        let expected: Expected
+    }
+    struct Record: Decodable {
+        let cases: [String]
+        let characters: [String: [Int]]
+        let pairs: [String: [Int]]
+        struct Mixup: Decodable { let target: String; let sent: String; let count: Int }
+        let mixups: [Mixup]
+        let attempts: Int
+        let problemCharacters: [String]
+        let problemPairs: [String]
+    }
+    struct ToneCase: Decodable {
+        let name: String
+        let sampleRate: Double
+        let pitchHz: Double
+        let amplitude: Double
+        let noiseAmplitude: Double
+        let impulses: [Double]
+        let impulseAmplitude: Double
+        let marks: [[Double]]
+        let durationMs: Double
+        let toleranceMs: Double
+        let expectedPitchHz: Double
+        let pitchToleranceHz: Double
+    }
+    struct Tone: Decodable { let cases: [ToneCase] }
+    let charGapBinEdges: [Double]
+    let wordGapBinEdges: [Double]
+    let tolerance: Double
+    let cases: [Case]
+    let record: Record
+    let toneDetector: Tone
+}
+func loadSendingFixture() -> SendingFixture? {
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent()
+        .deletingLastPathComponent().deletingLastPathComponent()
+    guard let data = try? Data(contentsOf: root.appendingPathComponent("fixtures/sending-analysis.json")) else { return nil }
+    do { return try JSONDecoder().decode(SendingFixture.self, from: data) } catch {
+        print("      ↳ decode error: \(error)")
+        return nil
+    }
+}
+if let fx = loadSendingFixture() {
+    check("character-gap bin edges are the fixture's", SendingAnalysis.charGapBinEdges == fx.charGapBinEdges)
+    check("word-gap bin edges are the fixture's", SendingAnalysis.wordGapBinEdges == fx.wordGapBinEdges)
+    var analyses: [String: SendingAnalysis] = [:]
+    for c in fx.cases {
+        let a = SendingAnalysis(marks: c.marks.map { KeyMark(downMs: $0[0], upMs: $0[1]) },
+                                target: c.target,
+                                keyType: SendingKeyType(rawValue: c.keyType) ?? .straight,
+                                characterWpm: c.characterWpm,
+                                effectiveWpm: c.effectiveWpm)
+        analyses[c.name] = a
+        let e = c.expected
+        let tol = fx.tolerance
+        var problems: [String] = []
+        func num(_ label: String, _ got: Double?, _ want: Double?) {
+            guard let want else { return }
+            guard let got, abs(got - want) <= tol else { problems.append("\(label) \(String(describing: got)) ≠ \(want)"); return }
+        }
+        func stat(_ label: String, _ got: SendingAnalysis.Stat, _ want: SendingFixture.GapStat?) {
+            guard let want else { return }
+            if got.count != want.count { problems.append("\(label).count \(got.count) ≠ \(want.count)") }
+            num("\(label).mean", got.mean, want.mean)
+            num("\(label).sd", got.sd, want.sd)
+        }
+        if let d = e.decoded, d != a.decodedText { problems.append("decoded \"\(a.decodedText)\" ≠ \"\(d)\"") }
+        if let v = e.correct, v != a.correctCharacterCount { problems.append("correct \(a.correctCharacterCount) ≠ \(v)") }
+        if let v = e.targetCharacters, v != a.targetCharacterCount { problems.append("targetCharacters \(a.targetCharacterCount) ≠ \(v)") }
+        if let v = e.marks, v != a.marks.count { problems.append("marks \(a.marks.count) ≠ \(v)") }
+        num("accuracy", a.accuracy, e.accuracy)
+        num("unitMs", a.unitMs, e.unitMs)
+        num("characterWpm", a.characterWpm, e.characterWpm)
+        num("effectiveWpm", a.effectiveWpm, e.effectiveWpm)
+        num("dahDitRatio", a.dahDitRatio, e.dahDitRatio)
+        num("farnsworthFactor", a.farnsworthFactor, e.farnsworthFactor)
+        stat("dits", a.dits, e.dits)
+        stat("dahs", a.dahs, e.dahs)
+        stat("elementGaps", a.elementGaps, e.elementGaps)
+        stat("characterGaps", a.characterGaps, e.characterGaps)
+        stat("wordGaps", a.wordGaps, e.wordGaps)
+        if let h = e.characterGapHistogram, h != a.characterGapHistogram { problems.append("char histogram \(a.characterGapHistogram) ≠ \(h)") }
+        if let h = e.wordGapHistogram, h != a.wordGapHistogram { problems.append("word histogram \(a.wordGapHistogram) ≠ \(h)") }
+        if let al = e.alignment, al != a.alignment.map(\.code) { problems.append("alignment \(a.alignment.map(\.code)) ≠ \(al)") }
+        if let v = e.missingWordBreaks, v != a.missingWordBreaks { problems.append("missingWordBreaks \(a.missingWordBreaks) ≠ \(v)") }
+        if let v = e.extraWordBreaks, v != a.extraWordBreaks { problems.append("extraWordBreaks \(a.extraWordBreaks) ≠ \(v)") }
+        let codes = a.feedback.map(\.rawValue)
+        if codes != e.feedback { problems.append("feedback \(codes) ≠ \(e.feedback)") }
+        for p in problems { print("      ↳ \(c.name): \(p)") }
+        check("analysis matches the fixture: \(c.name)", problems.isEmpty)
+    }
+    check("every feedback code has wording",
+          SendingFeedback.allCases.allSatisfy { code in
+              analyses.values.first.map { !$0.message(for: code).isEmpty } ?? false
+          })
+
+    var record = SendingRecord()
+    for name in fx.record.cases {
+        if let a = analyses[name] { record.record(a, at: Date(timeIntervalSince1970: 0)) }
+    }
+    let chars = record.characters.mapValues { [$0.attempts, $0.misses] }
+    let pairs = record.pairs.mapValues { [$0.attempts, $0.misses] }
+    let mixups = record.mixups.entries().map { "\($0.target)>\($0.chosen)×\($0.count)" }
+    check("sending record: per-character tallies", chars == fx.record.characters)
+    check("sending record: per-pair tallies", pairs == fx.record.pairs)
+    check("sending record: mix-ups", mixups == fx.record.mixups.map { "\($0.target)>\($0.sent)×\($0.count)" })
+    check("sending record: attempts kept", record.attempts.count == fx.record.attempts)
+    check("sending record: problem characters",
+          record.problemCharacters(minAttempts: 1).map(\.key) == fx.record.problemCharacters)
+    check("sending record: problem pairs",
+          record.problemPairs(minAttempts: 1).map(\.key) == fx.record.problemPairs)
+    if let data = try? JSONEncoder().encode(record),
+       let back = try? JSONDecoder().decode(SendingRecord.self, from: data) {
+        check("sending record survives a save/load round-trip", back == record)
+    } else {
+        check("sending record encodes and decodes", false)
+    }
+
+    // The recorder: edges from any input become marks.
+    var rec = KeyingRecorder()
+    rec.keyDown(atMs: 10); rec.keyDown(atMs: 12); rec.keyUp(atMs: 70); rec.keyUp(atMs: 80)
+    rec.keyDown(atMs: 130); rec.keyUp(atMs: 310)
+    check("keying recorder pairs edges and ignores repeats",
+          rec.marks == [KeyMark(downMs: 10, upMs: 70), KeyMark(downMs: 130, upMs: 310)])
+
+    // The tone detector, fed the signal the fixture describes.
+    for tc in fx.toneDetector.cases {
+        let rate = tc.sampleRate
+        let total = Int(tc.durationMs * rate / 1000)
+        var samples = [Float](repeating: 0, count: total)
+        var x: UInt64 = 1
+        let impulseSamples = Set(tc.impulses.map { Int(($0 * rate / 1000).rounded()) })
+        for n in 0..<total {
+            let tMs = Double(n) * 1000 / rate
+            var v = 0.0
+            if tc.marks.contains(where: { tMs >= $0[0] && tMs < $0[1] }) {
+                v = tc.amplitude * sin(2 * Double.pi * tc.pitchHz * Double(n) / rate)
+            }
+            x = (1103515245 &* x &+ 12345) % 2147483648
+            v += (Double(x) / 2147483648 * 2 - 1) * tc.noiseAmplitude
+            if impulseSamples.contains(n) { v += tc.impulseAmplitude }
+            samples[n] = Float(v)
+        }
+        var det = ToneKeyingDetector(sampleRate: rate)
+        var edges: [ToneKeyingDetector.Edge] = []
+        // Fed in uneven chunks, as a capture callback would.
+        var i = 0
+        let chunks = [1000, 333, 2048, 77]
+        var c = 0
+        while i < total {
+            let len = min(chunks[c % chunks.count], total - i)
+            edges += det.process(Array(samples[i..<(i + len)]))
+            i += len; c += 1
+        }
+        let want = tc.marks.flatMap { [(true, $0[0]), (false, $0[1])] }
+        var ok = edges.count == want.count
+        if ok {
+            for (g, w) in zip(edges, want) where g.isDown != w.0 || abs(g.timeMs - w.1) > tc.toleranceMs { ok = false }
+        }
+        if !ok { print("      ↳ \(tc.name): edges \(edges.map { ($0.isDown ? "↓" : "↑") + String(format: "%.1f", $0.timeMs) })") }
+        check("tone detector finds every edge within \(Int(tc.toleranceMs)) ms: \(tc.name)", ok)
+        let pitchOK = det.pitchHz.map { abs($0 - tc.expectedPitchHz) <= tc.pitchToleranceHz } ?? false
+        check("tone detector locks the pitch: \(tc.name)", pitchOK && det.isLocked)
+    }
+    // A pitch set by hand is locked from the first sample.
+    var manual = ToneKeyingDetector(sampleRate: 8000, pitchHz: 700)
+    var tone700 = [Float](repeating: 0, count: 2400)
+    for n in 800..<1280 { tone700[n] = Float(0.3 * sin(2 * Double.pi * 700 * Double(n) / 8000)) }
+    let manualEdges = manual.process(tone700)
+    check("a manual pitch is locked and hears its tone at once",
+          manual.isLocked && manualEdges.count == 2
+            && abs(manualEdges[0].timeMs - 100) <= 8 && abs(manualEdges[1].timeMs - 160) <= 8)
+} else {
+    check("fixtures/sending-analysis.json loads and decodes", false)
+}
+
 print("\n────────────────────────────")
 if failures == 0 {
     print("✅ All \(checks) checks passed.\n")
