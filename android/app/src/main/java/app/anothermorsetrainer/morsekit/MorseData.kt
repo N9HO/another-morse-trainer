@@ -297,6 +297,69 @@ object MorseData {
             MorseItem(id = "qso-${element.token}", playable = playable, answer = element.meaning, display = element.token)
         }
 
+    // ---- The CWOps CW 77 list (#240) ----
+
+    /** The set's name everywhere it is shown. */
+    const val CW77_NAME = "CW 77"
+
+    /**
+     * Bob Carter WR7Q's recommended playback for this list: 40 WPM with no
+     * Farnsworth stretching. The apps offer it as a one-tap preset.
+     */
+    const val CW77_RECOMMENDED_WPM = 40.0
+
+    /**
+     * The CW 77 list, de-duplicated, in the source file's order (table in
+     * MorseDataCW77.kt; pinned for both ports by `fixtures/cw77.json`).
+     */
+    val cw77: List<TokenMeaning> = cw77Data
+
+    /** The "Your callsign" field's default. Nobody's own call, so it counts as unset. */
+    const val CW77_PLACEHOLDER_CALLSIGN = "W1AW"
+    const val CW77_CALLSIGN_MEANING = "your call sign"
+    const val CW77_NAME_MEANING = "your name"
+
+    /**
+     * The learner's own callsign and name as extra CW 77 items, the rule
+     * pinned by `personal` in fixtures/cw77.json. Each is uppercased and loses
+     * every character with no Morse pattern; a name keeps one space between
+     * its words. An empty or placeholder callsign and an empty name are unset.
+     * Callsign first, then name; either is dropped when it is already a CW 77
+     * token or repeats the one before it. Empty means there is nothing to add,
+     * and the switch is not offered. Twin of Swift's `cw77Personal`.
+     */
+    fun cw77Personal(callsign: String, name: String): List<TokenMeaning> {
+        fun sendable(s: String): String = s.uppercase().filter { MorseCode.pattern(it) != null }
+        val listed = cw77.map { it.token }.toSet()
+        val out = mutableListOf<TokenMeaning>()
+        val call = callsign.split(Regex("\\s+")).joinToString("") { sendable(it) }
+        if (call.isNotEmpty() && call != CW77_PLACEHOLDER_CALLSIGN && call !in listed) {
+            out += TokenMeaning(call, CW77_CALLSIGN_MEANING)
+        }
+        val who = name.split(Regex("\\s+")).map { sendable(it) }.filter { it.isNotEmpty() }.joinToString(" ")
+        if (who.isNotEmpty() && who !in listed && who != out.lastOrNull()?.token) {
+            out += TokenMeaning(who, CW77_NAME_MEANING)
+        }
+        return out
+    }
+
+    /**
+     * Listen & Learn's "CW 77" pool: items whose answer is the meaning, like
+     * [qsoElementItems], with [personal] (from [cw77Personal]) after the 70.
+     * A bracketed token plays the run-together prosign; anything else, text.
+     */
+    fun cw77Items(personal: List<TokenMeaning> = emptyList()): List<MorseItem> =
+        (cw77 + personal).map { MorseItem("cw77-${it.token}", cw77Playable(it.token), it.meaning, it.token) }
+
+    /** Common Words' "CW 77" pool: hear the token, choose the token. */
+    fun cw77WordItems(personal: List<TokenMeaning> = emptyList()): List<MorseItem> =
+        (cw77 + personal).map { MorseItem("cw77-${it.token}", cw77Playable(it.token), it.token, it.token) }
+
+    private fun cw77Playable(token: String): MorseItem.Playable {
+        val prosign = prosigns.firstOrNull { it.name == token }
+        return if (prosign != null) MorseItem.Playable.Pattern(prosign.pattern) else MorseItem.Playable.Text(token)
+    }
+
     /** Prosign mode: hear the run-together prosign, choose its meaning. */
     val prosignItems: List<MorseItem>
         get() = prosigns.map {

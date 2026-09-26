@@ -25,9 +25,10 @@ the iOS app's navy/teal look.
 - **Characters**: Koch-method ladder (A-Z, 0-9) with a user-pinnable
   "Track stage" (characters, pairs, triples, words & call signs)
 - **Common Words**, **Abbreviations**, **Q-Codes**, **Prosigns**: phrase
-  drills, with custom word lists and optional punctuation extras (a mark
-  you turn on joins the Characters drill and the games' full set straight
-  away)
+  drills, with custom word lists, the CWOps CW 77 list as a Common Words
+  pool (with your own callsign and name if you like, and a one-tap 40 WPM,
+  no-Farnsworth preset), and optional punctuation extras (a mark you turn on
+  joins the Characters drill and the games' full set straight away)
 - **Confusion Drill**: targeted review of the pairs you mix up
 - **Head Copy**, **Type It**, **QRQ Speed**: copy in your head with
   auto-repeats and a timed reveal, free-recall typing, and high-speed copy at
@@ -114,7 +115,8 @@ the iOS app's navy/teal look.
   and a noise blanker that keeps QRN static crashes from reaching the decoder
   as marks
 - **Listen & Learn**: hands-free: hear the code, then the spoken answer, over
-  characters, the curated on-air QSO elements (Top 20 or Top 100), words, or
+  characters, the curated on-air QSO elements (Top 20 or Top 100), the
+  CWOps CW 77 list (optionally with your own callsign and name), words, or
   abbreviations and Q-codes, spelled out with the full meaning or as the
   brief meaning alone; keeps playing with the screen locked (foreground
   service), with the current item and the app logo on the lock screen and car

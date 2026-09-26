@@ -36,6 +36,7 @@
     { "id": "headCopyReveal", "category": "practice" },
     { "id": "keyerMode", "category": "keys" },
     { "id": "myCall", "category": "qso" },
+    { "id": "myName", "category": "qso" },
     { "id": "exchange", "category": "qso" },
     { "id": "maxCallers", "category": "qso" },
     { "id": "callerMinSpeed", "category": "qso" },

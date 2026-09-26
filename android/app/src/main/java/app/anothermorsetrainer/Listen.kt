@@ -8,6 +8,7 @@ import app.anothermorsetrainer.morsekit.MorseCode
 import app.anothermorsetrainer.morsekit.MorseData
 import app.anothermorsetrainer.morsekit.MorseItem
 import app.anothermorsetrainer.morsekit.ShuffledDeck
+import app.anothermorsetrainer.morsekit.TokenMeaning
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
 import kotlin.random.Random
@@ -15,12 +16,14 @@ import kotlin.random.Random
 /**
  * What the hands-free "Listen & Learn" mode announces. Entry order is the
  * chip row's order. The two QSO tiers are the curated on-air vocabulary of
- * [MorseData.qsoElements] (#182): the first 20, or all 100.
+ * [MorseData.qsoElements] (#182): the first 20, or all 100. CW 77 is the
+ * CWOps list, [MorseData.cw77] (#240).
  */
 enum class ListenContent(val label: String) {
     CHARACTERS("Characters"),
     QSO_TOP_20("QSO elements · Top 20"),
     QSO_TOP_100("QSO elements · Top 100"),
+    CW_77("CW 77 (CWOps)"),
     WORDS("Words"),
     ABBREVIATIONS("Abbreviations")
 }
@@ -95,22 +98,24 @@ object ListenState {
  * the content changes and otherwise kept for the picker's life.
  */
 class ListenPicker(private val rng: Random = Random.Default) {
-    private var dealtFor: Triple<ListenContent, ListenReadback, List<Char>>? = null
+    private var dealtFor: List<Any>? = null
     private var deck: ShuffledDeck<ListenItem>? = null
 
     /**
      * [activeCharacters] is the Koch ladder's active set, which the Characters
-     * pool follows (as on iOS, #213); a change re-deals the deck.
+     * pool follows (as on iOS, #213); [cw77Personal] is what CW 77 adds of
+     * your callsign and name (#240). A change to either re-deals the deck.
      */
     fun next(
         content: ListenContent,
         readback: ListenReadback = ListenReadback.SPELLED,
-        activeCharacters: List<Char> = MorseCode.kochOrder
+        activeCharacters: List<Char> = MorseCode.kochOrder,
+        cw77Personal: List<TokenMeaning> = emptyList()
     ): ListenItem {
-        val key = Triple(content, readback, activeCharacters)
+        val key = listOf(content, readback, activeCharacters, cw77Personal)
         if (key != dealtFor) {
             dealtFor = key
-            deck = ShuffledDeck(listenPool(content, readback, activeCharacters), rng)
+            deck = ShuffledDeck(listenPool(content, readback, activeCharacters, cw77Personal), rng)
         }
         return deck?.draw()
             ?: ListenItem(MorseItem.Playable.Text("E"), "E", spokenName('E'))
@@ -126,7 +131,8 @@ class ListenPicker(private val rng: Random = Random.Default) {
 fun listenPool(
     content: ListenContent,
     readback: ListenReadback = ListenReadback.SPELLED,
-    activeCharacters: List<Char> = MorseCode.kochOrder
+    activeCharacters: List<Char> = MorseCode.kochOrder,
+    cw77Personal: List<TokenMeaning> = emptyList()
 ): List<ListenItem> = when (content) {
     ListenContent.CHARACTERS -> activeCharacters.ifEmpty { listOf('E') }.map { ch ->
         ListenItem(MorseItem.Playable.Text(ch.toString()), ch.toString(), spokenName(ch))
@@ -144,6 +150,11 @@ fun listenPool(
         MorseData.qsoElementItems(limit).map { item ->
             ListenItem(item.playable, "${item.display} — ${item.answer}", spokenReadback(item.display, item.answer, readback))
         }
+    }
+    // The CWOps list (#240), revealed and spoken like the QSO elements, plus
+    // your own callsign and name when that is on.
+    ListenContent.CW_77 -> MorseData.cw77Items(cw77Personal).map { item ->
+        ListenItem(item.playable, "${item.display} — ${item.answer}", spokenReadback(item.display, item.answer, readback))
     }
 }
 

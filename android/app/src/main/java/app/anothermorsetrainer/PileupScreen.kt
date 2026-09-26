@@ -53,6 +53,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -456,6 +457,18 @@ internal fun PileupOptions() {
         // A call sign is one field, so the IME's action key closes the
         // keyboard rather than offering a newline you cannot use (#40).
         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+        keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
+        modifier = Modifier.fillMaxWidth()
+    )
+
+    // Optional; CW 77 can drill it with the call (#240).
+    PuSectionLabel(stringResource(R.string.pileup_your_name))
+    OutlinedTextField(
+        value = PileupSettings.myName,
+        onValueChange = { PileupSettings.updateMyName(it) },
+        singleLine = true,
+        placeholder = { Text(stringResource(R.string.pileup_your_name_placeholder)) },
+        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters, imeAction = ImeAction.Done),
         keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
         modifier = Modifier.fillMaxWidth()
     )

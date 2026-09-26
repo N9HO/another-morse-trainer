@@ -224,6 +224,8 @@
 
     <!-- PileupScreen -->
     <string name="pileup_your_call">YOUR CALL</string>
+    <string name="pileup_your_name">YOUR NAME</string>
+    <string name="pileup_your_name_placeholder">Optional</string>
     <string name="pileup_exchange">EXCHANGE</string>
     <string name="pileup_the_pileup">THE PILEUP</string>
     <string name="pileup_callers">Callers</string>
@@ -336,6 +338,13 @@
     <string name="decoder_mic_denied">Microphone access is off. Allow it in Settings → Apps → Permissions to decode audio.</string>
 
     <!-- ListenScreen -->
+    <!-- CW 77 options (#240), under Listen & Learn and Common Words -->
+    <string name="cw77_at_recommended">Playing at the recommended 40 WPM, no Farnsworth.</string>
+    <string name="cw77_use_recommended">Use 40 WPM, no Farnsworth</string>
+    <string name="cw77_recommended_footer">Bob Carter WR7Q recommends hearing CW 77 at 40 WPM with no Farnsworth spacing. This changes your speed in Settings.</string>
+    <string name="cw77_personal_unset">Add your callsign or name under Settings › QSO &amp; Pileups, or in Pileup Runner\'s setup (Your call, Your name), to drill them with CW 77.</string>
+    <string name="cw77_include_me">Include my callsign and name</string>
+    <string name="cw77_include_me_adds">Adds %1$s to the set.</string>
     <string name="listen_blurb">Hear the code, then the answer spoken aloud — no tapping. Keeps playing with the screen locked.</string>
     <string name="listen_heard_count">%1$s heard</string>
     <string name="listen_time_left">" · %1$d:%2$02d left"</string>
@@ -440,6 +449,7 @@
     <string name="settings_recognition_target">Recognition target</string>
     <string name="settings_seconds_1dp">%1$.1f s</string>
     <string name="settings_word_pool">Word pool</string>
+    <string name="settings_word_pool_cw77">Use CW 77 (CWOps) instead</string>
     <string name="settings_reveal_answer">Reveal answer</string>
     <string name="settings_my_words">My words</string>
     <string name="settings_use_my_word_list">Use my word list</string>

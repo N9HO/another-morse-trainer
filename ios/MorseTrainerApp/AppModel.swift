@@ -418,7 +418,7 @@ final class AppModel: ObservableObject {
         self.journeyQuiz = JourneyQuiz(scoring: loaded.journeyDrainOnMiss ? .default : .fillOnly,
                                        config: .init(ttrThreshold: loaded.ttrThreshold,
                                                      optionCount: loaded.maxAnswerChoices))
-        self.wordsQuiz = PhraseQuiz(name: "Words", items: MorseData.topWordItems(loaded.wordTier.count))
+        self.wordsQuiz = PhraseQuiz(name: "Words", items: loaded.wordPoolItems)
         self.abbrevQuiz = PhraseQuiz(name: "Abbreviations", items: MorseData.abbreviationItems)
         self.qCodeQuiz = PhraseQuiz(name: "Q-Codes", items: MorseData.qCodeItems)
         self.prosignQuiz = PhraseQuiz(name: "Prosigns", items: MorseData.prosignItems)
@@ -624,11 +624,10 @@ final class AppModel: ObservableObject {
 
     private func applyPhraseConfig(from s: AppSettings) {
         // Rebuild the Words quiz when its source changes: a custom list (issue
-        // #32) takes precedence over the built-in "Top N" tier — but only while
-        // its switch is on and it holds enough words to offer a distractor.
-        let desiredWordItems = s.customWordsActive
-            ? MorseData.customWordItems(s.customWords)
-            : MorseData.topWordItems(s.wordTier.count)
+        // #32) takes precedence over the built-in "Top N" tier or CW 77 — but
+        // only while its switch is on and it holds enough words to offer a
+        // distractor.
+        let desiredWordItems = s.wordPoolItems
         if wordsQuiz.items.map(\.id) != desiredWordItems.map(\.id) {
             wordsQuiz = PhraseQuiz(name: "Words", items: desiredWordItems)
         }
@@ -1805,6 +1804,17 @@ final class AppModel: ObservableObject {
                 ? MorseData.qsoTop20Count : MorseData.qsoTop100Count
             let readback = settings.listenReadback
             return ("qso:\(limit):\(readback.rawValue)", MorseData.qsoElementItems(limit).map { item -> ListenItem in
+                ListenItem(playable: item.playable,
+                           display: "\(item.display) — \(item.answer)",
+                           spoken: spokenReadback(token: item.display, meaning: item.answer, readback))
+            })
+        case .cw77:
+            // The CWOps list (#240), revealed and spoken like the QSO
+            // elements, plus your own callsign and name when that is on.
+            let readback = settings.listenReadback
+            let personal = settings.cw77Personal
+            let key = "cw77:\(readback.rawValue):" + personal.map(\.token).joined(separator: ",")
+            return (key, MorseData.cw77Items(personal: personal).map { item -> ListenItem in
                 ListenItem(playable: item.playable,
                            display: "\(item.display) — \(item.answer)",
                            spoken: spokenReadback(token: item.display, meaning: item.answer, readback))
