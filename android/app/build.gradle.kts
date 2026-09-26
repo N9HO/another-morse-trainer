@@ -124,6 +124,12 @@ dependencies {
     // Licensing section of CLAUDE.md requires. 1.6.0 was the newest release on
     // maven.google.com on 2026-09-08.
     implementation("com.google.android.play:integrity:1.6.0")
+    // Not used by the app directly. play-services-basement (pulled by
+    // integrity above) declares androidx.fragment:fragment:1.1.0 — still so in
+    // basement 18.12.0, the newest on 2026-09-25 — and Play Console's SDK
+    // Index flags 1.1.0 as outdated. Declaring it here lets Gradle resolve the
+    // current stable instead. Drop this once basement's POM moves past 1.2.1.
+    implementation("androidx.fragment:fragment:1.9.1")
     // JVM unit tests: the ported CW decoder core is held to the firmware
     // bench's synthetic-audio checks.
     testImplementation("junit:junit:4.13.2")
