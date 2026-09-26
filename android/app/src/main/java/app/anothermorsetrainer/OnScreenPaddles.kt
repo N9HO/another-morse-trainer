@@ -157,7 +157,7 @@ private fun Paddle(
     mode: PaddleKeyer.Mode,
     driver: PaddleKeyerDriver,
     enabled: Boolean,
-    modifier: Modifier
+    modifier: Modifier = Modifier
 ) {
     val pressed = driver.isHeld(element)
     val isDit = element == PaddleKeyer.Element.DIT
@@ -202,19 +202,20 @@ private fun Paddle(
 
 /**
  * The on-screen key the operator chose in Settings: the screen's own straight
- * key, or the paddles in its place, sized by [paddleModifier]. [onPaddleKey]
- * receives each key edge and when it happened; the straight key keeps calling
- * its screen directly. Mirrors iOS `OnScreenKeySwitch`.
+ * key, or the paddles in its place. [modifier] sizes the paddles; the straight
+ * key sizes itself. [onPaddleKey] receives each key edge and when it happened;
+ * the straight key keeps calling its screen directly. Mirrors iOS
+ * `OnScreenKeySwitch`.
  */
 @Composable
 fun OnScreenKeySwitch(
     onPaddleKey: (Boolean, Long) -> Unit,
-    paddleModifier: Modifier,
+    modifier: Modifier = Modifier,
     enabled: Boolean = true,
     straight: @Composable () -> Unit
 ) {
     if (Settings.onScreenKey == OnScreenKeyType.PADDLES) {
-        OnScreenPaddles(onPaddleKey, paddleModifier, enabled)
+        OnScreenPaddles(onPaddleKey, modifier, enabled)
     } else {
         straight()
     }

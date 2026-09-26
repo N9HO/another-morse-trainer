@@ -334,7 +334,7 @@ fun SendingPracticeScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Un
             // Straight key or paddles, as chosen in Settings (#233).
             OnScreenKeySwitch(
                 onPaddleKey = { down, ms -> keyer.touchKey(down, ms) },
-                paddleModifier = Modifier.fillMaxWidth().height(120.dp),
+                modifier = Modifier.fillMaxWidth().height(120.dp),
                 enabled = !revealed
             ) {
                 Box(

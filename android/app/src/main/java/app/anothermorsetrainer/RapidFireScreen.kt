@@ -596,7 +596,7 @@ private fun RapidFireRun(
                 // Straight key or paddles, as chosen in Settings (#233).
                 OnScreenKeySwitch(
                     onPaddleKey = onPaddleKey,
-                    paddleModifier = Modifier.fillMaxWidth().height(110.dp),
+                    modifier = Modifier.fillMaxWidth().height(110.dp),
                     enabled = revealBox
                 ) {
                     Box(

@@ -265,7 +265,7 @@ fun RepeaterScreen(onBack: () -> Unit) {
                 // Straight key or paddles, as chosen in Settings (#233).
                 OnScreenKeySwitch(
                     onPaddleKey = { down, ms -> repeater.touchKey(down, ms) },
-                    paddleModifier = Modifier.fillMaxWidth().height(110.dp)
+                    modifier = Modifier.fillMaxWidth().height(110.dp)
                 ) {
                     Box(
                         modifier = Modifier
