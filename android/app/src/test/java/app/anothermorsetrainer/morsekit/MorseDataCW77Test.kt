@@ -42,7 +42,7 @@ class MorseDataCW77Test {
         val prosigns = strings(fixture.getJSONArray("prosigns")).toSet()
         assertEquals(75, source.size)
         val derived = source.distinct().map { if (it in prosigns) "<$it>" else it }
-        assertEquals(70, fixture.getInt("uniqueCount"))
+        assertEquals(71, fixture.getInt("uniqueCount"))
         assertEquals(fixture.getInt("uniqueCount"), derived.size)
         assertEquals(derived, fixtureItems.map { it.token })
     }

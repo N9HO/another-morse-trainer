@@ -47,7 +47,7 @@ class ListenReadbackTest {
     @Test
     fun `cw 77 is the seventy items, then your callsign and name when included`() {
         val plain = listenPool(ListenContent.CW_77, ListenReadback.SPELLED)
-        assertEquals(70, plain.size)
+        assertEquals(71, plain.size)
         assertEquals("<BT> — separator / new section", plain.first { it.display.startsWith("<BT> — ") }.display)
         assertEquals("h w ?. how do you copy?", plain.first { it.display.startsWith("HW? — ") }.spoken)
         val mine = MorseData.cw77Personal("n9ho", "Justin")
