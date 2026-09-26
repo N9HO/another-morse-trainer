@@ -1,0 +1,406 @@
+{
+ "derivation": {
+  "about": "Spec for SendingAnalysis (Swift) / SendingAnalysis.kt and ToneKeyingDetector on both ports. Inputs are key-down/key-up schedules built from the 1:3 / 1:3:7 standard; every expected value below was worked by hand from these rules, not captured from either port.",
+  "cleanup": "Sort marks by down time; drop marks with up <= down. Merge a mark into the previous one when the gap between them is under glitchMs (5 ms); then drop marks shorter than glitchMs.",
+  "classify": "Durations d. If max/min < 1.8, every mark is one kind: dah when d >= 2 * (1200 / characterWpm), else dit. Otherwise two-means on ln(d): centres start at ln(min) and ln(max); a mark is a dah when ln(d) >= the centres' midpoint; recompute centres as the mean ln of each class; repeat until no mark changes class (at most 20 rounds). If exp(dahCentre - ditCentre) < 1.8 at the end, fall back to the one-kind rule.",
+  "unit": "unit = mean dit duration (ms); mean dah / 3 when there are no dits.",
+  "farnsworth": "k = spacingUnit / unit of MorseTiming(characterWpm, effectiveWpm) (the ARRL formula already in fixtures/timing.json); k = 1 without Farnsworth.",
+  "gaps": "gap = next down - this up. gap / unit < 2 is inside a character (element gap, reported in units). Otherwise spacing = gap / (unit * k): < 5 ends a character (character gap), >= 5 ends a word (word gap). Character and word gaps are reported in these spacing units.",
+  "decode": "Each character's dits and dahs ('.'/'-') look up MorseCode; an unknown pattern reads as '#'. Words joined by one space.",
+  "histograms": "Bin index = number of edges <= value. charGapBinEdges [1.75, 2.25, 2.75, 3.25, 3.75, 4.25] (labels <2, 2, 2.5, 3, 3.5, 4, 4.5+). wordGapBinEdges [5.5, 6.5, 7.5, 8.5, 9.5, 10.5] (labels 5, 6, 7, 8, 9, 10, 11+).",
+  "speed": "characterWpm = 1200 / unit. effectiveWpm = 1200 * U / (last up - first down), where U is the standard length of what was sent: 1 per dit, 3 per dah, 1 per element gap, 3 per character gap, 7 per word gap (no trailing gap).",
+  "target": "Uppercase; any whitespace run becomes one space; characters with no Morse pattern are dropped; trimmed.",
+  "alignment": "Levenshtein over target and decoded text, spaces included as tokens. Match 0, substitution 1, missing (target token not sent) 1, extra (sent token not in target) 1; a space never substitutes for a character. Backtrace from the end preferring diagonal, then missing, then extra. Codes: '=X' match, '~XY' X sent as Y, '-X' missing (space = a word break sent too short), '+Y' extra (space = a word split). accuracy = matched non-space target characters / non-space target characters.",
+  "feedback": "Checked in this order; a code appears when its rule holds. slowerThanTarget: key type is not keyer, marks >= 5 and characterWpm < 0.85 * target. fasterThanTarget: key type is not keyer, marks >= 5 and characterWpm > 1.15 * target. dahsShort / dahsLong: key type is not keyer, dits >= 3 and dahs >= 3, mean dah / mean dit < 2.5 / > 3.5. ditsUneven: straight or cootie, dits >= 5, sd/mean > 0.25 (population sd). dahsUneven: not keyer, dahs >= 5, sd/mean > 0.25. elementGapsShort / Long: not keyer, element gaps >= 3, mean < 0.7 / > 1.5. charGapsShort / Long: character gaps >= 3, mean < 2.5 / > 4.0. charGapsUneven: character gaps >= 5, sd/mean > 0.3. wordGapsShort / Long: word gaps >= 2, mean < 6 / > 9. wordsRunTogether: a missing space. wordsSplit: an extra space. perfectCopy: every alignment step a match. timingOnTarget: marks >= 5 and none of the codes before wordsRunTogether.",
+  "record": "SendingRecord.record: every non-space target token is an attempt at that character, missed unless matched. Inside each target word, every adjacent pair is an attempt at the pair, missed unless both halves matched. A substitution whose sent character is not '#' adds a mix-up target->sent. problemCharacters/problemPairs: attempts >= minAttempts and misses > 0, worst miss rate first, then most misses, then key order."
+ },
+ "charGapBinEdges": [1.75, 2.25, 2.75, 3.25, 3.75, 4.25],
+ "wordGapBinEdges": [5.5, 6.5, 7.5, 8.5, 9.5, 10.5],
+ "tolerance": 0.001,
+ "cases": [
+  {
+   "name": "perfect PARIS PARIS at 20 WPM",
+   "target": "Paris  paris",
+   "keyType": "straight",
+   "characterWpm": 20,
+   "effectiveWpm": 20,
+   "marks": [[0.0, 60.0], [120.0, 300.0], [360.0, 540.0], [600.0, 660.0], [840.0, 900.0], [960.0, 1140.0], [1320.0, 1380.0], [1440.0, 1620.0], [1680.0, 1740.0], [1920.0, 1980.0], [2040.0, 2100.0], [2280.0, 2340.0], [2400.0, 2460.0], [2520.0, 2580.0], [3000.0, 3060.0], [3120.0, 3300.0], [3360.0, 3540.0], [3600.0, 3660.0], [3840.0, 3900.0], [3960.0, 4140.0], [4320.0, 4380.0], [4440.0, 4620.0], [4680.0, 4740.0], [4920.0, 4980.0], [5040.0, 5100.0], [5280.0, 5340.0], [5400.0, 5460.0], [5520.0, 5580.0]],
+   "expected": {
+    "decoded": "PARIS PARIS",
+    "correct": 10,
+    "targetCharacters": 10,
+    "accuracy": 1.0,
+    "unitMs": 60,
+    "characterWpm": 20,
+    "effectiveWpm": 20,
+    "dits": {
+     "count": 20,
+     "mean": 60,
+     "sd": 0
+    },
+    "dahs": {
+     "count": 8,
+     "mean": 180,
+     "sd": 0
+    },
+    "elementGaps": {
+     "count": 18,
+     "mean": 1.0
+    },
+    "characterGaps": {
+     "count": 8,
+     "mean": 3.0
+    },
+    "wordGaps": {
+     "count": 1,
+     "mean": 7.0
+    },
+    "characterGapHistogram": [0, 0, 0, 8, 0, 0, 0],
+    "wordGapHistogram": [0, 0, 1, 0, 0, 0, 0],
+    "feedback": ["perfectCopy", "timingOnTarget"]
+   }
+  },
+  {
+   "name": "character gaps stretched to 4.5 units",
+   "target": "PARIS PARIS",
+   "keyType": "straight",
+   "characterWpm": 20,
+   "effectiveWpm": 20,
+   "marks": [[0.0, 60.0], [120.0, 300.0], [360.0, 540.0], [600.0, 660.0], [930.0, 990.0], [1050.0, 1230.0], [1500.0, 1560.0], [1620.0, 1800.0], [1860.0, 1920.0], [2190.0, 2250.0], [2310.0, 2370.0], [2640.0, 2700.0], [2760.0, 2820.0], [2880.0, 2940.0], [3360.0, 3420.0], [3480.0, 3660.0], [3720.0, 3900.0], [3960.0, 4020.0], [4290.0, 4350.0], [4410.0, 4590.0], [4860.0, 4920.0], [4980.0, 5160.0], [5220.0, 5280.0], [5550.0, 5610.0], [5670.0, 5730.0], [6000.0, 6060.0], [6120.0, 6180.0], [6240.0, 6300.0]],
+   "expected": {
+    "decoded": "PARIS PARIS",
+    "correct": 10,
+    "targetCharacters": 10,
+    "accuracy": 1.0,
+    "unitMs": 60,
+    "characterWpm": 20,
+    "effectiveWpm": 17.714286,
+    "characterGaps": {
+     "count": 8,
+     "mean": 4.5
+    },
+    "wordGaps": {
+     "count": 1,
+     "mean": 7.0
+    },
+    "characterGapHistogram": [0, 0, 0, 0, 0, 0, 8],
+    "wordGapHistogram": [0, 0, 1, 0, 0, 0, 0],
+    "feedback": ["charGapsLong", "perfectCopy"]
+   }
+  },
+  {
+   "name": "dahs two units long",
+   "target": "PARIS PARIS",
+   "keyType": "straight",
+   "characterWpm": 20,
+   "effectiveWpm": 20,
+   "marks": [[0.0, 60.0], [120.0, 240.0], [300.0, 420.0], [480.0, 540.0], [720.0, 780.0], [840.0, 960.0], [1140.0, 1200.0], [1260.0, 1380.0], [1440.0, 1500.0], [1680.0, 1740.0], [1800.0, 1860.0], [2040.0, 2100.0], [2160.0, 2220.0], [2280.0, 2340.0], [2760.0, 2820.0], [2880.0, 3000.0], [3060.0, 3180.0], [3240.0, 3300.0], [3480.0, 3540.0], [3600.0, 3720.0], [3900.0, 3960.0], [4020.0, 4140.0], [4200.0, 4260.0], [4440.0, 4500.0], [4560.0, 4620.0], [4800.0, 4860.0], [4920.0, 4980.0], [5040.0, 5100.0]],
+   "expected": {
+    "decoded": "PARIS PARIS",
+    "correct": 10,
+    "targetCharacters": 10,
+    "accuracy": 1.0,
+    "unitMs": 60,
+    "characterWpm": 20,
+    "effectiveWpm": 21.882353,
+    "dahDitRatio": 2.0,
+    "dits": {
+     "count": 20,
+     "mean": 60,
+     "sd": 0
+    },
+    "dahs": {
+     "count": 8,
+     "mean": 120,
+     "sd": 0
+    },
+    "feedback": ["dahsShort", "perfectCopy"]
+   }
+  },
+  {
+   "name": "the same short dahs through a keyer are not the operator's",
+   "target": "PARIS PARIS",
+   "keyType": "keyer",
+   "characterWpm": 20,
+   "effectiveWpm": 20,
+   "marks": [[0.0, 60.0], [120.0, 240.0], [300.0, 420.0], [480.0, 540.0], [720.0, 780.0], [840.0, 960.0], [1140.0, 1200.0], [1260.0, 1380.0], [1440.0, 1500.0], [1680.0, 1740.0], [1800.0, 1860.0], [2040.0, 2100.0], [2160.0, 2220.0], [2280.0, 2340.0], [2760.0, 2820.0], [2880.0, 3000.0], [3060.0, 3180.0], [3240.0, 3300.0], [3480.0, 3540.0], [3600.0, 3720.0], [3900.0, 3960.0], [4020.0, 4140.0], [4200.0, 4260.0], [4440.0, 4500.0], [4560.0, 4620.0], [4800.0, 4860.0], [4920.0, 4980.0], [5040.0, 5100.0]],
+   "expected": {
+    "decoded": "PARIS PARIS",
+    "dahDitRatio": 2.0,
+    "feedback": ["perfectCopy", "timingOnTarget"]
+   }
+  },
+  {
+   "name": "an 8 sent as a 7",
+   "target": "HELLO 88",
+   "keyType": "straight",
+   "characterWpm": 20,
+   "effectiveWpm": 20,
+   "marks": [[0.0, 60.0], [120.0, 180.0], [240.0, 300.0], [360.0, 420.0], [600.0, 660.0], [840.0, 900.0], [960.0, 1140.0], [1200.0, 1260.0], [1320.0, 1380.0], [1560.0, 1620.0], [1680.0, 1860.0], [1920.0, 1980.0], [2040.0, 2100.0], [2280.0, 2460.0], [2520.0, 2700.0], [2760.0, 2940.0], [3360.0, 3540.0], [3600.0, 3780.0], [3840.0, 4020.0], [4080.0, 4140.0], [4200.0, 4260.0], [4440.0, 4620.0], [4680.0, 4860.0], [4920.0, 4980.0], [5040.0, 5100.0], [5160.0, 5220.0]],
+   "expected": {
+    "decoded": "HELLO 87",
+    "correct": 6,
+    "targetCharacters": 7,
+    "accuracy": 0.857143,
+    "unitMs": 60,
+    "characterWpm": 20,
+    "effectiveWpm": 20,
+    "dits": {
+     "count": 16,
+     "mean": 60,
+     "sd": 0
+    },
+    "dahs": {
+     "count": 10,
+     "mean": 180,
+     "sd": 0
+    },
+    "elementGaps": {
+     "count": 19,
+     "mean": 1.0
+    },
+    "characterGaps": {
+     "count": 5,
+     "mean": 3.0
+    },
+    "wordGaps": {
+     "count": 1,
+     "mean": 7.0
+    },
+    "alignment": ["=H", "=E", "=L", "=L", "=O", "= ", "=8", "~87"],
+    "feedback": ["timingOnTarget"]
+   }
+  },
+  {
+   "name": "a word break sent as a character gap, and an extra 9",
+   "target": "CQ DE K9",
+   "keyType": "straight",
+   "characterWpm": 20,
+   "effectiveWpm": 20,
+   "marks": [[0.0, 180.0], [240.0, 300.0], [360.0, 540.0], [600.0, 660.0], [840.0, 1020.0], [1080.0, 1260.0], [1320.0, 1380.0], [1440.0, 1620.0], [1800.0, 1980.0], [2040.0, 2100.0], [2160.0, 2220.0], [2400.0, 2460.0], [2880.0, 3060.0], [3120.0, 3180.0], [3240.0, 3420.0], [3600.0, 3780.0], [3840.0, 4020.0], [4080.0, 4260.0], [4320.0, 4500.0], [4560.0, 4620.0], [4800.0, 4980.0], [5040.0, 5220.0], [5280.0, 5460.0], [5520.0, 5700.0], [5760.0, 5820.0]],
+   "expected": {
+    "decoded": "CQDE K99",
+    "correct": 6,
+    "targetCharacters": 6,
+    "accuracy": 1.0,
+    "effectiveWpm": 20,
+    "dits": {
+     "count": 9,
+     "mean": 60,
+     "sd": 0
+    },
+    "dahs": {
+     "count": 16,
+     "mean": 180,
+     "sd": 0
+    },
+    "elementGaps": {
+     "count": 18,
+     "mean": 1.0
+    },
+    "characterGaps": {
+     "count": 5,
+     "mean": 3.0
+    },
+    "wordGaps": {
+     "count": 1,
+     "mean": 7.0
+    },
+    "alignment": ["=C", "=Q", "- ", "=D", "=E", "= ", "=K", "+9", "=9"],
+    "missingWordBreaks": 1,
+    "extraWordBreaks": 0,
+    "feedback": ["wordsRunTogether", "timingOnTarget"]
+   }
+  },
+  {
+   "name": "bug: machine dits of 50 ms, hand dahs averaging 182.5 ms",
+   "target": "PARIS PARIS",
+   "keyType": "bug",
+   "characterWpm": 20,
+   "effectiveWpm": 20,
+   "marks": [[0.0, 50.0], [100.0, 270.0], [320.0, 520.0], [570.0, 620.0], [770.0, 820.0], [870.0, 1060.0], [1210.0, 1260.0], [1310.0, 1470.0], [1520.0, 1570.0], [1720.0, 1770.0], [1820.0, 1870.0], [2020.0, 2070.0], [2120.0, 2170.0], [2220.0, 2270.0], [2620.0, 2670.0], [2720.0, 2930.0], [2980.0, 3160.0], [3210.0, 3260.0], [3410.0, 3460.0], [3510.0, 3660.0], [3810.0, 3860.0], [3910.0, 4110.0], [4160.0, 4210.0], [4360.0, 4410.0], [4460.0, 4510.0], [4660.0, 4710.0], [4760.0, 4810.0], [4860.0, 4910.0]],
+   "expected": {
+    "decoded": "PARIS PARIS",
+    "correct": 10,
+    "targetCharacters": 10,
+    "accuracy": 1.0,
+    "unitMs": 50,
+    "characterWpm": 24,
+    "effectiveWpm": 22.729124,
+    "dahDitRatio": 3.65,
+    "dits": {
+     "count": 20,
+     "mean": 50,
+     "sd": 0
+    },
+    "dahs": {
+     "count": 8,
+     "mean": 182.5,
+     "sd": 19.843135
+    },
+    "elementGaps": {
+     "count": 18,
+     "mean": 1.0
+    },
+    "characterGaps": {
+     "count": 8,
+     "mean": 3.0
+    },
+    "wordGaps": {
+     "count": 1,
+     "mean": 7.0
+    },
+    "feedback": ["fasterThanTarget", "dahsLong", "perfectCopy"]
+   }
+  },
+  {
+   "name": "the bug's timing through a keyer: speed and dahs are the keyer's",
+   "target": "PARIS PARIS",
+   "keyType": "keyer",
+   "characterWpm": 20,
+   "effectiveWpm": 20,
+   "marks": [[0.0, 50.0], [100.0, 270.0], [320.0, 520.0], [570.0, 620.0], [770.0, 820.0], [870.0, 1060.0], [1210.0, 1260.0], [1310.0, 1470.0], [1520.0, 1570.0], [1720.0, 1770.0], [1820.0, 1870.0], [2020.0, 2070.0], [2120.0, 2170.0], [2220.0, 2270.0], [2620.0, 2670.0], [2720.0, 2930.0], [2980.0, 3160.0], [3210.0, 3260.0], [3410.0, 3460.0], [3510.0, 3660.0], [3810.0, 3860.0], [3910.0, 4110.0], [4160.0, 4210.0], [4360.0, 4410.0], [4460.0, 4510.0], [4660.0, 4710.0], [4760.0, 4810.0], [4860.0, 4910.0]],
+   "expected": {
+    "characterWpm": 24,
+    "dahDitRatio": 3.65,
+    "feedback": ["perfectCopy", "timingOnTarget"]
+   }
+  },
+  {
+   "name": "Farnsworth 18/10 sent with Farnsworth spacing",
+   "target": "PARIS PARIS",
+   "keyType": "straight",
+   "characterWpm": 18,
+   "effectiveWpm": 10,
+   "marks": [[0.0, 66.667], [133.333, 333.333], [400.0, 600.0], [666.667, 733.333], [1354.386, 1421.053], [1487.719, 1687.719], [2308.772, 2375.439], [2442.105, 2642.105], [2708.772, 2775.439], [3396.491, 3463.158], [3529.825, 3596.491], [4217.544, 4284.211], [4350.877, 4417.544], [4484.211, 4550.877], [6000.0, 6066.667], [6133.333, 6333.333], [6400.0, 6600.0], [6666.667, 6733.333], [7354.386, 7421.053], [7487.719, 7687.719], [8308.772, 8375.439], [8442.105, 8642.105], [8708.772, 8775.439], [9396.491, 9463.158], [9529.825, 9596.491], [10217.544, 10284.211], [10350.877, 10417.544], [10484.211, 10550.877]],
+   "expected": {
+    "decoded": "PARIS PARIS",
+    "correct": 10,
+    "targetCharacters": 10,
+    "accuracy": 1.0,
+    "unitMs": 66.666667,
+    "characterWpm": 18,
+    "effectiveWpm": 10.57732,
+    "farnsworthFactor": 3.105263,
+    "elementGaps": {
+     "count": 18,
+     "mean": 1.0
+    },
+    "characterGaps": {
+     "count": 8,
+     "mean": 3.0
+    },
+    "wordGaps": {
+     "count": 1,
+     "mean": 7.0
+    },
+    "characterGapHistogram": [0, 0, 0, 8, 0, 0, 0],
+    "wordGapHistogram": [0, 0, 1, 0, 0, 0, 0],
+    "feedback": ["perfectCopy", "timingOnTarget"]
+   }
+  },
+  {
+   "name": "contact bounce inside one dah",
+   "target": "t",
+   "keyType": "straight",
+   "characterWpm": 20,
+   "effectiveWpm": 20,
+   "marks": [[0, 80], [82, 180]],
+   "expected": {
+    "decoded": "T",
+    "correct": 1,
+    "targetCharacters": 1,
+    "accuracy": 1.0,
+    "marks": 1,
+    "unitMs": 60,
+    "characterWpm": 20,
+    "effectiveWpm": 20,
+    "dits": {
+     "count": 0
+    },
+    "dahs": {
+     "count": 1,
+     "mean": 180,
+     "sd": 0
+    },
+    "feedback": ["perfectCopy"]
+   }
+  }
+ ],
+ "record": {
+  "about": "Record the '8 sent as a 7' case, then the 'word break' case, into a fresh SendingRecord.",
+  "cases": ["an 8 sent as a 7", "a word break sent as a character gap, and an extra 9"],
+  "characters": {
+   "H": [1, 0],
+   "E": [2, 0],
+   "L": [2, 0],
+   "O": [1, 0],
+   "8": [2, 1],
+   "C": [1, 0],
+   "Q": [1, 0],
+   "D": [1, 0],
+   "K": [1, 0],
+   "9": [1, 0]
+  },
+  "pairs": {
+   "HE": [1, 0],
+   "EL": [1, 0],
+   "LL": [1, 0],
+   "LO": [1, 0],
+   "88": [1, 1],
+   "CQ": [1, 0],
+   "DE": [1, 0],
+   "K9": [1, 0]
+  },
+  "mixups": [
+   {
+    "target": "8",
+    "sent": "7",
+    "count": 1
+   }
+  ],
+  "attempts": 2,
+  "problemCharacters": ["8"],
+  "problemPairs": ["88"]
+ },
+ "toneDetector": {
+  "derivation": {
+   "blocks": "blockSamples = max(16, round(sampleRate * 0.004)). Per block, Goertzel magnitude 2*sqrt(s1^2 + s2^2 - c*s1*s2)/N (sine amplitude) at 300..1200 Hz in 50 Hz steps (or the locked / manual pitch only); level = the largest.",
+   "tracking": "First block seeds floor and peak. While up: floor += (level - floor) * (0.5 if level < floor else 0.002). While down: peak = max(peak, level). Every block: peak = max(floor, peak - (peak - floor) * 0.003).",
+   "thresholds": "on when level > max(floor*snr, 0.002, floor + 0.5*(peak-floor)); stays on while level >= max(floor*snr*0.7, 0.0015, floor + 0.35*(peak-floor)). snr = 4.",
+   "debounce": "A change must hold two consecutive blocks; the edge is stamped at the start of the first (block index * blockSamples / sampleRate). On confirming a key-down, peak = max(peak, level).",
+   "pitch": "While unlocked, each block with the key down votes for its loudest candidate; the first to 12 votes is locked.",
+   "signal": "Test signal: amplitude * sin(2*pi*pitch*n/rate) during each mark (n the absolute sample index), plus noise: x = (1103515245*x + 12345) mod 2^31 from seed 1, sample += (x / 2^31 * 2 - 1) * noiseAmplitude, and a single-sample impulse of +impulseAmplitude at each listed time."
+  },
+  "cases": [
+   {
+    "name": "700 Hz, loud, with a click in a gap",
+    "sampleRate": 8000,
+    "pitchHz": 700,
+    "amplitude": 0.3,
+    "noiseAmplitude": 0.02,
+    "impulses": [190],
+    "impulseAmplitude": 0.9,
+    "marks": [[101, 163], [222, 401], [463, 521], [581, 642]],
+    "durationMs": 760,
+    "toleranceMs": 8,
+    "expectedPitchHz": 700,
+    "pitchToleranceHz": 50
+   },
+   {
+    "name": "550 Hz, quiet, at 48 kHz",
+    "sampleRate": 48000,
+    "pitchHz": 550,
+    "amplitude": 0.05,
+    "noiseAmplitude": 0.004,
+    "impulses": [],
+    "impulseAmplitude": 0,
+    "marks": [[61, 98], [133, 241], [277, 314], [421, 457], [493, 602]],
+    "durationMs": 700,
+    "toleranceMs": 8,
+    "expectedPitchHz": 550,
+    "pitchToleranceHz": 50
+   }
+  ]
+ }
+}

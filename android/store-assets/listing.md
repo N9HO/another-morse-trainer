@@ -50,6 +50,9 @@ Send, decode and look up
 • Sending Practice: key it back on a touch key or a hardware MIDI key, with
   live decode of what you actually sent.
 • Sending Drills: printable practice sheets built from what you've studied.
+• Sending Analyzer: send a text on a straight key, bug, cootie or paddles
+  (touch key, Vail adapter or MIDI key, or a tone the microphone hears) and
+  see every error, your character and word spacing, and what to fix.
 • CW Decoder: point the microphone at a rig or a WebSDR and read received
   Morse as text.
 • Reference: a tap-to-hear chart of prosigns, Q-codes, abbreviations, ham

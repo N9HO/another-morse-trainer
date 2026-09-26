@@ -22,8 +22,8 @@ third party, and is deleted when you uninstall the app.
 
 ## Microphone
 
-The app requests microphone access for two optional features, and uses it only
-while you are actively using one of them:
+The app requests microphone access for three optional features, and uses it
+only while you are actively using one of them:
 
 - **Voice answers**, which let you speak your answer instead of tapping it. Your
   speech is transcribed using Android's built-in speech recognition. Depending
@@ -33,6 +33,11 @@ while you are actively using one of them:
 - **CW Decoder**, which listens to received Morse code (from a radio speaker, for
   instance) and decodes it to text. This runs entirely on your device: the
   audio is analysed in memory and is not sent anywhere.
+- **Sending Analyzer**, when you choose the microphone as its input: it listens
+  for the tone of a key, keyer or radio you are sending on and times each
+  key-down and key-up. This also runs entirely on your device: the audio is
+  analysed in memory and is not sent anywhere. Only the timing results are
+  kept, on your device.
 
 The app itself does **not** record, save, or transmit any audio.
 

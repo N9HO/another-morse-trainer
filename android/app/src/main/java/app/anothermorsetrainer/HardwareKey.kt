@@ -63,7 +63,11 @@ class HardwareKey(context: Context) {
      * The adapter is woken with the user's current sidetone and speed so its
      * own piezo and internal keyer match what the app is playing.
      */
-    fun start(onKey: (Boolean) -> Unit, onConnected: (String?) -> Unit) {
+    fun start(
+        onKey: (Boolean) -> Unit,
+        onConnected: (String?) -> Unit,
+        onKeyTimed: ((isDown: Boolean, atNanos: Long) -> Unit)? = null
+    ) {
         output.configure(
             keyerMode = storedKeyerMode,
             wpm = Settings.characterWpm.roundToInt(),
@@ -78,6 +82,7 @@ class HardwareKey(context: Context) {
         // answer to "what is keying?" and are deliberately dropped. The name in
         // the UI comes from the input side, which is the half actually keying.
         output.start { }
+        input.onKeyTimed = onKeyTimed
         input.start(onKey = onKey, onConnected = onConnected)
     }
 

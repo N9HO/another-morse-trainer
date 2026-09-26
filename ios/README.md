@@ -121,6 +121,15 @@ testers, bug reports and feature chat live on
   ladder, with live decode, always-on replay, and a connected-MIDI-key
   readout; plus printable drill sheets built from what you've studied (even,
   personalized, or numbers & punctuation)
+- **Sending Analyzer**: send a pangram, call signs, words, your studied
+  groups or your own text on a straight key, bug, cootie or paddles, through
+  the on-screen key (straight or paddles, per Settings; the on-screen paddles
+  are judged as paddles), a Vail adapter or other MIDI key, or the microphone
+  (an oscillator, keyer, rig or signal generator it can hear); get the copy
+  lined up against the text with every error marked, character- and
+  word-spacing histograms against 3 and 7 units (Farnsworth-aware), dit and
+  dah lengths and their ratio, achieved speed, plain-English feedback judged
+  per key type, and a running record of problem characters, pairs and mix-ups
 - **Vail repeater**: live CW over the [Vail](https://vail.woozle.org) network
   with a server picker and private-channel option, plus Vail Adapter support:
   MIDI key input *and* output (keyer modes, speed, sidetone, RX piezo buzz),

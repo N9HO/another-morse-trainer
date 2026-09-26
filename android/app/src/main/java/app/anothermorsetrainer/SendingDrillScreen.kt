@@ -172,7 +172,7 @@ fun SendingDrillScreen(onBack: () -> Unit) {
  * with recorded recognition data. (iOS reads the live engine's active ladder;
  * Android's engines are per-session, so the persisted stats stand in.)
  */
-private fun studiedCharacters(): List<Char> {
+internal fun studiedCharacters(): List<Char> {
     val seed = Settings.seedCharacters()
     val drilled = Stats.charStats.keys.mapNotNull { it.firstOrNull() }
     return (seed + drilled).distinct()

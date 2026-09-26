@@ -25,6 +25,7 @@ struct IntroView: View {
     @State private var showingStartHere = false
     @State private var showingDailyDit = false
     @State private var showingSendingDrill = false
+    @State private var showingSendingAnalyzer = false
     @State private var showingCWDecoder = false
     @State private var showingRepeater = false
     @StateObject private var repeater = RepeaterModel()
@@ -89,6 +90,12 @@ struct IntroView: View {
         }
         .sheet(isPresented: $showingSendingDrill) {
             SendingDrillView().environmentObject(model)
+        }
+        .sheet(isPresented: $showingSendingAnalyzer) {
+            SendingAnalyzerView(toneHz: model.settings.toneFrequency,
+                                keyerWpm: model.settings.wpm,
+                                studied: model.studiedCharacters)
+                .environmentObject(model)
         }
         .sheet(isPresented: $showingCWDecoder) {
             CWDecoderView().environmentObject(model)
@@ -164,6 +171,13 @@ struct IntroView: View {
                     .padding(8)
             }
             .accessibilityLabel("Sending drills — printable practice sheets")
+            Button { showingSendingAnalyzer = true } label: {
+                Image(systemName: "gauge.with.needle")
+                    .font(.title3)
+                    .foregroundStyle(Theme.teal)
+                    .padding(8)
+            }
+            .accessibilityLabel("Sending analyzer — send a text and see your accuracy and spacing")
             Button { showingStats = true } label: {
                 Image(systemName: "chart.bar")
                     .font(.title3)
