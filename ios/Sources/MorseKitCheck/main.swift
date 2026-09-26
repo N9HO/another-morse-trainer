@@ -5996,6 +5996,119 @@ if let fx = loadSettingsCatalogFixture() {
     check("fixtures/settings-catalog.json loads and decodes", false)
 }
 
+// ---------------------------------------------------------------------------
+// Keyboard-entry answers (#232), against fixtures/answer-entry.json — read by
+// this harness and by android AnswerEntryTest.
+struct AnswerEntryFixture: Decodable {
+    struct LadderCase: Decodable {
+        let name: String
+        let events: String
+        let tier: String
+        let promotions: [[PromotionPart]]
+    }
+    enum PromotionPart: Decodable, Equatable {
+        case index(Int), tier(String)
+        init(from decoder: Decoder) throws {
+            let c = try decoder.singleValueContainer()
+            if let i = try? c.decode(Int.self) { self = .index(i) } else { self = .tier(try c.decode(String.self)) }
+        }
+    }
+    struct GradeCase: Decodable {
+        let target: String
+        let answer: String
+        let correct: Bool
+        let confusedWith: String?
+    }
+    let window: Int
+    let requiredCorrect: Int
+    let ladder: [LadderCase]
+    let normalize: [String: String]
+    let gradeCharacter: [GradeCase]
+}
+func loadAnswerEntryFixture() -> AnswerEntryFixture? {
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent()
+        .deletingLastPathComponent().deletingLastPathComponent()
+    guard let data = try? Data(contentsOf: root.appendingPathComponent("fixtures/answer-entry.json")) else { return nil }
+    return try? JSONDecoder().decode(AnswerEntryFixture.self, from: data)
+}
+print("\nAnswer entry (fixtures/answer-entry.json):")
+if let fx = loadAnswerEntryFixture() {
+    check("window is \(fx.window)", AnswerEntryLadder.window == fx.window)
+    check("\(fx.requiredCorrect) correct clear a rung", AnswerEntryLadder.requiredCorrect == fx.requiredCorrect)
+    check("fixture has ladder cases", !fx.ladder.isEmpty)
+    for c in fx.ladder {
+        var ladder = AnswerEntryLadder()
+        var promotions: [[AnswerEntryFixture.PromotionPart]] = []
+        for (i, e) in c.events.enumerated() {
+            switch e {
+            case "L": ladder.restartLevel()
+            default:
+                if let up = ladder.record(correct: e == "c") { promotions.append([.index(i), .tier(up.rawValue)]) }
+            }
+        }
+        check("ladder: \(c.name)", ladder.tier.rawValue == c.tier && promotions == c.promotions)
+    }
+    check("fixture has normalize cases", !fx.normalize.isEmpty)
+    for (typed, expected) in fx.normalize.sorted(by: { $0.key < $1.key }) {
+        check("normalize \(typed.debugDescription) → \(expected.debugDescription)", TypedAnswer.normalize(typed) == expected)
+    }
+    check("fixture has grading cases", !fx.gradeCharacter.isEmpty)
+    for g in fx.gradeCharacter {
+        let got = TypedAnswer.gradeCharacter(g.answer, target: g.target.first!)
+        check("\(g.answer.debugDescription) for \(g.target): correct \(g.correct), confused with \(g.confusedWith ?? "nothing")",
+              got.correct == g.correct && got.confusedWith.map(String.init) == g.confusedWith)
+    }
+} else {
+    check("fixtures/answer-entry.json loads and decodes", false)
+}
+
+print("\nAnswer entry — the engines grade typed answers:")
+do {
+    // The Koch engine: a blank or two-character answer is a miss for the
+    // target with no confusion partner; a single wrong character is a confusion.
+    let engine = TrainerEngine(seedCount: 2, rng: SeededRNG(seed: 7))
+    for (answer, label) in [("", "a blank"), ("KM", "two characters"), ("%", "a symbol with no code")] {
+        let d = engine.nextDrill()
+        let target = d.correct.first!
+        let before = engine.stats[target]?.attempts.count ?? 0
+        let outcome = engine.record(choice: answer, ttr: 0.4)
+        check("\(label) is a miss", !outcome.correct)
+        check("… counted against \(target)", (engine.stats[target]?.attempts.count ?? 0) == before + 1)
+        check("… with no confusion recorded", engine.confusions.isEmpty)
+    }
+    let d = engine.nextDrill()
+    let target = d.correct.first!
+    let other: Character = target == "K" ? "M" : "K"
+    _ = engine.record(choice: String(other).lowercased(), ttr: 0.4)
+    check("a single wrong character (typed lower case) is a confusion",
+          engine.confusions.count(target: target, chosen: other) == 1)
+    let d2 = engine.nextDrill()
+    check("a typed answer in lower case is right", engine.record(choice: d2.correct.lowercased(), ttr: 0.4).correct)
+
+    // The Confusion Drill, on the same rules.
+    let review = TrainerEngine(seedCount: 2, rng: SeededRNG(seed: 9))
+    let quiz = ConfusionQuiz(engine: review, rng: SeededRNG(seed: 9))
+    let rd = quiz.nextDrill()
+    let rt = rd.correct.first!
+    let rb = review.stats[rt]?.attempts.count ?? 0
+    check("Confusion Drill: a blank is a miss", !quiz.record(choice: "", ttr: 0.4).correct)
+    check("… counted, with no confusion recorded",
+          (review.stats[rt]?.attempts.count ?? 0) == rb + 1 && review.confusions.isEmpty)
+
+    // Saved ladders survive a round trip and tolerate an older or odd shape.
+    var ladder = AnswerEntryLadder()
+    for _ in 0..<20 { ladder.record(correct: true) }
+    ladder.record(correct: false)
+    let trip = (try? JSONEncoder().encode(ladder)).flatMap { try? JSONDecoder().decode(AnswerEntryLadder.self, from: $0) }
+    check("a ladder round-trips through JSON", trip == ladder && trip?.tier == .sixChoices && trip?.recent == [false])
+    let odd = try? JSONDecoder().decode(AnswerEntryLadder.self, from: Data(#"{"tier":"hexChoices","future":1}"#.utf8))
+    check("an unknown rung decodes as four choices", odd == AnswerEntryLadder())
+    check("tiers show 4, 6, then no choices",
+          AnswerEntryTier.fourChoices.choiceCount == 4 && AnswerEntryTier.sixChoices.choiceCount == 6
+          && AnswerEntryTier.typed.choiceCount == nil)
+}
+
 print("\n────────────────────────────")
 if failures == 0 {
     print("✅ All \(checks) checks passed.\n")

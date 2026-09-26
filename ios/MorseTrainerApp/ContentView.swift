@@ -101,6 +101,13 @@ struct ContentView: View {
                                             : "Key answers off. Switch to keying your answer.")
                     }
 
+                    // How the choice quizzes take an answer (#232): tap,
+                    // climb to typing, or type — switchable mid-drill.
+                    if model.mode.supportsKeyedAnswers,
+                       let drill = model.drill, drill.isKeyable, !model.settings.keyingResponse {
+                        answerEntryMenu
+                    }
+
                     if model.isHeadCopy {
                         headCopyControls
                     } else if model.usesTypedEntry {
@@ -285,6 +292,19 @@ struct ContentView: View {
             if let ttr = model.lastTTR {
                 Text(String(format: "%.2f s", ttr))
                     .font(.caption).foregroundStyle(.secondary)
+            }
+            if model.usesTypedChoiceAnswer, model.lastCorrect == false, let typed = model.lastSelected {
+                Text(typed.isEmpty ? "Skipped" : "You typed \(typed)")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+            if let promoted = model.answerEntryPromotion {
+                Label(promoted.choiceCount.map { "Next step: \($0) choices" }
+                      ?? "Next step: type your answers",
+                      systemImage: "arrow.up.circle.fill")
+                    .font(.callout).bold()
+                    .foregroundStyle(Theme.teal)
+                    .padding(.top, 4)
             }
             if let unlocked = model.justUnlocked {
                 // Journey surfaces a full sentence ("Level 3 complete!"); other
@@ -1110,6 +1130,26 @@ struct ContentView: View {
         }
     }
 
+    /// The in-drill Answer entry picker (#232), labelled with where the
+    /// progressive ladder stands.
+    private var answerEntryMenu: some View {
+        Menu {
+            Picker("Answer entry", selection: Binding(
+                get: { model.settings.answerEntry },
+                set: { model.settings.answerEntry = $0 }
+            )) {
+                ForEach(AnswerEntryMode.allCases, id: \.self) { m in
+                    Text(m.title).tag(m)
+                }
+            }
+        } label: {
+            Label("Answers · \(model.answerEntryLabel)", systemImage: "keyboard")
+                .font(.footnote.weight(.medium))
+                .foregroundStyle(model.settings.answerEntry == .choices ? Theme.textSecondary : Theme.teal)
+        }
+        .accessibilityLabel("Answer entry: \(model.answerEntryLabel). Change how you answer.")
+    }
+
     @ViewBuilder
     private var typedEntry: some View {
         // Head copy hides the box while the code plays so you can't type along —
@@ -1145,8 +1185,24 @@ struct ContentView: View {
             .buttonStyle(.borderedProminent)
             .disabled(model.phase != .awaiting
                       || typedAnswer.trimmingCharacters(in: .whitespaces).isEmpty)
+            // A typed answer to a choice quiz (#232) can be passed: a miss,
+            // with nothing recorded as the character it was mistaken for.
+            if model.usesTypedChoiceAnswer {
+                Button("Don't know") { model.skipTypedAnswer() }
+                    .font(.subheadline)
+                    .disabled(model.phase != .awaiting)
+            }
         }
         .onChange(of: model.drill) { _ in typedAnswer = "" }
+        .onChange(of: typedAnswer) { text in
+            // A single-character drill answered by typing (#232) submits on
+            // the keystroke, so the recognition clock is not charged for a
+            // second tap on Submit — the same one touch a choice button takes.
+            guard model.usesTypedChoiceAnswer, model.phase == .awaiting,
+                  model.drill?.correct.count == 1,
+                  TypedAnswer.normalize(text).count == 1 else { return }
+            submitTyped()
+        }
         .onChange(of: model.phase) { newPhase in
             // Focus when it's time to answer; also focus during playback for
             // "type as you hear it" so you can copy in real time.
@@ -1158,13 +1214,20 @@ struct ContentView: View {
 
     /// Placeholder tuned to how the current mode wants you to type.
     private var typedPlaceholder: String {
+        if model.usesTypedChoiceAnswer {
+            return model.drill?.correct.count == 1 ? "Type the character" : "Type what you heard"
+        }
         if model.isRapidFireLiveType { return "Type as you hear it" }
         if model.isRapidFireHeadType { return "Type what you copied" }
         return "Type what you heard"
     }
 
     private func submitTyped() {
-        model.submitTyped(typedAnswer)
+        if model.usesTypedChoiceAnswer {
+            model.submitTypedChoiceAnswer(typedAnswer)
+        } else {
+            model.submitTyped(typedAnswer)
+        }
     }
 
     // MARK: - Voice response

@@ -133,6 +133,26 @@
     <string name="quiz_voice_not_caught">Didn\'t catch that — tap an option or try again.</string>
     <string name="quiz_key_answers_on">⠿ Key answers · on</string>
     <string name="quiz_key_answers_off">⠿ Key answers · off</string>
+    <!-- Keyboard-entry answers in the choice quizzes (#232). -->
+    <string name="quiz_answers_menu">⌨ Answers · %1$s</string>
+    <string name="quiz_answers_menu_description">Answer entry: %1$s. Change how you answer.</string>
+    <string name="answer_entry_label_tap">tap</string>
+    <string name="answer_entry_label_type">type</string>
+    <string name="answer_entry_label_progressive_choices">progressive, %1$d choices</string>
+    <string name="answer_entry_label_progressive_typing">progressive, typing</string>
+    <string name="answer_entry_choices">Tap</string>
+    <string name="answer_entry_progressive">Progressive</string>
+    <string name="answer_entry_typed">Type</string>
+    <string name="quiz_type_the_character">Type the character</string>
+    <string name="quiz_type_what_you_heard">Type what you heard</string>
+    <string name="quiz_submit">Submit</string>
+    <string name="quiz_dont_know">Don\'t know</string>
+    <string name="quiz_you_typed">You typed %1$s</string>
+    <string name="quiz_skipped">Skipped</string>
+    <string name="quiz_next_step_choices">Next step: %1$d choices</string>
+    <string name="quiz_next_step_typing">Next step: type your answers</string>
+    <string name="settings_answer_entry">Answer entry</string>
+    <string name="settings_answer_entry_footer">Tap picks from the buttons. Progressive starts each level at 4 choices, moves to 6 after 18 of 20 right, then to typing the answer after 18 of 20 more; a new character or stage starts again at 4. Type always has you type. Answers that are a meaning or a prosign always show choices.</string>
     <string name="quiz_new_character">★ New: %1$s</string>
     <string name="quiz_intro_new_character">★ New character</string>
     <string name="quiz_intro_new_prosign">★ New prosign</string>

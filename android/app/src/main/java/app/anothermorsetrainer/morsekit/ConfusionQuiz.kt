@@ -64,10 +64,16 @@ class ConfusionQuiz(
 
     override fun record(choice: String, ttr: Double): DrillOutcome {
         val target = lastTarget ?: return DrillOutcome(correct = false, unlocked = null)
-        val answer = choice.firstOrNull() ?: return DrillOutcome(correct = false, unlocked = null)
+        // Only a single Morse character is a confusion partner (#232): a
+        // blank, two characters or a symbol with no code is a plain miss.
+        val grade = TypedAnswer.gradeCharacter(choice, target)
+        if (!grade.correct && grade.confusedWith == null) {
+            engine.noteMiss(target)
+            return DrillOutcome(correct = false, unlocked = null)
+        }
         // Record the attempt without graduating new Koch characters — this is
         // review, not progression. A correct call eases the drilled pairing.
-        val correct = engine.noteAttempt(answer = answer, target = target, ttr = ttr)
+        val correct = engine.noteAttempt(answer = grade.confusedWith ?: target, target = target, ttr = ttr)
         val confuser = lastConfuser
         if (correct && confuser != null) {
             engine.easeConfusion(target = target, chosen = confuser)

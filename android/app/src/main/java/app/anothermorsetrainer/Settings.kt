@@ -8,6 +8,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.content.edit
+import app.anothermorsetrainer.morsekit.AnswerEntryMode
 import app.anothermorsetrainer.morsekit.BuddyStatus
 import app.anothermorsetrainer.morsekit.CallsignFormat
 import app.anothermorsetrainer.morsekit.ContestLength
@@ -205,6 +206,15 @@ object Settings {
     // Key your answer instead of tapping, in drills where the heard text is the
     // answer (Characters, Common Words, Confusion). Toggled in the quiz itself.
     var answerByKeying by mutableStateOf(false)
+        private set
+
+    /**
+     * How the choice quizzes take an answer (#232): tap the choices (the
+     * default), climb four choices → six → typed per level, or always type.
+     * Honoured per drill like keying: a meaning or a prosign glyph keeps its
+     * choices. The iOS `AppSettings.answerEntry` twin.
+     */
+    var answerEntry by mutableStateOf(AnswerEntryMode.CHOICES)
         private set
 
     // ---- Practice (drill difficulty / presentation) ----
@@ -497,6 +507,7 @@ object Settings {
         hapticsEnabled = prefs.getBoolean("haptics", true)
         voiceAnswersEnabled = prefs.getBoolean("voiceAnswers", false)
         answerByKeying = prefs.getBoolean("answerByKeying", false)
+        answerEntry = AnswerEntryMode.fromId(prefs.getString("answerEntry", null))
         answerChoices = prefs.getInt("answerChoices", 4).coerceIn(4, 6)
         recognitionTargetSec = prefs.getFloat("recogTarget", 1.0f).toDouble().coerceIn(0.5, 3.0)
         wordCount = prefs.getInt("wordCount", 100)
@@ -684,6 +695,11 @@ object Settings {
     fun updateAnswerByKeying(value: Boolean) {
         answerByKeying = value
         if (value) voiceAnswersEnabled = false
+        persist()
+    }
+
+    fun updateAnswerEntry(value: AnswerEntryMode) {
+        answerEntry = value
         persist()
     }
 
@@ -1134,6 +1150,7 @@ object Settings {
             putBoolean("haptics", hapticsEnabled)
             putBoolean("voiceAnswers", voiceAnswersEnabled)
             putBoolean("answerByKeying", answerByKeying)
+            putString("answerEntry", answerEntry.id)
             putInt("answerChoices", answerChoices)
             putFloat("recogTarget", recognitionTargetSec.toFloat())
             putInt("wordCount", wordCount)

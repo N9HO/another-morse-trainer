@@ -334,8 +334,16 @@ class TrainerEngine(
 
     override fun record(choice: String, ttr: Double): DrillOutcome {
         val q = lastQuestion ?: return DrillOutcome(false, null)
-        val answer = choice.firstOrNull() ?: return DrillOutcome(false, null)
-        val outcome = record(answer = answer, question = q, ttr = ttr)
+        // A typed or keyed answer can be anything (#232): only a single Morse
+        // character is a confusion partner. A blank, two characters or a
+        // symbol with no code is a miss with no partner, and a miss never
+        // advances the ladder.
+        val grade = TypedAnswer.gradeCharacter(choice, q.target)
+        if (!grade.correct && grade.confusedWith == null) {
+            noteMiss(q.target)
+            return DrillOutcome(false, null)
+        }
+        val outcome = record(answer = grade.confusedWith ?: q.target, question = q, ttr = ttr)
         return DrillOutcome(outcome.correct, outcome.addedCharacter?.toString())
     }
 
