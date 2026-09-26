@@ -1164,7 +1164,7 @@ private struct GamesMenuView: View {
 ///
 /// The starting level is deliberately NOT asked here (#151). It is one
 /// app-wide answer, given at first run (`OnboardingView`) and changeable under
-/// Settings → Proficiency; re-asking it on every Characters, Confusion Drill
+/// Settings › Characters & Lessons › Proficiency; re-asking it on every Characters, Confusion Drill
 /// and Sending Practice launch read as three different questions, and tapping
 /// the level you already had silently restarted the ladder. Those modes still
 /// open the sheet sensibly without it: Characters and Sending Practice carry

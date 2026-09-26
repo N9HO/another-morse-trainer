@@ -126,7 +126,7 @@ testers, bug reports and feature chat live on
   transcript itself and ranks on the speed summed over correct items (so a
   game's board number is not its on-screen score); every post is attested
   with App Attest, so only the genuine app on a real device can rank. Pick a
-  callsign-shaped display name in Settings › Leaderboard; "Delete my scores"
+  callsign-shaped display name in Settings › Leaderboard & Buddy; "Delete my scores"
   removes everything the server holds for the device. The board itself is
   browsable by anyone, per mode, from the Games menu and from Your Stats,
   without sharing; the first time you start a game with sharing off, one
@@ -136,7 +136,7 @@ testers, bug reports and feature chat live on
   practised. The home screen says whether your buddy has practised today,
   and the daily reminder adds a nudge when they haven't (as of the app's
   last look). Uses the leaderboard display name and attestation; pairing
-  itself is the opt-in. Settings › Buddy streak.
+  itself is the opt-in. Settings › Leaderboard & Buddy › Buddy streak.
 - **Progress**: daily streak with milestone celebrations, a GitHub-style
   activity grid of daily practice time, session history with per-session
   recognition charts, per-character stats, most-confused pairs, performance
@@ -149,6 +149,10 @@ testers, bug reports and feature chat live on
 - A first-run question about how much Morse you already know, which seeds
   the Characters ladder and unlocks the Journey that far
 - Daily practice reminders (minute precision, streak-aware)
+- **Settings** grouped into ten categories (Sound, Speed & Timing,
+  Characters & Lessons, Practice & Feedback, Keys & Sending, QSO & Pileups,
+  Reminders, Display, Leaderboard & Buddy, Help & About) with a search field
+  that finds any setting by name or synonym and jumps straight to it
 
 ## Project layout
 

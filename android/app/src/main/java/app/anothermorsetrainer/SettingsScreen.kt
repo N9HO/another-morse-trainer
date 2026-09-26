@@ -9,6 +9,37 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.EmojiEvents
+import androidx.compose.material.icons.filled.GraphicEq
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Piano
+import androidx.compose.material.icons.filled.School
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.SettingsInputAntenna
+import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.TextFields
+import androidx.compose.material.icons.filled.TrackChanges
+import androidx.compose.runtime.key
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.input.ImeAction
+import app.anothermorsetrainer.morsekit.SettingsCatalog
+import app.anothermorsetrainer.morsekit.SettingsCategory
+import app.anothermorsetrainer.morsekit.SettingsSearchEntry
+import app.anothermorsetrainer.morsekit.SettingsSection
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -79,6 +110,24 @@ import kotlinx.coroutines.launch
 import java.text.DateFormat
 import java.util.Date
 import kotlin.math.roundToInt
+
+/*
+ * Settings is a root of categories with a search field on top (#236); each
+ * category opens a sub-screen of titled sections. The map — which categories
+ * exist, in what order, which sections each holds, and what search finds — is
+ * `morsekit/SettingsCatalog.kt`, pinned to the iOS app's by
+ * `fixtures/settings-catalog.json`. This file only draws the rows.
+ *
+ * Adding a setting:
+ *   1. Put its row in the `SettingsSection` branch it belongs to in the
+ *      `when (section)` inside [SettingsScreen]. A new section is a new
+ *      [SettingsSection] entry, a branch there, and a line in `isShown`.
+ *   2. Add one entry to `SettingsCatalog.entries`, in its section's place.
+ *      If iOS has it too, add it to the fixture.
+ * Mid-session the screen is scoped to the running mode ([SettingsMode],
+ * #66): `isShown` hides sections for other modes, and a category with
+ * nothing left in it drops off the root and out of search.
+ */
 
 /**
  * The training surface that opened Settings mid-session. Mirrors the iOS
@@ -175,7 +224,6 @@ fun SettingsScreen(
     val uriHandler = LocalUriHandler.current
     val player = remember { MorsePlayer() }
     DisposableEffect(Unit) { onDispose { player.release() } }
-    BackHandler { onBack() }
 
     fun shown(modes: Set<SettingsMode>): Boolean = scope == null || scope in modes
 
@@ -269,823 +317,908 @@ fun SettingsScreen(
         ).show()
     }
 
-    Column(modifier = Modifier.fillMaxSize()) {
-        TextButton(onClick = onBack, modifier = Modifier.padding(8.dp)) { Text(stringResource(R.string.common_back), color = Brand.teal) }
+    // #236: the root lists the categories under a search field; a category
+    // shows its sections. `categoryId` null is the root. The search text and
+    // the open category survive a configuration change.
+    var categoryId by rememberSaveable { mutableStateOf<String?>(null) }
+    var focusName by rememberSaveable { mutableStateOf<String?>(null) }
+    var query by rememberSaveable { mutableStateOf("") }
+    val category = SettingsCategory.byId(categoryId)
+    val focus = SettingsSection.entries.firstOrNull { it.name == focusName }
+    fun openCategory(target: SettingsCategory, section: SettingsSection?) {
+        categoryId = target.id
+        focusName = section?.name
+    }
+    fun closeCategory() {
+        categoryId = null
+        focusName = null
+    }
+    // Back from a category returns to the root; from the root it leaves.
+    BackHandler { if (categoryId != null) closeCategory() else onBack() }
 
+    val showChoiceRows = shown(CHOICE_QUIZ_MODES)
+    val showWordPool = shown(setOf(SettingsMode.WORDS))
+    val showDuration = shown(DURATION_MODES)
+
+    /** Whether a section belongs on this surface — every gate the flat list had before #236. */
+    fun isShown(section: SettingsSection): Boolean = when (section) {
+        SettingsSection.SOUND, SettingsSection.REMINDERS, SettingsSection.DISPLAY,
+        SettingsSection.LEADERBOARD, SettingsSection.BUDDY,
+        SettingsSection.BUG_REPORTS, SettingsSection.ABOUT -> true
+        SettingsSection.SPEED -> scope == null || scope !in OWN_SPEED_MODES
+        SettingsSection.PROFICIENCY, SettingsSection.PUNCTUATION -> shown(LADDER_MODES)
+        SettingsSection.NEW_CHARACTERS -> shown(LADDER_MODES) && shown(setOf(SettingsMode.CHARACTERS))
+        SettingsSection.PREVIEW_STAGE -> shown(STAGE_PIN_MODES)
+        SettingsSection.RESET -> scope == null
+        SettingsSection.PRACTICE -> showChoiceRows || showWordPool || showDuration
+        SettingsSection.MY_WORDS -> showWordPool
+        SettingsSection.FEEDBACK -> scope == null || scope !in NO_FEEDBACK_MODES
+        SettingsSection.HEAD_COPY -> shown(setOf(SettingsMode.HEAD_COPY))
+        SettingsSection.HARDWARE_KEY -> shown(KEY_MODES) && midiSupported
+        SettingsSection.PILEUP -> scope == null
+    }
+    val visibleCategories = SettingsCategory.entries.filter { c -> c.sections.any { isShown(it) } }
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        TextButton(
+            onClick = { if (categoryId != null) closeCategory() else onBack() },
+            modifier = Modifier.padding(8.dp)
+        ) { Text(stringResource(R.string.common_back), color = Brand.teal) }
+
+        // A fresh scroll position for each screen: the root and every category.
+        key(categoryId) {
             CenteredScrollColumn(
                 contentModifier = Modifier.padding(horizontal = 20.dp)
             ) {
                 Text(
-                    stringResource(R.string.common_settings),
+                    category?.title ?: stringResource(R.string.common_settings),
                     style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.Bold,
                     color = Brand.textPrimary,
                     modifier = Modifier.padding(start = 4.dp, bottom = 8.dp)
                 )
-                if (scope != null) {
-                    Text(
-                        stringResource(R.string.settings_scoped_note),
-                        color = Brand.textSecondary,
-                        fontSize = 12.sp,
-                        modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
-                    )
-                }
-
-                if (scope == null || scope !in OWN_SPEED_MODES) {
-                    SectionHeader(stringResource(R.string.common_speed))
-                    SettingsGroup {
-                        val minWpm = Settings.MIN_CHARACTER_WPM.toFloat()
-                        val maxWpm = Settings.MAX_CHARACTER_WPM.toFloat()
-                        SliderSetting(
-                            label = stringResource(R.string.settings_character_speed),
-                            value = stringResource(R.string.common_wpm_value, Settings.characterWpm.roundToInt()),
-                            position = Settings.characterWpm.toFloat(),
-                            range = minWpm..maxWpm, steps = wholeWpmSteps(minWpm, maxWpm),
-                            onChange = { Settings.updateCharacterWpm(it.toDouble()) }
-                        )
-                        GroupDivider()
-                        // Farnsworth is a switch with its own effective speed
-                        // (iOS parity): the slider only appears while it is on.
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(stringResource(R.string.settings_farnsworth_spacing), color = Brand.textPrimary, fontWeight = FontWeight.Medium)
-                            Switch(
-                                checked = Settings.farnsworthEnabled,
-                                onCheckedChange = { Settings.updateFarnsworthEnabled(it) },
-                                colors = switchColors()
-                            )
-                        }
-                        if (Settings.farnsworthEnabled) {
-                            GroupDivider()
-                            // Farnsworth only ever *slows* the spacing, so its top is
-                            // the character speed itself — and it has to follow that
-                            // speed up, or a 60 WPM session couldn't be spaced at 45
-                            // (issue #79). The floor is iOS's 8 WPM.
-                            val minEffective = Settings.MIN_EFFECTIVE_WPM.toFloat()
-                            val maxFarnsworth = maxOf(minEffective + 1f, Settings.characterWpm.toFloat())
-                            SliderSetting(
-                                label = stringResource(R.string.settings_effective_speed),
-                                value = stringResource(R.string.common_wpm_value, Settings.effectiveWpm.roundToInt()),
-                                position = Settings.effectiveWpm.toFloat().coerceIn(minEffective, maxFarnsworth),
-                                range = minEffective..maxFarnsworth, steps = wholeWpmSteps(minEffective, maxFarnsworth),
-                                onChange = { Settings.updateEffectiveWpm(it.toDouble()) }
-                            )
-                        }
-                    }
-                    val qrqNote = if (Settings.characterWpm >= 40) {
-                        stringResource(R.string.settings_qrq_note, Settings.characterWpm.roundToInt())
-                    } else ""
-                    SectionFooter(
-                        stringResource(R.string.settings_speed_footer) + qrqNote
-                    )
-                    // Twin of the iOS warning: slowing the characters is the one
-                    // adjustment that works against the method, so say so rather
-                    // than letting it pass silently.
-                    if (Settings.characterWpm < KOCH_MIN_WPM) {
-                        SpeedWarning(
-                            stringResource(R.string.settings_speed_warning, KOCH_MIN_WPM.toInt(), KOCH_MIN_WPM.toInt())
+                if (category == null) {
+                    if (scope != null) {
+                        Text(
+                            stringResource(R.string.settings_scoped_note),
+                            color = Brand.textSecondary,
+                            fontSize = 12.sp,
+                            modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
                         )
                     }
-                }
-
-                SectionHeader(stringResource(R.string.settings_sound))
-                SettingsGroup {
-                    SliderSetting(
-                        label = stringResource(R.string.settings_sidetone_pitch),
-                        value = stringResource(R.string.common_hz_value, Settings.sidetoneHz.roundToInt()),
-                        position = Settings.sidetoneHz.toFloat(),
-                        range = 300f..1000f, steps = 0,
-                        onChange = { Settings.updateSidetoneHz(it.toDouble()) }
-                    )
-                    GroupDivider()
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(stringResource(R.string.settings_preview_tone), color = Brand.textPrimary, fontWeight = FontWeight.Medium)
-                        OutlinedButton(onClick = {
-                            player.play(MorseItem.Playable.Text("PARIS"), Settings.sidetoneHz, Settings.timing()) {}
-                        }) {
-                            Icon(Icons.Filled.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Text(stringResource(R.string.settings_play_button))
-                        }
-                    }
-                    GroupDivider()
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(stringResource(R.string.settings_keep_bluetooth_awake), color = Brand.textPrimary, fontWeight = FontWeight.Medium)
-                        Switch(
-                            checked = Settings.bluetoothKeepAlive,
-                            onCheckedChange = { Settings.updateBluetoothKeepAlive(it) },
-                            colors = switchColors()
-                        )
-                    }
-                    GroupDivider()
-                    BandNoiseSetting()
-                }
-                SectionFooter(
-                    stringResource(R.string.settings_sound_footer) + "\n\n" +
-                        stringResource(R.string.settings_keep_bluetooth_awake_footer) + "\n\n" +
-                        stringResource(R.string.settings_band_noise_footer)
-                )
-
-                val showChoiceRows = shown(CHOICE_QUIZ_MODES)
-                val showWordPool = shown(setOf(SettingsMode.WORDS))
-                val showDuration = shown(DURATION_MODES)
-                if (showChoiceRows || showWordPool || showDuration) {
-                    SectionHeader(stringResource(R.string.settings_practice))
-                    SettingsGroup {
-                        var needDivider = false
-                        if (showChoiceRows) {
-                            SegmentedSetting(
-                                label = stringResource(R.string.settings_answer_choices),
-                                options = listOf("4" to 4, "5" to 5, "6" to 6),
-                                selected = Settings.answerChoices,
-                                onSelect = { Settings.updateAnswerChoices(it) }
-                            )
-                            GroupDivider()
-                            SliderSetting(
-                                label = stringResource(R.string.settings_recognition_target),
-                                value = stringResource(R.string.settings_seconds_1dp, Settings.recognitionTargetSec),
-                                position = Settings.recognitionTargetSec.toFloat(),
-                                // 0.5–3.0 s in tenths, the iOS range and step.
-                                range = 0.5f..3.0f, steps = 24,
-                                onChange = { Settings.updateRecognitionTargetSec(it.toDouble()) }
-                            )
-                            needDivider = true
-                        }
-                        if (showWordPool) {
-                            if (needDivider) GroupDivider()
-                            SegmentedSetting(
-                                label = stringResource(R.string.settings_word_pool),
-                                options = listOf("100" to 100, "300" to 300, "500" to 500, "1000" to 1000),
-                                selected = Settings.wordCount,
-                                onSelect = { Settings.updateWordCount(it) }
-                            )
-                            needDivider = true
-                        }
-                        if (showChoiceRows) {
-                            if (needDivider) GroupDivider()
-                            SegmentedSetting(
-                                label = stringResource(R.string.settings_reveal_answer),
-                                options = RevealMode.entries.map { it.shortLabel to it },
-                                selected = Settings.revealMode,
-                                onSelect = { Settings.updateRevealMode(it) }
-                            )
-                            needDivider = true
-                        }
-                        if (showDuration) {
-                            if (needDivider) GroupDivider()
-                            DurationSetting()
-                        }
-                    }
-                    SectionFooter(
-                        practiceFooter(showChoiceRows, showWordPool, showDuration)
-                    )
-                }
-
-                if (showWordPool) {
-                SectionHeader(stringResource(R.string.settings_my_words))
-                SettingsGroup {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(stringResource(R.string.settings_use_my_word_list), color = Brand.textPrimary, fontWeight = FontWeight.Medium)
-                        Switch(
-                            checked = Settings.useCustomWords,
-                            onCheckedChange = { Settings.updateUseCustomWords(it) },
-                            colors = switchColors()
-                        )
-                    }
-                    if (Settings.useCustomWords) {
-                        GroupDivider()
-                        OutlinedTextField(
-                            value = Settings.customWordsText,
-                            onValueChange = { Settings.updateCustomWordsText(it) },
-                            placeholder = { Text(stringResource(R.string.settings_custom_words_placeholder)) },
-                            minLines = 3,
-                            maxLines = 8,
-                            modifier = Modifier.fillMaxWidth().padding(12.dp)
-                        )
-                    }
-                }
-                SectionFooter(
-                    if (Settings.useCustomWords) {
-                        val n = Settings.customWords.size
-                        stringResource(R.string.settings_custom_words_footer_lead) + when {
-                            n >= 2 -> stringResource(R.string.settings_words_ready, n)
-                            else -> stringResource(R.string.settings_custom_words_need_two)
+                    SettingsSearchField(query = query, onChange = { query = it })
+                    if (SettingsCatalog.words(query).isEmpty()) {
+                        SettingsGroup {
+                            visibleCategories.forEachIndexed { i, c ->
+                                if (i > 0) GroupDivider()
+                                CategoryRow(c) { openCategory(c, null) }
+                            }
                         }
                     } else {
-                        stringResource(R.string.settings_custom_words_footer_off)
-                    }
-                )
-                }
-
-                if (shown(LADDER_MODES)) {
-                SectionHeader(stringResource(R.string.settings_punctuation))
-                SettingsGroup {
-                    MorseCode.pickablePunctuation.forEachIndexed { i, ch ->
-                        if (i > 0) GroupDivider()
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(punctuationLabel(ch), color = Brand.textPrimary, fontWeight = FontWeight.Medium)
-                            Switch(
-                                checked = ch in Settings.punctuationChars,
-                                onCheckedChange = {
-                                    Settings.togglePunctuation(ch)
-                                    // The live ladder picks the new order up immediately.
-                                    EngineStore.applyStudyOrder()
-                                },
-                                colors = switchColors()
-                            )
-                        }
-                    }
-                }
-                SectionFooter(
-                    stringResource(R.string.settings_punctuation_footer)
-                )
-
-                SectionHeader(stringResource(R.string.settings_starting_level))
-                SettingsGroup {
-                    Proficiency.entries.forEachIndexed { i, level ->
-                        if (i > 0) GroupDivider()
-                        RadioRow(
-                            label = level.label,
-                            selected = Settings.proficiency == level,
-                            onClick = {
-                                Settings.updateProficiency(level)
-                                // Restart the ladder from the new seed; per-character
-                                // stats and recorded confusions are kept.
-                                EngineStore.reseed()
-                                JourneyStore.unlockForProficiency()
-                            }
-                        )
-                    }
-                }
-                SectionFooter(stringResource(R.string.settings_starting_level_footer))
-
-                // A first meeting is shown, not sprung (#162). Characters only:
-                // the sending and confusion drills never present a new item.
-                if (shown(setOf(SettingsMode.CHARACTERS))) {
-                SectionHeader(stringResource(R.string.settings_introduce_new))
-                SettingsGroup {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(stringResource(R.string.settings_introduce_new_toggle), color = Brand.textPrimary, fontWeight = FontWeight.Medium)
-                        Switch(
-                            checked = Settings.introduceNewCharacters,
-                            onCheckedChange = { Settings.updateIntroduceNewCharacters(it) },
-                            colors = switchColors()
-                        )
-                    }
-                }
-                SectionFooter(stringResource(R.string.settings_introduce_new_footer))
-                }
-                }
-
-                if (scope == null || scope !in NO_FEEDBACK_MODES) {
-                val showVoiceRow = shown(VOICE_ANSWER_MODES)
-                SectionHeader(stringResource(R.string.settings_feedback))
-                SettingsGroup {
-                    // The iOS Feedback section's two toggles: right/wrong
-                    // colouring, and a Replay button before answering.
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(stringResource(R.string.settings_show_correctness), color = Brand.textPrimary, fontWeight = FontWeight.Medium)
-                        Switch(
-                            checked = Settings.showCorrectness,
-                            onCheckedChange = { Settings.updateShowCorrectness(it) },
-                            colors = switchColors()
-                        )
-                    }
-                    GroupDivider()
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(stringResource(R.string.settings_show_replay), color = Brand.textPrimary, fontWeight = FontWeight.Medium)
-                        Switch(
-                            checked = Settings.allowReplay,
-                            onCheckedChange = { Settings.updateAllowReplay(it) },
-                            colors = switchColors()
-                        )
-                    }
-                    GroupDivider()
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(stringResource(R.string.settings_haptic_feedback), color = Brand.textPrimary, fontWeight = FontWeight.Medium)
-                        Switch(
-                            checked = Settings.hapticsEnabled,
-                            onCheckedChange = { Settings.updateHapticsEnabled(it) },
-                            colors = switchColors()
-                        )
-                    }
-                    if (showVoiceRow) {
-                        GroupDivider()
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(stringResource(R.string.settings_voice_answers), color = Brand.textPrimary, fontWeight = FontWeight.Medium)
-                            Switch(
-                                checked = Settings.voiceAnswersEnabled,
-                                onCheckedChange = { Settings.updateVoiceAnswersEnabled(it) },
-                                colors = switchColors()
-                            )
-                        }
-                    }
-                }
-                SectionFooter(
-                    if (showVoiceRow)
-                        stringResource(R.string.settings_feedback_footer)
-                    else
-                        stringResource(R.string.settings_feedback_footer_haptics_only)
-                )
-                }
-
-                // The key plugged into a Vail Adapter. Only worth showing where a
-                // key can be attached at all, and only on a device with MIDI.
-                if (shown(KEY_MODES) && midiSupported) {
-                    SectionHeader(stringResource(R.string.settings_hardware_key))
-                    SettingsGroup { AdapterKeyerSetting(context) }
-                    SectionFooter(
-                        stringResource(R.string.settings_hardware_key_footer)
-                    )
-                }
-
-                SectionHeader(stringResource(R.string.settings_display))
-                SettingsGroup {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(stringResource(R.string.settings_slashed_zero), color = Brand.textPrimary, fontWeight = FontWeight.Medium)
-                        Switch(
-                            checked = Settings.slashedZero,
-                            onCheckedChange = { Settings.updateSlashedZero(it) },
-                            colors = switchColors()
-                        )
-                    }
-                }
-                SectionFooter(stringResource(R.string.settings_slashed_zero_footer))
-
-                // Head Copy's re-hearing: auto-repeat count and reveal countdown
-                // (iOS parity). The drill screen carries the same two controls.
-                if (shown(setOf(SettingsMode.HEAD_COPY))) {
-                    SectionHeader(stringResource(R.string.settings_head_copy))
-                    SettingsGroup {
-                        SegmentedSetting(
-                            label = stringResource(R.string.settings_head_copy_repeats),
-                            options = (0..Settings.MAX_HEAD_COPY_REPEATS).map { n ->
-                                (if (n == 0) stringResource(R.string.common_off) else stringResource(R.string.settings_repeat_times, n)) to n
-                            },
-                            selected = Settings.headCopyRepeats,
-                            onSelect = { Settings.updateHeadCopyRepeats(it) }
-                        )
-                        GroupDivider()
-                        SliderSetting(
-                            label = stringResource(R.string.settings_head_copy_reveal),
-                            value = if (Settings.headCopyRevealSec < 1) stringResource(R.string.settings_head_copy_manual)
-                                    else stringResource(R.string.settings_seconds_whole, Settings.headCopyRevealSec),
-                            position = Settings.headCopyRevealSec.toFloat(),
-                            range = 0f..Settings.MAX_HEAD_COPY_REVEAL_SEC.toFloat(),
-                            steps = Settings.MAX_HEAD_COPY_REVEAL_SEC - 1,
-                            onChange = { Settings.updateHeadCopyRevealSec(it.roundToInt()) }
-                        )
-                    }
-                    SectionFooter(stringResource(R.string.settings_head_copy_footer))
-                }
-
-                SectionHeader(stringResource(R.string.settings_reminders))
-                SettingsGroup {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(stringResource(R.string.settings_daily_reminder), color = Brand.textPrimary, fontWeight = FontWeight.Medium)
-                        Switch(
-                            checked = Settings.remindersEnabled,
-                            onCheckedChange = { if (it) enableReminders() else disableReminders() },
-                            colors = switchColors()
-                        )
-                    }
-                    if (Settings.remindersEnabled) {
-                        GroupDivider()
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(stringResource(R.string.common_time), color = Brand.textPrimary, fontWeight = FontWeight.Medium)
-                            TextButton(onClick = { pickTime() }) {
-                                Text(formatTime(Settings.reminderHour, Settings.reminderMinute), color = Brand.teal, fontWeight = FontWeight.SemiBold)
-                            }
-                        }
-                    }
-                }
-                SectionFooter(stringResource(R.string.settings_reminders_footer))
-
-                // The shared leaderboard (docs/high-scores-design.md, step 2):
-                // opt-in, off by default, a display name the server's rule
-                // accepts, and the delete button both stores require. The
-                // toggle is offered even before the maintainer has filled the
-                // Cloud project number, so the preference survives into the
-                // build that turns attestation on; the footnote says why
-                // nothing is posted meanwhile.
-                SectionHeader(stringResource(R.string.settings_leaderboard))
-                SettingsGroup {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(
-                            stringResource(R.string.settings_leaderboard_share),
-                            color = Brand.textPrimary, fontWeight = FontWeight.Medium,
-                            modifier = Modifier.weight(1f).padding(end = 12.dp)
-                        )
-                        Switch(
-                            checked = Settings.leaderboardEnabled,
-                            onCheckedChange = { Settings.updateLeaderboardEnabled(it) },
-                            colors = switchColors()
-                        )
-                    }
-                    if (Settings.leaderboardEnabled) {
-                        GroupDivider()
-                        val nameOk = Leaderboard.isValidDisplayName(Settings.leaderboardName)
-                        OutlinedTextField(
-                            value = Settings.leaderboardName,
-                            onValueChange = { Settings.updateLeaderboardName(it) },
-                            label = { Text(stringResource(R.string.settings_leaderboard_name)) },
-                            placeholder = { Text(stringResource(R.string.settings_leaderboard_name_hint)) },
-                            singleLine = true,
-                            isError = Settings.leaderboardName.isNotEmpty() && !nameOk,
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)
-                        )
-                        if (!nameOk) {
-                            Text(
-                                stringResource(R.string.settings_leaderboard_name_invalid),
-                                color = Brand.warning, fontSize = 12.sp,
-                                modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp)
-                            )
-                        }
-                        GroupDivider()
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable(enabled = !deletingScores) { confirmDeleteScores = true }
-                                .padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                stringResource(if (deletingScores) R.string.settings_leaderboard_deleting else R.string.settings_leaderboard_delete),
-                                color = if (deletingScores) Brand.textSecondary else Color(0xFFF2788F),
-                                fontWeight = FontWeight.Medium
-                            )
-                        }
-                        deleteScoresNote?.let { note ->
-                            Text(
-                                note, color = Brand.textSecondary, fontSize = 12.sp,
-                                modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp)
-                            )
-                        }
-                    }
-                    if (!LeaderboardClient.isConfigured) {
-                        GroupDivider()
-                        Text(
-                            stringResource(R.string.settings_leaderboard_unconfigured),
-                            color = Brand.warning, fontSize = 12.sp,
-                            modifier = Modifier.padding(16.dp)
-                        )
-                    }
-                }
-                SectionFooter(stringResource(R.string.settings_leaderboard_footer))
-
-                // Buddy streak (docs/buddy-streak-design.md): its own section
-                // and its own consent — the leaderboard switch above does not
-                // gate it; only the display name is shared. The buttons run
-                // the attested calls through BuddyClient and say what happened
-                // inline; the status line reads the cache, refreshed when the
-                // section appears (at most every 15 minutes).
-                SectionHeader(stringResource(R.string.settings_buddy))
-                // Only when paired or an invite is out, as on iOS: a status call
-                // creates an identity server-side, and pairing is the consent.
-                LaunchedEffect(Unit) { BuddyClient.refreshIfStale() }
-                val buddyStatus = Settings.buddyStatus
-                val buddyPaired = buddyStatus != null && buddyStatus.paired
-                val buddyHasName = BuddyClient.displayName() != null
-                val buddyReady = buddyHasName && LeaderboardClient.isConfigured && buddyBusy == null
-                // Resource strings read at composition (lint: LocalContextGetResources).
-                val buddyErrorTemplate = stringResource(R.string.settings_buddy_error)
-                val buddyShareTitle = stringResource(R.string.settings_buddy_share_title)
-                val buddyShareTemplate = stringResource(R.string.settings_buddy_share_text)
-                SettingsGroup {
-                    Text(
-                        if (buddyStatus != null && buddyPaired) {
-                            val practised = buddyStatus.buddyPractisedOn(Buddy.today())
-                            stringResource(
-                                if (practised) R.string.settings_buddy_paired else R.string.settings_buddy_paired_not_yet,
-                                buddyStatus.buddyName, buddyStreakLabel(buddyStatus.streak)
-                            )
+                        val results = SettingsCatalog.search(query, SettingsCatalog.entries.filter { isShown(it.section) })
+                        if (results.isEmpty()) {
+                            SectionFooter(stringResource(R.string.settings_search_none, query.trim()))
                         } else {
-                            stringResource(R.string.settings_buddy_unpaired)
-                        },
-                        color = Brand.textPrimary, fontWeight = FontWeight.Medium,
-                        modifier = Modifier.padding(16.dp)
-                    )
-                    if (!buddyHasName) {
-                        Text(
-                            stringResource(R.string.settings_buddy_no_name),
-                            color = Brand.warning, fontSize = 12.sp,
-                            modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp)
-                        )
+                            SectionHeader(stringResource(R.string.settings_search_results))
+                            SettingsGroup {
+                                results.forEachIndexed { i, entry ->
+                                    if (i > 0) GroupDivider()
+                                    SearchResultRow(entry) { openCategory(entry.category, entry.section) }
+                                }
+                            }
+                        }
                     }
-                    if (buddyPaired) {
-                        GroupDivider()
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable(enabled = buddyReady) { confirmLeaveBuddy = true }
-                                .padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            val leaving = buddyBusy == BuddyAction.LEAVE
-                            Text(
-                                stringResource(if (leaving) R.string.settings_buddy_leaving else R.string.settings_buddy_leave),
-                                color = if (leaving) Brand.textSecondary else Color(0xFFF2788F),
-                                fontWeight = FontWeight.Medium
-                            )
-                        }
-                    } else {
-                        GroupDivider()
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable(enabled = buddyReady) {
-                                    buddyBusy = BuddyAction.INVITE
-                                    buddyNote = null
-                                    uiScope.launch {
-                                        when (val result = BuddyClient.invite()) {
-                                            is BuddyClient.InviteResult.Failed -> buddyNote = buddyErrorTemplate.format(result.reason)
-                                            is BuddyClient.InviteResult.Ok -> {}
-                                        }
-                                        buddyBusy = null
-                                    }
-                                }
-                                .padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            val inviting = buddyBusy == BuddyAction.INVITE
-                            Text(
-                                stringResource(if (inviting) R.string.settings_buddy_inviting else R.string.settings_buddy_invite),
-                                color = if (inviting) Brand.textSecondary else Brand.teal,
-                                fontWeight = FontWeight.Medium
-                            )
-                        }
-                        // An invite this install issued and the server still
-                        // honours: the code, large, with copy and share. It
-                        // stays until it expires or someone joins with it.
-                        val inviteCode = Settings.buddyInviteCode
-                        val inviteExpiresAt = Settings.buddyInviteExpiresAt
-                        if (inviteCode.isNotEmpty() && inviteExpiresAt > System.currentTimeMillis()) {
-                            val expiryLabel = remember(inviteExpiresAt) {
-                                DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(inviteExpiresAt))
-                            }
-                            Column(modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 8.dp)) {
-                                Text(
-                                    inviteCode,
-                                    color = Brand.textPrimary,
-                                    fontSize = 34.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    fontFamily = FontFamily.Monospace,
-                                    letterSpacing = 6.sp,
-                                    textAlign = TextAlign.Center,
-                                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                } else {
+                    category.sections.filter { isShown(it) }.forEach { section ->
+                    AnchoredSection(section, focus) {
+                    when (section) {
+                        SettingsSection.SOUND -> {
+                            SectionHeader(stringResource(R.string.settings_sound))
+                            SettingsGroup {
+                                SliderSetting(
+                                    label = stringResource(R.string.settings_sidetone_pitch),
+                                    value = stringResource(R.string.common_hz_value, Settings.sidetoneHz.roundToInt()),
+                                    position = Settings.sidetoneHz.toFloat(),
+                                    range = 300f..1000f, steps = 0,
+                                    onChange = { Settings.updateSidetoneHz(it.toDouble()) }
                                 )
-                                Text(
-                                    stringResource(R.string.settings_buddy_code_hint, expiryLabel),
-                                    color = Brand.textSecondary, fontSize = 12.sp
-                                )
-                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    TextButton(onClick = {
-                                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-                                        clipboard?.setPrimaryClip(ClipData.newPlainText("Buddy code", inviteCode))
-                                        copiedBuddyCode = true
-                                    }) {
-                                        Text(
-                                            stringResource(if (copiedBuddyCode) R.string.settings_buddy_copied else R.string.settings_buddy_copy),
-                                            color = Brand.teal, fontWeight = FontWeight.SemiBold
-                                        )
-                                    }
-                                    TextButton(onClick = {
-                                        val send = Intent(Intent.ACTION_SEND).apply {
-                                            type = "text/plain"
-                                            putExtra(Intent.EXTRA_TEXT, buddyShareTemplate.format(inviteCode))
-                                        }
-                                        context.startActivity(Intent.createChooser(send, buddyShareTitle))
-                                    }) {
-                                        Text(stringResource(R.string.settings_buddy_share), color = Brand.teal, fontWeight = FontWeight.SemiBold)
-                                    }
-                                }
-                            }
-                        }
-                        GroupDivider()
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable(enabled = buddyReady) { showJoinBuddy = !showJoinBuddy }
-                                .padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(stringResource(R.string.settings_buddy_join), color = Brand.teal, fontWeight = FontWeight.Medium)
-                        }
-                        if (showJoinBuddy) {
-                            // The field says no before the server does, by the
-                            // same rule (Buddy.normalizeInviteCode); spaces and
-                            // dashes are allowed in, stripped on the way out.
-                            val normalizedCode = Buddy.normalizeInviteCode(joinBuddyCode)
-                            OutlinedTextField(
-                                value = joinBuddyCode,
-                                onValueChange = { joinBuddyCode = it.uppercase().take(10) },
-                                placeholder = { Text(stringResource(R.string.settings_buddy_join_hint)) },
-                                singleLine = true,
-                                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters),
-                                isError = joinBuddyCode.isNotEmpty() && normalizedCode == null,
-                                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)
-                            )
-                            Row(
-                                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
-                                horizontalArrangement = Arrangement.End
-                            ) {
-                                val joining = buddyBusy == BuddyAction.JOIN
-                                TextButton(
-                                    enabled = buddyReady && normalizedCode != null,
-                                    onClick = {
-                                        val code = normalizedCode ?: return@TextButton
-                                        buddyBusy = BuddyAction.JOIN
-                                        buddyNote = null
-                                        uiScope.launch {
-                                            val failure = BuddyClient.join(code)
-                                            if (failure == null) {
-                                                showJoinBuddy = false
-                                                joinBuddyCode = ""
-                                            } else {
-                                                buddyNote = buddyErrorTemplate.format(failure)
-                                            }
-                                            buddyBusy = null
-                                        }
-                                    }
+                                GroupDivider()
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
-                                    Text(
-                                        stringResource(if (joining) R.string.settings_buddy_joining else R.string.settings_buddy_join_go),
-                                        color = Brand.teal, fontWeight = FontWeight.SemiBold
+                                    Text(stringResource(R.string.settings_preview_tone), color = Brand.textPrimary, fontWeight = FontWeight.Medium)
+                                    OutlinedButton(onClick = {
+                                        player.play(MorseItem.Playable.Text("PARIS"), Settings.sidetoneHz, Settings.timing()) {}
+                                    }) {
+                                        Icon(Icons.Filled.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
+                                        Text(stringResource(R.string.settings_play_button))
+                                    }
+                                }
+                                GroupDivider()
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(stringResource(R.string.settings_keep_bluetooth_awake), color = Brand.textPrimary, fontWeight = FontWeight.Medium)
+                                    Switch(
+                                        checked = Settings.bluetoothKeepAlive,
+                                        onCheckedChange = { Settings.updateBluetoothKeepAlive(it) },
+                                        colors = switchColors()
+                                    )
+                                }
+                                GroupDivider()
+                                BandNoiseSetting()
+                            }
+                            SectionFooter(
+                                stringResource(R.string.settings_sound_footer) + "\n\n" +
+                                    stringResource(R.string.settings_keep_bluetooth_awake_footer) + "\n\n" +
+                                    stringResource(R.string.settings_band_noise_footer)
+                            )
+                        }
+                        SettingsSection.SPEED -> {
+                            SectionHeader(stringResource(R.string.common_speed))
+                            SettingsGroup {
+                                val minWpm = Settings.MIN_CHARACTER_WPM.toFloat()
+                                val maxWpm = Settings.MAX_CHARACTER_WPM.toFloat()
+                                SliderSetting(
+                                    label = stringResource(R.string.settings_character_speed),
+                                    value = stringResource(R.string.common_wpm_value, Settings.characterWpm.roundToInt()),
+                                    position = Settings.characterWpm.toFloat(),
+                                    range = minWpm..maxWpm, steps = wholeWpmSteps(minWpm, maxWpm),
+                                    onChange = { Settings.updateCharacterWpm(it.toDouble()) }
+                                )
+                                GroupDivider()
+                                // Farnsworth is a switch with its own effective speed
+                                // (iOS parity): the slider only appears while it is on.
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(stringResource(R.string.settings_farnsworth_spacing), color = Brand.textPrimary, fontWeight = FontWeight.Medium)
+                                    Switch(
+                                        checked = Settings.farnsworthEnabled,
+                                        onCheckedChange = { Settings.updateFarnsworthEnabled(it) },
+                                        colors = switchColors()
+                                    )
+                                }
+                                if (Settings.farnsworthEnabled) {
+                                    GroupDivider()
+                                    // Farnsworth only ever *slows* the spacing, so its top is
+                                    // the character speed itself — and it has to follow that
+                                    // speed up, or a 60 WPM session couldn't be spaced at 45
+                                    // (issue #79). The floor is iOS's 8 WPM.
+                                    val minEffective = Settings.MIN_EFFECTIVE_WPM.toFloat()
+                                    val maxFarnsworth = maxOf(minEffective + 1f, Settings.characterWpm.toFloat())
+                                    SliderSetting(
+                                        label = stringResource(R.string.settings_effective_speed),
+                                        value = stringResource(R.string.common_wpm_value, Settings.effectiveWpm.roundToInt()),
+                                        position = Settings.effectiveWpm.toFloat().coerceIn(minEffective, maxFarnsworth),
+                                        range = minEffective..maxFarnsworth, steps = wholeWpmSteps(minEffective, maxFarnsworth),
+                                        onChange = { Settings.updateEffectiveWpm(it.toDouble()) }
                                     )
                                 }
                             }
+                            val qrqNote = if (Settings.characterWpm >= 40) {
+                                stringResource(R.string.settings_qrq_note, Settings.characterWpm.roundToInt())
+                            } else ""
+                            SectionFooter(
+                                stringResource(R.string.settings_speed_footer) + qrqNote
+                            )
+                            // Twin of the iOS warning: slowing the characters is the one
+                            // adjustment that works against the method, so say so rather
+                            // than letting it pass silently.
+                            if (Settings.characterWpm < KOCH_MIN_WPM) {
+                                SpeedWarning(
+                                    stringResource(R.string.settings_speed_warning, KOCH_MIN_WPM.toInt(), KOCH_MIN_WPM.toInt())
+                                )
+                            }
                         }
-                    }
-                    buddyNote?.let { note ->
-                        Text(
-                            note, color = Brand.warning, fontSize = 12.sp,
-                            modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp)
-                        )
-                    }
-                    if (!LeaderboardClient.isConfigured) {
-                        GroupDivider()
-                        Text(
-                            stringResource(R.string.settings_leaderboard_unconfigured),
-                            color = Brand.warning, fontSize = 12.sp,
-                            modifier = Modifier.padding(16.dp)
-                        )
-                    }
-                }
-                SectionFooter(stringResource(R.string.settings_buddy_footer))
-
-                // Developer aid (iOS `previewStage`): jump the Characters track
-                // to a stage and start drilling it. Shown where the Track-stage
-                // pin is, since both act on the same shared ladder.
-                if (shown(STAGE_PIN_MODES)) {
-                    SectionHeader(stringResource(R.string.settings_preview_stage))
-                    SettingsGroup {
-                        val track = remember { EngineStore.current() }
-                        ProgressiveCharacters.Stage.entries.forEachIndexed { i, stage ->
-                            if (i > 0) GroupDivider()
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        track.jumpToStage(stage)
-                                        EngineStore.save()
-                                        onPreviewStage?.invoke() ?: onBack()
-                                    }
-                                    .padding(16.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    Text(stage.displayName, color = Brand.textPrimary, fontWeight = FontWeight.Medium)
-                                    if (track.stage == stage) Text("✓", color = Brand.tealBright, fontWeight = FontWeight.Bold)
+                        SettingsSection.PROFICIENCY -> {
+                            SectionHeader(stringResource(R.string.settings_starting_level))
+                            SettingsGroup {
+                                Proficiency.entries.forEachIndexed { i, level ->
+                                    if (i > 0) GroupDivider()
+                                    RadioRow(
+                                        label = level.label,
+                                        selected = Settings.proficiency == level,
+                                        onClick = {
+                                            Settings.updateProficiency(level)
+                                            // Restart the ladder from the new seed; per-character
+                                            // stats and recorded confusions are kept.
+                                            EngineStore.reseed()
+                                            JourneyStore.unlockForProficiency()
+                                        }
+                                    )
                                 }
-                                Icon(Icons.Filled.PlayArrow, contentDescription = null, tint = Brand.textSecondary, modifier = Modifier.size(18.dp))
                             }
+                            SectionFooter(stringResource(R.string.settings_starting_level_footer))
+                        }
+                        SettingsSection.NEW_CHARACTERS -> {
+                            // A first meeting is shown, not sprung (#162). Characters only:
+                            // the sending and confusion drills never present a new item.
+                            SectionHeader(stringResource(R.string.settings_introduce_new))
+                            SettingsGroup {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(stringResource(R.string.settings_introduce_new_toggle), color = Brand.textPrimary, fontWeight = FontWeight.Medium)
+                                    Switch(
+                                        checked = Settings.introduceNewCharacters,
+                                        onCheckedChange = { Settings.updateIntroduceNewCharacters(it) },
+                                        colors = switchColors()
+                                    )
+                                }
+                            }
+                            SectionFooter(stringResource(R.string.settings_introduce_new_footer))
+                        }
+                        SettingsSection.PUNCTUATION -> {
+                            SectionHeader(stringResource(R.string.settings_punctuation))
+                            SettingsGroup {
+                                MorseCode.pickablePunctuation.forEachIndexed { i, ch ->
+                                    if (i > 0) GroupDivider()
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth().padding(16.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text(punctuationLabel(ch), color = Brand.textPrimary, fontWeight = FontWeight.Medium)
+                                        Switch(
+                                            checked = ch in Settings.punctuationChars,
+                                            onCheckedChange = {
+                                                Settings.togglePunctuation(ch)
+                                                // The live ladder picks the new order up immediately.
+                                                EngineStore.applyStudyOrder()
+                                            },
+                                            colors = switchColors()
+                                        )
+                                    }
+                                }
+                            }
+                            SectionFooter(
+                                stringResource(R.string.settings_punctuation_footer)
+                            )
+                        }
+                        SettingsSection.PREVIEW_STAGE -> {
+                            // Developer aid (iOS `previewStage`): jump the Characters track
+                            // to a stage and start drilling it. Shown where the Track-stage
+                            // pin is, since both act on the same shared ladder.
+                            SectionHeader(stringResource(R.string.settings_preview_stage))
+                            SettingsGroup {
+                                val track = remember { EngineStore.current() }
+                                ProgressiveCharacters.Stage.entries.forEachIndexed { i, stage ->
+                                    if (i > 0) GroupDivider()
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable {
+                                                track.jumpToStage(stage)
+                                                EngineStore.save()
+                                                onPreviewStage?.invoke() ?: onBack()
+                                            }
+                                            .padding(16.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            Text(stage.displayName, color = Brand.textPrimary, fontWeight = FontWeight.Medium)
+                                            if (track.stage == stage) Text("✓", color = Brand.tealBright, fontWeight = FontWeight.Bold)
+                                        }
+                                        Icon(Icons.Filled.PlayArrow, contentDescription = null, tint = Brand.textSecondary, modifier = Modifier.size(18.dp))
+                                    }
+                                }
+                            }
+                            SectionFooter(stringResource(R.string.settings_preview_stage_footer))
+                        }
+                        SettingsSection.RESET -> {
+                            // Mid-session the destructive reset stays out of reach — it would
+                            // yank the engine out from under the running drill. Home only.
+                            SectionHeader(stringResource(R.string.common_progress))
+                            SettingsGroup {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().clickable { confirmReset = true }.padding(16.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(stringResource(R.string.settings_reset_all_progress), color = Color(0xFFF2788F), fontWeight = FontWeight.Medium)
+                                }
+                            }
+                            SectionFooter(
+                                stringResource(R.string.settings_reset_footer)
+                            )
+                        }
+                        SettingsSection.PRACTICE -> {
+                            SectionHeader(stringResource(R.string.settings_practice))
+                            SettingsGroup {
+                                var needDivider = false
+                                if (showChoiceRows) {
+                                    SegmentedSetting(
+                                        label = stringResource(R.string.settings_answer_choices),
+                                        options = listOf("4" to 4, "5" to 5, "6" to 6),
+                                        selected = Settings.answerChoices,
+                                        onSelect = { Settings.updateAnswerChoices(it) }
+                                    )
+                                    GroupDivider()
+                                    SliderSetting(
+                                        label = stringResource(R.string.settings_recognition_target),
+                                        value = stringResource(R.string.settings_seconds_1dp, Settings.recognitionTargetSec),
+                                        position = Settings.recognitionTargetSec.toFloat(),
+                                        // 0.5–3.0 s in tenths, the iOS range and step.
+                                        range = 0.5f..3.0f, steps = 24,
+                                        onChange = { Settings.updateRecognitionTargetSec(it.toDouble()) }
+                                    )
+                                    needDivider = true
+                                }
+                                if (showWordPool) {
+                                    if (needDivider) GroupDivider()
+                                    SegmentedSetting(
+                                        label = stringResource(R.string.settings_word_pool),
+                                        options = listOf("100" to 100, "300" to 300, "500" to 500, "1000" to 1000),
+                                        selected = Settings.wordCount,
+                                        onSelect = { Settings.updateWordCount(it) }
+                                    )
+                                    needDivider = true
+                                }
+                                if (showChoiceRows) {
+                                    if (needDivider) GroupDivider()
+                                    SegmentedSetting(
+                                        label = stringResource(R.string.settings_reveal_answer),
+                                        options = RevealMode.entries.map { it.shortLabel to it },
+                                        selected = Settings.revealMode,
+                                        onSelect = { Settings.updateRevealMode(it) }
+                                    )
+                                    needDivider = true
+                                }
+                                if (showDuration) {
+                                    if (needDivider) GroupDivider()
+                                    DurationSetting()
+                                }
+                            }
+                            SectionFooter(
+                                practiceFooter(showChoiceRows, showWordPool, showDuration)
+                            )
+                        }
+                        SettingsSection.MY_WORDS -> {
+                            SectionHeader(stringResource(R.string.settings_my_words))
+                            SettingsGroup {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(stringResource(R.string.settings_use_my_word_list), color = Brand.textPrimary, fontWeight = FontWeight.Medium)
+                                    Switch(
+                                        checked = Settings.useCustomWords,
+                                        onCheckedChange = { Settings.updateUseCustomWords(it) },
+                                        colors = switchColors()
+                                    )
+                                }
+                                if (Settings.useCustomWords) {
+                                    GroupDivider()
+                                    OutlinedTextField(
+                                        value = Settings.customWordsText,
+                                        onValueChange = { Settings.updateCustomWordsText(it) },
+                                        placeholder = { Text(stringResource(R.string.settings_custom_words_placeholder)) },
+                                        minLines = 3,
+                                        maxLines = 8,
+                                        modifier = Modifier.fillMaxWidth().padding(12.dp)
+                                    )
+                                }
+                            }
+                            SectionFooter(
+                                if (Settings.useCustomWords) {
+                                    val n = Settings.customWords.size
+                                    stringResource(R.string.settings_custom_words_footer_lead) + when {
+                                        n >= 2 -> stringResource(R.string.settings_words_ready, n)
+                                        else -> stringResource(R.string.settings_custom_words_need_two)
+                                    }
+                                } else {
+                                    stringResource(R.string.settings_custom_words_footer_off)
+                                }
+                            )
+                        }
+                        SettingsSection.FEEDBACK -> {
+                            val showVoiceRow = shown(VOICE_ANSWER_MODES)
+                            SectionHeader(stringResource(R.string.settings_feedback))
+                            SettingsGroup {
+                                // The iOS Feedback section's two toggles: right/wrong
+                                // colouring, and a Replay button before answering.
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(stringResource(R.string.settings_show_correctness), color = Brand.textPrimary, fontWeight = FontWeight.Medium)
+                                    Switch(
+                                        checked = Settings.showCorrectness,
+                                        onCheckedChange = { Settings.updateShowCorrectness(it) },
+                                        colors = switchColors()
+                                    )
+                                }
+                                GroupDivider()
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(stringResource(R.string.settings_show_replay), color = Brand.textPrimary, fontWeight = FontWeight.Medium)
+                                    Switch(
+                                        checked = Settings.allowReplay,
+                                        onCheckedChange = { Settings.updateAllowReplay(it) },
+                                        colors = switchColors()
+                                    )
+                                }
+                                GroupDivider()
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(stringResource(R.string.settings_haptic_feedback), color = Brand.textPrimary, fontWeight = FontWeight.Medium)
+                                    Switch(
+                                        checked = Settings.hapticsEnabled,
+                                        onCheckedChange = { Settings.updateHapticsEnabled(it) },
+                                        colors = switchColors()
+                                    )
+                                }
+                                if (showVoiceRow) {
+                                    GroupDivider()
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth().padding(16.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text(stringResource(R.string.settings_voice_answers), color = Brand.textPrimary, fontWeight = FontWeight.Medium)
+                                        Switch(
+                                            checked = Settings.voiceAnswersEnabled,
+                                            onCheckedChange = { Settings.updateVoiceAnswersEnabled(it) },
+                                            colors = switchColors()
+                                        )
+                                    }
+                                }
+                            }
+                            SectionFooter(
+                                if (showVoiceRow)
+                                    stringResource(R.string.settings_feedback_footer)
+                                else
+                                    stringResource(R.string.settings_feedback_footer_haptics_only)
+                            )
+                        }
+                        SettingsSection.HEAD_COPY -> {
+                            // Head Copy's re-hearing: auto-repeat count and reveal countdown
+                            // (iOS parity). The drill screen carries the same two controls.
+                            SectionHeader(stringResource(R.string.settings_head_copy))
+                            SettingsGroup {
+                                SegmentedSetting(
+                                    label = stringResource(R.string.settings_head_copy_repeats),
+                                    options = (0..Settings.MAX_HEAD_COPY_REPEATS).map { n ->
+                                        (if (n == 0) stringResource(R.string.common_off) else stringResource(R.string.settings_repeat_times, n)) to n
+                                    },
+                                    selected = Settings.headCopyRepeats,
+                                    onSelect = { Settings.updateHeadCopyRepeats(it) }
+                                )
+                                GroupDivider()
+                                SliderSetting(
+                                    label = stringResource(R.string.settings_head_copy_reveal),
+                                    value = if (Settings.headCopyRevealSec < 1) stringResource(R.string.settings_head_copy_manual)
+                                            else stringResource(R.string.settings_seconds_whole, Settings.headCopyRevealSec),
+                                    position = Settings.headCopyRevealSec.toFloat(),
+                                    range = 0f..Settings.MAX_HEAD_COPY_REVEAL_SEC.toFloat(),
+                                    steps = Settings.MAX_HEAD_COPY_REVEAL_SEC - 1,
+                                    onChange = { Settings.updateHeadCopyRevealSec(it.roundToInt()) }
+                                )
+                            }
+                            SectionFooter(stringResource(R.string.settings_head_copy_footer))
+                        }
+                        SettingsSection.HARDWARE_KEY -> {
+                            // The key plugged into a Vail Adapter. Only worth showing where a
+                            // key can be attached at all, and only on a device with MIDI.
+                            SectionHeader(stringResource(R.string.settings_hardware_key))
+                            SettingsGroup { AdapterKeyerSetting(context) }
+                            SectionFooter(
+                                stringResource(R.string.settings_hardware_key_footer)
+                            )
+                        }
+                        SettingsSection.PILEUP -> {
+                            // The Pileup Runner's own options (#236), the same composable its
+                            // setup screen shows, so iOS and Android both keep them under
+                            // QSO & Pileups. Home only: mid-run the engine already holds its config.
+                            SectionHeader(stringResource(R.string.mode_pileup_runner))
+                            Column(
+                                modifier = Modifier.fillMaxWidth().brandCard().padding(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(14.dp)
+                            ) { PileupOptions() }
+                            SectionFooter(stringResource(R.string.settings_pileup_footer))
+                        }
+                        SettingsSection.REMINDERS -> {
+                            SectionHeader(stringResource(R.string.settings_reminders))
+                            SettingsGroup {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(stringResource(R.string.settings_daily_reminder), color = Brand.textPrimary, fontWeight = FontWeight.Medium)
+                                    Switch(
+                                        checked = Settings.remindersEnabled,
+                                        onCheckedChange = { if (it) enableReminders() else disableReminders() },
+                                        colors = switchColors()
+                                    )
+                                }
+                                if (Settings.remindersEnabled) {
+                                    GroupDivider()
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text(stringResource(R.string.common_time), color = Brand.textPrimary, fontWeight = FontWeight.Medium)
+                                        TextButton(onClick = { pickTime() }) {
+                                            Text(formatTime(Settings.reminderHour, Settings.reminderMinute), color = Brand.teal, fontWeight = FontWeight.SemiBold)
+                                        }
+                                    }
+                                }
+                            }
+                            SectionFooter(stringResource(R.string.settings_reminders_footer))
+                        }
+                        SettingsSection.DISPLAY -> {
+                            SectionHeader(stringResource(R.string.settings_display))
+                            SettingsGroup {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(stringResource(R.string.settings_slashed_zero), color = Brand.textPrimary, fontWeight = FontWeight.Medium)
+                                    Switch(
+                                        checked = Settings.slashedZero,
+                                        onCheckedChange = { Settings.updateSlashedZero(it) },
+                                        colors = switchColors()
+                                    )
+                                }
+                            }
+                            SectionFooter(stringResource(R.string.settings_slashed_zero_footer))
+                        }
+                        SettingsSection.LEADERBOARD -> {
+                            // The shared leaderboard (docs/high-scores-design.md, step 2):
+                            // opt-in, off by default, a display name the server's rule
+                            // accepts, and the delete button both stores require. The
+                            // toggle is offered even before the maintainer has filled the
+                            // Cloud project number, so the preference survives into the
+                            // build that turns attestation on; the footnote says why
+                            // nothing is posted meanwhile.
+                            SectionHeader(stringResource(R.string.settings_leaderboard))
+                            SettingsGroup {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(
+                                        stringResource(R.string.settings_leaderboard_share),
+                                        color = Brand.textPrimary, fontWeight = FontWeight.Medium,
+                                        modifier = Modifier.weight(1f).padding(end = 12.dp)
+                                    )
+                                    Switch(
+                                        checked = Settings.leaderboardEnabled,
+                                        onCheckedChange = { Settings.updateLeaderboardEnabled(it) },
+                                        colors = switchColors()
+                                    )
+                                }
+                                if (Settings.leaderboardEnabled) {
+                                    GroupDivider()
+                                    val nameOk = Leaderboard.isValidDisplayName(Settings.leaderboardName)
+                                    OutlinedTextField(
+                                        value = Settings.leaderboardName,
+                                        onValueChange = { Settings.updateLeaderboardName(it) },
+                                        label = { Text(stringResource(R.string.settings_leaderboard_name)) },
+                                        placeholder = { Text(stringResource(R.string.settings_leaderboard_name_hint)) },
+                                        singleLine = true,
+                                        isError = Settings.leaderboardName.isNotEmpty() && !nameOk,
+                                        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)
+                                    )
+                                    if (!nameOk) {
+                                        Text(
+                                            stringResource(R.string.settings_leaderboard_name_invalid),
+                                            color = Brand.warning, fontSize = 12.sp,
+                                            modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp)
+                                        )
+                                    }
+                                    GroupDivider()
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable(enabled = !deletingScores) { confirmDeleteScores = true }
+                                            .padding(16.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            stringResource(if (deletingScores) R.string.settings_leaderboard_deleting else R.string.settings_leaderboard_delete),
+                                            color = if (deletingScores) Brand.textSecondary else Color(0xFFF2788F),
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    }
+                                    deleteScoresNote?.let { note ->
+                                        Text(
+                                            note, color = Brand.textSecondary, fontSize = 12.sp,
+                                            modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp)
+                                        )
+                                    }
+                                }
+                                if (!LeaderboardClient.isConfigured) {
+                                    GroupDivider()
+                                    Text(
+                                        stringResource(R.string.settings_leaderboard_unconfigured),
+                                        color = Brand.warning, fontSize = 12.sp,
+                                        modifier = Modifier.padding(16.dp)
+                                    )
+                                }
+                            }
+                            SectionFooter(stringResource(R.string.settings_leaderboard_footer))
+                        }
+                        SettingsSection.BUDDY -> {
+                            // Buddy streak (docs/buddy-streak-design.md): its own section
+                            // and its own consent — the leaderboard switch above does not
+                            // gate it; only the display name is shared. The buttons run
+                            // the attested calls through BuddyClient and say what happened
+                            // inline; the status line reads the cache, refreshed when the
+                            // section appears (at most every 15 minutes).
+                            SectionHeader(stringResource(R.string.settings_buddy))
+                            // Only when paired or an invite is out, as on iOS: a status call
+                            // creates an identity server-side, and pairing is the consent.
+                            LaunchedEffect(Unit) { BuddyClient.refreshIfStale() }
+                            val buddyStatus = Settings.buddyStatus
+                            val buddyPaired = buddyStatus != null && buddyStatus.paired
+                            val buddyHasName = BuddyClient.displayName() != null
+                            val buddyReady = buddyHasName && LeaderboardClient.isConfigured && buddyBusy == null
+                            // Resource strings read at composition (lint: LocalContextGetResources).
+                            val buddyErrorTemplate = stringResource(R.string.settings_buddy_error)
+                            val buddyShareTitle = stringResource(R.string.settings_buddy_share_title)
+                            val buddyShareTemplate = stringResource(R.string.settings_buddy_share_text)
+                            SettingsGroup {
+                                Text(
+                                    if (buddyStatus != null && buddyPaired) {
+                                        val practised = buddyStatus.buddyPractisedOn(Buddy.today())
+                                        stringResource(
+                                            if (practised) R.string.settings_buddy_paired else R.string.settings_buddy_paired_not_yet,
+                                            buddyStatus.buddyName, buddyStreakLabel(buddyStatus.streak)
+                                        )
+                                    } else {
+                                        stringResource(R.string.settings_buddy_unpaired)
+                                    },
+                                    color = Brand.textPrimary, fontWeight = FontWeight.Medium,
+                                    modifier = Modifier.padding(16.dp)
+                                )
+                                if (!buddyHasName) {
+                                    Text(
+                                        stringResource(R.string.settings_buddy_no_name),
+                                        color = Brand.warning, fontSize = 12.sp,
+                                        modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp)
+                                    )
+                                }
+                                if (buddyPaired) {
+                                    GroupDivider()
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable(enabled = buddyReady) { confirmLeaveBuddy = true }
+                                            .padding(16.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        val leaving = buddyBusy == BuddyAction.LEAVE
+                                        Text(
+                                            stringResource(if (leaving) R.string.settings_buddy_leaving else R.string.settings_buddy_leave),
+                                            color = if (leaving) Brand.textSecondary else Color(0xFFF2788F),
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    }
+                                } else {
+                                    GroupDivider()
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable(enabled = buddyReady) {
+                                                buddyBusy = BuddyAction.INVITE
+                                                buddyNote = null
+                                                uiScope.launch {
+                                                    when (val result = BuddyClient.invite()) {
+                                                        is BuddyClient.InviteResult.Failed -> buddyNote = buddyErrorTemplate.format(result.reason)
+                                                        is BuddyClient.InviteResult.Ok -> {}
+                                                    }
+                                                    buddyBusy = null
+                                                }
+                                            }
+                                            .padding(16.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        val inviting = buddyBusy == BuddyAction.INVITE
+                                        Text(
+                                            stringResource(if (inviting) R.string.settings_buddy_inviting else R.string.settings_buddy_invite),
+                                            color = if (inviting) Brand.textSecondary else Brand.teal,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    }
+                                    // An invite this install issued and the server still
+                                    // honours: the code, large, with copy and share. It
+                                    // stays until it expires or someone joins with it.
+                                    val inviteCode = Settings.buddyInviteCode
+                                    val inviteExpiresAt = Settings.buddyInviteExpiresAt
+                                    if (inviteCode.isNotEmpty() && inviteExpiresAt > System.currentTimeMillis()) {
+                                        val expiryLabel = remember(inviteExpiresAt) {
+                                            DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(inviteExpiresAt))
+                                        }
+                                        Column(modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 8.dp)) {
+                                            Text(
+                                                inviteCode,
+                                                color = Brand.textPrimary,
+                                                fontSize = 34.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                fontFamily = FontFamily.Monospace,
+                                                letterSpacing = 6.sp,
+                                                textAlign = TextAlign.Center,
+                                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                                            )
+                                            Text(
+                                                stringResource(R.string.settings_buddy_code_hint, expiryLabel),
+                                                color = Brand.textSecondary, fontSize = 12.sp
+                                            )
+                                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                TextButton(onClick = {
+                                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                                                    clipboard?.setPrimaryClip(ClipData.newPlainText("Buddy code", inviteCode))
+                                                    copiedBuddyCode = true
+                                                }) {
+                                                    Text(
+                                                        stringResource(if (copiedBuddyCode) R.string.settings_buddy_copied else R.string.settings_buddy_copy),
+                                                        color = Brand.teal, fontWeight = FontWeight.SemiBold
+                                                    )
+                                                }
+                                                TextButton(onClick = {
+                                                    val send = Intent(Intent.ACTION_SEND).apply {
+                                                        type = "text/plain"
+                                                        putExtra(Intent.EXTRA_TEXT, buddyShareTemplate.format(inviteCode))
+                                                    }
+                                                    context.startActivity(Intent.createChooser(send, buddyShareTitle))
+                                                }) {
+                                                    Text(stringResource(R.string.settings_buddy_share), color = Brand.teal, fontWeight = FontWeight.SemiBold)
+                                                }
+                                            }
+                                        }
+                                    }
+                                    GroupDivider()
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable(enabled = buddyReady) { showJoinBuddy = !showJoinBuddy }
+                                            .padding(16.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(stringResource(R.string.settings_buddy_join), color = Brand.teal, fontWeight = FontWeight.Medium)
+                                    }
+                                    if (showJoinBuddy) {
+                                        // The field says no before the server does, by the
+                                        // same rule (Buddy.normalizeInviteCode); spaces and
+                                        // dashes are allowed in, stripped on the way out.
+                                        val normalizedCode = Buddy.normalizeInviteCode(joinBuddyCode)
+                                        OutlinedTextField(
+                                            value = joinBuddyCode,
+                                            onValueChange = { joinBuddyCode = it.uppercase().take(10) },
+                                            placeholder = { Text(stringResource(R.string.settings_buddy_join_hint)) },
+                                            singleLine = true,
+                                            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters),
+                                            isError = joinBuddyCode.isNotEmpty() && normalizedCode == null,
+                                            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)
+                                        )
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
+                                            horizontalArrangement = Arrangement.End
+                                        ) {
+                                            val joining = buddyBusy == BuddyAction.JOIN
+                                            TextButton(
+                                                enabled = buddyReady && normalizedCode != null,
+                                                onClick = {
+                                                    val code = normalizedCode ?: return@TextButton
+                                                    buddyBusy = BuddyAction.JOIN
+                                                    buddyNote = null
+                                                    uiScope.launch {
+                                                        val failure = BuddyClient.join(code)
+                                                        if (failure == null) {
+                                                            showJoinBuddy = false
+                                                            joinBuddyCode = ""
+                                                        } else {
+                                                            buddyNote = buddyErrorTemplate.format(failure)
+                                                        }
+                                                        buddyBusy = null
+                                                    }
+                                                }
+                                            ) {
+                                                Text(
+                                                    stringResource(if (joining) R.string.settings_buddy_joining else R.string.settings_buddy_join_go),
+                                                    color = Brand.teal, fontWeight = FontWeight.SemiBold
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                                buddyNote?.let { note ->
+                                    Text(
+                                        note, color = Brand.warning, fontSize = 12.sp,
+                                        modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp)
+                                    )
+                                }
+                                if (!LeaderboardClient.isConfigured) {
+                                    GroupDivider()
+                                    Text(
+                                        stringResource(R.string.settings_leaderboard_unconfigured),
+                                        color = Brand.warning, fontSize = 12.sp,
+                                        modifier = Modifier.padding(16.dp)
+                                    )
+                                }
+                            }
+                            SectionFooter(stringResource(R.string.settings_buddy_footer))
+                        }
+                        SettingsSection.BUG_REPORTS -> {
+                            // Bug reports (iOS issue #31): build, OS, device and the
+                            // settings most likely to matter, onto the clipboard.
+                            SectionHeader(stringResource(R.string.settings_bug_reports))
+                            SettingsGroup {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                                            clipboard?.setPrimaryClip(ClipData.newPlainText("Diagnostics", diagnosticInfo(context, scope)))
+                                            copiedDiagnostics = true
+                                            if (Settings.hapticsEnabled) haptics.success()
+                                        }
+                                        .padding(16.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Icon(
+                                        if (copiedDiagnostics) Icons.Filled.CheckCircle else Icons.Filled.ContentCopy,
+                                        contentDescription = null,
+                                        tint = Brand.teal,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Text(
+                                        stringResource(if (copiedDiagnostics) R.string.settings_copied_diagnostics else R.string.settings_copy_diagnostics),
+                                        color = Brand.teal, fontWeight = FontWeight.Medium
+                                    )
+                                }
+                            }
+                            SectionFooter(stringResource(R.string.settings_bug_reports_footer))
+                        }
+                        SettingsSection.ABOUT -> {
+                            // Support the project (iOS parity). Links out to the website's
+                            // own page rather than straight to a tipping site: Play's
+                            // payments policy reads an in-app link to external tipping as
+                            // a purchase mechanism, a link to the project's homepage is
+                            // not, and the coffee button lives there.
+                            SectionHeader(stringResource(R.string.settings_about))
+                            SettingsGroup {
+                                LinkRow(stringResource(R.string.settings_support_project)) { uriHandler.openUri(SUPPORT_URL) }
+                                GroupDivider()
+                                LinkRow(stringResource(R.string.settings_join_discord)) { uriHandler.openUri(DISCORD_URL) }
+                                GroupDivider()
+                                LinkRow(stringResource(R.string.settings_source_github)) { uriHandler.openUri(GITHUB_URL) }
+                                GroupDivider()
+                                LinkRow(stringResource(R.string.settings_licenses)) { showLicenses = true }
+                            }
+                            SectionFooter(stringResource(R.string.settings_about_footer))
                         }
                     }
-                    SectionFooter(stringResource(R.string.settings_preview_stage_footer))
-                }
-
-                // Bug reports (iOS issue #31): build, OS, device and the
-                // settings most likely to matter, onto the clipboard.
-                SectionHeader(stringResource(R.string.settings_bug_reports))
-                SettingsGroup {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-                                clipboard?.setPrimaryClip(ClipData.newPlainText("Diagnostics", diagnosticInfo(context, scope)))
-                                copiedDiagnostics = true
-                                if (Settings.hapticsEnabled) haptics.success()
-                            }
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Icon(
-                            if (copiedDiagnostics) Icons.Filled.CheckCircle else Icons.Filled.ContentCopy,
-                            contentDescription = null,
-                            tint = Brand.teal,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Text(
-                            stringResource(if (copiedDiagnostics) R.string.settings_copied_diagnostics else R.string.settings_copy_diagnostics),
-                            color = Brand.teal, fontWeight = FontWeight.Medium
-                        )
                     }
-                }
-                SectionFooter(stringResource(R.string.settings_bug_reports_footer))
-
-                // Support the project (iOS parity). Links out to the website's
-                // own page rather than straight to a tipping site: Play's
-                // payments policy reads an in-app link to external tipping as
-                // a purchase mechanism, a link to the project's homepage is
-                // not, and the coffee button lives there.
-                SectionHeader(stringResource(R.string.settings_about))
-                SettingsGroup {
-                    LinkRow(stringResource(R.string.settings_support_project)) { uriHandler.openUri(SUPPORT_URL) }
-                    GroupDivider()
-                    LinkRow(stringResource(R.string.settings_join_discord)) { uriHandler.openUri(DISCORD_URL) }
-                    GroupDivider()
-                    LinkRow(stringResource(R.string.settings_source_github)) { uriHandler.openUri(GITHUB_URL) }
-                    GroupDivider()
-                    LinkRow(stringResource(R.string.settings_licenses)) { showLicenses = true }
-                }
-                SectionFooter(stringResource(R.string.settings_about_footer))
-
-                // Mid-session the destructive reset stays out of reach — it would
-                // yank the engine out from under the running drill. Home only.
-                if (scope == null) {
-                SectionHeader(stringResource(R.string.common_progress))
-                SettingsGroup {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().clickable { confirmReset = true }.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(stringResource(R.string.settings_reset_all_progress), color = Color(0xFFF2788F), fontWeight = FontWeight.Medium)
                     }
-                }
-                SectionFooter(
-                    stringResource(R.string.settings_reset_footer)
-                )
                 }
 
                 Spacer(Modifier.height(24.dp))
             }
+        }
     }
 
     if (confirmReset) {
@@ -1216,6 +1349,115 @@ fun SettingsScreen(
 
 /** The buddy call a Settings row is waiting on, so the row can say so and the others go quiet. */
 private enum class BuddyAction { INVITE, JOIN, LEAVE }
+
+/** The Settings root's search field (#236): filters [SettingsCatalog] as you type. */
+@Composable
+private fun SettingsSearchField(query: String, onChange: (String) -> Unit) {
+    val focusManager = LocalFocusManager.current
+    OutlinedTextField(
+        value = query,
+        onValueChange = onChange,
+        singleLine = true,
+        placeholder = { Text(stringResource(R.string.settings_search_hint)) },
+        leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null, tint = Brand.textSecondary) },
+        trailingIcon = if (query.isEmpty()) null else {
+            {
+                IconButton(onClick = { onChange("") }) {
+                    Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.settings_search_clear), tint = Brand.textSecondary)
+                }
+            }
+        },
+        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+        keyboardActions = KeyboardActions(onSearch = { focusManager.clearFocus() }),
+        modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
+    )
+}
+
+/** The icon beside a category on the Settings root. */
+private val SettingsCategory.icon: ImageVector
+    get() = when (this) {
+        SettingsCategory.SOUND -> Icons.Filled.GraphicEq
+        SettingsCategory.SPEED -> Icons.Filled.Speed
+        SettingsCategory.CHARACTERS -> Icons.Filled.School
+        SettingsCategory.PRACTICE -> Icons.Filled.TrackChanges
+        SettingsCategory.KEYS -> Icons.Filled.Piano
+        SettingsCategory.QSO -> Icons.Filled.SettingsInputAntenna
+        SettingsCategory.REMINDERS -> Icons.Filled.Notifications
+        SettingsCategory.DISPLAY -> Icons.Filled.TextFields
+        SettingsCategory.LEADERBOARD -> Icons.Filled.EmojiEvents
+        SettingsCategory.ABOUT -> Icons.Filled.Info
+    }
+
+/** One category on the Settings root: tap to open its sub-screen. */
+@Composable
+private fun CategoryRow(category: SettingsCategory, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        Icon(category.icon, contentDescription = null, tint = Brand.teal, modifier = Modifier.size(20.dp))
+        Text(category.title, color = Brand.textPrimary, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+        Text("›", color = Brand.textSecondary, fontSize = 20.sp)
+    }
+}
+
+/** A search hit: the setting, and the category it opens. */
+@Composable
+private fun SearchResultRow(entry: SettingsSearchEntry, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(entry.title, color = Brand.textPrimary, fontWeight = FontWeight.Medium)
+            Text(entry.category.title, color = Brand.textSecondary, fontSize = 12.sp)
+        }
+        Text("›", color = Brand.textSecondary, fontSize = 20.sp)
+    }
+}
+
+/**
+ * One section of a category sub-screen. When a search result opened the
+ * category on this section, it is scrolled to the top and tinted for a moment
+ * so the eye finds it (iOS does the same with its list's scroll proxy).
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun AnchoredSection(
+    section: SettingsSection,
+    focus: SettingsSection?,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    val requester = remember { BringIntoViewRequester() }
+    var width by remember { mutableStateOf(1f) }
+    var flashing by remember { mutableStateOf(false) }
+    LaunchedEffect(focus) {
+        if (section == focus) {
+            delay(150)
+            // A rect far taller than the screen, from the section's top: the
+            // smallest scroll that shows its leading edge puts the section at
+            // the top instead of just peeking in at the bottom.
+            requester.bringIntoView(Rect(0f, 0f, width, 100_000f))
+            flashing = true
+            delay(1500)
+            flashing = false
+        }
+    }
+    val tint by animateColorAsState(
+        if (flashing) Brand.teal.copy(alpha = 0.16f) else Color.Transparent,
+        animationSpec = tween(600),
+        label = "settingsFocus"
+    )
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .bringIntoViewRequester(requester)
+            .onGloballyPositioned { width = it.size.width.toFloat().coerceAtLeast(1f) }
+            .background(tint, RoundedCornerShape(12.dp)),
+        content = content
+    )
+}
 
 /** The Practice footer, assembled from whichever rows the scope kept. */
 private fun practiceFooter(choices: Boolean, wordPool: Boolean, duration: Boolean): String {

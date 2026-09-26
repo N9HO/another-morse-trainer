@@ -420,6 +420,12 @@
 
     <!-- SettingsScreen -->
     <string name="settings_scoped_note">Showing what applies here — the full settings live on the home screen.</string>
+    <!-- Settings root search and categories (#236); category titles live in morsekit/SettingsCatalog.kt -->
+    <string name="settings_search_hint">Search settings</string>
+    <string name="settings_search_clear">Clear search</string>
+    <string name="settings_search_results">Results</string>
+    <string name="settings_search_none">No settings match “%1$s”.</string>
+    <string name="settings_pileup_footer">The same options as the Pileup Runner setup screen; a change in either place shows in both.</string>
     <string name="settings_character_speed">Character speed</string>
     <string name="settings_qrq_note">\n\nQRQ territory — %1$s WPM. Great for pushing instant recognition once 30+ feels comfortable.</string>
     <string name="settings_speed_footer">Character speed is how fast the dits and dahs are sent. Farnsworth keeps each character at full speed but adds extra space between characters, down to the effective speed, so you have time to recognise each one. Applies to words, groups and other multi-character content — single characters are unaffected.</string>
@@ -574,7 +580,7 @@
     <string name="start_here_aim_title">Aim at a contact</string>
     <string name="start_here_aim_body">Have a target beyond "learn Morse". The best one is a real contact, and it needs far less than the full alphabet: your own callsign, the question mark, your state, and a handful of exchange words. People who aim at a contact tend to get there; people who aim at finishing the alphabet often stall.</string>
     <string name="start_here_know_title">Already know some Morse?</string>
-    <string name="start_here_know_body">Open Settings → Proficiency and tell it what you already know. That sets your starting character set instead of making you re-earn A and N. Comfortable with the whole alphabet? Skip Journey and go straight to Common Words, Rapid Fire, or Pileup Runner.</string>
+    <string name="start_here_know_body">Open Settings › Characters &amp; Lessons › Proficiency and tell it what you already know. That sets your starting character set instead of making you re-earn A and N. Comfortable with the whole alphabet? Skip Journey and go straight to Common Words, Rapid Fire, or Pileup Runner.</string>
     <!-- Daily Dit: the shared daily puzzle (#155) -->
     <string name="daily_dit_title">Daily Dit</string>
     <string name="daily_dit_home_sub_new">Today\'s word in Morse — your speed, up to %1$d WPM</string>
@@ -875,7 +881,7 @@
     <!-- Shared leaderboard (docs/high-scores-design.md, step 2) -->
     <string name="leaderboard_title">Leaderboard</string>
     <string name="leaderboard_open">Shared leaderboard</string>
-    <string name="leaderboard_blurb">Top runs from both apps, graded by the server: each board number is the speed summed over the items copied correctly, so a game\'s number is not its on-screen score. Share your own runs from Settings › Leaderboard.</string>
+    <string name="leaderboard_blurb">Top runs from both apps, graded by the server: each board number is the speed summed over the items copied correctly, so a game\'s number is not its on-screen score. Share your own runs from Settings › Leaderboard &amp; Buddy.</string>
     <string name="leaderboard_loading">Loading…</string>
     <string name="leaderboard_empty">No scores posted for this mode yet.</string>
     <string name="leaderboard_error">Couldn\'t load the board: %1$s</string>
@@ -886,7 +892,7 @@
     <string name="games_leaderboard_tagline">Top runs in every game, from both apps</string>
     <!-- The first-play opt-in prompt (#226) -->
     <string name="leaderboard_optin_title">Post your scores to the leaderboard?</string>
-    <string name="leaderboard_optin_body">Finished games (and Rapid Fire, Contest and Pileup Runner runs) can be posted to the shared leaderboard under a display name of 2–12 characters: letters, digits, space, / and -. The board ranks a server-graded copy of each run, not the on-screen score. You can turn sharing off at any time in Settings › Leaderboard.</string>
+    <string name="leaderboard_optin_body">Finished games (and Rapid Fire, Contest and Pileup Runner runs) can be posted to the shared leaderboard under a display name of 2–12 characters: letters, digits, space, / and -. The board ranks a server-graded copy of each run, not the on-screen score. You can turn sharing off at any time in Settings › Leaderboard &amp; Buddy.</string>
     <string name="leaderboard_optin_share">Share scores</string>
     <string name="leaderboard_optin_not_now">Not now</string>
     <string name="leaderboard_optin_never">Don\'t ask again</string>
@@ -898,7 +904,7 @@
     <string name="leaderboard_reason_not_registered">run not registered (%1$s)</string>
     <string name="leaderboard_reason_network">couldn\'t reach the server</string>
     <string name="leaderboard_reason_attestation">device attestation failed</string>
-    <!-- Settings › Leaderboard -->
+    <!-- Settings › Leaderboard &amp; Buddy -->
     <string name="settings_leaderboard">Leaderboard</string>
     <string name="settings_leaderboard_share">Share scores to the shared leaderboard</string>
     <string name="settings_leaderboard_name">Display name</string>
@@ -912,19 +918,19 @@
     <string name="settings_leaderboard_delete_failed">Couldn\'t delete: %1$s</string>
     <string name="settings_leaderboard_footer">Off by default. When on, each finished Rapid Fire, Contest, Pileup Runner or arcade run is sent to the shared leaderboard under your display name and graded there: the board ranks server-graded copies, the speed summed over the items you copied correctly, so a game\'s board number is not its on-screen score. Only builds installed from Google Play can post; the board itself is open to everyone.</string>
     <string name="settings_leaderboard_unconfigured">The leaderboard is not enabled in this build.</string>
-    <!-- Settings › Buddy streak (docs/buddy-streak-design.md) -->
+    <!-- Settings › Leaderboard &amp; Buddy › Buddy streak (docs/buddy-streak-design.md) -->
     <string name="settings_buddy">Buddy streak</string>
     <string name="settings_buddy_unpaired">Invite a buddy, or join with a code they send you.</string>
     <string name="settings_buddy_paired">Paired with %1$s · %2$s · %1$s has practised today</string>
     <string name="settings_buddy_paired_not_yet">Paired with %1$s · %2$s · %1$s hasn\'t practised yet today</string>
-    <string name="settings_buddy_no_name">Pick a display name in Settings › Leaderboard</string>
+    <string name="settings_buddy_no_name">Pick a display name in Settings › Leaderboard &amp; Buddy</string>
     <string name="settings_buddy_invite">Invite a buddy</string>
     <string name="settings_buddy_inviting">Asking for a code…</string>
     <string name="settings_buddy_code_hint">Send this code to your buddy. It works once, within 24 hours (until %1$s).</string>
     <string name="settings_buddy_copy">Copy code</string>
     <string name="settings_buddy_copied">Copied</string>
     <string name="settings_buddy_share">Share code</string>
-    <string name="settings_buddy_share_text">Be my Morse buddy on Another Morse Trainer: open Settings › Buddy streak › Join with a code and enter %1$s (good for 24 hours).</string>
+    <string name="settings_buddy_share_text">Be my Morse buddy on Another Morse Trainer: open Settings › Leaderboard &amp; Buddy › Buddy streak › Join with a code and enter %1$s (good for 24 hours).</string>
     <string name="settings_buddy_share_title">Share buddy code</string>
     <string name="settings_buddy_join">Join with a code</string>
     <string name="settings_buddy_join_hint">Six letters or digits</string>
@@ -937,7 +943,7 @@
     <string name="settings_buddy_refreshing">Checking…</string>
     <string name="settings_buddy_error">Couldn\'t do that: %1$s</string>
     <string name="settings_buddy_footer">Pair with one other person and keep a shared streak: each day you both practise counts, and a day either of you misses resets it. Your buddy sees your leaderboard display name and whether you practised each day, nothing else. Pairing works on its own; the leaderboard switch above stays yours. Only builds installed from Google Play can pair.</string>
-    <string name="buddy_reason_no_name">pick a display name in Settings › Leaderboard first</string>
+    <string name="buddy_reason_no_name">pick a display name in Settings › Leaderboard &amp; Buddy first</string>
     <string name="buddy_reason_bad_code">the code is six letters or digits</string>
     <string name="buddy_reason_bad_reply">the server sent something unexpected</string>
     <!-- Home screen buddy line -->

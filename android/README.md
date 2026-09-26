@@ -133,7 +133,7 @@ the iOS app's navy/teal look.
 - **Leaderboard**: an opt-in shared board across both apps for Rapid Fire,
   Contest, Pileup Runner and the six arcade games, browsable by anyone, per
   mode, from the Games sub-menu and from Progress without sharing. Off by
-  default; turn it on in Settings › Leaderboard with a display name, or from
+  default; turn it on in Settings › Leaderboard & Buddy with a display name, or from
   the one prompt offered the first time you start a game with sharing off
   (with "Not now" and "Don't ask again"). Each finished run's transcript
   (what was sent, what you answered) is graded by the server, which ranks
@@ -143,7 +143,7 @@ the iOS app's navy/teal look.
   this install posted
 - **Buddy streak**: pair with one other person (on either app) and keep a
   shared streak: each day you both practise counts, a day either misses
-  resets it. Settings › Buddy streak mints a six-character invite code
+  resets it. Settings › Leaderboard & Buddy › Buddy streak mints a six-character invite code
   (single use, 24 hours) to send however you like, or takes one a buddy
   sent; it uses the leaderboard display name and needs no leaderboard
   opt-in. The home screen says whether your buddy has practised today, the
@@ -159,6 +159,10 @@ the iOS app's navy/teal look.
   the first character) and a separate band-noise level to copy through,
   haptics, daily reminders, session length, custom word lists, punctuation
   opt-ins, and a slashed-zero display option
+- **Settings** grouped into ten categories (Sound, Speed & Timing,
+  Characters & Lessons, Practice & Feedback, Keys & Sending, QSO & Pileups,
+  Reminders, Display, Leaderboard & Buddy, Help & About) with a search field
+  that finds any setting by name or synonym and jumps straight to it
 - Dark navy/teal theme, adaptive icon, phone + tablet responsive layout
 
 ## Build

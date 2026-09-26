@@ -171,7 +171,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
 
     // The Koch starting level ("what do you already know") is deliberately not
     // a per-mode question any more (#151): it is one app-wide answer, given at
-    // first run (`OnboardingView`) and changed under Settings → Proficiency.
+    // first run (`OnboardingView`) and changed under Settings › Characters & Lessons › Proficiency.
     // Re-asking it on every Characters, Confusion Drill and Sending Practice
     // launch read as three different questions, and tapping the level you
     // already had silently restarted the ladder.
@@ -2856,7 +2856,7 @@ final class AppModel: ObservableObject {
     }
 
     /// The first-run answer (#151): seed the ladder, unlock the Journey that
-    /// far, and never ask again. Settings → Proficiency changes it later.
+    /// far, and never ask again. Settings › Characters & Lessons › Proficiency changes it later.
     func completeOnboarding(_ proficiency: Proficiency) {
         configureProficiency(proficiency)
         settings.onboardingDone = true
