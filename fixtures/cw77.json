@@ -142,12 +142,12 @@
   "styles": {
     "order": ["listen", "quiz"],
     "labels": { "listen": "Listen", "quiz": "Quiz" },
-    "default": "quiz",
+    "default": "listen",
     "cases": [
       {
         "why": "listen, switch off: the 70, each answered by its meaning",
         "style": "listen", "includeMe": false, "callsign": "n9ho", "name": "Justin",
-        "count": 71,
+        "count": 70,
         "first": { "display": "VVV", "answer": "test signal — tuning up" },
         "tail": [ { "display": "DX", "answer": "distance" } ]
       },
@@ -202,7 +202,7 @@
       "ios": { "listen": "cw77Listen", "quiz": "cw77" },
       "android": { "listen": "CW 77 Listen", "quiz": "CW 77" }
     },
-    "passive": ["quiz"],
+    "passive": ["listen"],
     "ranked": false
   },
   "personal": {
