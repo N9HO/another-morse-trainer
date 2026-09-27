@@ -103,7 +103,7 @@ struct BuddySettingsSection: View {
         } header: {
             Text("Buddy streak")
         } footer: {
-            Text("Pair with up to ten people and keep a separate streak with each: the days you both practised. Any practice day counts, the same as your own streak, and one practice counts for every buddy. Your buddies see your leaderboard display name and whether you practised each day, nothing else; pairing needs the same device attestation as posting a score but not the Share scores switch. Leaving a buddy ends that streak for both of you and keeps the others, and Delete my scores above removes every pairing.")
+            Text("Pair with up to ten people and keep a separate streak with each: the days you both practiced. Any practice day counts, the same as your own streak, and one practice counts for every buddy. Your buddies see your leaderboard display name and whether you practiced each day, nothing else; pairing needs the same device attestation as posting a score but not the Share scores switch. Leaving a buddy ends that streak for both of you and keeps the others, and Delete my scores above removes every pairing.")
         }
         .listRowBackground(rowBackground)
         .confirmationDialog("Leave \(leaving?.displayName ?? "buddy")?",

@@ -5939,9 +5939,9 @@ do {
     check("the cache takes the list, the cap and the day",
           listed.buddies.count == 2 && listed.maxBuddies == 10 && listed.myStreak == 30 && listed.today == "2026-09-11" && listed.paired && !listed.isFull)
     check("a buddy row says its own streak and day",
-          listed.rowLine(for: w1aw, today: "2026-09-11") == "12-day buddy streak · practised today"
-          && listed.rowLine(for: listed.buddies[1], today: "2026-09-11") == "3-day buddy streak · hasn't practised yet today"
-          && listed.rowLine(for: w1aw, today: "2026-09-12") == "12-day buddy streak · hasn't practised yet today")
+          listed.rowLine(for: w1aw, today: "2026-09-11") == "12-day buddy streak · practiced today"
+          && listed.rowLine(for: listed.buddies[1], today: "2026-09-11") == "3-day buddy streak · hasn't practiced yet today"
+          && listed.rowLine(for: w1aw, today: "2026-09-12") == "12-day buddy streak · hasn't practiced yet today")
     check("the count line shows the cap", listed.countLine == "2 of 10 buddies" && BuddyStatusCache().countLine == "0 of 1 buddy")
     var invited = BuddyStatusCache(status: none, fetchedAt: fetched)
     invited.pendingInviteCode = "ABC234"
@@ -5977,7 +5977,7 @@ do {
           legacy?.buddies == [BuddyEntry(id: "", displayName: "W1AW", practisedToday: true, streak: 4)]
           && legacy?.maxBuddies == 1 && legacy?.myStreak == 9 && legacy?.lastReportedDay == "2026-09-11" && legacy?.fetchedAt == nil)
     check("… and its home line reads as before",
-          legacy?.homeLine(today: "2026-09-11") == "W1AW practised today · 4-day buddy streak")
+          legacy?.homeLine(today: "2026-09-11") == "W1AW practiced today · 4-day buddy streak")
     let legacyUnpaired = try? JSONDecoder().decode(BuddyStatusCache.self, from: Data(#"{"paired":false,"buddyName":"","pendingInviteCode":"ABC234"}"#.utf8))
     check("an unpaired one-buddy cache keeps its invite and has no buddies",
           legacyUnpaired?.buddies == [] && legacyUnpaired?.pendingInviteCode == "ABC234")

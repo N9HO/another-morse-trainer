@@ -359,7 +359,7 @@ struct SettingsView: View {
                 ForEach(BackgroundNoiseLevel.bandLevels) { Text($0.label).tag($0) }
             }
             Label {
-                Text("Adds audible band noise (QRN) under everything so practising is more like copying off the air; any level also keeps Bluetooth audio awake.")
+                Text("Adds audible band noise (QRN) under everything so practicing is more like copying off the air; any level also keeps Bluetooth audio awake.")
             } icon: {
                 Image(systemName: "waveform")
             }
@@ -642,7 +642,7 @@ struct SettingsView: View {
                 }
             }
             if (MIDIOutput.KeyerMode(rawValue: adapterKeyerMode) ?? .straightKey).adapterTimesSending {
-                Text("The adapter times the sending in this mode, at the speed you're practising at.")
+                Text("The adapter times the sending in this mode, at the speed you're practicing at.")
                     .font(.caption).foregroundStyle(.secondary)
             }
         } header: {

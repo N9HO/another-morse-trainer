@@ -461,7 +461,7 @@ private struct ResultsSection: View {
                                      slashedZero: model.settings.slashedZero))
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .fixedSize(horizontal: false, vertical: true)
-            Text("Red: sent as something else · orange: left out · grey: extra · ⎵ word break")
+            Text("Red: sent as something else · orange: left out · gray: extra · ⎵ word break")
                 .font(.caption2)
                 .foregroundStyle(Theme.textSecondary)
             let errors = analysis.alignment.filter { $0.kind != .match }

@@ -62,9 +62,9 @@ testers, bug reports and feature chat live on
   lives, combos, three difficulties, and every hit and miss feeds your stats
 - **Morse Defender**: an arcade callsign-copy game — cities and ships with
   callsigns line the bottom; each attacker sends its target's callsign and
-  you route the defence by tapping that asset or typing the callsign before
+  you route the defense by tapping that asset or typing the callsign before
   it arrives. Callsigns are call-like groups from your active set or real
-  US calls, sent from 8 WPM under your character speed (Farnsworth honoured)
+  US calls, sent from 8 WPM under your character speed (Farnsworth honored)
   and stepping up 2 WPM every four hits. Assets are the lives (4 growing to
   8), up to three attackers at once, waves, combos, three difficulties, and
   every character copied feeds your stats and confusion matrix
@@ -81,7 +81,7 @@ testers, bug reports and feature chat live on
   floats. Labels hide as the waves go on until the traffic announces itself in
   Morse. Three lives, waves, combos, three difficulties, its own gentle speed
   ramp, and every lane decision feeds your stats and confusion matrix
-- **CW Asteroids**: the sending-side arcade game — labelled asteroids drift
+- **CW Asteroids**: the sending-side arcade game — labeled asteroids drift
   in toward your ship; key each one's label to destroy it, or hear a label
   sent and tap the asteroid carrying it. From wave 3 larger asteroids carry
   short words and callsigns that split into their characters when hit.
@@ -157,10 +157,10 @@ testers, bug reports and feature chat live on
   prompt offers to turn it on, with "Not now" and "Don't ask again".
 - **Buddy streak**: pair with up to ten people (on either app), each by a
   six-character invite code (single use, 24 hours), and keep a separate
-  streak with each of the days you *both* practised. Settings ›
+  streak with each of the days you *both* practiced. Settings ›
   Leaderboard & Buddy › Buddy streak lists every buddy with their streak and whether they have
-  practised today, and leaves one buddy at a time. The home screen says who
-  has practised today, and the daily reminder adds one nudge naming whoever
+  practiced today, and leaves one buddy at a time. The home screen says who
+  has practiced today, and the daily reminder adds one nudge naming whoever
   hasn't (as of the app's last look). Uses the leaderboard display name and
   attestation; pairing itself is the opt-in.
 - **Progress**: daily streak with milestone celebrations, a GitHub-style

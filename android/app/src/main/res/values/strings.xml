@@ -465,7 +465,7 @@
     <string name="settings_pileup_footer">The same options as the Pileup Runner setup screen; a change in either place shows in both.</string>
     <string name="settings_character_speed">Character speed</string>
     <string name="settings_qrq_note">\n\nQRQ territory — %1$s WPM. Great for pushing instant recognition once 30+ feels comfortable.</string>
-    <string name="settings_speed_footer">Character speed is how fast the dits and dahs are sent. Farnsworth keeps each character at full speed but adds extra space between characters, down to the effective speed, so you have time to recognise each one. Applies to words, groups and other multi-character content — single characters are unaffected.</string>
+    <string name="settings_speed_footer">Character speed is how fast the dits and dahs are sent. Farnsworth keeps each character at full speed but adds extra space between characters, down to the effective speed, so you have time to recognize each one. Applies to words, groups and other multi-character content — single characters are unaffected.</string>
     <string name="settings_speed_warning">Below %1$s WPM it\'s easy to start counting the dits and dahs instead of hearing each character as a single sound. Training at %2$s+ WPM builds instant, by-ear recognition, which is the whole point of the Koch method. If you need more time to answer, raise \"Recognition target\" or lower the Farnsworth speed instead of slowing the code.</string>
     <string name="settings_sound">Sound</string>
     <string name="settings_sidetone_pitch">Sidetone pitch</string>
@@ -496,8 +496,8 @@
     <string name="settings_feedback">Feedback</string>
     <string name="settings_haptic_feedback">Haptic feedback</string>
     <string name="settings_voice_answers">Voice answers</string>
-    <string name="settings_feedback_footer">Show right / wrong colours the answers and says which it was; the replay button lets you hear the item again before answering. Buzz on right and wrong answers. Voice answers let you speak instead of tap (uses the microphone) — turning them on turns keyed answers off, and the reverse.</string>
-    <string name="settings_feedback_footer_haptics_only">Show right / wrong colours the answers and says which it was; the replay button lets you hear the item again before answering. Buzz on right and wrong answers.</string>
+    <string name="settings_feedback_footer">Show right / wrong colors the answers and says which it was; the replay button lets you hear the item again before answering. Buzz on right and wrong answers. Voice answers let you speak instead of tap (uses the microphone) — turning them on turns keyed answers off, and the reverse.</string>
+    <string name="settings_feedback_footer_haptics_only">Show right / wrong colors the answers and says which it was; the replay button lets you hear the item again before answering. Buzz on right and wrong answers.</string>
     <string name="settings_hardware_key">Hardware key</string>
     <string name="settings_hardware_key_footer">How the adapter should read your key. Straight key is the default; pick an iambic mode for a paddle. This is your key, not a drill setting — it applies in Sending Practice and on the Vail screen alike.</string>
     <string name="settings_display">Display</string>
@@ -513,7 +513,7 @@
     <string name="settings_reset">Reset</string>
     <string name="settings_session_length">Session length</string>
     <string name="settings_keyer_mode">Keyer mode</string>
-    <string name="settings_keyer_mode_note">The adapter times the sending in this mode, at the speed you\'re practising at.</string>
+    <string name="settings_keyer_mode_note">The adapter times the sending in this mode, at the speed you\'re practicing at.</string>
     <string name="settings_on_screen_key">On-screen key</string>
     <string name="settings_paddle_mode">Paddle mode</string>
     <string name="settings_paddle_swap">Dah on the left</string>
@@ -744,7 +744,7 @@
     <string name="settings_keep_bluetooth_awake">Keep Bluetooth audio awake</string>
     <string name="settings_keep_bluetooth_awake_footer">Keep Bluetooth audio awake plays a floor deliberately just above silence — too quiet to hear — so Bluetooth earbuds never idle between transmissions: truly silent audio lets some headsets sleep, and they wake a moment late and clip the first character.</string>
     <string name="settings_band_noise">Band noise</string>
-    <string name="settings_band_noise_footer">Band noise adds audible band noise (QRN) under everything so practising is more like copying off the air; any level also keeps Bluetooth audio awake.</string>
+    <string name="settings_band_noise_footer">Band noise adds audible band noise (QRN) under everything so practicing is more like copying off the air; any level also keeps Bluetooth audio awake.</string>
     <string name="rapidfire_include_sections">Include ARRL/RAC Field Day sections</string>
     <string name="rapidfire_cut_numbers">Cut numbers</string>
     <!-- Daily Dit counts (#168): the share text carries both, so the screen says them the same way. -->
@@ -810,7 +810,7 @@
     <!-- Morse Defender (#188) -->
     <string name="mode_defender">Morse Defender</string>
     <string name="home_arcade_callsign_copy">Arcade callsign copy</string>
-    <string name="defender_blurb">Cities and ships line the bottom, each with a callsign. Attackers come down from the top, and each one sends the callsign of the asset it is heading for. Copy it and route the defence — tap that asset, or type the callsign — before the attacker arrives. Lose every asset and the game is over; every wave brings more assets and more attackers at once. Every copy feeds your character stats.</string>
+    <string name="defender_blurb">Cities and ships line the bottom, each with a callsign. Attackers come down from the top, and each one sends the callsign of the asset it is heading for. Copy it and route the defense — tap that asset, or type the callsign — before the attacker arrives. Lose every asset and the game is over; every wave brings more assets and more attackers at once. Every copy feeds your character stats.</string>
     <string name="defender_how_to_route">How you route</string>
     <string name="defender_callsigns">Callsigns</string>
     <string name="defender_callsigns_active">From my characters</string>
@@ -901,10 +901,10 @@
     <!-- CW Asteroids (#189) -->
     <string name="mode_asteroids">CW Asteroids</string>
     <string name="home_arcade_sending">Arcade sending</string>
-    <string name="asteroids_blurb">Labelled asteroids drift in toward your ship. See one and key its label to destroy it, or hear one sent and tap the asteroid carrying it. Later waves bring short words and callsigns that split into their characters when hit. Three lives; every wave comes faster. Misses feed your confusion drill.</string>
+    <string name="asteroids_blurb">Labeled asteroids drift in toward your ship. See one and key its label to destroy it, or hear one sent and tap the asteroid carrying it. Later waves bring short words and callsigns that split into their characters when hit. Three lives; every wave comes faster. Misses feed your confusion drill.</string>
     <string name="asteroids_how_you_play">How you play</string>
     <string name="asteroids_characters">Characters</string>
-    <string name="asteroids_words_note">From wave %1$d, larger asteroids carry short words and callsigns spelt from these characters; a word splits into its characters when hit.</string>
+    <string name="asteroids_words_note">From wave %1$d, larger asteroids carry short words and callsigns spelled from these characters; a word splits into its characters when hit.</string>
     <string name="asteroids_difficulty">Difficulty</string>
     <string name="asteroids_start">Start game</string>
     <string name="asteroids_score">Score</string>
@@ -976,8 +976,8 @@
     </plurals>
     <!-- One buddy's row, under the name: the pairing's streak, then its day. -->
     <string name="settings_buddy_row">%1$s · %2$s</string>
-    <string name="settings_buddy_row_practised">practised today</string>
-    <string name="settings_buddy_row_not_yet">hasn\'t practised yet today</string>
+    <string name="settings_buddy_row_practised">practiced today</string>
+    <string name="settings_buddy_row_not_yet">hasn\'t practiced yet today</string>
     <string name="settings_buddy_no_name">Pick a display name in Settings › Leaderboard &amp; Buddy</string>
     <string name="settings_buddy_invite">Invite a buddy</string>
     <string name="settings_buddy_invite_another">Invite another buddy</string>
@@ -1000,23 +1000,23 @@
     <string name="settings_buddy_leave_confirm_body">Ends your buddy streak with %1$s, for both of you. Your other buddies are not affected, and either of you can pair again with a new code.</string>
     <string name="settings_buddy_refreshing">Checking…</string>
     <string name="settings_buddy_error">Couldn\'t do that: %1$s</string>
-    <string name="settings_buddy_footer">Pair with up to ten people and keep a separate streak with each: each day you both practise counts, and a day either of you misses resets it. One practice counts for every buddy. Your buddies see your leaderboard display name and whether you practised each day, nothing else. Leaving a buddy ends that streak for both of you and keeps the others. Pairing works on its own; the leaderboard switch above stays yours. Only builds installed from Google Play can pair.</string>
+    <string name="settings_buddy_footer">Pair with up to ten people and keep a separate streak with each: each day you both practice counts, and a day either of you misses resets it. One practice counts for every buddy. Your buddies see your leaderboard display name and whether you practiced each day, nothing else. Leaving a buddy ends that streak for both of you and keeps the others. Pairing works on its own; the leaderboard switch above stays yours. Only builds installed from Google Play can pair.</string>
     <string name="buddy_reason_no_name">pick a display name in Settings › Leaderboard &amp; Buddy first</string>
     <string name="buddy_reason_bad_code">the code is six letters or digits</string>
     <string name="buddy_reason_bad_reply">the server sent something unexpected</string>
     <!-- Home screen buddy line. One buddy: home_buddy_practised / home_buddy_not_yet with
          the streak. Several: home_buddies_all, or a buddy_waiting_* phrase in
          home_buddies_waiting, with buddy_streak_best (fixtures/buddy-list.json). -->
-    <string name="home_buddy_practised">%1$s practised today · %2$s</string>
+    <string name="home_buddy_practised">%1$s practiced today · %2$s</string>
     <string name="buddy_streak_days">%1$d-day buddy streak</string>
     <string name="buddy_streak_none">no buddy streak yet</string>
     <string name="buddy_streak_best">best: %1$s</string>
-    <string name="home_buddy_not_yet">%1$s hasn\'t practised yet today · %2$s</string>
-    <string name="home_buddies_all">All %1$d buddies practised today · %2$s</string>
+    <string name="home_buddy_not_yet">%1$s hasn\'t practiced yet today · %2$s</string>
+    <string name="home_buddies_all">All %1$d buddies practiced today · %2$s</string>
     <string name="home_buddies_waiting">%1$s · %2$s</string>
-    <string name="buddy_waiting_one">%1$s hasn\'t practised yet today</string>
-    <string name="buddy_waiting_two">%1$s and %2$s haven\'t practised yet today</string>
-    <string name="buddy_waiting_many">%1$s, %2$s and %3$d more haven\'t practised yet today</string>
+    <string name="buddy_waiting_one">%1$s hasn\'t practiced yet today</string>
+    <string name="buddy_waiting_two">%1$s and %2$s haven\'t practiced yet today</string>
+    <string name="buddy_waiting_many">%1$s, %2$s and %3$d more haven\'t practiced yet today</string>
     <!-- Licenses: the Play Integrity SDK notice -->
     <string name="licenses_play_integrity_title">Google Play Integrity API</string>
     <string name="licenses_play_integrity_footer">Sharing a score proves this is a genuine Play-installed build with the Play Integrity API library (com.google.android.play:integrity) and the Google Play services it depends on, © Google LLC, used under the Android Software Development Kit License Agreement and the Play Integrity API Terms of Service.</string>
@@ -1070,7 +1070,7 @@
     <string name="analyzer_char_wpm">char WPM</string>
     <string name="analyzer_overall_wpm">overall WPM</string>
     <string name="analyzer_what_you_sent">What you sent</string>
-    <string name="analyzer_alignment_legend">Red: sent as something else · orange: left out · grey: extra · ⎵ word break</string>
+    <string name="analyzer_alignment_legend">Red: sent as something else · orange: left out · gray: extra · ⎵ word break</string>
     <string name="analyzer_unknown_character">an unknown character</string>
     <string name="analyzer_sent_as">%1$s (%2$s) sent as %3$s (%4$s)</string>
     <string name="analyzer_break_too_short">word break sent too short</string>
