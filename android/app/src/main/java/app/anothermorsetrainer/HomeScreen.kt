@@ -18,7 +18,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
-import androidx.compose.material.icons.automirrored.filled.FormatListNumbered
+import androidx.compose.material.icons.filled.FormatListNumbered
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.ListAlt
 import androidx.compose.material.icons.automirrored.filled.MenuBook
@@ -126,7 +126,7 @@ fun HomeScreen(
     val cw77Item = HomeItem(
         stringResource(R.string.mode_cw77),
         stringResource(R.string.home_cwops_on_air_list),
-        Icons.AutoMirrored.Filled.FormatListNumbered,
+        Icons.Filled.FormatListNumbered,
         onPickCw77
     )
     val items = listOf(
