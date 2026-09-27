@@ -197,3 +197,118 @@ struct SendingKeyerView: View {
         model.select(typed)
     }
 }
+
+/// A hardware Morse key (Vail Adapter / BLE-MIDI) typing into a screen that
+/// otherwise takes the keyboard — the Pileup Runner and Contest box, Type It,
+/// QRQ, Daily Dit, Defender's typed copy and Journey's choices (#251).
+///
+/// The adapter types nothing on its own: out of the box it is a HID keyboard
+/// sending Ctrl (or `[` `]`) for dit and dah, which a text field ignores, and
+/// it sends MIDI only once something wakes it. Only the screens that answer by
+/// keying ran a `SendingKeyer`, so everywhere else the key was dead. This runs
+/// the same `SendingKeyer` those screens use — adapter wake, sidetone, decoder
+/// — and hands each newly decoded run of text to `onText`. Once the key has
+/// been idle for two word gaps (after the decoder's own word space), the
+/// operator has stopped sending: `onPause` fires and the decoder starts clean.
+///
+/// Hardware keys only; the on-screen key stays with the modes that answer by
+/// keying. Typing still works alongside it. Twin of the Kotlin
+/// `HardwareKeyInput` composable in HardwareKey.kt.
+struct HardwareKeyInput: ViewModifier {
+    let wpm: Double
+    let toneHz: Double
+    let isEnabled: Bool
+    let onText: (String) -> Void
+    let onPause: () -> Void
+
+    @StateObject private var sender: SendingKeyer
+    /// How much of `sender.decodedText` has already been handed on.
+    @State private var fed = 0
+    @State private var pauseTask: Task<Void, Never>?
+    @State private var running = false
+    /// The keyer mode Settings and the Vail screen share, pushed to an awake
+    /// adapter when the Settings sheet drawn over the screen changes it.
+    @AppStorage(RepeaterModel.keyerModeDefaultsKey) private var adapterKeyerMode: Int =
+        MIDIOutput.KeyerMode.straightKey.rawValue
+
+    init(wpm: Double, toneHz: Double, isEnabled: Bool,
+         onText: @escaping (String) -> Void, onPause: @escaping () -> Void) {
+        self.wpm = wpm
+        self.toneHz = toneHz
+        self.isEnabled = isEnabled
+        self.onText = onText
+        self.onPause = onPause
+        _sender = StateObject(wrappedValue: SendingKeyer(wpm: wpm, toneHz: toneHz))
+    }
+
+    func body(content: Content) -> some View {
+        content
+            .onAppear { setRunning(isEnabled) }
+            .onDisappear { setRunning(false) }
+            .onChange(of: isEnabled) { setRunning($0) }
+            .onChange(of: sender.decodedText) { feed($0) }
+            .onChange(of: sender.isKeying) { keying in
+                pauseTask?.cancel()
+                pauseTask = nil
+                if !keying, running { schedulePause() }
+            }
+            .onChange(of: adapterKeyerMode) { _ in applyConfig() }
+            .onChange(of: wpm) { _ in applyConfig() }
+            .onChange(of: toneHz) { _ in applyConfig() }
+    }
+
+    /// Append a decoded run to a text box: no leading space into an empty box
+    /// or after one that already ends in a space.
+    static func appending(_ chunk: String, to text: String) -> String {
+        var add = Substring(chunk)
+        if text.isEmpty || text.hasSuffix(" ") { add = add.drop { $0 == " " } }
+        return text + add
+    }
+
+    private func setRunning(_ on: Bool) {
+        guard on != running else { return }
+        running = on
+        if on {
+            sender.start()
+        } else {
+            pauseTask?.cancel()
+            pauseTask = nil
+            sender.stop()
+            sender.clear()
+        }
+    }
+
+    private func applyConfig() {
+        guard running else { return }
+        sender.applyConfig(wpm: wpm, toneHz: toneHz)
+    }
+
+    private func feed(_ decoded: String) {
+        if decoded.count < fed { fed = 0 }   // the decoder was cleared
+        guard decoded.count > fed else { return }
+        let chunk = String(decoded.dropFirst(fed))
+        fed = decoded.count
+        onText(chunk)
+    }
+
+    private func schedulePause() {
+        let wait = sender.wordGapMs * 2
+        pauseTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: UInt64(max(0, wait) * 1_000_000))
+            guard !Task.isCancelled, running, !sender.isKeying else { return }
+            guard fed > 0 else { return }   // nothing was decoded — no send
+            onPause()
+            sender.clear()
+        }
+    }
+}
+
+extension View {
+    /// Feed a hardware Morse key into this screen (#251); see `HardwareKeyInput`.
+    func hardwareKeyInput(wpm: Double, toneHz: Double, isEnabled: Bool = true,
+                          onText: @escaping (String) -> Void,
+                          onPause: @escaping () -> Void = {}) -> some View {
+        modifier(HardwareKeyInput(wpm: wpm, toneHz: toneHz, isEnabled: isEnabled,
+                                  onText: onText, onPause: onPause))
+    }
+}

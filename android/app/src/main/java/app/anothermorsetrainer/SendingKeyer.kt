@@ -62,6 +62,12 @@ class SendingKeyer(wpm: Double, toneHz: Double) {
     /** Flush the in-progress character and return the full decoded answer. */
     fun submit(): String = decoder.submit().trim()
 
+    /**
+     * The decoder's current word gap, adapted to the operator's own speed —
+     * what [HardwareKeyInput] times "the operator has stopped sending" from.
+     */
+    val wordGapMs: Double get() = decoder.wordGapMs
+
     // MARK: - Key handling
 
     private fun handle(isDown: Boolean, ms: Long) {

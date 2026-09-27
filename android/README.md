@@ -107,6 +107,11 @@ the iOS app's navy/teal look.
 - **On-screen paddles**: the on-screen key can be a straight key or a pair of
   touch paddles with a built-in Iambic A / Iambic B / Ultimatic keyer, dit and
   dah memory, and a left-handed swap — wherever you key on screen
+- **A hardware key wherever you type**: a Vail Adapter or other MIDI key
+  also works in the Pileup Runner and Contest (what you key goes in the box
+  and is sent when you stop keying; key CQ to call CQ), Type It, QRQ Speed,
+  Daily Dit, Journey and Morse Defender's typed copy, decoded as you key
+  with sidetone
 - **Repeater**: live CW over the Vail network with a server picker and
   private-channel option, plus Vail Adapter support: MIDI key input *and*
   output (keyer mode + speed, sidetone, opt-out RX piezo buzz), Bluetooth LE

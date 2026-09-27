@@ -281,7 +281,12 @@ fun PileupScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) 
         player.play(MorseItem.Playable.Text(t), Settings.sidetoneHz, Settings.timing(), onFinished = then)
     }
 
-    fun perform(action: PileupEngine.Action, selfText: String? = null) {
+    /**
+     * Apply [action] and play the replies. [keyed] marks a send from a
+     * hardware key (#251): the operator already heard it as sidetone, so
+     * their side — the TU included — is not keyed again.
+     */
+    fun perform(action: PileupEngine.Action, selfText: String? = null, keyed: Boolean = false) {
         val e = engine ?: return
         when (action) {
             is PileupEngine.Action.Play -> playSelfThen(selfText) {
@@ -293,7 +298,7 @@ fun PileupScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) 
             }
             is PileupEngine.Action.Logged -> {
                 if (Settings.hapticsEnabled) haptics.success()
-                playSelfThen("TU") {
+                playSelfThen(if (keyed) null else "TU") {
                     // Back to the run without another button press (iOS #35): the
                     // rest of the pileup calls again, or a fresh CQ tops it up.
                     if (PileupSettings.autoRecall) {
@@ -311,7 +316,7 @@ fun PileupScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) 
         syncRun()
     }
 
-    fun submit() {
+    fun submit(keyed: Boolean = false) {
         val e = engine ?: return
         if (input.isBlank()) return
         val raw = input.trim()
@@ -324,7 +329,26 @@ fun PileupScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) 
         val frag = PileupEngine.fragment(raw)
         val stillHunting = e.phase is PileupEngine.Phase.Pileup || e.phase is PileupEngine.Phase.Idle
         input = if (PileupSettings.keepPartialCall && raw.endsWith("?") && frag.isNotEmpty() && stillHunting) frag else ""
-        perform(action, selfText = raw)
+        perform(action, selfText = if (keyed) null else raw, keyed = keyed)
+    }
+
+    /**
+     * A send from a hardware key (#251), fired once the operator stops
+     * keying. Keying CQ while no station is being worked calls CQ — there is
+     * no button to reach for with a hand on the paddle. Twin of the iOS
+     * `qsoPrimary(keyed:)`.
+     */
+    fun keyedSubmit() {
+        val e = engine ?: return
+        val sent = input.trim().uppercase()
+        if (sent.isEmpty()) return
+        val hunting = e.phase is PileupEngine.Phase.Pileup || e.phase is PileupEngine.Phase.Idle
+        if (hunting && (sent == "CQ" || sent.startsWith("CQ "))) {
+            input = ""
+            perform(e.callCQ(), keyed = true)
+            return
+        }
+        submit(keyed = true)
     }
 
     // The run clock: tick once a second so the rate and elapsed readouts move.
@@ -356,6 +380,12 @@ fun PileupScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) 
             onSwitchMode = ::switchTo
         )
         PuPhase.RUNNING -> engine?.let { e ->
+            // A Vail Adapter / BLE-MIDI key sends into the same box (#251):
+            // what you key lands in it, and stopping keying sends it.
+            HardwareKeyInput(
+                onText = { input = appendKeyed(input, it.uppercase()) },
+                onPause = { keyedSubmit() }
+            )
             // rev rides in as a plain parameter, NOT a key(): keying the subtree
             // on it rebuilt the run UI every clock tick, which yanked focus from
             // the Send box and closed the keyboard as soon as it opened (#24).
@@ -365,7 +395,7 @@ fun PileupScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) 
                 elapsedSeconds = elapsedSeconds(),
                 input = input,
                 onInput = { input = it.uppercase() },
-                onSend = ::submit,
+                onSend = { submit() },
                 reveal = reveal,
                 onToggleReveal = { reveal = !reveal },
                 onCQ = { perform(e.callCQ(), selfText = cqText(PileupSettings.mode, PileupSettings.effectiveCall)) },

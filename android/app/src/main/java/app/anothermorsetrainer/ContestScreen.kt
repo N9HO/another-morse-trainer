@@ -291,6 +291,25 @@ fun ContestScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
         perform(action)
     }
 
+    /**
+     * A send from a hardware key (#251), fired once the operator stops
+     * keying. Keying CQ while no station is being worked calls CQ — there is
+     * no button to reach for with a hand on the paddle. Twin of the iOS
+     * `qsoPrimary(keyed:)`, which Contest shares with the Pileup Runner.
+     */
+    fun keyedSubmit() {
+        val e = engine ?: return
+        val sent = input.trim().uppercase()
+        if (sent.isEmpty()) return
+        val hunting = e.phase is PileupEngine.Phase.Pileup || e.phase is PileupEngine.Phase.Idle
+        if (hunting && (sent == "CQ" || sent.startsWith("CQ "))) {
+            input = ""
+            perform(e.callCQ())
+            return
+        }
+        submit()
+    }
+
     // The contest clock: tick once a second while running; a timed run ends
     // itself when the length is up.
     LaunchedEffect(phase) {
@@ -328,6 +347,12 @@ fun ContestScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
             onSwitchMode = ::switchTo
         )
         CtPhase.RUNNING -> engine?.let { e ->
+            // A Vail Adapter / BLE-MIDI key sends into the same box (#251):
+            // what you key lands in it, and stopping keying sends it.
+            HardwareKeyInput(
+                onText = { input = appendKeyed(input, it.uppercase()) },
+                onPause = { keyedSubmit() }
+            )
             // rev rides in as a plain parameter, NOT a key(): keying the subtree
             // on it rebuilt the run UI every clock tick, which yanked focus from
             // the Send box and closed the keyboard as soon as it opened (#24).

@@ -123,6 +123,11 @@ testers, bug reports and feature chat live on
 - **On-screen paddles**: the on-screen key can be a straight key or a pair of
   touch paddles with a built-in Iambic A / Iambic B / Ultimatic keyer, dit and
   dah memory, and a left-handed swap — wherever you key on screen
+- **A hardware key wherever you type**: a Vail Adapter or other MIDI key
+  also works in the Pileup Runner and Contest (what you key goes in the box
+  and is sent when you stop keying; key CQ to call CQ), Type It, QRQ Speed,
+  Daily Dit, Journey and Morse Defender's typed copy, decoded as you key
+  with sidetone
 - **Sending Practice**: a dedicated hear-it, key-it-back mode on the adaptive
   ladder, with live decode, always-on replay, and a connected-MIDI-key
   readout; plus printable drill sheets built from what you've studied (even,

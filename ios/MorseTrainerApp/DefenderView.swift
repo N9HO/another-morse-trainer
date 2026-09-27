@@ -233,6 +233,11 @@ struct DefenderView: View {
                         .accessibilityLabel("Typed so far: \(typed.isEmpty ? "nothing" : typed)")
                 }
                 keyboard
+                    // A Vail Adapter / BLE-MIDI key types the copy too (#251),
+                    // one decoded character at a time, like a key press.
+                    .hardwareKeyInput(wpm: model.settings.wpm,
+                                      toneHz: model.settings.toneFrequency,
+                                      onText: keyedCopy)
             }
         }
     }
@@ -492,6 +497,13 @@ struct DefenderView: View {
     /// Typed input: a key extends the copy; the defence routes itself the
     /// moment the copy matches a standing asset, and a copy that has run past
     /// the longest callsign without matching is a wasted shot.
+    /// Decoded characters from a hardware key: each one the alphabet has is
+    /// a key press; anything else is dropped, as a dead key would be.
+    private func keyedCopy(_ chunk: String) {
+        let live = Set(game?.keyboardPool ?? [])
+        for ch in chunk.uppercased() where live.contains(ch) { typedKey(ch) }
+    }
+
     private func typedKey(_ ch: Character) {
         guard phase == .playing, let game else { return }
         typed.append(Character(String(ch).uppercased()))

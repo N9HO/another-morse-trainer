@@ -241,6 +241,36 @@ fun JourneyScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
         revealed = true
     }
 
+    // A hardware key (#251). Journey's choices take a keyboard, so they take
+    // a Vail Adapter / BLE-MIDI key too. A drill whose answer is the text you
+    // heard is answered once you have keyed as many characters as it has (the
+    // "Key answers" rule); a meaning drill takes one keyed character the way
+    // it takes a keystroke. Stopping short grades what was sent. Twin of the
+    // iOS `journeyKeyedText`.
+    var keyed by remember { mutableStateOf("") }
+    LaunchedEffect(round) { keyed = "" }
+    fun keyedText(chunk: String) {
+        if (revealed) { keyed = ""; return }
+        keyed = appendKeyed(keyed, chunk)
+        val sent = keyed.trim()
+        if (drill.isKeyable) {
+            if (sent.length < drill.correct.length) return
+            keyed = ""
+            answer(sent)
+        } else if (sent.length == 1) {
+            val index = AnswerKeys.optionFor(sent[0], drill.options) ?: return
+            keyed = ""
+            answer(drill.options[index])
+        }
+    }
+    fun keyedPause() {
+        val sent = keyed.trim()
+        keyed = ""
+        if (revealed || !drill.isKeyable || sent.isEmpty()) return
+        answer(sent)
+    }
+    HardwareKeyInput(onText = { keyedText(it) }, onPause = { keyedPause() })
+
     // Mid-session Settings, drawn over the session so its state lives on.
     var showSettings by remember { mutableStateOf(false) }
 

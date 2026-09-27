@@ -219,6 +219,21 @@ fun DailyDitScreen(onBack: () -> Unit) {
                     note = message
                 )
             } else {
+                // A Vail Adapter / BLE-MIDI key types the guess too (#251).
+                // Stopping keying with five letters in guesses; a keyed guess
+                // that is not taken is cleared (its reason stays on screen) so
+                // the next can be keyed without reaching for the screen.
+                HardwareKeyInput(
+                    onText = { chunk ->
+                        entry = (entry + chunk).uppercase().filter { c -> c.isLetter() }.take(DailyDit.WORD_LENGTH)
+                    },
+                    onPause = {
+                        if (entry.length == DailyDit.WORD_LENGTH) {
+                            message = submit(entry, haptics) { entry = "" }
+                            if (message != null) entry = ""
+                        }
+                    }
+                )
                 // Guess entry
                 Row(
                     modifier = Modifier.fillMaxWidth(),

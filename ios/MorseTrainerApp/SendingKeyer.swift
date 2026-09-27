@@ -181,6 +181,10 @@ final class SendingKeyer: ObservableObject {
         decoder.submit().trimmingCharacters(in: .whitespaces)
     }
 
+    /// The decoder's current word gap, adapted to the operator's own speed —
+    /// what `HardwareKeyInput` times "the operator has stopped sending" from.
+    var wordGapMs: Double { decoder.wordGapMs }
+
     // MARK: - Key handling
 
     private func handle(key: MIDIInput.Key, isDown: Bool, atMs ms: Int64) {
