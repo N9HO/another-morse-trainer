@@ -29,6 +29,12 @@ the iOS app's navy/teal look.
   pool (with your own callsign and name if you like, and a one-tap 40 WPM,
   no-Farnsworth preset), and optional punctuation extras (a mark you turn on
   joins the Characters drill and the games' full set straight away)
+- **CW 77**: the CWOps CW 77 list as a mode of its own, in two styles:
+  Listen (hands-free, like Listen & Learn, and it keeps playing with the
+  screen locked) or Quiz (scored, like Common Words, answered by choices,
+  typing or keying). The include-my-callsign-and-name switch and the
+  one-tap 40 WPM, no-Farnsworth preset sit on its setup sheet, and it
+  remembers the style you last chose
 - **Confusion Drill**: targeted review of the pairs you mix up
 - **Head Copy**, **Type It**, **QRQ Speed**: copy in your head with
   auto-repeats and a timed reveal, free-recall typing, and high-speed copy at

@@ -104,9 +104,11 @@ data class SessionRecord(
          * their [attempts] count items *heard*, not answers, and [correct] is
          * always 0. Their accuracy is not applicable (#183): the stats screens
          * show "N/A" and the aggregates leave them out. The names are the
-         * `mode` strings `Stats.record` is called with on this port.
+         * `mode` strings `Stats.record` is called with on this port. CW 77's
+         * Listen style ("CW 77 Listen") is Listen & Learn over the CW 77 list,
+         * so it is passive too; its Quiz style ("CW 77") is scored.
          */
-        val PASSIVE_MODES: Set<String> = setOf("Listen", "Stories")
+        val PASSIVE_MODES: Set<String> = setOf("Listen", "Stories", "CW 77 Listen")
 
         /** Whether sessions of [mode] grade answers at all. */
         fun isScoredMode(mode: String): Boolean = mode !in PASSIVE_MODES

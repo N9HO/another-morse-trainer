@@ -156,3 +156,39 @@ extension MorseData {
         return .text(token)
     }
 }
+
+// MARK: - The standalone CW 77 mode (#240 follow-up)
+
+/// How the standalone CW 77 mode runs the list. `listen` is Listen & Learn's
+/// loop: hear the token, then see it and hear the readback, hands-free and
+/// able to keep playing in the background. `quiz` is Common Words' drill:
+/// hear the token and answer it by choices, typing or keying, scored.
+/// Pinned by `styles` in fixtures/cw77.json; the Kotlin twin is `Cw77Style`.
+public enum CW77Style: String, CaseIterable, Codable, Sendable, Identifiable {
+    case listen, quiz
+
+    /// What the mode's setup sheet selects before a style has been chosen.
+    public static let `default`: CW77Style = .listen
+
+    public var id: String { rawValue }
+
+    public var label: String {
+        switch self {
+        case .listen: return "Listen"
+        case .quiz:   return "Quiz"
+        }
+    }
+}
+
+extension MorseData {
+    /// The standalone CW 77 mode's pool for `style`: Listen & Learn's items
+    /// (answered by their meaning) or Common Words' (answered by the token),
+    /// with `personal` (from `cw77Personal`) after the 70.
+    public static func cw77Pool(style: CW77Style,
+                                personal: [(token: String, meaning: String)] = []) -> [MorseItem] {
+        switch style {
+        case .listen: return cw77Items(personal: personal)
+        case .quiz:   return cw77WordItems(personal: personal)
+        }
+    }
+}

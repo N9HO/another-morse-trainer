@@ -121,6 +121,58 @@ class MorseDataCW77Test {
     }
 
     @Test
+    fun theModesStylesAreTheFixturesInOrderWithItsDefault() {
+        val styles = fixture.getJSONObject("styles")
+        assertEquals(strings(styles.getJSONArray("order")), Cw77Style.entries.map { it.id })
+        val labels = styles.getJSONObject("labels")
+        for (s in Cw77Style.entries) assertEquals(labels.getString(s.id), s.label)
+        assertEquals(styles.getString("default"), Cw77Style.DEFAULT.id)
+    }
+
+    @Test
+    fun eachStylesPoolMatchesEveryFixtureCase() {
+        val cases = fixture.getJSONObject("styles").getJSONArray("cases")
+        for (i in 0 until cases.length()) {
+            val c = cases.getJSONObject(i)
+            val why = c.getString("why")
+            val style = Cw77Style.fromId(c.getString("style"))
+            assertNotNull("$why: no style ${c.getString("style")}", style)
+            val personal = if (c.getBoolean("includeMe")) {
+                MorseData.cw77Personal(c.getString("callsign"), c.getString("name"))
+            } else {
+                emptyList()
+            }
+            val pool = MorseData.cw77Pool(style!!, personal)
+            val shown = pool.map { it.display to it.answer }
+            fun pair(o: JSONObject) = o.getString("display") to o.getString("answer")
+            val tail = c.getJSONArray("tail")
+            assertEquals(why, c.getInt("count"), pool.size)
+            assertEquals(why, pair(c.getJSONObject("first")), shown.first())
+            assertEquals(why, (0 until tail.length()).map { pair(tail.getJSONObject(it)) }, shown.takeLast(tail.length()))
+            assertEquals(why, pool.size, pool.map { it.id }.toSet().size)
+            if (c.has("keyable")) {
+                // Keyable as the app decides it (`Drill.isKeyable`): the answer
+                // is the text heard, and holds no bracketed prosign.
+                val keyable = pool.count { it.answer == it.display && !it.answer.contains("<") }
+                assertEquals(why, c.getInt("keyable"), keyable)
+            }
+        }
+    }
+
+    @Test
+    fun theModesSessionsAreRecordedUnrankedWithListenPassive() {
+        val styles = fixture.getJSONObject("styles")
+        val records = styles.getJSONObject("records").getJSONObject("android")
+        assertEquals(listOf("listen"), strings(styles.getJSONArray("passive")))
+        assertFalse(SessionRecord.isScoredMode(records.getString("listen")))
+        assertTrue(SessionRecord.isScoredMode(records.getString("quiz")))
+        assertFalse(styles.getBoolean("ranked"))
+        for (key in records.keys()) {
+            assertEquals("${records.getString(key)} must not be ranked", null, Leaderboard.modeId(records.getString(key)))
+        }
+    }
+
+    @Test
     fun personalItemsFollowTheSeventyWithTheirOwnMeanings() {
         val mine = MorseData.cw77Personal("n9ho", "Justin")
         assertEquals(listOf(MorseData.CW77_CALLSIGN_MEANING, MorseData.CW77_NAME_MEANING), mine.map { it.meaning })

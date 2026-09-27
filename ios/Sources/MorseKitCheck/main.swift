@@ -1707,10 +1707,33 @@ struct CW77Fixture: Decodable {
         let nameMeaning: String
         let cases: [Case]
     }
+    struct Styles: Decodable {
+        struct Shown: Decodable, Equatable { let display: String; let answer: String }
+        struct Case: Decodable {
+            let why: String
+            let style: String
+            let includeMe: Bool
+            let callsign: String
+            let name: String
+            let count: Int
+            let keyable: Int?
+            let first: Shown
+            let tail: [Shown]
+        }
+        struct Records: Decodable { let ios: [String: String]; let android: [String: String] }
+        let order: [String]
+        let labels: [String: String]
+        let `default`: String
+        let cases: [Case]
+        let records: Records
+        let passive: [String]
+        let ranked: Bool
+    }
     let source: [String]
     let prosigns: [String]
     let uniqueCount: Int
     let recommended: Recommended
+    let styles: Styles
     let personal: Personal
     let items: [Item]
 }
@@ -1809,6 +1832,46 @@ if let fx = loadCW77Fixture() {
     check("personal items follow the 70",
           withMe.count == 72 && withMe.suffix(2).map(\.display) == ["N9HO", "JUSTIN"]
           && Set(withMe.map(\.id)).count == 72)
+
+    // The standalone CW 77 mode: two styles over the same list.
+    let st = fx.styles
+    check("the CW 77 mode's styles are the fixture's, in order",
+          CW77Style.allCases.map(\.rawValue) == st.order)
+    check("the CW 77 style labels are the fixture's",
+          CW77Style.allCases.allSatisfy { st.labels[$0.rawValue] == $0.label })
+    check("the CW 77 mode opens on the fixture's default style",
+          CW77Style.default.rawValue == st.default)
+    var stylesOK = true
+    for c in st.cases {
+        guard let style = CW77Style(rawValue: c.style) else {
+            stylesOK = false
+            print("      ↳ \(c.why): no style \(c.style)")
+            continue
+        }
+        let personal = c.includeMe ? MorseData.cw77Personal(callsign: c.callsign, name: c.name) : []
+        let pool = MorseData.cw77Pool(style: style, personal: personal)
+        let shown = pool.map { CW77Fixture.Styles.Shown(display: $0.display, answer: $0.answer) }
+        // Keyable as the app decides it (`Drill.isKeyable`): the answer is
+        // the text heard, and holds no bracketed prosign.
+        let keyable = pool.filter { $0.answer == $0.display && !$0.answer.contains("<") }.count
+        let ok = pool.count == c.count
+            && shown.first == c.first
+            && Array(shown.suffix(c.tail.count)) == c.tail
+            && Set(pool.map(\.id)).count == pool.count
+            && (c.keyable.map { $0 == keyable } ?? true)
+        if !ok {
+            stylesOK = false
+            print("      ↳ \(c.why): \(pool.count) items, \(keyable) keyable, ends \(shown.suffix(c.tail.count).map(\.display))")
+        }
+    }
+    check("each style's pool matches every fixture case", stylesOK)
+    check("the CW 77 records are logged under their own modes, Listen passive, Quiz scored",
+          st.records.ios["listen"].map { SessionRecord.passiveModes.contains($0) } == true
+          && st.records.ios["quiz"].map { !SessionRecord.passiveModes.contains($0) } == true
+          && st.passive == ["listen"])
+    check("CW 77 is never a ranked leaderboard mode",
+          !st.ranked
+          && st.records.ios.values.allSatisfy { LeaderboardMode(trainingModeRawValue: $0) == nil })
 } else {
     check("fixtures/cw77.json loads and decodes", false)
 }

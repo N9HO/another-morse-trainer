@@ -21,6 +21,26 @@ package app.anothermorsetrainer.morsekit
 // the table lives here as an internal top-level val and MorseData re-exposes
 // it with the item builders.
 
+/**
+ * How the standalone CW 77 mode (the #240 follow-up) runs the list. [LISTEN]
+ * is Listen & Learn's loop: hear the token, then see it and hear the
+ * readback, hands-free and kept alive in the background. [QUIZ] is Common
+ * Words' drill: hear the token and answer it by choices, typing or keying,
+ * scored. Pinned by `styles` in fixtures/cw77.json; the Swift twin is
+ * `CW77Style`. [id] is the fixture's (and the Swift raw value's) spelling.
+ */
+enum class Cw77Style(val id: String, val label: String) {
+    LISTEN("listen", "Listen"),
+    QUIZ("quiz", "Quiz");
+
+    companion object {
+        /** What the mode's setup sheet selects before a style has been chosen. */
+        val DEFAULT: Cw77Style = LISTEN
+
+        fun fromId(id: String?): Cw77Style? = entries.firstOrNull { it.id == id }
+    }
+}
+
 /** The CW 77 list, de-duplicated, in the source file's order. */
 internal val cw77Data: List<TokenMeaning> = listOf(
     TokenMeaning("VVV", "test signal — tuning up"),

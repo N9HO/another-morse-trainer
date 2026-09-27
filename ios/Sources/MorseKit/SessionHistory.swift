@@ -58,8 +58,10 @@ public struct SessionRecord: Codable, Sendable, Identifiable, Equatable {
     /// answer — Listen & Learn announces each item, Short Stories reveals the
     /// passage — so their `attempts` count items *heard*, not answers, and
     /// `correct` is always 0. Their accuracy is not applicable (#183): the
-    /// stats screens show "N/A" and the aggregates leave them out.
-    public static let passiveModes: Set<String> = ["listen", "story"]
+    /// stats screens show "N/A" and the aggregates leave them out. CW 77's
+    /// Listen style (`cw77Listen`) is Listen & Learn over the CW 77 list, so
+    /// it is passive too; its Quiz style (`cw77`) is scored.
+    public static let passiveModes: Set<String> = ["listen", "story", "cw77Listen"]
 
     /// Whether this session graded any answers. False for a passive mode,
     /// or for a record with nothing answered; such a session has no accuracy

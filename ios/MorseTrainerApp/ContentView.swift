@@ -205,11 +205,13 @@ struct ContentView: View {
             // the next session begins only on an explicit start — so on the
             // summary screen the label and checkmark moving to the picked mode
             // are the visible effect (issue #42).
+            // CW 77's two styles share one entry, which reopens on the
+            // style last chosen.
             Picker("Mode", selection: Binding(
-                get: { model.learningMode },
-                set: { model.setMode($0) }
+                get: { model.learningMode.menuEntry },
+                set: { model.setMode($0 == .cw77 ? .cw77(model.settings.cw77Style) : $0) }
             )) {
-                ForEach(TrainingMode.allCases.filter { !$0.isGame }) { m in
+                ForEach(TrainingMode.allCases.filter { !$0.isGame && $0.hasMenuEntry }) { m in
                     Label(m.title, systemImage: m.icon).tag(m)
                 }
                 // The games under their own heading, as on the home screen (#207).
@@ -1570,7 +1572,7 @@ struct ContentView: View {
                     // isn't applicable — show a placeholder instead of a
                     // misleading 0% (issue #36).
                     summaryRow("Accuracy",
-                               (s.mode == .listen || s.mode == .story || rfReview || s.attempts == 0)
+                               (SessionRecord.passiveModes.contains(s.mode.rawValue) || rfReview || s.attempts == 0)
                                ? "—" : "\(Int((s.accuracy * 100).rounded()))%")
                     summaryRow("Fastest", s.fastest.map { String(format: "%.2f s", $0) } ?? "—")
                     summaryRow("Median TTR", s.medianTTR.map { String(format: "%.2f s", $0) } ?? "—")

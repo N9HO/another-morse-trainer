@@ -365,6 +365,14 @@
     <string name="cw77_personal_unset">Add your callsign or name under Settings › QSO &amp; Pileups, or in Pileup Runner\'s setup (Your call, Your name), to drill them with CW 77.</string>
     <string name="cw77_include_me">Include my callsign and name</string>
     <string name="cw77_include_me_adds">Adds %1$s to the set.</string>
+    <string name="mode_cw77">CW 77</string>
+    <string name="home_cwops_on_air_list">CWOps on-air list</string>
+    <string name="cw77_blurb">The CWOps CW 77: the words and abbreviations you hear most in a CW contact, which CW Academy students learn to copy at speed. Listen hands-free, or quiz yourself on them.</string>
+    <string name="cw77_style">Style</string>
+    <string name="cw77_style_listen_blurb">Hands-free: hear each item, then see it and hear it read back. Keeps playing with the screen locked.</string>
+    <string name="cw77_style_quiz_blurb">Hear each item and answer it: tap a choice, type it, or key it, as Common Words does. Scored.</string>
+    <string name="cw77_listen_options">Gap and readback</string>
+    <string name="cw77_now_playing_artist">Morse Trainer · CW 77</string>
     <string name="listen_blurb">Hear the code, then the answer spoken aloud — no tapping. Keeps playing with the screen locked.</string>
     <string name="listen_heard_count">%1$s heard</string>
     <string name="listen_time_left">" · %1$d:%2$02d left"</string>

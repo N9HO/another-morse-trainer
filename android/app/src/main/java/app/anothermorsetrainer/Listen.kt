@@ -76,6 +76,19 @@ object ListenState {
     var readbackSel: ListenReadback
         get() = Settings.listenReadback
         set(value) = Settings.updateListenReadback(value)
+    /**
+     * Whether this session is the CW 77 mode's Listen style rather than
+     * Listen & Learn: the loop then always announces [ListenContent.CW_77],
+     * whatever Listen & Learn's own content choice is, and the session is
+     * recorded as "CW 77 Listen". Set by the screen before it starts a
+     * session; read by the service.
+     */
+    var cw77Session by mutableStateOf(false)
+
+    /** What the loop announces: the content choice, or CW 77 in a [cw77Session]. */
+    val loopContent: ListenContent
+        get() = if (cw77Session) ListenContent.CW_77 else contentSel
+
     var running by mutableStateOf(false)
     var paused by mutableStateOf(false)
     var playing by mutableStateOf(false)   // true while the code sounds, false while the answer shows

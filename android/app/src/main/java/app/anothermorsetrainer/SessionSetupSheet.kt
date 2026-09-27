@@ -34,6 +34,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.anothermorsetrainer.morsekit.Cw77Style
 import app.anothermorsetrainer.morsekit.ProgressiveCharacters
 
 /**
@@ -114,6 +115,55 @@ fun SessionSetupSheet(
                         style = MaterialTheme.typography.labelSmall,
                         color = Brand.textSecondary
                     )
+                }
+            }
+
+            // The CW 77 mode (#240 follow-up): its style up front, then the
+            // include-me switch and the one-tap speed — the same Cw77Options
+            // Listen & Learn and Common Words show for the list. The Listen
+            // style also takes Listen & Learn's gap and readback.
+            if (settingsMode == SettingsMode.CW77) {
+                SetupCard(stringResource(R.string.cw77_style)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Cw77Style.entries.forEach { style ->
+                            StagePill(label = style.label, selected = style == Settings.cw77Style) {
+                                Settings.updateCw77Style(style)
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        stringResource(
+                            if (Settings.cw77Style == Cw77Style.LISTEN) R.string.cw77_style_listen_blurb
+                            else R.string.cw77_style_quiz_blurb
+                        ),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Brand.textSecondary
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Cw77Options()
+                }
+                if (Settings.cw77Style == Cw77Style.LISTEN) {
+                    SetupCard(stringResource(R.string.cw77_listen_options)) {
+                        Row(
+                            modifier = Modifier.horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            ListenGap.entries.forEach { gap ->
+                                StagePill(label = gap.label, selected = gap == Settings.listenGap) {
+                                    Settings.updateListenGap(gap)
+                                }
+                            }
+                        }
+                        Spacer(Modifier.height(8.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            ListenReadback.entries.forEach { readback ->
+                                StagePill(label = readback.label, selected = readback == Settings.listenReadback) {
+                                    Settings.updateListenReadback(readback)
+                                }
+                            }
+                        }
+                    }
                 }
             }
 

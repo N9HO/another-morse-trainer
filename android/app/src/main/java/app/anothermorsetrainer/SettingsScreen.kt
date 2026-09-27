@@ -143,6 +143,8 @@ import kotlin.math.roundToInt
  */
 enum class SettingsMode {
     CHARACTERS, WORDS, ABBREVIATIONS, QCODES, PROSIGNS, CONFUSION,
+    /** The standalone CW 77 mode: its setup sheet, and its Quiz style's run. */
+    CW77,
     JOURNEY, TYPE_IT, QRQ, HEAD_COPY, LISTEN, STORY, EXAM,
     PILEUP, CONTEST, RAPID_FIRE, SENDING
 }
@@ -157,7 +159,7 @@ internal val STAGE_PIN_MODES = setOf(SettingsMode.CHARACTERS, SettingsMode.SENDI
 
 /** The choice drills governed by answer choices, recognition target, and reveal. */
 private val CHOICE_QUIZ_MODES = setOf(
-    SettingsMode.CHARACTERS, SettingsMode.WORDS, SettingsMode.ABBREVIATIONS,
+    SettingsMode.CHARACTERS, SettingsMode.WORDS, SettingsMode.CW77, SettingsMode.ABBREVIATIONS,
     SettingsMode.QCODES, SettingsMode.PROSIGNS, SettingsMode.CONFUSION,
     SettingsMode.JOURNEY
 )
@@ -168,14 +170,14 @@ private val CHOICE_QUIZ_MODES = setOf(
  * so all of them are governed by the keyer mode.
  */
 private val KEY_MODES = setOf(
-    SettingsMode.CHARACTERS, SettingsMode.WORDS, SettingsMode.ABBREVIATIONS,
+    SettingsMode.CHARACTERS, SettingsMode.WORDS, SettingsMode.CW77, SettingsMode.ABBREVIATIONS,
     SettingsMode.QCODES, SettingsMode.PROSIGNS, SettingsMode.CONFUSION,
     SettingsMode.JOURNEY, SettingsMode.RAPID_FIRE, SettingsMode.SENDING
 )
 
 /** The screens that read the session-length setting. */
 internal val DURATION_MODES = setOf(
-    SettingsMode.CHARACTERS, SettingsMode.WORDS, SettingsMode.ABBREVIATIONS,
+    SettingsMode.CHARACTERS, SettingsMode.WORDS, SettingsMode.CW77, SettingsMode.ABBREVIATIONS,
     SettingsMode.QCODES, SettingsMode.PROSIGNS, SettingsMode.CONFUSION,
     SettingsMode.TYPE_IT, SettingsMode.QRQ, SettingsMode.HEAD_COPY,
     SettingsMode.LISTEN, SettingsMode.STORY
@@ -200,7 +202,7 @@ private val NO_FEEDBACK_MODES = setOf(
 
 /** The choice quizzes that take a typed answer (#232): every one but the Journey. */
 internal val ANSWER_ENTRY_MODES = setOf(
-    SettingsMode.CHARACTERS, SettingsMode.WORDS, SettingsMode.ABBREVIATIONS,
+    SettingsMode.CHARACTERS, SettingsMode.WORDS, SettingsMode.CW77, SettingsMode.ABBREVIATIONS,
     SettingsMode.QCODES, SettingsMode.PROSIGNS, SettingsMode.CONFUSION
 )
 
@@ -214,7 +216,7 @@ internal val AnswerEntryMode.titleRes: Int
 
 /** The quiz screen is the only surface with spoken answers. */
 private val VOICE_ANSWER_MODES = setOf(
-    SettingsMode.CHARACTERS, SettingsMode.WORDS, SettingsMode.ABBREVIATIONS,
+    SettingsMode.CHARACTERS, SettingsMode.WORDS, SettingsMode.CW77, SettingsMode.ABBREVIATIONS,
     SettingsMode.QCODES, SettingsMode.PROSIGNS, SettingsMode.CONFUSION
 )
 
@@ -1660,6 +1662,9 @@ private fun diagnosticInfo(context: Context, scope: SettingsMode?): String {
             else "Word pool: Top ${Settings.wordCount}"
         )
         SettingsMode.LISTEN -> lines.add("Listen: ${Settings.listenContent.label} · ${Settings.listenGap.label}")
+        SettingsMode.CW77 -> lines.add(
+            "CW 77: ${Settings.cw77Style.label} · include me ${if (Settings.cw77IncludeMe) "on" else "off"}"
+        )
         SettingsMode.HEAD_COPY -> lines.add("Head Copy: repeats ${Settings.headCopyRepeats} · reveal ${Settings.headCopyRevealSec} s")
         else -> {}
     }

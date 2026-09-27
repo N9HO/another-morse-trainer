@@ -362,14 +362,15 @@ struct IntroView: View {
         VStack(alignment: .leading, spacing: 12) {
             sectionTitle("Choose your practice", systemImage: "square.grid.2x2")
             LazyVGrid(columns: tileColumns, spacing: 14) {
-                ForEach(TrainingMode.allCases.filter { !$0.isGame }) { mode in
+                ForEach(TrainingMode.allCases.filter { !$0.isGame && $0.hasMenuEntry }) { mode in
                     // Every tile is a real button: one tap opens that mode's
                     // pre-flight options with Start right there — no separate
-                    // Continue press (issue #60).
+                    // Continue press (issue #60). CW 77's one tile opens on
+                    // the style last chosen; its sheet switches between them.
                     ModeTile(mode: mode,
-                             isSelected: model.learningMode == mode) {
+                             isSelected: model.learningMode.menuEntry == mode) {
                         Haptics.selection()
-                        model.learningMode = mode
+                        model.learningMode = mode == .cw77 ? .cw77(model.settings.cw77Style) : mode
                         showingSetup = true
                     }
                 }
@@ -432,6 +433,18 @@ private struct ModeOptionsCard: View {
     @EnvironmentObject var model: AppModel
     @State private var showingCustomWords = false
     @State private var showingJourneyMap = false
+
+    /// The CW 77 mode's style. Picking one switches the selected mode between
+    /// its two cases and remembers the choice for the next visit.
+    private var cw77StyleBinding: Binding<CW77Style> {
+        Binding(
+            get: { model.learningMode.cw77Style ?? model.settings.cw77Style },
+            set: { style in
+                model.settings.cw77Style = style
+                model.learningMode = .cw77(style)
+            }
+        )
+    }
 
     private var listenContentBinding: Binding<ListenContent> {
         Binding(
@@ -599,7 +612,7 @@ private struct ModeOptionsCard: View {
     /// stage, contest…) render no extra options card.
     private var hasOptions: Bool {
         switch model.learningMode {
-        case .listen, .exam, .story, .words, .qrq, .journey, .rapidFire:
+        case .listen, .exam, .story, .words, .cw77, .cw77Listen, .qrq, .journey, .rapidFire:
             return true
         default:
             return model.learningMode.supportsVoiceAnswers
@@ -610,6 +623,36 @@ private struct ModeOptionsCard: View {
         if hasOptions {
             VStack(alignment: .leading, spacing: 16) {
             Group {
+            // The standalone CW 77 mode (#240 follow-up): the style first,
+            // then the include-me switch and the one-tap speed, the same
+            // controls Listen & Learn and Common Words show for the list.
+            if let style = model.learningMode.cw77Style {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Style")
+                        .font(.subheadline).foregroundStyle(.secondary)
+                    Picker("Style", selection: cw77StyleBinding) {
+                        ForEach(CW77Style.allCases) { s in
+                            Text(s.label).tag(s)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    Text(style == .listen
+                         ? "Hands-free: hear each item, then see it and hear it read back. Keeps playing with the screen locked."
+                         : "Hear each item and answer it: tap a choice, type it, or key it, as Common Words does. Scored.")
+                        .font(.footnote)
+                        .foregroundStyle(Theme.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                cw77Options
+                if style == .listen {
+                    inlinePicker(title: "Gap before the spoken answer",
+                                 selection: listenGapBinding) { (g: AnswerGap) in g.label }
+                    inlinePicker(title: "Readback",
+                                 selection: listenReadbackBinding) { (r: ListenReadback) in r.label }
+                }
+            }
+
             if model.learningMode == .listen {
                 inlinePicker(title: "What should it announce?",
                              selection: listenContentBinding) { (c: ListenContent) in c.label }
@@ -952,7 +995,8 @@ private struct ModeOptionsCard: View {
     }
 
     /// Shown under Listen & Learn's content picker and Common Words' pool
-    /// picker while CW 77 is chosen (Android parity): Bob Carter WR7Q's
+    /// picker while CW 77 is chosen, and up front on the CW 77 mode's own
+    /// sheet (Android parity): Bob Carter WR7Q's
     /// playback as a one-tap preset — an explicit tap that sets the global
     /// speed, never a silent override — and the switch that adds your own
     /// callsign and name, offered only when there is one to add.
@@ -1384,7 +1428,7 @@ private struct SessionSetupSheet: View {
                     .readableWidth()
                 }
             }
-            .navigationTitle(model.learningMode.title)
+            .navigationTitle(model.learningMode.menuEntry.title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

@@ -98,10 +98,10 @@ struct SettingsView: View {
     /// The choice quizzes governed by the Learning section (recognition time
     /// and the answer-button count).
     private static let choiceQuizModes: Set<TrainingMode> =
-        [.journey, .characters, .words, .abbreviations, .qCodes, .prosigns, .confusion]
+        [.journey, .characters, .words, .cw77, .abbreviations, .qCodes, .prosigns, .confusion]
     /// The choice quizzes that take a typed answer (#232): every one but the Journey.
     private static let answerEntryModes: Set<TrainingMode> =
-        [.characters, .words, .abbreviations, .qCodes, .prosigns, .confusion]
+        [.characters, .words, .cw77, .abbreviations, .qCodes, .prosigns, .confusion]
     /// The pileup surfaces all four QSO sections configure.
     private static let pileupModes: Set<TrainingMode> = [.qso, .contest]
     /// The surfaces a hardware key can drive — every mode `usesKeyingResponse`
@@ -109,11 +109,11 @@ struct SettingsView: View {
     /// its `SendingKeyer`, which wakes the adapter. (The Vail repeater carries
     /// its own copy of this control.)
     private static let hardwareKeyModes: Set<TrainingMode> =
-        [.sending, .characters, .words, .abbreviations, .qCodes, .prosigns,
+        [.sending, .characters, .words, .cw77, .abbreviations, .qCodes, .prosigns,
          .confusion, .rapidFire, .invaders, .galaga, .dungeon, .asteroids]
     /// Modes with a play → answer → reveal loop the Feedback section controls.
     private static let feedbackModes: Set<TrainingMode> =
-        [.journey, .characters, .words, .abbreviations, .qCodes, .prosigns,
+        [.journey, .characters, .words, .cw77, .abbreviations, .qCodes, .prosigns,
          .headCopy, .typed, .sending, .confusion, .qrq, .rapidFire]
 
     /// Whether a section that only matters for `modes` belongs on this surface.
@@ -158,8 +158,8 @@ struct SettingsView: View {
         case .hardwareKey: return shown(for: Self.hardwareKeyModes)
         case .onScreenKey: return shown(for: Self.hardwareKeyModes)
         // Your call and name are also what CW 77 drills when you include
-        // them (#240), so Listen & Learn and Common Words reach them too.
-        case .yourStation: return shown(for: Self.pileupModes.union([.listen, .words]))
+        // them (#240), so Listen & Learn, Common Words and CW 77 reach them too.
+        case .yourStation: return shown(for: Self.pileupModes.union([.listen, .words, .cw77, .cw77Listen]))
         case .pileupRunner, .qsoSignals, .qsoRealism, .qsoCallsigns:
             return shown(for: Self.pileupModes)
         }
@@ -1079,6 +1079,10 @@ struct SettingsView: View {
             lines.append("Exam: \(s.examSpeed.label) · \(s.examGrading.label)")
         case .listen:
             lines.append("Listen: \(s.listenContent.label) · \(s.listenGap.label) · \(s.listenReadback.label)")
+        case .cw77, .cw77Listen:
+            lines.append("CW 77: \(s.cw77Style.label) · include me \(s.cw77IncludeMe ? "on" : "off")"
+                         + (model.learningMode == .cw77Listen
+                            ? " · \(s.listenGap.label) · \(s.listenReadback.label)" : ""))
         case .rapidFire:
             lines.append("Rapid Fire: \(s.rapidFire.content.label) · \(s.rapidFire.response.label) · \(s.rapidFire.pace.label)")
         default:
