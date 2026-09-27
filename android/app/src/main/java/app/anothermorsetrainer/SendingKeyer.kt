@@ -53,6 +53,12 @@ class SendingKeyer(wpm: Double, toneHz: Double) {
 
     fun start() = sidetone.start()
 
+    /**
+     * Silence the sidetone only (#251): a key unplugged mid-character still
+     * needs [idleJob] to finish that character and its word space.
+     */
+    fun stopSidetone() = sidetone.stop()
+
     fun stop() {
         idleJob?.cancel()
         idleJob = null

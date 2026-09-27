@@ -194,7 +194,7 @@ fun HardwareKeyInput(onText: (String) -> Unit, onPause: () -> Unit = {}) {
                 if (down) keyer.start()
                 keyer.touchKey(down)
             },
-            onConnected = { name -> if (name != null) keyer.start() else keyer.stop() }
+            onConnected = { name -> if (name != null) keyer.start() else keyer.stopSidetone() }
         )
         onDispose {
             midi.stop()

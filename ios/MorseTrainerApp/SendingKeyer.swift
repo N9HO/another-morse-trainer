@@ -93,7 +93,11 @@ final class SendingKeyer: ObservableObject {
                 // Straight key, dit, and dah paddles are all measured as bursts;
                 // the adapter does any iambic timing, so we just time key-down.
                 Task { @MainActor in
-                    self?.handle(key: event.key, isDown: event.isDown, atMs: event.timestampMs)
+                    // An event queued before `stop()` must not reach `handle`,
+                    // whose key-down would restart the sidetone and re-claim
+                    // the audio session with nothing left to release it (#251).
+                    guard let self, self.midi != nil else { return }
+                    self.handle(key: event.key, isDown: event.isDown, atMs: event.timestampMs)
                 }
             }
             input.onSourcesChanged = { [weak self] names in
