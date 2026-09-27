@@ -236,6 +236,24 @@ final class AudioSession: @unchecked Sendable {
         }
     }
 
+    // MARK: - Volume
+
+    /// The system output volume, 0…1, for asking "play anyway?" before a sound
+    /// that costs something (Daily Dit's listens, #252). A read, not a claim:
+    /// checking must not take the route and pause the learner's music.
+    ///
+    /// Volume is the whole answer on this platform. Every profile above is
+    /// `.playback` or `.playAndRecord`, and neither category obeys the
+    /// Ring/Silent switch — so the switch (which no public API reads anyway)
+    /// cannot silence the app, and a zero here is the only "muted" there is.
+    ///
+    /// An iPhone/iPad app running on a Mac reports a volume that is not the
+    /// Mac's, so it reads as full there rather than prompting on a guess.
+    var outputVolume: Double {
+        if ProcessInfo.processInfo.isiOSAppOnMac { return 1 }
+        return Double(AVAudioSession.sharedInstance().outputVolume)
+    }
+
     /// Force the next claim to reconfigure even if the profile is unchanged.
     /// Used after the session has been reset out from under us.
     private func invalidateLocked() {

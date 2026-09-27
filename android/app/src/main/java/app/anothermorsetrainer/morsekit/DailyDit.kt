@@ -196,6 +196,24 @@ object DailyDit {
     }
 
     /**
+     * Media volume, as a fraction of the stream's maximum, below which a play
+     * that would count as a listen asks first (#252). 0.05 sits under the
+     * quietest audible step on a typical Android media stream (1/15 ≈ 0.067)
+     * and on an iPhone (1/16 = 0.0625), so in practice it means "at zero" —
+     * the case the report is about — while still catching the first step of a
+     * stream with more than twenty, which is not reliably audible either.
+     */
+    const val QUIET_VOLUME_FRACTION = 0.05
+
+    /**
+     * Whether playing the word should ask "play anyway?" first. Only a play
+     * that spends a listen asks: replays after the win are free (#168), so a
+     * silent one costs nothing and is not worth a prompt.
+     */
+    fun warnsBeforeListen(volumeFraction: Double, isFinished: Boolean): Boolean =
+        !isFinished && volumeFraction < QUIET_VOLUME_FRACTION
+
+    /**
      * Speeds are whole numbers in practice; don't print "60.0 WPM".
      *
      * [Locale.US] rather than the default: this string goes into the share

@@ -3296,6 +3296,13 @@ final class AppModel: ObservableObject {
                                   timing: MorseTiming(wpm: wpm))
     }
 
+    /// Whether playing the word now should ask "play anyway?" first (#252):
+    /// the play would spend a listen and the device is muted or all but.
+    var dailyDitPlayNeedsVolumeConfirmation: Bool {
+        DailyDit.warnsBeforeListen(volumeFraction: AudioSession.shared.outputVolume,
+                                   isFinished: dailyDit.isFinished)
+    }
+
     func stopDailyDit() { player.stop() }
 
     // MARK: - Morse Invaders (#170)
