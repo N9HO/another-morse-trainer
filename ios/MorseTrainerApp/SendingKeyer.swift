@@ -18,13 +18,26 @@ final class SendingKeyer: ObservableObject {
     @Published private(set) var isKeying = false
     /// Names of the connected hardware keys (Vail Adapter / BLE-MIDI), live
     /// through hot-plug and unplug, for the connected-device readout.
-    @Published private(set) var midiDeviceNames: [String] = []
+    @Published private(set) var midiDeviceNames: [String] = [] {
+        didSet { updateOnDemandSidetone() }
+    }
+    /// Counts every change of the one logical key. A key-down and key-up that
+    /// land in the same frame leave `isKeying` where it was, so a view that
+    /// times "stopped keying" watches this instead (#251).
+    @Published private(set) var edgeCount = 0
     /// True when MIDI setup itself failed, so the UI can say a hardware key
     /// won't work instead of silently ignoring it (the on-screen key still does).
     /// Distinct from simply having nothing connected yet — see `midiDeviceNames`.
     @Published private(set) var midiUnavailable = false
 
     private let keyer = KeyerEngine()
+    /// Whether `keyer` (the sidetone engine, and with it the audio-session
+    /// claim that ducks other audio) is running.
+    private var sidetoneRunning = false
+    /// Sidetone only while a hardware key is connected or keying — for the
+    /// screens that listen for a key without offering an on-screen one, so
+    /// opening them with no key attached leaves the user's music alone.
+    private var sidetoneOnDemand = false
     private var midi: MIDIInput?
     /// Output to the key, kept alive for one reason: waking the Vail Adapter.
     /// The adapter boots in HID keyboard mode and sends **no** MIDI note events
@@ -68,8 +81,12 @@ final class SendingKeyer: ObservableObject {
         }
     }
 
-    func start() {
-        try? keyer.start()
+    /// Start listening. `sidetoneOnDemand` holds the sidetone engine back until
+    /// a hardware key is connected or keys (see `HardwareKeyInput`); the
+    /// screens with an on-screen key start it at once.
+    func start(sidetoneOnDemand: Bool = false) {
+        self.sidetoneOnDemand = sidetoneOnDemand
+        if !sidetoneOnDemand { startSidetone() }
         do {
             let input = try MIDIInput()
             input.onEvent = { [weak self] event in
@@ -162,7 +179,26 @@ final class SendingKeyer: ObservableObject {
         idleTask = nil
         midi = nil
         midiOutput = nil
+        stopSidetone()
+    }
+
+    private func startSidetone() {
+        guard !sidetoneRunning else { return }
+        try? keyer.start()
+        sidetoneRunning = true
+    }
+
+    private func stopSidetone() {
+        guard sidetoneRunning else { return }
         keyer.stop()
+        sidetoneRunning = false
+    }
+
+    /// On-demand sidetone follows the connected keys: up when one arrives,
+    /// down when the last one goes (the key-down path also starts it).
+    private func updateOnDemandSidetone() {
+        guard sidetoneOnDemand, midi != nil else { return }
+        if midiDeviceNames.isEmpty { stopSidetone() } else { startSidetone() }
     }
 
     /// On-screen key press/release. `atMs` is when the edge happened, for the
@@ -194,8 +230,10 @@ final class SendingKeyer: ObservableObject {
         if isDown { heldKeys.insert(key) } else { heldKeys.remove(key) }
         let nowHeld = !heldKeys.isEmpty
         guard nowHeld != wasHeld else { return }
+        edgeCount &+= 1
         onEdge?(nowHeld, ms)
         if nowHeld {
+            startSidetone()
             keyDownAtMs = ms
             isKeying = true
             idleTask?.cancel()

@@ -1,6 +1,7 @@
 package app.anothermorsetrainer
 
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import app.anothermorsetrainer.morsekit.MorseDecoder
@@ -28,6 +29,14 @@ class SendingKeyer(wpm: Double, toneHz: Double) {
 
     /** True while the key is held down (drives the pressed look). */
     var isKeying by mutableStateOf(false)
+        private set
+
+    /**
+     * Counts every key-down and key-up. A down/up pair delivered in one frame
+     * leaves [isKeying] where it was, so "stopped keying" is timed from this
+     * instead (#251, [HardwareKeyInput]).
+     */
+    var edgeCount by mutableIntStateOf(0)
         private set
 
     private val sidetone = SidetoneGenerator(toneHz)
@@ -73,12 +82,14 @@ class SendingKeyer(wpm: Double, toneHz: Double) {
     private fun handle(isDown: Boolean, ms: Long) {
         if (isDown) {
             if (keyDownAtMs != null) return
+            edgeCount++
             keyDownAtMs = ms
             isKeying = true
             idleJob?.cancel(); idleJob = null
             sidetone.setKeyDown(true)
         } else {
             val down = keyDownAtMs ?: return
+            edgeCount++
             keyDownAtMs = null
             isKeying = false
             sidetone.setKeyDown(false)

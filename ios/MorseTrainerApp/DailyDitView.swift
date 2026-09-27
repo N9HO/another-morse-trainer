@@ -180,11 +180,16 @@ struct DailyDitView: View {
         }
         // A Vail Adapter / BLE-MIDI key types the guess too (#251).
         .hardwareKeyInput(wpm: model.settings.wpm, toneHz: model.settings.toneFrequency,
-                          onText: { entry = HardwareKeyInput.appending($0, to: entry) },
+                          // Letters only, and no more than five — a sixth keyed
+                          // letter is dropped, the same on Android.
+                          onText: {
+                              let next = HardwareKeyInput.appending($0, to: entry)
+                              entry = String(DailyDit.normalize(next).prefix(DailyDit.wordLength))
+                          },
                           onPause: keyedGuess)
     }
 
-    /// Stopped keying: once five or more letters are in, guess. A keyed guess
+    /// Stopped keying: once five letters are in, guess. A keyed guess
     /// that is not taken is cleared (its reason stays on screen), so the next
     /// one can be keyed without reaching for the screen to delete it.
     private func keyedGuess() {

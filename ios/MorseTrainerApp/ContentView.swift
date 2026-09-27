@@ -1134,9 +1134,12 @@ struct ContentView: View {
         if model.qsoActionLabel == "CQ" || keyedCQ {
             model.qsoCQ(keyed: keyed)
             qsoText = ""
-        } else if model.qsoPrimaryAction(qsoText, keyed: keyed) {
+        } else if model.qsoPrimaryAction(qsoText, keyed: keyed) || keyed {
             // Cleared unless "keep partial call" kept a still-being-copied call
-            // in the box (issue #29).
+            // in the box (issue #29). A keyed send always empties it: a keyer
+            // cannot edit the box, so a kept partial ("N9" after "N9?") would
+            // have the next keyed call appended to it — "N9N9HO", a bust
+            // every time (#251).
             qsoText = ""
         } else {
             // Kept a still-being-copied call. If the send was a typed "?" repeat

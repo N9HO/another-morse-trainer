@@ -224,8 +224,12 @@ fun DailyDitScreen(onBack: () -> Unit) {
                 // that is not taken is cleared (its reason stays on screen) so
                 // the next can be keyed without reaching for the screen.
                 HardwareKeyInput(
+                    // Letters only, and no more than five — a sixth keyed
+                    // letter is dropped, the same on iOS.
                     onText = { chunk ->
                         entry = (entry + chunk).uppercase().filter { c -> c.isLetter() }.take(DailyDit.WORD_LENGTH)
+                        // Keying is how you recover from a rejection too.
+                        if (entry.isNotEmpty() && message != null) message = null
                     },
                     onPause = {
                         if (entry.length == DailyDit.WORD_LENGTH) {

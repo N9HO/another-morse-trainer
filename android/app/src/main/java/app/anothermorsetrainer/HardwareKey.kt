@@ -181,10 +181,21 @@ fun HardwareKeyInput(onText: (String) -> Unit, onPause: () -> Unit = {}) {
     // How much of the decoded text has already been handed on.
     var fed by remember { mutableIntStateOf(0) }
 
+    // Listening for the key and waking the adapter start with the screen; the
+    // sidetone does not. Starting it takes exclusive audio focus, which would
+    // pause the user's music on every screen this sits on even with no key
+    // attached (MorsePlayer's rule: focus only while something sounds). So it
+    // starts when a key is connected — or on its first key-down, whichever
+    // comes first — and stops when the key goes away.
     DisposableEffect(Unit) {
         keyer.scope = scope
-        keyer.start()
-        midi.start(onKey = { down -> keyer.touchKey(down) }, onConnected = { })
+        midi.start(
+            onKey = { down ->
+                if (down) keyer.start()
+                keyer.touchKey(down)
+            },
+            onConnected = { name -> if (name != null) keyer.start() else keyer.stop() }
+        )
         onDispose {
             midi.stop()
             keyer.stop()
@@ -201,14 +212,18 @@ fun HardwareKeyInput(onText: (String) -> Unit, onPause: () -> Unit = {}) {
         }
     }
 
-    // Restarted by every key edge; a pause with nothing decoded sends nothing.
-    val keying = keyer.isKeying
+    // Restarted by every key edge — counted, so a down/up pair that lands in
+    // one frame still restarts it — and re-checked on waking. A pause with
+    // nothing decoded sends nothing.
+    val edges = keyer.edgeCount
     val hasText = decoded.isNotEmpty()
-    LaunchedEffect(keying, hasText) {
-        if (keying || !hasText) return@LaunchedEffect
+    LaunchedEffect(edges, hasText) {
+        if (keyer.isKeying || !hasText) return@LaunchedEffect
         delay((keyer.wordGapMs * 2).toLong())
+        if (keyer.isKeying || keyer.edgeCount != edges) return@LaunchedEffect
         currentOnPause()
         keyer.clear()
+        fed = 0
     }
 }
 

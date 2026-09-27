@@ -247,10 +247,13 @@ struct HardwareKeyInput: ViewModifier {
             .onDisappear { setRunning(false) }
             .onChange(of: isEnabled) { setRunning($0) }
             .onChange(of: sender.decodedText) { feed($0) }
-            .onChange(of: sender.isKeying) { keying in
+            // Every key edge restarts the pause clock. Watching the edge count
+            // rather than `isKeying`: a down/up pair delivered together leaves
+            // `isKeying` unchanged and would not restart it.
+            .onChange(of: sender.edgeCount) { _ in
                 pauseTask?.cancel()
                 pauseTask = nil
-                if !keying, running { schedulePause() }
+                if running, !sender.isKeying { schedulePause() }
             }
             .onChange(of: adapterKeyerMode) { _ in applyConfig() }
             .onChange(of: wpm) { _ in applyConfig() }
@@ -269,12 +272,16 @@ struct HardwareKeyInput: ViewModifier {
         guard on != running else { return }
         running = on
         if on {
-            sender.start()
+            // The keyer was built with the settings of the first render; wake
+            // the adapter with the ones in force now.
+            sender.applyConfig(wpm: wpm, toneHz: toneHz)
+            sender.start(sidetoneOnDemand: true)
         } else {
             pauseTask?.cancel()
             pauseTask = nil
             sender.stop()
             sender.clear()
+            fed = 0
         }
     }
 
@@ -293,12 +300,16 @@ struct HardwareKeyInput: ViewModifier {
 
     private func schedulePause() {
         let wait = sender.wordGapMs * 2
+        let edge = sender.edgeCount
         pauseTask = Task { @MainActor in
             try? await Task.sleep(nanoseconds: UInt64(max(0, wait) * 1_000_000))
-            guard !Task.isCancelled, running, !sender.isKeying else { return }
+            // Re-checked on waking: still idle, and no edge since this was set.
+            guard !Task.isCancelled, running, !sender.isKeying,
+                  sender.edgeCount == edge else { return }
             guard fed > 0 else { return }   // nothing was decoded — no send
             onPause()
             sender.clear()
+            fed = 0
         }
     }
 }
