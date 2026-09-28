@@ -309,6 +309,25 @@ class DailyDitTest {
         }
     }
 
+    // #252: a play that would spend a listen asks first when the device is
+    // muted or all but; a free replay after the win never does.
+    @Test
+    fun theMutedDeviceWarningMatchesTheFixture() {
+        assertEquals(rules.getDouble("quietVolumeFraction"), DailyDit.QUIET_VOLUME_FRACTION, 0.0)
+        val cases = fixture.getJSONArray("quietWarnings")
+        assertTrue("fixture carries no quietWarnings cases", cases.length() > 0)
+        for (i in 0 until cases.length()) {
+            val c = cases.getJSONObject(i)
+            val volume = c.getDouble("volumeFraction")
+            val finished = c.getBoolean("isFinished")
+            assertEquals(
+                "volume $volume, finished $finished",
+                c.getBoolean("warns"),
+                DailyDit.warnsBeforeListen(volume, finished)
+            )
+        }
+    }
+
     // ---- Rules the fixture can't express as a table -------------------------
 
     @Test

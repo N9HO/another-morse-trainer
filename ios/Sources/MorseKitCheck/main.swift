@@ -3314,6 +3314,7 @@ do {
 struct DailyDitFixture: Decodable {
     struct Rules: Decodable {
         let listensPerSpeedStep, guessesPerSpeedStep, wordLength, selectionStride: Int
+        let quietVolumeFraction: Double
         // #168: no guess cap. Optional so the check can assert it is *absent*.
         let maxGuesses: Int?
         let speedStepWpm, minimumWpm: Double
@@ -3357,6 +3358,7 @@ struct DailyDitFixture: Decodable {
         let headline: String
     }
     struct SolvedSpeed: Decodable { let heard: [Double]; let winningGuessWpm, solvedWpm: Double }
+    struct QuietWarning: Decodable { let volumeFraction: Double; let isFinished, warns: Bool }
     let rules: Rules
     let wordLists: WordLists
     let civilDates: [CivilDate]
@@ -3366,6 +3368,7 @@ struct DailyDitFixture: Decodable {
     let share: Share
     let headlines: [Headline]
     let solvedSpeeds: [SolvedSpeed]
+    let quietWarnings: [QuietWarning]
 }
 
 func loadDailyDitFixture() -> DailyDitFixture? {
@@ -3558,6 +3561,20 @@ if let fx = loadDailyDitFixture() {
         }
     }
     check("the reported speed is the lowest heard across \(fx.solvedSpeeds.count) cases (a later faster listen and a blind guess included)", solvedOK)
+
+    // #252: a play that would spend a listen asks first when the device is
+    // muted or all but; a free replay after the win never does.
+    check("the quiet-volume threshold matches the fixture",
+          DailyDit.quietVolumeFraction == fx.rules.quietVolumeFraction)
+    var quietOK = true
+    for q in fx.quietWarnings {
+        let warns = DailyDit.warnsBeforeListen(volumeFraction: q.volumeFraction, isFinished: q.isFinished)
+        if warns != q.warns {
+            quietOK = false
+            print("      ↳ volume \(q.volumeFraction), finished \(q.isFinished): warns \(warns), fixture says \(q.warns)")
+        }
+    }
+    check("the muted-device warning matches the fixture across \(fx.quietWarnings.count) cases (the boundary and a finished game included)", quietOK)
 
     // Rules the fixture can't express as a table
     var rules = DailyDitGame(puzzleNumber: 1, answer: "SPEND", startingWpm: 40)

@@ -639,6 +639,9 @@
     <string name="daily_dit_status_solved">Copied at %1$s WPM · %2$s · %3$s</string>
     <string name="daily_dit_play">Play the word</string>
     <string name="daily_dit_hear_again">Hear it again</string>
+    <string name="daily_dit_muted_title">Your device appears to be muted</string>
+    <string name="daily_dit_muted_body">The volume is at or near zero. Every play before you solve the word counts as a listen, so turn it up first, or play anyway.</string>
+    <string name="daily_dit_muted_play_anyway">Play anyway</string>
     <string name="daily_dit_five_letters">Five letters</string>
     <string name="daily_dit_guess">Guess</string>
     <string name="daily_dit_ruled_out">Ruled out</string>
