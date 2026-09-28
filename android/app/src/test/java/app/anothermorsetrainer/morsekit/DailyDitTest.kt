@@ -322,7 +322,7 @@ class DailyDitTest {
             val finished = c.getBoolean("isFinished")
             assertEquals(
                 "volume $volume, finished $finished",
-                c.getBoolean("warns"),
+                !c.getBoolean("warns"),  // NEGATIVE CONTROL: must fail
                 DailyDit.warnsBeforeListen(volume, finished)
             )
         }
