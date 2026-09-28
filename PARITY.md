@@ -65,7 +65,7 @@ changes and the gap is closed.
 
 | What | Missing on | Why | What the app does instead |
 |---|---|---|---|
-| Pairing a Bluetooth LE MIDI key by scanning from inside the app | iOS | CoreMIDI only exposes a BLE MIDI peripheral once it has been connected through the system `CABTMIDICentralViewController` sheet; there is no app-level scan API. | Opens that system sheet from Settings (`BluetoothMIDISheet.swift`). Same outcome: a paired key. |
+| Pairing a Bluetooth LE MIDI key by scanning from inside the app | iOS | CoreMIDI only exposes a BLE MIDI peripheral once it has been connected through the system `CABTMIDICentralViewController` sheet; there is no app-level scan API. | Opens that system sheet from the screens that take a key (Sending Practice and keyed answers via `SendingKeyerView`, the Repeater, the Sending Analyzer; `BluetoothMIDISheet.swift`). Same outcome: a paired key. |
 | Hardware-key section always visible in Settings | Android | Some Android devices ship without `FEATURE_MIDI`; showing MIDI controls there would offer a feature the device cannot use. | The section is hidden on devices without the feature (`SettingsScreen.kt`, `FEATURE_MIDI` check). On devices that have it, the section matches iOS. |
 | Voice answers: listening starts by itself when the tone ends, and the time-to-recognize clock starts at speech onset | Android | Android's `SpeechRecognizer` is one-shot: each invocation plays the system start sound and takes audio focus, so auto-listening after every prompt would chime over every character; it also owns the microphone, so the app gets no audio to detect onset from. | A "Speak answer" button starts one recognition per prompt (`QuizScreen.kt`); the clock runs from the tap. |
 | Daily reminder at exactly the chosen minute | Android | The app deliberately does not request `SCHEDULE_EXACT_ALARM`, which Android 12+ gates behind a special permission; an inexact alarm may fire minutes late when the OS batches it. | `setInexactRepeating` at the chosen time; the reminder still arrives, at minute precision only on iOS. |
@@ -198,6 +198,70 @@ Fire, the story and serial libraries, Q-codes, word tiers, confusion pairs,
 MorseKit's own `MorseDecoder`, and save/load. Neither side tests
 `SendingDrill`. The way to close these is the one `CLAUDE.md` prescribes: a
 fixture derived from the spec, read by both.
+
+## Audit of 2026-09-27: open rows
+
+A second audit, in the same slices, after CW 77, the Sending Analyzer,
+on-screen paddles, keyboard-entry answers and multiple buddies landed. Those
+five features were found at parity in their logic: the CW 77 table, every
+Sending Analyzer threshold and text, the paddle keyer (pinned by
+`fixtures/paddle-keyer.json`), answer entry (`fixtures/answer-entry.json`) and
+the buddy limits all match. What follows had not been closed when it was
+recorded. Each row is closed per *Closing an item* below.
+
+Behavior (a user can do something on one app and not the other, or gets a
+different result):
+
+| # | Divergence | iOS | Android |
+|---|---|---|---|
+| 1 | Session length in Journey, Sending Practice, Rapid Fire and Pileup Runner | Picker, five-minute default, countdown and timer menu (`AppModel.usesSessionLength`) | None; the run lasts until End. Rapid Fire and Pileup Runner are ranked, so runs are not comparable |
+| 2 | Session length in Short Stories | No picker or timer menu, yet `startSession` starts the `practiceDuration` clock for every mode but Contest, so a story appears to end silently at five minutes; Code Exam and the games may be affected the same way (read from code, not yet run) | Picker and countdown (`DURATION_MODES` includes STORY) |
+| 3 | Timer menu "Subtract 1 minute" | Present (`reduceSessionTime`) | Missing (`SessionMenus.kt`) |
+| 4 | Pileup Runner / Contest options mid-session | In the in-session Settings sheet | Home Settings only (`SettingsScreen.kt` `PILEUP -> scope == null`) |
+| 5 | Your callsign / name from a CW 77, Listen or Common Words session | Your Station section shown | Unreachable; the fields live in the home-only Pileup section |
+| 6 | Display name and Delete my scores with Share scores off | Always shown | Hidden, so deleting scores or buddy pairings needs sharing switched back on |
+| 7 | Post-run leaderboard line | Rank and metric, plus "New personal best · c/t graded correct"; "not ranked" (refused) told apart from "not posted" | Rank and metric or a reason only |
+| 8 | Leaderboard metric display | Rounded (`metric.rounded()`) | Truncated (`toLong()`): 339.6 reads 340 vs 339 |
+| 9 | Display-name validation | Server deny list and specific messages; no error on an empty field | No deny list, one generic message, shown when empty |
+| 10 | Stats › Recent sessions | Whole history (up to 100), each opens its detail | Latest 6 |
+| 11 | Best session accuracy and biggest session | Over the full history | Over `Stats.recent` (50) |
+| 12 | Stats before the first session | Characters table shown | Only the empty message |
+| 13 | Personal bests, lifetime totals and sharing from Home | Unreachable: the Brag Sheet opens only from a session toolbar | On the Progress screen from Home |
+| 14 | Bluetooth LE key in Invaders, Galaga, Dungeon, Asteroids | A paired key feeds them | No `BluetoothKeyButton`, so only USB/Vail MIDI works |
+| 15 | "Studied characters" (Analyzer Groups, Sending Drills) | The Koch ladder's active set | Seed plus every character with stats |
+| 16 | Hardware-keyboard shortcuts in Head Copy (R, Return, X) and R to replay on the new-character intro | Present | Missing |
+| 17 | On-screen key after the answer is revealed | Stays live | Disabled (Sending Practice, Rapid Fire) |
+| 18 | Sidetone and tone-spread slider steps | 10 Hz; "Zero-beat" below 10 Hz | Continuous; "Zero beat" only at 0; stored sidetone not clamped on load |
+| 19 | Pileup min/max speed and wait | Independent; min can pass max | Coupled |
+| 20 | Your callsign input | Free text | Uppercase, letters/digits/`/`, 12 max, blank → W1AW |
+| 21 | Preview tone | Replays the current drill item; silent with none | Always keys PARIS |
+| 22 | Sending Analyzer, microphone input | Key closed | Hardware key stays open with its sidetone |
+| 23 | Sending Analyzer, two keys at once | Merged into one logical key | Recorded separately |
+| 24 | Sending Analyzer, microphone | Stops on interruption or route loss; own denied-permission message | No interruption handling; reuses the decoder's message ("…to decode audio") |
+| 25 | Home Daily Dit card, solved with no WPM recorded | Drops the speed | Shows "copied at  WPM" (a bug) |
+
+Copy and labels (same feature, different words; pick one per row):
+reminder notification title and no-streak body; buddy footer, invite share
+text and the "New invite code" relabel; delete-scores dialog; the CW 77
+"no callsign set" hint; setting names (Side tone / Sidetone pitch, Speed /
+Character speed, Recognize within / Recognition target, Reveal the letter /
+Reveal answer, and the Pileup Runner rows); Android session rows showing
+record keys ("Pileup", "Stories") where iOS shows mode titles; fastest copy
+"0.84 s" vs "840ms"; the stale iOS QRQ blurb ("35 or 40 WPM", both offer
+35/40/50/60); the Pileup Runner tagline.
+
+Layout, recorded for a decision rather than as gaps: where the voice and
+keyed-answer switches, word pool, "Use my word list", track stage and QRQ
+speed live (setup sheet on iOS, Settings or the mode screen on Android);
+Sending Drills, Sending Analyzer, Reference and the Repeater as toolbar
+icons (iOS) vs tiles (Android); home tile order; the last-used tile
+highlight (iOS only); the setup sheet's long blurb vs short tagline; iOS's
+finer Settings sections. If these are accepted as idiom they move to *Same
+feature, platform mechanism*.
+
+Documentation: neither README mentions the Daily Dit; the Android README
+lacks the first-run proficiency question and describes Sending Practice and
+the Repeater more briefly than iOS's.
 
 ## Closing an item
 
