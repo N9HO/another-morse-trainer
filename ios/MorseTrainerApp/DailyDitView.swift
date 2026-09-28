@@ -18,6 +18,10 @@ struct DailyDitView: View {
     @State private var playingUntil: Date?
     @State private var showingReference = false
     @State private var shareURL: URL?
+    /// "Your device appears to be muted — play anyway?" is up (#252).
+    @State private var confirmingQuietPlay = false
+    /// The learner said "Play anyway" once this visit; don't ask on every play.
+    @State private var quietPlayAccepted = false
     @FocusState private var entryFocused: Bool
 
     private var game: DailyDitGame { model.dailyDit }
@@ -61,6 +65,15 @@ struct DailyDitView: View {
             // midnight rollover (refreshDailyDit) both change what the card says.
             .task(id: game.isFinished) { renderShareImage() }
             .onDisappear { model.stopDailyDit() }
+            .alert("Your device appears to be muted", isPresented: $confirmingQuietPlay) {
+                Button("Play anyway") {
+                    quietPlayAccepted = true
+                    play()
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("The volume is at or near zero. Every play before you solve the word counts as a listen, so turn it up first, or play anyway.")
+            }
         }
     }
 
@@ -101,7 +114,7 @@ struct DailyDitView: View {
 
     private var playButton: some View {
         Button {
-            play()
+            requestPlay()
         } label: {
             HStack(spacing: 10) {
                 Image(systemName: isPlaying ? "waveform" : "play.fill")
@@ -120,6 +133,18 @@ struct DailyDitView: View {
         .accessibilityHint(game.isFinished
                            ? "Replays after the win are free"
                            : "Every \(DailyDit.listensPerSpeedStep) listens slow the code by \(Int(DailyDit.speedStepWpm)) words per minute")
+    }
+
+    /// A play that would spend a listen with the volume at (or all but) zero
+    /// asks first (#252): the listen is counted when the word is sent, not
+    /// when it is heard, so a silent play would burn one for nothing. Cancel
+    /// costs nothing. Free replays after the win never ask.
+    private func requestPlay() {
+        if !quietPlayAccepted && model.dailyDitPlayNeedsVolumeConfirmation {
+            confirmingQuietPlay = true
+        } else {
+            play()
+        }
     }
 
     private func play() {

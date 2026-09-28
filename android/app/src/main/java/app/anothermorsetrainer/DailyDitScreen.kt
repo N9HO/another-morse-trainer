@@ -3,6 +3,7 @@ package app.anothermorsetrainer
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.media.AudioManager
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -24,6 +25,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
@@ -96,6 +98,11 @@ fun DailyDitScreen(onBack: () -> Unit) {
     var entry by rememberSaveable { mutableStateOf("") }
     var message by rememberSaveable { mutableStateOf<String?>(null) }
     var showReference by rememberSaveable { mutableStateOf(false) }
+    // "Your device appears to be muted — play anyway?" (#252), and whether the
+    // learner already said "Play anyway" this visit, so it doesn't ask on
+    // every play.
+    var confirmingQuietPlay by rememberSaveable { mutableStateOf(false) }
+    var quietPlayAccepted by rememberSaveable { mutableStateOf(false) }
 
     // The app can sit open across midnight; don't serve yesterday's grid.
     LaunchedEffect(Unit) { DailyDitStore.refresh() }
@@ -111,6 +118,47 @@ fun DailyDitScreen(onBack: () -> Unit) {
     // "1 guess · 3 listens" — the counts the share text carries, in the same words.
     val guessesText = pluralStringResource(R.plurals.daily_dit_guesses, game.guessesUsed, game.guessesUsed)
     val listensText = pluralStringResource(R.plurals.daily_dit_listens, game.listens, game.listens)
+
+    // Send the word. The store records the listen (a no-op once the day is
+    // won) and hands back the speed to send it at.
+    val playWord: () -> Unit = {
+        if (game.answer.isNotEmpty()) {
+            val wpm = DailyDitStore.listen()
+            player.replaySound(
+                MorseItem.Playable.Text(game.answer),
+                Settings.sidetoneHz,
+                MorseTiming(wpm)
+            )
+        }
+    }
+
+    if (confirmingQuietPlay) {
+        AlertDialog(
+            // Tapping outside or Back is Cancel: nothing played, nothing spent.
+            onDismissRequest = { confirmingQuietPlay = false },
+            containerColor = Brand.navyElevated,
+            title = { Text(stringResource(R.string.daily_dit_muted_title), color = Brand.textPrimary) },
+            text = { Text(stringResource(R.string.daily_dit_muted_body), color = Brand.textSecondary) },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmingQuietPlay = false
+                    quietPlayAccepted = true
+                    playWord()
+                }) {
+                    Text(
+                        stringResource(R.string.daily_dit_muted_play_anyway),
+                        color = Brand.teal,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmingQuietPlay = false }) {
+                    Text(stringResource(R.string.common_cancel), color = Brand.teal)
+                }
+            }
+        )
+    }
 
     Column(modifier = Modifier.fillMaxSize()) {
         Row(
@@ -178,16 +226,19 @@ fun DailyDitScreen(onBack: () -> Unit) {
             }
 
             // Play — every play counts (#168): the store records the listen
-            // and hands back the speed to send it at.
+            // and hands back the speed to send it at. A play that would spend
+            // a listen with the media volume at (or all but) zero asks first
+            // (#252): the listen is counted when the word is sent, not when it
+            // is heard. Cancel costs nothing; free replays after the win never
+            // ask.
             Button(
                 onClick = {
-                    if (game.answer.isNotEmpty()) {
-                        val wpm = DailyDitStore.listen()
-                        player.replaySound(
-                            MorseItem.Playable.Text(game.answer),
-                            Settings.sidetoneHz,
-                            MorseTiming(wpm)
-                        )
+                    if (!quietPlayAccepted &&
+                        DailyDit.warnsBeforeListen(mediaVolumeFraction(context), game.isFinished)
+                    ) {
+                        confirmingQuietPlay = true
+                    } else {
+                        playWord()
                     }
                 },
                 modifier = Modifier.fillMaxWidth().height(54.dp),
@@ -671,4 +722,20 @@ private fun ResultCard(
 private fun copyText(context: Context, text: String) {
     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
     clipboard?.setPrimaryClip(ClipData.newPlainText("Daily Dit", text))
+}
+
+/**
+ * The media volume as a fraction of its maximum, for asking "play anyway?"
+ * before a play that spends a listen (#252). [MorsePlayer] plays with
+ * `USAGE_MEDIA`, which is [AudioManager.STREAM_MUSIC], so that is the stream
+ * that decides whether the word is heard — the ringer mode does not. A muted
+ * stream reads as zero whatever its level. If the service or its range can't
+ * be read, it reads as full: better no prompt than a wrong one.
+ */
+private fun mediaVolumeFraction(context: Context): Double {
+    val audio = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return 1.0
+    if (audio.isStreamMute(AudioManager.STREAM_MUSIC)) return 0.0
+    val max = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+    if (max <= 0) return 1.0
+    return audio.getStreamVolume(AudioManager.STREAM_MUSIC).toDouble() / max
 }

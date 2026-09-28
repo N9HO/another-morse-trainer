@@ -181,6 +181,24 @@ public enum DailyDit {
             + max(0, wrongGuesses) / guessesPerSpeedStep
         return max(minimumWpm, start - speedStepWpm * Double(steps))
     }
+
+    // MARK: - The muted-device check (#252)
+
+    /// Output volume, as a fraction of the device's maximum, below which a
+    /// play that would count as a listen asks first. 0.05 sits under the
+    /// quietest audible step on an iPhone (1/16 = 0.0625) and on a typical
+    /// Android media stream (1/15 ≈ 0.067), so in practice it means "at zero"
+    /// — the case the report is about — while still catching a volume that
+    /// reads a hair above zero, or the first step of a stream with more than
+    /// twenty, which is not reliably audible either.
+    public static let quietVolumeFraction = 0.05
+
+    /// Whether playing the word should ask "play anyway?" first. Only a play
+    /// that spends a listen asks: replays after the win are free (#168), so a
+    /// silent one costs nothing and is not worth a prompt.
+    public static func warnsBeforeListen(volumeFraction: Double, isFinished: Bool) -> Bool {
+        !isFinished && volumeFraction < quietVolumeFraction
+    }
 }
 
 // MARK: - A day's game

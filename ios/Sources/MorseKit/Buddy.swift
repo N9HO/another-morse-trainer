@@ -319,14 +319,14 @@ public struct BuddyDigest: Sendable, Equatable {
         bestStreak = buddies.map(\.streak).max() ?? 0
     }
 
-    /// "W1AW hasn't practised yet today", "W1AW and K1ABC haven't …",
+    /// "W1AW hasn't practiced yet today", "W1AW and K1ABC haven't …",
     /// "W1AW, K1ABC and 2 more haven't …"; nil when nobody is waiting.
     public var waitingPhrase: String? {
         switch (waitingNames.count, waitingMore) {
         case (0, _): return nil
-        case (1, _): return "\(waitingNames[0]) hasn't practised yet today"
-        case (_, 0): return "\(waitingNames[0]) and \(waitingNames[1]) haven't practised yet today"
-        default: return "\(waitingNames[0]), \(waitingNames[1]) and \(waitingMore) more haven't practised yet today"
+        case (1, _): return "\(waitingNames[0]) hasn't practiced yet today"
+        case (_, 0): return "\(waitingNames[0]) and \(waitingNames[1]) haven't practiced yet today"
+        default: return "\(waitingNames[0]), \(waitingNames[1]) and \(waitingMore) more haven't practiced yet today"
         }
     }
 }
@@ -488,26 +488,26 @@ public struct BuddyStatusCache: Codable, Sendable, Equatable {
     }
 
     /// The home screen's line under the streak badge, or nil with no
-    /// buddies. One buddy: "W1AW practised today · 12-day buddy streak" /
-    /// "W1AW hasn't practised yet today · 12-day buddy streak" (the #219
-    /// wording). Several: "All 3 buddies practised today · best: 40-day
+    /// buddies. One buddy: "W1AW practiced today · 12-day buddy streak" /
+    /// "W1AW hasn't practiced yet today · 12-day buddy streak" (the #219
+    /// wording). Several: "All 3 buddies practiced today · best: 40-day
     /// buddy streak", or who is still waiting, then the best streak.
     public func homeLine(today: String) -> String? {
         let d = digest(today: today)
         guard let first = buddies.first else { return nil }
         if d.count == 1 {
-            let did = d.allPractised ? "practised today" : "hasn't practised yet today"
+            let did = d.allPractised ? "practiced today" : "hasn't practiced yet today"
             return "\(first.displayName) \(did) · \(Self.streakLabel(first.streak))"
         }
-        let summary = d.allPractised ? "All \(d.count) buddies practised today" : (d.waitingPhrase ?? "")
+        let summary = d.allPractised ? "All \(d.count) buddies practiced today" : (d.waitingPhrase ?? "")
         let streak = d.bestStreak > 0 ? "best: \(Self.streakLabel(d.bestStreak))" : Self.streakLabel(0)
         return "\(summary) · \(streak)"
     }
 
     /// One buddy's row in Settings › Leaderboard & Buddy › Buddy streak, under the name:
-    /// "12-day buddy streak · practised today" / "… · hasn't practised yet today".
+    /// "12-day buddy streak · practiced today" / "… · hasn't practiced yet today".
     public func rowLine(for buddy: BuddyEntry, today: String) -> String {
-        let did = practised(buddy, on: today) ? "practised today" : "hasn't practised yet today"
+        let did = practised(buddy, on: today) ? "practiced today" : "hasn't practiced yet today"
         return "\(Self.streakLabel(buddy.streak)) · \(did)"
     }
 
@@ -520,7 +520,7 @@ public struct BuddyStatusCache: Codable, Sendable, Equatable {
     }
 
     /// The sentence the daily reminder gains when, at the last fetch, some
-    /// buddy had not practised — "W1AW hasn't practised yet today (as of
+    /// buddy had not practiced — "W1AW hasn't practiced yet today (as of
     /// 6:10 pm)", or "W1AW, K1ABC and 2 more haven't …" with several: one
     /// sentence however many buddies, never one each (#237: no spam) — or
     /// nil when there is nothing to nudge about. `asOf` is the fetch time

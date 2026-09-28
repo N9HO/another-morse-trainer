@@ -85,7 +85,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .rapidFire:          return "Copy what you hear"
         case .invaders:           return "Shoot the character you hear"
         case .galaga:             return "Shoot the character you hear"
-        case .defender:           return "Route the defence to the callsign you hear"
+        case .defender:           return "Route the defense to the callsign you hear"
         case .dungeon:            return "Key the counter-spell"
         case .frogger:            return "Cross on the character you hear"
         case .asteroids:          return "Send the label on each asteroid"
@@ -167,13 +167,13 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .galaga:
             return "Enemies swoop in along curved paths and settle into a formation, then dive at you one by one. Hear one and type it, or see one and key it, to shoot the most dangerous enemy carrying it before its dive gets through. Consecutive hits build a combo multiplier up to ×8; three lives; every wave brings a bigger formation and faster dives. Misses feed your confusion drill."
         case .defender:
-            return "Cities and ships line the bottom, each with a callsign. Attackers come down from the top, and each one sends the callsign of the asset it is heading for. Copy it and route the defence — tap that asset, or type the callsign — before the attacker arrives. Lose every asset and the game is over; every wave brings more assets and more attackers at once. Every copy feeds your character stats."
+            return "Cities and ships line the bottom, each with a callsign. Attackers come down from the top, and each one sends the callsign of the asset it is heading for. Copy it and route the defense — tap that asset, or type the callsign — before the attacker arrives. Lose every asset and the game is over; every wave brings more assets and more attackers at once. Every copy feeds your character stats."
         case .dungeon:
             return "A roguelike, room by room. Each monster casts a spell word in Morse; copy it, then key the counter word from the spell book on a Morse key before the attack lands. A counter in time hurts the monster, a wrong or late one costs a life, and some counters heal you. Three lives; every room's window is shorter. Every keyed character feeds your stats and confusion drill."
         case .frogger:
             return "Hop a frog across three lanes of traffic and three of river. Every vehicle and log carries a character, and each lane is cued in Morse: only the cued vehicle is harmless and only the cued log floats. Three lives; each crossing is a wave and the traffic gets faster. Labels hide as the waves go on. Wrong lanes feed your confusion drill."
         case .asteroids:
-            return "Labelled asteroids drift in toward your ship. See one and key its label to destroy it, or hear one sent and tap the asteroid carrying it. Later waves bring short words and callsigns that split into their characters when hit. Three lives; every wave comes faster. Misses feed your confusion drill."
+            return "Labeled asteroids drift in toward your ship. See one and key its label to destroy it, or hear one sent and tap the asteroid carrying it. Later waves bring short words and callsigns that split into their characters when hit. Three lives; every wave comes faster. Misses feed your confusion drill."
         }
     }
 
@@ -3297,6 +3297,13 @@ final class AppModel: ObservableObject {
         return player.replaySound(playable: .text(dailyDit.answer),
                                   frequency: settings.toneFrequency,
                                   timing: MorseTiming(wpm: wpm))
+    }
+
+    /// Whether playing the word now should ask "play anyway?" first (#252):
+    /// the play would spend a listen and the device is muted or all but.
+    var dailyDitPlayNeedsVolumeConfirmation: Bool {
+        DailyDit.warnsBeforeListen(volumeFraction: AudioSession.shared.outputVolume,
+                                   isFinished: dailyDit.isFinished)
     }
 
     func stopDailyDit() { player.stop() }

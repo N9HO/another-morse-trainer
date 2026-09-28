@@ -32,11 +32,11 @@ only while you are actively using one of them:
   This feature is off by default.
 - **CW Decoder**, which listens to received Morse code (from a radio speaker, for
   instance) and decodes it to text. This runs entirely on your device: the
-  audio is analysed in memory and is not sent anywhere.
+  audio is analyzed in memory and is not sent anywhere.
 - **Sending Analyzer**, when you choose the microphone as its input: it listens
   for the tone of a key, keyer or radio you are sending on and times each
   key-down and key-up. This also runs entirely on your device: the audio is
-  analysed in memory and is not sent anywhere. Only the timing results are
+  analyzed in memory and is not sent anywhere. Only the timing results are
   kept, on your device.
 
 The app itself does **not** record, save, or transmit any audio.

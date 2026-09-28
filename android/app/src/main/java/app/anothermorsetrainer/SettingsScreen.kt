@@ -1669,7 +1669,7 @@ private fun diagnosticInfo(context: Context, scope: SettingsMode?): String {
         else -> {}
     }
     lines.add("Session: ${Settings.practiceDuration.label} · reveal ${Settings.revealMode.label} · " +
-        "choices ${Settings.answerChoices} · recognise ${"%.1f".format(Settings.recognitionTargetSec)} s")
+        "choices ${Settings.answerChoices} · recognize ${"%.1f".format(Settings.recognitionTargetSec)} s")
     lines.add("Bluetooth keep-alive: ${if (Settings.bluetoothKeepAlive) "on" else "off"}")
     if (Settings.bandNoise != BackgroundNoiseLevel.OFF) {
         lines.add("Band noise: ${Settings.bandNoise.label}")

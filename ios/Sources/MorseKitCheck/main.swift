@@ -3314,6 +3314,7 @@ do {
 struct DailyDitFixture: Decodable {
     struct Rules: Decodable {
         let listensPerSpeedStep, guessesPerSpeedStep, wordLength, selectionStride: Int
+        let quietVolumeFraction: Double
         // #168: no guess cap. Optional so the check can assert it is *absent*.
         let maxGuesses: Int?
         let speedStepWpm, minimumWpm: Double
@@ -3357,6 +3358,7 @@ struct DailyDitFixture: Decodable {
         let headline: String
     }
     struct SolvedSpeed: Decodable { let heard: [Double]; let winningGuessWpm, solvedWpm: Double }
+    struct QuietWarning: Decodable { let volumeFraction: Double; let isFinished, warns: Bool }
     let rules: Rules
     let wordLists: WordLists
     let civilDates: [CivilDate]
@@ -3366,6 +3368,7 @@ struct DailyDitFixture: Decodable {
     let share: Share
     let headlines: [Headline]
     let solvedSpeeds: [SolvedSpeed]
+    let quietWarnings: [QuietWarning]
 }
 
 func loadDailyDitFixture() -> DailyDitFixture? {
@@ -3558,6 +3561,20 @@ if let fx = loadDailyDitFixture() {
         }
     }
     check("the reported speed is the lowest heard across \(fx.solvedSpeeds.count) cases (a later faster listen and a blind guess included)", solvedOK)
+
+    // #252: a play that would spend a listen asks first when the device is
+    // muted or all but; a free replay after the win never does.
+    check("the quiet-volume threshold matches the fixture",
+          DailyDit.quietVolumeFraction == fx.rules.quietVolumeFraction)
+    var quietOK = true
+    for q in fx.quietWarnings {
+        let warns = DailyDit.warnsBeforeListen(volumeFraction: q.volumeFraction, isFinished: q.isFinished)
+        if warns != q.warns {
+            quietOK = false
+            print("      ↳ volume \(q.volumeFraction), finished \(q.isFinished): warns \(warns), fixture says \(q.warns)")
+        }
+    }
+    check("the muted-device warning matches the fixture across \(fx.quietWarnings.count) cases (the boundary and a finished game included)", quietOK)
 
     // Rules the fixture can't express as a table
     var rules = DailyDitGame(puzzleNumber: 1, answer: "SPEND", startingWpm: 40)
@@ -5939,9 +5956,9 @@ do {
     check("the cache takes the list, the cap and the day",
           listed.buddies.count == 2 && listed.maxBuddies == 10 && listed.myStreak == 30 && listed.today == "2026-09-11" && listed.paired && !listed.isFull)
     check("a buddy row says its own streak and day",
-          listed.rowLine(for: w1aw, today: "2026-09-11") == "12-day buddy streak · practised today"
-          && listed.rowLine(for: listed.buddies[1], today: "2026-09-11") == "3-day buddy streak · hasn't practised yet today"
-          && listed.rowLine(for: w1aw, today: "2026-09-12") == "12-day buddy streak · hasn't practised yet today")
+          listed.rowLine(for: w1aw, today: "2026-09-11") == "12-day buddy streak · practiced today"
+          && listed.rowLine(for: listed.buddies[1], today: "2026-09-11") == "3-day buddy streak · hasn't practiced yet today"
+          && listed.rowLine(for: w1aw, today: "2026-09-12") == "12-day buddy streak · hasn't practiced yet today")
     check("the count line shows the cap", listed.countLine == "2 of 10 buddies" && BuddyStatusCache().countLine == "0 of 1 buddy")
     var invited = BuddyStatusCache(status: none, fetchedAt: fetched)
     invited.pendingInviteCode = "ABC234"
@@ -5977,7 +5994,7 @@ do {
           legacy?.buddies == [BuddyEntry(id: "", displayName: "W1AW", practisedToday: true, streak: 4)]
           && legacy?.maxBuddies == 1 && legacy?.myStreak == 9 && legacy?.lastReportedDay == "2026-09-11" && legacy?.fetchedAt == nil)
     check("… and its home line reads as before",
-          legacy?.homeLine(today: "2026-09-11") == "W1AW practised today · 4-day buddy streak")
+          legacy?.homeLine(today: "2026-09-11") == "W1AW practiced today · 4-day buddy streak")
     let legacyUnpaired = try? JSONDecoder().decode(BuddyStatusCache.self, from: Data(#"{"paired":false,"buddyName":"","pendingInviteCode":"ABC234"}"#.utf8))
     check("an unpaired one-buddy cache keeps its invite and has no buddies",
           legacyUnpaired?.buddies == [] && legacyUnpaired?.pendingInviteCode == "ABC234")

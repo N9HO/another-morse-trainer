@@ -10,10 +10,12 @@
     "shareText": "headline, then one emoji row per guess, then the link",
     "listens": "every play of the word before the win — the first and every replay — recorded at the speed in effect when it was played; the step lands on the play after it, as with guesses. Replays after the win are free and not recorded",
     "solvedWpm": "the lowest speed the word was heard at before the correct guess (min of heard); a word never listened to reports the speed the winning guess was made at",
-    "headline": "solved: 'Daily Dit #N — <solvedWpm> WPM · <g> guess(es) · <l> listen(s)'; playing: 'Daily Dit #N — <g> guess(es) · <l> listen(s) so far'; ' (no reference)' appended when hideReference. Singular at exactly 1. No guess cap, so no lost outcome"
+    "headline": "solved: 'Daily Dit #N — <solvedWpm> WPM · <g> guess(es) · <l> listen(s)'; playing: 'Daily Dit #N — <g> guess(es) · <l> listen(s) so far'; ' (no reference)' appended when hideReference. Singular at exactly 1. No guess cap, so no lost outcome",
+    "quietWarning": "#252: a play asks 'play anyway?' first iff the game is not finished (so the play would spend a listen) AND volumeFraction < quietVolumeFraction, strictly below. volumeFraction is output volume over the device maximum; a muted stream counts as 0. 0.05 is under the quietest step on an iPhone (1/16 = 0.0625) and a 15-step Android media stream (1/15), so in practice it is 'at zero'; a 25-step stream's first step (0.04) is below it"
   },
   "rules": {
     "listensPerSpeedStep": 3,
+    "quietVolumeFraction": 0.05,
     "guessesPerSpeedStep": 3,
     "speedStepWpm": 5.0,
     "minimumWpm": 10.0,
@@ -546,6 +548,58 @@
       "heard": [],
       "winningGuessWpm": 40.0,
       "solvedWpm": 40.0
+    }
+  ],
+  "quietWarnings": [
+    {
+      "volumeFraction": 0.0,
+      "isFinished": false,
+      "warns": true
+    },
+    {
+      "volumeFraction": 0.0,
+      "isFinished": true,
+      "warns": false
+    },
+    {
+      "volumeFraction": 0.04,
+      "isFinished": false,
+      "warns": true
+    },
+    {
+      "volumeFraction": 0.049,
+      "isFinished": false,
+      "warns": true
+    },
+    {
+      "volumeFraction": 0.05,
+      "isFinished": false,
+      "warns": false
+    },
+    {
+      "volumeFraction": 0.0625,
+      "isFinished": false,
+      "warns": false
+    },
+    {
+      "volumeFraction": 0.0667,
+      "isFinished": false,
+      "warns": false
+    },
+    {
+      "volumeFraction": 0.5,
+      "isFinished": false,
+      "warns": false
+    },
+    {
+      "volumeFraction": 1.0,
+      "isFinished": false,
+      "warns": false
+    },
+    {
+      "volumeFraction": 0.04,
+      "isFinished": true,
+      "warns": false
     }
   ]
 }
