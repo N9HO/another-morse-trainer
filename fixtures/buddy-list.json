@@ -2,9 +2,9 @@
   "description": "Several buddies, a streak each (issue #237; docs/buddy-streak-design.md, 'Several buddies'). Read by ios/Sources/MorseKitCheck/main.swift and android/app/src/test/java/app/anothermorsetrainer/morsekit/BuddyListTest.kt. Values are written from the rules in the design note and the leaderboard README's v1/v2 status shapes, not captured from either app.",
   "rules": {
     "parse": "A v2 body has `buddies`; a v1 body has `paired` and at most one `buddy`, which becomes a one-entry list with id \"\" and maxBuddies 1. A body with neither is not a status (null). An entry without a non-blank displayName is dropped; streaks below zero read as zero; a missing or malformed `today` reads as \"\"; maxBuddies is at least 1 and at least the list's length.",
-    "digest": "A buddy counts as practised only when the status is for today (statusDay == today) and it says so. waiting = the rest, in list order. Up to two waiting names are shown; waitingMore counts the others. allPractised needs at least one buddy. bestStreak is the longest streak, 0 with no buddies.",
-    "home": "No buddies: no line. One buddy: '<name> practised today' or '<name> hasn't practised yet today', then ' · ' and the streak ('N-day buddy streak', or 'no buddy streak yet' at 0). Several: 'All N buddies practised today' or the waiting phrase, then ' · ' and 'best: N-day buddy streak' (or 'no buddy streak yet' when every streak is 0).",
-    "waitingPhrase": "One: '<a> hasn't practised yet today'. Two: '<a> and <b> haven't practised yet today'. More: '<a>, <b> and <k> more haven't practised yet today'.",
+    "digest": "A buddy counts as practiced only when the status is for today (statusDay == today) and it says so. waiting = the rest, in list order. Up to two waiting names are shown; waitingMore counts the others. allPractised needs at least one buddy. bestStreak is the longest streak, 0 with no buddies.",
+    "home": "No buddies: no line. One buddy: '<name> practiced today' or '<name> hasn't practiced yet today', then ' · ' and the streak ('N-day buddy streak', or 'no buddy streak yet' at 0). Several: 'All N buddies practiced today' or the waiting phrase, then ' · ' and 'best: N-day buddy streak' (or 'no buddy streak yet' when every streak is 0).",
+    "waitingPhrase": "One: '<a> hasn't practiced yet today'. Two: '<a> and <b> haven't practiced yet today'. More: '<a>, <b> and <k> more haven't practiced yet today'.",
     "reminder": "The waiting phrase plus ' (as of <asOf>)', only when the status has been fetched, is for today, and someone is waiting; otherwise none.",
     "keepInvite": "An invite this device issued stays shown unless the list is now full (count >= maxBuddies) or a buddy appeared that this device did not join itself. A buddy 'appeared' when no previous entry matches it: same non-empty id, or, when either id is empty (a v1 answer or a cache from before #237), the same name. When this device just joined, the newcomer with the joined id (or, with no id, the first newcomer) is its own and does not count."
   },
@@ -18,29 +18,29 @@
       "home": null, "reminder": null
     },
     {
-      "name": "one buddy who practised",
+      "name": "one buddy who practiced",
       "today": "2026-09-26", "statusDay": "2026-09-26", "fetched": true,
       "buddies": [ { "name": "W1AW", "practisedToday": true, "streak": 12 } ],
       "digest": { "count": 1, "allPractised": true, "waitingNames": [], "waitingMore": 0, "bestStreak": 12 },
-      "home": "W1AW practised today · 12-day buddy streak", "reminder": null
+      "home": "W1AW practiced today · 12-day buddy streak", "reminder": null
     },
     {
       "name": "one buddy who has not, yet: the #219 wording unchanged",
       "today": "2026-09-26", "statusDay": "2026-09-26", "fetched": true,
       "buddies": [ { "name": "W1AW", "practisedToday": false, "streak": 1 } ],
       "digest": { "count": 1, "allPractised": false, "waitingNames": ["W1AW"], "waitingMore": 0, "bestStreak": 1 },
-      "home": "W1AW hasn't practised yet today · 1-day buddy streak",
-      "reminder": "W1AW hasn't practised yet today (as of 6:10 pm)"
+      "home": "W1AW hasn't practiced yet today · 1-day buddy streak",
+      "reminder": "W1AW hasn't practiced yet today (as of 6:10 pm)"
     },
     {
       "name": "a status from yesterday cannot vouch for today, and does not nudge",
       "today": "2026-09-27", "statusDay": "2026-09-26", "fetched": true,
       "buddies": [ { "name": "W1AW", "practisedToday": true, "streak": 0 } ],
       "digest": { "count": 1, "allPractised": false, "waitingNames": ["W1AW"], "waitingMore": 0, "bestStreak": 0 },
-      "home": "W1AW hasn't practised yet today · no buddy streak yet", "reminder": null
+      "home": "W1AW hasn't practiced yet today · no buddy streak yet", "reminder": null
     },
     {
-      "name": "several, all practised",
+      "name": "several, all practiced",
       "today": "2026-09-26", "statusDay": "2026-09-26", "fetched": true,
       "buddies": [
         { "name": "W1AW", "practisedToday": true, "streak": 3 },
@@ -48,7 +48,7 @@
         { "name": "N9HO", "practisedToday": true, "streak": 0 }
       ],
       "digest": { "count": 3, "allPractised": true, "waitingNames": [], "waitingMore": 0, "bestStreak": 40 },
-      "home": "All 3 buddies practised today · best: 40-day buddy streak", "reminder": null
+      "home": "All 3 buddies practiced today · best: 40-day buddy streak", "reminder": null
     },
     {
       "name": "several, one waiting",
@@ -58,8 +58,8 @@
         { "name": "K1ABC", "practisedToday": false, "streak": 7 }
       ],
       "digest": { "count": 2, "allPractised": false, "waitingNames": ["K1ABC"], "waitingMore": 0, "bestStreak": 7 },
-      "home": "K1ABC hasn't practised yet today · best: 7-day buddy streak",
-      "reminder": "K1ABC hasn't practised yet today (as of 6:10 pm)"
+      "home": "K1ABC hasn't practiced yet today · best: 7-day buddy streak",
+      "reminder": "K1ABC hasn't practiced yet today (as of 6:10 pm)"
     },
     {
       "name": "several, two waiting, in list order",
@@ -70,8 +70,8 @@
         { "name": "N9HO", "practisedToday": false, "streak": 0 }
       ],
       "digest": { "count": 3, "allPractised": false, "waitingNames": ["W1AW", "N9HO"], "waitingMore": 0, "bestStreak": 0 },
-      "home": "W1AW and N9HO haven't practised yet today · no buddy streak yet",
-      "reminder": "W1AW and N9HO haven't practised yet today (as of 6:10 pm)"
+      "home": "W1AW and N9HO haven't practiced yet today · no buddy streak yet",
+      "reminder": "W1AW and N9HO haven't practiced yet today (as of 6:10 pm)"
     },
     {
       "name": "several, more waiting than are named",
@@ -84,15 +84,15 @@
         { "name": "G4ABC", "practisedToday": false, "streak": 0 }
       ],
       "digest": { "count": 5, "allPractised": false, "waitingNames": ["W1AW", "K1ABC"], "waitingMore": 2, "bestStreak": 9 },
-      "home": "W1AW, K1ABC and 2 more haven't practised yet today · best: 9-day buddy streak",
-      "reminder": "W1AW, K1ABC and 2 more haven't practised yet today (as of 6:10 pm)"
+      "home": "W1AW, K1ABC and 2 more haven't practiced yet today · best: 9-day buddy streak",
+      "reminder": "W1AW, K1ABC and 2 more haven't practiced yet today (as of 6:10 pm)"
     },
     {
       "name": "never fetched: no reminder, whatever the list says",
       "today": "2026-09-26", "statusDay": "2026-09-26", "fetched": false,
       "buddies": [ { "name": "W1AW", "practisedToday": false, "streak": 4 } ],
       "digest": { "count": 1, "allPractised": false, "waitingNames": ["W1AW"], "waitingMore": 0, "bestStreak": 4 },
-      "home": "W1AW hasn't practised yet today · 4-day buddy streak", "reminder": null
+      "home": "W1AW hasn't practiced yet today · 4-day buddy streak", "reminder": null
     }
   ],
   "parseCases": [

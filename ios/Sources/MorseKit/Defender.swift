@@ -29,9 +29,9 @@ public enum DefenderInput: String, Codable, CaseIterable, Identifiable, Sendable
     public var blurb: String {
         switch self {
         case .tap:
-            return "Each attacker sends the callsign of the asset it is heading for (tap the attacker to hear it again). Copy it and tap that asset to route the defence."
+            return "Each attacker sends the callsign of the asset it is heading for (tap the attacker to hear it again). Copy it and tap that asset to route the defense."
         case .typed:
-            return "Each attacker sends its target's callsign (tap the attacker to hear it again). Type the callsign on the keyboard; the defence routes itself the moment it matches an asset."
+            return "Each attacker sends its target's callsign (tap the attacker to hear it again). Type the callsign on the keyboard; the defense routes itself the moment it matches an asset."
         }
     }
 }

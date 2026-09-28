@@ -109,7 +109,7 @@ struct AsteroidsView: View {
                     .font(Theme.copyFont(style: .footnote, monospaced: true,
                                          slashedZero: model.settings.slashedZero))
                     .foregroundStyle(Theme.textSecondary)
-                Text("From wave \(AsteroidsGame.wordWaveStart), larger asteroids carry short words and callsigns spelt from these characters; a word splits into its characters when hit.")
+                Text("From wave \(AsteroidsGame.wordWaveStart), larger asteroids carry short words and callsigns spelled from these characters; a word splits into its characters when hit.")
                     .font(.footnote)
                     .foregroundStyle(Theme.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)

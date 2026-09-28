@@ -24,11 +24,11 @@ import kotlin.random.Random
 enum class DefenderInput(val label: String, val blurb: String) {
     TAP(
         "Tap the target",
-        "Each attacker sends the callsign of the asset it is heading for (tap the attacker to hear it again). Copy it and tap that asset to route the defence."
+        "Each attacker sends the callsign of the asset it is heading for (tap the attacker to hear it again). Copy it and tap that asset to route the defense."
     ),
     TYPED(
         "Type the callsign",
-        "Each attacker sends its target's callsign (tap the attacker to hear it again). Type the callsign on the keyboard; the defence routes itself the moment it matches an asset."
+        "Each attacker sends its target's callsign (tap the attacker to hear it again). Type the callsign on the keyboard; the defense routes itself the moment it matches an asset."
     )
 }
 
