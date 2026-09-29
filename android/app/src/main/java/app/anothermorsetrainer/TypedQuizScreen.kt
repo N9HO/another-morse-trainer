@@ -266,6 +266,12 @@ fun TypedQuizScreen(
                 onDone = onBack
             )
         } else {
+        // A Vail Adapter / BLE-MIDI key types the answer too (#251): what you
+        // key lands in the box, and stopping keying checks it.
+        HardwareKeyInput(
+            onText = { if (!revealed) input = appendKeyed(input, it) },
+            onPause = { if (input.isNotBlank()) submit() }
+        )
         // The app targets SDK 36, so it is always edge-to-edge and the window
         // does not resize when the IME opens; AppBackground insets for the
         // system bars, which do not include the keyboard. Without imePadding

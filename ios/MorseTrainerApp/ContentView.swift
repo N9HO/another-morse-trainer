@@ -15,6 +15,8 @@ struct ContentView: View {
     @State private var typedAnswer = ""
     @State private var examCopy = ""
     @State private var qsoText = ""
+    /// Journey's keyed answer so far, from a hardware key (#251).
+    @State private var journeyKeyed = ""
     /// Learner aid: reveal who's calling / the expected copy (Android parity).
     @State private var qsoHintShown = false
     @FocusState private var typedFocused: Bool
@@ -914,6 +916,12 @@ struct ContentView: View {
         .onChange(of: model.qsoReadyToLog) { ready in
             if ready { Haptics.success() }
         }
+        // A Vail Adapter / BLE-MIDI key sends into the same box (#251): what
+        // you key lands in it, and stopping keying sends it.
+        .hardwareKeyInput(wpm: model.settings.wpm, toneHz: model.settings.toneFrequency,
+                          isEnabled: model.qsoActive,
+                          onText: { qsoText = HardwareKeyInput.appending($0, to: qsoText) },
+                          onPause: { qsoPrimary(keyed: true) })
     }
 
     /// A caller just walked off. Says which call you lost and what you had it
@@ -1092,7 +1100,7 @@ struct ContentView: View {
                     .autocorrectionDisabled()
                     .submitLabel(.send)
                     .focused($qsoFocused)
-                    .onSubmit(qsoPrimary)
+                    .onSubmit { qsoPrimary() }
                     .morseKeyboardRow(text: $qsoText) { qsoFocused = false }
                 if model.qsoCanRepeat {
                     Button { model.qsoRepeat() } label: {
@@ -1104,7 +1112,7 @@ struct ContentView: View {
                     .accessibilityLabel("Ask for a repeat")
                 }
             }
-            Button(action: qsoPrimary) {
+            Button { qsoPrimary() } label: {
                 Text(model.qsoActionLabel)
                     .font(.headline)
                     .frame(maxWidth: .infinity, minHeight: 50)
@@ -1114,13 +1122,24 @@ struct ContentView: View {
         }
     }
 
-    private func qsoPrimary() {
-        if model.qsoActionLabel == "CQ" {
-            model.qsoCQ()
+    /// The smart box's one action. `keyed` is a send from a hardware key
+    /// (#251): you already heard it as sidetone, so the app does not key your
+    /// side again, and keying CQ while no station is being worked calls CQ —
+    /// there is no button to reach for with your hand on the paddle.
+    private func qsoPrimary(keyed: Bool = false) {
+        let sent = qsoText.trimmingCharacters(in: .whitespaces).uppercased()
+        if keyed, sent.isEmpty { return }
+        let keyedCQ = keyed && (sent == "CQ" || sent.hasPrefix("CQ "))
+            && model.qsoWorkingCall == nil && !model.qsoReadyToLog
+        if model.qsoActionLabel == "CQ" || keyedCQ {
+            model.qsoCQ(keyed: keyed)
             qsoText = ""
-        } else if model.qsoPrimaryAction(qsoText) {
+        } else if model.qsoPrimaryAction(qsoText, keyed: keyed) || keyed {
             // Cleared unless "keep partial call" kept a still-being-copied call
-            // in the box (issue #29).
+            // in the box (issue #29). A keyed send always empties it: a keyer
+            // cannot edit the box, so a kept partial ("N9" after "N9?") would
+            // have the next keyed call appended to it — "N9N9HO", a bust
+            // every time (#251).
             qsoText = ""
         } else {
             // Kept a still-being-copied call. If the send was a typed "?" repeat
@@ -1212,6 +1231,20 @@ struct ContentView: View {
                 typedFocused = true
             }
         }
+        // Type It and QRQ take a hardware key too (#251): what you key is
+        // typed into the box, and stopping keying submits it. The choice
+        // quizzes and Rapid Fire key through their own "Key answers" panel.
+        .hardwareKeyInput(wpm: model.settings.wpm, toneHz: model.settings.toneFrequency,
+                          isEnabled: model.mode == .typed || model.mode == .qrq,
+                          onText: { chunk in
+                              guard model.phase != .answered else { return }
+                              typedAnswer = HardwareKeyInput.appending(chunk, to: typedAnswer)
+                          },
+                          onPause: {
+                              guard model.phase == .awaiting,
+                                    !typedAnswer.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+                              submitTyped()
+                          })
     }
 
     /// Placeholder tuned to how the current mode wants you to type.
@@ -1416,6 +1449,40 @@ struct ContentView: View {
             }
         }
         .animation(.easeInOut(duration: 0.2), value: model.phase)
+        // Journey's choices take a keyboard, so they take a hardware key too
+        // (#251). The choice quizzes have their own "Key answers" panel.
+        .hardwareKeyInput(wpm: model.settings.wpm, toneHz: model.settings.toneFrequency,
+                          isEnabled: model.isJourney,
+                          onText: journeyKeyedText, onPause: journeyKeyedPause)
+        .onChange(of: model.drill) { _ in journeyKeyed = "" }
+    }
+
+    /// A keyed run on Journey: a drill whose answer is the text you heard is
+    /// answered once you have keyed as many characters as it has — the rule
+    /// "Key answers" uses; a meaning drill takes a single keyed character the
+    /// way it takes a keystroke (its own character, or 1–9 for a position).
+    private func journeyKeyedText(_ chunk: String) {
+        guard model.phase == .awaiting, let drill = model.drill else { journeyKeyed = ""; return }
+        journeyKeyed = HardwareKeyInput.appending(chunk, to: journeyKeyed)
+        let sent = journeyKeyed.trimmingCharacters(in: .whitespaces)
+        if drill.isKeyable {
+            guard sent.count >= drill.correct.count else { return }
+            journeyKeyed = ""
+            model.select(sent)
+        } else if sent.count == 1, let ch = sent.first,
+                  let index = AnswerKeys.option(for: ch, in: drill.options) {
+            journeyKeyed = ""
+            model.select(drill.options[index])
+        }
+    }
+
+    /// Stopped keying short of the answer's length: grade what was sent.
+    private func journeyKeyedPause() {
+        let sent = journeyKeyed.trimmingCharacters(in: .whitespaces)
+        journeyKeyed = ""
+        guard model.phase == .awaiting, let drill = model.drill, drill.isKeyable,
+              !sent.isEmpty else { return }
+        model.select(sent)
     }
 
     /// Big monospaced for short tokens, smaller for word-y meanings. Digits

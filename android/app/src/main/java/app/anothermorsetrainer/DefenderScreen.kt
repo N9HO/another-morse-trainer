@@ -468,6 +468,15 @@ fun DefenderScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
             }
             DefPhase.RUNNING -> {
                 BackHandler { abandonRun() }
+                // Typed input takes a Vail Adapter / BLE-MIDI key too (#251):
+                // each decoded character is a key press, and one the alphabet
+                // lacks is dropped, as a dead key would be.
+                if (input == DefenderInput.TYPED) {
+                    HardwareKeyInput(onText = { chunk ->
+                        val pool = game?.keyboardPool.orEmpty()
+                        chunk.uppercase().filter { it in pool }.forEach { typedKey(it) }
+                    })
+                }
                 DefenderRun(
                     input = input,
                     attackers = attackers,

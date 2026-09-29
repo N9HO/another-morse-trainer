@@ -2,8 +2,16 @@ package app.anothermorsetrainer
 
 import android.content.Context
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
+import kotlinx.coroutines.delay
 import kotlin.math.log2
 import kotlin.math.roundToInt
 
@@ -138,4 +146,89 @@ fun AdapterConfigSync(key: HardwareKey) {
     val wpm = Settings.characterWpm
     val sidetoneHz = Settings.sidetoneHz
     LaunchedEffect(mode, wpm, sidetoneHz) { key.applyConfig() }
+}
+
+/**
+ * A hardware Morse key (Vail Adapter / BLE-MIDI) typing into a screen that
+ * otherwise takes the keyboard — the Pileup Runner and Contest box, Type It,
+ * QRQ, Daily Dit, Defender's typed copy and Journey's choices (#251).
+ *
+ * The adapter types nothing on its own: out of the box it is a HID keyboard
+ * sending Ctrl (or `[` `]`) for dit and dah, which a text field ignores, and
+ * it sends MIDI only once [HardwareKey] wakes it. Only the screens that answer
+ * by keying ran one, so everywhere else the key was dead. This runs the same
+ * [SendingKeyer] + [HardwareKey] pair those screens use — adapter wake,
+ * sidetone, decoder — and hands each newly decoded run of text to [onText].
+ * Once the key has been idle for two word gaps (after the decoder's own word
+ * space), the operator has stopped sending: [onPause] fires and the decoder
+ * starts clean.
+ *
+ * Compose it only while the screen is taking input; leaving composition stops
+ * the key. Hardware keys only — the on-screen key stays with the modes that
+ * answer by keying. Typing still works alongside it. Twin of the iOS
+ * `HardwareKeyInput` view modifier in SendingKeyerView.swift.
+ */
+@Composable
+fun HardwareKeyInput(onText: (String) -> Unit, onPause: () -> Unit = {}) {
+    val context = LocalContext.current
+    val keyer = remember { SendingKeyer(wpm = Settings.characterWpm, toneHz = Settings.sidetoneHz) }
+    val midi = remember { HardwareKey(context) }
+    // A keyer mode or speed picked in the Settings sheet reaches the adapter now.
+    AdapterConfigSync(midi)
+    val scope = rememberCoroutineScope()
+    val currentOnText by rememberUpdatedState(onText)
+    val currentOnPause by rememberUpdatedState(onPause)
+    // How much of the decoded text has already been handed on.
+    var fed by remember { mutableIntStateOf(0) }
+
+    // Listening for the key and waking the adapter start with the screen; the
+    // sidetone does not. Starting it takes exclusive audio focus, which would
+    // pause the user's music on every screen this sits on even with no key
+    // attached (MorsePlayer's rule: focus only while something sounds). So it
+    // starts when a key is connected — or on its first key-down, whichever
+    // comes first — and stops when the key goes away.
+    DisposableEffect(Unit) {
+        keyer.scope = scope
+        midi.start(
+            onKey = { down ->
+                if (down) keyer.start()
+                keyer.touchKey(down)
+            },
+            onConnected = { name -> if (name != null) keyer.start() else keyer.stopSidetone() }
+        )
+        onDispose {
+            midi.stop()
+            keyer.stop()
+        }
+    }
+
+    val decoded = keyer.decodedText
+    LaunchedEffect(decoded) {
+        if (decoded.length < fed) fed = 0 // the decoder was cleared
+        if (decoded.length > fed) {
+            val chunk = decoded.substring(fed)
+            fed = decoded.length
+            currentOnText(chunk)
+        }
+    }
+
+    // Restarted by every key edge — counted, so a down/up pair that lands in
+    // one frame still restarts it — and re-checked on waking. A pause with
+    // nothing decoded sends nothing.
+    val edges = keyer.edgeCount
+    val hasText = decoded.isNotEmpty()
+    LaunchedEffect(edges, hasText) {
+        if (keyer.isKeying || !hasText) return@LaunchedEffect
+        delay((keyer.wordGapMs * 2).toLong())
+        if (keyer.isKeying || keyer.edgeCount != edges) return@LaunchedEffect
+        currentOnPause()
+        keyer.clear()
+        fed = 0
+    }
+}
+
+/** Append a decoded run to a text box: no leading space into an empty box or after a space. */
+internal fun appendKeyed(text: String, chunk: String): String {
+    val add = if (text.isEmpty() || text.endsWith(" ")) chunk.trimStart(' ') else chunk
+    return text + add
 }

@@ -178,10 +178,12 @@ struct DailyDitView: View {
                     .focused($entryFocused)
                     .submitLabel(.send)
                     .onSubmit(submit)
-                    .onChange(of: entry) { _ in
+                    .onChange(of: entry) { new in
                         // Typing is how you recover from a rejection; clearing
-                        // the message on the next keystroke says so.
-                        if message != nil { message = nil }
+                        // the message on the next keystroke says so. Not when
+                        // the box is emptied: a keyed guess that was rejected
+                        // clears the box but must still say why.
+                        if message != nil, !new.isEmpty { message = nil }
                     }
 
                 Button("Guess", action: submit)
@@ -201,6 +203,24 @@ struct DailyDitView: View {
                     .transition(.opacity)
             }
         }
+        // A Vail Adapter / BLE-MIDI key types the guess too (#251).
+        .hardwareKeyInput(wpm: model.settings.wpm, toneHz: model.settings.toneFrequency,
+                          // Letters only, and no more than five — a sixth keyed
+                          // letter is dropped, the same on Android.
+                          onText: {
+                              let next = HardwareKeyInput.appending($0, to: entry)
+                              entry = String(DailyDit.normalize(next).prefix(DailyDit.wordLength))
+                          },
+                          onPause: keyedGuess)
+    }
+
+    /// Stopped keying: once five letters are in, guess. A keyed guess
+    /// that is not taken is cleared (its reason stays on screen), so the next
+    /// one can be keyed without reaching for the screen to delete it.
+    private func keyedGuess() {
+        guard DailyDit.normalize(entry).count >= DailyDit.wordLength else { return }
+        submit()
+        if !entry.isEmpty { entry = "" }
     }
 
     private var canGuess: Bool {

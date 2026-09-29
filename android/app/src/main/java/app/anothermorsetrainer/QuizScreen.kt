@@ -100,7 +100,7 @@ private enum class QuizPhase { RUNNING, SUMMARY }
  * characters, groups, and words, but not meaning-answers (abbreviations,
  * Q-codes) or prosign glyphs the decoder can't produce.
  */
-private val Drill.isKeyable: Boolean
+internal val Drill.isKeyable: Boolean
     get() = correct == revealPrimary && correct.none { it == '<' }
 
 /** Streak-milestone badge tiers (mirrors the iOS emoji map). */

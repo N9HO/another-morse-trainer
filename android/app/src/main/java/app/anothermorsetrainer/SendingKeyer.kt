@@ -1,6 +1,7 @@
 package app.anothermorsetrainer
 
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import app.anothermorsetrainer.morsekit.MorseDecoder
@@ -30,6 +31,14 @@ class SendingKeyer(wpm: Double, toneHz: Double) {
     var isKeying by mutableStateOf(false)
         private set
 
+    /**
+     * Counts every key-down and key-up. A down/up pair delivered in one frame
+     * leaves [isKeying] where it was, so "stopped keying" is timed from this
+     * instead (#251, [HardwareKeyInput]).
+     */
+    var edgeCount by mutableIntStateOf(0)
+        private set
+
     private val sidetone = SidetoneGenerator(toneHz)
     private val decoder = MorseDecoder(wpm)
     private var keyDownAtMs: Long? = null
@@ -43,6 +52,12 @@ class SendingKeyer(wpm: Double, toneHz: Double) {
     }
 
     fun start() = sidetone.start()
+
+    /**
+     * Silence the sidetone only (#251): a key unplugged mid-character still
+     * needs [idleJob] to finish that character and its word space.
+     */
+    fun stopSidetone() = sidetone.stop()
 
     fun stop() {
         idleJob?.cancel()
@@ -62,17 +77,25 @@ class SendingKeyer(wpm: Double, toneHz: Double) {
     /** Flush the in-progress character and return the full decoded answer. */
     fun submit(): String = decoder.submit().trim()
 
+    /**
+     * The decoder's current word gap, adapted to the operator's own speed —
+     * what [HardwareKeyInput] times "the operator has stopped sending" from.
+     */
+    val wordGapMs: Double get() = decoder.wordGapMs
+
     // MARK: - Key handling
 
     private fun handle(isDown: Boolean, ms: Long) {
         if (isDown) {
             if (keyDownAtMs != null) return
+            edgeCount++
             keyDownAtMs = ms
             isKeying = true
             idleJob?.cancel(); idleJob = null
             sidetone.setKeyDown(true)
         } else {
             val down = keyDownAtMs ?: return
+            edgeCount++
             keyDownAtMs = null
             isKeying = false
             sidetone.setKeyDown(false)

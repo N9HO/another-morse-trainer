@@ -1428,12 +1428,14 @@ final class AppModel: ObservableObject {
     /// keeps the partial regardless of that setting — asking for a repeat must
     /// not wipe the call you've copied so far (issue #49). The view strips the
     /// trailing "?" from what it keeps.
+    /// `keyed` marks a send from a hardware key (#251): the operator already
+    /// sent it and heard it as sidetone, so your side is not keyed again.
     @discardableResult
-    func qsoPrimaryAction(_ text: String) -> Bool {
+    func qsoPrimaryAction(_ text: String, keyed: Bool = false) -> Bool {
         guard usesPileup else { return true }
         if qsoReadyToLog {
             let action = pileup.logCurrent()
-            perform(selfText: "TU \(settings.qso.myCall)", action: action)
+            perform(selfText: keyed ? nil : "TU \(settings.qso.myCall)", action: action)
             return true
         }
         let pre = pileup.phase
@@ -1443,7 +1445,8 @@ final class AppModel: ObservableObject {
             ?? pileup.stations.first?.call
         let bustsBefore = pileup.bustCount
         let action = pileup.send(text)
-        perform(selfText: selfSendText(input: text, pre: pre, post: pileup.phase, action: action),
+        perform(selfText: keyed ? nil
+                    : selfSendText(input: text, pre: pre, post: pileup.phase, action: action),
                 action: action)
         // Leaderboard: a bust is a miscopy — of the exchange of the station
         // being worked, or of a call while hunting (credited against the
@@ -1462,10 +1465,10 @@ final class AppModel: ObservableObject {
         return !(stillHunting && (settings.qso.keepPartialCall || typedRepeat))
     }
 
-    func qsoCQ() {
+    func qsoCQ(keyed: Bool = false) {
         guard usesPileup else { return }
         let action = pileup.callCQ()
-        perform(selfText: selfCQText(), action: action)
+        perform(selfText: keyed ? nil : selfCQText(), action: action)
     }
 
     func qsoRepeat() {
