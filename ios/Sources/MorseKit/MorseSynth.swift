@@ -188,8 +188,9 @@ public struct MorseSynth: Sendable {
     /// `705 / 2 = 352`, so rise and fall both run their full length with 265
     /// samples of steady tone between them. The samples at that speed are as
     /// click-free as at 20 WPM — `fixtures/render.json` pins PARIS at 75 —
-    /// so a "pops and clicks" report there (issue #228) is not this envelope;
-    /// look downstream of the samples, at the route and the device.
+    /// so a "pops and clicks" report there (issue #228) is not this envelope.
+    /// It was the iPhone's built-in speaker processing near full scale;
+    /// `MorsePlayer.routeGain()` leaves it headroom.
     @inline(__always)
     private func sample(n: Int, toneSamples: Int) -> Float {
         let rampSamples = max(1, min(fullRampSamples, toneSamples / 2))

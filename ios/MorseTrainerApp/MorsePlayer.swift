@@ -185,6 +185,23 @@ final class MorsePlayer {
             engine.prepare()
             try? engine.start()
         }
+        sourceNode.volume = Self.routeGain()
+    }
+
+    /// Output gain for the current route (#228). The synth hands over a clean
+    /// tone at 0.9 of full scale, and on headphones that is what should be
+    /// heard. The iPhone's built-in speaker runs it through its own limiter
+    /// and speaker protection, which work in blocks of about one I/O buffer
+    /// (~21 ms). Above ~50 WPM whole elements begin and end inside one block,
+    /// and near full scale the speaker's processing turns them into pops and
+    /// clicks (reported on an iPhone 15 Pro Max, clearing at about 50 WPM).
+    /// Half the level (−6 dB) keeps the tone below where that processing
+    /// engages. Checked per play, since `activate()` runs before every sound.
+    static let builtInSpeakerGain: Float = 0.5
+
+    private static func routeGain() -> Float {
+        let outputs = AVAudioSession.sharedInstance().currentRoute.outputs
+        return outputs.contains { $0.portType == .builtInSpeaker } ? builtInSpeakerGain : 1
     }
 
     func stop() {
