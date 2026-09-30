@@ -227,11 +227,16 @@ single always-on machine holding the Discord gateway connection. On a
 
 ## Cost note (model choice)
 
-`ANTHROPIC_MODEL` defaults to `claude-opus-5` (most capable). Triage is a
-high-volume, low-complexity task, so if you want to cut cost set:
+`ANTHROPIC_MODEL` defaults to `claude-opus-5-5`, the current Opus, and
+`fly.toml` pins the same. It replaced `claude-opus-5` at a lower per-token price
+($4 / $20 per million input / output tokens, against $5 / $25), with the same
+request shape: the bot sends no `thinking` setting, no forced tool choice and
+no prefill, which are the parts of a request Opus 5.5 rejects. Thinking is
+always on and bills as output, at the model's default `medium` effort. Triage is
+a high-volume, low-complexity task, so if you want to cut cost set:
 
 - `claude-haiku-4-5` — cheapest, fast, fine for classification.
-- `claude-sonnet-5` — middle ground.
+- `claude-sonnet-5-5` — middle ground.
 
 Each triage is a single short request, and the instruction prompt is cached, so
 even on Opus the per-message cost is small — but Haiku is the economical default
@@ -260,7 +265,7 @@ there. `fly logs` has the reason. In the order they have actually bitten:
 
   ```bash
   fly ssh console -a morse-discord-triage
-  python -c 'import anthropic; c=anthropic.Anthropic(); print(c.messages.create(model="claude-opus-5", max_tokens=16, messages=[{"role":"user","content":"ping"}]).usage)'
+  python -c 'import anthropic; c=anthropic.Anthropic(); print(c.messages.create(model="claude-opus-5-5", max_tokens=16, messages=[{"role":"user","content":"ping"}]).usage)'
   ```
 
   A `Usage(...)` line means the key can reach the API and the fault is

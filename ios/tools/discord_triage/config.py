@@ -111,9 +111,9 @@ class Settings:
 
     # --- Anthropic ---
     anthropic_api_key: str
-    # Defaults to the most capable model. For lower cost on this high-volume,
+    # Defaults to the current Opus. For lower cost on this high-volume,
     # low-complexity task, set ANTHROPIC_MODEL=claude-haiku-4-5 (cheapest) or
-    # claude-sonnet-5 (mid). Your call — see the README cost note.
+    # claude-sonnet-5-5 (mid). Your call — see the README cost note.
     model: str
     # Output budget for one triage call. It has to hold the WHOLE verdict — a
     # full Markdown issue body with Steps/Expected/Actual, a follow-up comment,
@@ -160,7 +160,7 @@ class Settings:
             trigger_emojis=_emoji_set(os.environ.get("TRIGGER_EMOJI", "🐛")),
             settle_seconds=_float("TRIAGE_SETTLE_SECONDS", 8.0),
             anthropic_api_key=_required("ANTHROPIC_API_KEY"),
-            model=os.environ.get("ANTHROPIC_MODEL", "claude-opus-5"),
+            model=os.environ.get("ANTHROPIC_MODEL", "claude-opus-5-5"),
             max_tokens=_int("ANTHROPIC_MAX_TOKENS", MAX_OUTPUT_TOKENS,
                             MAX_OUTPUT_TOKENS),
             github_token=_required("GITHUB_TOKEN"),
