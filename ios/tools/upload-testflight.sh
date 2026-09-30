@@ -222,8 +222,14 @@ if [ "${DRY_RUN:-0}" = "1" ]; then
   # which validation rightly calls a duplicate.
   echo "▸ Validating with App Store Connect (nothing is uploaded)…"
   ALTOOL_PLATFORM=ios; [ "$PLATFORM" = "maccatalyst" ] && ALTOOL_PLATFORM=macos
-  if API_PRIVATE_KEYS_DIR="$(dirname "$ASC_KEY_PATH")" xcrun altool --validate-app "$PACKAGE" \
-       --platform "$ALTOOL_PLATFORM" --api-key "$ASC_KEY_ID" --api-issuer "$ASC_ISSUER_ID"; then
+  # altool can print ERROR and still exit 0 (seen 2026-09-30 with "Cannot
+  # determine the Apple ID from Bundle ID … and platform 'MAC_OS'", the app
+  # record lacking the macOS platform), so read its output, not its status.
+  VALIDATION=$(API_PRIVATE_KEYS_DIR="$(dirname "$ASC_KEY_PATH")" xcrun altool --validate-app "$PACKAGE" \
+       --platform "$ALTOOL_PLATFORM" --api-key "$ASC_KEY_ID" --api-issuer "$ASC_ISSUER_ID" 2>&1) \
+    && VALID_RC=0 || VALID_RC=$?
+  printf '%s\n' "$VALIDATION"
+  if [ "$VALID_RC" = "0" ] && ! grep -qE 'ERROR|error:' <<<"$VALIDATION"; then
     echo "▸ Validation passed."
   else
     echo "⚠️  Validation reported problems (above). A duplicate build number is expected when"
