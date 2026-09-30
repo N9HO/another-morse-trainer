@@ -1159,7 +1159,7 @@
     <string name="first_four_stage_passed">Stage passed</string>
     <string name="first_four_next">Next: %1$s</string>
     <string name="first_four_back_to_stages">Back to the stages</string>
-    <string name="first_four_practise_again">Practise it again</string>
+    <string name="first_four_practice_again">Practice it again</string>
     <string name="first_four_copied_now_send">Copied %1$d in a row. Now send it.</string>
     <string name="first_four_right">Right — %1$d of %2$d.</string>
     <string name="first_four_wrong">That was %1$s, not %2$s. Try again.</string>

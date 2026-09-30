@@ -496,7 +496,7 @@ private fun FirstFourElementStage(
                 feedback = null
                 phase = FirstFourPhase.COPY
                 play(text)
-            }) { Text(stringResource(R.string.first_four_practise_again), color = Brand.teal) }
+            }) { Text(stringResource(R.string.first_four_practice_again), color = Brand.teal) }
         }
         phase == FirstFourPhase.COPY -> Column(
             modifier = Modifier.fillMaxWidth().brandCard().padding(14.dp),
