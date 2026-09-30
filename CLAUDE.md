@@ -1,35 +1,43 @@
 # Working in this repository
 
-A monorepo holding two independent apps. Read this before making changes that
-span directories.
+A monorepo holding three independent apps. Read this before making changes
+that span directories.
 
 ## Layout
 
     ios/        SwiftUI app + SwiftPM package (Xcode project, macOS to build)
     android/    Kotlin + Compose app (Gradle root; settings.gradle.kts lives here)
-    fixtures/   Shared test *data*, read by both trees. Not code — see below.
+    desktop/    Windows + Linux app: Compose Multiplatform Desktop on the JVM,
+                forked from android/ (its own Gradle root; see
+                docs/desktop-design.md)
+    fixtures/   Shared test *data*, read by every tree. Not code — see below.
     docs/       Design notes for work that is decided but not yet built.
                 Read the relevant one before starting such a feature;
                 `docs/high-scores-design.md` covers scorekeeping, personal
                 bests and the shared anti-cheat leaderboard.
 
-Nothing at the repository root builds anything. `cd ios` or `cd android` first.
+Nothing at the repository root builds anything. `cd ios`, `cd android` or
+`cd desktop` first.
 
-## The rule that matters most: two ports, not one
+## The rule that matters most: separate ports, not one
 
-`ios/Sources/MorseKit/` (Swift) and
-`android/app/src/main/java/app/anothermorsetrainer/morsekit/` (Kotlin) are
-**parallel ports of the same training logic, kept as two independent trees.**
+`ios/Sources/MorseKit/` (Swift),
+`android/app/src/main/java/app/anothermorsetrainer/morsekit/` (Kotlin) and
+`desktop/app/src/main/kotlin/app/anothermorsetrainer/morsekit/` (Kotlin) are
+**parallel ports of the same training logic, kept as three independent
+trees.** The desktop tree began as a copy of the Android one (#264) and is
+not linked to it: same language, same file names, no shared code.
 
 - Do **not** unify them — no Kotlin Multiplatform, no shared module, no
   deduplicating the data tables. That is a separate project with real risk.
-- A fix that applies to both is **two** edits, one per tree, in the language and
-  idiom of that tree.
+- A fix that applies to all of them is **three** edits, one per tree, in the
+  language and idiom of that tree. Two trees in the same language are still
+  two edits: never make `desktop/` read, include or depend on `android/`.
 - A user-visible change on one side obligates the same change on the other,
   in the same pull request or in a paired issue — see the parity rule below.
   Either way, say which side you touched.
 
-The one thing the two trees *do* share is `fixtures/`: JSON files of expected
+The one thing the trees *do* share is `fixtures/`: JSON files of expected
 values, each tree reading them in its own idiom (`JSONDecoder` in the Swift
 harness, `org.json` in the Kotlin tests). That is deliberate and is not a crack
 in the rule — it shares **data**, never behaviour, so neither port can start
@@ -43,30 +51,32 @@ fixture pins both to the same numbers. Expected values are derived from the
 documented formulas independently of either implementation, so both ports
 drifting the same way still fails.
 
-`fixtures/**` is in the `paths:` filter of *both* workflows and in
-`merge-gate.yml`'s detection for both platforms — a fixture change has to build
-both apps, or it is only half checked.
+`fixtures/**` is in the `paths:` filter of *all three* platform workflows and
+in `merge-gate.yml`'s detection for every platform — a fixture change has to
+build every app, or it is only partly checked. The desktop tests read them
+the Android way (`org.json` from the test classpath).
 
-## The other rule: two ports, one feature set
+## The other rule: separate ports, one feature set
 
-**Every feature, fix and behaviour change ships on both apps** (#171). Nothing
-a user can do on iOS/iPadOS/macOS may be missing on Android, or the reverse,
-unless the platform genuinely cannot do it — and then the exception is written
-down in `PARITY.md`, not left as a silent gap. `PARITY.md` is the single
+**Every feature, fix and behaviour change ships on every app** (#171): iOS
+(iPhone, iPad, Mac), Android, and desktop (Windows, Linux). Nothing a user can
+do on one may be missing on another, unless the platform genuinely cannot do
+it — and then the exception is written down in `PARITY.md`, not left as a silent gap. `PARITY.md` is the single
 record: the policy, every intentional platform-limited exception, and the
 divergences the last audit found and had not yet closed.
 
 What this means when you make a change:
 
 - **Parity is part of the definition of done.** An issue that changes what a
-  user sees is complete when both apps have the behaviour, not when one does.
-  When you are asked to implement a feature or fix a behaviour bug, do both
-  trees in the same change — two edits, one per tree, per the rule above — or
-  say plainly which side is missing and why.
+  user sees is complete when every app has the behaviour, not when one does.
+  When you are asked to implement a feature or fix a behaviour bug, do every
+  tree in the same change — one edit per tree, per the rule above — or say
+  plainly which side is missing and why.
 - **A single-platform pull request has to say why.** The pull request template
   has a Parity section; `merge-gate.yml` reads it on any PR whose diff touches
-  only one of `ios/` (excluding `ios/tools/`) and `android/` (excluding
-  `android/store-assets/`), Markdown not counted, and fails unless
+  some but not all of `ios/` (excluding `ios/tools/`), `android/` (excluding
+  `android/store-assets/`) and `desktop/` (excluding `desktop/packaging/`),
+  Markdown not counted, and fails unless
   exactly one of these is ticked: the other side is tracked in a paired issue
   (`#N` on that line), the gap is a platform limitation recorded in
   `PARITY.md` in the same PR, or the change is platform-internal with no
@@ -80,9 +90,9 @@ What this means when you make a change:
   the system MIDI sheet and Android scans in-app; Android keeps Listen & Learn
   alive with a foreground service and iOS with a background audio session.
   Parity is about what the user can do, not how each OS does it.
-- **Divergence in what is documented counts too.** The two READMEs list the
-  same features; a feature added to one list and not the other is a gap in the
-  same sense.
+- **Divergence in what is documented counts too.** The three app READMEs list
+  the same features; a feature added to one list and not the others is a gap
+  in the same sense.
 
 ## The guide goes with the app
 
@@ -94,17 +104,18 @@ is documentation of behaviour, not a changelog: the guide must never describe
 something the shipped apps no longer do.
 
 - The pull request template has a Guide section; `merge-gate.yml` reads it on
-  any PR that changes app code (either tree, Markdown not counted) without
+  any PR that changes app code (any tree, Markdown not counted) without
   ticking "Platform-internal", and fails unless "Guide updated" (say which
   sections) or "No guide change needed" (say why) is ticked.
 - When a change reaches one platform before the other, the guide says which.
-- The two READMEs' feature lists are the in-repo summary of the same thing;
+- The app READMEs' feature lists are the in-repo summary of the same thing;
   keep them in step too (the parity rule above).
 
 ## Do not touch the vendored decoder
 
-`ios/Sources/CWDecoderCore/` (C99) and `android/…/morsekit/cw/` (its Kotlin
-port) are kept byte-identical to a firmware copy. Each has a `PROVENANCE.md`
+`ios/Sources/CWDecoderCore/` (C99), `android/…/morsekit/cw/` (its Kotlin
+port) and `desktop/…/morsekit/cw/` (a byte-identical copy of that port) are
+kept byte-identical to a firmware copy. Each has a `PROVENANCE.md`
 next to the code it documents, and `CWDecoderCore` also has its own `LICENSE`.
 Don't reformat, relicense, tidy, or relocate them or those files.
 
@@ -112,10 +123,11 @@ Don't reformat, relicense, tidy, or relocate them or those files.
 
 The repository is GPL-3.0-or-later (root `LICENSE`, copyright Justin Rogers); the
 vendored decoder above stays MIT (copyright Jay Vana), which the GPL permits.
-Both apps show both notices on the Settings › Help & About › Licenses screen — the
+Every app shows both notices on the Settings › Help & About › Licenses screen — the
 GPL asks an interactive program to display its terms, and the MIT notice must
 accompany every copy, including the shipped binaries. A new third-party
-dependency that carries a notice goes on that screen too, on both ports.
+dependency that carries a notice goes on that screen too, on every port that
+ships it.
 
 ## Building and testing
 
@@ -154,6 +166,17 @@ cd android                                # needs JDK 17 + Android SDK
 ./gradlew :app:assembleDebug
 ```
 
+```bash
+cd desktop                                # needs JDK 21 (CI installs it)
+./gradlew :app:test                       # JUnit 4; fixtures/ is on the classpath
+./gradlew :app:run                        # the app, on the machine you are on
+./gradlew :app:createDistributable        # app image with a jlinked runtime
+./gradlew :app:packageMsi                 # Windows only
+```
+
+The MSIX, Flatpak and AppImage are assembled from the app image by
+`desktop.yml`; see `docs/desktop-design.md` §3–4.
+
 The triage bot has its own suite, run in CI by `triage-bot.yml`:
 
 ```bash
@@ -170,7 +193,9 @@ build — so a change there runs the Python suite on Linux instead of two
 
 **There is no Android hardware behind this project, and no JDK or Android SDK
 on the maintainer's machine.** `./gradlew` cannot run locally; every Android
-change is written blind and verified only by CI. iOS builds locally, but nobody
+and desktop change is written blind and verified only by CI. Nobody has run
+the desktop app on a real Windows or Linux machine either: `desktop.yml`'s
+Xvfb launch screenshots are the only time anyone sees it. iOS builds locally, but nobody
 can *hear* either app, and no test on either side plays audio. Everything in
 this section exists because of that.
 
@@ -229,11 +254,17 @@ Standing traps, all deliberate:
   - iOS: `CURRENT_PROJECT_VERSION` / `MARKETING_VERSION` in
     `ios/MorseTrainer.xcodeproj/project.pbxproj`
   - Android: `versionCode` / `versionName` in `android/app/build.gradle.kts`
+  - Desktop: `desktopVersionName` / `desktopVersionCode` in
+    `desktop/app/build.gradle.kts`
 - Release tags are namespaced: **`ios-v*`** and **`android-v*`**. A bare `v*`
   tag fires nothing. Testing builds are tagged `ios-beta-v*` /
   `android-beta-v*` by the release workflows themselves; never push an
   `ios-v*` or `android-v*` tag to mark one, because that ships to production.
-- `ios.yml` and `android-ci.yml` are path-filtered to their own subtree. If you
+- Desktop releases will be tagged **`desktop-v*`** (no release workflow yet;
+  `desktop.yml` builds artifacts only).
+- `ios.yml`, `android-ci.yml` and `desktop.yml` are path-filtered to their own
+  subtree. `desktop.yml` runs one job on `windows-latest` (2x Linux billing)
+  and none on macOS. If you
   add a workflow, give it a `paths:` filter too — the iOS jobs run on `macos-15`
   at 10x Linux billing.
 - Changing a path filter? Remember a *skipped* job reports no status, so a

@@ -1,16 +1,19 @@
-# Feature parity between the two apps
+# Feature parity between the apps
 
 The Apple app (`ios/`, one build that runs on iOS, iPadOS and Apple-silicon
 Macs) and the Android app (`android/`) are two independent ports of one
-trainer, and they are meant to be **the same trainer**. This file is the one
+trainer, and they are meant to be **the same trainer**. Since #264 there is a
+third: the desktop app (`desktop/`, Windows and Linux), forked from the Android
+tree and kept as its own independent port. Everything below applies to all
+three; where it still says "both", read "every". This file is the one
 place that says so, lists every exception, and records what the last audit
 found. It exists because of #171: parity was reached once by deliberate
 effort, and nothing stopped it drifting again.
 
 ## The rule
 
-1. **Every feature, fix and behaviour change ships on both apps.** Nothing a
-   user can do on one app may be missing on the other.
+1. **Every feature, fix and behaviour change ships on every app.** Nothing a
+   user can do on one app may be missing on another.
 2. **The only exception is a genuine platform limitation** — the operating
    system cannot do it, or forbids it — and then the exception is written in
    the *Documented exceptions* section below, in the same pull request that
@@ -35,14 +38,15 @@ effort, and nothing stopped it drifting again.
 ## How it is enforced
 
 - **Pull request template.** `.github/pull_request_template.md` has a Parity
-  section with four boxes: both platforms in this PR; a paired issue (`#N` on
+  section with four boxes: all platforms in this PR; a paired issue (`#N` on
   the line) tracks the other side; a platform limitation recorded in this
   file in the same PR; or platform-internal, nothing user-visible (build, CI,
   lint, refactor, version bump, a crash fix in code only one platform has).
 - **Merge gate.** `.github/workflows/merge-gate.yml` reads that section on any
-  pull request whose diff touches only one of `ios/` (excluding `ios/tools/`)
-  and `android/` (excluding `android/store-assets/`), Markdown files not
-  counted on either side, and fails unless one of
+  pull request whose diff touches some but not all of `ios/` (excluding
+  `ios/tools/`), `android/` (excluding `android/store-assets/`) and `desktop/`
+  (excluding `desktop/packaging/`), Markdown files not counted, and fails
+  unless one of
   the last three boxes is ticked — and, for a limitation, unless `PARITY.md`
   is in the diff. Bot-authored PRs are exempt. It cannot tell a feature from
   a refactor; the box is a statement the author is accountable for, and a
@@ -68,8 +72,23 @@ changes and the gap is closed.
 | Pairing a Bluetooth LE MIDI key by scanning from inside the app | iOS | CoreMIDI only exposes a BLE MIDI peripheral once it has been connected through the system `CABTMIDICentralViewController` sheet; there is no app-level scan API. | Opens that system sheet from the screens that take a key (Sending Practice and keyed answers via `SendingKeyerView`, the Repeater, the Sending Analyzer; `BluetoothMIDISheet.swift`). Same outcome: a paired key. |
 | Hardware-key section always visible in Settings | Android | Some Android devices ship without `FEATURE_MIDI`; showing MIDI controls there would offer a feature the device cannot use. | The section is hidden on devices without the feature (`SettingsScreen.kt`, `FEATURE_MIDI` check). On devices that have it, the section matches iOS. |
 | Voice answers: listening starts by itself when the tone ends, and the time-to-recognize clock starts at speech onset | Android | Android's `SpeechRecognizer` is one-shot: each invocation plays the system start sound and takes audio focus, so auto-listening after every prompt would chime over every character; it also owns the microphone, so the app gets no audio to detect onset from. | A "Speak answer" button starts one recognition per prompt (`QuizScreen.kt`); the clock runs from the tap. |
-| A desktop build (#264) | Android | Android has no desktop build. The Apple app reaches the Mac through Mac Catalyst from the same target; Windows and Linux are tracked in #264. | Nothing on the desktop yet; the Android app is phone and tablet only. |
+| A desktop build (#264) | Android | Android has no desktop build of its own. The Apple app reaches the Mac through Mac Catalyst from the same target. | Windows and Linux get the separate `desktop/` app (#264), forked from the Android code and listed below; the Android app itself is phone and tablet only. |
 | Daily reminder at exactly the chosen minute | Android | The app deliberately does not request `SCHEDULE_EXACT_ALARM`, which Android 12+ gates behind a special permission; an inexact alarm may fire minutes late when the OS batches it. | `setInexactRepeating` at the chosen time; the reminder still arrives, at minute precision only on iOS. |
+
+#### Desktop (Windows, Linux) — #264
+
+The desktop app is a Compose Desktop (JVM) port; these are the things it
+cannot do, and why (details in `docs/desktop-design.md` §2).
+
+| What | Missing on | Why | What the app does instead |
+|---|---|---|---|
+| Bluetooth LE MIDI keys | desktop | Java Sound's MIDI providers are WinMM on Windows and ALSA raw MIDI on Linux; BLE MIDI is exposed only through WinRT (Windows) and as an ALSA sequencer client with no raw-MIDI node (BlueZ), neither reachable from `javax.sound.midi`, and Java has no Bluetooth stack to scan with. | USB MIDI keys (the Vail Adapter) and the keyboard (Space, `[` `]`); the hardware-key settings say so (`DesktopCopy.KEY_CONNECT_HINT`). |
+| Voice answers | desktop | No speech recognizer is reachable from the JVM: Windows' is WinRT-only, and Linux has no system recognizer. | Typed, choice and keyed answers; Settings says why instead of the switch. |
+| Daily reminder | desktop | A reminder must fire while the app is closed. Windows needs a WinRT scheduled toast, Linux has no time-of-day scheduler for a sandboxed app; neither is possible from pure Java. | Settings says so instead of the switch. Follow-up with a native helper if asked for. |
+| Haptics | desktop | Desktops have no vibration hardware. | The switch is hidden (`Haptics.isAvailable`). |
+| Ranked leaderboard runs, and buddy streaks | desktop | Both rest on device attestation (App Attest, Play Integrity; `docs/high-scores-design.md` §3), which neither OS offers to an open-source app. | Runs count toward personal bests; post-run lines say "Not ranked"; the board is readable; Settings explains. |
+| Listen & Learn controls in the lock screen, notification or car display | desktop | There is no media-session surface a JVM app can publish to. | The window's own controls; a minimised window keeps playing. |
+| Spoken read-back inside the Flatpak | desktop (Linux, Flatpak) | The sandbox has no speech engine; Windows (System.Speech) and a Linux install with `spd-say` or `espeak-ng` do speak. | Shows the text. Bundling espeak-ng is a follow-up. |
 
 ### Same feature, platform mechanism (not gaps)
 
@@ -121,6 +140,14 @@ missing feature.
   BLE-MIDI keys system-wide in Audio MIDI Setup, and the same button shows
   how (`MacBluetoothMIDIHelp`, `MacCatalystSupport.swift`). Same outcome: a
   key CoreMIDI can see.
+- **Desktop (#264).** Share is *Copy image* (clipboard, image and text
+  flavours) and *Save image…* (PNG) instead of a share sheet; Escape is Back;
+  audio mixes with other apps (desktops have no audio-focus protocol); Listen
+  & Learn runs in-process, since a minimised desktop app keeps running;
+  settings are JSON files in the platform config directory; the Sending
+  Drills sheet prints through the system print dialog; USB keys are found by
+  polling, since Java Sound has no hot-plug callback; keyed screens also take
+  Space and `[` `]`.
 - **Audio-stack reset recovery.** iOS rebuilds the engine on
   `mediaServicesWereReset` (`AudioSession.swift`); Android has no such
   event and catches `IllegalStateException` instead.
@@ -278,6 +305,14 @@ Documentation: neither README mentions the Daily Dit; the Android README
 lacks the first-run proficiency question and describes Sending Practice and
 the Repeater more briefly than iOS's.
 
+### The desktop app and this audit
+
+The desktop tree was forked from `android/` at `7bcb50a` (2026-09-30), so it
+inherits every Android-side row above as it stood then. It closes one half of
+row 16: Head Copy takes R, Return and X on desktop, as on iOS (the R-to-replay
+on the new-character intro is still missing on desktop and Android). Closing
+a row now means closing it on every app that has the gap.
+
 ## Closing an item
 
 When an audit, a bug report or a review finds a divergence, add it as a row
@@ -288,4 +323,4 @@ exceptions* instead, with the reason. If the two apps disagree on a default
 or a range, pick the value the user guide documents (or the better one, and
 update the guide), and change the other side. A pull request that closes a
 row is a single-platform PR by nature; tick "Paired issue" and name the row's
-issue, or tick "Both platforms" when both sides change.
+issue, or tick "All platforms" when every side changes.
