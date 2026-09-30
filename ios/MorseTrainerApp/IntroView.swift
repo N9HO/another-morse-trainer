@@ -219,10 +219,11 @@ struct IntroView: View {
     /// shown only while paired: whether the buddy has practised today and
     /// the shared streak, from the last status fetch. Sits under the streak
     /// badge because that is what it is about; unlike the badge it shows at
-    /// a zero streak, since "hasn't practised yet" is the point.
+    /// a zero streak, since "hasn't practised yet" is the point. Settings ›
+    /// Leaderboard & Buddy can hide it (#253, `buddyOnHome`).
     @ViewBuilder
     private var buddyLine: some View {
-        if let line = model.settings.buddy.homeLine(today: model.buddyToday) {
+        if model.settings.buddyOnHome, let line = model.settings.buddy.homeLine(today: model.buddyToday) {
             HStack(spacing: 6) {
                 Image(systemName: "person.2.fill")
                 Text(line)

@@ -165,7 +165,7 @@ testers, bug reports and feature chat live on
   streak with each of the days you *both* practiced. Settings ›
   Leaderboard & Buddy › Buddy streak lists every buddy with their streak and whether they have
   practiced today, and leaves one buddy at a time. The home screen says who
-  has practiced today, and the daily reminder adds one nudge naming whoever
+  has practiced today (a switch under Buddy streak hides that line), and the daily reminder adds one nudge naming whoever
   hasn't (as of the app's last look). Uses the leaderboard display name and
   attestation; pairing itself is the opt-in.
 - **Progress**: daily streak with milestone celebrations, a GitHub-style

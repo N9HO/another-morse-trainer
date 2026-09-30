@@ -1004,6 +1004,9 @@
     <string name="settings_buddy_refreshing">Checking…</string>
     <string name="settings_buddy_error">Couldn\'t do that: %1$s</string>
     <string name="settings_buddy_footer">Pair with up to ten people and keep a separate streak with each: each day you both practice counts, and a day either of you misses resets it. One practice counts for every buddy. Your buddies see your leaderboard display name and whether you practiced each day, nothing else. Leaving a buddy ends that streak for both of you and keeps the others. Pairing works on its own; the leaderboard switch above stays yours. Only builds installed from Google Play can pair.</string>
+    <!-- The home screen's buddy line switch (#253), under the Buddy streak section. -->
+    <string name="settings_buddy_on_home">Show buddy line on home screen</string>
+    <string name="settings_buddy_on_home_footer">The line under your streak on the home screen: who has practiced today and your buddy streak. It appears only while you have a buddy. Turning it off hides it there and nowhere else; the list above and the daily reminder still show your buddies.</string>
     <string name="buddy_reason_no_name">pick a display name in Settings › Leaderboard &amp; Buddy first</string>
     <string name="buddy_reason_bad_code">the code is six letters or digits</string>
     <string name="buddy_reason_bad_reply">the server sent something unexpected</string>

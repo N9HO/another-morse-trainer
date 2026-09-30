@@ -482,6 +482,14 @@ object Settings {
         private set
     var buddyInviteExpiresAt by mutableStateOf(0L)
         private set
+    /**
+     * Whether the home screen shows the buddy line while paired (#253). A
+     * preference, unlike the cache above; on by default so an upgrade sees no
+     * change. Only the home line reads it: the Settings list and the daily
+     * reminder's buddy sentence are unaffected. iOS: `AppSettings.buddyOnHome`.
+     */
+    var buddyOnHome by mutableStateOf(true)
+        private set
 
     // Daily practice reminder (a notification to keep the streak alive).
     var remindersEnabled by mutableStateOf(false)
@@ -678,6 +686,7 @@ object Settings {
         buddyLastReportedDay = runCatching { prefs.getString("buddyLastReportedDay", "") ?: "" }.getOrDefault("")
         buddyInviteCode = runCatching { prefs.getString("buddyInviteCode", "") ?: "" }.getOrDefault("")
         buddyInviteExpiresAt = runCatching { prefs.getLong("buddyInviteExpiresAt", 0L) }.getOrDefault(0L)
+        buddyOnHome = runCatching { prefs.getBoolean("buddyOnHome", true) }.getOrDefault(true)
     }
 
     /**
@@ -1054,6 +1063,11 @@ object Settings {
         persistBuddy()
     }
 
+    fun updateBuddyOnHome(value: Boolean) {
+        buddyOnHome = value
+        persistBuddy()
+    }
+
     /** After a one-buddy (v1) leave or "Delete my scores": the server has forgotten every pairing, so does the cache. */
     fun clearBuddy() {
         buddyStatus = null
@@ -1063,7 +1077,11 @@ object Settings {
         persistBuddy()
     }
 
-    /** The buddy keys are written on their own: they change from a background fetch, not a settings tap. */
+    /**
+     * The buddy keys are written on their own: most change from a background
+     * fetch, not a settings tap. The home-line switch rides along so every
+     * buddy key lives in one place.
+     */
     private fun persistBuddy() {
         val s = buddyStatus
         prefs.edit {
@@ -1081,6 +1099,7 @@ object Settings {
             putString("buddyLastReportedDay", buddyLastReportedDay)
             putString("buddyInviteCode", buddyInviteCode)
             putLong("buddyInviteExpiresAt", buddyInviteExpiresAt)
+            putBoolean("buddyOnHome", buddyOnHome)
         }
     }
 
