@@ -6538,6 +6538,209 @@ if let fx = loadSendingFixture() {
     check("fixtures/sending-analysis.json loads and decodes", false)
 }
 
+// MARK: - First Four (#265)
+
+// fixtures/first-four.json, read by this harness AND by the Kotlin
+// FirstFourTest: stages and pass constants, call/state validation, copy and
+// send matching, busted-call partials, the station tables, every scene's
+// beats, graded scene runs, and one learner's progress answer by answer.
+print("\nFirst Four (fixtures/first-four.json):")
+func loadFirstFourFixture() -> [String: Any]? {
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent()
+        .deletingLastPathComponent().deletingLastPathComponent()
+    guard let data = try? Data(contentsOf: root.appendingPathComponent("fixtures/first-four.json")) else { return nil }
+    return (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+}
+if let fx = loadFirstFourFixture(),
+   let stages = fx["stages"] as? [String],
+   let elementStages = fx["elementStages"] as? [String],
+   let constants = fx["constants"] as? [String: Int],
+   let scenes = fx["scenes"] as? [[String: Any]],
+   let sceneRuns = fx["sceneRuns"] as? [[String: Any]],
+   let progressSteps = (fx["progressRun"] as? [String: Any])?["steps"] as? [[String: Any]] {
+    check("stage order", FirstFourStage.allCases.map(\.rawValue) == stages)
+    check("element stages", FirstFourStage.allCases.filter(\.isElement).map(\.rawValue) == elementStages)
+    check("pass constants",
+          constants["copyStreakToPass"] == FirstFour.copyStreakToPass
+          && constants["sendStreakToPass"] == FirstFour.sendStreakToPass
+          && constants["bustedRoundsToPass"] == FirstFour.bustedRoundsToPass
+          && constants["noReplyScenesToPass"] == FirstFour.noReplyScenesToPass
+          && constants["walkthroughRunsToPass"] == FirstFour.walkthroughRunsToPass)
+    check("default call", (fx["derivation"] as? [String: Any])?["defaultCall"] as? String == FirstFour.defaultCall)
+
+    let activatorRows = (fx["activators"] as? [[String: String]]) ?? []
+    check("activator table", activatorRows.map { FirstFour.Station(call: $0["call"] ?? "", state: $0["state"] ?? "") } == FirstFour.activators)
+    check("other-hunter table", (fx["otherHunters"] as? [String]) == FirstFour.otherHunters)
+    for p in (fx["activatorPicks"] as? [[String: Any]]) ?? [] {
+        let index = p["index"] as? Int ?? -1
+        let excluding = p["excluding"] as? String ?? ""
+        let got = FirstFour.activator(index: index, excluding: excluding)
+        check("activator pick \(index) excluding \(excluding)", got.call == p["call"] as? String)
+    }
+    for p in (fx["otherHunterPicks"] as? [[String: Any]]) ?? [] {
+        let index = p["index"] as? Int ?? -1
+        let excluding = p["excluding"] as? String ?? ""
+        let got = FirstFour.otherHunter(index: index, excluding: excluding)
+        check("other hunter pick \(index) excluding \(excluding)", got == p["call"] as? String)
+    }
+
+    for c in (fx["callCases"] as? [[String: Any]]) ?? [] {
+        let input = c["input"] as? String ?? ""
+        check("call '\(input)' normalises and validates",
+              FirstFour.normalizeCall(input) == c["normalized"] as? String
+              && FirstFour.isValidCall(input) == c["valid"] as? Bool)
+    }
+    for c in (fx["stateCases"] as? [[String: Any]]) ?? [] {
+        let input = c["input"] as? String ?? ""
+        check("state '\(input)' normalises and validates",
+              FirstFour.normalizeState(input) == c["normalized"] as? String
+              && FirstFour.isValidState(input) == c["valid"] as? Bool)
+    }
+    for c in (fx["prefillCases"] as? [[String: Any]]) ?? [] {
+        let saved = c["saved"] as? String ?? ""
+        check("prefill from saved '\(saved)'", FirstFour.prefillCall(saved: saved) == c["prefill"] as? String)
+    }
+    for c in (fx["elements"] as? [[String: Any]]) ?? [] {
+        let name = c["stage"] as? String ?? ""
+        let stage = FirstFourStage(rawValue: name)
+        let got = stage.flatMap { FirstFour.element($0, call: c["call"] as? String ?? "", state: c["state"] as? String ?? "") }
+        check("element text for \(name)", stage != nil && got == c["text"] as? String)
+    }
+    for c in (fx["copyCases"] as? [[String: Any]]) ?? [] {
+        let typed = c["typed"] as? String ?? ""
+        let expected = c["expected"] as? String ?? ""
+        check("copy '\(typed)' for '\(expected)'", FirstFour.copyMatches(typed, expected: expected) == c["match"] as? Bool)
+    }
+    for c in (fx["sendCases"] as? [[String: Any]]) ?? [] {
+        let sent = c["sent"] as? String ?? ""
+        let expected = c["expected"] as? String ?? ""
+        check("send '\(sent)' for '\(expected)'", FirstFour.sendMatches(sent, expected: expected) == c["match"] as? Bool)
+    }
+    for c in (fx["partialCases"] as? [[String: Any]]) ?? [] {
+        let call = c["call"] as? String ?? ""
+        check("partials of \(call)", FirstFour.partials(call: call) == c["partials"] as? [String])
+    }
+    for c in (fx["partialRounds"] as? [[String: Any]]) ?? [] {
+        let call = c["call"] as? String ?? ""
+        let round = c["round"] as? Int ?? -1
+        check("partial for \(call) round \(round)", FirstFour.partial(call: call, round: round) == c["partial"] as? String)
+    }
+
+    // Scenes, built from their inputs and compared beat by beat.
+    func firstFourScene(_ s: [String: Any]) -> [FirstFourBeat]? {
+        let call = s["call"] as? String ?? ""
+        let station = FirstFour.Station(call: s["activator"] as? String ?? "", state: s["activatorState"] as? String ?? "")
+        switch s["scene"] as? String {
+        case "bustedCall": return FirstFour.bustedCallScene(call: call, partial: s["partial"] as? String ?? "", activator: station)
+        case "noReplyA": return FirstFour.noReplySceneA(call: call, activator: station)
+        case "noReplyB": return FirstFour.noReplySceneB(call: call, activator: station, otherHunter: s["otherHunter"] as? String ?? "")
+        case "walkthrough": return FirstFour.walkthroughScene(call: call, state: s["state"] as? String ?? "", activator: station)
+        default: return nil
+        }
+    }
+    var builtScenes: [String: [FirstFourBeat]] = [:]
+    for s in scenes {
+        let name = s["name"] as? String ?? "?"
+        let rows = (s["beats"] as? [[String: Any]]) ?? []
+        let want: [FirstFourBeat] = rows.compactMap { b in
+            guard let kind = FirstFourBeat.Kind(rawValue: b["kind"] as? String ?? ""),
+                  let cue = FirstFourBeat.Cue(rawValue: b["cue"] as? String ?? "") else { return nil }
+            return FirstFourBeat(kind, b["text"] as? String ?? "", answer: b["answer"] as? String, cue: cue)
+        }
+        let got = firstFourScene(s)
+        if let got { builtScenes[name] = got }
+        if got != want {
+            print("      ↳ \(name): \((got ?? []).map { "\($0.kind.rawValue) \($0.text) \($0.cue.rawValue)" })")
+        }
+        check("scene: \(name)", got != nil && got == want && want.count == rows.count)
+    }
+
+    for r in sceneRuns {
+        let name = r["name"] as? String ?? "?"
+        guard let beats = builtScenes[r["scene"] as? String ?? ""] else {
+            check("scene run: \(name) (scene found)", false)
+            continue
+        }
+        var scene = FirstFourScene(beats: beats)
+        var verdictsOK = true
+        for step in (r["steps"] as? [[String: Any]]) ?? [] {
+            let text = step["text"] as? String ?? ""
+            let kind = step["response"] as? String ?? ""
+            let response: FirstFourScene.Response
+            switch kind {
+            case "continued": response = .continued
+            case "sent": response = .sent(text)
+            case "copied": response = .copied(text)
+            default: response = .waited
+            }
+            let verdict = scene.respond(response)
+            if verdict.rawValue != step["verdict"] as? String {
+                verdictsOK = false
+                print("      ↳ \(name): \(kind) '\(text)' gave \(verdict.rawValue)")
+            }
+        }
+        check("scene run: \(name)",
+              verdictsOK && scene.isFinished == r["finished"] as? Bool
+              && scene.mistakes == r["mistakes"] as? Int && scene.isClean == r["clean"] as? Bool)
+    }
+
+    var progress = FirstFourProgress()
+    var progressOK = true
+    for (i, step) in progressSteps.enumerated() {
+        let stage = FirstFourStage(rawValue: step["stage"] as? String ?? "") ?? .call
+        let passed = Set(step["passed"] as? [String] ?? [])
+        let next = step["next"] as? String
+        var ok = true
+        switch step["op"] as? String {
+        case "element":
+            let phase = FirstFourPhase(rawValue: step["phase"] as? String ?? "") ?? .copy
+            let done = progress.recordElement(stage, phase: phase, correct: step["correct"] as? Bool ?? false)
+            ok = done == step["phaseDone"] as? Bool
+                && progress.streak == step["streak"] as? Int
+                && Set(progress.passed.map(\.rawValue)) == passed
+                && Set(progress.copyPassed.map(\.rawValue)) == Set(step["copyPassed"] as? [String] ?? [])
+                && progress.nextStage?.rawValue == next
+        case "scene":
+            let passedNow = progress.recordScene(stage, clean: step["clean"] as? Bool ?? false)
+            ok = passedNow == step["stagePassed"] as? Bool
+                && progress.cleanRuns(stage) == step["cleanRuns"] as? Int
+                && Set(progress.passed.map(\.rawValue)) == passed
+                && progress.nextStage?.rawValue == next
+        case "noReplyScene":
+            let b = FirstFour.noReplyUsesSceneB(cleanRuns: progress.cleanRuns(.noReply))
+            ok = (b ? "B" : "A") == step["scene"] as? String
+        case "complete":
+            ok = progress.isComplete == step["complete"] as? Bool && progress.passedCount == step["passedCount"] as? Int
+        default:
+            ok = false
+        }
+        if !ok {
+            progressOK = false
+            print("      ↳ progress step \(i) (\(step["op"] as? String ?? "?")) differs")
+        }
+    }
+    check("progress run, answer by answer", progressOK && !progressSteps.isEmpty)
+
+    // Persistence: the passed stages and clean runs survive; the streak does not.
+    var saved = FirstFourProgress()
+    saved.recordElement(.call, phase: .copy, correct: true)
+    saved.recordScene(.walkthrough, clean: true)
+    for _ in 0..<FirstFour.bustedRoundsToPass { saved.recordScene(.bustedCall, clean: true) }
+    let restored = (try? JSONEncoder().encode(saved)).flatMap { try? JSONDecoder().decode(FirstFourProgress.self, from: $0) }
+    check("progress round-trips through JSON without its streak",
+          restored?.passed == saved.passed && restored?.cleanRuns(.walkthrough) == 1
+          && restored?.cleanRuns(.bustedCall) == FirstFour.bustedRoundsToPass && restored?.streak == 0)
+    check("an older or empty save decodes as a fresh start",
+          (try? JSONDecoder().decode(FirstFourProgress.self, from: Data("{}".utf8))) == FirstFourProgress())
+    var opening = FirstFourProgress()
+    for _ in 0..<FirstFour.copyStreakToPass { opening.recordElement(.state, phase: .copy, correct: true) }
+    check("an element stage opens on send once its copy is done",
+          opening.openingPhase(.state) == .send && opening.openingPhase(.call) == .copy)
+} else {
+    check("fixtures/first-four.json loads and decodes", false)
+}
+
 print("\n────────────────────────────")
 if failures == 0 {
     print("✅ All \(checks) checks passed.\n")
