@@ -23,8 +23,8 @@ object DesktopCopy {
 
     /** Under the hardware-key settings: what a desktop can and cannot connect. */
     const val KEY_CONNECT_HINT =
-        "Plug in a USB MIDI key such as the Vail Adapter. Bluetooth MIDI keys are not supported " +
-            "on desktop: Windows and Linux do not offer them to Java's MIDI system."
+        "Plug in a USB MIDI key such as the Vail Adapter; the keyboard works too. Bluetooth MIDI " +
+            "keys are not supported on Windows or Linux."
 
     /** In place of the voice-answer switch. */
     const val VOICE_UNAVAILABLE = "Spoken answers are not available on desktop."

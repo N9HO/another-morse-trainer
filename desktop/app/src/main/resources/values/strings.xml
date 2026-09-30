@@ -1,6 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  User-facing copy for the Android app, moved out of the composables (issue #132).
+  User-facing copy for the desktop app, forked from the Android app's strings.xml
+  (#264). Edits here are the desktop's own: wording is changed only where the
+  desktop behaves differently (the decoder and analyzer microphone notes, the
+  Listen and CW 77 blurbs, the analyzer's key note, the bug-report footer).
+  "Tap" is left as it is: a click is a tap.
+  Originally moved out of the Android composables (issue #132).
   Every value was extracted from the Kotlin literal it replaced by script, not
   retyped; format arguments are %n$s because that is what a Kotlin template does
   (toString), and %d would localise digits.
@@ -354,7 +359,7 @@
     <string name="decoder_listening_its_quiet">Listening — it\'s quiet</string>
     <string name="decoder_hearing_audio">Hearing audio</string>
     <string name="decoder_waiting_for_cw">Waiting for CW…</string>
-    <string name="decoder_idle_prompt">Tap Start and hold the phone near the audio you want copied.</string>
+    <string name="decoder_idle_prompt">Click Start, with the microphone near the audio you want copied.</string>
     <string name="decoder_mic_denied">Microphone access is off. Allow it in Settings → Apps → Permissions to decode audio.</string>
 
     <!-- ListenScreen -->
@@ -369,11 +374,11 @@
     <string name="home_cwops_on_air_list">CWOps on-air list</string>
     <string name="cw77_blurb">The CWOps CW 77: the words and abbreviations you hear most in a CW contact, which CW Academy students learn to copy at speed. Listen hands-free, or quiz yourself on them.</string>
     <string name="cw77_style">Style</string>
-    <string name="cw77_style_listen_blurb">Hands-free: hear each item, then see it and hear it read back. Keeps playing with the screen locked.</string>
+    <string name="cw77_style_listen_blurb">Hands-free: hear each item, then see it and hear it read back. Keeps playing with the window minimized.</string>
     <string name="cw77_style_quiz_blurb">Hear each item and answer it: tap a choice, type it, or key it, as Common Words does. Scored.</string>
     <string name="cw77_listen_options">Gap and readback</string>
     <string name="cw77_now_playing_artist">Morse Trainer · CW 77</string>
-    <string name="listen_blurb">Hear the code, then the answer spoken aloud — no tapping. Keeps playing with the screen locked.</string>
+    <string name="listen_blurb">Hear the code, then the answer spoken aloud — no clicking. Keeps playing with the window minimized.</string>
     <string name="listen_heard_count">%1$s heard</string>
     <string name="listen_time_left">" · %1$d:%2$02d left"</string>
     <string name="listen_tap_play_prompt">Tap play to start a hands-free loop.</string>
@@ -730,7 +735,7 @@
     <string name="settings_bug_reports">Bug reports</string>
     <string name="settings_copy_diagnostics">Copy diagnostic info</string>
     <string name="settings_copied_diagnostics">Copied to clipboard</string>
-    <string name="settings_bug_reports_footer">Copies your app/Android version, device, and current settings to the clipboard to paste into a bug report.</string>
+    <string name="settings_bug_reports_footer">Copies your app version, operating system, and current settings to the clipboard to paste into a bug report.</string>
     <string name="settings_about">About</string>
     <string name="settings_support_project">Support the project</string>
     <string name="settings_join_discord">Join the Discord</string>
@@ -1048,7 +1053,7 @@
     <string name="analyzer_input">Input</string>
     <string name="analyzer_input_key">Key</string>
     <string name="analyzer_input_microphone">Microphone</string>
-    <string name="analyzer_input_key_note">The on-screen key, or a Vail adapter or Bluetooth MIDI key. Set the adapter\'s keyer mode in Settings › Keys &amp; Sending › Keyer mode to match your key; in a paddle mode the adapter keys at your Settings › Speed &amp; Timing speed.</string>
+    <string name="analyzer_input_key_note">The on-screen key, the keyboard (Space, or [ and ]), or a Vail adapter or other USB MIDI key. Set the adapter\'s keyer mode in Settings › Keys &amp; Sending › Keyer mode to match your key; in a paddle mode the adapter keys at your Settings › Speed &amp; Timing speed.</string>
     <string name="analyzer_judged_against">Judged against</string>
     <string name="analyzer_farnsworth">Farnsworth spacing</string>
     <string name="analyzer_effective_wpm">Effective %1$d WPM</string>
@@ -1062,7 +1067,7 @@
     <string name="analyzer_sensitivity_low">Low</string>
     <string name="analyzer_sensitivity_normal">Normal</string>
     <string name="analyzer_sensitivity_high">High</string>
-    <string name="analyzer_mic_note">Key your oscillator, keyer or rig near the phone. The light should follow your key; if it flickers in the gaps, lower the sensitivity.</string>
+    <string name="analyzer_mic_note">Key your oscillator, keyer or rig near the microphone. The light should follow your key; if it flickers in the gaps, lower the sensitivity.</string>
     <string name="analyzer_copied_so_far">Copied so far</string>
     <string name="analyzer_finish">Finish</string>
     <string name="analyzer_sending_note">Send the whole text, then pause — the attempt finishes by itself. Finish ends it early.</string>
