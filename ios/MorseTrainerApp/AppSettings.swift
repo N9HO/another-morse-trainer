@@ -729,6 +729,9 @@ struct AppSettings: Codable, Equatable {
     /// lives on the server — but it persists with the settings because it is
     /// read wherever they are. `BuddyStatusCache` in MorseKit is the shape.
     var buddy = BuddyStatusCache()
+    /// Whether the home screen shows the buddy line while paired (#253).
+    /// A preference, unlike `buddy`; on by default so an upgrade sees no change.
+    var buddyOnHome: Bool = true
 
     /// Short Stories mode settings (fables vs. fetched news headlines).
     var story = StorySettings()
@@ -866,6 +869,7 @@ extension AppSettings {
         case rapidFire
         case leaderboard
         case buddy
+        case buddyOnHome
         case story
         case showCorrectness, reveal, allowReplay, hapticsEnabled, slashedZero
         case onScreenKey, paddleMode, paddleSwap
@@ -952,6 +956,7 @@ extension AppSettings {
         s.rapidFire = try c.decodeIfPresent(RapidFireSettings.self, forKey: .rapidFire) ?? s.rapidFire
         s.leaderboard = try c.decodeIfPresent(LeaderboardSettings.self, forKey: .leaderboard) ?? s.leaderboard
         s.buddy = try c.decodeIfPresent(BuddyStatusCache.self, forKey: .buddy) ?? s.buddy
+        s.buddyOnHome = try c.decodeIfPresent(Bool.self, forKey: .buddyOnHome) ?? s.buddyOnHome
         s.story = try c.decodeIfPresent(StorySettings.self, forKey: .story) ?? s.story
         s.showCorrectness = try c.decodeIfPresent(Bool.self, forKey: .showCorrectness) ?? s.showCorrectness
         s.reveal = try c.decodeIfPresent(RevealMode.self, forKey: .reveal) ?? s.reveal

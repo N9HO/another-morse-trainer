@@ -903,8 +903,20 @@ struct SettingsView: View {
 
     // Buddy streak (docs/buddy-streak-design.md, #219, #237): its own view,
     // tinted like the other sections when a search result lands on it.
+    @ViewBuilder
     private var buddySection: some View {
         BuddySettingsSection(rowBackground: rowBackground(.buddy))
+        // The home screen's buddy line (#253): on by default, so an upgrade
+        // changes nothing. Offered before any pairing too, so it can be set
+        // first; only IntroView's line reads it — this list and the daily
+        // reminder's buddy sentence are unaffected. Android: SettingsScreen's
+        // BUDDY branch, same words.
+        Section {
+            Toggle("Show buddy line on home screen", isOn: $model.settings.buddyOnHome)
+        } footer: {
+            Text("The line under your streak on the home screen: who has practiced today and your buddy streak. It appears only while you have a buddy. Turning it off hides it there and nowhere else; the list above and the daily reminder still show your buddies.")
+        }
+        .listRowBackground(rowBackground(.buddy))
     }
 
     // MARK: - Help & About

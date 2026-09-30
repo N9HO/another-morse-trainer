@@ -1019,6 +1019,30 @@ fun SettingsScreen(
                         SettingsSection.BUDDY -> {
                             // Buddy streak (docs/buddy-streak-design.md, #219, #237): its own composable.
                             BuddySection()
+                            // The home screen's buddy line (#253): on by default, offered
+                            // before any pairing too. Only HomeScreen reads it. iOS:
+                            // SettingsView.buddySection, same words. No header of its own:
+                            // it belongs to the Buddy streak section above.
+                            Spacer(Modifier.height(16.dp))
+                            SettingsGroup {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(
+                                        stringResource(R.string.settings_buddy_on_home),
+                                        color = Brand.textPrimary, fontWeight = FontWeight.Medium,
+                                        modifier = Modifier.weight(1f).padding(end = 12.dp)
+                                    )
+                                    Switch(
+                                        checked = Settings.buddyOnHome,
+                                        onCheckedChange = { Settings.updateBuddyOnHome(it) },
+                                        colors = switchColors()
+                                    )
+                                }
+                            }
+                            SectionFooter(stringResource(R.string.settings_buddy_on_home_footer))
                         }
                         SettingsSection.BUG_REPORTS -> {
                             // Bug reports (iOS issue #31): build, OS, device and the

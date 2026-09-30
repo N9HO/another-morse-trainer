@@ -205,8 +205,9 @@ fun HomeScreen(
                 }
                 // The buddy line (docs/buddy-streak-design.md §5): the in-app
                 // nudge. Reads the cache; MainActivity.onStart refreshes it.
+                // Settings › Leaderboard & Buddy can hide it (#253).
                 Settings.buddyStatus?.let { buddy ->
-                    if (buddy.paired) {
+                    if (buddy.paired && Settings.buddyOnHome) {
                         Spacer(Modifier.height(8.dp))
                         BuddyLine(buddy)
                     }

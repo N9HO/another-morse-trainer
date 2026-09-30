@@ -178,7 +178,7 @@ the iOS app's navy/teal look.
   six-character invite code (single use, 24 hours) to send however you
   like, or takes one a buddy sent; it uses the leaderboard display name and
   needs no leaderboard opt-in. The home screen says who has practiced
-  today, the daily reminder adds one line naming whoever has not (as of the
+  today (a switch under Buddy streak hides that line), the daily reminder adds one line naming whoever has not (as of the
   last check), "Leave" on a buddy ends that pairing only, and "Delete my
   scores" ends them all
 - Timed practice sessions (1-30 min or open-ended) with mid-session timer
