@@ -35,7 +35,8 @@ class BuddyListTest {
 
     /** The app's string templates by name, `\'` unescaped, as `getString(id)` returns them. */
     private val strings: Map<String, String> by lazy {
-        val file = File("src/main/res/values/strings.xml")
+        // Desktop: the copy lives on the classpath side of the tree (Strings.kt).
+        val file = File("src/main/resources/values/strings.xml")
         assertTrue("strings.xml not found from ${File(".").absolutePath}", file.exists())
         val re = Regex("<string name=\"([a-z_]+)\">(.*?)</string>")
         re.findAll(file.readText()).associate { it.groupValues[1] to it.groupValues[2].replace("\\'", "'") }
