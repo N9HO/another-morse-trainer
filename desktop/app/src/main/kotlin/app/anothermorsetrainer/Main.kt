@@ -330,7 +330,12 @@ private val SetupSaver: Saver<SetupTarget?, Any> = listSaver(
 private fun AppRoot() {
     val resources = LocalResources.current
     var route by rememberSaveable(stateSaver = RouteSaver) {
-        mutableStateOf<Route>(if (Settings.onboardingDone) Route.Home else Route.Onboarding)
+        // AMT_START_ROUTE (a route tag, as routeTag writes them) opens straight
+        // onto one screen. It exists for desktop.yml, which launches the
+        // packaged app once per screen under Xvfb so every screen is at least
+        // composed and screenshotted; an unknown tag falls back as usual.
+        val startRoute = System.getenv("AMT_START_ROUTE")?.let { routeFrom(it) }
+        mutableStateOf<Route>(startRoute ?: if (Settings.onboardingDone) Route.Home else Route.Onboarding)
     }
     // The mode awaiting its pre-flight sheet. Home stays composed underneath, so
     // cancelling the sheet leaves the menu exactly as it was.

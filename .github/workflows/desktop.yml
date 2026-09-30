@@ -194,6 +194,43 @@ jobs:
           launch home "$RUNNER_TEMP/amt-seeded"
           ls -l shots
 
+      # Every screen, composed at least once: the packaged app is launched
+      # straight onto each route (AMT_START_ROUTE, Main.kt) with the seeded
+      # profile, and must still be running after 10 s with no exception in its
+      # output. Nothing is clicked, so this proves each screen opens, not that
+      # it works; the contact sheet is for a human to look at.
+      - name: Open every screen under Xvfb
+        run: |
+          set -uo pipefail
+          export DISPLAY=:99
+          pgrep -x Xvfb >/dev/null || { Xvfb :99 -screen 0 1024x1000x24 & sleep 2; }
+          LAUNCHER="$IMG/bin/AnotherMorseTrainer"
+          mkdir -p shots/screens
+          failed=""
+          for tag in journey "quiz:Characters" "quiz:Common Words" "quiz:Confusion Drill" cw77 \
+                     headCopy typeIt qrq rapidFire listen story exam pileup contest \
+                     games invaders galaga defender dungeon frogger asteroids \
+                     sending sendingDrills sendingAnalyzer repeater cwDecoder \
+                     reference startHere dailyDit settings stats leaderboard; do
+            file="$(echo "$tag" | tr ': ' '__')"
+            AMT_CONFIG_DIR="$RUNNER_TEMP/amt-seeded" AMT_START_ROUTE="$tag" \
+              "$LAUNCHER" > "shots/screens/$file.log" 2>&1 &
+            pid=$!
+            sleep 10
+            if ! kill -0 "$pid" 2>/dev/null; then
+              echo "::error::$tag: the app exited within 10 s"
+              failed="$failed $file"
+            elif grep -qE 'Exception|Error:' "shots/screens/$file.log"; then
+              echo "::error::$tag: an exception was logged"
+              failed="$failed $file"
+            fi
+            import -window root -crop 480x900+272+50 +repage "shots/screens/$file.png" || true
+            kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null || true
+          done
+          for f in $failed; do echo "── $f.log"; cat "shots/screens/$f.log"; done
+          montage shots/screens/*.png -tile 8x -geometry 240x450+4+4 -background '#0b1a2e' shots/all-screens.png || true
+          [ -z "$failed" ] || { echo "::error::Screens that failed to open:$failed"; exit 1; }
+
       - name: Upload launch screenshots
         if: always()
         uses: actions/upload-artifact@v6
