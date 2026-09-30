@@ -60,7 +60,7 @@ from github_client import (
     find_issue_for_thread,
     issue_corpus,
 )
-from triage import triage
+from triage import triage, with_parity_checklist
 
 logging.basicConfig(
     level=logging.INFO,
@@ -421,6 +421,7 @@ async def _file_issue(verdict, body: str) -> tuple[Optional[dict], Optional[str]
     reply explaining any fallback or failure ("" when there's nothing to say).
     """
     repo = settings.repo_for(verdict.platform)
+    body = with_parity_checklist(verdict.kind, body)
     try:
         issue = await create_issue(verdict.title, body, verdict.labels, repo=repo)
         return issue, repo, ""
