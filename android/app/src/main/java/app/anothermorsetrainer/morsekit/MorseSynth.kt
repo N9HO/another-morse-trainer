@@ -98,8 +98,10 @@ class MorseSynth(
                     withGaps(els, timing.elementGap, 0.0)
                 }
                 is MorseItem.Playable.Text -> {
-                    val chars = playable.value.toList()
-                    for ((ci, ch) in chars.withIndex()) {
+                    val chars = playable.value
+                    var ci = 0
+                    while (ci < chars.length) {
+                        val ch = chars[ci]
                         // A space is a word gap: stretch the previous character's
                         // trailing gap to a full word gap. Only QSO-style
                         // multi-word transmissions contain spaces — single tokens
@@ -109,11 +111,35 @@ class MorseSynth(
                                 val last = out.removeAt(out.size - 1)
                                 out.add(Segment(last.toneSamples, toSamples(timing.wordGap)))
                             }
+                            ci += 1
                             continue
                         }
-                        val els = MorseCode.elements(ch)
+                        // A bracketed prosign ("<AR>", spelled as
+                        // MorseData.prosigns spells it — the tree's convention for
+                        // prosigns in text) is keyed run-together as one
+                        // character, so a passage can carry AR and SK among its
+                        // words (#263). Anything else in brackets falls through to
+                        // the characters, as before.
+                        var els = MorseCode.elements(ch)
+                        var last = ci
+                        if (ch == '<') {
+                            val close = chars.indexOf('>', startIndex = ci + 1)
+                            val prosign = if (close >= 0) {
+                                val token = chars.substring(ci, close + 1)
+                                MorseData.prosigns.firstOrNull { it.name == token }
+                            } else {
+                                null
+                            }
+                            if (prosign != null) {
+                                els = prosign.pattern.map {
+                                    if (it == '.') MorseCode.Element.DIT else MorseCode.Element.DAH
+                                }
+                                last = close
+                            }
+                        }
+                        ci = last + 1
                         if (els.isEmpty()) continue
-                        val afterChar = if (ci == chars.size - 1) 0.0 else timing.characterGap
+                        val afterChar = if (last == chars.length - 1) 0.0 else timing.characterGap
                         withGaps(els, timing.elementGap, afterChar)
                     }
                 }

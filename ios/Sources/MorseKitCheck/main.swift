@@ -525,11 +525,14 @@ do {
     check("passage RST is from the pool", MorseData.rstValues.contains(p.rst))
     check("passage rig is from the pool", MorseData.rigs.contains(p.rig))
     check("two different callsigns in the exchange", p.toCall != p.deCall)
-    check("sent text keys BT separators with '='", p.sentText.contains(" = "))
+    check("sent text keys BT separators as <BT>", p.sentText.contains(" <BT> "))
     check("sent text contains the operator name", p.sentText.contains(p.name))
-    check("copy text drops the '=' separators", !p.copyText.contains("="))
+    check("sent text signs portable with a slash", p.sentText.contains("\(p.deCall)/\(p.portable)"))
+    check("copy text drops the prosigns", !p.copyText.contains("<") && !p.copyText.contains("="))
+    check("copy text keeps the punctuation", p.copyText.contains(".") && p.copyText.contains(","))
     check("display text shows the <BT> prosign", p.displayText.contains("<BT>"))
-    check("display text signs off with <KN>", p.displayText.contains("<KN>"))
+    check("display text ends the message with <AR>", p.displayText.contains(" <AR> "))
+    check("display text signs off with <SK>", p.displayText.hasSuffix(" <SK>"))
 
     check("ten questions are generated", session.questions.count == 10)
     var allFour = true, allDistinct = true, allIncludeAnswer = true
@@ -561,27 +564,48 @@ do {
     check("exam completes after all questions are answered", session.isComplete)
 }
 
-print("\nExam solid-copy grading (25 in a row):")
+print("\nExam solid-copy grading (one minute at the exam's speed):")
 do {
     let sample = MorseData.examSamples.first { $0.speed == .novice5 }!
     let session = ExamSession(speed: .novice5, grading: .solidCopy,
                               passage: sample.passage, rng: SeededRNG(seed: 1))
     let copy = session.passage.copyText
-    check("required solid-copy run is the historical 25", ExamSession.requiredRun == 25)
-    check("the passage is long enough to attempt 25 in a row", copy.count >= 25)
+    // The first `n` counted characters of the copy — spaces ride along free.
+    func counted(_ n: Int) -> String {
+        var out = "", seen = 0
+        for ch in copy {
+            if ch != " " { if seen == n { break }; seen += 1 }
+            out.append(ch)
+        }
+        return out
+    }
+    let nonSpace = copy.filter { $0 != " " }.count
+    check("novice solid-copy bar is 25", session.requiredRun == 25)
+    for speed in ExamSpeed.allCases {
+        let shortest = MorseData.examSamples(for: speed)
+            .map { $0.passage.copyText.filter { $0 != " " }.count }.min() ?? 0
+        check("\(speed.wpmLabel) passages are long enough to reach \(speed.requiredRun) in a row",
+              shortest >= speed.requiredRun)
+    }
 
     let perfect = session.gradeSolidCopy(copy)
-    check("a perfect copy passes", perfect.passed && perfect.longestRun == copy.count)
+    check("a perfect copy passes", perfect.passed && perfect.longestRun == nonSpace)
     check("exactly 25 characters in a row passes",
-          session.gradeSolidCopy(String(copy.prefix(25))).passed)
-    let r24 = session.gradeSolidCopy(String(copy.prefix(24)))
+          session.gradeSolidCopy(counted(25)).passed)
+    let r24 = session.gradeSolidCopy(counted(24))
     check("24 characters in a row fails", !r24.passed)
     check("the 24-run reports a longest run of 24", r24.longestRun == 24)
     check("garbage copy fails", !session.gradeSolidCopy("zzzz qqqq wwww").passed)
     check("grading is case-insensitive",
-          session.gradeSolidCopy(String(copy.prefix(25)).lowercased()).passed)
+          session.gradeSolidCopy(counted(25).lowercased()).passed)
     check("a stray '=' in the copy is tolerated",
-          session.gradeSolidCopy("= " + String(copy.prefix(25))).passed)
+          session.gradeSolidCopy("= " + counted(25)).passed)
+    let general = ExamSession(speed: .general13, grading: .solidCopy, passage: sample.passage)
+    check("the same 25 fails at 13 WPM", !general.gradeSolidCopy(counted(25)).passed)
+    check("13 WPM passes at 65 and not at 64",
+          general.gradeSolidCopy(counted(65)).passed && !general.gradeSolidCopy(counted(64)).passed)
+    check("solid-copy label names the speed's bar",
+          ExamGrading.solidCopy.label(for: .extra20) == "Solid copy (100 in a row)")
 
     check("record() grades a passing solid copy as correct",
           session.record(choice: copy, ttr: 0).correct == true)
@@ -594,6 +618,111 @@ do {
           !MorseData.examSamples(for: .novice5).isEmpty
           && !MorseData.examSamples(for: .general13).isEmpty
           && !MorseData.examSamples(for: .extra20).isEmpty)
+}
+
+// MARK: - Shared Code Exam fixture
+//
+// fixtures/code-exam.json, read by this harness and by android
+// CodeExamFixtureTest. The pass bars, the required character set, the prosign
+// patterns and the grading cases are all derived from the historical FCC/VEC
+// rules written out in the fixture, not captured from either port (#262, #263).
+struct CodeExamFixture: Decodable {
+    struct PassBar: Decodable {
+        struct Case: Decodable { let speed: String; let effectiveWpm: Int; let requiredRun: Int }
+        let charactersPerWord: Int
+        let cases: [Case]
+    }
+    struct Required: Decodable {
+        let letters: String
+        let digits: String
+        let punctuation: [String]
+        let prosigns: [String]
+    }
+    struct Patterns: Decodable {
+        struct Case: Decodable { let token: String; let pattern: String }
+        let cases: [Case]
+    }
+    struct Normalize: Decodable {
+        struct Case: Decodable { let input: String; let normalized: String }
+        let cases: [Case]
+    }
+    struct Runs: Decodable {
+        struct Case: Decodable { let sent: String; let typed: String; let longestRun: Int }
+        let cases: [Case]
+    }
+    let passBar: PassBar
+    let requiredCharacters: Required
+    let prosignPatterns: Patterns
+    let normalize: Normalize
+    let longestRun: Runs
+}
+
+func loadCodeExamFixture() -> CodeExamFixture? {
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent()
+        .deletingLastPathComponent().deletingLastPathComponent()
+    guard let data = try? Data(contentsOf: root.appendingPathComponent("fixtures/code-exam.json")) else { return nil }
+    return try? JSONDecoder().decode(CodeExamFixture.self, from: data)
+}
+
+print("\nShared Code Exam fixture (fixtures/code-exam.json):")
+if let fx = loadCodeExamFixture() {
+    check("five characters a word", ExamSpeed.charactersPerWord == fx.passBar.charactersPerWord)
+    for c in fx.passBar.cases {
+        guard let speed = ExamSpeed(rawValue: c.speed) else {
+            check("fixture speed \(c.speed) exists", false); continue
+        }
+        check("\(c.speed) is \(c.effectiveWpm) WPM effective", Int(speed.effectiveWpm) == c.effectiveWpm)
+        check("\(c.speed) solid-copy bar is \(c.requiredRun)", speed.requiredRun == c.requiredRun)
+        check("\(c.speed) session grades against \(c.requiredRun)",
+              ExamSession(speed: speed, grading: .solidCopy).gradeSolidCopy("").required == c.requiredRun)
+    }
+
+    let req = fx.requiredCharacters
+    let required = req.letters.map(String.init) + req.digits.map(String.init)
+        + req.punctuation + req.prosigns
+    func missing(_ text: String) -> [String] { required.filter { !text.contains($0) } }
+    for sample in MorseData.examSamples {
+        let gone = missing(sample.passage.sentText)
+        check("bundled passage \(sample.id) sends every required character\(gone.isEmpty ? "" : " (missing \(gone))")",
+              gone.isEmpty)
+    }
+    var generatedOK = true
+    var rng: any RandomNumberGenerator = SeededRNG(seed: 263)
+    for _ in 0..<200 {
+        let text = ExamSession.randomPassage(using: &rng).sentText
+        if !missing(text).isEmpty { generatedOK = false; print("    missing \(missing(text)) in: \(text)") }
+    }
+    check("200 generated passages each send every required character", generatedOK)
+    var allSendable = true
+    for sample in MorseData.examSamples {
+        let plain = ExamPassage.normalize(sample.passage.sentText)
+        if !plain.allSatisfy({ $0 == " " || MorseCode.pattern(for: $0) != nil }) { allSendable = false }
+    }
+    check("every bundled passage is keyable once its prosigns are set aside", allSendable)
+
+    let rate = 44_100.0
+    let t = MorseTiming(wpm: 20)
+    for c in fx.prosignPatterns.cases {
+        check("\(c.token) in sent text keys run-together as \(c.pattern)",
+              MorseSynth.segments(for: .text(c.token), timing: t, sampleRate: rate)
+                == MorseSynth.segments(for: .pattern(c.pattern), timing: t, sampleRate: rate))
+        check("the app's prosign table spells \(c.token) as \(c.pattern)",
+              MorseData.prosigns.first { $0.name == c.token }?.pattern == c.pattern)
+    }
+
+    for c in fx.normalize.cases {
+        check("normalize \(c.input.debugDescription) → \(c.normalized.debugDescription)",
+              ExamPassage.normalize(c.input) == c.normalized)
+    }
+    for c in fx.longestRun.cases {
+        let run = ExamSession.longestCommonRun(Array(ExamPassage.normalize(c.typed)),
+                                               Array(ExamPassage.normalize(c.sent)))
+        check("run of \(c.typed.debugDescription) in \(c.sent.debugDescription) is \(c.longestRun)",
+              run == c.longestRun)
+    }
+} else {
+    check("fixtures/code-exam.json loads and decodes", false)
 }
 
 // MARK: - Pileup QSO engine

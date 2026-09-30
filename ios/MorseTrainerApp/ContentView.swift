@@ -615,7 +615,7 @@ struct ContentView: View {
             Text("Code Proficiency Exam")
                 .font(.title3).bold()
                 .multilineTextAlignment(.center)
-            Text("\(model.examSpeed.label) · \(model.examGrading.label)")
+            Text("\(model.examSpeed.label) · \(model.examGrading.label(for: model.examSpeed))")
                 .font(.caption).foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
         }

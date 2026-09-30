@@ -5,10 +5,13 @@ import Foundation
 // Background: the historical FCC/VEC code exams (eliminated 2007-02-23) sent
 // ~5 minutes of plain-language text styled as an on-air QSO — callsigns, name,
 // QTH, rig, antenna, weather, RST, age, "73". To pass you needed EITHER one
-// minute of solid copy (25 consecutive correct characters) OR to correctly
-// answer ~10 fill-in questions about the content. License-tied speeds were
-// 5 WPM (Novice), 13 WPM (General/Advanced) and 20 WPM (Amateur Extra); the
-// 5 WPM test used Farnsworth (full-speed characters, stretched spacing).
+// minute of solid copy (that many consecutive correct characters at the exam's
+// speed: 25 at 5 WPM, 65 at 13, 100 at 20 — see `ExamSpeed.requiredRun`) OR to
+// correctly answer ~10 fill-in questions about the content. License-tied speeds
+// were 5 WPM (Novice), 13 WPM (General/Advanced) and 20 WPM (Amateur Extra);
+// the 5 WPM test used Farnsworth (full-speed characters, stretched spacing).
+// The text had to include every letter and numeral, . , ? / and the prosigns
+// AR, SK and BT (#263). `fixtures/code-exam.json` pins both rules.
 //
 // The genuine secured exam transcripts were never published, so this mode
 // reproduces the *format* with procedurally generated (and a few bundled)
@@ -53,6 +56,22 @@ public enum ExamSpeed: String, Sendable, Codable, CaseIterable, Identifiable {
 
     public var wpmLabel: String { "\(Int(effectiveWpm)) WPM" }
 
+    /// Characters in a word, by the PARIS standard every WPM figure uses.
+    public static let charactersPerWord = 5
+
+    /// The solid-copy pass bar: one minute of copy at this exam's speed (#262),
+    /// so 25 / 65 / 100 characters at 5 / 13 / 20 WPM.
+    ///
+    /// Two choices, both pinned by `fixtures/code-exam.json`:
+    /// - The speed is the *effective* (stated) WPM, not the character speed.
+    ///   The 5 WPM exam sent 13 WPM characters, but a minute of it still held
+    ///   five words, and the historical bar there was 25 characters.
+    /// - Word spaces are not characters. PARIS is five letters; the space
+    ///   between words is timing. `ExamSession.longestCommonRun` counts the
+    ///   same way — a space inside a run has to match but adds nothing — so the
+    ///   bar and the count measure the same thing.
+    public var requiredRun: Int { Int(effectiveWpm) * Self.charactersPerWord }
+
     public var license: String {
         switch self {
         case .novice5:   return "Novice / Technician"
@@ -68,14 +87,16 @@ public enum ExamSpeed: String, Sendable, Codable, CaseIterable, Identifiable {
 
 /// The two historical ways to pass the code exam.
 public enum ExamGrading: String, Sendable, Codable, CaseIterable, Identifiable {
-    case solidCopy   // one minute of solid copy: 25 consecutive correct chars
+    case solidCopy   // one minute of solid copy: `ExamSpeed.requiredRun` in a row
     case questions   // ~10 fill-in questions about the content of the message
 
     public var id: String { rawValue }
 
-    public var label: String {
+    /// The picker / header label. Solid copy names its bar, which depends on
+    /// the speed (#262): "Solid copy (65 in a row)" at 13 WPM.
+    public func label(for speed: ExamSpeed) -> String {
         switch self {
-        case .solidCopy: return "Solid copy (25 in a row)"
+        case .solidCopy: return "Solid copy (\(speed.requiredRun) in a row)"
         case .questions: return "Answer questions"
         }
     }
@@ -88,6 +109,9 @@ public enum ExamGrading: String, Sendable, Codable, CaseIterable, Identifiable {
 public struct ExamPassage: Sendable, Equatable {
     public let toCall: String    // the station being called (the examinee)
     public let deCall: String    // the sending station (the examiner)
+    /// The call area the sending station signs portable from ("4" → K9LA/4),
+    /// so every passage keys a slash (#263).
+    public let portable: String
     public let name: String
     public let qth: String       // US-state QTH
     public let rst: String
@@ -98,21 +122,24 @@ public struct ExamPassage: Sendable, Equatable {
     public let temp: String
     public let age: String
 
-    /// The keyed transmission, using "=" (BT) section separators and a final
-    /// "K". Every character is sendable. This is what gets played in Morse.
+    /// The keyed transmission. Prosigns are bracketed tokens (<BT> between
+    /// sections, <AR> closing the message, <SK> on the final over), spelled as
+    /// `MorseData.prosigns` spells them, which `MorseSynth` keys run-together;
+    /// everything else is a sendable character. This is what gets played.
     public let sentText: String
-    /// A prosign-annotated, human-readable version for the reveal screen
-    /// (separators shown as <BT>, sign-off as <KN>).
-    public let displayText: String
-    /// The gradable plain-text copy a candidate would write: `sentText` with the
-    /// "=" separators removed and whitespace collapsed.
+    /// The version shown on the reveal screen. Now that the keyed text spells
+    /// its prosigns the way the app displays them, it is the same string.
+    public var displayText: String { sentText }
+    /// The gradable copy a candidate would write: `sentText` through
+    /// `normalize`, so the prosigns are gone and the punctuation stays.
     public let copyText: String
 
-    public init(toCall: String, deCall: String, name: String, qth: String,
-                rst: String, rig: String, power: String, antenna: String,
-                weather: String, temp: String, age: String) {
+    public init(toCall: String, deCall: String, portable: String, name: String,
+                qth: String, rst: String, rig: String, power: String,
+                antenna: String, weather: String, temp: String, age: String) {
         self.toCall = toCall
         self.deCall = deCall
+        self.portable = portable
         self.name = name
         self.qth = qth
         self.rst = rst
@@ -122,45 +149,63 @@ public struct ExamPassage: Sendable, Equatable {
         self.weather = weather
         self.temp = temp
         self.age = age
-        self.sentText = ExamPassage.render(toCall: toCall, deCall: deCall, name: name,
-                                           qth: qth, rst: rst, rig: rig, power: power,
-                                           antenna: antenna, weather: weather, temp: temp,
-                                           age: age, sep: "=", closer: "K")
-        self.displayText = ExamPassage.render(toCall: toCall, deCall: deCall, name: name,
-                                              qth: qth, rst: rst, rig: rig, power: power,
-                                              antenna: antenna, weather: weather, temp: temp,
-                                              age: age, sep: "<BT>", closer: "<KN>")
+        self.sentText = ExamPassage.render(toCall: toCall, deCall: deCall,
+                                           portable: portable, name: name, qth: qth,
+                                           rst: rst, rig: rig, power: power,
+                                           antenna: antenna, weather: weather,
+                                           temp: temp, age: age)
         self.copyText = ExamPassage.normalize(self.sentText)
     }
 
-    /// One ragchew template, parameterized by the section separator and sign-off
-    /// so the keyed ("=" / "K") and pretty ("<BT>" / "<KN>") forms stay in sync.
-    private static func render(toCall: String, deCall: String, name: String,
-                               qth: String, rst: String, rig: String, power: String,
-                               antenna: String, weather: String, temp: String,
-                               age: String, sep: String, closer: String) -> String {
-        "\(toCall) DE \(deCall) \(sep) GE OM ES TNX FER CALL \(sep) " +
-        "UR RST \(rst) \(rst) \(sep) NAME HR IS \(name) \(name) \(sep) " +
-        "QTH \(qth) \(qth) \(sep) RIG HR IS \(rig) ES PWR \(power) \(sep) " +
-        "ANT IS \(antenna) \(sep) WX \(weather) ES TEMP \(temp) \(sep) " +
-        "AGE \(age) \(sep) HW? \(toCall) DE \(deCall) \(closer)"
+    /// One ragchew template. Its fixed wording carries everything the FCC/VEC
+    /// exams had to include, whatever fields were drawn (#263): every letter
+    /// (B, J, V, Y and Z come from "JUST GOT BACK … VY GLAD" and "1830Z"), every
+    /// numeral ("1830Z ON 14.052 OR 7.069"), . , ? and the portable slash, and
+    /// the prosigns — <BT> between sections, <AR> closing the message and <SK>
+    /// on the final over. `fixtures/code-exam.json` lists the requirement.
+    private static func render(toCall: String, deCall: String, portable: String,
+                               name: String, qth: String, rst: String, rig: String,
+                               power: String, antenna: String, weather: String,
+                               temp: String, age: String) -> String {
+        let de = "\(deCall)/\(portable)"
+        return "\(toCall) DE \(de) <BT> GE OM ES TNX FER CALL. " +
+            "UR RST \(rst) \(rst), NAME HR IS \(name) \(name), QTH \(qth) \(qth). <BT> " +
+            "RIG HR IS \(rig) ES PWR \(power), ANT IS \(antenna). <BT> " +
+            "WX \(weather) ES TEMP \(temp). AGE \(age), JUST GOT BACK ON THE AIR " +
+            "ES VY GLAD TO WORK U. <BT> CAN WE SKED TMW AT 1830Z ON 14.052 OR 7.069? " +
+            "HW? 73 <AR> \(toCall) DE \(de) <SK>"
     }
 
-    /// Reduce a string to a comparable copy stream: upper-cased, "=" separators
-    /// dropped (candidates aren't expected to transcribe BT), and runs of
-    /// whitespace collapsed to a single space. Used for both the reference text
-    /// and the learner's typed copy so grading is apples-to-apples.
+    /// Reduce a string to a comparable copy stream, used for both the reference
+    /// text and the learner's typed copy so grading is apples-to-apples.
+    ///
+    /// Grading rule (#263, pinned by `fixtures/code-exam.json`, identical in the
+    /// Kotlin port): letters, digits and the punctuation . , ? / are copy, kept
+    /// as written and graded like any other character. A prosign in any written
+    /// form — a bracketed token such as <AR>, or "+" (AR), or "=" (BT) — is
+    /// dropped and acts as a word break: it is procedure rather than message
+    /// text, the copy keyboard has no key for it, and a candidate is never marked
+    /// down for writing one or leaving it out. Upper-cased; whitespace runs
+    /// collapse to one space, none leading or trailing.
     public static func normalize(_ s: String) -> String {
         var out = ""
         var pendingSpace = false
-        for ch in s.uppercased() {
-            if ch == "=" { continue }
-            if ch == " " || ch == "\n" || ch == "\t" {
+        let chars = Array(s.uppercased())
+        var i = 0
+        while i < chars.count {
+            let ch = chars[i]
+            var isBreak = ch == " " || ch == "\n" || ch == "\t" || ch == "=" || ch == "+"
+            if ch == "<", let close = chars[(i + 1)...].firstIndex(of: ">") {
+                isBreak = true
+                i = close            // skip the whole bracketed prosign
+            }
+            if isBreak {
                 if !out.isEmpty { pendingSpace = true }
             } else {
                 if pendingSpace { out.append(" "); pendingSpace = false }
                 out.append(ch)
             }
+            i += 1
         }
         return out
     }
@@ -168,9 +213,10 @@ public struct ExamPassage: Sendable, Equatable {
 
 /// The outcome of grading a solid-copy attempt.
 public struct ExamCopyResult: Sendable, Equatable {
-    /// Length of the longest run of consecutive characters the copy got right.
+    /// Length of the longest run of consecutive characters the copy got right
+    /// (word spaces inside the run not counted — see `ExamSpeed.requiredRun`).
     public let longestRun: Int
-    /// The bar to clear (the historical FCC rule: 25 in a row).
+    /// The bar to clear: one minute of copy at the exam's speed.
     public let required: Int
     public var passed: Bool { longestRun >= required }
     public init(longestRun: Int, required: Int) {
@@ -200,10 +246,11 @@ public struct ExamQuestion: Sendable, Equatable {
 /// bespoke exam screen uses (play the whole passage, then copy or answer).
 public final class ExamSession: QuizSource {
 
-    /// The historical "one minute of solid copy" bar: 25 consecutive characters.
-    public static let requiredRun = 25
-
     public let speed: ExamSpeed
+
+    /// The historical "one minute of solid copy" bar at this exam's speed.
+    public var requiredRun: Int { speed.requiredRun }
+
     public let grading: ExamGrading
     public private(set) var passage: ExamPassage
     public private(set) var questions: [ExamQuestion]
@@ -261,7 +308,7 @@ public final class ExamSession: QuizSource {
                 revealPrimary: passage.copyText,
                 revealSecondary: "",
                 question: "Copy the transmission, then type what you got. " +
-                    "Pass = \(Self.requiredRun) correct characters in a row.")
+                    "Pass = \(requiredRun) correct characters in a row.")
         case .questions:
             let q = questions[min(questionIndex, max(0, questions.count - 1))]
             // The first question carries the passage so the loop plays it once;
@@ -305,19 +352,22 @@ public final class ExamSession: QuizSource {
         let a = Array(ExamPassage.normalize(typed))
         let b = Array(passage.copyText)
         return ExamCopyResult(longestRun: Self.longestCommonRun(a, b),
-                              required: Self.requiredRun)
+                              required: requiredRun)
     }
 
-    /// Length of the longest substring common to both character arrays
-    /// (classic O(n·m) longest-common-substring DP, rolling row).
-    static func longestCommonRun(_ a: [Character], _ b: [Character]) -> Int {
+    /// The longest substring common to both character arrays, counted in
+    /// characters with word spaces weighing nothing: a space inside the run has
+    /// to match, but the bar is in characters, not keystrokes (#262). Classic
+    /// O(n·m) longest-common-substring DP, rolling row, with each cell holding
+    /// the run's weight rather than its length.
+    public static func longestCommonRun(_ a: [Character], _ b: [Character]) -> Int {
         if a.isEmpty || b.isEmpty { return 0 }
         var prev = [Int](repeating: 0, count: b.count + 1)
         var best = 0
         for i in 1...a.count {
             var cur = [Int](repeating: 0, count: b.count + 1)
             for j in 1...b.count where a[i - 1] == b[j - 1] {
-                cur[j] = prev[j - 1] + 1
+                cur[j] = prev[j - 1] + (a[i - 1] == " " ? 0 : 1)
                 if cur[j] > best { best = cur[j] }
             }
             prev = cur
@@ -327,7 +377,7 @@ public final class ExamSession: QuizSource {
 
     // MARK: Passage generation
 
-    static func randomPassage(using rng: inout any RandomNumberGenerator) -> ExamPassage {
+    public static func randomPassage(using rng: inout any RandomNumberGenerator) -> ExamPassage {
         let calls = MorseData.callSigns
         let toCall = calls.randomElement(using: &rng) ?? "W1AW"
         var deCall = calls.randomElement(using: &rng) ?? "K3LR"
@@ -340,6 +390,7 @@ public final class ExamSession: QuizSource {
         return ExamPassage(
             toCall: toCall,
             deCall: deCall,
+            portable: String(Int.random(in: 0...9, using: &rng)),
             name: MorseData.opNames.randomElement(using: &rng) ?? "BOB",
             qth: MorseData.qthList.randomElement(using: &rng) ?? "OH",
             rst: MorseData.rstValues.randomElement(using: &rng) ?? "599",

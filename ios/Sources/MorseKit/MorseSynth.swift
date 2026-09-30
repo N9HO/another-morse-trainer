@@ -96,7 +96,9 @@ public struct MorseSynth: Sendable {
         case .text(let text):
             let chars = Array(text)
             var result: [Segment] = []
-            for (ci, ch) in chars.enumerated() {
+            var ci = 0
+            while ci < chars.count {
+                let ch = chars[ci]
                 // A space is a word gap: stretch the previous character's
                 // trailing gap to a full word gap. Only QSO-style multi-word
                 // transmissions contain spaces — single tokens are unaffected.
@@ -105,11 +107,24 @@ public struct MorseSynth: Sendable {
                         result[result.count - 1] = Segment(toneSamples: last.toneSamples,
                                                            gapSamples: toSamples(timing.wordGap))
                     }
+                    ci += 1
                     continue
                 }
-                let els = MorseCode.elements(for: ch)
+                // A bracketed prosign ("<AR>", spelled as `MorseData.prosigns`
+                // spells it — the tree's convention for prosigns in text) is
+                // keyed run-together as one character, so a passage can carry
+                // AR and SK among its words (#263). Anything else in brackets
+                // falls through to the characters, as before.
+                var els = MorseCode.elements(for: ch)
+                var last = ci
+                if ch == "<", let close = chars[(ci + 1)...].firstIndex(of: ">"),
+                   let prosign = MorseData.prosigns.first(where: { $0.name == String(chars[ci...close]) }) {
+                    els = prosign.pattern.map { $0 == "." ? MorseCode.Element.dit : .dah }
+                    last = close
+                }
+                ci = last + 1
                 guard !els.isEmpty else { continue }
-                let afterChar = ci == chars.count - 1 ? 0 : timing.characterGap
+                let afterChar = last == chars.count - 1 ? 0 : timing.characterGap
                 result += withGaps(els, interElement: timing.elementGap, trailing: afterChar)
             }
             return result

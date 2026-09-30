@@ -93,8 +93,9 @@ testers, bug reports and feature chat live on
 - **Contest**: timed runs of the weekly CW events (K1USN SST, ICWC MST,
   CWops CWT, NCCC Sprint, ARRL Field Day) with authentic exchanges and speeds,
   a live score and rate, and an end-of-run scorecard
-- **Code Exam**: FCC/ARRL-style copy test at 5 / 13 / 20 WPM (solid copy or
-  content questions)
+- **Code Exam**: FCC/ARRL-style copy test at 5 / 13 / 20 WPM, every passage
+  carrying the letters, numerals, `. , ? /` and AR / SK / BT the real exams did
+  (one minute of solid copy — 25 / 65 / 100 in a row — or content questions)
 - **Short Stories**: continuous copy of a public-domain fable (32 bundled), a
   longer classic sent in parts with a bookmark that keeps your place, or todays
   news: real RSS headlines sanitized to sendable Morse and hidden until you

@@ -57,8 +57,8 @@ private const val EXAM_SIDETONE_HZ = 600.0
  * Three steps: pick a [ExamSpeed] and an [ExamGrading] mode, then run it.
  * Solid-copy mode plays the whole QSO-style passage and asks you to type what
  * you got (graded on the longest run of consecutive-correct characters, the old
- * "25 in a row" rule). Question mode plays the passage once, then asks fill-in
- * questions about what was sent. Both drive the fully-ported [ExamSession].
+ * "one minute of solid copy" rule: 25 / 65 / 100 at 5 / 13 / 20 WPM). Question
+ * mode plays the passage once, then asks fill-in questions about what was sent. Both drive the fully-ported [ExamSession].
  */
 @Composable
 fun CodeExamScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) {
@@ -200,7 +200,7 @@ private fun ExamSetup(
         Spacer(Modifier.height(8.dp))
         ExamGrading.allCases.forEach { option ->
             ChoiceRow(
-                label = option.label,
+                label = option.label(speed),
                 selected = option == grading,
                 onClick = { onGrading(option) }
             )
@@ -300,7 +300,7 @@ private fun SolidCopyExam(
         Text(stringResource(R.string.exam_title_with_speed, session.speed.wpmLabel), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(4.dp))
         Text(
-            stringResource(R.string.exam_solid_copy_instructions, ExamSession.requiredRun),
+            stringResource(R.string.exam_solid_copy_instructions, session.requiredRun),
             style = MaterialTheme.typography.bodyMedium,
             textAlign = TextAlign.Center
         )
