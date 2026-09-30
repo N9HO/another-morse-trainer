@@ -1,5 +1,6 @@
 import Foundation
 import AVFoundation
+import CoreAudio   // UnsafeMutableAudioBufferListPointer: AVFoundation does not re-export it on Mac Catalyst
 import os
 
 /// Generates and plays the sound of a Morse character/word/prosign.

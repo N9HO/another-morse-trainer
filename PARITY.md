@@ -68,6 +68,7 @@ changes and the gap is closed.
 | Pairing a Bluetooth LE MIDI key by scanning from inside the app | iOS | CoreMIDI only exposes a BLE MIDI peripheral once it has been connected through the system `CABTMIDICentralViewController` sheet; there is no app-level scan API. | Opens that system sheet from the screens that take a key (Sending Practice and keyed answers via `SendingKeyerView`, the Repeater, the Sending Analyzer; `BluetoothMIDISheet.swift`). Same outcome: a paired key. |
 | Hardware-key section always visible in Settings | Android | Some Android devices ship without `FEATURE_MIDI`; showing MIDI controls there would offer a feature the device cannot use. | The section is hidden on devices without the feature (`SettingsScreen.kt`, `FEATURE_MIDI` check). On devices that have it, the section matches iOS. |
 | Voice answers: listening starts by itself when the tone ends, and the time-to-recognize clock starts at speech onset | Android | Android's `SpeechRecognizer` is one-shot: each invocation plays the system start sound and takes audio focus, so auto-listening after every prompt would chime over every character; it also owns the microphone, so the app gets no audio to detect onset from. | A "Speak answer" button starts one recognition per prompt (`QuizScreen.kt`); the clock runs from the tap. |
+| A desktop build (#264) | Android | Android has no desktop build. The Apple app reaches the Mac through Mac Catalyst from the same target; Windows and Linux are tracked in #264. | Nothing on the desktop yet; the Android app is phone and tablet only. |
 | Daily reminder at exactly the chosen minute | Android | The app deliberately does not request `SCHEDULE_EXACT_ALARM`, which Android 12+ gates behind a special permission; an inexact alarm may fire minutes late when the OS batches it. | `setInexactRepeating` at the chosen time; the reminder still arrives, at minute precision only on iOS. |
 
 ### Same feature, platform mechanism (not gaps)
@@ -106,6 +107,11 @@ missing feature.
   on-device recognition (`VoiceRecognizer.swift`, iOS 17+); Android has only
   `EXTRA_BIASING_STRINGS` (`VoiceRecognizer.kt`, API 33+), the nearest
   equivalent.
+- **Bluetooth LE key on the Mac.** The iOS system pairing sheet
+  (`CABTMIDICentralViewController`) does not exist on the Mac; macOS connects
+  BLE-MIDI keys system-wide in Audio MIDI Setup, and the same button shows
+  how (`MacBluetoothMIDIHelp`, `MacCatalystSupport.swift`). Same outcome: a
+  key CoreMIDI can see.
 - **Audio-stack reset recovery.** iOS rebuilds the engine on
   `mediaServicesWereReset` (`AudioSession.swift`); Android has no such
   event and catches `IllegalStateException` instead.

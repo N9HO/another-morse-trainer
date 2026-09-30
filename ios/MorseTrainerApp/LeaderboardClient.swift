@@ -40,7 +40,12 @@ enum LeaderboardError: Error {
     /// One line for the session summary.
     var message: String {
         switch self {
-        case .unsupported: return "Only a real device can post; the simulator cannot attest."
+        case .unsupported:
+            #if targetEnvironment(macCatalyst)
+            return "This Mac cannot attest, so it can read the boards but not post to them."
+            #else
+            return "Only a real device can post; the simulator cannot attest."
+            #endif
         case .attestation(let s): return "Attestation failed: \(s)"
         case .server(_, let reason): return reason
         case .transport(let s): return s

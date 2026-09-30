@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- The Mac Catalyst build's entitlements (issue #264). Picked by
+	     CODE_SIGN_ENTITLEMENTS[sdk=macosx*] in the project; the iPhone build
+	     still signs with MorseTrainer.entitlements. Keep the two in step for
+	     anything that is not Mac-only.
+
+	     The Mac App Store requires the App Sandbox, and inside it every
+	     resource the app touches has to be asked for:
+	       network.client       leaderboard, buddy streak, news feed, Vail repeater
+	       device.audio-input   CW decoder, Sending Analyzer mic, voice answers
+	     CoreMIDI (USB keys, the Vail adapter, BLE-MIDI keys once macOS has
+	     connected them) needs no entitlement. -->
+	<key>com.apple.security.app-sandbox</key>
+	<true/>
+	<key>com.apple.security.network.client</key>
+	<true/>
+	<key>com.apple.security.device.audio-input</key>
+	<true/>
+	<!-- Same App Attest environment as the iPhone build: see
+	     MorseTrainer.entitlements and docs/high-scores-design.md. -->
+	<key>com.apple.developer.devicecheck.appattest-environment</key>
+	<string>production</string>
+</dict>
+</plist>
