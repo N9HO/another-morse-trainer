@@ -30,9 +30,13 @@ struct IntroView: View {
     @State private var showingRepeater = false
     @StateObject private var repeater = RepeaterModel()
     @Environment(\.scenePhase) private var scenePhase
+    /// A big iPad window: a wider column, the mode tiles four across, and
+    /// the Daily Dit and Start here cards side by side (Theme.swift).
+    @Environment(\.wideLayout) private var wide
 
-    private let tileColumns = [GridItem(.flexible(), spacing: 14),
-                               GridItem(.flexible(), spacing: 14)]
+    private var tileColumns: [GridItem] {
+        Array(repeating: GridItem(.flexible(), spacing: 14), count: wide ? 4 : 2)
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -42,22 +46,31 @@ struct IntroView: View {
                 VStack(spacing: 28) {
                     header
 
-                    dailyDitCard
+                    if wide {
+                        HStack(alignment: .top, spacing: 14) {
+                            dailyDitCard
+                            startHereButton
+                        }
+                        .fixedSize(horizontal: false, vertical: true)
+                    } else {
+                        dailyDitCard
 
-                    startHereButton
+                        startHereButton
+                    }
 
                     modePicker
 
                     Spacer(minLength: 8)
                 }
                 .padding(24)
-                .readableWidth()
+                .readableWidth(wide ? Theme.wideContentMaxWidth : Theme.contentMaxWidth)
                 .animation(.easeInOut(duration: 0.22), value: model.learningMode)
             }
         }
         .sheet(isPresented: $showingSetup) {
             SessionSetupSheet(onStart: onStart)
                 .environmentObject(model)
+                .pageSizedSheet()
         }
         .sheet(isPresented: $showingGames, onDismiss: {
             if pendingGameSetup {
@@ -72,33 +85,35 @@ struct IntroView: View {
                 showingGames = false
             }
             .environmentObject(model)
+            .pageSizedSheet()
         }
         .sheet(isPresented: $showingSettings) {
-            SettingsView().environmentObject(model)
+            SettingsView().environmentObject(model).pageSizedSheet()
         }
         .sheet(isPresented: $showingStats) {
-            StatsView().environmentObject(model)
+            StatsView().environmentObject(model).pageSizedSheet()
         }
         .sheet(isPresented: $showingReference) {
-            ReferenceView().environmentObject(model)
+            ReferenceView().environmentObject(model).pageSizedSheet()
         }
         .sheet(isPresented: $showingStartHere) {
-            StartHereView().environmentObject(model)
+            StartHereView().environmentObject(model).pageSizedSheet()
         }
         .sheet(isPresented: $showingDailyDit) {
-            DailyDitView().environmentObject(model)
+            DailyDitView().environmentObject(model).pageSizedSheet()
         }
         .sheet(isPresented: $showingSendingDrill) {
-            SendingDrillView().environmentObject(model)
+            SendingDrillView().environmentObject(model).pageSizedSheet()
         }
         .sheet(isPresented: $showingSendingAnalyzer) {
             SendingAnalyzerView(toneHz: model.settings.toneFrequency,
                                 keyerWpm: model.settings.wpm,
                                 studied: model.studiedCharacters)
                 .environmentObject(model)
+                .pageSizedSheet()
         }
         .sheet(isPresented: $showingCWDecoder) {
-            CWDecoderView().environmentObject(model)
+            CWDecoderView().environmentObject(model).pageSizedSheet()
         }
         .fullScreenCover(isPresented: $showingRepeater) {
             // AppModel too: the on-screen key follows the Settings choice of
@@ -300,6 +315,8 @@ struct IntroView: View {
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(Theme.textSecondary)
             }
+            // Side by side on a wide iPad, the two cards match heights.
+            .frame(maxHeight: .infinity)
             .foregroundStyle(.white)
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
@@ -347,6 +364,8 @@ struct IntroView: View {
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(Theme.textSecondary)
             }
+            // Side by side on a wide iPad, the two cards match heights.
+            .frame(maxHeight: .infinity)
             .foregroundStyle(.white)
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
@@ -859,7 +878,7 @@ private struct ModeOptionsCard: View {
                 CustomWordsSheet().environmentObject(model)
             }
             .sheet(isPresented: $showingJourneyMap) {
-                JourneyMapView().environmentObject(model)
+                JourneyMapView().environmentObject(model).pageSizedSheet()
             }
         }
     }
@@ -1297,6 +1316,7 @@ private struct GamesMenuView: View {
 private struct SessionSetupSheet: View {
     @EnvironmentObject var model: AppModel
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.wideLayout) private var wide
     var onStart: () -> Void
 
     private var durationBinding: Binding<PracticeDuration> {
@@ -1456,7 +1476,9 @@ private struct SessionSetupSheet: View {
                 .background(.ultraThinMaterial)
             }
         }
-        .presentationDetents([.medium, .large])
+        // A half-height sheet suits a phone; on a big iPad it leaves the
+        // options a letterbox to scroll through, so it opens full there.
+        .presentationDetents(wide ? [.large] : [.medium, .large])
     }
 
     /// A labelled container holding one control, in the brand card style.

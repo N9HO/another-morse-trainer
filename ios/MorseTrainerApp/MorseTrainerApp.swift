@@ -56,5 +56,8 @@ struct RootView: View {
                           openSetup: $reopenSetup)
             }
         }
+        // One measurement of the window for every screen's iPad layout
+        // (Theme.swift, `wideLayout`).
+        .readsWideLayout()
     }
 }
