@@ -116,8 +116,10 @@ paddles.
 - **Contest**: timed runs of the weekly CW events (K1USN SST, ICWC MST, CWops
   CWT, NCCC Sprint, ARRL Field Day) with authentic exchanges, speeds, live
   score/rate, and an end-of-run scorecard
-- **Code Exam**: FCC/ARRL-style copy test at 5 / 13 / 20 WPM (solid copy or
-  content questions, random or a bundled passage)
+- **Code Exam**: FCC/ARRL-style copy test at 5 / 13 / 20 WPM, every passage
+  carrying the letters, numerals, `. , ? /` and AR / SK / BT the real exams did
+  (one minute of solid copy — 25 / 65 / 100 in a row — or content questions,
+  random or a bundled passage)
 - **Sending Practice**: key it back (mouse, keyboard or MIDI key); quizzes can
   also be answered by keying
 - **On-screen paddles**: the on-screen key can be a straight key or a pair of
