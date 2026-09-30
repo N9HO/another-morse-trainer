@@ -290,6 +290,10 @@ class MorsePlayer {
 
         try {
             t.play()
+            // −6 dB on the built-in speaker, following route changes (#259).
+            // A track volume, so the samples below are exactly what
+            // fixtures/render.json pins.
+            SpeakerHeadroom.follow(t)
             while (running) {
                 val next = program
                 val current = playing

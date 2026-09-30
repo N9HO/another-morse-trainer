@@ -152,6 +152,10 @@ object BackgroundNoise {
 
         try {
             track.play()
+            // The same −6 dB on the built-in speaker as MorsePlayer (#259), so
+            // the tone-to-noise balance is the same on every route — as on
+            // iOS, where the noise is mixed into the tone's own source node.
+            SpeakerHeadroom.follow(track)
             while (isCurrent(mine)) {
                 fill(target, GAIN_STEP)
                 if (track.write(buffer, 0, CHUNK, AudioTrack.WRITE_BLOCKING) < 0) break
