@@ -21,6 +21,14 @@ import javax.sound.sampled.SourceDataLine
  * [open] returns null when there is no output device (a CI runner, a machine
  * with audio disabled). Callers treat that the way the Android port treats a
  * failed `AudioTrack.Builder().build()`: practice carries on silently.
+ *
+ * No built-in-speaker headroom here. The phone apps drop tones and noise
+ * 6 dB when the route is the device's own speaker (#228 on iOS, #259 on
+ * Android's `SpeakerHeadroom`), but Java Sound only names mixers ("Primary
+ * Sound Driver", "default [default]"), not what is plugged into them, and a
+ * laptop's speaker and its headphone jack are usually the same mixer. Every
+ * route plays at full level; the OS volume is the control. Recorded in
+ * PARITY.md.
  */
 internal class PcmOut private constructor(private val line: SourceDataLine) {
 

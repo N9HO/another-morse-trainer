@@ -219,8 +219,11 @@ class MorseSynth(
      * `705 / 2 = 352`, so rise and fall both run their full length with 265
      * samples of steady tone between them. The samples at that speed are as
      * click-free as at 20 WPM — `fixtures/render.json` pins PARIS at 75 —
-     * so a "pops and clicks" report there (issue #228) is not this envelope;
-     * look downstream of the samples, at the route and the device.
+     * so a "pops and clicks" report there (issue #228) is not this envelope.
+     * It was a phone's built-in speaker processing near full scale; the phone
+     * apps leave that speaker 6 dB of headroom (#228, #259). The desktop does
+     * not, as Java Sound cannot tell a laptop's speaker from any other output
+     * (PARITY.md).
      */
     private fun sample(n: Int, toneSamples: Int): Float {
         val rampSamples = maxOf(1, minOf(fullRampSamples, toneSamples / 2))
