@@ -437,13 +437,16 @@ Order:
 1. This PR: tree, port, CI, governance, design.
 2. Hardware and listening checks (§6, items 5 and 6) on both OSes; fix what
    they find.
-3. The in-flight phone work that lands after this fork, ported into
-   `desktop/`: Daily Dit Copy (#266, PR #269), the Code Exam pass bar and
-   prosigns (#262/#263, PR #274, which also adds a fixture the desktop tests
-   must read), First Four (#265, PR #276), the buddy-line home toggle (#253,
-   PR #272; the desktop has no buddies, so only if the toggle is visible
-   there), and the Android speaker headroom (#259, PR #271; check whether a
-   desktop equivalent makes sense — laptop speakers clip too).
+3. The phone work that landed after this fork, ported into `desktop/` in
+   this PR after rebasing onto it: Daily Dit Copy puts the card image on the
+   clipboard with the text as a fallback flavour (#266, PR #269); the Code
+   Exam pass bar and prosign passages, with `CodeExamFixtureTest` reading
+   `fixtures/code-exam.json` (#262/#263, PR #274). Decided not to port, each
+   recorded in `PARITY.md`: the buddy-line home switch (#253, PR #272; the
+   desktop has no buddies, so there is no line to hide; the catalog keeps
+   the shared search terms) and the built-in-speaker headroom (#259, PR #271;
+   Java Sound cannot tell a laptop's speaker from its headphone jack). Still
+   owed: First Four (#265, PR #276), tracked for desktop in #280.
 4. Smaller desktop follow-ups found while porting: Settings search still
    indexes the settings the desktop hides (haptics, voice, reminder time,
    leaderboard sharing, buddies) and lands on the explanatory note; R to
