@@ -17,10 +17,11 @@ import java.io.File
  * [ShareCard], and mirrors the iOS and Android `DailyDitShareCard`. No letters
  * appear: the image spoils nothing the emoji grid didn't.
  *
- * Desktop: there is no system share sheet. [share] copies the image to the
- * clipboard with [DailyDitGame.shareText] as its plain-text alternative, so the
- * pasteable text still travels with the image; [save] writes the PNG where the
- * user picks.
+ * Desktop: there is no system share sheet. [copy] (the Copy button, #266) and
+ * [share] (the Share menu's "Copy image") put the image on the clipboard with
+ * [DailyDitGame.shareText] as its plain-text alternative, one Transferable
+ * carrying both flavours, so a target that only takes text still gets the
+ * result; [save] writes the PNG where the user picks.
  */
 object DailyDitShareCard {
     private val TEAL = Color(0x2C, 0xC0, 0xD1)
@@ -38,8 +39,17 @@ object DailyDitShareCard {
      * the Android share sheet's title; desktop has no chooser and ignores it.
      */
     @Suppress("UNUSED_PARAMETER")
-    fun share(game: DailyDitGame, chooserTitle: String): Boolean =
-        DesktopShare.copyImage(render(game), game.shareText)
+    fun share(game: DailyDitGame, chooserTitle: String): Boolean = copy(game)
+
+    /**
+     * The card on the clipboard as an AWT image flavour, with the share text as
+     * a string flavour in the same Transferable (#266): an app that pastes
+     * images gets the card, one that only takes text gets the text. If the
+     * image can't be placed at all, the text alone is copied, so Copy never
+     * does less than it did before.
+     */
+    fun copy(game: DailyDitGame): Boolean =
+        DesktopShare.copyImage(render(game), game.shareText) || DesktopShare.copyText(game.shareText)
 
     /** Asks where to save the card as a PNG; the file written, or null if cancelled or failed. */
     fun save(game: DailyDitGame): File? =
