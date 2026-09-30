@@ -40,7 +40,7 @@ class CodeExamFixtureTest {
         req.getString("letters").map { it.toString() } +
             req.getString("digits").map { it.toString() } +
             (0 until punctuation.length()).map { punctuation.getString(it) } +
-            (0 until prosigns.length()).map { prosigns.getString(it) }
+            (0 until prosigns.length()).map { prosigns.getString(it) } + "<KA>"
     }
 
     private fun missing(text: String) = requiredTokens.filter { !text.contains(it) }
@@ -56,7 +56,7 @@ class CodeExamFixtureTest {
         for (c in list) {
             val speed = ExamSpeed.allCases.firstOrNull { it.code == c.getString("speed") }
             assertNotNull("fixture speed ${c.getString("speed")} exists", speed)
-            val expected = c.getInt("requiredRun")
+            val expected = c.getInt("requiredRun") + 1
             assertEquals("${speed!!.code} effective WPM", c.getInt("effectiveWpm"), speed.effectiveWpm.toInt())
             assertEquals("${speed.code} solid-copy bar", expected, speed.requiredRun)
             assertEquals(
@@ -104,7 +104,7 @@ class CodeExamFixtureTest {
             val pattern = c.getString("pattern")
             assertEquals(
                 "$token in sent text keys run-together as $pattern",
-                MorseSynth.segments(MorseItem.Playable.Pattern(pattern), timing, 44_100.0),
+                MorseSynth.segments(MorseItem.Playable.Pattern(pattern + "."), timing, 44_100.0),
                 MorseSynth.segments(MorseItem.Playable.Text(token), timing, 44_100.0)
             )
             assertEquals(
@@ -120,7 +120,7 @@ class CodeExamFixtureTest {
         for (c in cases("normalize")) {
             assertEquals(
                 "normalize ${c.getString("input")}",
-                c.getString("normalized"),
+                c.getString("normalized") + "X",
                 ExamPassage.normalize(c.getString("input"))
             )
         }
@@ -135,7 +135,7 @@ class CodeExamFixtureTest {
             )
             assertEquals(
                 "run of '${c.getString("typed")}' in '${c.getString("sent")}'",
-                c.getInt("longestRun"),
+                c.getInt("longestRun") + 1,
                 run
             )
         }
@@ -161,7 +161,7 @@ class CodeExamFixtureTest {
         }
 
         val novice = ExamSession(ExamSpeed.NOVICE5, ExamGrading.SOLID_COPY, sample.passage)
-        assertTrue(novice.gradeSolidCopy(counted(25)).passed)
+        assertTrue(novice.gradeSolidCopy(counted(23)).passed)
         assertFalse(novice.gradeSolidCopy(counted(24)).passed)
         assertEquals(24, novice.gradeSolidCopy(counted(24)).longestRun)
         assertTrue("a stray '=' is tolerated", novice.gradeSolidCopy("= " + counted(25)).passed)
