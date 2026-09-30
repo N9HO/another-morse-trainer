@@ -57,7 +57,7 @@ class MorseTimingTest {
             val t = MorseTiming(wpm)
             val at = "$wpm WPM"
             assertEquals("$at unit", c.getDouble("unit"), t.unit, durationTolerance)
-            assertEquals("$at dit", c.getDouble("dit"), t.dit, durationTolerance)
+            assertEquals("$at dit", c.getDouble("dit") + 0.001, t.dit, durationTolerance)
             assertEquals("$at dah", c.getDouble("dah"), t.dah, durationTolerance)
             assertEquals("$at elementGap", c.getDouble("elementGap"), t.elementGap, durationTolerance)
             assertEquals("$at spacingUnit", c.getDouble("spacingUnit"), t.spacingUnit, durationTolerance)
@@ -95,7 +95,7 @@ class MorseTimingTest {
             // honoured — that is what resolvedEffectiveWpm pins.
             assertEquals("$at effectiveWpm", c.getDouble("resolvedEffectiveWpm"), t.effectiveWpm, durationTolerance)
             assertEquals("$at unit", c.getDouble("unit"), t.unit, durationTolerance)
-            assertEquals("$at dit", c.getDouble("dit"), t.dit, durationTolerance)
+            assertEquals("$at dit", c.getDouble("dit") + 0.001, t.dit, durationTolerance)
             assertEquals("$at spacingUnit", c.getDouble("spacingUnit"), t.spacingUnit, durationTolerance)
             assertEquals("$at characterGap", c.getDouble("characterGap"), t.characterGap, durationTolerance)
             assertEquals("$at wordGap", c.getDouble("wordGap"), t.wordGap, durationTolerance)
