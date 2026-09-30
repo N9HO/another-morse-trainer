@@ -57,13 +57,15 @@ object ExamData {
     /**
      * A small library of ready-made exam passages — a couple at each license
      * speed — built with the same template the generator uses, so the questions
-     * generated from them line up with the text.
+     * generated from them line up with the text — and so each one carries every
+     * character and prosign the FCC/VEC exams required (#263), which
+     * `fixtures/code-exam.json` checks passage by passage.
      */
     val examSamples: List<ExamSample> = listOf(
         ExamSample(
             id = "novice-w1aw", speed = ExamSpeed.NOVICE5,
             passage = ExamPassage(
-                toCall = "W1AW", deCall = "K9LA", name = "JIM",
+                toCall = "W1AW", deCall = "K9LA", portable = "4", name = "JIM",
                 qth = "IL", rst = "599", rig = "IC7300",
                 power = "100W", antenna = "DIPOLE",
                 weather = "SUNNY", temp = "72F", age = "45"
@@ -72,7 +74,7 @@ object ExamData {
         ExamSample(
             id = "novice-n0ax", speed = ExamSpeed.NOVICE5,
             passage = ExamPassage(
-                toCall = "N0AX", deCall = "W7PHX", name = "DAVE",
+                toCall = "N0AX", deCall = "W7PHX", portable = "6", name = "DAVE",
                 qth = "AZ", rst = "579", rig = "KX3",
                 power = "5W", antenna = "ENDFED",
                 weather = "CLEAR", temp = "85F", age = "34"
@@ -81,7 +83,7 @@ object ExamData {
         ExamSample(
             id = "general-k3lr", speed = ExamSpeed.GENERAL13,
             passage = ExamPassage(
-                toCall = "K3LR", deCall = "AA3B", name = "BOB",
+                toCall = "K3LR", deCall = "AA3B", portable = "2", name = "BOB",
                 qth = "PA", rst = "589", rig = "K3",
                 power = "500W", antenna = "YAGI",
                 weather = "WINDY", temp = "55F", age = "52"
@@ -90,7 +92,7 @@ object ExamData {
         ExamSample(
             id = "general-w6oat", speed = ExamSpeed.GENERAL13,
             passage = ExamPassage(
-                toCall = "W6OAT", deCall = "N5XJ", name = "STEVE",
+                toCall = "W6OAT", deCall = "N5XJ", portable = "0", name = "STEVE",
                 qth = "CA", rst = "559", rig = "FTDX10",
                 power = "100W", antenna = "VERTICAL",
                 weather = "FOGGY", temp = "60F", age = "63"
@@ -99,7 +101,7 @@ object ExamData {
         ExamSample(
             id = "extra-k1ttt", speed = ExamSpeed.EXTRA20,
             passage = ExamPassage(
-                toCall = "K1TTT", deCall = "W5KFT", name = "TOM",
+                toCall = "K1TTT", deCall = "W5KFT", portable = "1", name = "TOM",
                 qth = "TX", rst = "599", rig = "IC7610",
                 power = "1KW", antenna = "HEXBEAM",
                 weather = "HOT", temp = "90F", age = "41"
@@ -108,7 +110,7 @@ object ExamData {
         ExamSample(
             id = "extra-n2ic", speed = ExamSpeed.EXTRA20,
             passage = ExamPassage(
-                toCall = "N2IC", deCall = "K0XYZ", name = "MIKE",
+                toCall = "N2IC", deCall = "K0XYZ", portable = "7", name = "MIKE",
                 qth = "CO", rst = "569", rig = "K4",
                 power = "200W", antenna = "BEAM",
                 weather = "SNOWY", temp = "20C", age = "60"

@@ -7,10 +7,13 @@ import kotlin.random.Random
 // Background: the historical FCC/VEC code exams (eliminated 2007-02-23) sent
 // ~5 minutes of plain-language text styled as an on-air QSO — callsigns, name,
 // QTH, rig, antenna, weather, RST, age, "73". To pass you needed EITHER one
-// minute of solid copy (25 consecutive correct characters) OR to correctly
-// answer ~10 fill-in questions about the content. License-tied speeds were
-// 5 WPM (Novice), 13 WPM (General/Advanced) and 20 WPM (Amateur Extra); the
-// 5 WPM test used Farnsworth (full-speed characters, stretched spacing).
+// minute of solid copy (that many consecutive correct characters at the exam's
+// speed: 25 at 5 WPM, 65 at 13, 100 at 20 — see [ExamSpeed.requiredRun]) OR to
+// correctly answer ~10 fill-in questions about the content. License-tied speeds
+// were 5 WPM (Novice), 13 WPM (General/Advanced) and 20 WPM (Amateur Extra);
+// the 5 WPM test used Farnsworth (full-speed characters, stretched spacing).
+// The text had to include every letter and numeral, . , ? / and the prosigns
+// AR, SK and BT (#263). `fixtures/code-exam.json` pins both rules.
 //
 // The genuine secured exam transcripts were never published, so this mode
 // reproduces the *format* with procedurally generated (and a few bundled)
@@ -67,6 +70,21 @@ enum class ExamSpeed(val code: String) {
 
     val wpmLabel: String get() = "${effectiveWpm.toInt()} WPM"
 
+    /**
+     * The solid-copy pass bar: one minute of copy at this exam's speed (#262),
+     * so 25 / 65 / 100 characters at 5 / 13 / 20 WPM.
+     *
+     * Two choices, both pinned by `fixtures/code-exam.json`:
+     * - The speed is the *effective* (stated) WPM, not the character speed. The
+     *   5 WPM exam sent 13 WPM characters, but a minute of it still held five
+     *   words, and the historical bar there was 25 characters.
+     * - Word spaces are not characters. PARIS is five letters; the space
+     *   between words is timing. [ExamSession.longestCommonRun] counts the same
+     *   way — a space inside a run has to match but adds nothing — so the bar
+     *   and the count measure the same thing.
+     */
+    val requiredRun: Int get() = effectiveWpm.toInt() * CHARACTERS_PER_WORD
+
     val license: String
         get() = when (this) {
             NOVICE5 -> "Novice / Technician"
@@ -77,6 +95,9 @@ enum class ExamSpeed(val code: String) {
     val label: String get() = "$wpmLabel — $license"
 
     companion object {
+        /** Characters in a word, by the PARIS standard every WPM figure uses. */
+        const val CHARACTERS_PER_WORD = 5
+
         /** Mirrors Swift's `CaseIterable.allCases`. */
         val allCases: List<ExamSpeed> get() = entries.toList()
     }
@@ -91,16 +112,19 @@ enum class ExamSpeed(val code: String) {
  * `enum class` carrying the raw value as [code].
  */
 enum class ExamGrading(val code: String) {
-    SOLID_COPY("solidCopy"), // one minute of solid copy: 25 consecutive correct chars
+    SOLID_COPY("solidCopy"), // one minute of solid copy: ExamSpeed.requiredRun in a row
     QUESTIONS("questions");  // ~10 fill-in questions about the content of the message
 
     val id: String get() = code
 
-    val label: String
-        get() = when (this) {
-            SOLID_COPY -> "Solid copy (25 in a row)"
-            QUESTIONS -> "Answer questions"
-        }
+    /**
+     * The picker / header label. Solid copy names its bar, which depends on the
+     * speed (#262): "Solid copy (65 in a row)" at 13 WPM.
+     */
+    fun label(speed: ExamSpeed): String = when (this) {
+        SOLID_COPY -> "Solid copy (${speed.requiredRun} in a row)"
+        QUESTIONS -> "Answer questions"
+    }
 
     companion object {
         /** Mirrors Swift's `CaseIterable.allCases`. */
@@ -121,6 +145,8 @@ enum class ExamGrading(val code: String) {
 data class ExamPassage(
     val toCall: String,    // the station being called (the examinee)
     val deCall: String,    // the sending station (the examiner)
+    /** The call area the sending station signs portable from ("4" → K9LA/4), so every passage keys a slash (#263). */
+    val portable: String,
     val name: String,
     val qth: String,       // US-state QTH
     val rst: String,
@@ -132,60 +158,83 @@ data class ExamPassage(
     val age: String
 ) {
     /**
-     * The keyed transmission, using "=" (BT) section separators and a final
-     * "K". Every character is sendable. This is what gets played in Morse.
+     * The keyed transmission. Prosigns are bracketed tokens (<BT> between
+     * sections, <AR> closing the message, <SK> on the final over), spelled as
+     * [MorseData.prosigns] spells them, which [MorseSynth] keys run-together;
+     * everything else is a sendable character. This is what gets played.
      */
     val sentText: String = render(
-        toCall, deCall, name, qth, rst, rig, power,
-        antenna, weather, temp, age, sep = "=", closer = "K"
+        toCall, deCall, portable, name, qth, rst, rig, power,
+        antenna, weather, temp, age
     )
 
     /**
-     * A prosign-annotated, human-readable version for the reveal screen
-     * (separators shown as <BT>, sign-off as <KN>).
+     * The version shown on the reveal screen. Now that the keyed text spells
+     * its prosigns the way the app displays them, it is the same string.
      */
-    val displayText: String = render(
-        toCall, deCall, name, qth, rst, rig, power,
-        antenna, weather, temp, age, sep = "<BT>", closer = "<KN>"
-    )
+    val displayText: String get() = sentText
 
     /**
-     * The gradable plain-text copy a candidate would write: [sentText] with the
-     * "=" separators removed and whitespace collapsed.
+     * The gradable copy a candidate would write: [sentText] through
+     * [normalize], so the prosigns are gone and the punctuation stays.
      */
     val copyText: String = normalize(sentText)
 
     companion object {
         /**
-         * One ragchew template, parameterized by the section separator and
-         * sign-off so the keyed ("=" / "K") and pretty ("<BT>" / "<KN>") forms
-         * stay in sync.
+         * One ragchew template. Its fixed wording carries everything the FCC/VEC
+         * exams had to include, whatever fields were drawn (#263): every letter
+         * (B, J, V, Y and Z come from "JUST GOT BACK … VY GLAD" and "1830Z"),
+         * every numeral ("1830Z ON 14.052 OR 7.069"), . , ? and the portable
+         * slash, and the prosigns — <BT> between sections, <AR> closing the
+         * message and <SK> on the final over. `fixtures/code-exam.json` lists
+         * the requirement.
          */
         private fun render(
-            toCall: String, deCall: String, name: String,
+            toCall: String, deCall: String, portable: String, name: String,
             qth: String, rst: String, rig: String, power: String,
-            antenna: String, weather: String, temp: String,
-            age: String, sep: String, closer: String
-        ): String =
-            "$toCall DE $deCall $sep GE OM ES TNX FER CALL $sep " +
-                "UR RST $rst $rst $sep NAME HR IS $name $name $sep " +
-                "QTH $qth $qth $sep RIG HR IS $rig ES PWR $power $sep " +
-                "ANT IS $antenna $sep WX $weather ES TEMP $temp $sep " +
-                "AGE $age $sep HW? $toCall DE $deCall $closer"
+            antenna: String, weather: String, temp: String, age: String
+        ): String {
+            val de = "$deCall/$portable"
+            return "$toCall DE $de <BT> GE OM ES TNX FER CALL. " +
+                "UR RST $rst $rst, NAME HR IS $name $name, QTH $qth $qth. <BT> " +
+                "RIG HR IS $rig ES PWR $power, ANT IS $antenna. <BT> " +
+                "WX $weather ES TEMP $temp. AGE $age, JUST GOT BACK ON THE AIR " +
+                "ES VY GLAD TO WORK U. <BT> CAN WE SKED TMW AT 1830Z ON 14.052 OR 7.069? " +
+                "HW? 73 <AR> $toCall DE $de <SK>"
+        }
 
         /**
-         * Reduce a string to a comparable copy stream: upper-cased, "="
-         * separators dropped (candidates aren't expected to transcribe BT), and
-         * runs of whitespace collapsed to a single space. Used for both the
+         * Reduce a string to a comparable copy stream, used for both the
          * reference text and the learner's typed copy so grading is
          * apples-to-apples.
+         *
+         * Grading rule (#263, pinned by `fixtures/code-exam.json`, identical in
+         * the Swift port): letters, digits and the punctuation . , ? / are copy,
+         * kept as written and graded like any other character. A prosign in any
+         * written form — a bracketed token such as <AR>, or "+" (AR), or "="
+         * (BT) — is dropped and acts as a word break: it is procedure rather
+         * than message text, the copy keyboard has no key for it, and a
+         * candidate is never marked down for writing one or leaving it out.
+         * Upper-cased; whitespace runs collapse to one space, none leading or
+         * trailing.
          */
         fun normalize(s: String): String {
             val out = StringBuilder()
             var pendingSpace = false
-            for (ch in s.uppercase()) {
-                if (ch == '=') continue
-                if (ch == ' ' || ch == '\n' || ch == '\t') {
+            val chars = s.uppercase()
+            var i = 0
+            while (i < chars.length) {
+                val ch = chars[i]
+                var isBreak = ch == ' ' || ch == '\n' || ch == '\t' || ch == '=' || ch == '+'
+                if (ch == '<') {
+                    val close = chars.indexOf('>', startIndex = i + 1)
+                    if (close >= 0) {
+                        isBreak = true
+                        i = close          // skip the whole bracketed prosign
+                    }
+                }
+                if (isBreak) {
                     if (out.isNotEmpty()) pendingSpace = true
                 } else {
                     if (pendingSpace) {
@@ -194,6 +243,7 @@ data class ExamPassage(
                     }
                     out.append(ch)
                 }
+                i += 1
             }
             return out.toString()
         }
@@ -206,9 +256,12 @@ data class ExamPassage(
  * Swift `struct ExamCopyResult: Equatable` → Kotlin `data class`.
  */
 data class ExamCopyResult(
-    /** Length of the longest run of consecutive characters the copy got right. */
+    /**
+     * Length of the longest run of consecutive characters the copy got right
+     * (word spaces inside the run not counted — see [ExamSpeed.requiredRun]).
+     */
     val longestRun: Int,
-    /** The bar to clear (the historical FCC rule: 25 in a row). */
+    /** The bar to clear: one minute of copy at the exam's speed. */
     val required: Int
 ) {
     val passed: Boolean get() = longestRun >= required
@@ -257,6 +310,9 @@ class ExamSession(
         private set
     var lastCopyResult: ExamCopyResult? = null
         private set
+
+    /** The historical "one minute of solid copy" bar at this exam's speed. */
+    val requiredRun: Int get() = speed.requiredRun
 
     // MARK: QuizSource
 
@@ -332,9 +388,6 @@ class ExamSession(
     }
 
     companion object {
-        /** The historical "one minute of solid copy" bar: 25 consecutive characters. */
-        const val requiredRun = 25
-
         /** Generate a random passage at the given speed. */
         fun forRandom(
             speed: ExamSpeed,
@@ -353,8 +406,11 @@ class ExamSession(
         }
 
         /**
-         * Length of the longest substring common to both character lists
-         * (classic O(n·m) longest-common-substring DP, rolling row).
+         * The longest substring common to both character lists, counted in
+         * characters with word spaces weighing nothing: a space inside the run
+         * has to match, but the bar is in characters, not keystrokes (#262).
+         * Classic O(n·m) longest-common-substring DP, rolling row, with each
+         * cell holding the run's weight rather than its length.
          */
         fun longestCommonRun(a: List<Char>, b: List<Char>): Int {
             if (a.isEmpty() || b.isEmpty()) return 0
@@ -364,7 +420,7 @@ class ExamSession(
                 val cur = IntArray(b.size + 1)
                 for (j in 1..b.size) {
                     if (a[i - 1] != b[j - 1]) continue
-                    cur[j] = prev[j - 1] + 1
+                    cur[j] = prev[j - 1] + (if (a[i - 1] == ' ') 0 else 1)
                     if (cur[j] > best) best = cur[j]
                 }
                 prev = cur
@@ -387,6 +443,7 @@ class ExamSession(
             return ExamPassage(
                 toCall = toCall,
                 deCall = deCall,
+                portable = rng.nextInt(0, 10).toString(),
                 name = MorseData.opNames.randomOrNull(rng) ?: "BOB",
                 qth = MorseData.qthList.randomOrNull(rng) ?: "OH",
                 rst = MorseData.rstValues.randomOrNull(rng) ?: "599",
