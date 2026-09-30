@@ -11,7 +11,9 @@ struct MorseTrainerApp: App {
                 .environmentObject(model)
                 .tint(Theme.teal)              // brand accent on all controls
                 .preferredColorScheme(.dark)   // navy-friendly dark UI
+                .macWindowSizing()             // Mac only (MacCatalystSupport.swift)
         }
+        .macCommands()
         // The background-noise floor (issue #29) is a foreground comfort: it
         // exists to keep a Bluetooth route awake while you practise. Leaving it
         // running once the app is backgrounded would hiss indefinitely — the

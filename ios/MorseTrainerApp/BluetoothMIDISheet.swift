@@ -10,10 +10,15 @@
 // zero MIDI sources. The Android port has the same requirement and solves it in
 // BleMidi.kt (scan for the BLE-MIDI service, then openBluetoothDevice); this is
 // the Apple-side counterpart.
+//
+// The Mac build has no CABTMIDICentralViewController; there the same modifier
+// presents MacBluetoothMIDIHelp (MacCatalystSupport.swift), which points to
+// Audio MIDI Setup.
 
-import CoreAudioKit
 import SwiftUI
 import UIKit
+#if !targetEnvironment(macCatalyst)
+import CoreAudioKit
 
 /// Wraps iOS's own BLE-MIDI browser so it can be presented as a SwiftUI sheet.
 struct BluetoothMIDISheet: UIViewControllerRepresentable {
@@ -49,6 +54,7 @@ struct BluetoothMIDISheet: UIViewControllerRepresentable {
         }
     }
 }
+#endif
 
 extension View {
     /// Present the BLE-MIDI browser, and re-scan CoreMIDI when it closes.
@@ -59,7 +65,11 @@ extension View {
     func bluetoothMIDISheet(isPresented: Binding<Bool>,
                             onDismiss: @escaping () -> Void) -> some View {
         sheet(isPresented: isPresented, onDismiss: onDismiss) {
+            #if targetEnvironment(macCatalyst)
+            MacBluetoothMIDIHelp(isPresented: isPresented)
+            #else
             BluetoothMIDISheet(isPresented: isPresented)
+            #endif
         }
     }
 }

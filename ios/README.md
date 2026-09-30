@@ -9,6 +9,11 @@ independently-versioned Kotlin implementation, not a shared module.
 **The beta is open.** Join on
 [TestFlight](https://testflight.apple.com/join/ZwXF88Gh).
 
+**It runs on the Mac too.** The same app target builds for the Mac through Mac
+Catalyst, under the same bundle ID so one App Store purchase covers both
+(universal purchase). The Mac build is not published yet; see
+[On the Mac](#on-the-mac) for what differs there.
+
 The user guide, covering every mode, setting and hardware option, lives at
 [anothermorsetrainer.app/guide](https://anothermorsetrainer.app/guide/), and
 testers, bug reports and feature chat live on
@@ -148,6 +153,8 @@ testers, bug reports and feature chat live on
   unplug detection, chat, and a signal timeline
 - **Bluetooth LE MIDI keys**: paired from inside the app via the system MIDI
   sheet, which is the only thing on iOS that makes a BLE key visible to apps
+  (on the Mac, connected once in Audio MIDI Setup, which the same button
+  explains)
 - **Bluetooth keep-alive and band noise**: a near-silent floor (on by
   default) that stops Bluetooth earbuds sleeping through the first character,
   and a separate band-noise level to copy through
@@ -196,6 +203,37 @@ testers, bug reports and feature chat live on
 - `tools/`: App Store release script + App Store Connect helpers (and the
   `whatsnew/` release notes App Review reads), Discord triage bot
 
+## On the Mac
+
+The Mac build is the iPhone app built for Mac Catalyst with the Mac interface
+idiom (`SUPPORTS_MACCATALYST`, `TARGETED_DEVICE_FAMILY[sdk=macosx*] = 6`), so
+there is one target and one code base; the Mac-only code is in
+`MorseTrainerApp/MacCatalystSupport.swift`. What differs:
+
+- **Bluetooth LE keys** are connected in macOS's Audio MIDI Setup (Window ›
+  Show MIDI Studio, then the Bluetooth button), not in the app: the iOS
+  pairing sheet does not exist on the Mac. The "Bluetooth key" buttons open a
+  short how-to instead. USB MIDI keys and the Vail Adapter work as soon as
+  they are plugged in, through CoreMIDI as on iOS.
+- **The keyboard** works everywhere the iPhone app takes a hardware keyboard:
+  typed answers, the number keys and Return for the choice quizzes, the games'
+  letter keys, and Head Copy's R, Return and X.
+- **The window** can be resized down to phone width; wider than that, the
+  screens keep their readable column. File › New Window is removed (one
+  session, one audio engine), and Help opens the user guide.
+- **The leaderboard** needs App Attest to post. Where the Mac cannot attest,
+  the boards stay readable and a run says why it was not posted, as in the
+  simulator.
+- **Listen & Learn** keeps playing in the background: a Mac app is not
+  suspended when its window is not in front.
+- **Sandbox**: the Mac build is sandboxed with network-client and
+  microphone entitlements (`Config/MorseTrainer-macCatalyst.entitlements`).
+- **Icon and category**: the Mac icon slots in `AppIcon.appiconset` are the
+  iOS master drawn on the macOS icon grid (`tools/gen_mac_icon.py`; re-run it
+  after changing `icon_1024.png`), and `LSApplicationCategoryType` files the
+  app under Education. The minimum is macOS 13 (`MACOSX_DEPLOYMENT_TARGET`,
+  the Catalyst counterpart of iOS 16).
+
 ## Build
 
 Open `MorseTrainer.xcodeproj` in Xcode and run the `MorseTrainer` scheme, or
@@ -206,8 +244,16 @@ swift build
 swift run MorseKitCheck
 ```
 
-CI (`.github/workflows/ios.yml`) builds both the package and the app on every
-push, so changes made away from a Mac still get compile-checked.
+For the Mac, pick the "My Mac (Mac Catalyst)" destination in Xcode, or:
+
+```bash
+xcodebuild build -project MorseTrainer.xcodeproj -scheme MorseTrainer \
+  -destination 'platform=macOS,variant=Mac Catalyst' CODE_SIGNING_ALLOWED=NO
+```
+
+CI (`.github/workflows/ios.yml`) builds the package, the iOS app and the Mac
+Catalyst app on every push, so changes made away from a Mac still get
+compile-checked.
 
 ## License
 

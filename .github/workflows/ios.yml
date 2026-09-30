@@ -5,9 +5,12 @@ name: iOS Build
 #   * logic-job  - builds/runs the Foundation-only MorseKit package + MorseKitCheck
 #                  harness (fast feedback, no Xcode needed)
 #   * ios-build  - real `xcodebuild` of the MorseTrainer iOS app on a macOS runner
+#   * mac-build  - the same app target built for Mac Catalyst (#264), so a change
+#                  that compiles for iPhone but not for the Mac is caught here
+#                  and not at release time
 #
 # Path-filtered: this repo also holds the Android app, and a macOS runner bills at
-# 10x a Linux one, so an Android-only change must not start this workflow. Both
+# 10x a Linux one, so an Android-only change must not start this workflow. All
 # jobs set `working-directory: ios`, which is why the swift and xcodebuild
 # invocations below still name their paths relative to the iOS tree.
 #
@@ -103,5 +106,40 @@ jobs:
             -configuration Debug \
             -sdk iphonesimulator \
             -destination "generic/platform=iOS Simulator" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO
+
+  mac-build:
+    name: Build MorseTrainer (Mac Catalyst)
+    runs-on: macos-15
+    defaults:
+      run:
+        working-directory: ios
+    steps:
+      - uses: actions/checkout@v5
+
+      # Same Xcode as ios-build, for the same reason: compile against the SDK a
+      # release would use.
+      - name: Select Xcode 26
+        run: |
+          set -euo pipefail
+          XC=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1 || true)
+          if [ -z "$XC" ]; then
+            echo "::error::No Xcode 26.x on this runner."
+            ls -d /Applications/Xcode*.app || true
+            exit 1
+          fi
+          sudo xcode-select -switch "$XC"
+
+      - name: Build for Mac Catalyst
+        run: |
+          # `generic/platform=macOS,variant=Mac Catalyst` builds without needing
+          # the runner's own Mac as a run destination. Unsigned: this proves the
+          # Mac build compiles and links; signing and upload are a release step.
+          xcodebuild build \
+            -project MorseTrainer.xcodeproj \
+            -scheme MorseTrainer \
+            -configuration Debug \
+            -destination "generic/platform=macOS,variant=Mac Catalyst" \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO

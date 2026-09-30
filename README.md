@@ -5,7 +5,7 @@ both apps:
 
 | | | |
 |---|---|---|
-| [**`ios/`**](ios/) | SwiftUI + SwiftPM + Xcode | iOS / iPadOS — [open beta on TestFlight](https://testflight.apple.com/join/ZwXF88Gh) |
+| [**`ios/`**](ios/) | SwiftUI + SwiftPM + Xcode | iOS / iPadOS — [open beta on TestFlight](https://testflight.apple.com/join/ZwXF88Gh); the same app also builds for the Mac (Mac Catalyst), not yet published |
 | [**`android/`**](android/) | Kotlin + Jetpack Compose + Gradle | Android — closed testing |
 
 The user guide lives at

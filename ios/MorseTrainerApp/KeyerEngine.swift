@@ -14,6 +14,7 @@
 // See CLAUDE.md §3 for full audio model.
 
 import AVFoundation
+import CoreAudio   // UnsafeMutableAudioBufferListPointer: AVFoundation does not re-export it on Mac Catalyst
 import os
 import OSLog
 
