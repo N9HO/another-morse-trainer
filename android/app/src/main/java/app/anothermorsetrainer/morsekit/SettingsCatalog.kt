@@ -174,7 +174,7 @@ object SettingsCatalog {
             listOf("leaderboard", "post", "upload", "ranking", "high scores", "opt in"), SettingsSection.LEADERBOARD),
         e("displayName", "Display name", listOf("name", "callsign", "nickname", "handle"), SettingsSection.LEADERBOARD),
         e("deleteScores", "Delete my scores", listOf("remove", "erase", "privacy", "data"), SettingsSection.LEADERBOARD),
-        e("buddyStreak", "Buddy streak", listOf("buddy", "buddies", "friend", "partner", "pair", "invite", "join", "code", "streak", "leave", "home screen", "hide"), SettingsSection.BUDDY),
+        e("buddyStreak", "Buddy streak", listOf("buddy", "buddies", "friend", "partner", "pair", "invite", "join", "code", "streak", "leave", "hide"), SettingsSection.BUDDY),
 
         // Help & About
         e("copyDiagnostics", "Copy diagnostic info",
