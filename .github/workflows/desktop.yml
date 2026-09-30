@@ -278,6 +278,10 @@ jobs:
           $manifest = $manifest.Replace('@PUBLISHER@', $env:MSIX_PUBLISHER)
           $manifest = $manifest.Replace('@PUBLISHER_DISPLAY_NAME@', $env:MSIX_PUBLISHER_DISPLAY_NAME)
           $manifest = $manifest.Replace('@VERSION@', $version)
+          if ($manifest -match '@[A-Z_]+@') { throw "Unfilled token in AppxManifest.xml: $($Matches[0])" }
+          if ($env:MSIX_PUBLISHER -like '*PLACEHOLDER*') {
+            Write-Host "::warning::MSIX identity is a placeholder (repository variables MSIX_* not set); this package is for build checks only and the Store will reject it."
+          }
           Set-Content -Path (Join-Path $layout 'AppxManifest.xml') -Value $manifest -Encoding utf8
 
           $kits = 'C:\Program Files (x86)\Windows Kits\10\bin'

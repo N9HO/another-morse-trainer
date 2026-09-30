@@ -66,9 +66,16 @@ fun main() {
     DailyDitStore.refresh()
     BuddyClient.refreshIfStale()
 
+    // Phone-shaped, but never taller than the screen's usable area: a 768-px
+    // laptop screen would otherwise put the title bar off the top.
+    val usableHeight = runCatching {
+        java.awt.GraphicsEnvironment.getLocalGraphicsEnvironment().maximumWindowBounds.height
+    }.getOrDefault(900)
+    val startHeight = (usableHeight - 40).coerceIn(560, 900)
+
     application {
         val state = rememberWindowState(
-            size = DpSize(480.dp, 900.dp),
+            size = DpSize(480.dp, startHeight.dp),
             position = WindowPosition(Alignment.Center)
         )
         Window(
