@@ -233,6 +233,15 @@ there is one target and one code base; the Mac-only code is in
   after changing `icon_1024.png`), and `LSApplicationCategoryType` files the
   app under Education. The minimum is macOS 13 (`MACOSX_DEPLOYMENT_TARGET`,
   the Catalyst counterpart of iOS 16).
+- **Shipping it**: the release workflow takes `platform: maccatalyst`
+  (TestFlight channel only for now), which archives for Mac Catalyst, uploads
+  a signed `.pkg` and points `asc-api.py` at the Mac build
+  (`ASC_PLATFORM=MAC_OS`). App Store Connect numbers builds per platform, so
+  the Mac build shares `CURRENT_PROJECT_VERSION` with the iPhone one without
+  colliding. Testers read `tools/whatsnew/whatsnew-mac-en-US` when it exists.
+  The run is tagged `mac-beta-v<version>-b<build>`, which the Discord
+  announcer ignores. Dry run first:
+  `gh workflow run ios-release.yml --ref main -f dry_run=true -f platform=maccatalyst -f channel=testflight`.
 
 ## Build
 

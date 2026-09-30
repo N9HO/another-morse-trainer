@@ -145,6 +145,7 @@ included, so nothing needs tagging by hand afterwards:
 |---|---|
 | `ios-v<version>-b<build>` | an App Store submission (a pushed tag, or a manual `appstore` run) |
 | `ios-beta-v<version>-b<build>` | a manual `testflight` run |
+| `mac-beta-v<version>-b<build>` | a manual `testflight` run with `platform: maccatalyst` (the Mac build; not announced) |
 | `android-v<versionName>-b<versionCode>` | a Play production release (a pushed tag, or a manual `production` run) |
 | `android-beta-v<versionName>-b<versionCode>` | a manual `alpha` or `internal` run |
 
