@@ -250,6 +250,9 @@ line), and `spd-say` or `espeak-ng` on Linux when installed. Inside the
 Flatpak neither tool is present, so read-back there shows the text only;
 bundling espeak-ng in the Flatpak is a follow-up.
 
+Daily Dit's "your device is muted" prompt (#252) is not on desktop: Java
+cannot read the system volume or mute state portably. Recorded in `PARITY.md`.
+
 **Voice answers** (speaking your copy) are not available: neither Windows'
 speech recognizer (WinRT) nor any Linux recognizer is reachable from the JVM
 without a native or bundled model. Recorded in `PARITY.md` with that reason.
@@ -327,7 +330,7 @@ the other two. Jobs:
 | Job | Runner | What |
 |---|---|---|
 | Desktop unit tests | ubuntu | `./gradlew :app:test` — the ported morsekit tests and the fixtures |
-| Desktop Linux packages | ubuntu | `createDistributable`; tarball, AppImage; launch under Xvfb and screenshot |
+| Desktop Linux packages | ubuntu | `createDistributable`; tarball, AppImage; launch under Xvfb and screenshot; open each of 32 screens (`AMT_START_ROUTE`) and fail on an exit or an exception |
 | Desktop Flatpak | ubuntu (flatpak container) | `flatpak-builder` over the app image; `.flatpak` bundle |
 | Desktop Windows packages | windows-latest | `packageMsi`, `createDistributable`, `makeappx pack` → MSI and MSIX |
 
@@ -339,9 +342,12 @@ independent of both phone apps (`desktopVersionName` in
 `desktop/app/build.gradle.kts`). A release workflow that uploads to the
 Store and Flathub is later work (§7).
 
-The xvfb screenshot is the only way anyone sees the app run, the job the
-Android emulator smoke test does for that tree. It launches the packaged app
-twice: a fresh profile (onboarding) and a seeded one (home screen).
+The Xvfb screenshots are the only way anyone sees the app run, the job the
+Android emulator smoke test does for that tree. The packaged app is launched
+with a fresh profile (onboarding) and a seeded one (home screen), then once
+per screen, straight onto its route, and a contact sheet of all of them is
+uploaded. The Windows job also starts the app for 25 seconds and takes a
+screenshot, as a non-blocking step.
 
 ## 5. Governance: two ports become three
 
@@ -409,8 +415,10 @@ work:
 Risks:
 
 - **Nobody has run it on a real desktop.** CI compiles it, runs the logic
-  tests, packages it and launches it under Xvfb. MIDI and audio have never
-  met hardware.
+  tests (377 of them, the fixtures included), packages it, launches it under
+  Xvfb and opens every one of its 32 screens, and launches it once on the
+  Windows runner. Nothing is clicked and nothing is heard: MIDI and audio
+  have never met hardware.
 - **Three trees drift faster than two.** Every user-visible change now owes
   three edits. The merge gate makes a partial change declare itself; it
   cannot make anyone do the third edit.
@@ -429,12 +437,24 @@ Order:
 1. This PR: tree, port, CI, governance, design.
 2. Hardware and listening checks (§6, items 5 and 6) on both OSes; fix what
    they find.
-3. The in-flight phone work that lands after this fork (listed in the PR:
-   Daily Dit Copy, Code Exam changes, First Four, the buddy-streak home
-   toggle, Android speaker headroom) ported into `desktop/`.
-4. Store and Flathub submission (§6), with the from-source Flatpak manifest
+3. The in-flight phone work that lands after this fork, ported into
+   `desktop/`: Daily Dit Copy (#266, PR #269), the Code Exam pass bar and
+   prosigns (#262/#263, PR #274, which also adds a fixture the desktop tests
+   must read), First Four (#265, PR #276), the buddy-line home toggle (#253,
+   PR #272; the desktop has no buddies, so only if the toggle is visible
+   there), and the Android speaker headroom (#259, PR #271; check whether a
+   desktop equivalent makes sense — laptop speakers clip too).
+4. Smaller desktop follow-ups found while porting: Settings search still
+   indexes the settings the desktop hides (haptics, voice, reminder time,
+   leaderboard sharing, buddies) and lands on the explanatory note; R to
+   replay on the new-character intro (PARITY.md row 16, still missing on
+   Android too); Listen read-back uses the system's default voice, not the
+   best English one; the distributions are ~100 MB compressed, and a
+   ProGuard pass over the release build (Compose Desktop supports one) would
+   shrink them once someone can test the result.
+5. Store and Flathub submission (§6), with the from-source Flatpak manifest
    and a `desktop-release.yml` that builds tagged `desktop-v*` releases and
    attaches the MSI, MSIX and AppImage.
-5. Follow-ups that are possible with native work: the daily reminder
+6. Follow-ups that are possible with native work: the daily reminder
    (scheduled toast / Background portal), espeak-ng in the Flatpak, and BLE
    keys via a WinRT bridge.
