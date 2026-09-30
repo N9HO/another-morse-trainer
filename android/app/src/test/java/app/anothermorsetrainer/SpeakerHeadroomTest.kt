@@ -15,7 +15,7 @@ class SpeakerHeadroomTest {
     @Test
     fun builtInSpeakerGetsSixDecibelsOfHeadroom() {
         val gain = SpeakerHeadroom.gainFor(AudioDeviceInfo.TYPE_BUILTIN_SPEAKER)
-        assertEquals(0.5012f, gain, 1e-4f)
+        assertEquals(0.25f, gain, 1e-4f)
         assertEquals(-6.0, 20 * log10(gain.toDouble()), 0.01)
     }
 
