@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import UniformTypeIdentifiers
 
 /// **Daily Dit** — the day's five-letter word, sent in Morse, the same for
 /// everyone (issue #155).
@@ -363,7 +364,7 @@ struct DailyDitView: View {
 
             HStack(spacing: 12) {
                 Button {
-                    UIPasteboard.general.string = game.shareText
+                    copyResult()
                     Haptics.success()
                     message = "Copied."
                 } label: {
@@ -539,13 +540,31 @@ struct DailyDitView: View {
             shareURL = nil
             return
         }
-        let renderer = ImageRenderer(content: DailyDitShareCard(game: game))
-        renderer.scale = 3
-        guard let ui = renderer.uiImage, let data = ui.pngData() else { return }
+        guard let data = shareCardPNG() else { return }
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("AnotherMorseTrainer-DailyDit.png")
         try? data.write(to: url)
         shareURL = url
+    }
+
+    /// The share card as PNG data — the one image both Share and Copy hand out.
+    @MainActor private func shareCardPNG() -> Data? {
+        let renderer = ImageRenderer(content: DailyDitShareCard(game: game))
+        renderer.scale = 3
+        return renderer.uiImage?.pngData()
+    }
+
+    /// Copy puts the same card Share sends on the pasteboard (#266), as one
+    /// item carrying both the PNG and `shareText`: a target that takes images
+    /// pastes the card, a text-only one still pastes the result. If the render
+    /// fails, the text goes alone, so Copy never copies nothing. UIPasteboard
+    /// is the Mac's pasteboard too when the app runs there as an iPad app.
+    @MainActor private func copyResult() {
+        var item: [String: Any] = [UTType.utf8PlainText.identifier: game.shareText]
+        if let png = shareCardPNG() {
+            item[UTType.png.identifier] = png
+        }
+        UIPasteboard.general.setItems([item])
     }
 
     private var howItWorks: some View {

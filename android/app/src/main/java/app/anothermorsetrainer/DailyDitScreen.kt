@@ -1,7 +1,5 @@
 package app.anothermorsetrainer
 
-import android.content.ClipData
-import android.content.ClipboardManager
 import android.content.Context
 import android.media.AudioManager
 import androidx.activity.compose.BackHandler
@@ -82,7 +80,8 @@ private val TILE_PRESENT = Color(0xFFCAA033)
  * text brags about.
  *
  * Ported from MorseTrainerApp/DailyDitView.swift. The iOS `ShareLink` becomes
- * an ACTION_SEND chooser and the pasteboard write becomes [ClipboardManager];
+ * an ACTION_SEND chooser and the pasteboard write becomes a `ClipboardManager`
+ * clip, both carrying the image [DailyDitShareCard] draws;
  * game state lives in [DailyDitStore] rather than on an `AppModel`.
  */
 @Composable
@@ -263,7 +262,7 @@ fun DailyDitScreen(onBack: () -> Unit) {
                     guesses = game.guessesUsed,
                     listens = game.listens,
                     onCopy = {
-                        copyText(context, game.shareText)
+                        DailyDitShareCard.copy(context, game)
                         message = resources.getString(R.string.daily_dit_copied)
                     },
                     onShare = { DailyDitShareCard.share(context, game, resources.getString(R.string.daily_dit_title)) },
@@ -717,11 +716,6 @@ private fun ResultCard(
             color = Brand.textSecondary
         )
     }
-}
-
-private fun copyText(context: Context, text: String) {
-    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-    clipboard?.setPrimaryClip(ClipData.newPlainText("Daily Dit", text))
 }
 
 /**

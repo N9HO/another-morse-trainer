@@ -1,5 +1,8 @@
 package app.anothermorsetrainer
 
+import android.content.ClipData
+import android.content.ClipDescription
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
@@ -10,6 +13,7 @@ import android.graphics.RadialGradient
 import android.graphics.RectF
 import android.graphics.Shader
 import android.graphics.Typeface
+import android.net.Uri
 import androidx.core.content.FileProvider
 import androidx.core.graphics.createBitmap
 import app.anothermorsetrainer.morsekit.DailyDit
@@ -26,6 +30,9 @@ import java.io.FileOutputStream
  * text still travels with the image. Drawn with a plain [Canvas] like
  * [ShareCard], and mirrors the iOS `DailyDitShareCard`. No letters appear:
  * the image spoils nothing the emoji grid didn't.
+ *
+ * [copy] puts the same image on the clipboard (#266), with the text beside it
+ * in the one clip item as the fallback for targets that only take text.
  */
 object DailyDitShareCard {
     private val NAVY_TOP = 0xFF05121C.toInt()
@@ -41,6 +48,36 @@ object DailyDitShareCard {
     private val TILE_ABSENT = 0xFF1C324C.toInt()
 
     fun share(context: Context, game: DailyDitGame, chooserTitle: String) {
+        val uri = render(context, game, "daily-dit.png")
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "image/png"
+            putExtra(Intent.EXTRA_STREAM, uri)
+            putExtra(Intent.EXTRA_TEXT, game.shareText)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        context.startActivity(Intent.createChooser(intent, chooserTitle))
+    }
+
+    /**
+     * The card as a `content://` clip whose single item also carries
+     * [DailyDitGame.shareText]: an app that pastes images gets the card, and
+     * one that only takes text gets the text via [ClipData.Item.coerceToText].
+     * The clipboard grants the pasting app read access to the URI itself, as
+     * the provider's `grantUriPermissions` allows. The card gets its own file
+     * so a later Share can't rewrite what's on the clipboard.
+     */
+    fun copy(context: Context, game: DailyDitGame) {
+        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager ?: return
+        val uri = render(context, game, "daily-dit-copy.png")
+        val description = ClipDescription(
+            "Daily Dit",
+            arrayOf("image/png", ClipDescription.MIMETYPE_TEXT_PLAIN)
+        )
+        clipboard.setPrimaryClip(ClipData(description, ClipData.Item(game.shareText, null, uri)))
+    }
+
+    /** Draws the card to `cacheDir/shared/<fileName>` and returns its provider URI. */
+    private fun render(context: Context, game: DailyDitGame, fileName: String): Uri {
         val w = 1080
         val margin = 64f
         val tile = 96f
@@ -105,17 +142,10 @@ object DailyDitShareCard {
         canvas.drawText(DailyDit.SHARE_LINK, margin, h - 52f, paint(TEAL, 36f))
 
         val dir = File(context.cacheDir, "shared").apply { mkdirs() }
-        val file = File(dir, "daily-dit.png")
+        val file = File(dir, fileName)
         FileOutputStream(file).use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
 
-        val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
-        val intent = Intent(Intent.ACTION_SEND).apply {
-            type = "image/png"
-            putExtra(Intent.EXTRA_STREAM, uri)
-            putExtra(Intent.EXTRA_TEXT, game.shareText)
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        }
-        context.startActivity(Intent.createChooser(intent, chooserTitle))
+        return FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
     }
 
     /** The headline's score, minus the "Daily Dit #N" the title already says. */
