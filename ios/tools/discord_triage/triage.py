@@ -107,10 +107,21 @@ class Verdict(BaseModel):
 
 # Static instructions — kept stable so the prefix can be prompt-cached.
 SYSTEM_PROMPT = """You are the issue-triage assistant for "Another Morse Trainer" \
-(AMT), a cross-platform app that teaches Morse code. It ships on Apple platforms \
-(iOS, iPadOS, macOS — Swift) and on Android (a separate port), and has practice \
-drills, a QSO simulator, a confusion matrix, timing/Farnsworth settings, and \
-progressive character training.
+(AMT), which teaches Morse code. It is two apps with ONE feature set: an Apple app \
+(iOS, iPadOS, macOS) and an Android app. Every feature is meant to exist on both, and \
+a bug seen on one is checked on the other before its issue closes — so a feature \
+request is always for both apps, whichever one the reporter uses, and a bug report \
+records where it was SEEN, not where anyone guesses the fault lives.
+
+Its modes: Journey, Characters (Koch ladder), Common Words, Abbreviations, Q-Codes, \
+Prosigns, CW 77, Confusion Drill, Head Copy, Type It / QRQ Speed, Rapid Fire, \
+Pileup Runner (the QSO simulator), Contest, Code Exam, Short Stories, Daily Dit, \
+Listen & Learn, Sending Practice, Sending Analyzer, CW Decoder, Reference, and the \
+arcade games (Morse Invaders, CW Galaga, Morse Defender, CW Dungeon, CW Frogger, \
+CW Asteroids). Around them: answering by voice, keyboard or keying; on-screen \
+paddles; hardware keys (Vail Adapter / MIDI, Bluetooth LE MIDI); the Vail repeater; \
+the shared Leaderboard; Buddy streaks; Progress; and Settings (Sound, Speed & Timing \
+including Farnsworth, and more).
 
 Your job: read a report from the project's Discord and decide whether it should \
 become a GitHub issue, then produce a clean, well-structured issue if so.
@@ -179,8 +190,13 @@ If a bug doesn't state the platform, still file it, but set platform = \
 'unknown' and needs_more_info = true, and make 'reply' ask specifically which OS \
 they're reporting for — naming the options (iOS / iPadOS / macOS / Android) and \
 asking for the OS/app version too. Once you know it, set 'platform', put a \
-"**Platform:** <os> (version if known)" line near the TOP of the issue body, and add \
+"**Seen on:** <os> (version if known)" line near the TOP of the issue body, and add \
 the matching platform label.
+- For a FEATURE, the platform the reporter uses is context, not scope: the feature is \
+for both apps. Say "**Requested from:** <os>" in the body if you know it, and set \
+platform = 'multiple'.
+- Do not write a parity or "Shipped on" checklist yourself — the bot appends the \
+right one to every issue it files.
 - Questions and noise are never filed.
 - If a screenshot is attached, describe what it shows (error text, screen, UI state) \
 in the issue body — the maintainer can't see the image, only your description.
@@ -204,13 +220,13 @@ let it file, and say in the body that it resurfaces the closed issue.
 precise, reproducible report. Use Markdown. For bugs, include Steps to reproduce, \
 Expected, and Actual sections whenever the message gives you enough to fill them; if it \
 doesn't, say what's missing and add a 'needs-info' label.
-- Reference app areas by name when relevant (e.g. QSO Simulator, Confusion Matrix, \
-Timing, Progressive Characters).
+- Reference app areas by the mode names above when relevant (e.g. Pileup Runner, \
+Confusion Drill, Speed & Timing settings, Characters).
 - End the body with a line like: "_Reported via Discord by {author}._"
 - labels: use 'bug' for bugs and 'enhancement' for features, plus 'needs-info' if the \
-report is too thin to act on. When you know the platform, also add a platform label: \
-'platform: ios', 'platform: ipados', 'platform: macos', 'platform: android', or \
-'platform: multiple'.
+report is too thin to act on. When you know a bug's platform, also add a platform \
+label: 'platform: ios', 'platform: ipados', 'platform: macos', 'platform: android', or \
+'platform: multiple'. A feature is always 'platform: multiple'.
 - reply: ALWAYS write a friendly, concise one-liner suitable to post back in the \
 Discord thread — even when you are not filing. If you won't file, the reply should say \
 why in a helpful way (e.g. what extra detail would let you file it, or that it reads \
@@ -261,6 +277,40 @@ PLATFORM_QUESTION = (
 )
 
 
+# The Parity / Shipped on checklists from .github/ISSUE_TEMPLATE/bug.yml and
+# feature.yml, worded the same. Every change ships on both apps (PARITY.md), and
+# these boxes are how an issue says so before it closes; a bot-filed issue
+# without them is the one kind that could close with only one side done.
+_PARITY_CHECKLISTS = {
+    "bug": (
+        "### Parity\n"
+        "_Filled in by whoever fixes it. Both boxes, or a note in PARITY.md, "
+        "before this issue closes._\n"
+        "- [ ] Fixed or confirmed absent on iOS\n"
+        "- [ ] Fixed or confirmed absent on Android"
+    ),
+    "feature": (
+        "### Shipped on\n"
+        "_Tick as each side merges. A single pull request may tick both._\n"
+        "- [ ] iOS / iPadOS / macOS\n"
+        "- [ ] Android"
+    ),
+}
+
+
+def with_parity_checklist(kind: str, body: str) -> str:
+    """`body` with the checklist for `kind` appended, if it has one and lacks it.
+
+    Applied at filing time rather than to the verdict, because a verdict's body
+    also becomes the comment attached to an issue this report duplicates, and
+    that issue already has its checklist.
+    """
+    checklist = _PARITY_CHECKLISTS.get(kind)
+    if checklist is None or checklist.splitlines()[0] in body:
+        return body
+    return f"{body.rstrip()}\n\n{checklist}"
+
+
 def _postprocess_platform(v: Verdict, ask_platform: bool = True) -> Verdict:
     """Enforce the platform policy regardless of the model's judgment.
 
@@ -277,6 +327,13 @@ def _postprocess_platform(v: Verdict, ask_platform: bool = True) -> Verdict:
     ago. The issue still gets flagged 'needs-info' — the model just gets to
     decide for itself whether anything is still worth asking out loud.
     """
+    # A feature is for both apps whichever one it was asked for on, so it is
+    # labelled that way — as .github/ISSUE_TEMPLATE/feature.yml does — and never
+    # with the reporter's own platform, which would read as a one-app feature.
+    if v.kind == "feature":
+        v.platform = "multiple"
+        v.labels = [l for l in v.labels if not l.startswith("platform:")]
+
     # A bug with no platform: file it, flag it, and (the first time) ask which OS.
     if v.kind == "bug" and v.platform in ("unknown", "n/a"):
         v.needs_more_info = True

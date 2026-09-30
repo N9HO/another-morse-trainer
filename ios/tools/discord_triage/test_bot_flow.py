@@ -481,6 +481,36 @@ def test_the_filed_issue_is_stamped_with_its_thread():
     assert f"<!-- discord-thread:{thread.id} -->" in h.created[0]["body"]
 
 
+
+def test_a_filed_bug_carries_the_parity_checklist():
+    """A bug seen on one app is checked on the other before it closes (#171)."""
+    with Harness([_verdict()]) as h:
+        run(bot._triage_thread(FakeThread([FakeMessage(REPORTER, "QSO sim freezes")]),
+                               explicit=True))
+    body = h.created[0]["body"]
+    assert "### Parity" in body
+    assert "- [ ] Fixed or confirmed absent on iOS" in body
+    assert "- [ ] Fixed or confirmed absent on Android" in body
+
+
+def test_a_filed_feature_carries_the_shipped_on_checklist():
+    with Harness([_verdict(kind="feature", labels=["enhancement"])]) as h:
+        run(bot._triage_thread(FakeThread([FakeMessage(REPORTER, "Add a Koch mode")]),
+                               explicit=True))
+    body = h.created[0]["body"]
+    assert "### Shipped on" in body
+    assert "- [ ] iOS / iPadOS / macOS" in body and "- [ ] Android" in body
+    assert "### Parity" not in body
+
+
+def test_a_duplicate_comment_does_not_repeat_the_checklist():
+    """The issue it duplicates already has its boxes; a second set would split them."""
+    with Harness([_verdict(should_file=False, is_duplicate=True, duplicate_of=17)]) as h:
+        run(bot._triage_thread(FakeThread([FakeMessage(REPORTER, "QSO sim freezes")]),
+                               explicit=True))
+    assert len(h.comments) == 1
+    assert "### Parity" not in h.comments[0][1]
+
 if __name__ == "__main__":
     failures = 0
     for name, fn in sorted(dict(globals()).items()):

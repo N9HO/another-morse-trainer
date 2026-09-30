@@ -24,6 +24,13 @@ Discord message ──▶ Claude triage ──▶ GitHub issue ──▶ reply i
   to update instead of filing the same bug again.
 - **Triages**: suggests labels (`bug` / `enhancement` / `needs-info`) and a
   severity, and tags every issue with a `from-discord` label.
+- **Files for both apps**: every change ships on iOS and Android
+  (`PARITY.md`), so every issue it files ends with the same checklist as the
+  repo's issue templates. A bug gets **Parity** ("Fixed or confirmed absent on
+  iOS / Android") and keeps the `platform:` label of the app it was *seen* on.
+  A feature gets **Shipped on** and is always `platform: multiple`, whichever
+  app the reporter uses. The bot adds the checklist itself at filing time, not
+  the model, and never adds it to the comment on an issue a report duplicates.
 - **Files first, asks second**: a genuine bug or feature is filed straight
   away even when it's still thin — labelled `needs-info`, with a
   "Still needed" section naming what's missing. It used to wait for the

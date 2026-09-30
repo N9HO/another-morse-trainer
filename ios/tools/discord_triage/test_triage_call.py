@@ -194,6 +194,35 @@ def test_the_report_and_the_issue_corpus_both_reach_the_model():
     assert sent["system"][0]["cache_control"] == {"type": "ephemeral"}
 
 
+def test_a_feature_is_labelled_for_both_apps_whichever_it_came_from():
+    feature = VERDICT.model_copy(update={
+        "kind": "feature", "platform": "ios", "severity": "n/a",
+        "labels": ["enhancement", "platform: ios"],
+    })
+    with fake_model(FakeResponse(feature)):
+        verdict = _triage()
+
+    assert verdict.platform == "multiple"
+    assert "platform: multiple" in verdict.labels
+    assert "platform: ios" not in verdict.labels, "a feature is never one app's"
+
+
+def test_a_bug_keeps_the_platform_it_was_seen_on():
+    with fake_model(FakeResponse(VERDICT.model_copy(update={"platform": "android"}))):
+        verdict = _triage()
+
+    assert verdict.platform == "android"
+    assert "platform: android" in verdict.labels
+
+
+def test_the_parity_checklist_goes_on_once_and_only_on_filed_kinds():
+    bug = triage.with_parity_checklist("bug", "Body")
+    assert bug.startswith("Body\n\n### Parity\n")
+    assert triage.with_parity_checklist("bug", bug) == bug, "never twice"
+    assert "### Shipped on" in triage.with_parity_checklist("feature", "Body")
+    assert triage.with_parity_checklist("question", "Body") == "Body"
+    assert triage.with_parity_checklist("noise", "Body") == "Body"
+
 def test_an_oversized_budget_is_refused_at_startup_not_at_the_first_report():
     over = str(config.MAX_OUTPUT_TOKENS + 1)
     saved = os.environ.get("ANTHROPIC_MAX_TOKENS")
