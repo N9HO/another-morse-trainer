@@ -455,7 +455,7 @@ private struct FirstFourElementStage: View {
             }
             .buttonStyle(.borderedProminent)
             .tint(Theme.teal)
-            Button("Practise it again") {
+            Button("Practice it again") {
                 stagePassed = false
                 feedback = nil
                 phase = .copy
