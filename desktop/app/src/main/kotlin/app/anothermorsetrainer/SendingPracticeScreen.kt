@@ -511,8 +511,12 @@ internal fun rememberKeyboardKeying(
                     }
                 }
                 Key.LeftBracket, Key.RightBracket -> {
-                    if (!isEnabled || !ownsPaddles) {
+                    if (!isEnabled) {
                         false
+                    } else if (!ownsPaddles) {
+                        // The on-screen paddles own [ and ]; hand the key to
+                        // them even when this screen's root holds focus.
+                        MorseKeyboard.handle(event)
                     } else {
                         val element = if (event.key == Key.LeftBracket) PaddleKeyer.Element.DIT
                         else PaddleKeyer.Element.DAH

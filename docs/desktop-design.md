@@ -366,7 +366,9 @@ work:
   audio focus, Listen in the background, Escape as Back.
 - **READMEs**: the root README names the three apps; `desktop/README.md`
   lists the same features as the other two, with the desktop differences.
-  The two phone READMEs gain one line pointing at it.
+  The phone READMEs are not touched in this PR: an edit under `ios/` starts
+  two macOS runners (`ios.yml` does not skip Markdown), and the root README
+  already points at all three.
 - **The guide** (anothermorsetrainer.app/guide, outside this repo): a
   "Windows and Linux" platform note with the desktop differences, in a site
   PR that waits until the Store and Flathub listings are live.
