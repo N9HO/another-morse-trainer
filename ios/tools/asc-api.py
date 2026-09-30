@@ -26,6 +26,9 @@ Usage:
                                            # apply tools/store-metadata.json (age
                                            # rating, categories, listing text,
                                            # URLs, review contact) idempotently
+
+Every command acts on the iPhone build unless ASC_PLATFORM=MAC_OS, which
+points it at the Mac Catalyst build on the same app record.
 """
 import base64, json, os, sys, time, urllib.parse, urllib.request, urllib.error
 
@@ -33,6 +36,21 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec, utils
 
 API = "https://api.appstoreconnect.apple.com"
+
+# Which of the app's platforms every command acts on: IOS (default) or MAC_OS
+# for the Mac Catalyst build (#264). App Store Connect keeps builds, build
+# numbers, App Store versions and review submissions per platform on the one
+# app record, so an iPhone build 37 and a Mac build 37 are different builds;
+# without this filter `wait 37` would find the iPhone one and return at once.
+# upload-testflight.sh sets it from RELEASE_PLATFORM.
+PLATFORM = os.environ.get("ASC_PLATFORM", "IOS")
+if PLATFORM not in ("IOS", "MAC_OS"):
+    sys.exit(f"ASC_PLATFORM must be IOS or MAC_OS, not {PLATFORM!r}")
+
+
+def _platform_filter() -> str:
+    """The /v1/builds query term that keeps a listing to PLATFORM's builds."""
+    return f"&filter[preReleaseVersion.platform]={PLATFORM}"
 
 
 def _b64(data: bytes) -> str:
@@ -71,7 +89,7 @@ def call(method: str, path: str, body=None):
 
 def newest_valid_build(app):
     """The newest non-expired build that's finished processing (VALID), or None."""
-    st, d = call("GET", f"/v1/builds?filter[app]={app}&sort=-version&limit=10"
+    st, d = call("GET", f"/v1/builds?filter[app]={app}{_platform_filter()}&sort=-version&limit=10"
                         f"&fields[builds]=version,processingState,expired")
     for b in d.get("data", []):
         a = b["attributes"]
@@ -80,9 +98,11 @@ def newest_valid_build(app):
     return None
 
 
-def prior_build(app, exclude_id):
-    """The newest VALID build that isn't `exclude_id` (to copy its tester set)."""
-    st, d = call("GET", f"/v1/builds?filter[app]={app}&sort=-version&limit=10"
+def prior_build(app, exclude_id, any_platform=False):
+    """The newest VALID build that isn't `exclude_id` (to copy its tester set).
+    `any_platform` looks across every platform, for a platform's first build."""
+    scope = "" if any_platform else _platform_filter()
+    st, d = call("GET", f"/v1/builds?filter[app]={app}{scope}&sort=-version&limit=10"
                         f"&fields[builds]=version,processingState,expired")
     for b in d.get("data", []):
         a = b["attributes"]
@@ -211,7 +231,7 @@ def prepare(app: str, version_string: str, meta_path: str):
     # 5. The App Store version for this version string. `appstore` creates
     # or renames it before this runs; it is not created here because the
     # build attach decides which one is editable.
-    st, d = call("GET", f"/v1/apps/{app}/appStoreVersions?filter[platform]=IOS"
+    st, d = call("GET", f"/v1/apps/{app}/appStoreVersions?filter[platform]={PLATFORM}"
                         f"&fields[appStoreVersions]=versionString,appVersionState,copyright&limit=50")
     ver = next((v for v in d.get("data", [])
                 if v["attributes"].get("versionString") == version_string), None)
@@ -352,7 +372,7 @@ def screenshots(app: str, version_string: str, display_type: str, directory: str
     files = sorted(f for f in os.listdir(os.path.expanduser(directory)) if f.lower().endswith(".png"))
     if not files:
         print(f"no PNGs in {directory}"); sys.exit(1)
-    st, d = call("GET", f"/v1/apps/{app}/appStoreVersions?filter[platform]=IOS"
+    st, d = call("GET", f"/v1/apps/{app}/appStoreVersions?filter[platform]={PLATFORM}"
                         f"&fields[appStoreVersions]=versionString&limit=50")
     ver = next((v for v in d.get("data", [])
                 if v["attributes"].get("versionString") == version_string), None)
@@ -429,7 +449,7 @@ def main():
             print(d)
 
     elif cmd == "builds":
-        st, d = call("GET", f"/v1/builds?filter[app]={app}&sort=-version&limit=5"
+        st, d = call("GET", f"/v1/builds?filter[app]={app}{_platform_filter()}&sort=-version&limit=5"
                             f"&fields[builds]=version,processingState,uploadedDate,expired")
         for b in d.get("data", []):
             a = b["attributes"]
@@ -442,7 +462,7 @@ def main():
         # Poll until the build with the given version (default: highest) is VALID.
         want = sys.argv[2] if len(sys.argv) > 2 else None
         for _ in range(60):
-            st, d = call("GET", f"/v1/builds?filter[app]={app}&sort=-version&limit=5"
+            st, d = call("GET", f"/v1/builds?filter[app]={app}{_platform_filter()}&sort=-version&limit=5"
                                 f"&fields[builds]=version,processingState")
             rows = d.get("data", [])
             target = (next((b for b in rows if b["attributes"].get("version") == want), None)
@@ -488,7 +508,7 @@ def main():
         notes_path = sys.argv[4] if len(sys.argv) > 4 else None
 
         # 1. The build, which must have finished processing (`wait` does that).
-        st, d = call("GET", f"/v1/builds?filter[app]={app}&filter[version]={build_number}"
+        st, d = call("GET", f"/v1/builds?filter[app]={app}{_platform_filter()}&filter[version]={build_number}"
                             f"&fields[builds]=version,processingState,expired,usesNonExemptEncryption&limit=5")
         build = next((b for b in d.get("data", [])
                       if b["attributes"].get("version") == build_number), None)
@@ -516,7 +536,7 @@ def main():
         # the app record, often "1.0"), so an editable version under another
         # string is renamed rather than joined by a second one, which the API
         # would refuse with a 409.
-        st, d = call("GET", f"/v1/apps/{app}/appStoreVersions?filter[platform]=IOS"
+        st, d = call("GET", f"/v1/apps/{app}/appStoreVersions?filter[platform]={PLATFORM}"
                             f"&fields[appStoreVersions]=versionString,appVersionState,releaseType&limit=50")
         versions = d.get("data", [])
         ver = next((v for v in versions
@@ -564,7 +584,7 @@ def main():
         else:
             st, d = call("POST", "/v1/appStoreVersions",
                          {"data": {"type": "appStoreVersions",
-                                   "attributes": {"platform": "IOS",
+                                   "attributes": {"platform": PLATFORM,
                                                   "versionString": version_string,
                                                   "releaseType": "AFTER_APPROVAL"},
                                    "relationships": {
@@ -630,7 +650,7 @@ def main():
         # 4. Submit. A review submission is a container; the version is an item
         # in it. Reuse an open, unsubmitted one for this platform if a previous
         # run got that far, and stop if one is already with App Review.
-        st, d = call("GET", f"/v1/reviewSubmissions?filter[app]={app}&filter[platform]=IOS"
+        st, d = call("GET", f"/v1/reviewSubmissions?filter[app]={app}&filter[platform]={PLATFORM}"
                             f"&filter[state]=READY_FOR_REVIEW,WAITING_FOR_REVIEW,IN_REVIEW,UNRESOLVED_ISSUES"
                             f"&fields[reviewSubmissions]=state,submittedDate&limit=10")
         subs = d.get("data", [])
@@ -651,7 +671,7 @@ def main():
         else:
             st, d = call("POST", "/v1/reviewSubmissions",
                          {"data": {"type": "reviewSubmissions",
-                                   "attributes": {"platform": "IOS"},
+                                   "attributes": {"platform": PLATFORM},
                                    "relationships": {"app": {"data": {"type": "apps", "id": app}}}}})
             if st >= 300 or not d.get("data"):
                 print(f"create review submission: HTTP {st}")
@@ -688,6 +708,14 @@ def main():
         bid, ver = b["id"], b["attributes"]["version"]
         prev = prior_build(app, bid)
         if not prev:
+            # The first build on a platform (the first Mac build) has no
+            # predecessor of its own; the testers are the app's, so take the
+            # set from the newest build on any platform.
+            prev = prior_build(app, bid, any_platform=True)
+            if prev:
+                print(f"No earlier {PLATFORM} build; copying testers from the newest build "
+                      f"on any platform ({prev['attributes']['version']}).")
+        if not prev:
             print("No prior build to copy a tester set from; add testers in App Store Connect.")
             return
         st, d = call("GET", f"/v1/builds/{prev['id']}/individualTesters?limit=200&fields[betaTesters]=email")
@@ -703,7 +731,7 @@ def main():
     elif cmd == "notify":
         group = sys.argv[2]
         # newest non-expired build that's done processing
-        st, d = call("GET", f"/v1/builds?filter[app]={app}&sort=-version&limit=10"
+        st, d = call("GET", f"/v1/builds?filter[app]={app}{_platform_filter()}&sort=-version&limit=10"
                             f"&fields[builds]=version,processingState,expired")
         valid = [b for b in d.get("data", [])
                  if b["attributes"].get("processingState") == "VALID"
@@ -803,7 +831,7 @@ def main():
         if not notes:
             print("notes file is empty")
             return
-        st, d = call("GET", f"/v1/builds?filter[app]={app}&sort=-version&limit=10"
+        st, d = call("GET", f"/v1/builds?filter[app]={app}{_platform_filter()}&sort=-version&limit=10"
                             f"&fields[builds]=version,processingState")
         target = next((b for b in d.get("data", [])
                        if b["attributes"].get("version") == want), None)

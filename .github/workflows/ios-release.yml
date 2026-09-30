@@ -20,6 +20,12 @@ name: iOS release (App Store upload)
 # be: Beta App Review plus the previous build's testers. Either way the build
 # also appears in TestFlight, so testers see a production build first.
 #
+# A manual run can also pick `platform: maccatalyst`, the Mac build of the
+# same target (#264): archived for Mac Catalyst, uploaded as a .pkg to the
+# same App Store Connect record, TestFlight channel only, tagged
+# mac-beta-v<version>-b<build> (which discord-release.yml does not announce).
+# Tags always ship the iPhone build.
+#
 # Every successful upload is TAGGED, by the `tag` job below, so the Discord
 # announcement has a name and each changelog starts where the last one ended:
 #   ios-v<MARKETING_VERSION>-b<build>       an App Store submission
@@ -71,6 +77,17 @@ on:
         options:
           - appstore
           - testflight
+      # Which build of the app: the iPhone one (default, and what every tag
+      # push ships) or the Mac Catalyst one (#264). The Mac build is
+      # TestFlight-only for now; the script refuses maccatalyst + appstore.
+      platform:
+        description: 'Which build: ios (iPhone, default) or maccatalyst (Mac, TestFlight channel only)'
+        required: false
+        default: "ios"
+        type: choice
+        options:
+          - ios
+          - maccatalyst
 
 permissions:
   contents: read
@@ -202,6 +219,8 @@ jobs:
           SUBMIT_ONLY: ${{ github.event.inputs.submit_only == 'true' && '1' || '0' }}
           # A tag push has no inputs, so a release resolves to appstore.
           RELEASE_CHANNEL: ${{ github.event.inputs.channel || 'appstore' }}
+          # And to the iPhone build.
+          RELEASE_PLATFORM: ${{ github.event.inputs.platform || 'ios' }}
           # App Review contact for `asc-api.py prepare`. Optional: when the
           # secrets are unset the contact already on the version is kept.
           ASC_REVIEW_FIRST_NAME: ${{ secrets.ASC_REVIEW_FIRST_NAME }}
@@ -217,6 +236,7 @@ jobs:
         if: github.event.inputs.dry_run != 'true'
         env:
           RELEASE_CHANNEL: ${{ github.event.inputs.channel || 'appstore' }}
+          RELEASE_PLATFORM: ${{ github.event.inputs.platform || 'ios' }}
         run: |
           set -euo pipefail
           if [ "$GITHUB_REF_TYPE" = "tag" ]; then
@@ -224,7 +244,13 @@ jobs:
           else
             BUILD=$(grep -m1 'CURRENT_PROJECT_VERSION' MorseTrainer.xcodeproj/project.pbxproj | grep -oE '[0-9]+')
             MARKETING=$(grep -m1 'MARKETING_VERSION' MorseTrainer.xcodeproj/project.pbxproj | grep -oE '[0-9]+(\.[0-9]+)*')
-            if [ "$RELEASE_CHANNEL" = "testflight" ]; then
+            if [ "$RELEASE_PLATFORM" = "maccatalyst" ]; then
+              # Its own namespace: the iPhone build of the same number has
+              # (or will have) ios-beta-v…-b<N>. discord-release.yml does not
+              # know this prefix, so a Mac build is not announced on its own;
+              # announce it by hand once there is something to say.
+              TAG="mac-beta-v${MARKETING}-b${BUILD}"
+            elif [ "$RELEASE_CHANNEL" = "testflight" ]; then
               TAG="ios-beta-v${MARKETING}-b${BUILD}"
             else
               TAG="ios-v${MARKETING}-b${BUILD}"
