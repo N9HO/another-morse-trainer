@@ -44,7 +44,7 @@ fun OnboardingScreen(onDone: () -> Unit) {
         ) {
             // Desktop: the launcher artwork ships as a classpath PNG.
             @Suppress("DEPRECATION")
-            val logo = painterResource("icon.png")
+            val logo = painterResource("logo-foreground.png")
             Image(
                 painter = logo,
                 contentDescription = null,

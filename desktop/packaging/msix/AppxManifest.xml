@@ -2,11 +2,13 @@
 <!--
   MSIX manifest for the Microsoft Store build (docs/desktop-design.md, §3).
 
-  desktop.yml fills the @TOKENS@ before running makeappx:
-    @IDENTITY_NAME@           repository variable MSIX_IDENTITY_NAME
-    @PUBLISHER@               repository variable MSIX_PUBLISHER            (e.g. CN=1A2B3C4D-…)
-    @PUBLISHER_DISPLAY_NAME@  repository variable MSIX_PUBLISHER_DISPLAY_NAME
-    @VERSION@                 desktopVersionName + ".0" (the Store reserves the 4th part)
+  desktop.yml replaces four tokens (IDENTITY_NAME, PUBLISHER,
+  PUBLISHER_DISPLAY_NAME and VERSION, each written between at-signs in the
+  elements below) before running makeappx:
+    Identity Name            repository variable MSIX_IDENTITY_NAME
+    Identity Publisher       repository variable MSIX_PUBLISHER (e.g. CN=1A2B3C4D-...)
+    PublisherDisplayName     repository variable MSIX_PUBLISHER_DISPLAY_NAME
+    Identity Version         desktopVersionName + ".0" (the Store reserves the 4th part)
 
   The three identity values MUST be copied from Partner Center › the app ›
   Product management › Product identity, after the app name is reserved. Until
