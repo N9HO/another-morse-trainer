@@ -1,0 +1,50 @@
+{
+  "$comment": "Shared Code Exam fixture, consumed by BOTH ports: android CodeExamFixtureTest and ios MorseKitCheck. Data, not code — see CLAUDE.md's two-ports rule. Every value here is derived from the historical FCC/VEC rules written out below, not captured from either port (#262, #263).",
+  "passBar": {
+    "rule": "One minute of solid copy at the exam's stated speed. The stated speed is the effective (overall, Farnsworth) WPM, not the character speed: the 5 WPM exam sent 13 WPM characters but was a 5 WPM exam. A word is 5 characters (PARIS), so the bar is effectiveWpm * 5. Word spaces are not characters (PARIS is five letters; the space is timing), so they do not count toward the bar.",
+    "charactersPerWord": 5,
+    "cases": [
+      { "speed": "novice5", "effectiveWpm": 5, "requiredRun": 25 },
+      { "speed": "general13", "effectiveWpm": 13, "requiredRun": 65 },
+      { "speed": "extra20", "effectiveWpm": 20, "requiredRun": 100 }
+    ]
+  },
+  "requiredCharacters": {
+    "rule": "The FCC/VEC code exam text had to include every letter and numeral, the period, comma, question mark and slash (DN), and the prosigns AR, SK and BT. Every passage the app sends — generated or bundled — must contain each of them. Prosigns are spelled in angle brackets, as MorseData.prosigns spells them in both trees.",
+    "letters": "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+    "digits": "0123456789",
+    "punctuation": [".", ",", "?", "/"],
+    "prosigns": ["<AR>", "<SK>", "<BT>"]
+  },
+  "prosignPatterns": {
+    "rule": "A bracketed prosign inside sent text is keyed run-together, as one character (ITU-R M.1677-1). The text '<AR>' must sound exactly like the pattern below.",
+    "cases": [
+      { "token": "<AR>", "pattern": ".-.-." },
+      { "token": "<SK>", "pattern": "...-.-" },
+      { "token": "<BT>", "pattern": "-...-" }
+    ]
+  },
+  "normalize": {
+    "rule": "The comparable copy stream: upper-cased; letters, digits and . , ? / kept as written; a prosign in any written form (a bracketed token such as <AR>, or '+' for AR, or '=' for BT) is dropped and acts as a word break, so a copy is never marked down for writing or omitting one; runs of whitespace collapse to one space; no leading or trailing space.",
+    "cases": [
+      { "input": "w1aw de k9la/4", "normalized": "W1AW DE K9LA/4" },
+      { "input": "  GE OM ES TNX FER CALL.  UR RST 599 599,\nNAME", "normalized": "GE OM ES TNX FER CALL. UR RST 599 599, NAME" },
+      { "input": "HW? 73 <AR> W1AW DE K9LA/4 <SK>", "normalized": "HW? 73 W1AW DE K9LA/4" },
+      { "input": "HW? 73 + W1AW DE K9LA/4", "normalized": "HW? 73 W1AW DE K9LA/4" },
+      { "input": "599=NAME", "normalized": "599 NAME" },
+      { "input": "599<BT>NAME", "normalized": "599 NAME" },
+      { "input": "= <BT> +", "normalized": "" }
+    ]
+  },
+  "longestRun": {
+    "rule": "The graded run is the longest stretch of the normalized copy that appears, in order and unbroken, in the normalized sent text. It is counted in characters, and a space inside the run must match but adds nothing.",
+    "cases": [
+      { "sent": "UR RST 599 599", "typed": "UR RST 599 599", "longestRun": 11 },
+      { "sent": "UR RST 599 599", "typed": "URRST 599 599", "longestRun": 9 },
+      { "sent": "UR RST 599 599", "typed": "UR RST 579 599", "longestRun": 6 },
+      { "sent": "CALL. UR RST <BT> 599", "typed": "CALL UR RST 599", "longestRun": 8 },
+      { "sent": "CALL. UR RST <BT> 599", "typed": "CALL. UR RST = 599", "longestRun": 13 },
+      { "sent": "W1AW DE K9LA/4", "typed": "zzzz", "longestRun": 0 }
+    ]
+  }
+}

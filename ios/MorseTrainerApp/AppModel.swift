@@ -157,7 +157,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .story:
             return "Continuous copy: hear a short story sent end to end. Copy it on paper or in your head, then reveal the text to check yourself. Pick a fable, a longer classic (Sherlock Holmes and friends) sent in parts with a bookmark that keeps your place, or todays news — real headlines hidden until you reveal, so the only way to read them is to copy the code."
         case .exam:
-            return "Sit a recreation of the old ARRL/FCC code-proficiency exam: a 5-minute QSO-style transmission at 5, 13, or 20 WPM. Pass with one minute of solid copy (25 characters in a row) or by answering questions about what was sent."
+            return "Sit a recreation of the old ARRL/FCC code-proficiency exam: a 5-minute QSO-style transmission at 5, 13, or 20 WPM. Pass with one minute of solid copy (25, 65 or 100 characters in a row) or by answering questions about what was sent."
         case .qrq:
             return "Push your speed: hear whole words and call signs at 35 or 40 WPM and type what you copy. Too fast to count dits — this trains instant, whole-word recognition (QRQ = “send faster”)."
         case .rapidFire:
@@ -1152,7 +1152,7 @@ final class AppModel: ObservableObject {
     var examGrading: ExamGrading { examSession?.grading ?? settings.examGrading }
     /// Pretty, prosign-annotated passage text for the reveal screen.
     var examPassageText: String { examSession?.passage.displayText ?? "" }
-    var examRequiredRun: Int { ExamSession.requiredRun }
+    var examRequiredRun: Int { examSession?.requiredRun ?? settings.examSpeed.requiredRun }
 
     /// Timing for the exam comes from its license speed (Farnsworth at 5 WPM),
     /// overriding the global WPM setting.
@@ -1228,7 +1228,8 @@ final class AppModel: ObservableObject {
 
     // MARK: Solid copy
 
-    /// Grade the typed copy: pass needs 25 correct characters in a row.
+    /// Grade the typed copy: pass needs one minute of copy in a row (25 / 65 /
+    /// 100 characters at 5 / 13 / 20 WPM — `ExamSpeed.requiredRun`).
     func submitExamCopy(_ text: String) {
         guard isExam, let session = examSession, examStage == .copy else { return }
         let result = session.gradeSolidCopy(text)

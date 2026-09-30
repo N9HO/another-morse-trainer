@@ -1076,7 +1076,7 @@ struct SettingsView: View {
         case .qrq:
             lines.append("QRQ speed: \(s.qrqSpeed.label)")
         case .exam:
-            lines.append("Exam: \(s.examSpeed.label) · \(s.examGrading.label)")
+            lines.append("Exam: \(s.examSpeed.label) · \(s.examGrading.label(for: s.examSpeed))")
         case .listen:
             lines.append("Listen: \(s.listenContent.label) · \(s.listenGap.label) · \(s.listenReadback.label)")
         case .cw77, .cw77Listen:

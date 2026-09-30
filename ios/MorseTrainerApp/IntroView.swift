@@ -685,7 +685,7 @@ private struct ModeOptionsCard: View {
                             .font(.subheadline).foregroundStyle(.secondary)
                         Picker("Grading", selection: examGradingBinding) {
                             ForEach(ExamGrading.allCases) { g in
-                                Text(g.label).tag(g)
+                                Text(g.label(for: model.settings.examSpeed)).tag(g)
                             }
                         }
                         .pickerStyle(.segmented)
