@@ -230,7 +230,9 @@ Standing traps, all deliberate:
     `ios/MorseTrainer.xcodeproj/project.pbxproj`
   - Android: `versionCode` / `versionName` in `android/app/build.gradle.kts`
 - Release tags are namespaced: **`ios-v*`** and **`android-v*`**. A bare `v*`
-  tag fires nothing.
+  tag fires nothing. Testing builds are tagged `ios-beta-v*` /
+  `android-beta-v*` by the release workflows themselves; never push an
+  `ios-v*` or `android-v*` tag to mark one, because that ships to production.
 - `ios.yml` and `android-ci.yml` are path-filtered to their own subtree. If you
   add a workflow, give it a `paths:` filter too — the iOS jobs run on `macos-15`
   at 10x Linux billing.

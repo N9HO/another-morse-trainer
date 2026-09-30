@@ -19,9 +19,10 @@ Neither is committed to git (`.gitignore` excludes them). The upload cert SHA-25
 ## What's already set up (done for you)
 
 - Release signing config in `app/build.gradle.kts` (reads `keystore.properties`).
-- `versionCode = 1`, `versionName = "1.0"`.
-- A **signed release AAB** at:
-  `app/build/outputs/bundle/release/app-release.aab`
+- The current `versionCode` / `versionName` live in `app/build.gradle.kts`; they
+  are not copied here, so they cannot go stale.
+- `./gradlew bundleRelease` writes the signed AAB to
+  `app/build/outputs/bundle/release/app-release.aab`.
 
 ## Build a release AAB (repeat for every update)
 
@@ -51,7 +52,8 @@ Two workflows are committed under `.github/workflows/`:
   **signed AAB and rolls it out on the Play _production_ track** (full
   rollout, `status: completed`), with the release notes read from
   `store-assets/whatsnew/whatsnew-en-US` (Play caps them at 500 characters;
-  the workflow refuses to ship a production build without them). The iOS twin
+  the workflow refuses to upload to any track without them, and warns when
+  they have not changed since the last release). The iOS twin
   (`ios-release.yml`) submits to App Review on the same trigger. Cut a release
   with:
 
@@ -65,16 +67,24 @@ Two workflows are committed under `.github/workflows/`:
   input — `alpha` (closed testing) or `internal` — for a build testers should
   see before everyone does. A tag always means production.
 
+  Every build that reaches Play is tagged by the workflow: `android-v<name>-b<code>`
+  for production, `android-beta-v<name>-b<code>` for alpha/internal. That tag is
+  what the Discord announcement names and where the next changelog starts. Do
+  not push an `android-v*` tag by hand to mark a testing build; it would
+  release to production.
+
   > Production has prerequisites the API cannot meet for you: the store
   > listing, content rating and data-safety form must be complete, and a
   > personal developer account created after November 2023 must have passed
   > the closed-test requirement and been granted production access in Play
   > Console. Until then the upload step fails with a policy error from the
-  > Play API; the AAB is still attached to the run as an artifact, and the
-  > versionCode is spent, so bump it before retrying.
+  > Play API ("Precondition check failed"). The AAB is still attached to the
+  > run as an artifact, and the versionCode is **not** spent: the upload went
+  > into a draft edit that Play discarded, so finish the Console side and
+  > re-run the same build.
 
   > **The `android-` prefix is required.** Both apps share this repo, and the
-  > iOS announcement workflow watches `ios-v*`. A bare `v1.12.2` tag would match
+  > iOS release workflow watches `ios-v*`. A bare `v1.12.2` tag would match
   > neither and silently do nothing; before the workflows were re-namespaced it
   > would have matched *both* and shipped an iOS Discord post for an Android
   > release. iOS tags are `ios-v*` and are entirely independent of these.

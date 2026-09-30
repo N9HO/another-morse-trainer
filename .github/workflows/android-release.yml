@@ -4,7 +4,7 @@ name: Android release (Google Play upload)
 # (e.g. `git tag android-v1.12.2 && git push origin android-v1.12.2`).
 #
 # The tag prefix matters: this is a monorepo holding both apps, and the iOS
-# announcement workflow watches `ios-v*`. A bare `v*` tag would fire both, so
+# release workflow watches `ios-v*`. A bare `v*` tag would fire both, so
 # each platform releases under its own namespace and the two cadences stay
 # independent. (Version numbers live in android/app/build.gradle.kts and in the
 # iOS project file; they are not restated here, to keep them from drifting.)
@@ -22,9 +22,19 @@ name: Android release (Google Play upload)
 # production access granted); until then the upload fails with a policy error
 # from the Play API and nothing is consumed except the versionCode.
 #
-# Release notes for the Play listing come from
-# android/store-assets/whatsnew/whatsnew-<locale> (Play caps them at 500
-# characters). Edit that file in the same PR as the version bump.
+# Release notes come from android/store-assets/whatsnew/whatsnew-<locale>
+# (Play caps them at 500 characters) and go out on EVERY track: testers on
+# alpha read them too. Edit that file in the same PR as the version bump. A
+# run whose notes are unchanged since the last release tag warns.
+#
+# Every successful upload is TAGGED, by the `tag` job below, so the Discord
+# announcement has a name and each changelog starts where the last one ended:
+#   android-v<versionName>-b<versionCode>       a production release
+#   android-beta-v<versionName>-b<versionCode>  an alpha or internal build
+# A tag push already carries its tag, so only a manual run creates one. The
+# tag is pushed with GITHUB_TOKEN, and GitHub never starts a workflow from a
+# GITHUB_TOKEN push, so an `android-v*` tag made here cannot re-fire this
+# workflow. An existing tag is never moved.
 #
 # It degrades gracefully: if the signing/Play secrets aren't configured yet, it
 # builds the bundle and uploads it as a workflow artifact instead of failing, so
@@ -72,6 +82,11 @@ on:
 permissions:
   contents: read
 
+# Never let two uploads race for the same versionCode.
+concurrency:
+  group: android-release
+  cancel-in-progress: false
+
 jobs:
   release:
     name: Build + upload AAB
@@ -84,8 +99,13 @@ jobs:
     defaults:
       run:
         working-directory: android
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
     steps:
       - uses: actions/checkout@v5
+        with:
+          # Tags, for the "notes unchanged since the last release" check.
+          fetch-depth: 0
 
       # First run in the monorepo: prove the secrets survived the move before
       # trusting a real release with them. Prints presence only — never values.
@@ -170,10 +190,11 @@ jobs:
             exit 1
           fi
 
-      # Release notes are optional on Play, but a production release without
-      # them looks abandoned. Fail before the upload rather than ship blank.
-      - name: Check the release notes exist
-        if: env.PLAY_TRACK == 'production' && github.event.inputs.dry_run != 'true'
+      # Release notes are optional on Play, but a build without them looks
+      # abandoned, and whatsNewDirectory sends them to every track. Fail before
+      # the upload rather than ship blank or over Play's limit.
+      - name: Check the release notes
+        if: github.event.inputs.dry_run != 'true'
         run: |
           set -euo pipefail
           NOTES=store-assets/whatsnew/whatsnew-en-US
@@ -187,8 +208,21 @@ jobs:
             exit 1
           fi
           echo "release notes ($LEN chars):"; cat "$NOTES"
+          # A rebuild may legitimately reuse them, so this only warns. A testing
+          # build is compared with the last build of either kind; production
+          # with the last production release, since its notes usually gather
+          # what the testing builds before it already said.
+          if [ "$PLAY_TRACK" = "production" ]; then
+            PREV="$(git describe --tags --abbrev=0 --match 'android-v*' HEAD^ 2>/dev/null || true)"
+          else
+            PREV="$(git describe --tags --abbrev=0 --match 'android-v*' --match 'android-beta-v*' HEAD^ 2>/dev/null || true)"
+          fi
+          if [ -n "$PREV" ] && git diff --quiet "$PREV" HEAD -- "$NOTES"; then
+            echo "::warning::android/$NOTES has not changed since $PREV. Testers and Play users will read the previous build's notes."
+          fi
 
       - name: Upload to Google Play
+        id: upload
         if: env.PLAY_JSON != '' && env.KEYSTORE_B64 != '' && github.event.inputs.dry_run != 'true'
         uses: r0adkll/upload-google-play@v1
         with:
@@ -196,7 +230,8 @@ jobs:
           packageName: app.anothermorsetrainer
           releaseFiles: android/app/build/outputs/bundle/release/app-release.aab
           # production on a tag push; a manual run may pick alpha or internal.
-          track: ${{ env.PLAY_TRACK }}
+          # `tracks` (plural) replaces the deprecated `track`; one track here.
+          tracks: ${{ env.PLAY_TRACK }}
           # completed = full rollout to everyone on the track, no staged
           # percentage. Halting or staging a rollout is a Play Console action.
           status: completed
@@ -213,6 +248,27 @@ jobs:
         run: |
           echo "::error::Google Play refused the production release. If the error above is 'Precondition check failed', complete the app's setup tasks in Play Console (Dashboard) and confirm production access, then re-run this workflow; the versionCode is not consumed by a discarded edit. The AAB is attached to this run for a manual upload."
 
+      # The name the `tag` job pushes and the announcement uses. Only a build
+      # that reached Play gets one: not a dry run, not the artifact fallback.
+      - name: Name the release tag
+        id: tag
+        if: steps.upload.outcome == 'success'
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            TAG="$GITHUB_REF_NAME"
+          else
+            CODE=$(grep -m1 -E '^[[:space:]]*versionCode[[:space:]]*=' app/build.gradle.kts | grep -oE '[0-9]+')
+            NAME=$(grep -m1 -E '^[[:space:]]*versionName[[:space:]]*=' app/build.gradle.kts | sed -E 's/.*"([^"]+)".*/\1/')
+            if [ "$PLAY_TRACK" = "production" ]; then
+              TAG="android-v${NAME}-b${CODE}"
+            else
+              TAG="android-beta-v${NAME}-b${CODE}"
+            fi
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "release tag: $TAG"
+
       - name: Dry run — upload skipped
         if: github.event.inputs.dry_run == 'true'
         run: |
@@ -225,3 +281,49 @@ jobs:
           name: app-release-aab
           path: android/app/build/outputs/bundle/release/app-release.aab
           if-no-files-found: warn
+
+  # Separate from the release job so the write permission is held only by this
+  # job, not by the job that holds the signing key and the Play credentials.
+  tag:
+    name: Tag the release
+    needs: release
+    if: needs.release.outputs.tag != ''
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Push the tag (never moves an existing one)
+        env:
+          TAG: ${{ needs.release.outputs.tag }}
+        run: |
+          set -euo pipefail
+          # Fetch it by name if it exists, then peel it to its commit.
+          if git fetch -q --depth=1 origin "refs/tags/${TAG}:refs/tags/${TAG}" 2>/dev/null; then
+            AT="$(git rev-parse "${TAG}^{commit}")"
+            if [ "$AT" = "$GITHUB_SHA" ]; then
+              echo "$TAG already points at this commit."
+            else
+              echo "::warning::$TAG already exists at ${AT:0:12}, not this run's ${GITHUB_SHA:0:12}. Left where it is; the announcement uses it as named."
+            fi
+            exit 0
+          fi
+          git -c user.name="github-actions[bot]" \
+              -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+              tag -a "$TAG" -m "$TAG" "$GITHUB_SHA"
+          git push origin "refs/tags/$TAG"
+          echo "Pushed $TAG at ${GITHUB_SHA:0:12}."
+
+      # discord-release.yml reads this to know what the run released: a
+      # manual run's head_branch is `main`, not a tag.
+      - name: Record the tag for the announcement
+        env:
+          TAG: ${{ needs.release.outputs.tag }}
+        run: printf '%s\n' "$TAG" > release-tag.txt
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: release-tag
+          path: release-tag.txt
+          retention-days: 7
