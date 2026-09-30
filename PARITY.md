@@ -87,6 +87,7 @@ cannot do, and why (details in `docs/desktop-design.md` §2).
 | Haptics | desktop | Desktops have no vibration hardware. | The switch is hidden (`Haptics.isAvailable`). |
 | Ranked leaderboard runs, and buddy streaks | desktop | Both rest on device attestation (App Attest, Play Integrity; `docs/high-scores-design.md` §3), which neither OS offers to an open-source app. | Runs count toward personal bests; post-run lines say "Not ranked"; the board is readable; Settings explains. |
 | Listen & Learn controls in the lock screen, notification or car display | desktop | There is no media-session surface a JVM app can publish to. | The window's own controls; a minimised window keeps playing. |
+| Daily Dit's "your device is muted" prompt before a listen (#252) | desktop | Java has no portable way to read the system output volume or mute state on Windows or Linux. | Every Play plays; the listen is spent as usual. |
 | Spoken read-back inside the Flatpak | desktop (Linux, Flatpak) | The sandbox has no speech engine; Windows (System.Speech) and a Linux install with `spd-say` or `espeak-ng` do speak. | Shows the text. Bundling espeak-ng is a follow-up. |
 
 ### Same feature, platform mechanism (not gaps)
