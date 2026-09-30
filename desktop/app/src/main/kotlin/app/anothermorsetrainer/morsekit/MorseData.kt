@@ -1,0 +1,406 @@
+package app.anothermorsetrainer.morsekit
+
+/**
+ * One thing the trainer can play and quiz on — a character, a word, an
+ * abbreviation, or a prosign. The user hears [playable] in Morse and the
+ * correct multiple-choice answer is [answer].
+ *
+ * Translated from MorseKit/MorseData.swift. Swift's `enum Playable` with
+ * associated values becomes a Kotlin `sealed class`; the named-tuple lists
+ * (`(token:, meaning:)` etc.) become small `data class`es.
+ */
+data class MorseItem(
+    val id: String,
+    /** What gets sounded out in Morse. */
+    val playable: Playable,
+    /** The correct multiple-choice answer (a meaning, a word, or a character). */
+    val answer: String,
+    /** Big label shown when revealing the answer (e.g. "ES", "<AR>", "X"). */
+    val display: String
+) {
+    sealed class Playable {
+        /** characters sent with normal spacing (word/abbr) */
+        data class Text(val value: String) : Playable()
+        /** raw dot-dash sent run-together (prosigns) */
+        data class Pattern(val value: String) : Playable()
+    }
+
+    /** Concatenated dot-dash pattern, used to find sound-alike distractors. */
+    val soundKey: String
+        get() = when (playable) {
+            is Playable.Pattern -> playable.value
+            is Playable.Text -> playable.value.mapNotNull { MorseCode.pattern(it) }.joinToString("")
+        }
+
+    /**
+     * The dot-dash stream as actually heard: prosign patterns run together,
+     * text characters separated by an inter-character gap. Unlike [soundKey]
+     * this keeps the abbreviation BK (-... -.-) apart from the prosign <BK>
+     * (-...-.-), while the letter K and the prosign <K> compare equal — both
+     * are a lone -.- on the air.
+     */
+    val audibleKey: String
+        get() = when (playable) {
+            is Playable.Pattern -> playable.value
+            is Playable.Text -> playable.value.mapNotNull { MorseCode.pattern(it) }.joinToString(" ")
+        }
+}
+
+/** A token paired with its plain-language meaning (abbreviations, Q-codes). */
+data class TokenMeaning(val token: String, val meaning: String)
+
+/** A prosign: its display name, run-together pattern, and meaning. */
+data class Prosign(val name: String, val pattern: String, val meaning: String)
+
+/**
+ * Curated ham-radio reference data (high-frequency words, abbreviations,
+ * Q-codes, and prosigns) used to build the quiz modes. Sourced from Morse
+ * Code Ninja, ARRL, KB6NU, and the ITU prosign spec.
+ */
+object MorseData {
+
+    // ---- Common words (frequency-ordered; the basis of MCN's "Top N Words") ----
+
+    val commonWords: List<String> = listOf(
+        "THE", "OF", "AND", "TO", "A", "IN", "FOR", "IS", "ON", "THAT",
+        "BY", "THIS", "WITH", "YOU", "IT", "NOT", "OR", "BE", "ARE", "FROM",
+        "AT", "AS", "YOUR", "ALL", "HAVE", "NEW", "MORE", "WAS", "WE", "WILL",
+        "HOME", "CAN", "ABOUT", "IF", "MY", "HAS", "BUT", "OUR", "ONE", "DO",
+        "TIME", "THEY", "UP", "WHAT", "WHICH", "OUT", "ANY", "THERE", "SEE", "ONLY",
+        "SO", "HIS", "WHEN", "HERE", "WHO", "NOW", "HELP", "GET", "FIRST", "BEEN",
+        "HOW", "SOME", "LIKE", "THAN", "FIND", "BACK", "NAME", "JUST", "OVER", "YEAR",
+        "DAY", "TWO", "NEXT", "GO", "WORK", "LAST", "MOST", "MAKE", "GOOD", "WELL",
+        "VERY", "NEED", "KNOW", "WAY", "PART", "GREAT", "REAL", "MUST", "MADE", "LINE",
+        "SEND", "RIGHT", "WANT", "LONG", "CODE", "SHOW", "SAME", "FOUND", "BOTH", "CALL",
+        "WORD", "LOOK", "COME", "SOUND", "THING", "WRITE"
+    )
+
+    // ---- Ham/QSO vocabulary (heard constantly on the air) ----
+
+    val hamWords: List<String> = listOf(
+        "NAME", "RIG", "ANT", "WX", "HR", "HW", "QSO", "QTH", "RST", "RPT",
+        "TNX", "PWR", "FB", "OM", "YL", "XYL", "DX", "SIG", "TEMP", "KEY",
+        "GUD", "COPY", "HOPE", "AGN", "FREQ", "BAND", "DIPOLE", "BEAM", "WIRE", "CONTEST"
+    )
+
+    // ---- Abbreviations → meaning ("what are they saying?") ----
+
+    val abbreviations: List<TokenMeaning> = listOf(
+        TokenMeaning("ABT", "about"), TokenMeaning("AGN", "again"), TokenMeaning("ANT", "antenna"), TokenMeaning("BCNU", "be seeing you"),
+        TokenMeaning("BK", "break"), TokenMeaning("B4", "before"), TokenMeaning("CFM", "confirm"), TokenMeaning("CL", "closing down"),
+        TokenMeaning("CPY", "copy"), TokenMeaning("CQ", "calling any station"), TokenMeaning("CUL", "see you later"),
+        TokenMeaning("DE", "this is / from"), TokenMeaning("DR", "dear"), TokenMeaning("DX", "distance"), TokenMeaning("ES", "and"),
+        TokenMeaning("FB", "fine business (great)"), TokenMeaning("FER", "for"), TokenMeaning("GA", "good afternoon"),
+        TokenMeaning("GE", "good evening"), TokenMeaning("GM", "good morning"), TokenMeaning("GN", "good night"),
+        TokenMeaning("GND", "ground"), TokenMeaning("GUD", "good"), TokenMeaning("HI", "laughter"), TokenMeaning("HR", "here"),
+        TokenMeaning("HV", "have"), TokenMeaning("HW", "how do you copy"), TokenMeaning("NR", "number"), TokenMeaning("OB", "old boy"),
+        TokenMeaning("OM", "old man"), TokenMeaning("OP", "operator"), TokenMeaning("PSE", "please"), TokenMeaning("PWR", "power"),
+        TokenMeaning("RPT", "repeat / report"), TokenMeaning("RST", "signal report"), TokenMeaning("RIG", "radio"),
+        TokenMeaning("SED", "said"), TokenMeaning("SIG", "signal"), TokenMeaning("SKED", "schedule"), TokenMeaning("SN", "soon"),
+        TokenMeaning("SRI", "sorry"), TokenMeaning("TFC", "traffic"), TokenMeaning("TNX", "thanks"), TokenMeaning("TU", "thank you"),
+        TokenMeaning("UR", "your / you're"), TokenMeaning("VY", "very"), TokenMeaning("WID", "with"), TokenMeaning("WKD", "worked"),
+        TokenMeaning("WL", "well"), TokenMeaning("WX", "weather"), TokenMeaning("YL", "young lady"),
+        TokenMeaning("73", "best regards"), TokenMeaning("88", "love and kisses")
+    )
+
+    // ---- Q-codes → meaning ----
+
+    // Bare QRL is the *statement* (the frequency is busy); the familiar
+    // channel-check question is QRL? — sent with the ordinary question mark.
+    // Both are taught so the two forms never get conflated (#27).
+    val qCodes: List<TokenMeaning> = listOf(
+        TokenMeaning("QRG", "your exact frequency is"), TokenMeaning("QRL", "this frequency is busy / in use"),
+        TokenMeaning("QRL?", "is this frequency in use?"),
+        TokenMeaning("QRM", "man-made interference"), TokenMeaning("QRN", "atmospheric noise / static"),
+        TokenMeaning("QRO", "increase power"), TokenMeaning("QRP", "low power"),
+        TokenMeaning("QRQ", "send faster"), TokenMeaning("QRS", "send slower"),
+        TokenMeaning("QRT", "stop sending / going off air"), TokenMeaning("QRU", "I have nothing for you"),
+        TokenMeaning("QRV", "I am ready"), TokenMeaning("QRX", "wait / stand by"),
+        TokenMeaning("QRZ", "who is calling me?"), TokenMeaning("QSB", "your signals are fading"),
+        TokenMeaning("QSK", "full break-in"), TokenMeaning("QSL", "acknowledge / received"),
+        TokenMeaning("QSO", "a contact"), TokenMeaning("QSP", "relay a message"),
+        TokenMeaning("QSY", "change frequency"), TokenMeaning("QTH", "my location is"),
+        TokenMeaning("QTR", "the correct time is")
+    )
+
+    // ---- Call signs (realistic structure for word/call-sign practice) ----
+
+    val callSigns: List<String> = listOf(
+        "W1AW", "K9LA", "N0AX", "AA3B", "K4XYZ", "W7PHX", "N5XJ", "K0XYZ",
+        "VE3KP", "G3ABC", "DL1XX", "JA1ABC", "VK2DEF", "KH6OO", "WB2OSZ",
+        "W5KFT", "K3LR", "N2IC", "W6OAT", "K1TTT"
+    )
+
+    // ---- Operator names & QTHs (for the QSO simulator) ----
+
+    /** Common operator first names heard on the air (ragchew "NAME" field). */
+    val opNames: List<String> = listOf(
+        "JIM", "BOB", "TOM", "DAVE", "JOHN", "MIKE", "BILL", "STEVE", "DAN", "PAUL",
+        "GARY", "KEN", "RON", "RICK", "JOE", "FRANK", "ED", "AL", "PHIL", "MARK",
+        "PETE", "SAM", "CARL", "RAY", "LARRY", "JACK", "ROY", "HANK", "WALT", "ART"
+    )
+
+    /** All US state (plus DC) abbreviations — for Rapid Fire's state-abbreviation stream. */
+    val usStates: List<String> = listOf(
+        "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA",
+        "HI", "ID", "IL", "IN", "IA", "KS", "KY", "LA", "ME", "MD",
+        "MA", "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH", "NJ",
+        "NM", "NY", "NC", "ND", "OH", "OK", "OR", "PA", "RI", "SC",
+        "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY", "DC"
+    )
+
+    /** QTH locations (US state abbreviations) for the ragchew "QTH" field. */
+    val qthList: List<String> = listOf(
+        "OH", "TX", "CA", "NY", "FL", "PA", "IL", "MI", "GA", "NC",
+        "VA", "WA", "AZ", "CO", "OR", "TN", "MO", "IN", "WI", "MN",
+        "KS", "IA", "OK", "AR", "UT", "NV", "ME", "NH", "VT", "ID"
+    )
+
+    /** Common signal reports given in a QSO. */
+    val rstValues: List<String> = listOf(
+        "599", "579", "559", "569", "589", "539", "449", "459", "558", "578"
+    )
+
+    // ---- Prosigns → (run-together pattern, meaning) ----
+
+    val prosigns: List<Prosign> = listOf(
+        Prosign("<AR>", ".-.-.", "over — end of message"),
+        Prosign("<K>", "-.-", "go ahead — any station"),
+        Prosign("<KN>", "-.--.", "go ahead — named station only"),
+        Prosign("<BT>", "-...-", "separator / new section"),
+        Prosign("<SK>", "...-.-", "end of contact"),
+        Prosign("<AS>", ".-...", "wait / stand by"),
+        Prosign("<BK>", "-...-.-", "break — back to you"),
+        Prosign("<CT>", "-.-.-", "attention / start"),
+        Prosign("<CL>", "-.-..-..", "closing — going off air"),
+        Prosign("<SN>", "...-.", "understood")
+    )
+
+    /** 500 words, most useful first, for the Top N word tiers (see MorseDataWords.kt). */
+    val rankedWords: List<String> = rankedWordsData
+
+    /** Daily Dit's answer pool, most common first (see DailyDitWords.kt). */
+    val dailyDitAnswers: List<String> = dailyDitAnswersData
+
+    /**
+     * Every five-letter word Daily Dit accepts as a guess (see DailyDitWords.kt).
+     * Split from a blob on first touch, so this stays untouched until someone
+     * actually plays.
+     */
+    val dailyDitAllowed: List<String> by lazy { dailyDitAllowedData }
+
+    // ---- Item builders for each quiz mode ----
+
+    /**
+     * Words mode: hear the word, choose the word. Drawn from the ranked
+     * (ham-weighted, frequency-ordered) list in MorseDataWords.kt, deduped
+     * so every item id is unique.
+     */
+    val wordItems: List<MorseItem>
+        get() = topWordItems(rankedWords.size)
+
+    /**
+     * A learner-supplied pool (the custom word list editor): the answer is the
+     * word itself. Takes the list exactly as [parseWordList] produced it —
+     * already uppercased, stripped to sendable characters, capped and
+     * de-duplicated — so this does no filtering of its own. Both ports agree
+     * on that split.
+     */
+    fun customWordItems(words: List<String>): List<MorseItem> =
+        words.map { w ->
+            MorseItem(id = "custom-$w", playable = MorseItem.Playable.Text(w), answer = w, display = w)
+        }
+
+    /** The longest word [parseWordList] keeps; anything longer is cut here. */
+    const val CUSTOM_WORD_MAX_LENGTH = 24
+
+    /**
+     * Parse a pasted blob into a clean word list for the custom pool. The
+     * rules, pinned for both ports by `fixtures/custom-words.json`: split on
+     * comma, semicolon and any whitespace; trim; uppercase; strip every
+     * character with no Morse pattern ([MorseCode.pattern]); cut to
+     * [CUSTOM_WORD_MAX_LENGTH]; drop empties; de-duplicate keeping the first
+     * occurrence. Stripping happens before the cut, so "AB!CDE…" loses the
+     * "!" and keeps 24 letters, not 23.
+     */
+    fun parseWordList(raw: String): List<String> {
+        val seen = LinkedHashSet<String>()
+        for (token in raw.split(WORD_LIST_SEPARATORS)) {
+            val upper = token.trim().uppercase()
+            val sendable = upper.filter { MorseCode.pattern(it) != null }
+            val w = sendable.take(CUSTOM_WORD_MAX_LENGTH)
+            if (w.isNotEmpty()) seen.add(w)
+        }
+        return seen.toList()
+    }
+
+    /** Comma, semicolon, or any run of whitespace (space, tab, CR, LF, …). */
+    private val WORD_LIST_SEPARATORS = Regex("[,;\\s]+")
+
+    /** The most-useful [limit] words (the QRQ "Top N" tiers), deduplicated. */
+    fun topWordItems(limit: Int): List<MorseItem> {
+        val seen = mutableSetOf<String>()
+        val items = mutableListOf<MorseItem>()
+        for (w in rankedWords) {
+            if (!seen.add(w)) continue
+            items.add(MorseItem(id = "word-$w", playable = MorseItem.Playable.Text(w), answer = w, display = w))
+            if (items.size >= limit) break
+        }
+        return items
+    }
+
+    /** Abbreviations mode: hear the abbreviation, choose its meaning. */
+    val abbreviationItems: List<MorseItem>
+        get() = abbreviations.map {
+            MorseItem(id = it.token, playable = MorseItem.Playable.Text(it.token), answer = it.meaning, display = it.token)
+        }
+
+    /** Q-code mode: hear the three-letter Q-signal, choose what it means. */
+    val qCodeItems: List<MorseItem>
+        get() = qCodes.map {
+            MorseItem(id = it.token, playable = MorseItem.Playable.Text(it.token), answer = it.meaning, display = it.token)
+        }
+
+    // ---- On-air QSO elements (Listen & Learn's curated tiers, #182) ----
+
+    /** Sizes of the QSO-element tiers: the first N of [qsoElements]. */
+    const val QSO_TOP_20_COUNT = 20
+    const val QSO_TOP_100_COUNT = 100
+
+    /**
+     * The 100 most-heard on-air QSO elements, most common first (table in
+     * MorseDataQSO.kt; pinned for both ports by `fixtures/qso-elements.json`).
+     */
+    val qsoElements: List<TokenMeaning> = qsoElementsData
+
+    /**
+     * The short spoken form of a meaning, for Listen & Learn's "Meaning only"
+     * readback (#210): the text before the first " — " qualifier, trimmed, so
+     * "go ahead — named station only" is spoken as "go ahead" and a meaning
+     * with no qualifier is spoken as it is. Pinned by the `brief` examples in
+     * fixtures/qso-elements.json; the Swift twin is `MorseData.briefMeaning`.
+     */
+    const val BRIEF_SEPARATOR = " — "
+    fun briefMeaning(meaning: String): String = meaning.substringBefore(BRIEF_SEPARATOR).trim()
+
+    /**
+     * Listen & Learn's "QSO elements · Top N" pool: the first [limit] of
+     * [qsoElements] as items whose answer is the meaning, like
+     * [abbreviationItems]. A bracketed token plays the run-together prosign
+     * pattern from [prosigns]; anything else plays as text.
+     */
+    fun qsoElementItems(limit: Int): List<MorseItem> =
+        qsoElements.take(limit).map { element ->
+            val prosign = prosigns.firstOrNull { it.name == element.token }
+            val playable = if (prosign != null) MorseItem.Playable.Pattern(prosign.pattern)
+            else MorseItem.Playable.Text(element.token)
+            MorseItem(id = "qso-${element.token}", playable = playable, answer = element.meaning, display = element.token)
+        }
+
+    // ---- The CWOps CW 77 list (#240) ----
+
+    /** The set's name everywhere it is shown. */
+    const val CW77_NAME = "CW 77"
+
+    /**
+     * Bob Carter WR7Q's recommended playback for this list: 40 WPM with no
+     * Farnsworth stretching. The apps offer it as a one-tap preset.
+     */
+    const val CW77_RECOMMENDED_WPM = 40.0
+
+    /**
+     * The CW 77 list, de-duplicated, in the source file's order (table in
+     * MorseDataCW77.kt; pinned for both ports by `fixtures/cw77.json`).
+     */
+    val cw77: List<TokenMeaning> = cw77Data
+
+    /** The "Your callsign" field's default. Nobody's own call, so it counts as unset. */
+    const val CW77_PLACEHOLDER_CALLSIGN = "W1AW"
+    const val CW77_CALLSIGN_MEANING = "your call sign"
+    const val CW77_NAME_MEANING = "your name"
+
+    /**
+     * The learner's own callsign and name as extra CW 77 items, the rule
+     * pinned by `personal` in fixtures/cw77.json. Each is uppercased and loses
+     * every character with no Morse pattern; a name keeps one space between
+     * its words. An empty or placeholder callsign and an empty name are unset.
+     * Callsign first, then name; either is dropped when it is already a CW 77
+     * token or repeats the one before it. Empty means there is nothing to add,
+     * and the switch is not offered. Twin of Swift's `cw77Personal`.
+     */
+    fun cw77Personal(callsign: String, name: String): List<TokenMeaning> {
+        fun sendable(s: String): String = s.uppercase().filter { MorseCode.pattern(it) != null }
+        val listed = cw77.map { it.token }.toSet()
+        val out = mutableListOf<TokenMeaning>()
+        val call = callsign.split(Regex("\\s+")).joinToString("") { sendable(it) }
+        if (call.isNotEmpty() && call != CW77_PLACEHOLDER_CALLSIGN && call !in listed) {
+            out += TokenMeaning(call, CW77_CALLSIGN_MEANING)
+        }
+        val who = name.split(Regex("\\s+")).map { sendable(it) }.filter { it.isNotEmpty() }.joinToString(" ")
+        if (who.isNotEmpty() && who !in listed && who != out.lastOrNull()?.token) {
+            out += TokenMeaning(who, CW77_NAME_MEANING)
+        }
+        return out
+    }
+
+    /**
+     * Listen & Learn's "CW 77" pool: items whose answer is the meaning, like
+     * [qsoElementItems], with [personal] (from [cw77Personal]) after the 70.
+     * A bracketed token plays the run-together prosign; anything else, text.
+     */
+    fun cw77Items(personal: List<TokenMeaning> = emptyList()): List<MorseItem> =
+        (cw77 + personal).map { MorseItem("cw77-${it.token}", cw77Playable(it.token), it.meaning, it.token) }
+
+    /** Common Words' "CW 77" pool: hear the token, choose the token. */
+    fun cw77WordItems(personal: List<TokenMeaning> = emptyList()): List<MorseItem> =
+        (cw77 + personal).map { MorseItem("cw77-${it.token}", cw77Playable(it.token), it.token, it.token) }
+
+    /**
+     * The standalone CW 77 mode's pool for [style]: Listen & Learn's items
+     * (answered by their meaning) or Common Words' (answered by the token),
+     * with [personal] (from [cw77Personal]) after the 70. Twin of Swift's
+     * `cw77Pool(style:personal:)`.
+     */
+    fun cw77Pool(style: Cw77Style, personal: List<TokenMeaning> = emptyList()): List<MorseItem> =
+        when (style) {
+            Cw77Style.LISTEN -> cw77Items(personal)
+            Cw77Style.QUIZ -> cw77WordItems(personal)
+        }
+
+    private fun cw77Playable(token: String): MorseItem.Playable {
+        val prosign = prosigns.firstOrNull { it.name == token }
+        return if (prosign != null) MorseItem.Playable.Pattern(prosign.pattern) else MorseItem.Playable.Text(token)
+    }
+
+    /** Prosign mode: hear the run-together prosign, choose its meaning. */
+    val prosignItems: List<MorseItem>
+        get() = prosigns.map {
+            MorseItem(id = it.name, playable = MorseItem.Playable.Pattern(it.pattern), answer = it.meaning, display = it.name)
+        }
+
+    /** Call signs as drill items, where the answer is the call sign itself. */
+    val callSignItems: List<MorseItem>
+        get() = callSigns.map {
+            MorseItem(id = "call-$it", playable = MorseItem.Playable.Text(it), answer = it, display = it)
+        }
+
+    /**
+     * Words + call signs, where the answer is the text itself (used by the
+     * advanced "Words & Call Signs" stage of the character ladder).
+     */
+    val wordAndCallSignItems: List<MorseItem>
+        get() {
+            val words = commonWords + hamWords.filter { it !in commonWords }
+            val all = words + callSigns
+            return all.map { MorseItem(id = it, playable = MorseItem.Playable.Text(it), answer = it, display = it) }
+        }
+
+    /**
+     * Prosigns where the answer is the prosign token itself (recognize-by-sound,
+     * used when prosigns are mixed into the advanced character stages).
+     */
+    val prosignTokenItems: List<MorseItem>
+        get() = prosigns.map {
+            MorseItem(id = it.name, playable = MorseItem.Playable.Pattern(it.pattern), answer = it.name, display = it.name)
+        }
+}

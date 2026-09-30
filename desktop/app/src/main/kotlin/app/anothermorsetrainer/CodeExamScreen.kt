@@ -1,0 +1,543 @@
+package app.anothermorsetrainer
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import app.anothermorsetrainer.morsekit.ExamData
+import app.anothermorsetrainer.morsekit.ExamGrading
+import app.anothermorsetrainer.morsekit.ExamSession
+import app.anothermorsetrainer.morsekit.ExamSpeed
+import app.anothermorsetrainer.morsekit.MorseItem
+import kotlin.math.roundToInt
+
+private val OK_GREEN = Color(0xFF2E7D32)
+private val ERR_RED = Color(0xFFC62828)
+private const val EXAM_SIDETONE_HZ = 600.0
+
+/**
+ * The historical FCC/VEC Morse code proficiency exam, reproduced in format.
+ *
+ * Three steps: pick a [ExamSpeed] and an [ExamGrading] mode, then run it.
+ * Solid-copy mode plays the whole QSO-style passage and asks you to type what
+ * you got (graded on the longest run of consecutive-correct characters, the old
+ * "25 in a row" rule). Question mode plays the passage once, then asks fill-in
+ * questions about what was sent. Both drive the fully-ported [ExamSession].
+ */
+@Composable
+fun CodeExamScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) {
+    val player = remember { MorsePlayer() }
+    val haptics = remember { Haptics() }
+
+    // The choices persist in Settings across launches (iOS examSpeed /
+    // examGrading / examUseBundled); the exam itself does not. An exam only
+    // reaches Stats when it is graded, so a process reclaimed mid-passage has
+    // nothing to record — it comes back to setup as chosen.
+    val speed = Settings.examSpeed
+    val grading = Settings.examGrading
+    val useBundled = Settings.examUseBundled
+    var session by remember { mutableStateOf<ExamSession?>(null) }
+
+    // Mid-session Settings, drawn over the exam so its state lives on.
+    var showSettings by remember { mutableStateOf(false) }
+
+    /**
+     * A fresh session at the chosen speed and grading (iOS makeExamSession):
+     * the next bundled passage for that speed when "Use a built-in passage"
+     * is on and one exists, otherwise a freshly generated one.
+     */
+    fun makeSession(): ExamSession {
+        if (useBundled) {
+            val samples = ExamData.examSamples(speed)
+            if (samples.isNotEmpty()) {
+                val n = samples.size
+                val sample = samples[((Settings.examSampleIndex % n) + n) % n]
+                return ExamSession(speed = speed, grading = grading, passage = sample.passage)
+            }
+        }
+        return ExamSession.forRandom(speed = speed, grading = grading)
+    }
+
+    /** "New passage" / "New exam": step to the next bundled sample, then rebuild (iOS newExam). */
+    fun newSession() {
+        Settings.advanceExamSample()
+        session = makeSession()
+    }
+
+    DisposableEffect(Unit) { onDispose { player.release() } }
+    BackHandler { player.stop(); onBack() }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+    Column(modifier = Modifier.fillMaxSize()) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            TextButton(onClick = onBack) { Text(stringResource(R.string.common_back)) }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                SessionSettingsButton { showSettings = true }
+                // Nothing to record on the way out: an exam reaches Stats only when graded.
+                SwitchModeButton(TrainingMode.EXAM) { mode ->
+                    player.stop()
+                    onSwitchMode(mode)
+                }
+            }
+        }
+
+        val s = session
+        if (s == null) {
+            ExamSetup(
+                speed = speed,
+                grading = grading,
+                useBundled = useBundled,
+                onSpeed = { Settings.updateExamSpeed(it) },
+                onGrading = { Settings.updateExamGrading(it) },
+                onUseBundled = { Settings.updateExamUseBundled(it) },
+                onStart = { session = makeSession() }
+            )
+        } else {
+            when (s.grading) {
+                ExamGrading.SOLID_COPY -> SolidCopyExam(
+                    session = s,
+                    player = player,
+                    haptics = haptics,
+                    onNew = { newSession() },
+                    onQuit = { player.stop(); session = null }
+                )
+                ExamGrading.QUESTIONS -> QuestionsExam(
+                    session = s,
+                    player = player,
+                    haptics = haptics,
+                    onNew = { newSession() },
+                    onQuit = { player.stop(); session = null }
+                )
+            }
+        }
+    }
+
+    if (showSettings) {
+        SessionSettingsOverlay(scope = SettingsMode.EXAM, onClose = { showSettings = false })
+    }
+    }
+}
+
+// MARK: - Setup
+
+@Composable
+private fun ExamSetup(
+    speed: ExamSpeed,
+    grading: ExamGrading,
+    useBundled: Boolean,
+    onSpeed: (ExamSpeed) -> Unit,
+    onGrading: (ExamGrading) -> Unit,
+    onUseBundled: (Boolean) -> Unit,
+    onStart: () -> Unit
+) {
+    CenteredScrollColumn(
+        contentModifier = Modifier.padding(horizontal = 24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(stringResource(R.string.mode_code_exam), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(4.dp))
+        Text(
+            stringResource(R.string.exam_intro),
+            style = MaterialTheme.typography.bodyMedium,
+            textAlign = TextAlign.Center
+        )
+        Spacer(Modifier.height(24.dp))
+
+        Text(stringResource(R.string.common_speed), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+        Spacer(Modifier.height(8.dp))
+        ExamSpeed.allCases.forEach { option ->
+            ChoiceRow(
+                label = option.label,
+                selected = option == speed,
+                onClick = { onSpeed(option) }
+            )
+            Spacer(Modifier.height(8.dp))
+        }
+
+        Spacer(Modifier.height(16.dp))
+        Text(stringResource(R.string.exam_how_youll_pass), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+        Spacer(Modifier.height(8.dp))
+        ExamGrading.allCases.forEach { option ->
+            ChoiceRow(
+                label = option.label,
+                selected = option == grading,
+                onClick = { onGrading(option) }
+            )
+            Spacer(Modifier.height(8.dp))
+        }
+
+        // "Use a built-in passage" (iOS IntroView's exam setup card): a
+        // ready-made text for the chosen speed instead of a generated one.
+        Spacer(Modifier.height(8.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(stringResource(R.string.exam_use_bundled), style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    stringResource(R.string.exam_use_bundled_note),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Brand.textSecondary
+                )
+            }
+            Spacer(Modifier.width(12.dp))
+            Switch(
+                checked = useBundled,
+                onCheckedChange = onUseBundled,
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = Brand.navy,
+                    checkedTrackColor = Brand.teal,
+                    uncheckedThumbColor = Brand.textSecondary,
+                    uncheckedTrackColor = Brand.navyRaised
+                )
+            )
+        }
+
+        Spacer(Modifier.height(24.dp))
+        Button(onClick = onStart, modifier = Modifier.fillMaxWidth().height(52.dp)) {
+            Text(stringResource(R.string.exam_start_exam), fontSize = 18.sp)
+        }
+        Spacer(Modifier.height(24.dp))
+    }
+}
+
+@Composable
+private fun ChoiceRow(label: String, selected: Boolean, onClick: () -> Unit) {
+    Card(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth(),
+        colors = if (selected) {
+            CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+        } else {
+            CardDefaults.cardColors()
+        },
+        elevation = CardDefaults.cardElevation(defaultElevation = if (selected) 4.dp else 1.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(if (selected) "●  " else "○  ", fontSize = 16.sp)
+            Text(label, style = MaterialTheme.typography.bodyLarge)
+        }
+    }
+}
+
+// MARK: - Solid copy
+
+@Composable
+private fun SolidCopyExam(
+    session: ExamSession,
+    player: MorsePlayer,
+    haptics: Haptics,
+    onNew: () -> Unit,
+    onQuit: () -> Unit
+) {
+    var typed by remember { mutableStateOf("") }
+    var graded by remember { mutableStateOf(false) }
+    var revealed by remember { mutableStateOf(false) }
+    var playing by remember { mutableStateOf(false) }
+
+    fun playPassage() {
+        playing = true
+        player.play(MorseItem.Playable.Text(session.passage.sentText), EXAM_SIDETONE_HZ, session.speed.timing) {
+            playing = false
+        }
+    }
+
+    // Scrolling alone did not reach the grade button on Android (issue #44):
+    // the scroll viewport ran on behind the on-screen keyboard. imePadding
+    // sits outside the scroll so the viewport itself shrinks. Desktop: there
+    // is no on-screen keyboard and the modifier does nothing; kept so the
+    // layout matches the Android tree.
+    fun grade() {
+        if (graded || typed.isBlank()) return
+        val result = session.gradeSolidCopy(typed)
+        graded = true
+        // One exam = one recorded attempt; a pass counts as correct.
+        Stats.record(
+            mode = "Code Exam",
+            attempts = 1,
+            correct = if (result.passed) 1 else 0,
+            bestTtrMs = null,
+            characterWpm = session.speed.characterWpm.roundToInt(),
+            effectiveWpm = session.speed.effectiveWpm.roundToInt()
+        )
+        if (Settings.hapticsEnabled) {
+            if (result.passed) haptics.success() else haptics.error()
+        }
+    }
+
+    // Desktop: the copy field has the keyboard as soon as the exam opens, and
+    // Enter grades (the copy is one run of text; a line break adds nothing).
+    val copyFocus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { copyFocus.requestFocus() } }
+
+    CenteredScrollColumn(
+        modifier = Modifier.imePadding(),
+        contentModifier = Modifier.padding(horizontal = 24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(stringResource(R.string.exam_title_with_speed, session.speed.wpmLabel), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+        Spacer(Modifier.height(4.dp))
+        Text(
+            stringResource(R.string.exam_solid_copy_instructions, ExamSession.requiredRun),
+            style = MaterialTheme.typography.bodyMedium,
+            textAlign = TextAlign.Center
+        )
+        Spacer(Modifier.height(20.dp))
+
+        Button(onClick = { playPassage() }, enabled = !playing, modifier = Modifier.fillMaxWidth().height(52.dp)) {
+            Text(if (playing) stringResource(R.string.exam_sending) else stringResource(R.string.exam_play_transmission), fontSize = 18.sp)
+        }
+        Spacer(Modifier.height(16.dp))
+
+        MorseNumberRow(
+            onKey = { if (!graded) typed += it },
+            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+        )
+        OutlinedTextField(
+            value = typed,
+            onValueChange = { typed = it.uppercase() },
+            label = { Text(stringResource(R.string.exam_your_copy)) },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(160.dp)
+                .focusRequester(copyFocus)
+                .onPreviewKeyEvent { event ->
+                    if ((event.key == Key.Enter || event.key == Key.NumPadEnter) && !graded) {
+                        if (event.type == KeyEventType.KeyDown) grade()
+                        true
+                    } else false
+                }
+        )
+        Spacer(Modifier.height(12.dp))
+
+        if (!graded) {
+            Button(
+                onClick = { grade() },
+                enabled = typed.isNotBlank(),
+                modifier = Modifier.fillMaxWidth().height(52.dp)
+            ) {
+                Text(stringResource(R.string.exam_grade_my_copy), fontSize = 18.sp)
+            }
+        } else {
+            val result = session.gradeSolidCopy(typed)
+            Text(
+                if (result.passed) stringResource(R.string.exam_pass) else stringResource(R.string.exam_not_yet),
+                color = if (result.passed) OK_GREEN else ERR_RED,
+                fontSize = 26.sp,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                stringResource(R.string.exam_longest_run, result.longestRun, result.required),
+                style = MaterialTheme.typography.bodyLarge
+            )
+            Spacer(Modifier.height(16.dp))
+
+            OutlinedButton(onClick = { revealed = !revealed }, modifier = Modifier.fillMaxWidth()) {
+                Text(if (revealed) stringResource(R.string.exam_hide_what_was_sent) else stringResource(R.string.exam_show_what_was_sent))
+            }
+            if (revealed) {
+                Spacer(Modifier.height(8.dp))
+                Card(modifier = Modifier.fillMaxWidth(), elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)) {
+                    Text(
+                        session.passage.displayText,
+                        modifier = Modifier.padding(16.dp),
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 14.sp
+                    )
+                }
+            }
+            Spacer(Modifier.height(16.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+                OutlinedButton(onClick = onQuit, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.common_done)) }
+                Button(
+                    onClick = { player.stop(); onNew() },
+                    modifier = Modifier.weight(1f)
+                ) { Text(stringResource(R.string.exam_new_passage)) }
+            }
+        }
+        Spacer(Modifier.height(24.dp))
+    }
+}
+
+// MARK: - Questions
+
+@Composable
+private fun QuestionsExam(
+    session: ExamSession,
+    player: MorsePlayer,
+    haptics: Haptics,
+    onNew: () -> Unit,
+    onQuit: () -> Unit
+) {
+    // Drive display off a LOCAL index: ExamSession.record() advances its own
+    // questionIndex when we score, so reading it back during the reveal would
+    // jump to the next question. qIndex stays put until the user taps Next.
+    var qIndex by remember { mutableIntStateOf(0) }
+    var chosen by remember { mutableStateOf<String?>(null) }
+    var revealed by remember { mutableStateOf(false) }
+    var playing by remember { mutableStateOf(false) }
+    var heardPassage by remember { mutableStateOf(false) }
+    var finished by remember { mutableStateOf(false) }
+
+    val total = session.questions.size
+
+    fun playPassage() {
+        playing = true
+        player.play(MorseItem.Playable.Text(session.passage.sentText), EXAM_SIDETONE_HZ, session.speed.timing) {
+            playing = false
+            heardPassage = true
+        }
+    }
+
+    CenteredScrollColumn(
+        contentModifier = Modifier.padding(horizontal = 24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        run {
+            if (!heardPassage) {
+                Text(stringResource(R.string.exam_title_with_speed, session.speed.wpmLabel), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    stringResource(R.string.exam_questions_intro, total),
+                    style = MaterialTheme.typography.bodyMedium,
+                    textAlign = TextAlign.Center
+                )
+                Spacer(Modifier.height(20.dp))
+                Button(onClick = { playPassage() }, enabled = !playing, modifier = Modifier.fillMaxWidth().height(52.dp)) {
+                    Text(if (playing) stringResource(R.string.exam_sending) else stringResource(R.string.exam_play_transmission), fontSize = 18.sp)
+                }
+            } else if (!finished) {
+                val q = session.questions[qIndex]
+                Text(stringResource(R.string.exam_question_counter, qIndex + 1, total), style = MaterialTheme.typography.labelMedium)
+                Spacer(Modifier.height(16.dp))
+                Text(
+                    q.prompt,
+                    style = MaterialTheme.typography.titleMedium,
+                    textAlign = TextAlign.Center,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(Modifier.height(24.dp))
+                q.options.forEach { option ->
+                    val colors = when {
+                        revealed && option == q.answer -> ButtonDefaults.buttonColors(containerColor = OK_GREEN)
+                        revealed && option == chosen -> ButtonDefaults.buttonColors(containerColor = ERR_RED)
+                        else -> ButtonDefaults.buttonColors()
+                    }
+                    Button(
+                        onClick = {
+                            if (!revealed) {
+                                chosen = option
+                                val outcome = session.record(option, 0.0)
+                                if (Settings.hapticsEnabled) {
+                                    if (outcome.correct) haptics.success() else haptics.error()
+                                }
+                                revealed = true
+                            }
+                        },
+                        colors = colors,
+                        modifier = Modifier.fillMaxWidth().height(52.dp).padding(vertical = 2.dp)
+                    ) {
+                        Text(option, fontSize = 17.sp, textAlign = TextAlign.Center)
+                    }
+                }
+                if (revealed) {
+                    Spacer(Modifier.height(16.dp))
+                    Button(
+                        onClick = {
+                            chosen = null
+                            revealed = false
+                            if (qIndex >= total - 1) {
+                                finished = true
+                                // The finished exam lands in stats: one row per
+                                // question, correct answers counted.
+                                Stats.record(
+                                    mode = "Code Exam",
+                                    attempts = total,
+                                    correct = session.correctCount,
+                                    bestTtrMs = null,
+                                    characterWpm = session.speed.characterWpm.roundToInt(),
+                                    effectiveWpm = session.speed.effectiveWpm.roundToInt()
+                                )
+                            } else {
+                                qIndex += 1
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth().height(48.dp)
+                    ) {
+                        Text(if (qIndex >= total - 1) stringResource(R.string.exam_see_results) else stringResource(R.string.exam_next_question))
+                    }
+                }
+            } else {
+                val score = session.correctCount
+                val passed = total > 0 && score.toDouble() / total >= 0.7  // historical bar ≈ 70%
+                Spacer(Modifier.height(24.dp))
+                Text(
+                    if (passed) stringResource(R.string.exam_pass) else stringResource(R.string.exam_not_yet),
+                    color = if (passed) OK_GREEN else ERR_RED,
+                    fontSize = 30.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(stringResource(R.string.exam_score, score, total), style = MaterialTheme.typography.headlineSmall)
+                Spacer(Modifier.height(28.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+                    OutlinedButton(onClick = onQuit, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.common_done)) }
+                    Button(onClick = onNew, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.exam_new_exam)) }
+                }
+            }
+        }
+        Spacer(Modifier.height(24.dp))
+    }
+}
