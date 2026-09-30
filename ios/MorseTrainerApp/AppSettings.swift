@@ -447,6 +447,9 @@ struct QSOSettings: Codable, Equatable {
     /// Your first name, optional. Only CW 77's "include my callsign and
     /// name" uses it so far (#240).
     var myName: String = ""
+    /// Your state (or province) abbreviation, optional. Only First Four
+    /// reads it so far (#265).
+    var myState: String = ""
     var mode: QSOContestMode = .pota
     var maxStations: Int = 4
     var minWPM: Double = 18
@@ -485,7 +488,7 @@ struct QSOSettings: Codable, Equatable {
 // settings (each missing key falls back to its default).
 extension QSOSettings {
     enum CodingKeys: String, CodingKey {
-        case myCall, myName, mode, maxStations, minWPM, maxWPM, farnsworth, toneSpread
+        case myCall, myName, myState, mode, maxStations, minWPM, maxWPM, farnsworth, toneSpread
         case minVolume, maxVolume, minDelay, maxDelay, qsbEnabled, qrn
         case cutNumbersEnabled, cutDigits, rstRequired, bustBehavior, giveUpEnabled
         case formats, usOnly, keepPartialCall, missedCallerFeedback
@@ -497,6 +500,7 @@ extension QSOSettings {
         var s = QSOSettings()
         s.myCall = try c.decodeIfPresent(String.self, forKey: .myCall) ?? s.myCall
         s.myName = try c.decodeIfPresent(String.self, forKey: .myName) ?? s.myName
+        s.myState = try c.decodeIfPresent(String.self, forKey: .myState) ?? s.myState
         s.mode = try c.decodeIfPresent(QSOContestMode.self, forKey: .mode) ?? s.mode
         s.maxStations = try c.decodeIfPresent(Int.self, forKey: .maxStations) ?? s.maxStations
         s.minWPM = try c.decodeIfPresent(Double.self, forKey: .minWPM) ?? s.minWPM

@@ -41,6 +41,7 @@
     { "id": "paddleSwap", "category": "keys" },
     { "id": "myCall", "category": "qso" },
     { "id": "myName", "category": "qso" },
+    { "id": "myState", "category": "qso" },
     { "id": "exchange", "category": "qso" },
     { "id": "maxCallers", "category": "qso" },
     { "id": "callerMinSpeed", "category": "qso" },
@@ -96,6 +97,7 @@
     { "name": "head copy by name", "query": "head copy", "includes": ["headCopyRepeats", "headCopyReveal"], "excludes": ["showReplay"] },
     { "name": "buddy", "query": "buddy", "includes": ["buddyStreak"], "first": "buddyStreak" },
     { "name": "rst", "query": "rst", "includes": ["rstRequired"], "first": "rstRequired" },
-    { "name": "call prefix", "query": "call", "includes": ["myCall", "usOnly", "callsignFormats", "maxCallers"] }
+    { "name": "call prefix", "query": "call", "includes": ["myCall", "usOnly", "callsignFormats", "maxCallers"] },
+    { "name": "province finds your state (#265)", "query": "province", "includes": ["myState"], "first": "myState" }
   ]
 }

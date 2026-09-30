@@ -141,6 +141,7 @@ object SettingsCatalog {
         // QSO & Pileups
         e("myCall", "Your callsign", listOf("call sign", "call", "station", "my call", "w1aw"), SettingsSection.PILEUP),
         e("myName", "Your name", listOf("name", "operator", "op", "cw 77", "cwops"), SettingsSection.PILEUP),
+        e("myState", "Your state", listOf("state", "province", "qth", "first four", "pota"), SettingsSection.PILEUP),
         e("exchange", "Exchange", listOf("pileup runner mode", "pota", "contest", "sprint", "cwt", "sst", "single caller", "mode"), SettingsSection.PILEUP),
         e("maxCallers", "Callers", listOf("max callers", "pileup size", "stations", "how many"), SettingsSection.PILEUP),
         e("callerMinSpeed", "Slowest caller", listOf("caller speed", "min speed", "wpm"), SettingsSection.PILEUP),

@@ -24,6 +24,9 @@ struct IntroView: View {
     @State private var showingReference = false
     @State private var showingStartHere = false
     @State private var showingDailyDit = false
+    /// First Four (#265): the guided path to a first POTA contact.
+    @State private var showingFirstFour = false
+    @State private var firstFourProgress = FirstFourStore.load()
     @State private var showingSendingDrill = false
     @State private var showingSendingAnalyzer = false
     @State private var showingCWDecoder = false
@@ -45,6 +48,8 @@ struct IntroView: View {
                     dailyDitCard
 
                     startHereButton
+
+                    firstFourCard
 
                     modePicker
 
@@ -88,6 +93,11 @@ struct IntroView: View {
         .sheet(isPresented: $showingDailyDit) {
             DailyDitView().environmentObject(model)
         }
+        .sheet(isPresented: $showingFirstFour, onDismiss: {
+            firstFourProgress = FirstFourStore.load()
+        }) {
+            FirstFourView().environmentObject(model)
+        }
         .sheet(isPresented: $showingSendingDrill) {
             SendingDrillView().environmentObject(model)
         }
@@ -107,6 +117,12 @@ struct IntroView: View {
         }
         .onAppear {
             model.refreshDailyDit()
+            firstFourProgress = FirstFourStore.load()
+            // Onboarding's "first POTA contact" button (#265) lands here.
+            if UserDefaults.standard.bool(forKey: FirstFourStore.openOnHomeKey) {
+                UserDefaults.standard.removeObject(forKey: FirstFourStore.openOnHomeKey)
+                showingFirstFour = true
+            }
             if openSetup {
                 openSetup = false
                 showingSetup = true
@@ -354,6 +370,48 @@ struct IntroView: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Start here — how to begin, what to expect, and why the code sounds fast")
+    }
+
+    /// First Four (#265): the four things a new operator needs to hunt one
+    /// POTA activator, and the contact itself. It sits with "Start here",
+    /// the other newcomer entry, above the grid: a guided path, not a mode
+    /// you come back to daily, and the first thing a beginner sees.
+    private var firstFourCard: some View {
+        let done = firstFourProgress.isComplete
+        let total = FirstFourStage.allCases.count
+        let subtitle: String
+        if done {
+            subtitle = "Ready for your first POTA contact"
+        } else if firstFourProgress.passedCount > 0 {
+            subtitle = "\(firstFourProgress.passedCount) of \(total) stages · call, state, ?, 73"
+        } else {
+            subtitle = "Your first POTA contact · call, state, ?, 73"
+        }
+        return Button { showingFirstFour = true } label: {
+            HStack(spacing: 10) {
+                Image(systemName: done ? "checkmark.seal.fill" : "antenna.radiowaves.left.and.right")
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(done ? Theme.tealBright : Theme.teal)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("First Four")
+                        .font(.subheadline.weight(.semibold))
+                    Text(subtitle)
+                        .font(.caption)
+                        .foregroundStyle(Theme.textSecondary)
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Theme.textSecondary)
+            }
+            .foregroundStyle(.white)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(Theme.navyElevated, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Theme.teal.opacity(0.6), lineWidth: 1.5))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("First Four. \(subtitle)")
     }
 
     // MARK: - Mode picker (tiles)

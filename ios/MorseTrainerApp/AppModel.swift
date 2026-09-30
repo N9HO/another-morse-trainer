@@ -337,7 +337,8 @@ final class AppModel: ObservableObject {
     private var examSession: ExamSession?
     private var examSampleIndex = 0
 
-    private let player = MorsePlayer()
+    /// Not private: First Four (`AppModel+FirstFour.swift`) plays through it.
+    let player = MorsePlayer()
     private let speech = SpeechPlayer()
     private var toneEndDate: Date?
     private var advanceGeneration = 0
@@ -3206,7 +3207,7 @@ final class AppModel: ObservableObject {
     /// only the first, because a report that failed on the network should be
     /// retried by the next answer; it costs nothing while the day is already
     /// reported or nobody is paired.
-    private func markPracticedToday() {
+    func markPracticedToday() {
         var s = streak
         let before = s.current
         defer { reportBuddyPracticeDay() }   // after the streak has today, so the report sees it
