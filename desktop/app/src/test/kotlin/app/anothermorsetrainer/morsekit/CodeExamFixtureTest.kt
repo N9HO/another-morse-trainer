@@ -56,7 +56,7 @@ class CodeExamFixtureTest {
         for (c in list) {
             val speed = ExamSpeed.allCases.firstOrNull { it.code == c.getString("speed") }
             assertNotNull("fixture speed ${c.getString("speed")} exists", speed)
-            val expected = c.getInt("requiredRun")
+            val expected = c.getInt("requiredRun") + 1 // NEGATIVE CONTROL: must fail
             assertEquals("${speed!!.code} effective WPM", c.getInt("effectiveWpm"), speed.effectiveWpm.toInt())
             assertEquals("${speed.code} solid-copy bar", expected, speed.requiredRun)
             assertEquals(
