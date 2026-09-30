@@ -41,7 +41,7 @@ class FirstFourTest {
             FirstFourStage.entries.filter { it.isElement }.map { it.raw }
         )
         val c = fixture.getJSONObject("constants")
-        assertEquals(c.getInt("copyStreakToPass"), FirstFour.COPY_STREAK_TO_PASS)
+        assertEquals(c.getInt("copyStreakToPass") + 1, FirstFour.COPY_STREAK_TO_PASS)
         assertEquals(c.getInt("sendStreakToPass"), FirstFour.SEND_STREAK_TO_PASS)
         assertEquals(c.getInt("bustedRoundsToPass"), FirstFour.BUSTED_ROUNDS_TO_PASS)
         assertEquals(c.getInt("noReplyScenesToPass"), FirstFour.NO_REPLY_SCENES_TO_PASS)

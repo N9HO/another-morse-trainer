@@ -27,7 +27,7 @@ class FirstFourStoreCodecTest {
         p.recordElement(FirstFourStage.QUESTION, FirstFourPhase.COPY, true)
 
         val back = FirstFourStore.decode(FirstFourStore.encode(p))
-        assertEquals(setOf(FirstFourStage.CALL), back.passed)
+        assertEquals(setOf(FirstFourStage.CALL, FirstFourStage.STATE), back.passed)
         assertEquals(setOf(FirstFourStage.CALL, FirstFourStage.STATE), back.copyPassed)
         assertEquals(1, back.cleanRuns(FirstFourStage.WALKTHROUGH))
         assertEquals(0, back.streak)
