@@ -228,6 +228,11 @@ there is one target and one code base; the Mac-only code is in
   suspended when its window is not in front.
 - **Sandbox**: the Mac build is sandboxed with network-client and
   microphone entitlements (`Config/MorseTrainer-macCatalyst.entitlements`).
+- **Icon and category**: the Mac icon slots in `AppIcon.appiconset` are the
+  iOS master drawn on the macOS icon grid (`tools/gen_mac_icon.py`; re-run it
+  after changing `icon_1024.png`), and `LSApplicationCategoryType` files the
+  app under Education. The minimum is macOS 13 (`MACOSX_DEPLOYMENT_TARGET`,
+  the Catalyst counterpart of iOS 16).
 
 ## Build
 
