@@ -85,7 +85,8 @@ private val TILE_PRESENT = Color(0xFFCAA033)
  * Ported from MorseTrainerApp/DailyDitView.swift, by way of the Android tree.
  * Desktop: the iOS `ShareLink` (Android's share sheet) becomes a small menu —
  * copy the result card image to the clipboard, or save it as a PNG — and the
- * pasteboard write is [DesktopShare.copyText]; game state lives in
+ * Copy button puts the same card on the clipboard with the share text as its
+ * fallback flavour ([DailyDitShareCard.copy], #266); game state lives in
  * [DailyDitStore] rather than on an `AppModel`.
  */
 @Composable
@@ -241,7 +242,7 @@ fun DailyDitScreen(onBack: () -> Unit) {
                     guesses = game.guessesUsed,
                     listens = game.listens,
                     onCopy = {
-                        DesktopShare.copyText(game.shareText)
+                        DailyDitShareCard.copy(game)
                         message = resources.getString(R.string.daily_dit_copied)
                     },
                     shareButton = {
