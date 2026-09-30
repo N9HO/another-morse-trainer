@@ -20,6 +20,16 @@ name: iOS release (App Store upload)
 # be: Beta App Review plus the previous build's testers. Either way the build
 # also appears in TestFlight, so testers see a production build first.
 #
+# Every successful upload is TAGGED, by the `tag` job below, so the Discord
+# announcement has a name and each changelog starts where the last one ended:
+#   ios-v<MARKETING_VERSION>-b<build>       an App Store submission
+#   ios-beta-v<MARKETING_VERSION>-b<build>  a TestFlight-channel build
+# A tag push already carries its tag, so only a manual run creates one. The
+# tag is pushed with GITHUB_TOKEN, and GitHub never starts a workflow from a
+# GITHUB_TOKEN push, so an `ios-v*` tag made here cannot re-fire this
+# workflow. `ios-beta-v*` does not match the `ios-v*` trigger either way.
+# An existing tag is never moved.
+#
 # NO `paths:` FILTER, deliberately. Every other workflow here is path-filtered
 # because macOS bills at 10x Linux, but this one is tag-triggered: on a tag push
 # GitHub evaluates `paths:` against the tagged commit's changed files, so a
@@ -77,8 +87,13 @@ jobs:
     defaults:
       run:
         working-directory: ios
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
     steps:
       - uses: actions/checkout@v5
+        with:
+          # Tags, for the "notes unchanged since the last release" check.
+          fetch-depth: 0
 
       # NOT /Applications/Xcode.app: on macos-15 that symlinks to Xcode 16.4,
       # whose iOS 18.5 SDK App Store Connect now refuses outright —
@@ -96,6 +111,27 @@ jobs:
           fi
           sudo xcode-select -switch "$XC"
           xcodebuild -version
+
+      # A rebuild may legitimately reuse the notes, so this warns rather than
+      # fails. It is the reminder that testers and App Review read this file.
+      # A TestFlight build is compared with the last build of either kind; an
+      # App Store release with the last App Store release, since its notes
+      # usually gather what the TestFlight builds before it already said.
+      - name: Warn if the release notes are unchanged since the last release
+        if: github.event.inputs.dry_run != 'true' && github.event.inputs.submit_only != 'true'
+        env:
+          RELEASE_CHANNEL: ${{ github.event.inputs.channel || 'appstore' }}
+        run: |
+          set -euo pipefail
+          NOTES=tools/whatsnew/whatsnew-en-US
+          if [ "$RELEASE_CHANNEL" = "testflight" ]; then
+            PREV="$(git describe --tags --abbrev=0 --match 'ios-v*' --match 'ios-beta-v*' HEAD^ 2>/dev/null || true)"
+          else
+            PREV="$(git describe --tags --abbrev=0 --match 'ios-v*' HEAD^ 2>/dev/null || true)"
+          fi
+          if [ -n "$PREV" ] && git diff --quiet "$PREV" HEAD -- "$NOTES"; then
+            echo "::warning::ios/$NOTES has not changed since $PREV. Testers and App Review will read the previous build's notes."
+          fi
 
       - name: Install cryptography (asc-api.py's only dependency)
         run: |
@@ -174,6 +210,29 @@ jobs:
           ASC_REVIEW_EMAIL: ${{ secrets.ASC_REVIEW_EMAIL }}
         run: ./tools/upload-testflight.sh
 
+      # The name the `tag` job pushes and the announcement uses. Empty on a dry
+      # run, which uploads nothing.
+      - name: Name the release tag
+        id: tag
+        if: github.event.inputs.dry_run != 'true'
+        env:
+          RELEASE_CHANNEL: ${{ github.event.inputs.channel || 'appstore' }}
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            TAG="$GITHUB_REF_NAME"
+          else
+            BUILD=$(grep -m1 'CURRENT_PROJECT_VERSION' MorseTrainer.xcodeproj/project.pbxproj | grep -oE '[0-9]+')
+            MARKETING=$(grep -m1 'MARKETING_VERSION' MorseTrainer.xcodeproj/project.pbxproj | grep -oE '[0-9]+(\.[0-9]+)*')
+            if [ "$RELEASE_CHANNEL" = "testflight" ]; then
+              TAG="ios-beta-v${MARKETING}-b${BUILD}"
+            else
+              TAG="ios-v${MARKETING}-b${BUILD}"
+            fi
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "release tag: $TAG"
+
       # `always()` so a failed or cancelled run still tears the keychain down.
       - name: Delete the temporary keychain
         if: always()
@@ -190,4 +249,50 @@ jobs:
           name: ios-release-logs
           path: ios/build/export/Packaging.log
           if-no-files-found: ignore
+          retention-days: 7
+
+  # Separate from the release job so the write permission is held only by this
+  # job, not by the job that runs the archive with the App Store key.
+  tag:
+    name: Tag the release
+    needs: release
+    if: needs.release.outputs.tag != ''
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Push the tag (never moves an existing one)
+        env:
+          TAG: ${{ needs.release.outputs.tag }}
+        run: |
+          set -euo pipefail
+          # Fetch it by name if it exists, then peel it to its commit.
+          if git fetch -q --depth=1 origin "refs/tags/${TAG}:refs/tags/${TAG}" 2>/dev/null; then
+            AT="$(git rev-parse "${TAG}^{commit}")"
+            if [ "$AT" = "$GITHUB_SHA" ]; then
+              echo "$TAG already points at this commit."
+            else
+              echo "::warning::$TAG already exists at ${AT:0:12}, not this run's ${GITHUB_SHA:0:12}. Left where it is; the announcement uses it as named."
+            fi
+            exit 0
+          fi
+          git -c user.name="github-actions[bot]" \
+              -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+              tag -a "$TAG" -m "$TAG" "$GITHUB_SHA"
+          git push origin "refs/tags/$TAG"
+          echo "Pushed $TAG at ${GITHUB_SHA:0:12}."
+
+      # discord-release.yml reads this to know what the run released: a
+      # manual run's head_branch is `main`, not a tag.
+      - name: Record the tag for the announcement
+        env:
+          TAG: ${{ needs.release.outputs.tag }}
+        run: printf '%s\n' "$TAG" > release-tag.txt
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: release-tag
+          path: release-tag.txt
           retention-days: 7

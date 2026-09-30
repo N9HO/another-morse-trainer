@@ -130,9 +130,35 @@ reachable from a manual run of the workflow (`channel: testflight`,
 `track: alpha` or `internal`) for a build testers should see first. Every iOS
 upload still lands in TestFlight on its way to the App Store.
 
+**Testing builds** are the everyday path after a batch of fixes: bump the build
+numbers and rewrite both notes files (`ios/tools/whatsnew/whatsnew-en-US`,
+`android/store-assets/whatsnew/whatsnew-en-US`) in one PR, merge it, then run
+each release workflow by hand from `main` (`channel: testflight`,
+`track: alpha`). The notes go to testers too: What to Test on TestFlight,
+release notes on the Play track. A run whose notes are unchanged since the last
+release warns.
+
+Every successful upload is **tagged by the workflow itself**, manual runs
+included, so nothing needs tagging by hand afterwards:
+
+| Tag | Made by |
+|---|---|
+| `ios-v<version>-b<build>` | an App Store submission (a pushed tag, or a manual `appstore` run) |
+| `ios-beta-v<version>-b<build>` | a manual `testflight` run |
+| `android-v<versionName>-b<versionCode>` | a Play production release (a pushed tag, or a manual `production` run) |
+| `android-beta-v<versionName>-b<versionCode>` | a manual `alpha` or `internal` run |
+
+The workflow pushes these with `GITHUB_TOKEN`, which never starts another
+workflow, so a tag it makes cannot fire a second release. `*-beta-v*` does not
+match the release triggers anyway, so **never push an `ios-v*` or `android-v*`
+tag by hand to mark a testing build**: that one would ship to production.
+
 `.github/workflows/discord-release.yml` is not tag-triggered: it runs on
 `workflow_run` once a release workflow *succeeds*, so an announcement can never
-precede the release it announces.
+precede the release it announces. It reads which tag the run made, starts the
+changelog at the previous tag of the same platform (either kind), and for a
+TestFlight build adds the join link from the `TESTFLIGHT_PUBLIC_LINK` repository
+variable. A manual run of it only re-announces.
 
 An unprefixed `v*` tag fires **nothing**. Before the split it would have fired
 **both** — an iOS Discord announcement for an Android release, and an attempted

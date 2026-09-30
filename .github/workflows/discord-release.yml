@@ -11,8 +11,25 @@ name: Discord release announcement
 # Each app keeps its own changelog, scoped to its own subtree, so an Android
 # release never lists iOS commits or vice versa.
 #
-# Manual runs (Actions tab or API) take extra inputs:
-#   tag             — tag to announce; platform is inferred from its prefix
+# Which release it was comes from the `release-tag` artifact the release
+# workflow's `tag` job uploads; a manual release run is on `main`, so its
+# head_branch names no tag. (A tag-push run from before that artifact existed
+# falls back to head_branch.) No artifact and no tag means nothing shipped, a
+# dry run for instance, and nothing is announced. Four tag shapes:
+#   ios-v*          App Store submission     android-v*       Play production
+#   ios-beta-v*     TestFlight build         android-beta-v*  Play alpha/internal
+# The changelog runs from the previous tag of the same platform, of either
+# kind, so every build lists only what is new since the one before it.
+#
+# A TestFlight build's announcement carries the public join link from the
+# repository variable TESTFLIGHT_PUBLIC_LINK (Settings -> Secrets and
+# variables -> Actions -> Variables) when it is set; a manual run's
+# testflight_link input overrides it. The link is fetched before posting.
+#
+# Manual runs (Actions tab or API) re-announce a release, and take inputs:
+#   tag             — tag to announce; platform is inferred from its prefix. A
+#                     tag that does not exist is announced as of this branch's
+#                     head, with a warning.
 #   testflight_link — public TestFlight join URL to include (verified; iOS only)
 #   dry_run         — "true" builds and prints the payload but posts nothing
 on:
@@ -57,30 +74,55 @@ jobs:
       - name: Resolve which release this is
         id: rel
         env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
           TAG_INPUT: ${{ github.event.inputs.tag }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
           RUN_WORKFLOW: ${{ github.event.workflow_run.name }}
           RUN_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          LINK_INPUT: ${{ github.event.inputs.testflight_link }}
+          LINK_VAR: ${{ vars.TESTFLIGHT_PUBLIC_LINK }}
         run: |
           set -euo pipefail
 
-          # A release run triggered by a tag push carries the tag in head_branch.
-          # A manually dispatched release carries a branch name instead — there is
-          # no release tag to announce then, so skip rather than invent one.
-          TAG="${TAG_INPUT:-${RUN_BRANCH:-}}"
+          TAG="${TAG_INPUT:-}"
+          if [ -z "$TAG" ] && [ -n "${RUN_ID:-}" ]; then
+            # The release workflow's `tag` job names what it shipped.
+            DIR="$(mktemp -d)"
+            if gh run download "$RUN_ID" -R "$REPO" -n release-tag -D "$DIR" 2>/dev/null; then
+              TAG="$(tr -d '[:space:]' < "$DIR/release-tag.txt")"
+            else
+              # Older runs, from before the artifact: a tag push's head_branch
+              # is the tag. A manual run's is a branch, and falls through.
+              TAG="${RUN_BRANCH:-}"
+            fi
+          fi
 
           case "$TAG" in
-            ios-v*)     PLATFORM=ios ;;
-            android-v*) PLATFORM=android ;;
+            ios-v*)             PLATFORM=ios;     KIND=release ;;
+            ios-beta-v*)        PLATFORM=ios;     KIND=beta ;;
+            android-v*)         PLATFORM=android; KIND=release ;;
+            android-beta-v*)    PLATFORM=android; KIND=beta ;;
             *)
               echo "::notice::'$TAG' is not a release tag (workflow: ${RUN_WORKFLOW:-manual}) — nothing to announce."
               echo "skip=true" >> "$GITHUB_OUTPUT"
               exit 0 ;;
           esac
 
-          echo "skip=false"        >> "$GITHUB_OUTPUT"
-          echo "tag=$TAG"          >> "$GITHUB_OUTPUT"
+          # A TestFlight join link belongs on a TestFlight build; a production
+          # iOS release gets one only when a manual run passes it.
+          LINK=""
+          if [ "$PLATFORM" = "ios" ]; then
+            LINK="${LINK_INPUT:-}"
+            if [ -z "$LINK" ] && [ "$KIND" = "beta" ]; then LINK="${LINK_VAR:-}"; fi
+          fi
+
+          echo "skip=false"         >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG"           >> "$GITHUB_OUTPUT"
           echo "platform=$PLATFORM" >> "$GITHUB_OUTPUT"
-          echo "Announcing $TAG ($PLATFORM)"
+          echo "kind=$KIND"         >> "$GITHUB_OUTPUT"
+          echo "link=$LINK"         >> "$GITHUB_OUTPUT"
+          echo "Announcing $TAG ($PLATFORM, $KIND)"
 
       - name: Build release info
         id: info
@@ -92,21 +134,26 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Keep each platform's changelog on its own tag line: an unfiltered
-          # describe would happily return the other app's tag (or the
-          # pre-monorepo `v1.1`) and start the changelog at someone else's release.
-          MATCH="${PLATFORM}-v*"
-
-          HEAD_SHA="$(git rev-parse HEAD)"
-          PREV="$(git describe --tags --abbrev=0 --match "$MATCH" "${HEAD_SHA}^" 2>/dev/null || true)"
-          if [ -n "$PREV" ]; then RANGE="${PREV}..HEAD"; else RANGE="HEAD"; fi
-
-          # Compare link: use the tag name when it points at HEAD, the sha otherwise.
-          if [ "$(git rev-parse "refs/tags/${TAG}^{commit}" 2>/dev/null || true)" = "$HEAD_SHA" ]; then
+          # The release is the tag when it exists (it can sit behind the
+          # checked-out head on a manual re-announce); the head otherwise.
+          if TAG_SHA="$(git rev-parse -q --verify "refs/tags/${TAG}^{commit}")"; then
+            END_SHA="$TAG_SHA"
             END="$TAG"
           else
-            END="${HEAD_SHA:0:12}"
+            echo "::warning::Tag $TAG does not exist; announcing as of ${GITHUB_SHA:0:12}."
+            END_SHA="$(git rev-parse HEAD)"
+            END="${END_SHA:0:12}"
           fi
+
+          # Keep each platform's changelog on its own tag line: an unfiltered
+          # describe would happily return the other app's tag (or the
+          # pre-monorepo `v1.1`) and start the changelog at someone else's
+          # release. Both kinds count, so a production release after a run of
+          # TestFlight/alpha builds lists only what the last testing build did not.
+          PREV="$(git describe --tags --abbrev=0 \
+                   --match "${PLATFORM}-v*" --match "${PLATFORM}-beta-v*" \
+                   "${END_SHA}^" 2>/dev/null || true)"
+          if [ -n "$PREV" ]; then RANGE="${PREV}..${END_SHA}"; else RANGE="$END_SHA"; fi
           if [ -n "$PREV" ]; then
             COMPARE="https://github.com/${REPO}/compare/${PREV}...${END}"
           else
@@ -136,9 +183,9 @@ jobs:
           echo "ts=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
 
       - name: Verify the TestFlight link resolves
-        if: ${{ steps.rel.outputs.skip != 'true' && github.event.inputs.testflight_link != '' }}
+        if: ${{ steps.rel.outputs.skip != 'true' && steps.rel.outputs.link != '' }}
         env:
-          LINK: ${{ github.event.inputs.testflight_link }}
+          LINK: ${{ steps.rel.outputs.link }}
           DRY_RUN: ${{ github.event.inputs.dry_run }}
         run: |
           set -euo pipefail
@@ -159,20 +206,29 @@ jobs:
           WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL }}
           TAG: ${{ steps.rel.outputs.tag }}
           PLATFORM: ${{ steps.rel.outputs.platform }}
+          KIND: ${{ steps.rel.outputs.kind }}
           COMPARE: ${{ steps.info.outputs.compare }}
           CHANGELOG: ${{ steps.info.outputs.changelog }}
           TS: ${{ steps.info.outputs.ts }}
-          LINK: ${{ github.event.inputs.testflight_link }}
+          LINK: ${{ steps.rel.outputs.link }}
           DRY_RUN: ${{ github.event.inputs.dry_run }}
         run: |
           set -euo pipefail
 
           if [ "$PLATFORM" = "ios" ]; then
             EMOJI="📱"; LABEL="iOS"; COLOR=3447003
-            BLURB="A new build is submitted to the App Store and will go live once Apple approves it. TestFlight testers get it right away."
+            if [ "$KIND" = "beta" ]; then
+              BLURB="A new TestFlight build is out. Testers get it once Apple's beta review passes."
+            else
+              BLURB="A new build is submitted to the App Store and will go live once Apple approves it. TestFlight testers get it right away."
+            fi
           else
             EMOJI="🤖"; LABEL="Android"; COLOR=3066993
-            BLURB="A new build is rolling out on Google Play."
+            if [ "$KIND" = "beta" ]; then
+              BLURB="A new testing build is on Google Play. Testers get it through the Play Store."
+            else
+              BLURB="A new build is rolling out on Google Play."
+            fi
           fi
 
           # jq builds correctly-escaped JSON from the raw values.

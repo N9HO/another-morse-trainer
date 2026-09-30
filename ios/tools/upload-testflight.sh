@@ -8,8 +8,9 @@
 #              tools/whatsnew/whatsnew-en-US, apply the listing metadata in
 #              tools/store-metadata.json, and submit to App Review with
 #              release-after-approval. This is the production path.
-#   testflight the beta path this script used to be: submit for Beta App
-#              Review and hand the build to the previous build's testers.
+#   testflight the testing path: set What to Test from the same
+#              tools/whatsnew/whatsnew-en-US, submit for Beta App Review and
+#              hand the build to the previous build's testers.
 # Every upload lands in TestFlight regardless, so internal testers still get
 # a production build before Apple has finished reviewing it.
 #
@@ -52,6 +53,15 @@ esac
 
 if [ "${SUBMIT_ONLY:-0}" = "1" ] && [ "${DRY_RUN:-0}" = "1" ]; then
   echo "❌ SUBMIT_ONLY and DRY_RUN together do nothing; pick one."; exit 1
+fi
+
+# Both channels ship notes: What's New on the App Store version, What to Test
+# on the TestFlight build. Checked before archiving, because once the upload
+# lands the build number is spent and a missing file would strand it.
+NOTES="tools/whatsnew/whatsnew-en-US"
+if [ "${DRY_RUN:-0}" != "1" ] && [ ! -s "$NOTES" ]; then
+  echo "❌ $NOTES is missing or empty. Write the notes for this build before releasing."
+  exit 1
 fi
 
 ARCHIVE="build/AMT-$(date +%Y%m%d-%H%M%S).xcarchive"
@@ -147,11 +157,6 @@ if [ "${SKIP_DISTRIBUTE:-0}" != "1" ]; then
   echo "  waiting for build $VER to finish processing…"
   python3 tools/asc-api.py wait "$VER"
   if [ "$CHANNEL" = "appstore" ]; then
-    NOTES="tools/whatsnew/whatsnew-en-US"
-    if [ ! -s "$NOTES" ]; then
-      echo "❌ $NOTES is missing or empty. App Review needs What's New; write it before releasing."
-      exit 1
-    fi
     # Three passes, because App Review refuses a version whose age rating,
     # categories or listing are missing, and those records only settle once
     # the version exists with a build on it: attach without submitting,
@@ -163,6 +168,9 @@ if [ "${SKIP_DISTRIBUTE:-0}" != "1" ]; then
     python3 tools/asc-api.py appstore "$MARKETING" "$VER" "$NOTES"
     echo "✅ $MARKETING ($VER) is submitted to App Review and will release automatically once approved."
   else
+    # What to Test goes on before the build reaches testers or Beta App
+    # Review, so neither sees it blank.
+    python3 tools/asc-api.py whatsnew "$VER" "$NOTES"
     python3 tools/asc-api.py dist      # assign the new build to the prior build's testers
     python3 tools/asc-api.py submit    # submit for beta review (fast-tracked on an approved train)
     echo "✅ Submitted for beta review and assigned to testers. They'll be emailed once approved."
