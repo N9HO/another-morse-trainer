@@ -902,12 +902,6 @@ async def on_raw_reaction_add(payload: discord.RawReactionActionEvent) -> None:
         return
     if str(payload.emoji) not in settings.trigger_emojis:
         return
-    if not _may_trigger(payload.user_id):
-        # No 👀, no reply: from the reporter's side a 🐛 is just a reaction.
-        log.info("Ignoring %s from user %s, who is not in TRIGGER_USER_IDS",
-                 payload.emoji, payload.user_id)
-        return
-
     channel = client.get_channel(payload.channel_id)
     if channel is None:
         # Not cached — e.g. a reaction inside an archived thread.
@@ -923,6 +917,18 @@ async def on_raw_reaction_add(payload: discord.RawReactionActionEvent) -> None:
         message = await channel.fetch_message(payload.message_id)
     except discord.HTTPException:
         log.exception("Failed to fetch reacted message")
+        return
+
+    if not _may_trigger(payload.user_id):
+        # A ❌ instead of the 👀, so whoever reacted can see the bot noticed
+        # and declined, rather than wondering whether it is down. Nothing else:
+        # no triage, no reply in the thread.
+        log.info("Declining %s from user %s, who is not in TRIGGER_USER_IDS",
+                 payload.emoji, payload.user_id)
+        try:
+            await message.add_reaction("❌")
+        except discord.HTTPException:
+            pass
         return
 
     # Acknowledge the trigger immediately: the 👀 says "seen, triaging". If
