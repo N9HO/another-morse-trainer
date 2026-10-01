@@ -13,7 +13,6 @@ import app.anothermorsetrainer.morsekit.CallsignFormat
 import app.anothermorsetrainer.morsekit.ContestLength
 import app.anothermorsetrainer.morsekit.ContestType
 import app.anothermorsetrainer.morsekit.Cw77Style
-import app.anothermorsetrainer.morsekit.ExamGrading
 import app.anothermorsetrainer.morsekit.ExamSpeed
 import app.anothermorsetrainer.morsekit.MorseCode
 import app.anothermorsetrainer.morsekit.MorseData
@@ -302,9 +301,6 @@ object Settings {
     /** Code Exam: the license-tied speed (iOS examSpeed). */
     var examSpeed by mutableStateOf(ExamSpeed.GENERAL13)
         private set
-    /** Code Exam: solid copy or content questions (iOS examGrading, default questions). */
-    var examGrading by mutableStateOf(ExamGrading.QUESTIONS)
-        private set
     /** Code Exam: a bundled passage instead of a freshly generated one (iOS examUseBundled). */
     var examUseBundled by mutableStateOf(false)
         private set
@@ -574,8 +570,6 @@ object Settings {
         journeyDrainOnMiss = prefs.getBoolean("journeyDrain", true)
         examSpeed = ExamSpeed.allCases.firstOrNull { it.code == prefs.getString("examSpeed", null) }
             ?: ExamSpeed.GENERAL13
-        examGrading = ExamGrading.allCases.firstOrNull { it.code == prefs.getString("examGrading", null) }
-            ?: ExamGrading.QUESTIONS
         examUseBundled = prefs.getBoolean("examBundled", false)
         examSampleIndex = prefs.getInt("examSampleIndex", 0).coerceAtLeast(0)
         qrqWpm = prefs.getFloat("qrqWpm", 35f).toDouble().coerceIn(35.0, 60.0)
@@ -1107,11 +1101,6 @@ object Settings {
         persistModeSetup()
     }
 
-    fun updateExamGrading(value: ExamGrading) {
-        examGrading = value
-        persistModeSetup()
-    }
-
     fun updateExamUseBundled(value: Boolean) {
         examUseBundled = value
         persistModeSetup()
@@ -1203,7 +1192,6 @@ object Settings {
         prefs.edit {
             putBoolean("journeyDrain", journeyDrainOnMiss)
             putString("examSpeed", examSpeed.code)
-            putString("examGrading", examGrading.code)
             putBoolean("examBundled", examUseBundled)
             putInt("examSampleIndex", examSampleIndex)
             putFloat("qrqWpm", qrqWpm.toFloat())

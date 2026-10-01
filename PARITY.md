@@ -209,8 +209,9 @@ Values the two apps now agree on (the iOS value, the original app's, unless
 Android's was plainly safer): character speed floor 15 WPM; Farnsworth off
 by default with an effective-speed floor of 8; recognize-within 0.5–3.0 s;
 reveal the answer on a miss; five-minute sessions; Head Copy two repeats and
-a 5 s reveal; Listen gaps 1.3 / 1.0 / 0.5 / 0.2 s; exam grading by
-questions; your call W1AW; caller speed floor 12; tone spread to 500 Hz;
+a 5 s reveal; Listen gaps 1.3 / 1.0 / 0.5 / 0.2 s; exam graded both ways
+in every sitting (no grading choice since the ARRL grading change); your
+call W1AW; caller speed floor 12; tone spread to 500 Hz;
 QRN Off / Normal / Moderate / Heavy at 0 / 0.04 / 0.10 / 0.20; keep partial
 call off; RX piezo buzz on; RX delay 0–4000 ms in 250 ms steps; TX tone
 48–96; 5000 signal events; the pileup QRN, keep-partial and Listen-gap

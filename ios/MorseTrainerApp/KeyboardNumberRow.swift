@@ -9,6 +9,11 @@ struct MorseKeyboardRow: ViewModifier {
     @Binding var text: String
     /// Dismiss the keyboard (clear the field's focus). Called by the chevron.
     var onDone: () -> Void
+    /// Prosign keys to add after the punctuation (Code Exam grades prosigns,
+    /// so its copy needs them). Each types its bracketed token as a word of
+    /// its own, the app's `<AR>` convention, which the exam reads as the
+    /// prosign and never as the letters.
+    var prosigns: [String] = []
 
     /// Digits first (the common case), then the punctuation that shows up in
     /// callsigns, Q-codes, and exchanges.
@@ -20,9 +25,14 @@ struct MorseKeyboardRow: ViewModifier {
             ToolbarItemGroup(placement: .keyboard) {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 6) {
-                        ForEach(Self.keys, id: \.self) { key in
+                        ForEach(Self.keys + prosigns, id: \.self) { key in
                             Button {
-                                text.append(key)
+                                if key.hasPrefix("<") {
+                                    if let last = text.last, !last.isWhitespace { text.append(" ") }
+                                    text.append(key + " ")
+                                } else {
+                                    text.append(key)
+                                }
                             } label: {
                                 Text(key)
                                     .font(.system(.body, design: .monospaced))
@@ -48,7 +58,8 @@ struct MorseKeyboardRow: ViewModifier {
 
 extension View {
     /// Attach the Morse number/punctuation accessory row to a focused text field.
-    func morseKeyboardRow(text: Binding<String>, onDone: @escaping () -> Void) -> some View {
-        modifier(MorseKeyboardRow(text: text, onDone: onDone))
+    func morseKeyboardRow(text: Binding<String>, prosigns: [String] = [],
+                          onDone: @escaping () -> Void) -> some View {
+        modifier(MorseKeyboardRow(text: text, onDone: onDone, prosigns: prosigns))
     }
 }

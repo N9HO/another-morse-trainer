@@ -711,8 +711,6 @@ struct AppSettings: Codable, Equatable {
     // Code Exam (ARRL/FCC-style proficiency exam)
     /// License-tied exam speed (5 / 13 / 20 WPM).
     var examSpeed: ExamSpeed = .general13
-    /// How the exam is graded: solid copy or content questions.
-    var examGrading: ExamGrading = .questions
     /// Use a bundled (ready-made) passage instead of a freshly generated one.
     var examUseBundled: Bool = false
 
@@ -867,7 +865,7 @@ extension AppSettings {
         case qrqSpeed, backgroundNoise, didMigrateNoiseFloor
         case bluetoothKeepAlive, bandNoise
         case dailyDitStartingWpm, dailyDitHideReference
-        case examSpeed, examGrading, examUseBundled
+        case examSpeed, examUseBundled
         case qso
         case contest
         case rapidFire
@@ -953,7 +951,6 @@ extension AppSettings {
         s.answerEntry = (try? c.decodeIfPresent(String.self, forKey: .answerEntry))
             .flatMap { $0 }.flatMap(AnswerEntryMode.init(rawValue:)) ?? s.answerEntry
         s.examSpeed = try c.decodeIfPresent(ExamSpeed.self, forKey: .examSpeed) ?? s.examSpeed
-        s.examGrading = try c.decodeIfPresent(ExamGrading.self, forKey: .examGrading) ?? s.examGrading
         s.examUseBundled = try c.decodeIfPresent(Bool.self, forKey: .examUseBundled) ?? s.examUseBundled
         s.qso = try c.decodeIfPresent(QSOSettings.self, forKey: .qso) ?? s.qso
         s.contest = try c.decodeIfPresent(ContestSettings.self, forKey: .contest) ?? s.contest

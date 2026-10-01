@@ -2,23 +2,32 @@ package app.anothermorsetrainer.morsekit
 
 import kotlin.random.Random
 
-// An ARRL/FCC-style Morse code proficiency exam mode.
+// An ARRL/FCC-style Morse code proficiency exam mode, graded the way the ARRL
+// VEC graded it.
 //
 // Background: the historical FCC/VEC code exams (eliminated 2007-02-23) sent
 // ~5 minutes of plain-language text styled as an on-air QSO — callsigns, name,
-// QTH, rig, antenna, weather, RST, age, "73". To pass you needed EITHER one
-// minute of solid copy (that many consecutive correct characters at the exam's
-// speed: 25 at 5 WPM, 65 at 13, 100 at 20 — see [ExamSpeed.requiredRun]) OR to
-// correctly answer ~10 fill-in questions about the content. License-tied speeds
-// were 5 WPM (Novice), 13 WPM (General/Advanced) and 20 WPM (Amateur Extra);
-// the 5 WPM test used Farnsworth (full-speed characters, stretched spacing).
-// The text had to include every letter and numeral, . , ? / and the prosigns
-// AR, SK and BT (#263). `fixtures/code-exam.json` pins both rules.
+// QTH, rig, antenna, weather, RST, age, "73". License-tied speeds were 5 WPM
+// (Novice), 13 WPM (General/Advanced) and 20 WPM (Amateur Extra); the 5 WPM
+// test used Farnsworth (full-speed characters, stretched spacing). The text
+// had to use every letter and numeral, period, comma, question mark, slant
+// mark and the prosigns AR, BT and SK (47 CFR 97.503(a), 1998 edition).
+//
+// Grading, ARRL VEC practice (the FCC left the method to the VEs):
+// - The candidate copies the whole message, then answers ten fill-in-the-blank
+//   questions about it. Either path passes: one minute of solid copy, or seven
+//   of the ten blanks right. (FCC 99-412 ¶37: the ARRL asked that VEs be held
+//   to "a ten-question fill-in-the-blank examination or one minute of solid
+//   copy".)
+// - One minute of solid copy is 25 / 65 / 100 characters at 5 / 13 / 20 WPM,
+//   with letters counting one and "numbers, punctuation and procedural
+//   signals" counting two each (ARRL VE Manual, 8th edition, 2000). So the
+//   prosigns are graded copy, not ignored.
+// `fixtures/code-exam.json` pins every rule above, with its sources.
 //
 // The genuine secured exam transcripts were never published, so this mode
 // reproduces the *format* with procedurally generated (and a few bundled)
-// QSO-style passages, plus both grading modes. Pure logic, no audio/UI, so it
-// can be unit-tested and reuses the same `QuizSource` loop as the other modes.
+// QSO-style passages. Pure logic, no audio/UI, so it can be unit-tested.
 //
 // Translated from MorseKit/MorseExam.swift. Swift's injectable
 // `RandomNumberGenerator` becomes Kotlin's `kotlin.random.Random`. Exam
@@ -72,9 +81,11 @@ enum class ExamSpeed(val code: String) {
 
     /**
      * The solid-copy pass bar: one minute of copy at this exam's speed (#262),
-     * so 25 / 65 / 100 characters at 5 / 13 / 20 WPM.
+     * so 25 / 65 / 100 counted characters at 5 / 13 / 20 WPM. Counted the
+     * ARRL way: a numeral, punctuation mark or prosign is worth two letters
+     * ([ExamPassage.weight]).
      *
-     * Two choices, both pinned by `fixtures/code-exam.json`:
+     * Two further choices, both pinned by `fixtures/code-exam.json`:
      * - The speed is the *effective* (stated) WPM, not the character speed. The
      *   5 WPM exam sent 13 WPM characters, but a minute of it still held five
      *   words, and the historical bar there was 25 characters.
@@ -94,41 +105,20 @@ enum class ExamSpeed(val code: String) {
 
     val label: String get() = "$wpmLabel — $license"
 
+    /**
+     * The two ways to pass, as the setup, header and settings summary show
+     * them: "Solid copy (65) or 7 of 10 questions" at 13 WPM.
+     */
+    val passLabel: String
+        get() = "Solid copy ($requiredRun) or ${ExamSession.QUESTIONS_TO_PASS} of " +
+            "${ExamSession.QUESTION_COUNT} questions"
+
     companion object {
         /** Characters in a word, by the PARIS standard every WPM figure uses. */
         const val CHARACTERS_PER_WORD = 5
 
         /** Mirrors Swift's `CaseIterable.allCases`. */
         val allCases: List<ExamSpeed> get() = entries.toList()
-    }
-}
-
-// MARK: - Grading mode
-
-/**
- * The two historical ways to pass the code exam.
- *
- * Swift `enum ExamGrading: String, CaseIterable, Identifiable` → Kotlin
- * `enum class` carrying the raw value as [code].
- */
-enum class ExamGrading(val code: String) {
-    SOLID_COPY("solidCopy"), // one minute of solid copy: ExamSpeed.requiredRun in a row
-    QUESTIONS("questions");  // ~10 fill-in questions about the content of the message
-
-    val id: String get() = code
-
-    /**
-     * The picker / header label. Solid copy names its bar, which depends on the
-     * speed (#262): "Solid copy (65 in a row)" at 13 WPM.
-     */
-    fun label(speed: ExamSpeed): String = when (this) {
-        SOLID_COPY -> "Solid copy (${speed.requiredRun} in a row)"
-        QUESTIONS -> "Answer questions"
-    }
-
-    companion object {
-        /** Mirrors Swift's `CaseIterable.allCases`. */
-        val allCases: List<ExamGrading> get() = entries.toList()
     }
 }
 
@@ -176,7 +166,8 @@ data class ExamPassage(
 
     /**
      * The gradable copy a candidate would write: [sentText] through
-     * [normalize], so the prosigns are gone and the punctuation stays.
+     * [normalize]. Prosigns stay in it, as bracketed tokens, because the ARRL
+     * graded them.
      */
     val copyText: String = normalize(sentText)
 
@@ -209,56 +200,101 @@ data class ExamPassage(
          * reference text and the learner's typed copy so grading is
          * apples-to-apples.
          *
-         * Grading rule (#263, pinned by `fixtures/code-exam.json`, identical in
-         * the Swift port): letters, digits and the punctuation . , ? / are copy,
-         * kept as written and graded like any other character. A prosign in any
-         * written form — a bracketed token such as <AR>, or "+" (AR), or "="
-         * (BT) — is dropped and acts as a word break: it is procedure rather
-         * than message text, the copy keyboard has no key for it, and a
-         * candidate is never marked down for writing one or leaving it out.
+         * Grading rule (pinned by `fixtures/code-exam.json`, identical in the
+         * Swift port). The ARRL VEC graded prosigns as copy, so they stay in
+         * the stream, each as its canonical bracketed token standing as its
+         * own word:
+         * - a bracketed token is a prosign: `<AR>`, `<sk>`, `< BT >` all read
+         *   as the token with its spaces dropped, upper-cased;
+         * - `+` is AR and `=` is BT, the written forms copy sheets used;
+         * - the letters `AR` without brackets are the letters A and R
+         *   (Arkansas in a QTH), never the prosign. The bracket or the symbol
+         *   decides.
+         * Letters, digits and `. , ? /` are kept as written (`/` is DN).
          * Upper-cased; whitespace runs collapse to one space, none leading or
          * trailing.
          */
         fun normalize(s: String): String {
-            val out = StringBuilder()
-            var pendingSpace = false
+            val words = mutableListOf<String>()
+            val word = StringBuilder()
+            fun endWord() {
+                if (word.isNotEmpty()) {
+                    words.add(word.toString())
+                    word.setLength(0)
+                }
+            }
             val chars = s.uppercase()
             var i = 0
             while (i < chars.length) {
                 val ch = chars[i]
-                var isBreak = ch == ' ' || ch == '\n' || ch == '\t' || ch == '=' || ch == '+'
                 if (ch == '<') {
                     val close = chars.indexOf('>', startIndex = i + 1)
                     if (close >= 0) {
-                        isBreak = true
-                        i = close          // skip the whole bracketed prosign
+                        val inner = chars.substring(i + 1, close).filter { !it.isWhitespace() }
+                        endWord()
+                        if (inner.isNotEmpty()) words.add("<$inner>")
+                        i = close + 1
+                        continue
                     }
                 }
-                if (isBreak) {
-                    if (out.isNotEmpty()) pendingSpace = true
-                } else {
-                    if (pendingSpace) {
-                        out.append(' ')
-                        pendingSpace = false
+                when {
+                    ch == '+' || ch == '=' -> {
+                        endWord()
+                        words.add(if (ch == '+') "<AR>" else "<BT>")
                     }
-                    out.append(ch)
+                    ch.isWhitespace() -> endWord()
+                    else -> word.append(ch)
                 }
                 i += 1
             }
-            return out.toString()
+            endWord()
+            return words.joinToString(" ")
+        }
+
+        /**
+         * Split a normalized copy stream into the symbols the grader compares:
+         * a bracketed prosign is one symbol, a word space is one symbol, and
+         * every other character is one symbol.
+         */
+        fun symbols(normalized: String): List<String> {
+            val out = mutableListOf<String>()
+            var i = 0
+            while (i < normalized.length) {
+                val close = if (normalized[i] == '<') normalized.indexOf('>', startIndex = i + 1) else -1
+                if (close >= 0) {
+                    out.add(normalized.substring(i, close + 1))
+                    i = close + 1
+                } else {
+                    out.add(normalized[i].toString())
+                    i += 1
+                }
+            }
+            return out
+        }
+
+        /**
+         * What one copied symbol counts toward the one-minute bar, by the ARRL
+         * VEC rule: a letter counts one; a numeral, punctuation mark or prosign
+         * counts two; a word space counts nothing (it has to be in the right
+         * place, but it is timing, not a character).
+         */
+        fun weight(symbol: String): Int {
+            if (symbol == " ") return 0
+            if (symbol.length == 1 && symbol[0] in 'A'..'Z') return 1
+            return 2
         }
     }
 }
 
 /**
- * The outcome of grading a solid-copy attempt.
+ * The outcome of grading a typed copy for one minute of solid copy.
  *
  * Swift `struct ExamCopyResult: Equatable` → Kotlin `data class`.
  */
 data class ExamCopyResult(
     /**
-     * Length of the longest run of consecutive characters the copy got right
-     * (word spaces inside the run not counted — see [ExamSpeed.requiredRun]).
+     * The longest run of consecutive correct copy, counted the ARRL way
+     * (letters 1, numerals / punctuation / prosigns 2, word spaces 0).
      */
     val longestRun: Int,
     /** The bar to clear: one minute of copy at the exam's speed. */
@@ -270,149 +306,153 @@ data class ExamCopyResult(
 // MARK: - Question
 
 /**
- * One fill-in question about the passage's content.
+ * One fill-in-the-blank question about the message, answered from the copy.
  *
  * Swift `struct ExamQuestion: Equatable` → Kotlin `data class`.
  */
 data class ExamQuestion(
+    /** The blank to fill, e.g. "The operator's name is ____." */
     val prompt: String,
-    val options: List<String>,   // distinct, includes `answer`
-    val answer: String
-)
+    /** The answer as it was sent. */
+    val answer: String,
+    /** Every answer marked right (e.g. both K9LA/4 and K9LA). */
+    val accepted: List<String> = listOf(answer)
+) {
+    /**
+     * Whether a typed answer fills the blank: compared the way copy is
+     * compared, with case and spacing ignored ("100 w" fills "100W").
+     */
+    fun accepts(typed: String): Boolean {
+        val t = compact(typed)
+        return t.isNotEmpty() && accepted.any { compact(it) == t }
+    }
+
+    private fun compact(s: String) = ExamPassage.normalize(s).filter { it != ' ' }
+}
+
+// MARK: - Result
+
+/** Which way a sitting passed. The ARRL VEC passed a candidate on either. */
+enum class ExamPassPath { SOLID_COPY, QUESTIONS, BOTH, NONE }
+
+/** Both grades for one sitting. */
+data class ExamResult(
+    val copy: ExamCopyResult,
+    val questionsCorrect: Int,
+    val questionsAsked: Int,
+    val questionsRequired: Int
+) {
+    val passedByCopy: Boolean get() = copy.passed
+    val passedByQuestions: Boolean
+        get() = questionsAsked > 0 && questionsCorrect >= questionsRequired
+    val passed: Boolean get() = passedByCopy || passedByQuestions
+    val path: ExamPassPath
+        get() = when {
+            passedByCopy && passedByQuestions -> ExamPassPath.BOTH
+            passedByCopy -> ExamPassPath.SOLID_COPY
+            passedByQuestions -> ExamPassPath.QUESTIONS
+            else -> ExamPassPath.NONE
+        }
+
+    /** One line naming the way the sitting passed, for the results screen. */
+    val pathText: String
+        get() = when (path) {
+            ExamPassPath.BOTH -> "Passed on both: solid copy and the questions"
+            ExamPassPath.SOLID_COPY -> "Passed on one minute of solid copy"
+            ExamPassPath.QUESTIONS -> "Passed on the questions"
+            ExamPassPath.NONE -> "Neither solid copy nor the questions reached the bar"
+        }
+}
 
 // MARK: - Session
 
 /**
- * Drives one exam: holds the passage, the questions, and the grading. Plugs
- * into the shared [QuizSource] loop, and also exposes a richer API the app's
- * bespoke exam screen uses (play the whole passage, then copy or answer).
+ * Drives one sitting, graded the way the ARRL VEC graded it: copy the whole
+ * message, then fill in ten blanks about it from that copy. One minute of
+ * solid copy passes, and so do seven right answers out of ten.
  *
  * Swift's two initializers (random passage / explicit passage) become a primary
  * constructor taking an explicit [passage] plus a [forRandom] companion factory.
  */
 class ExamSession(
     val speed: ExamSpeed,
-    val grading: ExamGrading,
-    passage: ExamPassage,
-    questionCount: Int = 10,
-    private val rng: Random = Random.Default
-) : QuizSource {
-
-    var passage: ExamPassage = passage
-        private set
-
-    var questions: List<ExamQuestion> = makeQuestions(passage, questionCount, rng)
-        private set
+    val passage: ExamPassage
+) {
+    val questions: List<ExamQuestion> = makeQuestions(passage)
 
     var questionIndex: Int = 0
         private set
     var correctCount: Int = 0
         private set
-    var lastCopyResult: ExamCopyResult? = null
+    var copyResult: ExamCopyResult = ExamCopyResult(longestRun = 0, required = speed.requiredRun)
         private set
 
     /** The historical "one minute of solid copy" bar at this exam's speed. */
     val requiredRun: Int get() = speed.requiredRun
 
-    // MARK: QuizSource
+    val summary: String get() = "Code exam · ${speed.wpmLabel}"
 
-    override val summary: String
-        get() = when (grading) {
-            ExamGrading.SOLID_COPY ->
-                "Code exam · ${speed.wpmLabel}"
-            ExamGrading.QUESTIONS ->
-                "Q ${minOf(questionIndex + 1, questions.size)} of ${questions.size}"
-        }
-
-    override fun nextDrill(): Drill = when (grading) {
-        ExamGrading.SOLID_COPY ->
-            Drill(
-                playable = MorseItem.Playable.Text(passage.sentText),
-                options = emptyList(),
-                correct = passage.copyText,
-                revealPrimary = passage.copyText,
-                revealSecondary = "",
-                question = "Copy the transmission, then type what you got. " +
-                    "Pass = $requiredRun correct characters in a row."
-            )
-        ExamGrading.QUESTIONS -> {
-            val q = questions[minOf(questionIndex, maxOf(0, questions.size - 1))]
-            // The first question carries the passage so the loop plays it once;
-            // later questions are silent (the passage isn't replayed).
-            Drill(
-                playable = MorseItem.Playable.Text(if (questionIndex == 0) passage.sentText else ""),
-                options = q.options,
-                correct = q.answer,
-                revealPrimary = q.answer,
-                revealSecondary = "",
-                question = q.prompt
-            )
-        }
-    }
-
-    override fun record(choice: String, ttr: Double): DrillOutcome = when (grading) {
-        ExamGrading.SOLID_COPY -> {
-            val result = gradeSolidCopy(choice)
-            lastCopyResult = result
-            DrillOutcome(correct = result.passed, unlocked = null)
-        }
-        ExamGrading.QUESTIONS -> {
-            if (questionIndex >= questions.size) {
-                DrillOutcome(correct = false, unlocked = null)
-            } else {
-                val correct = choice == questions[questionIndex].answer
-                if (correct) correctCount += 1
-                questionIndex += 1
-                val done = questionIndex >= questions.size
-                DrillOutcome(correct = correct, unlocked = if (done) "exam complete" else null)
-            }
-        }
-    }
-
-    /** Whether every question has been answered (question mode). */
-    val isComplete: Boolean get() = questionIndex >= questions.size
-
-    // MARK: Solid-copy grading
+    // MARK: Solid copy
 
     /**
-     * Grade a typed copy against the passage: find the longest run of
-     * consecutive characters that exactly matches the sent text.
+     * Grade a typed copy against the passage: the longest run of consecutive
+     * symbols matching the sent text, weighted by the ARRL counting rule.
      */
     fun gradeSolidCopy(typed: String): ExamCopyResult {
-        val a = ExamPassage.normalize(typed).toList()
-        val b = passage.copyText.toList()
-        return ExamCopyResult(
-            longestRun = longestCommonRun(a, b),
-            required = requiredRun
-        )
+        val a = ExamPassage.symbols(ExamPassage.normalize(typed))
+        val b = ExamPassage.symbols(passage.copyText)
+        return ExamCopyResult(longestRun = longestCommonRun(a, b), required = requiredRun)
     }
 
+    /** Hand in the copy: graded now and kept for the result. */
+    fun submitCopy(typed: String): ExamCopyResult {
+        copyResult = gradeSolidCopy(typed)
+        return copyResult
+    }
+
+    // MARK: Questions
+
+    /** The blank being filled in, or null once all are done. */
+    val currentQuestion: ExamQuestion? get() = questions.getOrNull(questionIndex)
+
+    /** Fill in the current blank and move on. Returns whether it was right. */
+    fun answer(typed: String): Boolean {
+        val q = currentQuestion ?: return false
+        val right = q.accepts(typed)
+        if (right) correctCount += 1
+        questionIndex += 1
+        return right
+    }
+
+    /** Whether every question has been answered. */
+    val isComplete: Boolean get() = questionIndex >= questions.size
+
+    /** Both grades so far. */
+    val result: ExamResult
+        get() = ExamResult(
+            copy = copyResult,
+            questionsCorrect = correctCount,
+            questionsAsked = questions.size,
+            questionsRequired = QUESTIONS_TO_PASS
+        )
+
     companion object {
+        /** Questions asked about the message, and how many must be right. */
+        const val QUESTION_COUNT = 10
+        const val QUESTIONS_TO_PASS = 7
+
         /** Generate a random passage at the given speed. */
-        fun forRandom(
-            speed: ExamSpeed,
-            grading: ExamGrading,
-            questionCount: Int = 10,
-            rng: Random = Random.Default
-        ): ExamSession {
-            val passage = randomPassage(rng)
-            return ExamSession(
-                speed = speed,
-                grading = grading,
-                passage = passage,
-                questionCount = questionCount,
-                rng = rng
-            )
-        }
+        fun forRandom(speed: ExamSpeed, rng: Random = Random.Default): ExamSession =
+            ExamSession(speed = speed, passage = randomPassage(rng))
 
         /**
-         * The longest substring common to both character lists, counted in
-         * characters with word spaces weighing nothing: a space inside the run
-         * has to match, but the bar is in characters, not keystrokes (#262).
-         * Classic O(n·m) longest-common-substring DP, rolling row, with each
-         * cell holding the run's weight rather than its length.
+         * The longest run of symbols common to both, in order and unbroken,
+         * each cell holding the run's ARRL weight rather than its length:
+         * letters one, numerals / punctuation / prosigns two, word spaces
+         * nothing (a space inside the run still has to match).
+         * Longest-common-substring DP with a rolling row.
          */
-        fun longestCommonRun(a: List<Char>, b: List<Char>): Int {
+        fun longestCommonRun(a: List<String>, b: List<String>): Int {
             if (a.isEmpty() || b.isEmpty()) return 0
             var prev = IntArray(b.size + 1)
             var best = 0
@@ -420,7 +460,7 @@ class ExamSession(
                 val cur = IntArray(b.size + 1)
                 for (j in 1..b.size) {
                     if (a[i - 1] != b[j - 1]) continue
-                    cur[j] = prev[j - 1] + (if (a[i - 1] == ' ') 0 else 1)
+                    cur[j] = prev[j - 1] + ExamPassage.weight(a[i - 1])
                     if (cur[j] > best) best = cur[j]
                 }
                 prev = cur
@@ -458,44 +498,25 @@ class ExamSession(
 
         // MARK: Question generation
 
-        fun makeQuestions(p: ExamPassage, count: Int, rng: Random): List<ExamQuestion> {
-            // (prompt, correct answer, pool to draw distractors from)
-            val fields: List<Triple<String, String, List<String>>> = listOf(
-                Triple("What was the operator's name?", p.name, MorseData.opNames),
-                Triple("What state (QTH) were they in?", p.qth, MorseData.qthList),
-                Triple("What RST signal report did they send?", p.rst, MorseData.rstValues),
-                Triple("What rig (radio) were they using?", p.rig, ExamData.rigs),
-                Triple("How much power were they running?", p.power, ExamData.powers),
-                Triple("What antenna were they using?", p.antenna, ExamData.antennas),
-                Triple("What was the weather (WX) like?", p.weather, ExamData.weathers),
-                Triple("What was the temperature?", p.temp, ExamData.temps),
-                Triple("How old is the operator?", p.age, ExamData.ages),
-                Triple("What was the sending station's callsign?", p.deCall, MorseData.callSigns),
-            )
-            var built = fields.map { field ->
-                ExamQuestion(
-                    prompt = field.first,
-                    options = makeOptions(answer = field.second, pool = field.third, rng = rng),
-                    answer = field.second
-                )
-            }
-            built = built.shuffled(rng)
-            if (count < built.size) built = built.take(count)
-            return built
-        }
-
         /**
-         * Four distinct options: the correct answer plus three random distractors
-         * from the same pool, shuffled.
+         * Ten fill-in blanks drawn from the passage's fields, in the order the
+         * message sends them, so they can be answered reading down the copy.
          */
-        fun makeOptions(answer: String, pool: List<String>, rng: Random): List<String> {
-            val distractors = pool.filter { it != answer }.shuffled(rng)
-            val options = mutableListOf(answer)
-            for (d in distractors) {
-                if (options.size >= 4) break
-                if (!options.contains(d)) options.add(d)
-            }
-            return options.shuffled(rng)
+        fun makeQuestions(p: ExamPassage): List<ExamQuestion> {
+            val de = "${p.deCall}/${p.portable}"
+            return listOf(
+                ExamQuestion("The sending station's call sign is ____.", de, listOf(de, p.deCall)),
+                ExamQuestion("The signal report (RST) is ____.", p.rst),
+                ExamQuestion("The operator's name is ____.", p.name),
+                ExamQuestion("The QTH (state) is ____.", p.qth),
+                ExamQuestion("The rig is ____.", p.rig),
+                ExamQuestion("The power is ____.", p.power),
+                ExamQuestion("The antenna is ____.", p.antenna),
+                ExamQuestion("The weather (WX) is ____.", p.weather),
+                ExamQuestion("The temperature is ____.", p.temp),
+                ExamQuestion("The operator's age is ____.", p.age),
+            )
         }
     }
 }
+

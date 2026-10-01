@@ -108,9 +108,10 @@ the iOS app's navy/teal look.
   CWT, NCCC Sprint, ARRL Field Day) with authentic exchanges, speeds, live
   score/rate, and an end-of-run scorecard
 - **Code Exam**: FCC/ARRL-style copy test at 5 / 13 / 20 WPM, every passage
-  carrying the letters, numerals, `. , ? /` and AR / SK / BT the real exams did
-  (one minute of solid copy — 25 / 65 / 100 in a row — or content questions,
-  random or a bundled passage)
+  carrying the letters, numerals, `. , ? /` and AR / SK / BT the real exams did,
+  graded the ARRL VEC way: copy it, then fill in 10 blanks from your copy; pass
+  on one minute of solid copy (25 / 65 / 100 in a row, numerals, punctuation and
+  prosigns counting two) or 7 of 10 answers (random or a bundled passage)
 - **Sending Practice**: key it back (touch or MIDI key); quizzes can also be
   answered by keying
 - **On-screen paddles**: the on-screen key can be a straight key or a pair of

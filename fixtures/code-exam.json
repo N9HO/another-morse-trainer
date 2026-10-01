@@ -1,7 +1,13 @@
 {
-  "$comment": "Shared Code Exam fixture, consumed by BOTH ports: android CodeExamFixtureTest and ios MorseKitCheck. Data, not code — see CLAUDE.md's two-ports rule. Every value here is derived from the historical FCC/VEC rules written out below, not captured from either port (#262, #263).",
+  "$comment": "Shared Code Exam fixture, consumed by BOTH ports: android CodeExamFixtureTest and ios MorseKitCheck. Data, not code — see CLAUDE.md's two-ports rule. Every value here is worked out by hand from the ARRL VEC grading rules written out below, not captured from either port (#262, #263, ARRL grading).",
+  "sources": [
+    "47 CFR 97.503(a), 1998 edition: texts 'using all the letters of the alphabet, numerals 0-9, period, comma, question mark, slant mark and prosigns AR, BT, and SK'. https://www.govinfo.gov/content/pkg/CFR-1998-title47-vol5/xml/CFR-1998-title47-vol5-sec97-503.xml",
+    "ARRL VE Manual, 8th edition (effective 2000-04-15), accreditation review: one-minute solid copy at 5 WPM is 25 consecutive characters; 'Numbers, punctuation and procedural signals count as ... 2 each'; a code test may be passed on one minute of solid copy. https://silo.tips/download/arrl-ve-accreditation-material-open-book-review-and-exam",
+    "FCC 99-412 (WT Docket 98-143) para. 36-38 and n. 90: VEs passed candidates on questions about the message or on consecutive correct characters; the ARRL proposed limiting VEs to 'a ten-question fill-in-the-blank examination or one minute of solid copy'. https://www.arrl.org/files/file/Regulatory/wt98-143ro.pdf",
+    "Secondary, consistent with the above: 7 of 10 fill-in-the-blank questions; letters count one, numerals, punctuation and prosigns two; 25 / 65 / 100 at 5 / 13 / 20 WPM. https://www.qsl.net/aaa-rc/morse.htm and https://ac6v.com/morseaids.php"
+  ],
   "passBar": {
-    "rule": "One minute of solid copy at the exam's stated speed. The stated speed is the effective (overall, Farnsworth) WPM, not the character speed: the 5 WPM exam sent 13 WPM characters but was a 5 WPM exam. A word is 5 characters (PARIS), so the bar is effectiveWpm * 5. Word spaces are not characters (PARIS is five letters; the space is timing), so they do not count toward the bar.",
+    "rule": "One minute of solid copy at the exam's stated speed. The stated speed is the effective (overall, Farnsworth) WPM, not the character speed: the 5 WPM exam sent 13 WPM characters but was a 5 WPM exam. A word is 5 characters (PARIS), so the bar is effectiveWpm * 5 counted characters. Counted per the weights section below.",
     "charactersPerWord": 5,
     "cases": [
       { "speed": "novice5", "effectiveWpm": 5, "requiredRun": 25 },
@@ -9,8 +15,25 @@
       { "speed": "extra20", "effectiveWpm": 20, "requiredRun": 100 }
     ]
   },
+  "weights": {
+    "rule": "ARRL VEC counting: a letter counts 1; a numeral, punctuation mark (. , ? /) or prosign counts 2; a word space counts 0 (it must be in the right place, but it is timing, not a character).",
+    "cases": [
+      { "symbol": "A", "weight": 1 },
+      { "symbol": "Z", "weight": 1 },
+      { "symbol": "0", "weight": 2 },
+      { "symbol": "7", "weight": 2 },
+      { "symbol": ".", "weight": 2 },
+      { "symbol": ",", "weight": 2 },
+      { "symbol": "?", "weight": 2 },
+      { "symbol": "/", "weight": 2 },
+      { "symbol": "<AR>", "weight": 2 },
+      { "symbol": "<BT>", "weight": 2 },
+      { "symbol": "<SK>", "weight": 2 },
+      { "symbol": " ", "weight": 0 }
+    ]
+  },
   "requiredCharacters": {
-    "rule": "The FCC/VEC code exam text had to include every letter and numeral, the period, comma, question mark and slash (DN), and the prosigns AR, SK and BT. Every passage the app sends — generated or bundled — must contain each of them. Prosigns are spelled in angle brackets, as MorseData.prosigns spells them in both trees.",
+    "rule": "47 CFR 97.503(a): every letter and numeral, the period, comma, question mark and slant mark, and the prosigns AR, BT and SK. Every passage the app sends — generated or bundled — must contain each of them. Prosigns are spelled in angle brackets, as MorseData.prosigns spells them in both trees.",
     "letters": "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
     "digits": "0123456789",
     "punctuation": [".", ",", "?", "/"],
@@ -25,26 +48,64 @@
     ]
   },
   "normalize": {
-    "rule": "The comparable copy stream: upper-cased; letters, digits and . , ? / kept as written; a prosign in any written form (a bracketed token such as <AR>, or '+' for AR, or '=' for BT) is dropped and acts as a word break, so a copy is never marked down for writing or omitting one; runs of whitespace collapse to one space; no leading or trailing space.",
+    "rule": "The comparable copy stream. Prosigns are graded, so they stay, each as its canonical bracketed token standing as its own word: a bracketed token in any case, spaces inside dropped; '+' is <AR>; '=' is <BT>. Letters without brackets are letters: 'AR' is A and R (Arkansas), never the prosign. Letters, digits and . , ? / are kept as written. Upper-cased; runs of whitespace collapse to one space; no leading or trailing space; empty brackets vanish.",
     "cases": [
       { "input": "w1aw de k9la/4", "normalized": "W1AW DE K9LA/4" },
       { "input": "  GE OM ES TNX FER CALL.  UR RST 599 599,\nNAME", "normalized": "GE OM ES TNX FER CALL. UR RST 599 599, NAME" },
-      { "input": "HW? 73 <AR> W1AW DE K9LA/4 <SK>", "normalized": "HW? 73 W1AW DE K9LA/4" },
-      { "input": "HW? 73 + W1AW DE K9LA/4", "normalized": "HW? 73 W1AW DE K9LA/4" },
-      { "input": "599=NAME", "normalized": "599 NAME" },
-      { "input": "599<BT>NAME", "normalized": "599 NAME" },
-      { "input": "= <BT> +", "normalized": "" }
+      { "input": "HW? 73 <AR> W1AW DE K9LA/4 <SK>", "normalized": "HW? 73 <AR> W1AW DE K9LA/4 <SK>" },
+      { "input": "HW? 73 + W1AW DE K9LA/4", "normalized": "HW? 73 <AR> W1AW DE K9LA/4" },
+      { "input": "599=NAME", "normalized": "599 <BT> NAME" },
+      { "input": "599<bt>NAME", "normalized": "599 <BT> NAME" },
+      { "input": "73 < sk >", "normalized": "73 <SK>" },
+      { "input": "QTH AR AR", "normalized": "QTH AR AR" },
+      { "input": "= <BT> +", "normalized": "<BT> <BT> <AR>" },
+      { "input": "<> 73", "normalized": "73" }
     ]
   },
   "longestRun": {
-    "rule": "The graded run is the longest stretch of the normalized copy that appears, in order and unbroken, in the normalized sent text. It is counted in characters, and a space inside the run must match but adds nothing.",
+    "rule": "The graded run is the longest stretch of the normalized copy that appears, in order and unbroken, in the normalized sent text, summed with the weights above. A prosign is one symbol: written as <BT> or = it matches a sent <BT>; left out, it breaks the run.",
     "cases": [
-      { "sent": "UR RST 599 599", "typed": "UR RST 599 599", "longestRun": 11 },
-      { "sent": "UR RST 599 599", "typed": "URRST 599 599", "longestRun": 9 },
-      { "sent": "UR RST 599 599", "typed": "UR RST 579 599", "longestRun": 6 },
-      { "sent": "CALL. UR RST <BT> 599", "typed": "CALL UR RST 599", "longestRun": 8 },
-      { "sent": "CALL. UR RST <BT> 599", "typed": "CALL. UR RST = 599", "longestRun": 13 },
-      { "sent": "W1AW DE K9LA/4", "typed": "zzzz", "longestRun": 0 }
+      { "sent": "UR RST 599 599", "typed": "UR RST 599 599", "longestRun": 17, "why": "5 letters + 6 numerals x 2" },
+      { "sent": "UR RST 599 599", "typed": "URRST 599 599", "longestRun": 15, "why": "RST 599 599: 3 letters + 6 numerals x 2" },
+      { "sent": "UR RST 599 599", "typed": "UR RST 579 599", "longestRun": 8, "why": "'9 599' is 4 numerals x 2 = 8, beating 'UR RST 5' = 5 + 2 = 7" },
+      { "sent": "CALL. UR RST <BT> 599", "typed": "CALL UR RST 599", "longestRun": 6, "why": "'599' = 6 beats 'UR RST' = 5 and 'CALL' = 4" },
+      { "sent": "CALL. UR RST <BT> 599", "typed": "CALL. UR RST = 599", "longestRun": 19, "why": "9 letters + period 2 + <BT> 2 + 3 numerals x 2" },
+      { "sent": "CALL. UR RST <BT> 599", "typed": "CALL. UR RST 599", "longestRun": 11, "why": "the missing <BT> breaks the run after 9 letters + period 2" },
+      { "sent": "QTH AR AR. <BT> RIG", "typed": "QTH AR AR. = RIG", "longestRun": 14, "why": "7 letters + period 2 + <BT> 2 + 3 letters" },
+      { "sent": "QTH AR AR. <BT> RIG", "typed": "QTH AR AR. + RIG", "longestRun": 9, "why": "'+' is <AR>, not the <BT> sent: 7 letters + period 2" },
+      { "sent": "W1AW DE K9LA/4", "typed": "zzzz", "longestRun": 0, "why": "nothing matches" }
+    ]
+  },
+  "solidCopy": {
+    "rule": "A copy passes on solid copy when its longest run reaches the speed's bar. Because numerals, punctuation and prosigns count two, the bar can be reached with fewer than bar-many actual characters.",
+    "cases": [
+      { "speed": "novice5", "sent": "W1AW DE K9LA/4 <BT> GE OM ES TNX FER CALL.", "typed": "W1AW DE K9LA/4 = GE OM ES TNX", "longestRun": 27, "passed": true, "why": "22 characters: 17 letters + 5 numerals/slant/prosign x 2" },
+      { "speed": "novice5", "sent": "W1AW DE K9LA/4 <BT> GE OM ES TNX FER CALL.", "typed": "W1AW DE K9LA/4 = GE OM ES", "longestRun": 24, "passed": false, "why": "one short of 25" },
+      { "speed": "novice5", "sent": "W1AW DE K9LA/4 <BT> GE OM ES TNX FER CALL.", "typed": "W1AW DE K9LA/4 GE OM ES TNX FER CALL.", "longestRun": 18, "passed": false, "why": "leaving out the <BT> splits it into 'W1AW DE K9LA/4' = 16 and 'GE OM ES TNX FER CALL.' = 18" },
+      { "speed": "general13", "sent": "W1AW DE K9LA/4 <BT> GE OM ES TNX FER CALL.", "typed": "W1AW DE K9LA/4 = GE OM ES TNX FER CALL.", "longestRun": 36, "passed": false, "why": "the whole line is 36, short of 65" }
+    ]
+  },
+  "questions": {
+    "rule": "After copying, the candidate fills in ten blanks about the message, answering from the copy. Seven right passes. The exam passes if EITHER solid copy or the questions reach the bar; the result names which.",
+    "asked": 10,
+    "required": 7,
+    "results": [
+      { "speed": "general13", "longestRun": 65, "questionsCorrect": 0, "passed": true, "path": "solidCopy" },
+      { "speed": "general13", "longestRun": 64, "questionsCorrect": 7, "passed": true, "path": "questions" },
+      { "speed": "general13", "longestRun": 64, "questionsCorrect": 6, "passed": false, "path": "none" },
+      { "speed": "extra20", "longestRun": 100, "questionsCorrect": 10, "passed": true, "path": "both" },
+      { "speed": "novice5", "longestRun": 24, "questionsCorrect": 6, "passed": false, "path": "none" },
+      { "speed": "novice5", "longestRun": 25, "questionsCorrect": 7, "passed": true, "path": "both" }
+    ],
+    "answerRule": "An answer is compared the way copy is: case and spaces ignored, prosign symbols read as prosigns. Anything else must match what was sent (72F is not 72). The sending call is right with or without its portable suffix.",
+    "answers": [
+      { "accepted": ["100W"], "typed": "100 w", "right": true },
+      { "accepted": ["72F"], "typed": "72", "right": false },
+      { "accepted": ["JIM"], "typed": " jim ", "right": true },
+      { "accepted": ["K9LA/4", "K9LA"], "typed": "k9la", "right": true },
+      { "accepted": ["K9LA/4", "K9LA"], "typed": "K9LA/4", "right": true },
+      { "accepted": ["K9LA/4", "K9LA"], "typed": "K9LA/5", "right": false },
+      { "accepted": ["IL"], "typed": "", "right": false }
     ]
   }
 }
