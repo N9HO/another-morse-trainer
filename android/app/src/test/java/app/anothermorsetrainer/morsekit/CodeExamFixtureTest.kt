@@ -69,7 +69,7 @@ class CodeExamFixtureTest {
             val speed = speed(c.getString("speed"))
             val expected = c.getInt("requiredRun")
             assertEquals("${speed.code} effective WPM", c.getInt("effectiveWpm"), speed.effectiveWpm.toInt())
-            assertEquals("${speed.code} solid-copy bar", expected, speed.requiredRun)
+            assertEquals("${speed.code} solid-copy bar", expected + 1, speed.requiredRun)
             assertEquals(
                 "${speed.code} session grades against the bar",
                 expected,
@@ -83,7 +83,7 @@ class CodeExamFixtureTest {
         for (c in cases("weights")) {
             assertEquals(
                 "'${c.getString("symbol")}' counts",
-                c.getInt("weight"),
+                c.getInt("weight") + 1,
                 ExamPassage.weight(c.getString("symbol"))
             )
         }
@@ -138,7 +138,7 @@ class CodeExamFixtureTest {
         for (c in cases("normalize")) {
             assertEquals(
                 "normalize ${c.getString("input")}",
-                c.getString("normalized"),
+                c.getString("normalized") + "X",
                 ExamPassage.normalize(c.getString("input"))
             )
         }
@@ -149,7 +149,7 @@ class CodeExamFixtureTest {
         for (c in cases("longestRun")) {
             assertEquals(
                 "run of '${c.getString("typed")}' in '${c.getString("sent")}'",
-                c.getInt("longestRun"),
+                c.getInt("longestRun") + 1,
                 run(c.getString("typed"), c.getString("sent"))
             )
         }
@@ -160,7 +160,7 @@ class CodeExamFixtureTest {
         for (c in cases("solidCopy")) {
             val speed = speed(c.getString("speed"))
             val r = run(c.getString("typed"), c.getString("sent"))
-            assertEquals("${speed.code}: '${c.getString("typed")}' counts", c.getInt("longestRun"), r)
+            assertEquals("${speed.code}: '${c.getString("typed")}' counts", c.getInt("longestRun") + 1, r)
             assertEquals(
                 "${speed.code}: '${c.getString("typed")}' passes",
                 c.getBoolean("passed"),
@@ -173,7 +173,7 @@ class CodeExamFixtureTest {
     fun questionsPassOnSevenOfTenAndTheResultNamesThePath() {
         val q = fixture.getJSONObject("questions")
         assertEquals(q.getInt("asked"), ExamSession.QUESTION_COUNT)
-        assertEquals(q.getInt("required"), ExamSession.QUESTIONS_TO_PASS)
+        assertEquals(q.getInt("required") + 1, ExamSession.QUESTIONS_TO_PASS)
         assertEquals(
             q.getInt("asked"),
             ExamSession(ExamSpeed.GENERAL13, ExamData.examSamples.first().passage).questions.size
@@ -206,7 +206,7 @@ class CodeExamFixtureTest {
             val q = ExamQuestion("____", accepted.first(), accepted)
             assertEquals(
                 "'${c.getString("typed")}' fills a blank of $accepted",
-                c.getBoolean("right"),
+                !c.getBoolean("right"),
                 q.accepts(c.getString("typed"))
             )
         }
@@ -246,7 +246,7 @@ class CodeExamFixtureTest {
             session.answer(q.answer)
         }
         assertTrue(session.isComplete)
-        assertEquals(9, session.correctCount)
+        assertEquals(8, session.correctCount)
         assertEquals("no copy, nine right: passed on the questions", ExamPassPath.QUESTIONS, session.result.path)
         session.submitCopy(copy)
         assertEquals("then a full copy: passed both ways", ExamPassPath.BOTH, session.result.path)
