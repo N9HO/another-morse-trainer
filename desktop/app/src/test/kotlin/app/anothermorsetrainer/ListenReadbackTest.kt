@@ -1,0 +1,66 @@
+package app.anothermorsetrainer
+
+import app.anothermorsetrainer.morsekit.MorseData
+import org.junit.Assert.assertEquals
+import org.junit.Test
+
+/**
+ * Listen & Learn's readback choice (#210): the token-plus-meaning sets are
+ * spoken either spelled out and then the full meaning, or as the brief
+ * meaning alone; the display carries the whole gloss either way. Pins the
+ * strings a listener actually hears, which the iOS twin (AppModel.listenPool)
+ * has no harness for.
+ */
+class ListenReadbackTest {
+
+    private fun item(content: ListenContent, readback: ListenReadback, token: String): ListenItem =
+        listenPool(content, readback).first { it.display.startsWith("$token — ") }
+
+    @Test
+    fun `spelled readback says the letters and then the whole meaning`() {
+        assertEquals("t n x. thanks", item(ListenContent.QSO_TOP_20, ListenReadback.SPELLED, "TNX").spoken)
+        assertEquals("k n. go ahead — named station only", item(ListenContent.QSO_TOP_20, ListenReadback.SPELLED, "<KN>").spoken)
+    }
+
+    @Test
+    fun `meaning-only readback says the brief meaning alone`() {
+        assertEquals("thanks", item(ListenContent.QSO_TOP_20, ListenReadback.MEANING_ONLY, "TNX").spoken)
+        assertEquals("go ahead", item(ListenContent.QSO_TOP_20, ListenReadback.MEANING_ONLY, "<KN>").spoken)
+        assertEquals("five nine nine", item(ListenContent.QSO_TOP_20, ListenReadback.MEANING_ONLY, "5NN").spoken)
+        assertEquals("my location is", item(ListenContent.ABBREVIATIONS, ListenReadback.MEANING_ONLY, "QTH").spoken)
+    }
+
+    @Test
+    fun `the display shows the whole gloss whatever is spoken`() {
+        assertEquals("<KN> — go ahead — named station only", item(ListenContent.QSO_TOP_20, ListenReadback.MEANING_ONLY, "<KN>").display)
+        assertEquals("<KN> — go ahead — named station only", item(ListenContent.QSO_TOP_20, ListenReadback.SPELLED, "<KN>").display)
+    }
+
+    @Test
+    fun `the characters pool is the active set, punctuation included, and never empty`() {
+        val active = listOf('K', 'M', '?', ',')
+        assertEquals(active.map { it.toString() }, listenPool(ListenContent.CHARACTERS, ListenReadback.SPELLED, active).map { it.display })
+        assertEquals("comma", listenPool(ListenContent.CHARACTERS, ListenReadback.SPELLED, active).last().spoken)
+        assertEquals(listOf("E"), listenPool(ListenContent.CHARACTERS, ListenReadback.SPELLED, emptyList()).map { it.display })
+    }
+
+    @Test
+    fun `cw 77 is the seventy items, then your callsign and name when included`() {
+        val plain = listenPool(ListenContent.CW_77, ListenReadback.SPELLED)
+        assertEquals(70, plain.size)
+        assertEquals("<BT> — separator / new section", plain.first { it.display.startsWith("<BT> — ") }.display)
+        assertEquals("h w ?. how do you copy?", plain.first { it.display.startsWith("HW? — ") }.spoken)
+        val mine = MorseData.cw77Personal("n9ho", "Justin")
+        val withMe = listenPool(ListenContent.CW_77, ListenReadback.MEANING_ONLY, cw77Personal = mine)
+        assertEquals(listOf("N9HO — your call sign", "JUSTIN — your name"), withMe.takeLast(2).map { it.display })
+        assertEquals(listOf("your call sign", "your name"), withMe.takeLast(2).map { it.spoken })
+    }
+
+    @Test
+    fun `characters and words are unchanged by the readback choice`() {
+        assertEquals(
+            listenPool(ListenContent.WORDS, ListenReadback.SPELLED).map { it.spoken },
+            listenPool(ListenContent.WORDS, ListenReadback.MEANING_ONLY).map { it.spoken }
+        )
+    }
+}

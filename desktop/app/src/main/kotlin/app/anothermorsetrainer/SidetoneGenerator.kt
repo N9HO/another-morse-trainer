@@ -1,0 +1,131 @@
+package app.anothermorsetrainer
+
+import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.math.PI
+import kotlin.math.sin
+
+/**
+ * A continuous sine that is gated on/off by the Morse key, for live sending
+ * practice. Unlike [MorsePlayer] (which renders fixed bursts), this keeps a
+ * streaming output line ([PcmOut]; `AudioTrack` on Android) running and ramps the gain up/down over 5 ms on each
+ * key-down/up so the sidetone is click-free.
+ *
+ * Port of the TX path of the iOS `KeyerEngine` `ToneGenerator` (the RX / received
+ * tone scheduling lives with the Vail repeater work). The audio render runs on a
+ * dedicated thread; the only shared state is the [keyDown] flag. The samples
+ * themselves come from a [SidetoneSynth], which knows nothing about the track.
+ *
+ * [focusGain] is what the generator asks of other apps' audio for as long as it
+ * runs. Drills leave the default, which pauses them; the Vail repeater passes
+ * [AudioFocus.Gain.DUCK] so a radio app keeps running alongside — the split
+ * [AudioFocus] documents, and the same one iOS makes with its `repeaterMix`
+ * session.
+ */
+class SidetoneGenerator(
+    private val frequencyHz: Double = 600.0,
+    private val focusGain: AudioFocus.Gain = AudioFocus.Gain.EXCLUSIVE
+) {
+
+    private val sampleRate = 44_100
+    private val amplitude = 0.5f
+    private val rampSeconds = 0.005
+
+    private val keyDown = AtomicBoolean(false)
+    @Volatile private var running = false
+    private var thread: Thread? = null
+    private var track: PcmOut? = null
+
+    fun start() {
+        if (running) return
+        running = true
+        AudioFocus.acquire(this, focusGain)
+        // Desktop: ~23 ms of buffer. The sidetone is the latency-critical
+        // sound — it has to land under the operator's finger — so it runs the
+        // smallest buffer Java Sound mixers reliably keep fed.
+        val t = PcmOut.open(sampleRate, 1024) ?: run {
+            // No output device: keying still decodes, silently.
+            running = false
+            AudioFocus.release(this)
+            return
+        }
+        track = t
+        thread = Thread { renderLoop(t) }.apply { isDaemon = true; name = "amt-sidetone"; start() }
+    }
+
+    /** Key down/up — the render loop ramps toward the new target gain. */
+    fun setKeyDown(down: Boolean) {
+        keyDown.set(down)
+    }
+
+    fun stop() {
+        running = false
+        keyDown.set(false)
+        thread?.let { try { it.join(200) } catch (_: InterruptedException) {} }
+        thread = null
+        track?.close()
+        track = null
+        AudioFocus.release(this)
+    }
+
+    private fun renderLoop(t: PcmOut) {
+        // Parked in a blocking write nearly all the time; the priority is for
+        // the moments it wakes, so a 10 ms block is not queued behind a Compose
+        // frame and the key-down is heard when it happens. A refused priority
+        // is the old behaviour, not a failure.
+        try { Thread.currentThread().priority = Thread.MAX_PRIORITY } catch (_: SecurityException) {}
+        // ~10 ms blocks: small enough that key-down latency is imperceptible.
+        val block = sampleRate / 100
+        val buf = FloatArray(block)
+        val synth = SidetoneSynth(sampleRate, frequencyHz, amplitude, rampSeconds)
+        while (running) {
+            synth.render(buf, block, keyDown.get())
+            if (!t.write(buf, block)) break
+        }
+    }
+}
+
+/**
+ * The pure half of [SidetoneGenerator]: a sine gated by a ramped gain, one
+ * block at a time. Holds the oscillator phase and the current gain so
+ * consecutive blocks join seamlessly. Kept apart from the output line so the
+ * ramp can be pinned by a unit test without audio hardware.
+ *
+ * The ramp moves [gain] toward the key's target by at most one step per sample
+ * and lands on it exactly — the same one-liner [BackgroundNoise] uses. It
+ * replaced a step followed by an overshoot guard of the form
+ * `target > gain && gain > target`, which meant to snap a step that crossed the
+ * target back onto it but can never be true, so the ramp never settled on its
+ * own: only the clamp to `0..amplitude` after it stopped the gain wandering,
+ * and only because the two targets happened to be the clamp's two bounds.
+ */
+internal class SidetoneSynth(
+    sampleRate: Int,
+    frequencyHz: Double,
+    /** The gain the envelope sits at while the key is held. */
+    val amplitude: Float,
+    rampSeconds: Double
+) {
+    private val omega = 2.0 * PI * frequencyHz / sampleRate
+    /** Per-sample gain step: the full range in [rampSeconds]. */
+    val rampStep = (amplitude / (rampSeconds * sampleRate)).toFloat()
+    private var phase = 0.0
+
+    /** Where the envelope is now: 0 in silence, [amplitude] with the key held. */
+    var gain = 0f
+        private set
+
+    /** Fill the first [count] samples of [buf], ramping toward [keyDown]'s target. */
+    fun render(buf: FloatArray, count: Int, keyDown: Boolean) {
+        val target = if (keyDown) amplitude else 0f
+        for (i in 0 until count) {
+            gain += (target - gain).coerceIn(-rampStep, rampStep)
+            buf[i] = (sin(phase) * gain).toFloat()
+            phase += omega
+            if (phase > TWO_PI) phase -= TWO_PI
+        }
+    }
+
+    private companion object {
+        const val TWO_PI = 2.0 * PI
+    }
+}

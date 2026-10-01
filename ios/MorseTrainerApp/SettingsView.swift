@@ -779,10 +779,19 @@ struct SettingsView: View {
                     .autocorrectionDisabled()
                     .font(.system(.body, design: .monospaced))
             }
+            HStack {
+                Text("Your state")
+                Spacer()
+                TextField("Optional", text: $model.settings.qso.myState)
+                    .multilineTextAlignment(.trailing)
+                    .textInputAutocapitalization(.characters)
+                    .autocorrectionDisabled()
+                    .font(.system(.body, design: .monospaced))
+            }
         } header: {
             Text("Your Station")
         } footer: {
-            Text("Used across the app — sent when you call CQ and work stations in Pileup Runner, and drilled in CW 77 when you include them.")
+            Text("Used across the app — sent when you call CQ and work stations in Pileup Runner, drilled in CW 77 when you include them, and taught in First Four, which also uses your state.")
         }
         .listRowBackground(rowBackground(.yourStation))
     }

@@ -1,0 +1,467 @@
+package app.anothermorsetrainer
+
+import androidx.compose.foundation.focusable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEvent
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import app.anothermorsetrainer.morsekit.MorseData
+import app.anothermorsetrainer.morsekit.MorseTiming
+import app.anothermorsetrainer.morsekit.PhraseQuiz
+import app.anothermorsetrainer.morsekit.QuizSource
+import kotlinx.coroutines.delay
+import kotlin.math.roundToInt
+
+private val OK_GREEN = Color(0xFF2E7D32)
+private val ERR_RED = Color(0xFFC62828)
+
+private enum class TqPhase { RUNNING, SUMMARY }
+
+/**
+ * Free-recall typing loop: play an item in Morse, the learner types exactly what
+ * they heard, and we grade the (case/space-normalized) text against the answer.
+ * Drives both **Type It** (global speed) and **QRQ Speed** (a faster timing
+ * provided by the caller). Mirrors the iOS `submitTyped` path: trim + uppercase,
+ * then compare through the same [QuizSource.record]. Runs against the configured
+ * session length and ends with the standard summary.
+ */
+@Composable
+fun TypedQuizScreen(
+    title: String,
+    onBack: () -> Unit,
+    makeSource: () -> QuizSource,
+    timing: () -> MorseTiming = { Settings.timing() },
+    speedControl: (@Composable () -> Unit)? = null,
+    settingsMode: SettingsMode = SettingsMode.TYPE_IT,
+    /** Mid-session mode switcher (iOS #42); the run is recorded before this fires. */
+    onSwitchMode: (TrainingMode) -> Unit = {}
+) {
+    val player = remember { MorsePlayer() }
+    val haptics = remember { Haptics() }
+    val source = remember { makeSource() }
+
+    // Mid-session Settings, drawn over the session so its state lives on.
+    var showSettings by remember { mutableStateOf(false) }
+
+    var drill by remember { mutableStateOf(source.nextDrill()) }
+    // Monotonic counter drives play/reset — never key on the Drill value (a data
+    // class can compare equal across rounds and silently skip the effect). See #43.
+    var round by remember { mutableIntStateOf(0) }
+    var revealed by remember { mutableStateOf(false) }
+    var input by remember { mutableStateOf("") }
+    var lastCorrect by remember { mutableStateOf(false) }
+    var summary by remember { mutableStateOf(source.summary) }
+    var toneFinishedAt by remember { mutableLongStateOf(0L) }
+
+    val focus = remember { FocusRequester() }
+    // Desktop: the screen root takes the keyboard while the answer field is
+    // disabled (a held correction), so Return still reaches "Next".
+    val rootFocus = remember { FocusRequester() }
+
+    // Session phase: drills, then a summary once the timer runs out or End is
+    // tapped. Back mid-session still records — it just skips the summary.
+    // These are the session itself, so they are saveable, as in the Android
+    // tree (where a process reclaimed in the background comes back with the
+    // tally, the clock and the phase intact). Desktop: nothing reclaims the
+    // process, so rememberSaveable behaves as remember here.
+    var phase by rememberSaveable { mutableStateOf(TqPhase.RUNNING) }
+    var tally by rememberSaveable(stateSaver = TallySaver) { mutableStateOf(Tally()) }
+    var remaining by rememberSaveable(stateSaver = OptionalIntSaver) {
+        mutableStateOf<Int?>(Settings.practiceDuration.seconds)
+    }
+    var recorded by rememberSaveable { mutableStateOf(false) }
+    var milestone by remember { mutableStateOf<Int?>(null) }
+
+    LaunchedEffect(round) {
+        revealed = false
+        input = ""
+        lastCorrect = false
+        toneFinishedAt = 0L
+        player.play(drill.playable, Settings.sidetoneHz, timing()) { toneFinishedAt = System.nanoTime() }
+    }
+
+    // Correct answers keep the rhythm going; a miss waits for the Next tap so the
+    // learner can compare what they typed against the answer.
+    // Clear the reveal state in the same recomposition as the new drill —
+    // LaunchedEffect(round) also resets it, but a frame later, and that stale
+    // frame flashed the next answer's comparison view (issue #63).
+    fun advance() {
+        drill = source.nextDrill()
+        revealed = false
+        input = ""
+        lastCorrect = false
+        round++
+    }
+
+    LaunchedEffect(revealed) {
+        if (!revealed || phase != TqPhase.RUNNING) return@LaunchedEffect
+        if (lastCorrect) {
+            delay(900)
+            advance()
+        } else {
+            // The held correction repeats what was sent after a beat, so you
+            // re-hear the sound you got wrong while the answer shows (#77).
+            delay(450)
+            player.replaySound(drill.playable, Settings.sidetoneHz, timing())
+        }
+    }
+
+    DisposableEffect(Unit) { onDispose { player.release() } }
+
+    /** Persist the session once (summary entry or an early Back, whichever first). */
+    fun recordSession(): Int? {
+        if (recorded) return null
+        recorded = true
+        return Stats.record(
+            mode = title, attempts = tally.attempts, correct = tally.correct,
+            bestTtrMs = tally.bestMs, durationSeconds = tally.elapsedSeconds(),
+            // The mode's own timing, so QRQ sessions band at 35/40 WPM.
+            characterWpm = timing().wpm.roundToInt(), medianTtrMs = tally.medianMs(),
+            effectiveWpm = timing().effectiveWpm.roundToInt()
+        )
+    }
+
+    fun endSession() {
+        if (phase == TqPhase.SUMMARY) return
+        player.stop()
+        milestone = recordSession()
+        phase = TqPhase.SUMMARY
+    }
+
+    fun finish() {
+        recordSession()
+        onBack()
+    }
+
+    fun practiceAgain() {
+        tally = Tally()
+        recorded = false
+        milestone = null
+        remaining = Settings.practiceDuration.seconds
+        phase = TqPhase.RUNNING
+        advance()
+    }
+
+    // Session countdown: ticks only while running and only when a length is set.
+    // Also keyed on whether a limit exists, so the timer menu starting a
+    // countdown on an open-ended run (or dropping one) restarts the loop.
+    LaunchedEffect(phase, remaining == null) {
+        if (phase != TqPhase.RUNNING) return@LaunchedEffect
+        while (true) {
+            val r = remaining ?: return@LaunchedEffect
+            if (r <= 0) {
+                endSession()
+                return@LaunchedEffect
+            }
+            delay(1000)
+            remaining = remaining?.minus(1)
+        }
+    }
+
+    BackHandler { if (phase == TqPhase.SUMMARY) onBack() else finish() }
+
+    fun submit() {
+        if (revealed || phase != TqPhase.RUNNING) return
+        val normalized = input.trim().uppercase()
+        if (normalized.isEmpty()) return
+        val ttr = if (toneFinishedAt == 0L) 0.0 else (System.nanoTime() - toneFinishedAt) / 1_000_000_000.0
+        val outcome = source.record(choice = normalized, ttr = ttr)
+        lastCorrect = outcome.correct
+        tally.attempts += 1
+        val ms = (ttr * 1000).roundToInt()
+        if (outcome.correct) {
+            tally.correct += 1
+            tally.noteCorrectMs(ms)
+        }
+        summary = source.summary
+        if (Settings.hapticsEnabled) {
+            if (outcome.correct) haptics.success() else haptics.error()
+        }
+        revealed = true
+    }
+
+    // Desktop keyboard flow: the answer field has focus whenever it takes
+    // input (each new drill, and back from the settings overlay); Return in it
+    // checks the answer. On a held correction the field is disabled, so the
+    // root takes focus and Return there is "Next".
+    LaunchedEffect(round, revealed, phase, showSettings) {
+        if (phase != TqPhase.RUNNING || showSettings) return@LaunchedEffect
+        runCatching { if (revealed) rootFocus.requestFocus() else focus.requestFocus() }
+    }
+    fun isEnter(event: KeyEvent) = event.key == Key.Enter || event.key == Key.NumPadEnter
+    fun handleRootKey(event: KeyEvent): Boolean {
+        if (!isEnter(event) || phase != TqPhase.RUNNING || showSettings) return false
+        if (!revealed || lastCorrect) return false
+        if (event.type == KeyEventType.KeyDown) advance()
+        return true
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .focusRequester(rootFocus)
+            .focusable()
+            .onPreviewKeyEvent { handleRootKey(it) }
+    ) {
+        // The header and the drill are stacked, not overlaid. As siblings in the
+        // Box the drill was drawn over the Back/End row, and once #44 gave that
+        // column a verticalScroll — a pointer-input node spanning the whole
+        // window — hit testing stopped there and the two buttons stopped
+        // responding to taps (issue #47). Only the typed modes grew a scroll,
+        // which is why only they broke. Every other screen already stacks.
+        Column(modifier = Modifier.fillMaxSize()) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            TextButton(onClick = { if (phase == TqPhase.SUMMARY) onBack() else finish() }) { Text(stringResource(R.string.common_back)) }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (phase == TqPhase.RUNNING) {
+                    SessionTimerMenu(
+                        remaining = remaining,
+                        onAddSeconds = { remaining = (remaining ?: 0) + it },
+                        onRemoveLimit = { remaining = null }
+                    )
+                    SessionSettingsButton { showSettings = true }
+                }
+                // Switching records the run the way Back does, then lands on
+                // the picked mode's setup (iOS #42).
+                SwitchModeButton(trainingModeFor(settingsMode)) { mode ->
+                    player.stop()
+                    recordSession()
+                    onSwitchMode(mode)
+                }
+                if (phase == TqPhase.RUNNING) {
+                    TextButton(onClick = { endSession() }) { Text(stringResource(R.string.common_end)) }
+                }
+            }
+        }
+
+        if (phase == TqPhase.SUMMARY) {
+            SessionSummaryContent(
+                title = title,
+                tally = tally,
+                milestone = milestone,
+                onPracticeAgain = { practiceAgain() },
+                onDone = onBack
+            )
+        } else {
+        // A Vail Adapter / USB MIDI key types the answer too (#251): what you
+        // key lands in the box, and stopping keying checks it.
+        HardwareKeyInput(
+            onText = { if (!revealed) input = appendKeyed(input, it) },
+            onPause = { if (input.isNotBlank()) submit() }
+        )
+        // On Android the window does not resize when the IME opens, and
+        // without imePadding the Check button sat underneath it (issue #44).
+        // Desktop: there is no on-screen keyboard, so imePadding does nothing;
+        // it is kept so the layout matches the Android tree. verticalScroll is
+        // the backstop for a short window, where the drill will not fit.
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .imePadding()
+                .verticalScroll(rememberScrollState())
+                .widthIn(max = CONTENT_MAX_WIDTH)
+                .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text(text = title, style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center)
+            Spacer(Modifier.height(4.dp))
+            Text(text = summary, style = MaterialTheme.typography.labelMedium, color = Brand.textSecondary)
+
+            speedControl?.let {
+                Spacer(Modifier.height(16.dp))
+                it()
+            }
+
+            Spacer(Modifier.height(36.dp))
+
+            if (revealed) {
+                SlashableText(
+                    text = drill.revealPrimary,
+                    fontSize = 44.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Monospace,
+                    textAlign = TextAlign.Center
+                )
+                Spacer(Modifier.height(6.dp))
+                // Right/wrong is its own setting (iOS showCorrectness).
+                if (Settings.showCorrectness) {
+                    Text(
+                        text = if (lastCorrect) stringResource(R.string.typed_correct) else stringResource(R.string.typed_wrong, input.trim().uppercase()),
+                        color = if (lastCorrect) OK_GREEN else ERR_RED,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            } else {
+                Text(text = stringResource(R.string.typed_type_what_you_hear), fontSize = 18.sp, color = Brand.teal)
+            }
+
+            Spacer(Modifier.height(28.dp))
+
+            MorseNumberRow(
+                onKey = { if (!revealed) input += it },
+                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+            )
+
+            OutlinedTextField(
+                value = input,
+                onValueChange = { if (!revealed) input = it },
+                enabled = !revealed,
+                singleLine = true,
+                textStyle = MaterialTheme.typography.headlineSmall.copy(
+                    fontFamily = FontFamily.Monospace, textAlign = TextAlign.Center
+                ),
+                keyboardOptions = KeyboardOptions(
+                    capitalization = KeyboardCapitalization.Characters,
+                    imeAction = ImeAction.Done
+                ),
+                keyboardActions = KeyboardActions(onDone = { submit() }),
+                // Desktop: Return checks the answer, taken in the preview pass
+                // so it does not depend on the IME action being delivered.
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .focusRequester(focus)
+                    .onPreviewKeyEvent { event ->
+                        if (isEnter(event)) {
+                            if (event.type == KeyEventType.KeyDown) submit()
+                            true
+                        } else false
+                    }
+            )
+
+            Spacer(Modifier.height(20.dp))
+
+            if (revealed) {
+                if (!lastCorrect) {
+                    // The held correction (issue #77): re-hear it as often as
+                    // needed, move on when ready.
+                    OutlinedButton(
+                        onClick = { player.replaySound(drill.playable, Settings.sidetoneHz, timing()) },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text(stringResource(R.string.common_replay)) }
+                    Spacer(Modifier.height(12.dp))
+                    Button(
+                        onClick = { advance() },
+                        colors = ButtonDefaults.buttonColors(containerColor = Brand.teal, contentColor = Brand.navy),
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text(stringResource(R.string.common_next), fontWeight = FontWeight.SemiBold) }
+                }
+            } else {
+                Button(
+                    onClick = { submit() },
+                    enabled = input.isNotBlank(),
+                    colors = ButtonDefaults.buttonColors(containerColor = Brand.teal, contentColor = Brand.navy),
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text(stringResource(R.string.typed_check), fontWeight = FontWeight.SemiBold) }
+                // Replay before answering is the opt-in feedback setting (iOS allowReplay).
+                if (Settings.allowReplay) {
+                    Spacer(Modifier.height(12.dp))
+                    OutlinedButton(
+                        onClick = { player.replaySound(drill.playable, Settings.sidetoneHz, timing()) },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text(stringResource(R.string.common_replay)) }
+                }
+            }
+        }
+        }
+
+        }  // end of the header + drill Column
+
+        if (showSettings) {
+            SessionSettingsOverlay(scope = settingsMode, onClose = { showSettings = false })
+        }
+    }
+}
+
+/**
+ * **QRQ Speed**: the same typed free-recall loop as [TypedQuizScreen], but words
+ * and call signs are sent at 35–60 WPM — too fast to count dits, training
+ * instant whole-word recognition. The speed override is local to this mode and
+ * does not touch the global WPM setting. 50 and 60 are there for operators who
+ * already work QRQ (issue #79); the same presets are offered on Apple platforms.
+ */
+@Composable
+fun QrqScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) {
+    // The preset persists across launches (iOS qrqSpeed), local to this mode.
+    val wpm = Settings.qrqWpm
+    TypedQuizScreen(
+        title = stringResource(R.string.mode_qrq_speed),
+        onBack = onBack,
+        makeSource = { PhraseQuiz("QRQ", MorseData.wordAndCallSignItems, summaryNoun = "words & calls") },
+        timing = { MorseTiming(Settings.qrqWpm) },
+        settingsMode = SettingsMode.QRQ,
+        onSwitchMode = onSwitchMode,
+        speedControl = {
+            // Four presets no longer fit a narrow phone side by side, so the row
+            // scrolls rather than clipping the fastest one off the edge.
+            Row(
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                listOf(35.0, 40.0, 50.0, 60.0).forEach { speed ->
+                    val selected = wpm == speed
+                    if (selected) {
+                        Button(
+                            onClick = { Settings.updateQrqWpm(speed) },
+                            colors = ButtonDefaults.buttonColors(containerColor = Brand.teal, contentColor = Brand.navy)
+                        ) { Text(stringResource(R.string.common_wpm_value, speed.toInt()), fontWeight = FontWeight.SemiBold) }
+                    } else {
+                        OutlinedButton(onClick = { Settings.updateQrqWpm(speed) }) { Text(stringResource(R.string.common_wpm_value, speed.toInt())) }
+                    }
+                }
+            }
+        }
+    )
+}
