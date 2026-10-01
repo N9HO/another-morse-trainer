@@ -76,6 +76,15 @@ changes and the gap is closed.
 Listed so nobody "ports" one side's plumbing to the other, or reads it as a
 missing feature.
 
+- **Big-screen layout.** Both apps run on tablets in any orientation and in
+  split-screen or resizable windows, and both re-flow the home grid four
+  across on a big window with the same thresholds (`wideLayout` in
+  `Theme.swift`, `isWideLayout()` in `Responsive.kt`). On iPad, Settings
+  and Stats open as page-sized sheets, so Settings shows its categories as
+  a sidebar and Stats runs its lists two to a row; Android's full-screen
+  Settings and Stats keep the single readable column. Same settings and
+  same figures; the iPad form is the sheet's own idiom.
+
 - **Notification permission.** Android 13+ makes `POST_NOTIFICATIONS` a
   runtime permission, so the Android app asks for it when the reminder is
   switched on; iOS asks through `UNUserNotificationCenter` at the same
