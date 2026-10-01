@@ -145,20 +145,21 @@ xcodebuild -project MorseTrainer.xcodeproj -scheme MorseTrainer -configuration R
   -authenticationKeyID "$ASC_KEY_ID" \
   -authenticationKeyIssuerID "$ASC_ISSUER_ID"
 
-if [ "$PLATFORM" = "maccatalyst" ]; then
-  # The export signs the app with the entitlements the ARCHIVED app claims,
-  # filtered by the provisioning profile. An unsigned archive claims none, so
-  # the Mac export came out with only the profile's identifiers: no App
-  # Sandbox (which the Mac App Store refuses), no microphone, no network.
-  # Seen 2026-09-30 in the export pipeline's entitlements file. Ad-hoc signing
-  # needs no certificate, so it records the Mac entitlements on the archived
-  # app without provisioning anything, and the cloud-signed export keeps them.
-  # The iOS path is left exactly as it has shipped.
-  echo "▸ Recording the Mac entitlements on the archived app (ad-hoc)…"
-  codesign --force --sign - --generate-entitlement-der \
-    --entitlements Config/MorseTrainer-macCatalyst.entitlements \
-    "$ARCHIVE/Products/Applications/MorseTrainer.app"
-fi
+# The export signs the app with the entitlements the ARCHIVED app claims,
+# filtered by the provisioning profile. An unsigned archive claims none, so
+# the export came out with only the profile's identifiers. On the Mac that
+# meant no App Sandbox (which the Mac App Store refuses), no microphone, no
+# network; on iOS it meant no App Attest, so every leaderboard post failed
+# on device. Both seen 2026-09-30, the iOS one by the dry run's entitlement
+# check. Ad-hoc signing needs no certificate, so it records the entitlements
+# on the archived app without provisioning anything, and the cloud-signed
+# export keeps them.
+ENTITLEMENTS=Config/MorseTrainer.entitlements
+[ "$PLATFORM" = "maccatalyst" ] && ENTITLEMENTS=Config/MorseTrainer-macCatalyst.entitlements
+echo "▸ Recording $ENTITLEMENTS on the archived app (ad-hoc)…"
+codesign --force --sign - --generate-entitlement-der \
+  --entitlements "$ENTITLEMENTS" \
+  "$ARCHIVE/Products/Applications/MorseTrainer.app"
 
 echo "▸ Exporting + uploading to TestFlight ($PLATFORM)…"
 xcodebuild -exportArchive \
