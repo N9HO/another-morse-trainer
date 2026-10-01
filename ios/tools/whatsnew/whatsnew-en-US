@@ -1,6 +1,3 @@
-• iPad: the app now runs natively on iPad in any orientation, with a wider home screen, a Settings sidebar and room for Stats. Split View, Slide Over and resizable windows work.
-• Leaderboard and buddy streaks: posting from an iPhone or iPad should now work. Earlier builds were missing the App Attest permission the device check needs.
-• Daily Dit: Copy now puts the result card image on the clipboard, with the text as a fallback, just like Share.
-• Code Exam: you pass with one minute of solid copy at the exam's speed (25, 65 or 100 characters at 5, 13 or 20 WPM). Passages now include . , ? / and the AR, SK and BT prosigns, as on the real exams.
-• Settings › Leaderboard & Buddy: a switch to hide the buddy line on the home screen.
-Please try: the app on an iPad (rotate it, use it in a narrow window), posting a score to the leaderboard, pasting a copied Daily Dit card into Messages, and a Code Exam at 13 WPM.
+• First Four: a new beginner mode for brand-new operators. Enter your call and state, and it teaches the four things you need to hunt POTA — your call, your state, ? and 73 — by ear and by key, then walks you through busted calls, unanswered calls and a whole contact. Find it under Start here on the home screen.
+• Everything from build 38: iPad support, working leaderboard posts, Daily Dit Copy with the image, the Code Exam pass bar and prosigns, and the buddy-line switch.
+Please try: First Four from start to finish, with the on-screen key or a Vail Adapter, and tell us where it was too easy or too hard.
