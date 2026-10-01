@@ -30,6 +30,7 @@ class MainActivity : ComponentActivity() {
         PileupSettings.init(this)
         Stats.init(this)
         DailyDitStore.init(this)
+        FirstFourStore.init(this)
         JourneyStore.init(this)
         EngineStore.init(this)
         VoiceProfileStore.init(this)
@@ -171,6 +172,8 @@ private sealed interface Route {
     data object Reference : Route
     data object StartHere : Route
     data object DailyDit : Route
+    /** First Four (#265): the guided path to a first POTA contact. */
+    data object FirstFour : Route
     data object Settings : Route
     data object Stats : Route
     /** The shared leaderboard, opened from Stats (docs/high-scores-design.md, step 2). */
@@ -223,6 +226,7 @@ private fun routeTag(route: Route): String = when (route) {
     Route.Reference -> "reference"
     Route.StartHere -> "startHere"
     Route.DailyDit -> "dailyDit"
+    Route.FirstFour -> "firstFour"
     Route.Settings -> "settings"
     Route.Stats -> "stats"
     Route.Leaderboard -> "leaderboard"
@@ -258,6 +262,7 @@ private fun routeFrom(tag: String): Route? = when (tag) {
     "reference" -> Route.Reference
     "startHere" -> Route.StartHere
     "dailyDit" -> Route.DailyDit
+    "firstFour" -> Route.FirstFour
     "settings" -> Route.Settings
     "stats" -> Route.Stats
     "leaderboard" -> Route.Leaderboard
@@ -368,11 +373,15 @@ private fun AppRoot() {
     }
 
     when (val r = route) {
-        Route.Onboarding -> OnboardingScreen(onDone = { route = Route.Home })
+        // Onboarding's second button (#265) goes straight on to First Four.
+        Route.Onboarding -> OnboardingScreen(onDone = { firstFour ->
+            route = if (firstFour) Route.FirstFour else Route.Home
+        })
         Route.Journey -> JourneyScreen(onBack = { route = Route.Home }, onSwitchMode = { switchTo(it) })
         Route.Home -> HomeScreen(
             onPickStartHere = { route = Route.StartHere },
             onPickDailyDit = { route = Route.DailyDit },
+            onPickFirstFour = { route = Route.FirstFour },
             // Journey asks about its scoring first (the iOS setup card's
             // "Misses drain the bar" toggle), so it goes through the sheet.
             onPickJourney = { launch(journeyTarget()) },
@@ -469,6 +478,7 @@ private fun AppRoot() {
         Route.Reference -> ReferenceScreen(onBack = { route = Route.Home })
         Route.StartHere -> StartHereScreen(onBack = { route = Route.Home })
         Route.DailyDit -> DailyDitScreen(onBack = { route = Route.Home })
+        Route.FirstFour -> FirstFourScreen(onBack = { route = Route.Home })
         Route.Settings -> SettingsScreen(
             onBack = { route = Route.Home },
             // Developer Preview Stage: the track has been jumped and saved;
