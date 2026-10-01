@@ -212,3 +212,73 @@ extension View {
         modifier(WideLayoutReader())
     }
 }
+
+// MARK: - iPad window controls
+
+extension View {
+    /// Keep a custom top bar clear of the window controls (close, minimise,
+    /// tile) that iPadOS 26 draws in the top-leading corner of a resizable
+    /// window. A navigation bar moves aside for them by itself; the home
+    /// screen's hand-made bar did not, and the controls sat on its Vail
+    /// button. The bar drops below them rather than sliding right, because
+    /// a narrow window has no width to spare. Zero everywhere else: full
+    /// screen, iPhone, the Mac (whose controls live in the title bar), and
+    /// before iPadOS 26.
+    func clearsWindowControls() -> some View {
+        modifier(WindowControlsClearance())
+    }
+}
+
+private struct WindowControlsClearance: ViewModifier {
+    @State private var top: CGFloat = 0
+
+    func body(content: Content) -> some View {
+        content
+            .padding(.top, top)
+            .background(WindowControlsProbe(top: $top))
+    }
+}
+
+/// Reads how far the window controls reach down into this view: the
+/// vertically corner-adapted safe area (UIKit's `LayoutRegion`, iOS 26) less
+/// the plain one. SwiftUI has no equivalent to read.
+private struct WindowControlsProbe: UIViewRepresentable {
+    @Binding var top: CGFloat
+
+    func makeUIView(context: Context) -> ProbeView {
+        let view = ProbeView()
+        view.isUserInteractionEnabled = false
+        view.onChange = { top = $0 }
+        return view
+    }
+
+    func updateUIView(_ view: ProbeView, context: Context) {
+        view.onChange = { top = $0 }
+    }
+
+    final class ProbeView: UIView {
+        var onChange: ((CGFloat) -> Void)?
+        private var reported: CGFloat = 0
+
+        override func layoutSubviews() {
+            super.layoutSubviews()
+            report()
+        }
+
+        override func safeAreaInsetsDidChange() {
+            super.safeAreaInsetsDidChange()
+            report()
+        }
+
+        private func report() {
+            guard #available(iOS 26.0, *) else { return }
+            let adapted = edgeInsets(for: .safeArea(cornerAdaptation: .vertical)).top
+            let plain = edgeInsets(for: .safeArea()).top
+            let extra = max(0, (adapted - plain).rounded())
+            guard extra != reported else { return }
+            reported = extra
+            // Out of the layout pass: this changes the padding it measured.
+            Task { @MainActor [weak self] in self?.onChange?(extra) }
+        }
+    }
+}

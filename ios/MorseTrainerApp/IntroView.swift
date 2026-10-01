@@ -70,7 +70,6 @@ struct IntroView: View {
         .sheet(isPresented: $showingSetup) {
             SessionSetupSheet(onStart: onStart)
                 .environmentObject(model)
-                .pageSizedSheet()
         }
         .sheet(isPresented: $showingGames, onDismiss: {
             if pendingGameSetup {
@@ -85,7 +84,6 @@ struct IntroView: View {
                 showingGames = false
             }
             .environmentObject(model)
-            .pageSizedSheet()
         }
         .sheet(isPresented: $showingSettings) {
             SettingsView().environmentObject(model).pageSizedSheet()
@@ -157,6 +155,10 @@ struct IntroView: View {
                         .font(.subheadline.weight(.semibold))
                 }
                 .foregroundStyle(Theme.teal)
+                // Never squeezed out: a narrow iPad window (Slide Over, a
+                // small Stage Manager window) left the capsule an empty
+                // pill with the word wrapped away.
+                .fixedSize()
                 .padding(.horizontal, 12)
                 .padding(.vertical, 7)
                 .overlay(
@@ -210,6 +212,7 @@ struct IntroView: View {
         }
         .padding(.horizontal, 16)
         .padding(.top, 8)
+        .clearsWindowControls()
     }
 
     // MARK: - Header
@@ -1476,8 +1479,9 @@ private struct SessionSetupSheet: View {
                 .background(.ultraThinMaterial)
             }
         }
-        // A half-height sheet suits a phone; on a big iPad it leaves the
-        // options a letterbox to scroll through, so it opens full there.
+        // A half-height sheet suits a phone; on a big iPad it left the
+        // options a letterbox to scroll through, so there it opens at the
+        // full height of the iPad's form sheet (a short list: not page-sized).
         .presentationDetents(wide ? [.large] : [.medium, .large])
     }
 
