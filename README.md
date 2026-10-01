@@ -1,24 +1,26 @@
 # Another Morse Trainer
 
 Learn to copy Morse code (CW) by ear with the Koch method. This repository holds
-both apps:
+the apps:
 
 | | | |
 |---|---|---|
 | [**`ios/`**](ios/) | SwiftUI + SwiftPM + Xcode | iPhone and iPad — [open beta on TestFlight](https://testflight.apple.com/join/ZwXF88Gh); the same app also builds for the Mac (Mac Catalyst), not yet published |
 | [**`android/`**](android/) | Kotlin + Jetpack Compose + Gradle | Android phones and tablets — closed testing |
+| [**`desktop/`**](desktop/) | Kotlin + Compose Multiplatform Desktop (JVM) + Gradle | Windows and Linux — in development (#264): Microsoft Store and Flathub planned |
 
 The user guide lives at
 [anothermorsetrainer.app/guide](https://anothermorsetrainer.app/guide/), and
 testers, bug reports and feature chat live on
 [Discord](https://discord.gg/qgyk3TPUd9).
 
-Both apps are free, with no ads or subscriptions. If they have helped your copy,
+The apps are free, with no ads or subscriptions. If they have helped your copy,
 you can [buy the developer a coffee](https://buymeacoffee.com/n9ho) or see
 [other ways to help](https://anothermorsetrainer.app/support/).
 
 Each platform's own README has the full feature list and setup notes:
-[ios/README.md](ios/README.md) · [android/README.md](android/README.md).
+[ios/README.md](ios/README.md) · [android/README.md](android/README.md) ·
+[desktop/README.md](desktop/README.md).
 
 ## Why I did this
 
@@ -84,6 +86,10 @@ exceptions, and the state of the last audit are in [PARITY.md](PARITY.md). A
 pull request that touches only one platform tree has to say why in its Parity
 section, and the merge gate checks that it did.
 
+**A third port, the same rule.** `desktop/` began as a copy of the Android
+tree (#264) and is kept as its own independent port — same language, no shared
+code, its own Gradle root. See [docs/desktop-design.md](docs/desktop-design.md).
+
 The same goes for the vendored CW decoder — `ios/Sources/CWDecoderCore/` (C99)
 and `android/…/morsekit/cw/` (its Kotlin port). Both are kept byte-identical to
 a firmware copy and carry their own `PROVENANCE.md`; don't reformat, relicense
@@ -108,6 +114,13 @@ cd android
 ./gradlew :app:testDebugUnitTest
 ```
 
+```bash
+# Desktop (Windows, Linux) — needs JDK 21
+cd desktop
+./gradlew :app:test
+./gradlew :app:run
+```
+
 ## Versions and releases
 
 **The two apps have independent version numbers and release cadences and are not
@@ -122,6 +135,7 @@ both release workflows:
 | Tag | Fires | Effect |
 |---|---|---|
 | `ios-v*` | `.github/workflows/ios-release.yml` | Builds and uploads the iOS build to App Store Connect, then submits it to App Review with release-after-approval (What's New from `ios/tools/whatsnew/`) |
+| `desktop-v*` | nothing yet | Reserved for desktop releases (`desktopVersionName` in `desktop/app/build.gradle.kts`, independent of both phone apps); `desktop.yml` builds artifacts only |
 | `android-v*` | `.github/workflows/android-release.yml` | Builds the signed AAB and rolls it out on the Play **production** track (release notes from `android/store-assets/whatsnew/`) |
 
 **A tag is a production release.** Both workflows used to target the beta
@@ -199,6 +213,12 @@ emulator, installs that exact APK, launches it, and fails on a crash or a
 missing symbol — R8 breaks things at runtime, not at build time, so the build
 job is green either way. It uploads two screenshots, which with no Android
 hardware behind this repo is also the only way to see the app running.
+
+`desktop.yml` is path-filtered to `desktop/**` and `fixtures/**`. It runs the
+desktop unit tests on Linux, builds the app image and AppImage and launches the
+packaged app under Xvfb for two screenshots (the only way anyone sees it run),
+builds a Flatpak bundle, and builds the MSI and an unsigned MSIX on one
+`windows-latest` runner (2x Linux billing). No macOS runner.
 
 A consequence worth knowing: **a skipped path-filtered job reports no status at
 all.** If either build is ever made a *required* status check on `main`,
