@@ -145,20 +145,21 @@ xcodebuild -project MorseTrainer.xcodeproj -scheme MorseTrainer -configuration R
   -authenticationKeyID "$ASC_KEY_ID" \
   -authenticationKeyIssuerID "$ASC_ISSUER_ID"
 
-if [ "$PLATFORM" = "maccatalyst" ]; then
-  # The export signs the app with the entitlements the ARCHIVED app claims,
-  # filtered by the provisioning profile. An unsigned archive claims none, so
-  # the Mac export came out with only the profile's identifiers: no App
-  # Sandbox (which the Mac App Store refuses), no microphone, no network.
-  # Seen 2026-09-30 in the export pipeline's entitlements file. Ad-hoc signing
-  # needs no certificate, so it records the Mac entitlements on the archived
-  # app without provisioning anything, and the cloud-signed export keeps them.
-  # The iOS path is left exactly as it has shipped.
-  echo "▸ Recording the Mac entitlements on the archived app (ad-hoc)…"
-  codesign --force --sign - --generate-entitlement-der \
-    --entitlements Config/MorseTrainer-macCatalyst.entitlements \
-    "$ARCHIVE/Products/Applications/MorseTrainer.app"
-fi
+# The export signs the app with the entitlements the ARCHIVED app claims,
+# filtered by the provisioning profile. An unsigned archive claims none, so
+# the export came out with only the profile's identifiers. On the Mac that
+# meant no App Sandbox (which the Mac App Store refuses), no microphone, no
+# network; on iOS it meant no App Attest, so every leaderboard post failed
+# on device. Both seen 2026-09-30, the iOS one by the dry run's entitlement
+# check. Ad-hoc signing needs no certificate, so it records the entitlements
+# on the archived app without provisioning anything, and the cloud-signed
+# export keeps them.
+ENTITLEMENTS=Config/MorseTrainer.entitlements
+[ "$PLATFORM" = "maccatalyst" ] && ENTITLEMENTS=Config/MorseTrainer-macCatalyst.entitlements
+echo "▸ Recording $ENTITLEMENTS on the archived app (ad-hoc)…"
+codesign --force --sign - --generate-entitlement-der \
+  --entitlements "$ENTITLEMENTS" \
+  "$ARCHIVE/Products/Applications/MorseTrainer.app"
 
 echo "▸ Exporting + uploading to TestFlight ($PLATFORM)…"
 xcodebuild -exportArchive \
@@ -206,13 +207,19 @@ if [ "${DRY_RUN:-0}" = "1" ]; then
     echo "❌ DRY RUN: export is not signed by an Apple Distribution certificate."
     exit 1
   fi
+  ENTS=$(codesign -d --entitlements - --xml "$APP" 2>/dev/null | plutil -convert json -o - - 2>/dev/null || true)
+  echo "▸ Entitlements on the exported app: $ENTS"
   if [ "$PLATFORM" = "maccatalyst" ]; then
-    ENTS=$(codesign -d --entitlements - --xml "$APP" 2>/dev/null | plutil -convert json -o - - 2>/dev/null || true)
-    echo "▸ Entitlements on the exported app: $ENTS"
     if ! printf '%s' "$ENTS" | grep -q '"com.apple.security.app-sandbox":true'; then
       echo "❌ DRY RUN: the Mac app is not sandboxed; the Mac App Store would refuse it."
       exit 1
     fi
+  fi
+  # The leaderboard and buddy streaks depend on App Attest; without this
+  # entitlement every attestation fails on device and nothing can be posted.
+  if ! printf '%s' "$ENTS" | grep -q '"com.apple.developer.devicecheck.appattest-environment":"production"'; then
+    echo "❌ DRY RUN: the exported app has no App Attest entitlement; leaderboard posts would fail."
+    exit 1
   fi
   # Ask App Store Connect whether it would take this package, without
   # uploading it: this is where a missing platform on the app record, a
