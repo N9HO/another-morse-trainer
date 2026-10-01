@@ -192,6 +192,14 @@ testers, bug reports and feature chat live on
   Characters & Lessons, Practice & Feedback, Keys & Sending, QSO & Pileups,
   Reminders, Display, Leaderboard & Buddy, Help & About) with a search field
   that finds any setting by name or synonym and jumps straight to it
+- **iPhone and iPad**: one universal app. On iPad it turns to any
+  orientation and runs in Split View, Slide Over and resizable Stage Manager
+  windows. A big window puts the home grid four across with Daily Dit and
+  Start here side by side, opens Settings as a sidebar beside the category
+  you are in, runs the Stats character and confused-pair lists two to a row,
+  and gives the on-screen key more room; a narrow one is the phone layout.
+  Text and quiz columns keep a readable width throughout. A hardware
+  keyboard answers in the typing and choice modes as on the iPhone
 
 ## Project layout
 
@@ -219,8 +227,10 @@ there is one target and one code base; the Mac-only code is in
   typed answers, the number keys and Return for the choice quizzes, the games'
   letter keys, and Head Copy's R, Return and X.
 - **The window** can be resized down to phone width; wider than that, the
-  screens keep their readable column. File › New Window is removed (one
-  session, one audio engine), and Help opens the user guide.
+  screens keep their readable column, and a wide window gets the iPad's
+  big-screen layout (the home grid four across, Settings with a sidebar).
+  File › New Window is removed (one session, one audio engine), and Help
+  opens the user guide.
 - **The leaderboard** needs App Attest to post. Where the Mac cannot attest,
   the boards stay readable and a run says why it was not posted, as in the
   simulator.

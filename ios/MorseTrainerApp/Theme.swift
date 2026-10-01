@@ -74,6 +74,16 @@ enum Theme {
     /// width (matches Android's Responsive.CONTENT_MAX_WIDTH).
     static let contentMaxWidth: CGFloat = 640
 
+    /// The wider cap for the few screens that re-flow rather than just centre
+    /// on a big iPad window (the home grid). See `WideLayoutReader`.
+    static let wideContentMaxWidth: CGFloat = 960
+
+    /// The narrowest window that gets the wide layout: an 11" iPad in
+    /// portrait (834 pt) qualifies; a 13" iPad split in half (about 680 pt),
+    /// a Slide Over panel, and a narrow Mac window do not, and keep the
+    /// phone layout.
+    static let wideLayoutMinWidth: CGFloat = 760
+
     /// Full-bleed brand background: a subtle top-to-bottom navy gradient with a
     /// faint teal glow up top, echoing the logo's lit ring.
     struct Background: View {
@@ -134,6 +144,20 @@ extension View {
             .frame(maxWidth: .infinity)
     }
 
+    /// Size a sheet for the iPad. Unmodified, an iPad sheet is a small form
+    /// card in the middle of the screen, which on a 13" iPad leaves Stats or
+    /// Settings a phone's width with a scrollbar. `.page` makes it a
+    /// page-sized sheet instead. iOS 18+ only; a no-op on iPhone, where every
+    /// sheet is full width anyway, and on older systems.
+    @ViewBuilder
+    func pageSizedSheet() -> some View {
+        if #available(iOS 18.0, *) {
+            self.presentationSizing(.page)
+        } else {
+            self
+        }
+    }
+
     /// A gentle repeating pulse on SF Symbols where supported (iOS 17+); a
     /// no-op on earlier systems so the call site stays clean.
     @ViewBuilder
@@ -142,6 +166,119 @@ extension View {
             self.symbolEffect(.pulse, options: .repeating)
         } else {
             self
+        }
+    }
+}
+
+
+// MARK: - Wide (iPad) layout
+
+private struct WideLayoutKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    /// True when the window is big enough to re-flow a screen rather than
+    /// centre a phone column in it: at least `Theme.wideLayoutMinWidth` wide
+    /// with a regular vertical size class. That is a full-screen iPad in
+    /// either orientation, a big Stage Manager window, or a wide Mac window;
+    /// never an iPhone (landscape is vertically compact), a Split View half
+    /// on a smaller iPad, or Slide Over. Set once at the root by
+    /// `WideLayoutReader`; it measures the window, not the sheet a view is in.
+    var wideLayout: Bool {
+        get { self[WideLayoutKey.self] }
+        set { self[WideLayoutKey.self] = newValue }
+    }
+}
+
+/// Measures the window's width at the root and publishes `wideLayout`. Width
+/// rather than the horizontal size class alone: a Mac window and a 13" iPad
+/// split in half both report `.regular` at widths the wide layouts do not fit.
+private struct WideLayoutReader: ViewModifier {
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
+    @State private var width: CGFloat = 0
+
+    func body(content: Content) -> some View {
+        content
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
+            .environment(\.wideLayout,
+                         width >= Theme.wideLayoutMinWidth && verticalSizeClass == .regular)
+    }
+}
+
+extension View {
+    /// Publish `wideLayout` to everything below, measured on this view.
+    func readsWideLayout() -> some View {
+        modifier(WideLayoutReader())
+    }
+}
+
+// MARK: - iPad window controls
+
+extension View {
+    /// Keep a custom top bar clear of the window controls (close, minimise,
+    /// tile) that iPadOS 26 draws in the top-leading corner of a resizable
+    /// window. A navigation bar moves aside for them by itself; the home
+    /// screen's hand-made bar did not, and the controls sat on its Vail
+    /// button. The bar drops below them rather than sliding right, because
+    /// a narrow window has no width to spare. Zero everywhere else: full
+    /// screen, iPhone, the Mac (whose controls live in the title bar), and
+    /// before iPadOS 26.
+    func clearsWindowControls() -> some View {
+        modifier(WindowControlsClearance())
+    }
+}
+
+private struct WindowControlsClearance: ViewModifier {
+    @State private var top: CGFloat = 0
+
+    func body(content: Content) -> some View {
+        content
+            .padding(.top, top)
+            .background(WindowControlsProbe(top: $top))
+    }
+}
+
+/// Reads how far the window controls reach down into this view: the
+/// vertically corner-adapted safe area (UIKit's `LayoutRegion`, iOS 26) less
+/// the plain one. SwiftUI has no equivalent to read.
+private struct WindowControlsProbe: UIViewRepresentable {
+    @Binding var top: CGFloat
+
+    func makeUIView(context: Context) -> ProbeView {
+        let view = ProbeView()
+        view.isUserInteractionEnabled = false
+        view.onChange = { top = $0 }
+        return view
+    }
+
+    func updateUIView(_ view: ProbeView, context: Context) {
+        view.onChange = { top = $0 }
+    }
+
+    final class ProbeView: UIView {
+        var onChange: ((CGFloat) -> Void)?
+        private var reported: CGFloat = 0
+
+        override func layoutSubviews() {
+            super.layoutSubviews()
+            report()
+        }
+
+        override func safeAreaInsetsDidChange() {
+            super.safeAreaInsetsDidChange()
+            report()
+        }
+
+        private func report() {
+            guard #available(iOS 26.0, *) else { return }
+            let adapted = edgeInsets(for: .safeArea(cornerAdaptation: .vertical)).top
+            let plain = edgeInsets(for: .safeArea()).top
+            let extra = max(0, (adapted - plain).rounded())
+            guard extra != reported else { return }
+            reported = extra
+            // Out of the layout pass: this changes the padding it measured.
+            Task { @MainActor [weak self] in self?.onChange?(extra) }
         }
     }
 }

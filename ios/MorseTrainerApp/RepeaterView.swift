@@ -7,6 +7,8 @@ import SwiftUI
 struct RepeaterView: View {
     @EnvironmentObject var model: RepeaterModel
     @Environment(\.dismiss) private var dismiss
+    /// A bigger key on a big iPad; the column itself is capped either way.
+    @Environment(\.wideLayout) private var wide
 
     @State private var showingSettings = false
     @State private var showingChat = false
@@ -29,12 +31,15 @@ struct RepeaterView: View {
                         OnScreenKeySwitch(onKey: { down, ms in model.touchKey(isDown: down, atMs: ms) }) {
                             RepeaterTouchKeyView()
                         }
-                        .frame(height: 150)
+                        .frame(height: wide ? 200 : 150)
                         breakInCard
                         adapterCard
                         rosterCard
                     }
                     .padding(18)
+                    // Full screen on an iPad would otherwise stretch every
+                    // card, and the key, edge to edge.
+                    .readableWidth()
                 }
             }
             .navigationTitle("On the Air")

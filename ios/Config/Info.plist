@@ -47,10 +47,18 @@
 	<string>Used so you can answer drills by speaking instead of tapping, so the CW decoder can hear the Morse audio you want turned into text, and so the Sending Analyzer can time the tone of a key, keyer or rig you send on.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Used to recognize the answer you speak during voice-response training.</string>
+	<!--
+	  One window. There is one AppModel and one audio engine per process, so a
+	  second iPad window (Stage Manager, App Exposé "New Window") would be a
+	  second view onto the same session with both driving the same player. The
+	  single window still takes part in Split View, Slide Over and Stage
+	  Manager resizing; only a second copy of it is ruled out. The Mac build
+	  removes File › New Window for the same reason (MacCatalystSupport.swift).
+	-->
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
-		<true/>
+		<false/>
 		<key>UISceneConfigurations</key>
 		<dict/>
 	</dict>
@@ -65,6 +73,19 @@
 	<key>UISupportedInterfaceOrientations~iphone</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<!--
+	  iPad: all four orientations, and no UIRequiresFullScreen, so the app
+	  takes part in Split View, Slide Over and Stage Manager. Nothing in it
+	  needs the whole screen: audio, MIDI and the keyer are per-process, not
+	  per-window, and every screen lays out down to a compact-width column.
+	-->
+	<key>UISupportedInterfaceOrientations~ipad</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationPortraitUpsideDown</string>
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>

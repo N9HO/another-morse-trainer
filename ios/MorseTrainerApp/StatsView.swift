@@ -11,6 +11,13 @@ struct StatsView: View {
     /// year where the width allows — Android switches at the same 600 dp.
     private var activityWeeks: Int { sizeClass == .regular ? 52 : 26 }
 
+    /// The width Stats was given: a page-sized sheet on a big iPad, where
+    /// the column widens and the character and confused-pair lists run two
+    /// to a row, rather than a phone column with a long scroll beside two
+    /// empty gutters.
+    @State private var width: CGFloat = 0
+    private var twoUp: Bool { width >= 900 }
+
     var body: some View {
         NavigationStack {
             List {
@@ -45,8 +52,14 @@ struct StatsView: View {
                 }
 
                 Section("Characters") {
-                    ForEach(model.characterStats) { stat in
-                        row(stat)
+                    if twoUp {
+                        ForEach(pairs(model.characterStats), id: \.first.id) { pair in
+                            twoUpRow(pair.first, pair.second, content: row)
+                        }
+                    } else {
+                        ForEach(model.characterStats) { stat in
+                            row(stat)
+                        }
                     }
                 }
                 .listRowBackground(Theme.navyElevated)
@@ -106,8 +119,14 @@ struct StatsView: View {
 
                 if !model.confusionPairs.isEmpty {
                     Section {
-                        ForEach(model.confusionPairs) { pair in
-                            confusionRow(pair)
+                        if twoUp {
+                            ForEach(pairs(model.confusionPairs), id: \.first.id) { pair in
+                                twoUpRow(pair.first, pair.second, content: confusionRow)
+                            }
+                        } else {
+                            ForEach(model.confusionPairs) { pair in
+                                confusionRow(pair)
+                            }
                         }
                     } header: {
                         Text("Most-confused pairs")
@@ -118,7 +137,8 @@ struct StatsView: View {
                 }
             }
             .scrollContentBackground(.hidden)
-            .readableWidth()
+            .readableWidth(twoUp ? 880 : Theme.contentMaxWidth)
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
             .background(Theme.Background())
             .navigationTitle("Your Stats")
             .navigationBarTitleDisplayMode(.inline)
@@ -127,6 +147,28 @@ struct StatsView: View {
                     Button("Done") { dismiss() }
                 }
             }
+        }
+    }
+
+    /// Consecutive items two at a time, for the two-up lists.
+    private func pairs<T>(_ items: [T]) -> [(first: T, second: T?)] {
+        stride(from: 0, to: items.count, by: 2).map { i in
+            (items[i], i + 1 < items.count ? items[i + 1] : nil)
+        }
+    }
+
+    /// Two list entries side by side in one row, split by a hairline; the
+    /// right half is left empty after an odd last entry.
+    private func twoUpRow<T, V: View>(_ left: T, _ right: T?,
+                                      @ViewBuilder content: (T) -> V) -> some View {
+        HStack(spacing: 16) {
+            content(left)
+                .frame(maxWidth: .infinity)
+            Divider()
+            Group {
+                if let right { content(right) } else { Color.clear }
+            }
+            .frame(maxWidth: .infinity)
         }
     }
 

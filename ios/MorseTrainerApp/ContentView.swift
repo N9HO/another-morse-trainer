@@ -162,16 +162,16 @@ struct ContentView: View {
                 // Scoped to the running mode so mid-session settings only show
                 // what applies to it (issue #66); the intro's Settings entry
                 // stays the full app-wide surface.
-                SettingsView(activeMode: model.mode).environmentObject(model)
+                SettingsView(activeMode: model.mode).environmentObject(model).pageSizedSheet()
             }
             .sheet(isPresented: $showStats) {
-                StatsView().environmentObject(model)
+                StatsView().environmentObject(model).pageSizedSheet()
             }
             .sheet(isPresented: $showBrag) {
                 BragSheetView().environmentObject(model)
             }
             .sheet(isPresented: $showJourneyMap) {
-                JourneyMapView().environmentObject(model)
+                JourneyMapView().environmentObject(model).pageSizedSheet()
             }
             .sheet(item: $detailRecord) { record in
                 NavigationStack {

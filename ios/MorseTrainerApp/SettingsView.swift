@@ -52,6 +52,13 @@ struct SettingsView: View {
     /// The drill-down stack under the root, and the root's search text.
     @State private var path: [SettingsRoute] = []
     @State private var query = ""
+    /// The width Settings was given. On a big iPad the sheet is page-sized,
+    /// wide enough for the categories to sit in a sidebar beside the one
+    /// that is open instead of pushing over it (`splitBody`).
+    @State private var width: CGFloat = 0
+    /// The sidebar's pick, in the split layout: the open category (and a
+    /// search result's section to scroll to), or nil before the first pick.
+    @State private var selection: SettingsRoute?
     /// The section a search result landed on, tinted for a moment so the eye
     /// finds it; cleared after the flash.
     @State private var highlighted: SettingsSection?
@@ -177,25 +184,16 @@ struct SettingsView: View {
         SettingsCatalog.search(query, in: SettingsCatalog.entries.filter { isShown($0.section) })
     }
 
+    /// Sidebar and detail side by side: a page-sized iPad sheet, a wide Mac
+    /// window. Narrower than this (iPhone, Split View, Slide Over) it is the
+    /// phone's drill-down stack.
+    private var splits: Bool { width >= 700 }
+
     var body: some View {
-        NavigationStack(path: $path) {
-            rootList
-                .searchable(text: $query,
-                            placement: .navigationBarDrawer(displayMode: .always),
-                            prompt: "Search settings")
-                .autocorrectionDisabled()
-                .navigationTitle("Settings")
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar { doneButton }
-                .navigationDestination(for: SettingsRoute.self) { route in
-                    switch route {
-                    case .category(let category, let focus):
-                        categoryScreen(category, focus: focus)
-                    case .licenses:
-                        LicensesView()
-                    }
-                }
+        Group {
+            if splits { splitBody } else { stackBody }
         }
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
         // Push every change to a connected adapter as it is made: from the
         // intro there is no drill underneath holding an output, and
         // mid-session the drill's own push is diff-based, so the overlap is
@@ -204,6 +202,67 @@ struct SettingsView: View {
         .onChange(of: adapterKeyerMode) { _ in syncAdapterIfKeyed() }
         .onChange(of: model.settings.wpm) { _ in syncAdapterIfKeyed() }
         .onChange(of: model.settings.toneFrequency) { _ in syncAdapterIfKeyed() }
+    }
+
+    /// The phone layout: categories, and each one pushed over them.
+    private var stackBody: some View {
+        NavigationStack(path: $path) {
+            rootList(sidebar: false)
+                .searchable(text: $query,
+                            placement: .navigationBarDrawer(displayMode: .always),
+                            prompt: "Search settings")
+                .autocorrectionDisabled()
+                .navigationTitle("Settings")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar { doneButton }
+                .navigationDestination(for: SettingsRoute.self, destination: destination)
+        }
+    }
+
+    /// The iPad layout: the categories (and search) in a sidebar, the open
+    /// one beside them. Same rows, same search, same scroll-to-section.
+    private var splitBody: some View {
+        NavigationSplitView(columnVisibility: .constant(.all)) {
+            rootList(sidebar: true)
+                .searchable(text: $query, placement: .sidebar, prompt: "Search settings")
+                .autocorrectionDisabled()
+                .navigationTitle("Settings")
+                .navigationBarTitleDisplayMode(.inline)
+                .hidingSidebarToggle()
+        } detail: {
+            NavigationStack(path: $path) {
+                Group {
+                    if let selection {
+                        destination(selection)
+                    } else {
+                        Theme.Background()
+                            .toolbar { doneButton }
+                    }
+                }
+                // A new pick is a new screen: its focus task runs again.
+                .id(selection)
+                .navigationDestination(for: SettingsRoute.self, destination: destination)
+            }
+        }
+        .navigationSplitViewStyle(.balanced)
+        .onAppear {
+            if selection == nil {
+                selection = visibleCategories.first.map { .category($0, focus: nil) }
+            }
+        }
+        // Licenses is pushed on the detail's own stack; a new category
+        // starts that stack over.
+        .onChange(of: selection) { _ in path = [] }
+    }
+
+    @ViewBuilder
+    private func destination(_ route: SettingsRoute) -> some View {
+        switch route {
+        case .category(let category, let focus):
+            categoryScreen(category, focus: focus)
+        case .licenses:
+            LicensesView()
+        }
     }
 
     /// Only where the Hardware key section is part of this surface, as when
@@ -221,51 +280,68 @@ struct SettingsView: View {
 
     // MARK: - Root and sub-screens
 
-    private var rootList: some View {
-        Form {
-            if SettingsCatalog.words(query).isEmpty {
-                Section {
-                    ForEach(visibleCategories) { category in
-                        NavigationLink(value: SettingsRoute.category(category, focus: nil)) {
-                            Label(category.title, systemImage: category.systemImage)
-                        }
-                    }
-                } footer: {
-                    if activeMode != nil {
-                        Text("Showing what applies here — the full settings live on the home screen.")
+    /// The categories, or search results. In the split layout it is the
+    /// sidebar: a selectable `List`, whose links set `selection` rather than
+    /// push, left on the system sidebar look so the pick is highlighted.
+    @ViewBuilder
+    private func rootList(sidebar: Bool) -> some View {
+        if sidebar {
+            List(selection: $selection) {
+                rootRows(rowBackground: nil)
+            }
+            .scrollContentBackground(.hidden)
+            .background(Theme.Background())
+        } else {
+            Form {
+                rootRows(rowBackground: Theme.navyElevated)
+            }
+            .scrollContentBackground(.hidden)
+            .readableWidth()
+            .background(Theme.Background())
+        }
+    }
+
+    @ViewBuilder
+    private func rootRows(rowBackground: Color?) -> some View {
+        if SettingsCatalog.words(query).isEmpty {
+            Section {
+                ForEach(visibleCategories) { category in
+                    NavigationLink(value: SettingsRoute.category(category, focus: nil)) {
+                        Label(category.title, systemImage: category.systemImage)
                     }
                 }
-                .listRowBackground(Theme.navyElevated)
-            } else {
-                let results = searchResults
-                if results.isEmpty {
-                    Section {
-                        Text("No settings match “\(query.trimmingCharacters(in: .whitespaces))”.")
-                            .foregroundStyle(.secondary)
-                    }
-                    .listRowBackground(Theme.navyElevated)
-                } else {
-                    Section {
-                        ForEach(results) { entry in
-                            NavigationLink(value: SettingsRoute.category(entry.category, focus: entry.section)) {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(entry.title)
-                                    Text(entry.category.title)
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
-                        }
-                    } header: {
-                        Text("Results")
-                    }
-                    .listRowBackground(Theme.navyElevated)
+            } footer: {
+                if activeMode != nil {
+                    Text("Showing what applies here — the full settings live on the home screen.")
                 }
             }
+            .listRowBackground(rowBackground)
+        } else {
+            let results = searchResults
+            if results.isEmpty {
+                Section {
+                    Text("No settings match “\(query.trimmingCharacters(in: .whitespaces))”.")
+                        .foregroundStyle(.secondary)
+                }
+                .listRowBackground(rowBackground)
+            } else {
+                Section {
+                    ForEach(results) { entry in
+                        NavigationLink(value: SettingsRoute.category(entry.category, focus: entry.section)) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(entry.title)
+                                Text(entry.category.title)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                } header: {
+                    Text("Results")
+                }
+                .listRowBackground(rowBackground)
+            }
         }
-        .scrollContentBackground(.hidden)
-        .readableWidth()
-        .background(Theme.Background())
     }
 
     private func categoryScreen(_ category: SettingsCategory, focus: SettingsSection?) -> some View {
@@ -1197,4 +1273,18 @@ private enum LicenseNotices {
 
     THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
     """
+}
+
+
+private extension View {
+    /// The split Settings keeps both columns up (the sidebar is the only way
+    /// between categories), so its show/hide button would do nothing.
+    @ViewBuilder
+    func hidingSidebarToggle() -> some View {
+        if #available(iOS 17.0, *) {
+            self.toolbar(removing: .sidebarToggle)
+        } else {
+            self
+        }
+    }
 }

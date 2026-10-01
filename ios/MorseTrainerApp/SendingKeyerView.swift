@@ -8,6 +8,9 @@ struct SendingKeyerView: View {
     @StateObject private var sender: SendingKeyer
     @State private var keyPressed = false
     @State private var showingBluetoothMIDI = false
+    /// A bigger key on a big iPad: two hands and a lap, not a thumb.
+    @Environment(\.wideLayout) private var wide
+    private var keyHeight: CGFloat { wide ? 180 : 120 }
     /// The operator's keyer mode, read from the value Settings and the Vail
     /// screen share (issue #43), so a change made in the Settings sheet drawn
     /// over this drill is pushed to the adapter at once.
@@ -26,7 +29,7 @@ struct SendingKeyerView: View {
             OnScreenKeySwitch(onKey: { down, ms in sender.touchKey(isDown: down, atMs: ms) }) {
                 keyButton
             }
-            .frame(height: 120)
+            .frame(height: keyHeight)
             controls
             midiStatus
         }
@@ -87,7 +90,7 @@ struct SendingKeyerView: View {
                     .foregroundStyle(keyPressed ? Theme.navy : Theme.textSecondary)
             }
         }
-        .frame(height: 120)
+        .frame(height: keyHeight)
         .scaleEffect(keyPressed ? 0.98 : 1)
         .animation(.easeOut(duration: 0.06), value: keyPressed)
         .contentShape(Rectangle())

@@ -197,7 +197,10 @@ the iOS app's navy/teal look.
   Characters & Lessons, Practice & Feedback, Keys & Sending, QSO & Pileups,
   Reminders, Display, Leaderboard & Buddy, Help & About) with a search field
   that finds any setting by name or synonym and jumps straight to it
-- Dark navy/teal theme, adaptive icon, phone + tablet responsive layout
+- Dark navy/teal theme, adaptive icon, phone + tablet responsive layout: any
+  orientation, split screen and freeform windows; a big tablet window puts
+  the home grid four across with Daily Dit and Start here side by side, and
+  every screen keeps a readable column instead of stretching edge to edge
 
 ## Build
 
