@@ -156,10 +156,14 @@ fun HomeScreen(
         // the menu had outgrown two screens of tiles. Same place as on iOS.
         HomeItem(stringResource(R.string.mode_games), stringResource(R.string.home_six_arcade_modes), Icons.Filled.SportsEsports, onPickGames)
 
+    // A big tablet window: a wider column, the tiles four across, and the
+    // Daily Dit and Start here cards side by side (iOS IntroView, same rule).
+    val wide = isWideLayout()
     CenteredScrollColumn(
         contentModifier = Modifier
             .padding(horizontal = 20.dp)
-            .padding(top = 12.dp, bottom = 32.dp)
+            .padding(top = 12.dp, bottom = 32.dp),
+        maxWidth = if (wide) WIDE_CONTENT_MAX_WIDTH else CONTENT_MAX_WIDTH
     ) {
             // Top bar: CW decoder + Stats + Settings, like the iOS toolbar.
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
@@ -218,21 +222,29 @@ fun HomeScreen(
             // The day's puzzle (#155). It sits above even "Start here" because
             // unlike everything else on this screen it expires: a daily
             // challenge you have to go looking for is one nobody plays.
-            DailyDitCard(onPickDailyDit)
-
-            Spacer(Modifier.height(12.dp))
-            // The newcomer's way in (#96): the site's guide explains how to
-            // begin and why the code is fast, but nothing on the tile grid
-            // said so. Always visible — as useful in week three as on day one.
-            StartHereCard(onPickStartHere)
+            // The newcomer's way in (#96), under it: the site's guide explains
+            // how to begin and why the code is fast, but nothing on the tile
+            // grid said so. Always visible — as useful in week three as on day one.
+            if (wide) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                    Box(Modifier.weight(1f)) { DailyDitCard(onPickDailyDit) }
+                    Box(Modifier.weight(1f)) { StartHereCard(onPickStartHere) }
+                }
+            } else {
+                DailyDitCard(onPickDailyDit)
+                Spacer(Modifier.height(12.dp))
+                StartHereCard(onPickStartHere)
+            }
 
             Spacer(Modifier.height(24.dp))
 
-            // Two-column tile grid (matches iOS mode picker).
-            items.chunked(2).forEach { pair ->
+            // Two-column tile grid (matches iOS mode picker); four across on
+            // a big tablet window.
+            val perRow = if (wide) 4 else 2
+            items.chunked(perRow).forEach { row ->
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                    pair.forEach { item -> ModeTile(item, Modifier.weight(1f)) }
-                    if (pair.size == 1) Spacer(Modifier.weight(1f))
+                    row.forEach { item -> ModeTile(item, Modifier.weight(1f)) }
+                    repeat(perRow - row.size) { Spacer(Modifier.weight(1f)) }
                 }
                 Spacer(Modifier.height(14.dp))
             }
