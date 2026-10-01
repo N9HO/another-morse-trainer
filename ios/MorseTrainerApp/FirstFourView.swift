@@ -879,6 +879,10 @@ private struct FirstFourKeyPanel: View {
     let onSubmit: (String) -> Void
     @StateObject private var sender: SendingKeyer
     @State private var keyPressed = false
+    /// A bigger key on a big iPad, as Sending Practice has (Theme.swift,
+    /// `wideLayout`); the column itself stays readable-width either way.
+    @Environment(\.wideLayout) private var wide
+    private var keyHeight: CGFloat { wide ? 150 : 100 }
 
     init(expected: String, resetToken: Int, wpm: Double, toneHz: Double,
          onSubmit: @escaping (String) -> Void) {
@@ -913,7 +917,7 @@ private struct FirstFourKeyPanel: View {
                         .font(.system(size: 12, weight: .bold)).tracking(1.5)
                         .foregroundStyle(keyPressed ? Theme.navy : Theme.textSecondary)
                 }
-                .frame(height: 100)
+                .frame(height: keyHeight)
                 .contentShape(Rectangle())
                 .gesture(
                     DragGesture(minimumDistance: 0)
@@ -927,7 +931,7 @@ private struct FirstFourKeyPanel: View {
                 .accessibilityLabel("Morse key")
                 .accessibilityHint("Press and hold to send each dit and dah")
             }
-            .frame(height: 100)
+            .frame(height: keyHeight)
             HStack(spacing: 12) {
                 Button { sender.clear() } label: {
                     Label("Clear", systemImage: "delete.left").frame(maxWidth: .infinity, minHeight: 40)

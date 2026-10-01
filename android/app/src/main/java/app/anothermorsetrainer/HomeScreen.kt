@@ -226,22 +226,26 @@ fun HomeScreen(
             // The newcomer's way in (#96), under it: the site's guide explains
             // how to begin and why the code is fast, but nothing on the tile
             // grid said so. Always visible — as useful in week three as on day one.
+            // First Four (#265), the four things a new operator needs to hunt
+            // one POTA activator and the contact itself, goes with "Start
+            // here", the other newcomer entry, above the grid — as on iOS. On
+            // a big tablet window the two stack beside Daily Dit, so First
+            // Four is not a thin strip across the 960 dp column.
             if (wide) {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                     Box(Modifier.weight(1f)) { DailyDitCard(onPickDailyDit) }
-                    Box(Modifier.weight(1f)) { StartHereCard(onPickStartHere) }
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        StartHereCard(onPickStartHere)
+                        FirstFourCard(onPickFirstFour)
+                    }
                 }
             } else {
                 DailyDitCard(onPickDailyDit)
                 Spacer(Modifier.height(12.dp))
                 StartHereCard(onPickStartHere)
+                Spacer(Modifier.height(12.dp))
+                FirstFourCard(onPickFirstFour)
             }
-
-            Spacer(Modifier.height(12.dp))
-            // First Four (#265): the four things a new operator needs to hunt
-            // one POTA activator, and the contact itself. With "Start here",
-            // the other newcomer entry, above the grid — as on iOS.
-            FirstFourCard(onPickFirstFour)
 
             Spacer(Modifier.height(24.dp))
 

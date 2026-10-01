@@ -50,18 +50,24 @@ struct IntroView: View {
                     header
 
                     if wide {
+                        // The two newcomer entries stack beside Daily Dit,
+                        // sharing its height, so First Four is not a thin
+                        // strip across the 960 pt column.
                         HStack(alignment: .top, spacing: 14) {
                             dailyDitCard
-                            startHereButton
+                            VStack(spacing: 14) {
+                                startHereButton
+                                firstFourCard
+                            }
                         }
                         .fixedSize(horizontal: false, vertical: true)
                     } else {
                         dailyDitCard
 
                         startHereButton
-                    }
 
-                    firstFourCard
+                        firstFourCard
+                    }
 
                     modePicker
 
@@ -108,7 +114,7 @@ struct IntroView: View {
         .sheet(isPresented: $showingFirstFour, onDismiss: {
             firstFourProgress = FirstFourStore.load()
         }) {
-            FirstFourView().environmentObject(model)
+            FirstFourView().environmentObject(model).pageSizedSheet()
         }
         .sheet(isPresented: $showingSendingDrill) {
             SendingDrillView().environmentObject(model).pageSizedSheet()
@@ -427,6 +433,9 @@ struct IntroView: View {
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(Theme.textSecondary)
             }
+            // Stacked under Start here on a wide iPad, the two share the
+            // Daily Dit card's height.
+            .frame(maxHeight: .infinity)
             .foregroundStyle(.white)
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
