@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  AppStream metadata for Flathub and Linux software centres.
+  Before submitting to Flathub (docs/desktop-design.md, §6): add at least one
+  <screenshot> with an https URL hosted on anothermorsetrainer.app, and a
+  <release> entry for every desktop-v* version.
+-->
+<component type="desktop-application">
+  <id>app.anothermorsetrainer.AnotherMorseTrainer</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later AND MIT</project_license>
+  <name>Another Morse Trainer</name>
+  <summary>Learn and practise Morse code</summary>
+  <developer id="app.anothermorsetrainer">
+    <name>Justin Rogers</name>
+  </developer>
+  <description>
+    <p>
+      A Morse code trainer built around the Koch method: characters are sent at
+      full speed from the first lesson, and new ones are added as you master
+      the old.
+    </p>
+    <ul>
+      <li>A guided Journey, character and word drills, head copy, typed copy and QRQ speed practice</li>
+      <li>Listen and Learn, short stories and a code exam</li>
+      <li>Pileup Runner, contest practice and Rapid Fire</li>
+      <li>Six arcade games played in Morse</li>
+      <li>Sending practice, drills and a sending analyzer with a USB Morse key such as the Vail Adapter, or the keyboard</li>
+      <li>A live CW decoder and the Vail repeater</li>
+    </ul>
+    <p>
+      The same trainer as the iPhone, iPad, Mac and Android apps. Scores made on
+      the desktop are kept as personal bests and are not ranked on the shared
+      leaderboard.
+    </p>
+  </description>
+  <launchable type="desktop-id">app.anothermorsetrainer.AnotherMorseTrainer.desktop</launchable>
+  <url type="homepage">https://anothermorsetrainer.app/</url>
+  <url type="help">https://anothermorsetrainer.app/guide/</url>
+  <url type="vcs-browser">https://github.com/N9HO/another-morse-trainer</url>
+  <url type="bugtracker">https://github.com/N9HO/another-morse-trainer/issues</url>
+  <categories>
+    <category>Education</category>
+    <category>HamRadio</category>
+  </categories>
+  <content_rating type="oars-1.1" />
+  <supports>
+    <control>keyboard</control>
+    <control>pointing</control>
+  </supports>
+  <releases>
+    <release version="1.0.0" date="2026-09-30">
+      <description>
+        <p>First desktop release for Windows and Linux.</p>
+      </description>
+    </release>
+  </releases>
+</component>
