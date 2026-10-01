@@ -14,6 +14,7 @@ struct ContentView: View {
     @State private var detailRecord: SessionRecord?
     @State private var typedAnswer = ""
     @State private var examCopy = ""
+    @State private var examAnswer = ""
     @State private var qsoText = ""
     /// Journey's keyed answer so far, from a hardware key (#251).
     @State private var journeyKeyed = ""
@@ -21,6 +22,7 @@ struct ContentView: View {
     @State private var qsoHintShown = false
     @FocusState private var typedFocused: Bool
     @FocusState private var examCopyFocused: Bool
+    @FocusState private var examAnswerFocused: Bool
     @FocusState private var qsoFocused: Bool
 
     private let columns = [GridItem(.flexible(), spacing: 16),
@@ -615,7 +617,7 @@ struct ContentView: View {
             Text("Code Proficiency Exam")
                 .font(.title3).bold()
                 .multilineTextAlignment(.center)
-            Text("\(model.examSpeed.label) · \(model.examGrading.label(for: model.examSpeed))")
+            Text("\(model.examSpeed.label) · \(model.examSpeed.passLabel)")
                 .font(.caption).foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
         }
@@ -628,9 +630,7 @@ struct ContentView: View {
             Image(systemName: "checkmark.seal")
                 .font(.system(size: 64))
                 .foregroundStyle(Theme.teal)
-            Text(model.examGrading == .solidCopy
-                 ? "Listen to the whole transmission and copy it. To pass, get \(model.examRequiredRun) characters in a row correct."
-                 : "Listen to the whole transmission, then answer questions about what was sent.")
+            Text("Listen to the whole transmission and copy it, prosigns included. Then fill in \(ExamSession.questionCount) blanks about it from your copy. Pass with \(model.examRequiredRun) in a row (numerals, punctuation and prosigns count two) or \(ExamSession.questionsToPass) right answers.")
                 .font(.callout).foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal)
@@ -671,9 +671,10 @@ struct ContentView: View {
     private var examCopyView: some View {
         VStack(spacing: 16) {
             examHeader
-            Text("Type everything you copied:")
+            Text("Type everything you copied. Write prosigns as <AR> <BT> <SK>, or + for AR and = for BT. Copied on paper? Leave it blank and go on to the questions.")
                 .font(.subheadline).foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
             TextEditor(text: $examCopy)
                 .font(.system(.body, design: .monospaced))
                 .textInputAutocapitalization(.characters)
@@ -683,81 +684,98 @@ struct ContentView: View {
                 .padding(8)
                 .background(Color(.secondarySystemBackground),
                             in: RoundedRectangle(cornerRadius: 12))
-                .morseKeyboardRow(text: $examCopy) { examCopyFocused = false }
+                .morseKeyboardRow(text: $examCopy, prosigns: ["<AR>", "<BT>", "<SK>"]) {
+                    examCopyFocused = false
+                }
             Button {
+                examCopyFocused = false
+                examAnswer = ""
                 model.submitExamCopy(examCopy)
             } label: {
-                Text("Grade my copy")
+                Text("Hand in copy, go to the questions")
                     .font(.headline).foregroundStyle(Theme.navy)
                     .frame(maxWidth: .infinity, minHeight: 52)
             }
             .buttonStyle(.borderedProminent)
-            .disabled(examCopy.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             Spacer(minLength: 0)
         }
         .onAppear { examCopyFocused = true }
     }
 
+    /// One fill-in blank at a time, answered from the copy, which stays on
+    /// screen above it (the ARRL candidate answered from their copy sheet).
     private var examQuestionView: some View {
-        VStack(spacing: 18) {
-            HStack {
-                Text("Question \(model.examQuestionNumber) of \(model.examQuestionCount)")
-                    .font(.subheadline).foregroundStyle(.secondary)
-                Spacer()
-            }
-            Text(model.examQuestion?.prompt ?? "")
-                .font(.title3).bold()
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 8)
+        ScrollView {
+            VStack(spacing: 16) {
+                HStack {
+                    Text("Question \(model.examQuestionNumber) of \(model.examQuestionCount)")
+                        .font(.subheadline).foregroundStyle(.secondary)
+                    Spacer()
+                    Text("\(model.examCorrectCount) right")
+                        .font(.subheadline).foregroundStyle(.secondary)
+                }
+                if !model.examCopyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Your copy:")
+                            .font(.caption).foregroundStyle(.secondary)
+                        Text(model.examCopyText)
+                            .font(Theme.copyFont(style: .footnote, monospaced: true,
+                                                 slashedZero: model.settings.slashedZero))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .padding(10)
+                    .background(Color(.secondarySystemBackground),
+                                in: RoundedRectangle(cornerRadius: 12))
+                }
+                Text(model.examQuestion?.prompt ?? "")
+                    .font(.title3).bold()
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 4)
 
-            LazyVGrid(columns: columns, spacing: 16) {
-                ForEach(model.examQuestion?.options ?? [], id: \.self) { option in
+                TextField("Answer", text: $examAnswer)
+                    .font(.system(.title3, design: .monospaced))
+                    .textInputAutocapitalization(.characters)
+                    .autocorrectionDisabled()
+                    .multilineTextAlignment(.center)
+                    .textFieldStyle(.roundedBorder)
+                    .focused($examAnswerFocused)
+                    .disabled(model.examAnswerCorrect != nil)
+                    .onSubmit { submitExamAnswer() }
+                    .morseKeyboardRow(text: $examAnswer) { examAnswerFocused = false }
+
+                if let correct = model.examAnswerCorrect {
+                    Text(correct ? "Correct" : "Not quite: \(model.examQuestion?.answer ?? "")")
+                        .font(.headline)
+                        .foregroundStyle(correct ? .green : .red)
                     Button {
-                        model.answerExamQuestion(option)
+                        examAnswer = ""
+                        model.nextExamQuestion()
+                        examAnswerFocused = model.examStage == .question
                     } label: {
-                        Text(option)
-                            .font(optionFont(option))
-                            .foregroundStyle(Theme.prominentLabel(on: examTint(for: option)))
-                            .multilineTextAlignment(.center)
-                            .minimumScaleFactor(0.6)
-                            .frame(maxWidth: .infinity, minHeight: 72)
-                            .padding(.horizontal, 4)
+                        Text(model.examQuestionNumber >= model.examQuestionCount ? "See results" : "Next")
+                            .font(.headline).foregroundStyle(Theme.navy)
+                            .frame(maxWidth: .infinity, minHeight: 50)
                     }
                     .buttonStyle(.borderedProminent)
-                    .tint(examTint(for: option))
-                    .disabled(model.examAnswerCorrect != nil)
+                } else {
+                    Button {
+                        submitExamAnswer()
+                    } label: {
+                        Text("Check")
+                            .font(.headline).foregroundStyle(Theme.navy)
+                            .frame(maxWidth: .infinity, minHeight: 50)
+                    }
+                    .buttonStyle(.borderedProminent)
                 }
-            }
-
-            if let correct = model.examAnswerCorrect {
-                Text(correct ? "Correct" : "Not quite")
-                    .font(.headline)
-                    .foregroundStyle(correct ? .green : .red)
-            }
-
-            Spacer(minLength: 0)
-
-            if model.examAnswerCorrect != nil {
-                Button {
-                    model.nextExamQuestion()
-                } label: {
-                    Text("Next")
-                        .font(.headline).foregroundStyle(Theme.navy)
-                        .frame(maxWidth: .infinity, minHeight: 50)
-                }
-                .buttonStyle(.borderedProminent)
-            } else {
-                Color.clear.frame(height: 50)
             }
         }
+        .onAppear { examAnswerFocused = true }
     }
 
-    private func examTint(for option: String) -> Color {
-        guard model.examAnswerCorrect != nil else { return .blue }
-        if option == model.examQuestion?.answer { return .green }
-        if option == model.examSelected, model.examAnswerCorrect == false { return .red }
-        return .gray
+    private func submitExamAnswer() {
+        guard model.examAnswerCorrect == nil else { return }
+        model.answerExamQuestion(examAnswer)
     }
 
     private var examResultsView: some View {
@@ -771,13 +789,22 @@ struct ContentView: View {
                     .font(.largeTitle).bold()
                     .foregroundStyle(model.examPassed ? .green : .red)
 
-                if model.examGrading == .solidCopy, let r = model.examCopyResult {
-                    Text("Longest solid run: \(r.longestRun) / \(r.required) characters")
+                if let r = model.examResult {
+                    Text(r.pathText)
                         .font(.headline)
                         .multilineTextAlignment(.center)
-                } else {
-                    Text("Score: \(model.examScoreText)")
-                        .font(.headline)
+                    VStack(alignment: .leading, spacing: 6) {
+                        Label("Solid copy: longest run \(r.copy.longestRun) / \(r.copy.required)",
+                              systemImage: r.passedByCopy ? "checkmark.circle.fill" : "xmark.circle")
+                            .foregroundStyle(r.passedByCopy ? .green : .secondary)
+                        Label("Questions: \(r.questionsCorrect) / \(r.questionsAsked) right, \(r.questionsRequired) to pass",
+                              systemImage: r.passedByQuestions ? "checkmark.circle.fill" : "xmark.circle")
+                            .foregroundStyle(r.passedByQuestions ? .green : .secondary)
+                        Text("Letters count one; numerals, punctuation and prosigns count two.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    .font(.subheadline)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
 
                 VStack(alignment: .leading, spacing: 6) {
@@ -796,6 +823,7 @@ struct ContentView: View {
 
                 Button {
                     examCopy = ""
+                    examAnswer = ""
                     model.newExam()
                 } label: {
                     Label("New exam", systemImage: "arrow.clockwise")

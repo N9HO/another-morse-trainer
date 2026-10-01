@@ -99,8 +99,10 @@ testers, bug reports and feature chat live on
   CWops CWT, NCCC Sprint, ARRL Field Day) with authentic exchanges and speeds,
   a live score and rate, and an end-of-run scorecard
 - **Code Exam**: FCC/ARRL-style copy test at 5 / 13 / 20 WPM, every passage
-  carrying the letters, numerals, `. , ? /` and AR / SK / BT the real exams did
-  (one minute of solid copy — 25 / 65 / 100 in a row — or content questions)
+  carrying the letters, numerals, `. , ? /` and AR / SK / BT the real exams did,
+  graded the ARRL VEC way: copy it, then fill in 10 blanks from your copy; pass
+  on one minute of solid copy (25 / 65 / 100 in a row, numerals, punctuation and
+  prosigns counting two) or 7 of 10 answers (random or a bundled passage)
 - **Short Stories**: continuous copy of a public-domain fable (32 bundled), a
   longer classic sent in parts with a bookmark that keeps your place, or todays
   news: real RSS headlines sanitized to sendable Morse and hidden until you

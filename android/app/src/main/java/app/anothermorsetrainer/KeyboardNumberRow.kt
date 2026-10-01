@@ -24,8 +24,17 @@ import androidx.compose.ui.unit.sp
  * buried behind the keyboard's symbol page. Mirrors the iOS `MorseKeyboardRow`.
  */
 @Composable
-fun MorseNumberRow(onKey: (String) -> Unit, modifier: Modifier = Modifier) {
-    val keys = listOf("1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "/", "?", ".", ",", "=")
+fun MorseNumberRow(
+    onKey: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    /**
+     * Prosign keys after the punctuation (Code Exam grades prosigns, so its
+     * copy needs them), as bracketed tokens in the app's `<AR>` convention.
+     * The caller decides the spacing; see [appendKey].
+     */
+    prosigns: List<String> = emptyList()
+) {
+    val keys = listOf("1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "/", "?", ".", ",", "=") + prosigns
     Row(
         modifier = modifier.horizontalScroll(rememberScrollState()),
         horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -46,3 +55,16 @@ fun MorseNumberRow(onKey: (String) -> Unit, modifier: Modifier = Modifier) {
         }
     }
 }
+
+/**
+ * Append a [MorseNumberRow] key to typed text: a bracketed prosign goes in as
+ * a word of its own (so `<AR>` is read as the prosign, never as the letters),
+ * anything else is appended as-is. Mirrors the iOS `MorseKeyboardRow`.
+ */
+fun appendKey(text: String, key: String): String =
+    if (key.startsWith("<")) {
+        val sep = if (text.isNotEmpty() && !text.last().isWhitespace()) " " else ""
+        "$text$sep$key "
+    } else {
+        text + key
+    }

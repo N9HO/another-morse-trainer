@@ -535,13 +535,6 @@ private struct ModeOptionsCard: View {
         )
     }
 
-    private var examGradingBinding: Binding<ExamGrading> {
-        Binding(
-            get: { model.settings.examGrading },
-            set: { model.settings.examGrading = $0 }
-        )
-    }
-
     private var examUseBundledBinding: Binding<Bool> {
         Binding(
             get: { model.settings.examUseBundled },
@@ -706,12 +699,9 @@ private struct ModeOptionsCard: View {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("How to pass")
                             .font(.subheadline).foregroundStyle(.secondary)
-                        Picker("Grading", selection: examGradingBinding) {
-                            ForEach(ExamGrading.allCases) { g in
-                                Text(g.label(for: model.settings.examSpeed)).tag(g)
-                            }
-                        }
-                        .pickerStyle(.segmented)
+                        Text("Copy the whole message, then fill in \(ExamSession.questionCount) blanks about it from your copy. Pass with one minute of solid copy (\(model.settings.examSpeed.requiredRun), counting each numeral, punctuation mark and prosign as two) or \(ExamSession.questionsToPass) right answers, as the ARRL VEC graded it.")
+                            .font(.footnote)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                     Toggle(isOn: examUseBundledBinding) {
                         VStack(alignment: .leading, spacing: 2) {

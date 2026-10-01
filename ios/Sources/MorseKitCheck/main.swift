@@ -518,7 +518,7 @@ check("extra exam is 20 WPM", ExamSpeed.extra20.effectiveWpm == 20)
 
 print("\nExam passage & question generation:")
 do {
-    let session = ExamSession(speed: .general13, grading: .questions, rng: SeededRNG(seed: 42))
+    let session = ExamSession(speed: .general13, rng: SeededRNG(seed: 42))
     let p = session.passage
     check("passage names the operator from the pool", MorseData.opNames.contains(p.name))
     check("passage QTH is a US state from the pool", MorseData.qthList.contains(p.qth))
@@ -528,92 +528,72 @@ do {
     check("sent text keys BT separators as <BT>", p.sentText.contains(" <BT> "))
     check("sent text contains the operator name", p.sentText.contains(p.name))
     check("sent text signs portable with a slash", p.sentText.contains("\(p.deCall)/\(p.portable)"))
-    check("copy text drops the prosigns", !p.copyText.contains("<") && !p.copyText.contains("="))
+    check("copy text keeps the prosigns, bracketed (the ARRL graded them)",
+          p.copyText.contains("<BT>") && p.copyText.contains("<AR>") && p.copyText.contains("<SK>"))
     check("copy text keeps the punctuation", p.copyText.contains(".") && p.copyText.contains(","))
-    check("display text shows the <BT> prosign", p.displayText.contains("<BT>"))
     check("display text ends the message with <AR>", p.displayText.contains(" <AR> "))
     check("display text signs off with <SK>", p.displayText.hasSuffix(" <SK>"))
 
-    check("ten questions are generated", session.questions.count == 10)
-    var allFour = true, allDistinct = true, allIncludeAnswer = true
-    for q in session.questions {
-        if q.options.count != 4 { allFour = false }
-        if Set(q.options).count != q.options.count { allDistinct = false }
-        if !q.options.contains(q.answer) { allIncludeAnswer = false }
-    }
-    check("every question offers 4 options", allFour)
-    check("every question's options are distinct", allDistinct)
-    check("every question includes its correct answer", allIncludeAnswer)
-
-    let first = session.nextDrill()
-    check("a question drill carries a prompt", !first.question.isEmpty)
-    check("the first question plays the passage", first.playable == .text(p.sentText))
-    check("a wrong answer scores incorrect",
-          session.record(choice: "\u{1}nope", ttr: 0).correct == false)
-    let d2 = session.nextDrill()
-    check("a correct answer scores correct",
-          session.record(choice: d2.correct, ttr: 0).correct == true)
+    check("ten questions are generated", session.questions.count == ExamSession.questionCount)
+    check("seven right answers pass", ExamSession.questionsToPass == 7)
+    check("every answer is in the copy, so it can be read off it",
+          session.questions.allSatisfy { p.copyText.contains($0.answer) })
+    check("every prompt is a blank to fill", session.questions.allSatisfy { $0.prompt.contains("____") })
+    check("the first question is current", session.currentQuestion == session.questions.first)
+    check("a wrong answer scores incorrect", session.answer("\u{1}nope") == false)
+    let second = session.currentQuestion!
+    check("a right answer, typed in lower case, scores correct",
+          session.answer(second.answer.lowercased()) == true)
     check("correct count tracks right answers", session.correctCount == 1)
-    check("later questions don't replay the passage",
-          d2.playable == .text(""))
-
-    while !session.isComplete {
-        let d = session.nextDrill()
-        _ = session.record(choice: d.correct, ttr: 0)
-    }
+    while let q = session.currentQuestion { session.answer(q.answer) }
     check("exam completes after all questions are answered", session.isComplete)
+    check("answering past the end is ignored", session.answer("X") == false && session.correctCount == 9)
+    check("nine right with no copy passes on the questions",
+          session.result.passed && session.result.path == .questions)
 }
 
-print("\nExam solid-copy grading (one minute at the exam's speed):")
+print("\nExam solid-copy grading (one minute at the exam's speed, ARRL counting):")
 do {
     let sample = MorseData.examSamples.first { $0.speed == .novice5 }!
-    let session = ExamSession(speed: .novice5, grading: .solidCopy,
-                              passage: sample.passage, rng: SeededRNG(seed: 1))
+    let session = ExamSession(speed: .novice5, passage: sample.passage)
     let copy = session.passage.copyText
-    // The first `n` counted characters of the copy — spaces ride along free.
+    let symbols = ExamPassage.symbols(copy)
+    // The shortest prefix of the copy whose ARRL count reaches `n`.
     func counted(_ n: Int) -> String {
-        var out = "", seen = 0
-        for ch in copy {
-            if ch != " " { if seen == n { break }; seen += 1 }
-            out.append(ch)
+        var total = 0, out = ""
+        for s in symbols {
+            if total >= n { break }
+            total += ExamPassage.weight(of: s)
+            out += s
         }
         return out
     }
-    let nonSpace = copy.filter { $0 != " " }.count
+    let full = symbols.reduce(0) { $0 + ExamPassage.weight(of: $1) }
     check("novice solid-copy bar is 25", session.requiredRun == 25)
     for speed in ExamSpeed.allCases {
         let shortest = MorseData.examSamples(for: speed)
-            .map { $0.passage.copyText.filter { $0 != " " }.count }.min() ?? 0
-        check("\(speed.wpmLabel) passages are long enough to reach \(speed.requiredRun) in a row",
+            .map { ExamPassage.symbols($0.passage.copyText).reduce(0) { $0 + ExamPassage.weight(of: $1) } }
+            .min() ?? 0
+        check("\(speed.wpmLabel) passages are long enough to reach \(speed.requiredRun) counted",
               shortest >= speed.requiredRun)
     }
 
     let perfect = session.gradeSolidCopy(copy)
-    check("a perfect copy passes", perfect.passed && perfect.longestRun == nonSpace)
-    check("exactly 25 characters in a row passes",
-          session.gradeSolidCopy(counted(25)).passed)
-    let r24 = session.gradeSolidCopy(counted(24))
-    check("24 characters in a row fails", !r24.passed)
-    check("the 24-run reports a longest run of 24", r24.longestRun == 24)
+    check("a perfect copy passes with the passage's full count", perfect.passed && perfect.longestRun == full)
+    let at25 = session.gradeSolidCopy(counted(25))
+    check("a run counting 25 or 26 passes", at25.passed && at25.longestRun >= 25)
     check("garbage copy fails", !session.gradeSolidCopy("zzzz qqqq wwww").passed)
-    check("grading is case-insensitive",
-          session.gradeSolidCopy(counted(25).lowercased()).passed)
-    check("a stray '=' in the copy is tolerated",
-          session.gradeSolidCopy("= " + counted(25)).passed)
-    let general = ExamSession(speed: .general13, grading: .solidCopy, passage: sample.passage)
+    check("grading is case-insensitive", session.gradeSolidCopy(counted(25).lowercased()).passed)
+    check("writing every <BT> as = and <AR> as + grades the same",
+          session.gradeSolidCopy(copy.replacingOccurrences(of: "<BT>", with: "=")
+                                     .replacingOccurrences(of: "<AR>", with: "+")) == perfect)
+    check("leaving the prosigns out costs the run",
+          session.gradeSolidCopy(ExamPassage.normalize(copy.replacingOccurrences(of: "<BT>", with: " "))).longestRun < full)
+    let general = ExamSession(speed: .general13, passage: sample.passage)
     check("the same 25 fails at 13 WPM", !general.gradeSolidCopy(counted(25)).passed)
-    check("13 WPM passes at 65 and not at 64",
-          general.gradeSolidCopy(counted(65)).passed && !general.gradeSolidCopy(counted(64)).passed)
-    check("solid-copy label names the speed's bar",
-          ExamGrading.solidCopy.label(for: .extra20) == "Solid copy (100 in a row)")
-
-    check("record() grades a passing solid copy as correct",
-          session.record(choice: copy, ttr: 0).correct == true)
-    check("solid-copy drill exposes the copy target as the answer",
-          ExamSession(speed: .novice5, grading: .solidCopy,
-                      passage: sample.passage).nextDrill().correct == copy)
-
-    // Bundled library is available at each speed.
+    check("13 WPM passes at a run of 65", general.gradeSolidCopy(counted(65)).passed)
+    check("submitCopy keeps the grade for the result",
+          general.submitCopy(copy).passed && general.result.copy.passed && general.result.path == .solidCopy)
     check("bundled exam passages exist for every speed",
           !MorseData.examSamples(for: .novice5).isEmpty
           && !MorseData.examSamples(for: .general13).isEmpty
@@ -623,13 +603,18 @@ do {
 // MARK: - Shared Code Exam fixture
 //
 // fixtures/code-exam.json, read by this harness and by android
-// CodeExamFixtureTest. The pass bars, the required character set, the prosign
-// patterns and the grading cases are all derived from the historical FCC/VEC
-// rules written out in the fixture, not captured from either port (#262, #263).
+// CodeExamFixtureTest. The pass bars, the counting weights, the required
+// character set, the prosign patterns and every grading case are worked out by
+// hand from the ARRL VEC rules written out (with sources) in the fixture, not
+// captured from either port.
 struct CodeExamFixture: Decodable {
     struct PassBar: Decodable {
         struct Case: Decodable { let speed: String; let effectiveWpm: Int; let requiredRun: Int }
         let charactersPerWord: Int
+        let cases: [Case]
+    }
+    struct Weights: Decodable {
+        struct Case: Decodable { let symbol: String; let weight: Int }
         let cases: [Case]
     }
     struct Required: Decodable {
@@ -650,11 +635,32 @@ struct CodeExamFixture: Decodable {
         struct Case: Decodable { let sent: String; let typed: String; let longestRun: Int }
         let cases: [Case]
     }
+    struct SolidCopy: Decodable {
+        struct Case: Decodable {
+            let speed: String; let sent: String; let typed: String
+            let longestRun: Int; let passed: Bool
+        }
+        let cases: [Case]
+    }
+    struct Questions: Decodable {
+        struct Result: Decodable {
+            let speed: String; let longestRun: Int; let questionsCorrect: Int
+            let passed: Bool; let path: String
+        }
+        struct Answer: Decodable { let accepted: [String]; let typed: String; let right: Bool }
+        let asked: Int
+        let required: Int
+        let results: [Result]
+        let answers: [Answer]
+    }
     let passBar: PassBar
+    let weights: Weights
     let requiredCharacters: Required
     let prosignPatterns: Patterns
     let normalize: Normalize
     let longestRun: Runs
+    let solidCopy: SolidCopy
+    let questions: Questions
 }
 
 func loadCodeExamFixture() -> CodeExamFixture? {
@@ -662,7 +668,19 @@ func loadCodeExamFixture() -> CodeExamFixture? {
         .deletingLastPathComponent().deletingLastPathComponent()
         .deletingLastPathComponent().deletingLastPathComponent()
     guard let data = try? Data(contentsOf: root.appendingPathComponent("fixtures/code-exam.json")) else { return nil }
-    return try? JSONDecoder().decode(CodeExamFixture.self, from: data)
+    do {
+        return try JSONDecoder().decode(CodeExamFixture.self, from: data)
+    } catch {
+        print("    code-exam.json: \(error)")
+        return nil
+    }
+}
+
+/// A standalone sent line wrapped as a passage-free session: the fixture's
+/// solid-copy cases grade against a short line, not a whole passage.
+func codeExamRun(typed: String, sent: String) -> Int {
+    ExamSession.longestCommonRun(ExamPassage.symbols(ExamPassage.normalize(typed)),
+                                 ExamPassage.symbols(ExamPassage.normalize(sent)))
 }
 
 print("\nShared Code Exam fixture (fixtures/code-exam.json):")
@@ -675,7 +693,11 @@ if let fx = loadCodeExamFixture() {
         check("\(c.speed) is \(c.effectiveWpm) WPM effective", Int(speed.effectiveWpm) == c.effectiveWpm)
         check("\(c.speed) solid-copy bar is \(c.requiredRun)", speed.requiredRun == c.requiredRun)
         check("\(c.speed) session grades against \(c.requiredRun)",
-              ExamSession(speed: speed, grading: .solidCopy).gradeSolidCopy("").required == c.requiredRun)
+              ExamSession(speed: speed).gradeSolidCopy("").required == c.requiredRun)
+    }
+
+    for c in fx.weights.cases {
+        check("\(c.symbol.debugDescription) counts \(c.weight)", ExamPassage.weight(of: c.symbol) == c.weight)
     }
 
     let req = fx.requiredCharacters
@@ -696,10 +718,13 @@ if let fx = loadCodeExamFixture() {
     check("200 generated passages each send every required character", generatedOK)
     var allSendable = true
     for sample in MorseData.examSamples {
-        let plain = ExamPassage.normalize(sample.passage.sentText)
-        if !plain.allSatisfy({ $0 == " " || MorseCode.pattern(for: $0) != nil }) { allSendable = false }
+        for s in ExamPassage.symbols(sample.passage.copyText) where s != " " {
+            let keyable = s.count == 1 ? MorseCode.pattern(for: s.first!) != nil
+                                       : MorseData.prosigns.contains { $0.name == s }
+            if !keyable { allSendable = false }
+        }
     }
-    check("every bundled passage is keyable once its prosigns are set aside", allSendable)
+    check("every symbol of every bundled passage is keyable", allSendable)
 
     let rate = 44_100.0
     let t = MorseTiming(wpm: 20)
@@ -716,10 +741,37 @@ if let fx = loadCodeExamFixture() {
               ExamPassage.normalize(c.input) == c.normalized)
     }
     for c in fx.longestRun.cases {
-        let run = ExamSession.longestCommonRun(Array(ExamPassage.normalize(c.typed)),
-                                               Array(ExamPassage.normalize(c.sent)))
         check("run of \(c.typed.debugDescription) in \(c.sent.debugDescription) is \(c.longestRun)",
-              run == c.longestRun)
+              codeExamRun(typed: c.typed, sent: c.sent) == c.longestRun)
+    }
+    for c in fx.solidCopy.cases {
+        guard let speed = ExamSpeed(rawValue: c.speed) else {
+            check("fixture speed \(c.speed) exists", false); continue
+        }
+        let run = codeExamRun(typed: c.typed, sent: c.sent)
+        let result = ExamCopyResult(longestRun: run, required: speed.requiredRun)
+        check("\(c.speed): \(c.typed.debugDescription) counts \(c.longestRun) and \(c.passed ? "passes" : "fails")",
+              run == c.longestRun && result.passed == c.passed)
+    }
+
+    check("\(fx.questions.asked) questions are asked", ExamSession.questionCount == fx.questions.asked
+          && ExamSession(speed: .general13).questions.count == fx.questions.asked)
+    check("\(fx.questions.required) right pass", ExamSession.questionsToPass == fx.questions.required)
+    for c in fx.questions.results {
+        guard let speed = ExamSpeed(rawValue: c.speed) else {
+            check("fixture speed \(c.speed) exists", false); continue
+        }
+        let r = ExamResult(copy: ExamCopyResult(longestRun: c.longestRun, required: speed.requiredRun),
+                           questionsCorrect: c.questionsCorrect,
+                           questionsAsked: ExamSession.questionCount,
+                           questionsRequired: ExamSession.questionsToPass)
+        check("\(c.speed) run \(c.longestRun) + \(c.questionsCorrect)/10 → \(c.path)",
+              r.passed == c.passed && r.path.rawValue == c.path)
+    }
+    for c in fx.questions.answers {
+        let q = ExamQuestion(prompt: "____", answer: c.accepted[0], accepted: c.accepted)
+        check("\(c.typed.debugDescription) fills a blank of \(c.accepted) → \(c.right)",
+              q.accepts(c.typed) == c.right)
     }
 } else {
     check("fixtures/code-exam.json loads and decodes", false)
