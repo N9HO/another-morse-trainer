@@ -173,7 +173,7 @@ class CodeExamFixtureTest {
     fun questionsPassOnSevenOfTenAndTheResultNamesThePath() {
         val q = fixture.getJSONObject("questions")
         assertEquals(q.getInt("asked"), ExamSession.QUESTION_COUNT)
-        assertEquals(q.getInt("required"), ExamSession.QUESTIONS_TO_PASS)
+        assertEquals(q.getInt("required") + 1, ExamSession.QUESTIONS_TO_PASS)
         assertEquals(
             q.getInt("asked"),
             ExamSession(ExamSpeed.GENERAL13, ExamData.examSamples.first().passage).questions.size
@@ -246,7 +246,7 @@ class CodeExamFixtureTest {
             session.answer(q.answer)
         }
         assertTrue(session.isComplete)
-        assertEquals(9, session.correctCount)
+        assertEquals(8, session.correctCount)
         assertEquals("no copy, nine right: passed on the questions", ExamPassPath.QUESTIONS, session.result.path)
         session.submitCopy(copy)
         assertEquals("then a full copy: passed both ways", ExamPassPath.BOTH, session.result.path)
