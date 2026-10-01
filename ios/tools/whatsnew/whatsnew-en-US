@@ -1,9 +1,6 @@
-• Sending Analyzer: send a text by key, Vail/MIDI or microphone and get accuracy, spacing and timing feedback.
-• On-screen paddles: Iambic A, Iambic B or Ultimatic.
-• CW 77 (CWOps) as its own mode: Listen or Quiz, and as a word list in Listen & Learn and Common Words.
-• Quizzes can move from multiple choice to typed answers as you improve.
-• Buddy streaks with up to ten buddies, a streak with each.
-• Settings are grouped into categories, with a search field.
-• A Vail Adapter or MIDI key works in every typing mode.
-• Daily Dit asks before a play with the sound muted uses up a listen.
-• Cleaner sound at high speeds on the iPhone's built-in speaker.
+• iPad: the app now runs natively on iPad in any orientation, with a wider home screen, a Settings sidebar and room for Stats. Split View, Slide Over and resizable windows work.
+• Leaderboard and buddy streaks: posting from an iPhone or iPad should now work. Earlier builds were missing the App Attest permission the device check needs.
+• Daily Dit: Copy now puts the result card image on the clipboard, with the text as a fallback, just like Share.
+• Code Exam: you pass with one minute of solid copy at the exam's speed (25, 65 or 100 characters at 5, 13 or 20 WPM). Passages now include . , ? / and the AR, SK and BT prosigns, as on the real exams.
+• Settings › Leaderboard & Buddy: a switch to hide the buddy line on the home screen.
+Please try: the app on an iPad (rotate it, use it in a narrow window), posting a score to the leaderboard, pasting a copied Daily Dit card into Messages, and a Code Exam at 13 WPM.
