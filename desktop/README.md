@@ -193,7 +193,10 @@ paddles.
   Characters & Lessons, Practice & Feedback, Keys & Sending, QSO & Pileups,
   Reminders, Display, Leaderboard & Buddy, Help & About) with a search field
   that finds any setting by name or synonym and jumps straight to it
-- Dark navy/teal theme, resizable window with the phone and tablet layouts
+- Dark navy/teal theme, resizable window with the phone and tablet layouts:
+  a big window (760 x 480 dp or more) puts the home grid four across with
+  Daily Dit and Start here side by side, and every screen keeps a readable
+  column instead of stretching edge to edge
 
 ## Build
 

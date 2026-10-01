@@ -21,6 +21,29 @@ import androidx.compose.ui.unit.dp
 /** Phone-first screens stretch ugly on tablets; cap readable content to this width. */
 val CONTENT_MAX_WIDTH: Dp = 640.dp
 
+/**
+ * The wider cap for the home grid on a big tablet window, where it re-flows
+ * four tiles across rather than centring the phone column (iOS
+ * `Theme.wideContentMaxWidth`).
+ */
+val WIDE_CONTENT_MAX_WIDTH: Dp = 960.dp
+
+/**
+ * True when the window is big enough to re-flow a screen rather than centre a
+ * phone column in it: at least 760 dp wide and 480 dp tall. A tablet in either
+ * orientation qualifies; a phone in landscape (short), a split-screen half on
+ * most tablets, and a freeform window narrower than that do not. Same
+ * thresholds as iOS's `wideLayout` (Theme.swift), whose "vertically regular"
+ * is the 480 here.
+ */
+@Composable
+fun isWideLayout(): Boolean {
+    val size = LocalWindowInfo.current.containerSize
+    return with(LocalDensity.current) {
+        size.width.toDp() >= 760.dp && size.height.toDp() >= 480.dp
+    }
+}
+
 /** True on tablets / landscape where a two-column menu reads better than one tall column. */
 @Composable
 fun isWideScreen(): Boolean {

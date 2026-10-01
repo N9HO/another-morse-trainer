@@ -104,7 +104,9 @@ missing feature.
   and Stats open as page-sized sheets, so Settings shows its categories as
   a sidebar and Stats runs its lists two to a row; Android's full-screen
   Settings and Stats keep the single readable column. Same settings and
-  same figures; the iPad form is the sheet's own idiom.
+  same figures; the iPad form is the sheet's own idiom. The desktop app's
+  window is resizable and uses the Android rule and thresholds
+  (`isWideLayout()` in its own `Responsive.kt`).
 
 - **Notification permission.** Android 13+ makes `POST_NOTIFICATIONS` a
   runtime permission, so the Android app asks for it when the reminder is

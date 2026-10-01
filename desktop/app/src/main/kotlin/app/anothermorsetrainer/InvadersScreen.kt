@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -471,7 +472,7 @@ private fun InvadersSetup(
             SwitchModeButton(TrainingMode.INVADERS, onSwitchMode)
         }
         Column(
-            modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp),
+            modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).widthIn(max = CONTENT_MAX_WIDTH).padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Text(stringResource(R.string.invaders_blurb), style = MaterialTheme.typography.bodySmall, color = Brand.textSecondary)
@@ -526,7 +527,7 @@ private fun InvadersRun(
     onSwitchMode: (TrainingMode) -> Unit
 ) {
     val measurer = rememberTextMeasurer()
-    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
+    Column(modifier = Modifier.fillMaxSize().widthIn(max = CONTENT_MAX_WIDTH).padding(horizontal = 16.dp)) {
         Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             TextButton(onClick = onEnd) { Text(stringResource(R.string.invaders_end_game), color = Brand.teal) }
             Spacer(Modifier.weight(1f))
@@ -701,7 +702,7 @@ private fun InvadersOver(
     onAgain: () -> Unit, onBack: () -> Unit
 ) {
     Column(
-        modifier = Modifier.fillMaxSize().padding(24.dp),
+        modifier = Modifier.fillMaxSize().widthIn(max = CONTENT_MAX_WIDTH).padding(24.dp),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {

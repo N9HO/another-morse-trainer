@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -299,7 +300,7 @@ private fun ReferenceDetailScreen(item: MorseItem, isPlaying: Boolean, onPlay: (
             TextButton(onClick = onBack) { Text(stringResource(R.string.common_back), color = Brand.teal) }
         }
         Column(
-            modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
+            modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).widthIn(max = CONTENT_MAX_WIDTH).padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(18.dp)
         ) {
             // Header
