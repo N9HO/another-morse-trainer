@@ -122,6 +122,19 @@ Set via `TRIGGER_MODE`:
 
 Scope it to specific channels with `WATCH_CHANNEL_IDS` (comma-separated IDs).
 
+**Who can trigger it.** Anyone in the server can add a 🐛, and reporters do —
+to their own posts, which used to file them straight to GitHub. Set
+`TRIGGER_USER_IDS` to the maintainers' Discord user ids (comma-separated) and
+only their reactions count; anyone else's 🐛 is ignored, with no 👀 and no
+reply, and the log says so. Left empty, anyone can trigger, and the bot warns
+about it at startup. To find a user id, turn on Discord's Settings › Advanced ›
+Developer Mode, then right-click the name › Copy User ID. It is not a secret,
+but setting it as one keeps it out of git:
+
+```bash
+fly secrets set TRIGGER_USER_IDS=123456789012345678
+```
+
 Either way, a trigger *inside a thread* means "re-read this whole conversation":
 in `auto` mode every reply does that automatically, and in `react` mode a 🐛
 anywhere in the thread does it on demand.

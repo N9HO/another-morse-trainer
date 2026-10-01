@@ -102,6 +102,11 @@ class Settings:
     trigger_mode: str
     # One or more emojis; reacting with any of them triggers triage.
     trigger_emojis: frozenset[str]
+    # Discord user ids whose trigger reactions count. Anyone can add a 🐛 to a
+    # message, and in a public forum the reporters do — which files their own
+    # reports straight to GitHub, past the maintainer the reaction exists to
+    # stand for. Empty = anyone (the old behaviour), and on_ready warns about it.
+    trigger_user_ids: set[int]
     # How long to let a thread settle before triaging it. Reporters routinely
     # split one thought across several messages a few seconds apart; waiting
     # coalesces the burst into a single triage over the whole conversation
@@ -158,6 +163,7 @@ class Settings:
             watch_channel_ids=_csv_ints("WATCH_CHANNEL_IDS"),
             trigger_mode=trigger_mode,
             trigger_emojis=_emoji_set(os.environ.get("TRIGGER_EMOJI", "🐛")),
+            trigger_user_ids=_csv_ints("TRIGGER_USER_IDS"),
             settle_seconds=_float("TRIAGE_SETTLE_SECONDS", 8.0),
             anthropic_api_key=_required("ANTHROPIC_API_KEY"),
             model=os.environ.get("ANTHROPIC_MODEL", "claude-opus-5-5"),

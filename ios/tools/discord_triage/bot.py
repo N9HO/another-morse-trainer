@@ -121,6 +121,11 @@ class Conversation:
 pending: dict[int, Pending] = {}
 
 
+def _may_trigger(user_id: int) -> bool:
+    """Whether a trigger reaction from this user counts (TRIGGER_USER_IDS)."""
+    return not settings.trigger_user_ids or user_id in settings.trigger_user_ids
+
+
 def _in_scope(channel_id: int, parent_id: Optional[int] = None) -> bool:
     if not settings.watch_channel_ids:
         return True
@@ -846,6 +851,15 @@ async def on_ready() -> None:
              client.user, settings.trigger_mode,
              " ".join(sorted(settings.trigger_emojis)), settings.github_repo,
              settings.settle_seconds)
+    if settings.trigger_mode == "react" and not settings.trigger_user_ids:
+        log.warning(
+            "TRIGGER_USER_IDS is empty, so ANYONE's %s triggers a triage — "
+            "including the reporters'. Set it to the maintainers' Discord user ids.",
+            " ".join(sorted(settings.trigger_emojis)),
+        )
+    elif settings.trigger_mode == "react":
+        log.info("Trigger reactions accepted from user ids: %s",
+                 ", ".join(str(i) for i in sorted(settings.trigger_user_ids)))
     # Probe GitHub access up front so a bad token is one obvious log line at
     # startup instead of a mystery when the first report tries to file.
     for repo in _issue_repos():
@@ -887,6 +901,11 @@ async def on_raw_reaction_add(payload: discord.RawReactionActionEvent) -> None:
     if settings.trigger_mode != "react":
         return
     if str(payload.emoji) not in settings.trigger_emojis:
+        return
+    if not _may_trigger(payload.user_id):
+        # No 👀, no reply: from the reporter's side a 🐛 is just a reaction.
+        log.info("Ignoring %s from user %s, who is not in TRIGGER_USER_IDS",
+                 payload.emoji, payload.user_id)
         return
 
     channel = client.get_channel(payload.channel_id)
