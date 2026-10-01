@@ -206,13 +206,19 @@ if [ "${DRY_RUN:-0}" = "1" ]; then
     echo "❌ DRY RUN: export is not signed by an Apple Distribution certificate."
     exit 1
   fi
+  ENTS=$(codesign -d --entitlements - --xml "$APP" 2>/dev/null | plutil -convert json -o - - 2>/dev/null || true)
+  echo "▸ Entitlements on the exported app: $ENTS"
   if [ "$PLATFORM" = "maccatalyst" ]; then
-    ENTS=$(codesign -d --entitlements - --xml "$APP" 2>/dev/null | plutil -convert json -o - - 2>/dev/null || true)
-    echo "▸ Entitlements on the exported app: $ENTS"
     if ! printf '%s' "$ENTS" | grep -q '"com.apple.security.app-sandbox":true'; then
       echo "❌ DRY RUN: the Mac app is not sandboxed; the Mac App Store would refuse it."
       exit 1
     fi
+  fi
+  # The leaderboard and buddy streaks depend on App Attest; without this
+  # entitlement every attestation fails on device and nothing can be posted.
+  if ! printf '%s' "$ENTS" | grep -q '"com.apple.developer.devicecheck.appattest-environment":"production"'; then
+    echo "❌ DRY RUN: the exported app has no App Attest entitlement; leaderboard posts would fail."
+    exit 1
   fi
   # Ask App Store Connect whether it would take this package, without
   # uploading it: this is where a missing platform on the app record, a
