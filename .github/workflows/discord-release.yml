@@ -15,9 +15,10 @@ name: Discord release announcement
 # workflow's `tag` job uploads; a manual release run is on `main`, so its
 # head_branch names no tag. (A tag-push run from before that artifact existed
 # falls back to head_branch.) No artifact and no tag means nothing shipped, a
-# dry run for instance, and nothing is announced. Four tag shapes:
+# dry run for instance, and nothing is announced. Five tag shapes:
 #   ios-v*          App Store submission     android-v*       Play production
 #   ios-beta-v*     TestFlight build         android-beta-v*  Play alpha/internal
+#   mac-beta-v*     Mac TestFlight build (Mac Catalyst)
 # The changelog runs from the previous tag of the same platform, of either
 # kind, so every build lists only what is new since the one before it.
 #
@@ -41,7 +42,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Tag to announce (ios-v* or android-v*)'
+        description: 'Tag to announce (ios-v*, ios-beta-v*, mac-beta-v*, android-v* or android-beta-v*)'
         required: false
       testflight_link:
         description: 'Public TestFlight join link to include (https://testflight.apple.com/join/…)'
@@ -103,6 +104,7 @@ jobs:
             ios-beta-v*)        PLATFORM=ios;     KIND=beta ;;
             android-v*)         PLATFORM=android; KIND=release ;;
             android-beta-v*)    PLATFORM=android; KIND=beta ;;
+            mac-beta-v*)        PLATFORM=mac;     KIND=beta ;;
             *)
               echo "::notice::'$TAG' is not a release tag (workflow: ${RUN_WORKFLOW:-manual}) — nothing to announce."
               echo "skip=true" >> "$GITHUB_OUTPUT"
@@ -112,7 +114,7 @@ jobs:
           # A TestFlight join link belongs on a TestFlight build; a production
           # iOS release gets one only when a manual run passes it.
           LINK=""
-          if [ "$PLATFORM" = "ios" ]; then
+          if [ "$PLATFORM" = "ios" ] || [ "$PLATFORM" = "mac" ]; then
             LINK="${LINK_INPUT:-}"
             if [ -z "$LINK" ] && [ "$KIND" = "beta" ]; then LINK="${LINK_VAR:-}"; fi
           fi
@@ -166,7 +168,8 @@ jobs:
           # outgrows the cap — that's what broke the first two runs of this job).
           # Scoped to the app's own subtree, with CI/tooling/docs paths excluded:
           # those aren't release content.
-          if [ "$PLATFORM" = "ios" ]; then
+          # The Mac build is the iOS app built for Mac Catalyst: same subtree.
+          if [ "$PLATFORM" = "ios" ] || [ "$PLATFORM" = "mac" ]; then
             LOG="$(git log --no-merges -25 --pretty=format:'• %s' "$RANGE" -- \
                    ios ':(exclude)ios/tools' ':(exclude)ios/HANDOFF.md')"
           else
@@ -222,6 +225,9 @@ jobs:
             else
               BLURB="A new build is submitted to the App Store and will go live once Apple approves it. TestFlight testers get it right away."
             fi
+          elif [ "$PLATFORM" = "mac" ]; then
+            EMOJI="💻"; LABEL="Mac"; COLOR=10181046
+            BLURB="A new Mac TestFlight build is out. Testers get it once Apple's beta review passes; install TestFlight from the Mac App Store first."
           else
             EMOJI="🤖"; LABEL="Android"; COLOR=3066993
             if [ "$KIND" = "beta" ]; then
