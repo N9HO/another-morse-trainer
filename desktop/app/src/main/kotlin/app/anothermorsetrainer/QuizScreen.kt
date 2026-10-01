@@ -108,8 +108,9 @@ internal fun milestoneEmoji(day: Int): String = when {
 
 /**
  * One reusable quiz loop that drives ANY [QuizSource] — character practice
- * (ProgressiveCharacters), word/abbreviation/Q-code drills (PhraseQuiz), the
- * confusion-pair drill, or the code exam (ExamSession) all flow through here.
+ * (ProgressiveCharacters), word/abbreviation/Q-code drills (PhraseQuiz) and the
+ * confusion-pair drill all flow through here. (The code exam has its own
+ * screen, CodeExamScreen.)
  * Plays the drill in Morse via [MorsePlayer], scores the answer, gives colour
  * feedback (haptics are a no-op on desktop), then advances.
  *
