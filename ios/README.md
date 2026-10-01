@@ -227,8 +227,10 @@ there is one target and one code base; the Mac-only code is in
   typed answers, the number keys and Return for the choice quizzes, the games'
   letter keys, and Head Copy's R, Return and X.
 - **The window** can be resized down to phone width; wider than that, the
-  screens keep their readable column. File › New Window is removed (one
-  session, one audio engine), and Help opens the user guide.
+  screens keep their readable column, and a wide window gets the iPad's
+  big-screen layout (the home grid four across, Settings with a sidebar).
+  File › New Window is removed (one session, one audio engine), and Help
+  opens the user guide.
 - **The leaderboard** needs App Attest to post. Where the Mac cannot attest,
   the boards stay readable and a run says why it was not posted, as in the
   simulator.
