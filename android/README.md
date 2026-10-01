@@ -90,6 +90,13 @@ the iOS app's navy/teal look.
   short words and callsigns that split into their characters when hit.
   Waves, lives, combos, three difficulties, a gentle speed ramp in hear-it
   mode, and every hit and miss feeds your stats
+- **First Four**: just enough CW for a brand-new operator to hunt one POTA
+  activator — enter your callsign and state, then hear and send your call,
+  your state, ? and 73, and work through three short scenes: a busted call
+  (the activator sends a partial like N9?; you send your full call and wait),
+  a call nobody answers, and a whole hunter-side contact. Offered from the
+  first-run screen and the top of Home, a tutorial rather than a scored mode,
+  and it ends with a nudge to thank your first CW contact
 - **Pileup Runner**: a full QSO simulator: your callsign, eight exchange
   flavors (single caller → POTA → contests), realism controls (caller count,
   speed band, tone spread, QSB, QRN, cut numbers, bust behavior, callsign

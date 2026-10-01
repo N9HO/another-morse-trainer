@@ -1,0 +1,304 @@
+{
+  "$comment": [
+    "First Four (#265), pinned for both ports: FirstFour / FirstFourScene /",
+    "FirstFourProgress in ios/Sources/MorseKit/FirstFour.swift and",
+    "android/app/src/main/java/app/anothermorsetrainer/morsekit/FirstFour.kt.",
+    "Read by ios/Sources/MorseKitCheck/main.swift and",
+    "android/app/src/test/java/app/anothermorsetrainer/morsekit/FirstFourTest.kt.",
+    "",
+    "Every expected value below was worked out by hand from the rules in",
+    "'derivation' and docs/first-four-design.md, not captured from either port.",
+    "Do not regenerate it to make a failing test pass; change it only when a",
+    "rule is meant to change."
+  ],
+  "derivation": {
+    "rules": [
+      "Stages, in order: the four element stages (call, state, question, seventyThree), then the three scenes (bustedCall, noReply, walkthrough).",
+      "Element text: call -> the learner's call; state -> the learner's state; question -> '?'; seventyThree -> '73'. Scenes have none.",
+      "An element stage has a copy phase then a send phase. A correct answer adds one to the streak, a miss sets it to 0; the streak also starts again at 0 whenever the stage or phase differs from the last answer's. Reaching copyStreakToPass (copy) or sendStreakToPass (send) completes the phase and sets the streak back to 0. Completing copy marks copyPassed; completing send marks the stage passed.",
+      "A scene run is clean when it had no mistakes. Clean runs are counted per scene; the scene passes at bustedRoundsToPass / noReplyScenesToPass / walkthroughRunsToPass clean runs. A run with a mistake counts for nothing. noReply plays scene A while it has 0 clean runs and scene B after.",
+      "nextStage is the first stage, in order, that has not passed; null when all have.",
+      "normalizeCall / normalizeState: upper-case and remove every whitespace character; nothing else is removed.",
+      "Valid call: 3-10 characters, only A-Z 0-9 and '/', at least one letter and one digit. Valid state: 2-3 characters, only A-Z.",
+      "prefillCall: the normalised saved call, or '' when that is the settings default W1AW or empty.",
+      "compact(s) = upper-case s with every whitespace character removed.",
+      "Copy matches when compact(typed) == compact(expected) and it is not empty.",
+      "Send matches when compact(sent) is not empty and equals compact(expected) or compact(expected) twice over.",
+      "partials(call): '?' first, then call[0..<k] + '?' for k = 2 ... length-1, skipping any prefix that ends in '/'. partial(call, round) = partials[round mod count].",
+      "activator(index, excluding call): the activator table without any row whose call equals the normalised learner's call, then row index mod its count. otherHunter(index, excluding call) likewise over the other-hunter table.",
+      "Scene responses: continued, sent(text), copied(text), waited. hear/silence beats advance on 'continued', else notYourTurn. send beats advance on a matching 'sent', a non-matching 'sent' is sentWrong, anything else is yourTurn. copy beats advance on a matching 'copied' against the beat's answer, anything else is copyWrong. wait beats advance on 'waited', anything else is stayQuiet. A wrong response adds a mistake and stays on the beat; the scene is finished once its last beat has advanced, and responses after that change nothing and answer 'finished'."
+    ],
+    "defaultCall": "W1AW"
+  },
+  "stages": ["call", "state", "question", "seventyThree", "bustedCall", "noReply", "walkthrough"],
+  "elementStages": ["call", "state", "question", "seventyThree"],
+  "constants": {
+    "copyStreakToPass": 3,
+    "sendStreakToPass": 3,
+    "bustedRoundsToPass": 3,
+    "noReplyScenesToPass": 2,
+    "walkthroughRunsToPass": 2
+  },
+  "activators": [
+    { "call": "K4RTZ", "state": "NC" },
+    { "call": "W0PQA", "state": "CO" },
+    { "call": "N7XKT", "state": "AZ" },
+    { "call": "KB3MZL", "state": "PA" },
+    { "call": "AC9WD", "state": "IL" },
+    { "call": "W5JBQ", "state": "TX" },
+    { "call": "K1VLM", "state": "ME" },
+    { "call": "N6GUZ", "state": "CA" }
+  ],
+  "otherHunters": ["W8KDP", "KE0RJ"],
+  "activatorPicks": [
+    { "index": 0, "excluding": "N9HO", "call": "K4RTZ" },
+    { "index": 9, "excluding": "N9HO", "call": "W0PQA" },
+    { "index": 0, "excluding": "K4RTZ", "call": "W0PQA" },
+    { "index": 6, "excluding": "k4rtz", "call": "N6GUZ" },
+    { "index": 7, "excluding": "K4RTZ", "call": "W0PQA" }
+  ],
+  "otherHunterPicks": [
+    { "index": 0, "excluding": "N9HO", "call": "W8KDP" },
+    { "index": 1, "excluding": "N9HO", "call": "KE0RJ" },
+    { "index": 0, "excluding": "W8KDP", "call": "KE0RJ" },
+    { "index": 3, "excluding": "W8KDP", "call": "KE0RJ" }
+  ],
+  "callCases": [
+    { "input": "n9ho", "normalized": "N9HO", "valid": true },
+    { "input": " kd9 abc ", "normalized": "KD9ABC", "valid": true },
+    { "input": "W1AW/4", "normalized": "W1AW/4", "valid": true },
+    { "input": "VE3/N9HO", "normalized": "VE3/N9HO", "valid": true },
+    { "input": "K4X", "normalized": "K4X", "valid": true },
+    { "input": "AB", "normalized": "AB", "valid": false },
+    { "input": "ABCD", "normalized": "ABCD", "valid": false },
+    { "input": "1234", "normalized": "1234", "valid": false },
+    { "input": "N9HO!", "normalized": "N9HO!", "valid": false },
+    { "input": "", "normalized": "", "valid": false },
+    { "input": "KD9ABCDEFGH", "normalized": "KD9ABCDEFGH", "valid": false }
+  ],
+  "stateCases": [
+    { "input": "wi", "normalized": "WI", "valid": true },
+    { "input": "W I", "normalized": "WI", "valid": true },
+    { "input": "ont", "normalized": "ONT", "valid": true },
+    { "input": "W", "normalized": "W", "valid": false },
+    { "input": "WISC", "normalized": "WISC", "valid": false },
+    { "input": "W1", "normalized": "W1", "valid": false },
+    { "input": "", "normalized": "", "valid": false }
+  ],
+  "prefillCases": [
+    { "saved": "W1AW", "prefill": "" },
+    { "saved": "w1aw", "prefill": "" },
+    { "saved": "", "prefill": "" },
+    { "saved": "n9ho", "prefill": "N9HO" },
+    { "saved": "W1AW/4", "prefill": "W1AW/4" }
+  ],
+  "elements": [
+    { "call": "N9HO", "state": "WI", "stage": "call", "text": "N9HO" },
+    { "call": "N9HO", "state": "WI", "stage": "state", "text": "WI" },
+    { "call": "N9HO", "state": "WI", "stage": "question", "text": "?" },
+    { "call": "N9HO", "state": "WI", "stage": "seventyThree", "text": "73" },
+    { "call": "N9HO", "state": "WI", "stage": "bustedCall", "text": null },
+    { "call": "N9HO", "state": "WI", "stage": "walkthrough", "text": null }
+  ],
+  "copyCases": [
+    { "typed": "n9ho", "expected": "N9HO", "match": true },
+    { "typed": "N 9 H O", "expected": "N9HO", "match": true },
+    { "typed": "N9H0", "expected": "N9HO", "match": false },
+    { "typed": "N9HON9HO", "expected": "N9HO", "match": false },
+    { "typed": "?", "expected": "?", "match": true },
+    { "typed": " 73 ", "expected": "73", "match": true },
+    { "typed": "37", "expected": "73", "match": false },
+    { "typed": "", "expected": "WI", "match": false },
+    { "typed": "wi", "expected": "WI", "match": true }
+  ],
+  "sendCases": [
+    { "sent": "N9HO", "expected": "N9HO", "match": true },
+    { "sent": "n9ho", "expected": "N9HO", "match": true },
+    { "sent": "N9HO N9HO", "expected": "N9HO", "match": true },
+    { "sent": "N9HON9HO", "expected": "N9HO", "match": true },
+    { "sent": "N9HO N9HO N9HO", "expected": "N9HO", "match": false },
+    { "sent": "N9H", "expected": "N9HO", "match": false },
+    { "sent": "5NN WI 73", "expected": "5NN WI 73", "match": true },
+    { "sent": "5NNWI73", "expected": "5NN WI 73", "match": true },
+    { "sent": "5NN WI", "expected": "5NN WI 73", "match": false },
+    { "sent": "?", "expected": "?", "match": true },
+    { "sent": "", "expected": "N9HO", "match": false }
+  ],
+  "partialCases": [
+    { "call": "N9HO", "partials": ["?", "N9?", "N9H?"] },
+    { "call": "KD9ABC", "partials": ["?", "KD?", "KD9?", "KD9A?", "KD9AB?"] },
+    { "call": "K4X", "partials": ["?", "K4?"] },
+    { "call": "W1AW/4", "partials": ["?", "W1?", "W1A?", "W1AW?"] }
+  ],
+  "partialRounds": [
+    { "call": "N9HO", "round": 0, "partial": "?" },
+    { "call": "N9HO", "round": 1, "partial": "N9?" },
+    { "call": "N9HO", "round": 2, "partial": "N9H?" },
+    { "call": "N9HO", "round": 3, "partial": "?" },
+    { "call": "K4X", "round": 5, "partial": "K4?" }
+  ],
+  "scenes": [
+    {
+      "name": "busted call, N9HO / N9?",
+      "scene": "bustedCall",
+      "call": "N9HO", "state": "WI", "activator": "K4RTZ", "activatorState": "NC", "partial": "N9?",
+      "beats": [
+        { "kind": "hear", "text": "CQ POTA DE K4RTZ K", "cue": "cq" },
+        { "kind": "send", "text": "N9HO", "cue": "callThem" },
+        { "kind": "hear", "text": "N9?", "cue": "partial" },
+        { "kind": "send", "text": "N9HO", "cue": "resend" },
+        { "kind": "hear", "text": "N9HO 5NN NC NC BK", "cue": "ack" }
+      ]
+    },
+    {
+      "name": "busted call, KD9ABC / bare ?",
+      "scene": "bustedCall",
+      "call": "KD9ABC", "state": "ON", "activator": "W0PQA", "activatorState": "CO", "partial": "?",
+      "beats": [
+        { "kind": "hear", "text": "CQ POTA DE W0PQA K", "cue": "cq" },
+        { "kind": "send", "text": "KD9ABC", "cue": "callThem" },
+        { "kind": "hear", "text": "?", "cue": "partial" },
+        { "kind": "send", "text": "KD9ABC", "cue": "resend" },
+        { "kind": "hear", "text": "KD9ABC 5NN CO CO BK", "cue": "ack" }
+      ]
+    },
+    {
+      "name": "no reply, scene A",
+      "scene": "noReplyA",
+      "call": "N9HO", "state": "WI", "activator": "K4RTZ", "activatorState": "NC",
+      "beats": [
+        { "kind": "hear", "text": "CQ POTA DE K4RTZ K", "cue": "cq" },
+        { "kind": "send", "text": "N9HO", "cue": "callThem" },
+        { "kind": "silence", "text": "", "cue": "noReply" },
+        { "kind": "send", "text": "N9HO", "cue": "callAgain" },
+        { "kind": "hear", "text": "N9HO 5NN NC NC BK", "cue": "ack" }
+      ]
+    },
+    {
+      "name": "no reply, scene B",
+      "scene": "noReplyB",
+      "call": "N9HO", "state": "WI", "activator": "K4RTZ", "activatorState": "NC", "otherHunter": "W8KDP",
+      "beats": [
+        { "kind": "hear", "text": "CQ POTA DE K4RTZ K", "cue": "cq" },
+        { "kind": "send", "text": "N9HO", "cue": "callThem" },
+        { "kind": "hear", "text": "W8KDP 5NN NC NC BK", "cue": "otherStation" },
+        { "kind": "wait", "text": "", "cue": "stayQuiet" },
+        { "kind": "hear", "text": "TU 73 QRZ", "cue": "qrz" },
+        { "kind": "send", "text": "N9HO", "cue": "callAgain" },
+        { "kind": "hear", "text": "N9HO 5NN NC NC BK", "cue": "ack" }
+      ]
+    },
+    {
+      "name": "walkthrough, N9HO in WI",
+      "scene": "walkthrough",
+      "call": "N9HO", "state": "WI", "activator": "K4RTZ", "activatorState": "NC",
+      "beats": [
+        { "kind": "hear", "text": "CQ POTA DE K4RTZ K4RTZ K", "cue": "cq" },
+        { "kind": "send", "text": "N9HO", "cue": "callThem" },
+        { "kind": "copy", "text": "N9HO 5NN NC NC BK", "answer": "NC", "cue": "theirExchange" },
+        { "kind": "send", "text": "5NN WI 73", "cue": "yourExchange" },
+        { "kind": "hear", "text": "TU 73 E E", "cue": "signOff" }
+      ]
+    },
+    {
+      "name": "walkthrough, KD9ABC in ON",
+      "scene": "walkthrough",
+      "call": "KD9ABC", "state": "ON", "activator": "W0PQA", "activatorState": "CO",
+      "beats": [
+        { "kind": "hear", "text": "CQ POTA DE W0PQA W0PQA K", "cue": "cq" },
+        { "kind": "send", "text": "KD9ABC", "cue": "callThem" },
+        { "kind": "copy", "text": "KD9ABC 5NN CO CO BK", "answer": "CO", "cue": "theirExchange" },
+        { "kind": "send", "text": "5NN ON 73", "cue": "yourExchange" },
+        { "kind": "hear", "text": "TU 73 E E", "cue": "signOff" }
+      ]
+    }
+  ],
+  "sceneRuns": [
+    {
+      "name": "busted call with two mistakes",
+      "scene": "busted call, N9HO / N9?",
+      "steps": [
+        { "response": "continued", "verdict": "advance" },
+        { "response": "sent", "text": "N9H", "verdict": "sentWrong" },
+        { "response": "sent", "text": "N9HO", "verdict": "advance" },
+        { "response": "continued", "verdict": "advance" },
+        { "response": "waited", "verdict": "yourTurn" },
+        { "response": "sent", "text": "N9HO N9HO", "verdict": "advance" },
+        { "response": "continued", "verdict": "advance" },
+        { "response": "continued", "verdict": "finished" }
+      ],
+      "finished": true, "mistakes": 2, "clean": false
+    },
+    {
+      "name": "no reply B: keying over another QSO",
+      "scene": "no reply, scene B",
+      "steps": [
+        { "response": "continued", "verdict": "advance" },
+        { "response": "sent", "text": "N9HO", "verdict": "advance" },
+        { "response": "sent", "text": "N9HO", "verdict": "notYourTurn" },
+        { "response": "continued", "verdict": "advance" },
+        { "response": "sent", "text": "N9HO", "verdict": "stayQuiet" },
+        { "response": "waited", "verdict": "advance" },
+        { "response": "continued", "verdict": "advance" },
+        { "response": "sent", "text": "N9HO", "verdict": "advance" },
+        { "response": "continued", "verdict": "advance" }
+      ],
+      "finished": true, "mistakes": 2, "clean": false
+    },
+    {
+      "name": "walkthrough, clean",
+      "scene": "walkthrough, N9HO in WI",
+      "steps": [
+        { "response": "continued", "verdict": "advance" },
+        { "response": "sent", "text": "N9HO", "verdict": "advance" },
+        { "response": "copied", "text": "nc", "verdict": "advance" },
+        { "response": "sent", "text": "5NNWI73", "verdict": "advance" },
+        { "response": "continued", "verdict": "advance" }
+      ],
+      "finished": true, "mistakes": 0, "clean": true
+    },
+    {
+      "name": "walkthrough, wrong copy then unfinished",
+      "scene": "walkthrough, N9HO in WI",
+      "steps": [
+        { "response": "continued", "verdict": "advance" },
+        { "response": "sent", "text": "N9HO", "verdict": "advance" },
+        { "response": "copied", "text": "NY", "verdict": "copyWrong" },
+        { "response": "continued", "verdict": "copyWrong" },
+        { "response": "copied", "text": "NC", "verdict": "advance" }
+      ],
+      "finished": false, "mistakes": 2, "clean": false
+    }
+  ],
+  "progressRun": {
+    "comment": "One learner's path through the stages, answer by answer, from a fresh FirstFourProgress. After each element step: the streak, whether the answer completed its phase, the passed and copyPassed stages, and nextStage. After each scene step: that scene's clean runs, whether this run passed the stage, the passed stages and nextStage. noReplyScene asks which noReply scene plays next.",
+    "steps": [
+      { "op": "element", "stage": "call", "phase": "copy", "correct": true, "streak": 1, "phaseDone": false, "passed": [], "copyPassed": [], "next": "call" },
+      { "op": "element", "stage": "call", "phase": "copy", "correct": true, "streak": 2, "phaseDone": false, "passed": [], "copyPassed": [], "next": "call" },
+      { "op": "element", "stage": "call", "phase": "copy", "correct": false, "streak": 0, "phaseDone": false, "passed": [], "copyPassed": [], "next": "call" },
+      { "op": "element", "stage": "call", "phase": "copy", "correct": true, "streak": 1, "phaseDone": false, "passed": [], "copyPassed": [], "next": "call" },
+      { "op": "element", "stage": "call", "phase": "copy", "correct": true, "streak": 2, "phaseDone": false, "passed": [], "copyPassed": [], "next": "call" },
+      { "op": "element", "stage": "call", "phase": "copy", "correct": true, "streak": 0, "phaseDone": true, "passed": [], "copyPassed": ["call"], "next": "call" },
+      { "op": "element", "stage": "call", "phase": "send", "correct": true, "streak": 1, "phaseDone": false, "passed": [], "copyPassed": ["call"], "next": "call" },
+      { "op": "element", "stage": "call", "phase": "send", "correct": true, "streak": 2, "phaseDone": false, "passed": [], "copyPassed": ["call"], "next": "call" },
+      { "op": "element", "stage": "state", "phase": "copy", "correct": true, "streak": 1, "phaseDone": false, "passed": [], "copyPassed": ["call"], "next": "call" },
+      { "op": "element", "stage": "call", "phase": "send", "correct": true, "streak": 1, "phaseDone": false, "passed": [], "copyPassed": ["call"], "next": "call" },
+      { "op": "element", "stage": "call", "phase": "send", "correct": true, "streak": 2, "phaseDone": false, "passed": [], "copyPassed": ["call"], "next": "call" },
+      { "op": "element", "stage": "call", "phase": "send", "correct": true, "streak": 0, "phaseDone": true, "passed": ["call"], "copyPassed": ["call"], "next": "state" },
+      { "op": "scene", "stage": "bustedCall", "clean": true, "cleanRuns": 1, "stagePassed": false, "passed": ["call"], "next": "state" },
+      { "op": "scene", "stage": "bustedCall", "clean": false, "cleanRuns": 1, "stagePassed": false, "passed": ["call"], "next": "state" },
+      { "op": "scene", "stage": "bustedCall", "clean": true, "cleanRuns": 2, "stagePassed": false, "passed": ["call"], "next": "state" },
+      { "op": "scene", "stage": "bustedCall", "clean": true, "cleanRuns": 3, "stagePassed": true, "passed": ["call", "bustedCall"], "next": "state" },
+      { "op": "noReplyScene", "scene": "A" },
+      { "op": "scene", "stage": "noReply", "clean": false, "cleanRuns": 0, "stagePassed": false, "passed": ["call", "bustedCall"], "next": "state" },
+      { "op": "noReplyScene", "scene": "A" },
+      { "op": "scene", "stage": "noReply", "clean": true, "cleanRuns": 1, "stagePassed": false, "passed": ["call", "bustedCall"], "next": "state" },
+      { "op": "noReplyScene", "scene": "B" },
+      { "op": "scene", "stage": "noReply", "clean": true, "cleanRuns": 2, "stagePassed": true, "passed": ["call", "bustedCall", "noReply"], "next": "state" },
+      { "op": "scene", "stage": "walkthrough", "clean": true, "cleanRuns": 1, "stagePassed": false, "passed": ["call", "bustedCall", "noReply"], "next": "state" },
+      { "op": "scene", "stage": "walkthrough", "clean": true, "cleanRuns": 2, "stagePassed": true, "passed": ["call", "bustedCall", "noReply", "walkthrough"], "next": "state" },
+      { "op": "scene", "stage": "walkthrough", "clean": true, "cleanRuns": 3, "stagePassed": false, "passed": ["call", "bustedCall", "noReply", "walkthrough"], "next": "state" },
+      { "op": "complete", "complete": false, "passedCount": 4 }
+    ]
+  }
+}

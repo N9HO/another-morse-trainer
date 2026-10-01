@@ -50,6 +50,23 @@ struct OnboardingView: View {
                 .buttonStyle(.borderedProminent)
                 .tint(Theme.teal)
                 .padding(.top, 12)
+
+                // First Four (#265): a newcomer who wants to be on the air
+                // this weekend is exactly who it is for, and this is the one
+                // screen they are sure to see. Same answer recorded; Home
+                // then opens First Four.
+                Button {
+                    Haptics.tap()
+                    UserDefaults.standard.set(true, forKey: FirstFourStore.openOnHomeKey)
+                    withAnimation { model.completeOnboarding(selected) }
+                } label: {
+                    Text("Or learn just enough for your first POTA contact")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Theme.teal)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                }
+                .buttonStyle(.plain)
             }
             .padding(.horizontal, 24)
             .padding(.vertical, 32)
