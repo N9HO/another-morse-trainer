@@ -122,6 +122,22 @@ Set via `TRIGGER_MODE`:
 
 Scope it to specific channels with `WATCH_CHANNEL_IDS` (comma-separated IDs).
 
+**Which emoji.** With `TRIGGER_EMOJI=🐛,✨,🔧`, the emoji also says what you
+think the report is:
+
+| Emoji | Means | Filed as |
+|---|---|---|
+| 🐛 | a bug | `bug` |
+| ✨ | a feature request: something new | `enhancement` |
+| 🔧 | a tweak: a small change to something that already works (wording, layout, a default, a limit) | `enhancement` + `tweak` |
+
+It is a strong hint, not an order: the model is told which you picked and
+follows it unless the report clearly says otherwise, so a ✨ on what is plainly
+a crash still files a bug. The `tweak` label goes on only when the 🔧 report is
+filed as a feature. Any other emoji in `TRIGGER_EMOJI` triggers a triage with
+no hint. Reacting with a second emoji on the same thread within the settle
+window re-runs the triage with the newer one.
+
 **Who can trigger it.** Anyone in the server can add a 🐛, and reporters do —
 to their own posts, which used to file them straight to GitHub. Set
 `TRIGGER_USER_IDS` to the maintainers' Discord user ids (comma-separated) and

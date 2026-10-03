@@ -223,6 +223,45 @@ def test_the_parity_checklist_goes_on_once_and_only_on_filed_kinds():
     assert triage.with_parity_checklist("question", "Body") == "Body"
     assert triage.with_parity_checklist("noise", "Body") == "Body"
 
+def _sent_text(messages):
+    return messages.calls[0]["messages"][0]["content"][0]["text"]
+
+
+def test_each_trigger_emoji_maps_to_its_kind():
+    assert triage.hint_for("🐛") == "bug"
+    assert triage.hint_for("✨") == "feature"
+    assert triage.hint_for("\u2728\ufe0f") == "feature", "with the variation selector too"
+    assert triage.hint_for("🔧") == "tweak"
+    assert triage.hint_for("👍") is None
+
+
+def test_the_emoji_hint_reaches_the_model():
+    for hint, word in (("bug", "BUG"), ("feature", "FEATURE REQUEST"), ("tweak", "TWEAK")):
+        with fake_model(FakeResponse(VERDICT)) as messages:
+            triage._triage_sync("kb1abc", "report", [], hint=hint)
+        assert word in _sent_text(messages), f"{hint}: the model must be told"
+
+
+def test_no_hint_adds_no_note():
+    with fake_model(FakeResponse(VERDICT)) as messages:
+        triage._triage_sync("kb1abc", "report", [])
+    assert "The maintainer marked this" not in _sent_text(messages)
+
+
+def test_a_tweak_filed_as_a_feature_is_labelled_tweak():
+    feature = VERDICT.model_copy(update={"kind": "feature", "labels": ["enhancement"]})
+    with fake_model(FakeResponse(feature)):
+        verdict = triage._triage_sync("kb1abc", "report", [], hint="tweak")
+    assert "tweak" in verdict.labels and "enhancement" in verdict.labels
+
+
+def test_a_tweak_the_model_calls_a_bug_is_not_labelled_tweak():
+    """The emoji is a hint: when the report is plainly a bug, it files a bug."""
+    with fake_model(FakeResponse(VERDICT.model_copy(update={"labels": ["bug"]}))):
+        verdict = triage._triage_sync("kb1abc", "report", [], hint="tweak")
+    assert verdict.kind == "bug"
+    assert "tweak" not in verdict.labels
+
 def test_an_oversized_budget_is_refused_at_startup_not_at_the_first_report():
     over = str(config.MAX_OUTPUT_TOKENS + 1)
     saved = os.environ.get("ANTHROPIC_MAX_TOKENS")

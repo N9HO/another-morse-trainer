@@ -311,6 +311,56 @@ def with_parity_checklist(kind: str, body: str) -> str:
     return f"{body.rstrip()}\n\n{checklist}"
 
 
+# What each trigger emoji says the maintainer thinks a report is. A hint, not a
+# ruling: the model is told, and files it as something else only when the report
+# clearly is something else (a ✨ on what is plainly a crash is still a bug). An
+# emoji not listed here triggers a triage with no hint, as every emoji used to.
+EMOJI_HINTS = {"🐛": "bug", "✨": "feature", "🔧": "tweak"}
+
+_HINT_NOTES = {
+    "bug": (
+        "The maintainer marked this as a BUG (🐛). Classify it as kind = 'bug' "
+        "unless the report clearly describes something else."
+    ),
+    "feature": (
+        "The maintainer marked this as a FEATURE REQUEST (✨): something new the "
+        "apps should do. Classify it as kind = 'feature' unless the report "
+        "clearly describes something else."
+    ),
+    "tweak": (
+        "The maintainer marked this as a TWEAK (🔧): a small change to something "
+        "that already works — wording, layout, a default, a limit, an extra "
+        "option. File it as kind = 'feature' (it is labelled 'tweak' "
+        "automatically) unless the report clearly describes something else, and "
+        "keep the issue as small as the change."
+    ),
+}
+
+# Added to a feature filed from a 🔧, so the small ones can be found and batched.
+TWEAK_LABEL = "tweak"
+
+
+def hint_for(emoji: str) -> Optional[str]:
+    """The kind a trigger emoji hints at, or None.
+
+    Ignores the variation selector a client may append (✨ arrives as both
+    "\u2728" and "\u2728\ufe0f"), so either spelling maps the same way.
+    """
+    return EMOJI_HINTS.get(emoji.replace("\ufe0f", ""))
+
+
+def _apply_hint(v: Verdict, hint: Optional[str]) -> Verdict:
+    """A tweak the model agreed was a feature gets its label; nothing else.
+
+    The label follows the model's classification, not the emoji: a 🔧 on what
+    turned out to be a bug files a bug, and a 'tweak' label on a bug would say
+    the opposite of what the issue is.
+    """
+    if hint == "tweak" and v.kind == "feature" and TWEAK_LABEL not in v.labels:
+        v.labels.append(TWEAK_LABEL)
+    return v
+
+
 def _postprocess_platform(v: Verdict, ask_platform: bool = True) -> Verdict:
     """Enforce the platform policy regardless of the model's judgment.
 
@@ -379,7 +429,9 @@ def _triage_sync(
     images: Optional[list[tuple[str, str]]] = None,
     has_issue: bool = False,
     ask_platform: bool = True,
+    hint: Optional[str] = None,
 ) -> Verdict:
+    hint_note = f"\n\nNOTE: {_HINT_NOTES[hint]}" if hint in _HINT_NOTES else ""
     explicit_note = (
         "\n\nNOTE: A maintainer explicitly flagged this for triage. Treat it as worth "
         "pursuing unless it is a duplicate or clearly not a bug/feature (e.g. pure "
@@ -406,6 +458,7 @@ def _triage_sync(
         f"Existing issues (for duplicate detection):\n"
         f"{_format_issue_corpus(issues)}"
         f"{explicit_note}"
+        f"{hint_note}"
         f"{issue_note}"
     )
 
@@ -458,7 +511,7 @@ def _triage_sync(
             "the model returned no verdict "
             f"(stop_reason={response.stop_reason!r}, model={response.model!r})"
         )
-    return _postprocess_platform(verdict, ask_platform)
+    return _apply_hint(_postprocess_platform(verdict, ask_platform), hint)
 
 
 async def triage(
@@ -469,6 +522,7 @@ async def triage(
     images: Optional[list[tuple[str, str]]] = None,
     has_issue: bool = False,
     ask_platform: bool = True,
+    hint: Optional[str] = None,
 ) -> Verdict:
     """Triage a report (single message or full thread transcript) off the event loop.
 
@@ -479,6 +533,8 @@ async def triage(
                   comments instead of filing again.
     `ask_platform` = False once this thread has already been asked which OS it is on,
                   so the forced OS question isn't repeated at every reply.
+    `hint`      = what the trigger emoji says this is ('bug', 'feature', 'tweak'),
+                  or None. See EMOJI_HINTS.
     """
     return await asyncio.to_thread(
         _triage_sync,
@@ -489,4 +545,5 @@ async def triage(
         images,
         has_issue,
         ask_platform,
+        hint,
     )

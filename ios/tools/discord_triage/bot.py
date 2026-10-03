@@ -60,7 +60,7 @@ from github_client import (
     find_issue_for_thread,
     issue_corpus,
 )
-from triage import triage, with_parity_checklist
+from triage import hint_for, triage, with_parity_checklist
 
 logging.basicConfig(
     level=logging.INFO,
@@ -681,8 +681,15 @@ def _lock_for(thread_id: int) -> asyncio.Lock:
     return lock
 
 
-async def _triage_thread(thread: discord.Thread, *, explicit: bool) -> None:
-    """Triage a whole thread, coalescing a burst of triggers into one pass."""
+async def _triage_thread(
+    thread: discord.Thread, *, explicit: bool, hint: Optional[str] = None
+) -> None:
+    """Triage a whole thread, coalescing a burst of triggers into one pass.
+
+    `hint` is what the trigger emoji says the report is. When several triggers
+    coalesce, the newest one's hint is the one that runs — the last emoji the
+    maintainer put on the thread is their latest word on what it is.
+    """
     token = next(_request_tokens)
     _latest_request[thread.id] = token
 
@@ -699,10 +706,12 @@ async def _triage_thread(thread: discord.Thread, *, explicit: bool) -> None:
     async with _lock_for(thread.id):
         if _latest_request.get(thread.id) != token:
             return
-        await _run_triage(thread, explicit=explicit)
+        await _run_triage(thread, explicit=explicit, hint=hint)
 
 
-async def _run_triage(thread: discord.Thread, *, explicit: bool) -> None:
+async def _run_triage(
+    thread: discord.Thread, *, explicit: bool, hint: Optional[str] = None
+) -> None:
     """Read the whole conversation and act on it."""
     convo = await _gather_thread(thread)
     if not convo.has_content:
@@ -730,6 +739,7 @@ async def _run_triage(thread: discord.Thread, *, explicit: bool) -> None:
             # Ask which OS at most once per thread; after that, re-asking is
             # exactly the "weren't you listening?" behavior we're avoiding.
             ask_platform=not asked_about_platform(convo.turns),
+            hint=hint,
         )
     except Exception:
         log.exception("Triage failed for thread=%s", thread.id)
@@ -739,9 +749,10 @@ async def _run_triage(thread: discord.Thread, *, explicit: bool) -> None:
             )
         return
     log.info(
-        "Triage thread=%s msgs=%d kind=%s should_file=%s needs_info=%s has_issue=%s explicit=%s",
+        "Triage thread=%s msgs=%d kind=%s should_file=%s needs_info=%s has_issue=%s "
+        "explicit=%s hint=%s",
         thread.id, len(convo.turns), verdict.kind, verdict.should_file,
-        verdict.needs_more_info, p.issue_number is not None, explicit,
+        verdict.needs_more_info, p.issue_number is not None, explicit, hint,
     )
 
     # In auto mode, a thread we're watching is still a conversation between
@@ -757,7 +768,9 @@ async def _run_triage(thread: discord.Thread, *, explicit: bool) -> None:
 # --- entry flows --------------------------------------------------------------
 
 
-async def _start_triage(message: discord.Message, explicit: bool) -> None:
+async def _start_triage(
+    message: discord.Message, explicit: bool, hint: Optional[str] = None
+) -> None:
     """Triage a channel message — or the thread it already belongs to."""
     # Where the conversation already lives: the thread the message sits in, or
     # one the reporter opened on their own message. Whenever there is one, the
@@ -768,7 +781,7 @@ async def _start_triage(message: discord.Message, explicit: bool) -> None:
     # message.
     home = await _message_thread(message, fetch=explicit)
     if home is not None:
-        await _triage_thread(home, explicit=explicit)
+        await _triage_thread(home, explicit=explicit, hint=hint)
         return
 
     author = message.author.display_name
@@ -785,7 +798,9 @@ async def _start_triage(message: discord.Message, explicit: bool) -> None:
 
     corpus = await _safe_issue_corpus()
     try:
-        verdict = await triage(author, content, corpus, explicit=explicit, images=images)
+        verdict = await triage(
+            author, content, corpus, explicit=explicit, images=images, hint=hint
+        )
     except Exception:
         # Never leave a 👀 hanging: an analysis failure gets said out loud.
         log.exception("Triage failed for msg=%s", message.id)
@@ -796,9 +811,10 @@ async def _start_triage(message: discord.Message, explicit: bool) -> None:
             )
         return
     log.info(
-        "Start triage msg=%s kind=%s should_file=%s needs_info=%s dup=%s explicit=%s",
+        "Start triage msg=%s kind=%s should_file=%s needs_info=%s dup=%s explicit=%s "
+        "hint=%s",
         message.id, verdict.kind, verdict.should_file,
-        verdict.needs_more_info, verdict.is_duplicate, explicit,
+        verdict.needs_more_info, verdict.is_duplicate, explicit, hint,
     )
 
     duplicate = _resolve_duplicate(verdict, corpus)
@@ -919,6 +935,9 @@ async def on_raw_reaction_add(payload: discord.RawReactionActionEvent) -> None:
         log.exception("Failed to fetch reacted message")
         return
 
+    # 🐛 / ✨ / 🔧 say what the maintainer thinks this is; see triage.EMOJI_HINTS.
+    hint = hint_for(str(payload.emoji))
+
     if not _may_trigger(payload.user_id):
         # A ❌ instead of the 👀, so whoever reacted can see the bot noticed
         # and declined, rather than wondering whether it is down. Nothing else:
@@ -947,13 +966,13 @@ async def on_raw_reaction_add(payload: discord.RawReactionActionEvent) -> None:
     # issue from the conversation instead of starting the report over.
     if isinstance(channel, discord.Thread):
         await ack()
-        await _triage_thread(await _wake(channel), explicit=True)
+        await _triage_thread(await _wake(channel), explicit=True, hint=hint)
         return
 
     if message.author.bot:
         return
     await ack()
-    await _start_triage(message, explicit=True)
+    await _start_triage(message, explicit=True, hint=hint)
 
 
 def main() -> None:
