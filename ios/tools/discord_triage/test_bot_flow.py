@@ -562,6 +562,31 @@ def test_the_maintainers_bug_reaction_still_triggers():
 def test_with_no_allowlist_anyone_can_trigger():
     assert "❌" not in _react(REPORTER.id, allowed=set())
 
+
+def test_the_emoji_hint_reaches_triage_for_a_thread():
+    with Harness([_verdict(kind="feature")]) as h:
+        run(bot._triage_thread(FakeThread([FakeMessage(REPORTER, "Add a QRQ mode")]),
+                               explicit=True, hint="feature"))
+    assert h.calls[0]["hint"] == "feature"
+
+
+def test_the_newest_emoji_wins_when_triggers_coalesce():
+    """A 🐛 then a ✨ on the same thread is one triage, run as the ✨."""
+    with Harness([_verdict(kind="feature")]) as h:
+        thread = FakeThread([FakeMessage(REPORTER, "Add a QRQ mode")])
+
+        async def two_reactions():
+            first = asyncio.create_task(
+                bot._triage_thread(thread, explicit=True, hint="bug"))
+            await asyncio.sleep(0.01)
+            second = asyncio.create_task(
+                bot._triage_thread(thread, explicit=True, hint="feature"))
+            await asyncio.gather(first, second)
+
+        run(two_reactions())
+    assert len(h.calls) == 1
+    assert h.calls[0]["hint"] == "feature"
+
 if __name__ == "__main__":
     failures = 0
     for name, fn in sorted(dict(globals()).items()):
