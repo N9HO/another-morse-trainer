@@ -447,6 +447,9 @@ struct QSOSettings: Codable, Equatable {
     /// Your first name, optional. Only CW 77's "include my callsign and
     /// name" uses it so far (#240).
     var myName: String = ""
+    /// Your state (or province) abbreviation, optional. Only First Four
+    /// reads it so far (#265).
+    var myState: String = ""
     var mode: QSOContestMode = .pota
     var maxStations: Int = 4
     var minWPM: Double = 18
@@ -485,7 +488,7 @@ struct QSOSettings: Codable, Equatable {
 // settings (each missing key falls back to its default).
 extension QSOSettings {
     enum CodingKeys: String, CodingKey {
-        case myCall, myName, mode, maxStations, minWPM, maxWPM, farnsworth, toneSpread
+        case myCall, myName, myState, mode, maxStations, minWPM, maxWPM, farnsworth, toneSpread
         case minVolume, maxVolume, minDelay, maxDelay, qsbEnabled, qrn
         case cutNumbersEnabled, cutDigits, rstRequired, bustBehavior, giveUpEnabled
         case formats, usOnly, keepPartialCall, missedCallerFeedback
@@ -497,6 +500,7 @@ extension QSOSettings {
         var s = QSOSettings()
         s.myCall = try c.decodeIfPresent(String.self, forKey: .myCall) ?? s.myCall
         s.myName = try c.decodeIfPresent(String.self, forKey: .myName) ?? s.myName
+        s.myState = try c.decodeIfPresent(String.self, forKey: .myState) ?? s.myState
         s.mode = try c.decodeIfPresent(QSOContestMode.self, forKey: .mode) ?? s.mode
         s.maxStations = try c.decodeIfPresent(Int.self, forKey: .maxStations) ?? s.maxStations
         s.minWPM = try c.decodeIfPresent(Double.self, forKey: .minWPM) ?? s.minWPM
@@ -707,8 +711,6 @@ struct AppSettings: Codable, Equatable {
     // Code Exam (ARRL/FCC-style proficiency exam)
     /// License-tied exam speed (5 / 13 / 20 WPM).
     var examSpeed: ExamSpeed = .general13
-    /// How the exam is graded: solid copy or content questions.
-    var examGrading: ExamGrading = .questions
     /// Use a bundled (ready-made) passage instead of a freshly generated one.
     var examUseBundled: Bool = false
 
@@ -863,7 +865,7 @@ extension AppSettings {
         case qrqSpeed, backgroundNoise, didMigrateNoiseFloor
         case bluetoothKeepAlive, bandNoise
         case dailyDitStartingWpm, dailyDitHideReference
-        case examSpeed, examGrading, examUseBundled
+        case examSpeed, examUseBundled
         case qso
         case contest
         case rapidFire
@@ -949,7 +951,6 @@ extension AppSettings {
         s.answerEntry = (try? c.decodeIfPresent(String.self, forKey: .answerEntry))
             .flatMap { $0 }.flatMap(AnswerEntryMode.init(rawValue:)) ?? s.answerEntry
         s.examSpeed = try c.decodeIfPresent(ExamSpeed.self, forKey: .examSpeed) ?? s.examSpeed
-        s.examGrading = try c.decodeIfPresent(ExamGrading.self, forKey: .examGrading) ?? s.examGrading
         s.examUseBundled = try c.decodeIfPresent(Bool.self, forKey: .examUseBundled) ?? s.examUseBundled
         s.qso = try c.decodeIfPresent(QSOSettings.self, forKey: .qso) ?? s.qso
         s.contest = try c.decodeIfPresent(ContestSettings.self, forKey: .contest) ?? s.contest

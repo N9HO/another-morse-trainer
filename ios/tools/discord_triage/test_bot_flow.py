@@ -511,6 +511,57 @@ def test_a_duplicate_comment_does_not_repeat_the_checklist():
     assert len(h.comments) == 1
     assert "### Parity" not in h.comments[0][1]
 
+
+class _ReactedMessage(FakeMessage):
+    def __init__(self):
+        # From a bot, so a reaction that gets past the gates stops right after
+        # the fetch, with nothing further to fake.
+        super().__init__(BOT_USER, "a bot's message")
+        self.reactions = []
+
+    async def add_reaction(self, emoji):
+        self.reactions.append(emoji)
+
+
+class _ReactedChannel:
+    def __init__(self):
+        self.message = _ReactedMessage()
+
+    async def fetch_message(self, message_id):
+        return self.message
+
+
+class _Payload:
+    def __init__(self, user_id, emoji="🐛"):
+        self.user_id, self.emoji = user_id, emoji
+        self.channel_id, self.message_id = next(_ids), next(_ids)
+
+
+def _react(user_id, allowed):
+    """Run on_raw_reaction_add for `user_id` with TRIGGER_USER_IDS = `allowed`."""
+    channel = _ReactedChannel()
+    with Harness([]):
+        bot.settings = dataclasses.replace(
+            bot.settings, trigger_mode="react", trigger_emojis=frozenset({"🐛"}),
+            trigger_user_ids=set(allowed), watch_channel_ids=set(),
+        )
+        bot.client.get_channel = lambda _id: channel
+        run(bot.on_raw_reaction_add(_Payload(user_id)))
+    return channel.message.reactions
+
+
+def test_a_reporters_own_bug_reaction_is_declined_with_a_red_x():
+    """A reporter reacting 🐛 to their own post must not file it (2026-10-01)."""
+    assert _react(REPORTER.id, allowed={99}) == ["❌"], "a ❌, and no 👀"
+
+
+def test_the_maintainers_bug_reaction_still_triggers():
+    assert "❌" not in _react(99, allowed={99})
+
+
+def test_with_no_allowlist_anyone_can_trigger():
+    assert "❌" not in _react(REPORTER.id, allowed=set())
+
 if __name__ == "__main__":
     failures = 0
     for name, fn in sorted(dict(globals()).items()):

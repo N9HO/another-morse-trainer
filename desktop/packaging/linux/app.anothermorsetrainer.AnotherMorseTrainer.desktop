@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Another Morse Trainer
+GenericName=Morse Code Trainer
+Comment=Learn and practise Morse code
+Exec=another-morse-trainer
+Icon=app.anothermorsetrainer.AnotherMorseTrainer
+Terminal=false
+Categories=Education;Network;HamRadio;
+Keywords=morse;cw;ham;radio;amateur;koch;vail;
+StartupWMClass=app-anothermorsetrainer-MainKt

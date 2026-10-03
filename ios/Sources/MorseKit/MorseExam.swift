@@ -1,22 +1,31 @@
 import Foundation
 
-// An ARRL/FCC-style Morse code proficiency exam mode.
+// An ARRL/FCC-style Morse code proficiency exam mode, graded the way the ARRL
+// VEC graded it.
 //
 // Background: the historical FCC/VEC code exams (eliminated 2007-02-23) sent
 // ~5 minutes of plain-language text styled as an on-air QSO — callsigns, name,
-// QTH, rig, antenna, weather, RST, age, "73". To pass you needed EITHER one
-// minute of solid copy (that many consecutive correct characters at the exam's
-// speed: 25 at 5 WPM, 65 at 13, 100 at 20 — see `ExamSpeed.requiredRun`) OR to
-// correctly answer ~10 fill-in questions about the content. License-tied speeds
-// were 5 WPM (Novice), 13 WPM (General/Advanced) and 20 WPM (Amateur Extra);
-// the 5 WPM test used Farnsworth (full-speed characters, stretched spacing).
-// The text had to include every letter and numeral, . , ? / and the prosigns
-// AR, SK and BT (#263). `fixtures/code-exam.json` pins both rules.
+// QTH, rig, antenna, weather, RST, age, "73". License-tied speeds were 5 WPM
+// (Novice), 13 WPM (General/Advanced) and 20 WPM (Amateur Extra); the 5 WPM
+// test used Farnsworth (full-speed characters, stretched spacing). The text
+// had to use every letter and numeral, period, comma, question mark, slant
+// mark and the prosigns AR, BT and SK (47 CFR 97.503(a), 1998 edition).
+//
+// Grading, ARRL VEC practice (the FCC left the method to the VEs):
+// - The candidate copies the whole message, then answers ten fill-in-the-blank
+//   questions about it. Either path passes: one minute of solid copy, or seven
+//   of the ten blanks right. (FCC 99-412 ¶37: the ARRL asked that VEs be held
+//   to "a ten-question fill-in-the-blank examination or one minute of solid
+//   copy".)
+// - One minute of solid copy is 25 / 65 / 100 characters at 5 / 13 / 20 WPM,
+//   with letters counting one and "numbers, punctuation and procedural
+//   signals" counting two each (ARRL VE Manual, 8th edition, 2000). So the
+//   prosigns are graded copy, not ignored.
+// `fixtures/code-exam.json` pins every rule above, with its sources.
 //
 // The genuine secured exam transcripts were never published, so this mode
 // reproduces the *format* with procedurally generated (and a few bundled)
-// QSO-style passages, plus both grading modes. Pure logic, no audio/UI, so it
-// can be unit-tested and reuses the same `QuizSource` loop as the other modes.
+// QSO-style passages. Pure logic, no audio/UI, so it can be unit-tested.
 
 // MARK: - Speed
 
@@ -60,9 +69,11 @@ public enum ExamSpeed: String, Sendable, Codable, CaseIterable, Identifiable {
     public static let charactersPerWord = 5
 
     /// The solid-copy pass bar: one minute of copy at this exam's speed (#262),
-    /// so 25 / 65 / 100 characters at 5 / 13 / 20 WPM.
+    /// so 25 / 65 / 100 counted characters at 5 / 13 / 20 WPM. Counted the
+    /// ARRL way: a numeral, punctuation mark or prosign is worth two letters
+    /// (`ExamPassage.weight(of:)`).
     ///
-    /// Two choices, both pinned by `fixtures/code-exam.json`:
+    /// Two further choices, both pinned by `fixtures/code-exam.json`:
     /// - The speed is the *effective* (stated) WPM, not the character speed.
     ///   The 5 WPM exam sent 13 WPM characters, but a minute of it still held
     ///   five words, and the historical bar there was 25 characters.
@@ -81,24 +92,11 @@ public enum ExamSpeed: String, Sendable, Codable, CaseIterable, Identifiable {
     }
 
     public var label: String { "\(wpmLabel) — \(license)" }
-}
 
-// MARK: - Grading mode
-
-/// The two historical ways to pass the code exam.
-public enum ExamGrading: String, Sendable, Codable, CaseIterable, Identifiable {
-    case solidCopy   // one minute of solid copy: `ExamSpeed.requiredRun` in a row
-    case questions   // ~10 fill-in questions about the content of the message
-
-    public var id: String { rawValue }
-
-    /// The picker / header label. Solid copy names its bar, which depends on
-    /// the speed (#262): "Solid copy (65 in a row)" at 13 WPM.
-    public func label(for speed: ExamSpeed) -> String {
-        switch self {
-        case .solidCopy: return "Solid copy (\(speed.requiredRun) in a row)"
-        case .questions: return "Answer questions"
-        }
+    /// The two ways to pass, as the setup, header and settings summary show
+    /// them: "Solid copy (65) or 7 of 10 questions" at 13 WPM.
+    public var passLabel: String {
+        "Solid copy (\(requiredRun)) or \(ExamSession.questionsToPass) of \(ExamSession.questionCount) questions"
     }
 }
 
@@ -131,7 +129,8 @@ public struct ExamPassage: Sendable, Equatable {
     /// its prosigns the way the app displays them, it is the same string.
     public var displayText: String { sentText }
     /// The gradable copy a candidate would write: `sentText` through
-    /// `normalize`, so the prosigns are gone and the punctuation stays.
+    /// `normalize`. Prosigns stay in it, as bracketed tokens, because the ARRL
+    /// graded them.
     public let copyText: String
 
     public init(toCall: String, deCall: String, portable: String, name: String,
@@ -179,42 +178,79 @@ public struct ExamPassage: Sendable, Equatable {
     /// Reduce a string to a comparable copy stream, used for both the reference
     /// text and the learner's typed copy so grading is apples-to-apples.
     ///
-    /// Grading rule (#263, pinned by `fixtures/code-exam.json`, identical in the
-    /// Kotlin port): letters, digits and the punctuation . , ? / are copy, kept
-    /// as written and graded like any other character. A prosign in any written
-    /// form — a bracketed token such as <AR>, or "+" (AR), or "=" (BT) — is
-    /// dropped and acts as a word break: it is procedure rather than message
-    /// text, the copy keyboard has no key for it, and a candidate is never marked
-    /// down for writing one or leaving it out. Upper-cased; whitespace runs
-    /// collapse to one space, none leading or trailing.
+    /// Grading rule (pinned by `fixtures/code-exam.json`, identical in the
+    /// Kotlin port). The ARRL VEC graded prosigns as copy, so they stay in the
+    /// stream, each as its canonical bracketed token standing as its own word:
+    /// - a bracketed token is a prosign: `<AR>`, `<sk>`, `< BT >` all read as
+    ///   the token with its spaces dropped, upper-cased;
+    /// - `+` is AR and `=` is BT, the written forms copy sheets used;
+    /// - the letters `AR` without brackets are the letters A and R (Arkansas
+    ///   in a QTH), never the prosign. The bracket or the symbol decides.
+    /// Letters, digits and `. , ? /` are kept as written (`/` is DN). Upper-
+    /// cased; whitespace runs collapse to one space, none leading or trailing.
     public static func normalize(_ s: String) -> String {
-        var out = ""
-        var pendingSpace = false
+        var words: [String] = []
+        var word = ""
+        func endWord() { if !word.isEmpty { words.append(word); word = "" } }
         let chars = Array(s.uppercased())
         var i = 0
         while i < chars.count {
             let ch = chars[i]
-            var isBreak = ch == " " || ch == "\n" || ch == "\t" || ch == "=" || ch == "+"
             if ch == "<", let close = chars[(i + 1)...].firstIndex(of: ">") {
-                isBreak = true
-                i = close            // skip the whole bracketed prosign
+                let inner = String(chars[(i + 1)..<close]).filter { !$0.isWhitespace }
+                endWord()
+                if !inner.isEmpty { words.append("<\(inner)>") }
+                i = close + 1
+                continue
             }
-            if isBreak {
-                if !out.isEmpty { pendingSpace = true }
+            if ch == "+" || ch == "=" {
+                endWord()
+                words.append(ch == "+" ? "<AR>" : "<BT>")
+            } else if ch.isWhitespace {
+                endWord()
             } else {
-                if pendingSpace { out.append(" "); pendingSpace = false }
-                out.append(ch)
+                word.append(ch)
             }
             i += 1
         }
+        endWord()
+        return words.joined(separator: " ")
+    }
+
+    /// Split a normalized copy stream into the symbols the grader compares: a
+    /// bracketed prosign is one symbol, a word space is one symbol, and every
+    /// other character is one symbol.
+    public static func symbols(_ normalized: String) -> [String] {
+        var out: [String] = []
+        let chars = Array(normalized)
+        var i = 0
+        while i < chars.count {
+            if chars[i] == "<", let close = chars[(i + 1)...].firstIndex(of: ">") {
+                out.append(String(chars[i...close]))
+                i = close + 1
+            } else {
+                out.append(String(chars[i]))
+                i += 1
+            }
+        }
         return out
+    }
+
+    /// What one copied symbol counts toward the one-minute bar, by the ARRL VEC
+    /// rule: a letter counts one; a numeral, punctuation mark or prosign counts
+    /// two; a word space counts nothing (it has to be in the right place, but
+    /// it is timing, not a character).
+    public static func weight(of symbol: String) -> Int {
+        if symbol == " " { return 0 }
+        if symbol.count == 1, let c = symbol.first, c.isASCII, c.isLetter { return 1 }
+        return 2
     }
 }
 
-/// The outcome of grading a solid-copy attempt.
+/// The outcome of grading a typed copy for one minute of solid copy.
 public struct ExamCopyResult: Sendable, Equatable {
-    /// Length of the longest run of consecutive characters the copy got right
-    /// (word spaces inside the run not counted — see `ExamSpeed.requiredRun`).
+    /// The longest run of consecutive correct copy, counted the ARRL way
+    /// (letters 1, numerals / punctuation / prosigns 2, word spaces 0).
     public let longestRun: Int
     /// The bar to clear: one minute of copy at the exam's speed.
     public let required: Int
@@ -227,152 +263,182 @@ public struct ExamCopyResult: Sendable, Equatable {
 
 // MARK: - Question
 
-/// One fill-in question about the passage's content.
+/// One fill-in-the-blank question about the message, answered from the copy.
 public struct ExamQuestion: Sendable, Equatable {
+    /// The blank to fill, e.g. "The operator's name is ____."
     public let prompt: String
-    public let options: [String]   // distinct, includes `answer`
+    /// The answer as it was sent.
     public let answer: String
-    public init(prompt: String, options: [String], answer: String) {
+    /// Every answer marked right (e.g. both K9LA/4 and K9LA).
+    public let accepted: [String]
+    public init(prompt: String, answer: String, accepted: [String]? = nil) {
         self.prompt = prompt
-        self.options = options
         self.answer = answer
+        self.accepted = accepted ?? [answer]
+    }
+
+    /// Whether a typed answer fills the blank: compared the way copy is
+    /// compared, with case and spacing ignored ("100 w" fills "100W").
+    public func accepts(_ typed: String) -> Bool {
+        let t = ExamQuestion.compact(typed)
+        return !t.isEmpty && accepted.contains { ExamQuestion.compact($0) == t }
+    }
+
+    static func compact(_ s: String) -> String {
+        ExamPassage.normalize(s).filter { $0 != " " }
+    }
+}
+
+// MARK: - Result
+
+/// Which way a sitting passed. The ARRL VEC passed a candidate on either.
+public enum ExamPassPath: String, Sendable, Equatable {
+    case solidCopy, questions, both, none
+}
+
+/// Both grades for one sitting.
+public struct ExamResult: Sendable, Equatable {
+    public let copy: ExamCopyResult
+    public let questionsCorrect: Int
+    public let questionsAsked: Int
+    public let questionsRequired: Int
+
+    public init(copy: ExamCopyResult, questionsCorrect: Int,
+                questionsAsked: Int, questionsRequired: Int) {
+        self.copy = copy
+        self.questionsCorrect = questionsCorrect
+        self.questionsAsked = questionsAsked
+        self.questionsRequired = questionsRequired
+    }
+
+    public var passedByCopy: Bool { copy.passed }
+    public var passedByQuestions: Bool {
+        questionsAsked > 0 && questionsCorrect >= questionsRequired
+    }
+    public var passed: Bool { passedByCopy || passedByQuestions }
+    public var path: ExamPassPath {
+        switch (passedByCopy, passedByQuestions) {
+        case (true, true):   return .both
+        case (true, false):  return .solidCopy
+        case (false, true):  return .questions
+        case (false, false): return .none
+        }
+    }
+
+    /// One line naming the way the sitting passed, for the results screen.
+    public var pathText: String {
+        switch path {
+        case .both:      return "Passed on both: solid copy and the questions"
+        case .solidCopy: return "Passed on one minute of solid copy"
+        case .questions: return "Passed on the questions"
+        case .none:      return "Neither solid copy nor the questions reached the bar"
+        }
     }
 }
 
 // MARK: - Session
 
-/// Drives one exam: holds the passage, the questions, and the grading. Plugs
-/// into the shared `QuizSource` loop, and also exposes a richer API the app's
-/// bespoke exam screen uses (play the whole passage, then copy or answer).
-public final class ExamSession: QuizSource {
+/// Drives one sitting, graded the way the ARRL VEC graded it: copy the whole
+/// message, then fill in ten blanks about it from that copy. One minute of
+/// solid copy passes, and so do seven right answers out of ten.
+public final class ExamSession {
+
+    /// Questions asked about the message, and how many must be right.
+    public static let questionCount = 10
+    public static let questionsToPass = 7
 
     public let speed: ExamSpeed
 
     /// The historical "one minute of solid copy" bar at this exam's speed.
     public var requiredRun: Int { speed.requiredRun }
 
-    public let grading: ExamGrading
-    public private(set) var passage: ExamPassage
-    public private(set) var questions: [ExamQuestion]
+    public let passage: ExamPassage
+    public let questions: [ExamQuestion]
 
     public private(set) var questionIndex = 0
     public private(set) var correctCount = 0
-    public private(set) var lastCopyResult: ExamCopyResult?
-
-    private var rng: any RandomNumberGenerator
+    public private(set) var copyResult: ExamCopyResult
 
     /// Generate a random passage at the given speed.
     public convenience init(speed: ExamSpeed,
-                            grading: ExamGrading,
-                            questionCount: Int = 10,
                             rng: any RandomNumberGenerator = SystemRandomNumberGenerator()) {
         var rng = rng
-        let passage = ExamSession.randomPassage(using: &rng)
-        self.init(speed: speed, grading: grading, passage: passage,
-                  questionCount: questionCount, rng: rng)
+        self.init(speed: speed, passage: ExamSession.randomPassage(using: &rng))
     }
 
     /// Build a session around a specific passage (e.g. a bundled one).
-    public init(speed: ExamSpeed,
-                grading: ExamGrading,
-                passage: ExamPassage,
-                questionCount: Int = 10,
-                rng: any RandomNumberGenerator = SystemRandomNumberGenerator()) {
-        var r: any RandomNumberGenerator = rng
-        let qs = ExamSession.makeQuestions(for: passage, count: questionCount, using: &r)
+    public init(speed: ExamSpeed, passage: ExamPassage) {
         self.speed = speed
-        self.grading = grading
         self.passage = passage
-        self.questions = qs
-        self.rng = r
+        self.questions = ExamSession.makeQuestions(for: passage)
+        self.copyResult = ExamCopyResult(longestRun: 0, required: speed.requiredRun)
     }
 
-    // MARK: QuizSource
+    public var summary: String { "Code exam · \(speed.wpmLabel)" }
 
-    public var summary: String {
-        switch grading {
-        case .solidCopy:
-            return "Code exam · \(speed.wpmLabel)"
-        case .questions:
-            return "Q \(min(questionIndex + 1, questions.count)) of \(questions.count)"
-        }
-    }
+    // MARK: Solid copy
 
-    public func nextDrill() -> Drill {
-        switch grading {
-        case .solidCopy:
-            return Drill(
-                playable: .text(passage.sentText),
-                options: [],
-                correct: passage.copyText,
-                revealPrimary: passage.copyText,
-                revealSecondary: "",
-                question: "Copy the transmission, then type what you got. " +
-                    "Pass = \(requiredRun) correct characters in a row.")
-        case .questions:
-            let q = questions[min(questionIndex, max(0, questions.count - 1))]
-            // The first question carries the passage so the loop plays it once;
-            // later questions are silent (the passage isn't replayed).
-            return Drill(
-                playable: .text(questionIndex == 0 ? passage.sentText : ""),
-                options: q.options,
-                correct: q.answer,
-                revealPrimary: q.answer,
-                revealSecondary: "",
-                question: q.prompt)
-        }
-    }
-
-    public func record(choice: String, ttr: TimeInterval) -> DrillOutcome {
-        switch grading {
-        case .solidCopy:
-            let result = gradeSolidCopy(choice)
-            lastCopyResult = result
-            return DrillOutcome(correct: result.passed, unlocked: nil)
-        case .questions:
-            guard questionIndex < questions.count else {
-                return DrillOutcome(correct: false, unlocked: nil)
-            }
-            let correct = choice == questions[questionIndex].answer
-            if correct { correctCount += 1 }
-            questionIndex += 1
-            let done = questionIndex >= questions.count
-            return DrillOutcome(correct: correct, unlocked: done ? "exam complete" : nil)
-        }
-    }
-
-    /// Whether every question has been answered (question mode).
-    public var isComplete: Bool { questionIndex >= questions.count }
-
-    // MARK: Solid-copy grading
-
-    /// Grade a typed copy against the passage: find the longest run of
-    /// consecutive characters that exactly matches the sent text.
+    /// Grade a typed copy against the passage: the longest run of consecutive
+    /// symbols matching the sent text, weighted by the ARRL counting rule.
     public func gradeSolidCopy(_ typed: String) -> ExamCopyResult {
-        let a = Array(ExamPassage.normalize(typed))
-        let b = Array(passage.copyText)
+        let a = ExamPassage.symbols(ExamPassage.normalize(typed))
+        let b = ExamPassage.symbols(passage.copyText)
         return ExamCopyResult(longestRun: Self.longestCommonRun(a, b),
                               required: requiredRun)
     }
 
-    /// The longest substring common to both character arrays, counted in
-    /// characters with word spaces weighing nothing: a space inside the run has
-    /// to match, but the bar is in characters, not keystrokes (#262). Classic
-    /// O(n·m) longest-common-substring DP, rolling row, with each cell holding
-    /// the run's weight rather than its length.
-    public static func longestCommonRun(_ a: [Character], _ b: [Character]) -> Int {
+    /// Hand in the copy: graded now and kept for the result.
+    @discardableResult
+    public func submitCopy(_ typed: String) -> ExamCopyResult {
+        copyResult = gradeSolidCopy(typed)
+        return copyResult
+    }
+
+    /// The longest run of symbols common to both, in order and unbroken, each
+    /// cell holding the run's ARRL weight rather than its length: letters one,
+    /// numerals / punctuation / prosigns two, word spaces nothing (a space
+    /// inside the run still has to match). Longest-common-substring DP with a
+    /// rolling row.
+    public static func longestCommonRun(_ a: [String], _ b: [String]) -> Int {
         if a.isEmpty || b.isEmpty { return 0 }
         var prev = [Int](repeating: 0, count: b.count + 1)
         var best = 0
         for i in 1...a.count {
             var cur = [Int](repeating: 0, count: b.count + 1)
             for j in 1...b.count where a[i - 1] == b[j - 1] {
-                cur[j] = prev[j - 1] + (a[i - 1] == " " ? 0 : 1)
+                cur[j] = prev[j - 1] + ExamPassage.weight(of: a[i - 1])
                 if cur[j] > best { best = cur[j] }
             }
             prev = cur
         }
         return best
+    }
+
+    // MARK: Questions
+
+    /// The blank being filled in, or nil once all are done.
+    public var currentQuestion: ExamQuestion? {
+        questionIndex < questions.count ? questions[questionIndex] : nil
+    }
+
+    /// Fill in the current blank and move on. Returns whether it was right.
+    @discardableResult
+    public func answer(_ typed: String) -> Bool {
+        guard let q = currentQuestion else { return false }
+        let right = q.accepts(typed)
+        if right { correctCount += 1 }
+        questionIndex += 1
+        return right
+    }
+
+    /// Whether every question has been answered.
+    public var isComplete: Bool { questionIndex >= questions.count }
+
+    /// Both grades so far.
+    public var result: ExamResult {
+        ExamResult(copy: copyResult, questionsCorrect: correctCount,
+                   questionsAsked: questions.count,
+                   questionsRequired: Self.questionsToPass)
     }
 
     // MARK: Passage generation
@@ -404,44 +470,23 @@ public final class ExamSession: QuizSource {
 
     // MARK: Question generation
 
-    static func makeQuestions(for p: ExamPassage,
-                              count: Int,
-                              using rng: inout any RandomNumberGenerator) -> [ExamQuestion] {
-        // (prompt, correct answer, pool to draw distractors from)
-        let fields: [(String, String, [String])] = [
-            ("What was the operator's name?",        p.name,    MorseData.opNames),
-            ("What state (QTH) were they in?",       p.qth,     MorseData.qthList),
-            ("What RST signal report did they send?", p.rst,    MorseData.rstValues),
-            ("What rig (radio) were they using?",    p.rig,     MorseData.rigs),
-            ("How much power were they running?",     p.power,  MorseData.powers),
-            ("What antenna were they using?",        p.antenna, MorseData.antennas),
-            ("What was the weather (WX) like?",      p.weather, MorseData.weathers),
-            ("What was the temperature?",            p.temp,    MorseData.temps),
-            ("How old is the operator?",             p.age,     MorseData.ages),
-            ("What was the sending station's callsign?", p.deCall, MorseData.callSigns),
+    /// Ten fill-in blanks drawn from the passage's fields, in the order the
+    /// message sends them, so they can be answered reading down the copy.
+    public static func makeQuestions(for p: ExamPassage) -> [ExamQuestion] {
+        let de = "\(p.deCall)/\(p.portable)"
+        return [
+            ExamQuestion(prompt: "The sending station's call sign is ____.",
+                         answer: de, accepted: [de, p.deCall]),
+            ExamQuestion(prompt: "The signal report (RST) is ____.", answer: p.rst),
+            ExamQuestion(prompt: "The operator's name is ____.", answer: p.name),
+            ExamQuestion(prompt: "The QTH (state) is ____.", answer: p.qth),
+            ExamQuestion(prompt: "The rig is ____.", answer: p.rig),
+            ExamQuestion(prompt: "The power is ____.", answer: p.power),
+            ExamQuestion(prompt: "The antenna is ____.", answer: p.antenna),
+            ExamQuestion(prompt: "The weather (WX) is ____.", answer: p.weather),
+            ExamQuestion(prompt: "The temperature is ____.", answer: p.temp),
+            ExamQuestion(prompt: "The operator's age is ____.", answer: p.age),
         ]
-        var built = fields.map { field -> ExamQuestion in
-            ExamQuestion(prompt: field.0,
-                         options: makeOptions(answer: field.1, pool: field.2, using: &rng),
-                         answer: field.1)
-        }
-        built.shuffle(using: &rng)
-        if count < built.count { built = Array(built.prefix(count)) }
-        return built
-    }
-
-    /// Four distinct options: the correct answer plus three random distractors
-    /// from the same pool, shuffled.
-    static func makeOptions(answer: String,
-                            pool: [String],
-                            using rng: inout any RandomNumberGenerator) -> [String] {
-        var distractors = pool.filter { $0 != answer }
-        distractors.shuffle(using: &rng)
-        var options = [answer]
-        for d in distractors where options.count < 4 {
-            if !options.contains(d) { options.append(d) }
-        }
-        options.shuffle(using: &rng)
-        return options
     }
 }
+

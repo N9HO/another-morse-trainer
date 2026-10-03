@@ -157,7 +157,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .story:
             return "Continuous copy: hear a short story sent end to end. Copy it on paper or in your head, then reveal the text to check yourself. Pick a fable, a longer classic (Sherlock Holmes and friends) sent in parts with a bookmark that keeps your place, or todays news — real headlines hidden until you reveal, so the only way to read them is to copy the code."
         case .exam:
-            return "Sit a recreation of the old ARRL/FCC code-proficiency exam: a 5-minute QSO-style transmission at 5, 13, or 20 WPM. Pass with one minute of solid copy (25, 65 or 100 characters in a row) or by answering questions about what was sent."
+            return "Sit a recreation of the old ARRL/FCC code-proficiency exam: a 5-minute QSO-style transmission at 5, 13, or 20 WPM. Graded the way the ARRL VEC graded it: copy the whole message, then fill in ten blanks about it from your copy. Pass with one minute of solid copy (25, 65 or 100 in a row, numerals, punctuation and prosigns counting two) or seven right answers."
         case .qrq:
             return "Push your speed: hear whole words and call signs at 35 or 40 WPM and type what you copy. Too fast to count dits — this trains instant, whole-word recognition (QRQ = “send faster”)."
         case .rapidFire:
@@ -337,7 +337,8 @@ final class AppModel: ObservableObject {
     private var examSession: ExamSession?
     private var examSampleIndex = 0
 
-    private let player = MorsePlayer()
+    /// Not private: First Four (`AppModel+FirstFour.swift`) plays through it.
+    let player = MorsePlayer()
     private let speech = SpeechPlayer()
     private var toneEndDate: Date?
     private var advanceGeneration = 0
@@ -577,7 +578,7 @@ final class AppModel: ObservableObject {
         case .qso:          return charLadder   // unused: QSO runs its own pileup loop
         case .contest:      return charLadder   // unused: Contest runs the same pileup loop
         case .story:        return charLadder   // unused: Stories run their own playback
-        case .exam:         return (examSession as QuizSource?) ?? charLadder   // exam runs its own flow
+        case .exam:         return charLadder   // unused: the exam runs its own flow
         case .qrq:          return qrqQuiz
         case .rapidFire:    return rapidFireQuiz
         case .invaders:     return charLadder   // unused: Invaders runs its own game loop (InvadersView)
@@ -1131,25 +1132,28 @@ final class AppModel: ObservableObject {
     // MARK: - Code Exam (ARRL/FCC-style proficiency exam)
 
     /// Where we are in one exam: waiting to start, sending the passage, taking
-    /// a typed copy, answering questions, or showing the result.
+    /// the typed copy, filling in the blanks, or showing the result. Every
+    /// exam goes through both the copy and the questions, as the ARRL VEC
+    /// sat it; either one passes.
     enum ExamStage { case ready, playing, copy, question, results }
 
     @Published private(set) var examStage: ExamStage = .ready
     @Published private(set) var examPlaying = false
     @Published private(set) var examRevealed = false
-    // Solid-copy grading.
+    /// The copy as handed in, kept on screen while the blanks are filled in.
+    @Published private(set) var examCopyText = ""
     @Published private(set) var examCopyResult: ExamCopyResult?
-    // Question grading.
+    // The fill-in-the-blank questions.
     @Published private(set) var examQuestion: ExamQuestion?
     @Published private(set) var examQuestionNumber = 0   // 1-based, for display
     @Published private(set) var examQuestionCount = 0
-    @Published private(set) var examSelected: String?
     @Published private(set) var examAnswerCorrect: Bool?
     @Published private(set) var examCorrectCount = 0
+    /// Both grades, once the last blank is filled in.
+    @Published private(set) var examResult: ExamResult?
     private var examGeneration = 0
 
     var examSpeed: ExamSpeed { examSession?.speed ?? settings.examSpeed }
-    var examGrading: ExamGrading { examSession?.grading ?? settings.examGrading }
     /// Pretty, prosign-annotated passage text for the reveal screen.
     var examPassageText: String { examSession?.passage.displayText ?? "" }
     var examRequiredRun: Int { examSession?.requiredRun ?? settings.examSpeed.requiredRun }
@@ -1160,16 +1164,15 @@ final class AppModel: ObservableObject {
 
     private func makeExamSession() -> ExamSession {
         let speed = settings.examSpeed
-        let grading = settings.examGrading
         if settings.examUseBundled {
             let samples = MorseData.examSamples(for: speed)
             if !samples.isEmpty {
                 let n = samples.count
                 let sample = samples[((examSampleIndex % n) + n) % n]
-                return ExamSession(speed: speed, grading: grading, passage: sample.passage)
+                return ExamSession(speed: speed, passage: sample.passage)
             }
         }
-        return ExamSession(speed: speed, grading: grading)
+        return ExamSession(speed: speed)
     }
 
     /// Set up an exam (build the session, wait for the Start/Play tap).
@@ -1180,8 +1183,9 @@ final class AppModel: ObservableObject {
         examStage = .ready
         examPlaying = false
         examRevealed = false
+        examCopyText = ""
         examCopyResult = nil
-        examSelected = nil
+        examResult = nil
         examAnswerCorrect = nil
         examCorrectCount = 0
         examQuestion = nil
@@ -1191,7 +1195,7 @@ final class AppModel: ObservableObject {
         summary = session.summary
     }
 
-    /// Send the whole exam transmission, then move on to copy or questions.
+    /// Send the whole exam transmission, then move on to the copy.
     func playExam() {
         guard isExam, let session = examSession else { return }
         examGeneration += 1
@@ -1205,14 +1209,8 @@ final class AppModel: ObservableObject {
                     timing: examTiming) { [weak self] in
             guard let self, self.examGeneration == gen else { return }
             self.examPlaying = false
-            self.sessionAttempts += 1
-            switch session.grading {
-            case .solidCopy:
-                self.examStage = .copy
-                self.phase = .awaiting
-            case .questions:
-                self.beginExamQuestions()
-            }
+            self.examStage = .copy
+            self.phase = .awaiting
         }
     }
 
@@ -1228,55 +1226,47 @@ final class AppModel: ObservableObject {
 
     // MARK: Solid copy
 
-    /// Grade the typed copy: pass needs one minute of copy in a row (25 / 65 /
-    /// 100 characters at 5 / 13 / 20 WPM — `ExamSpeed.requiredRun`).
+    /// Hand in the typed copy (it may be blank, for a paper or head copy) and
+    /// go on to the questions. It is graded now — one minute of solid copy,
+    /// counted the ARRL way (`ExamSpeed.requiredRun`) — but the verdict waits
+    /// for the questions, as on the real exam.
     func submitExamCopy(_ text: String) {
         guard isExam, let session = examSession, examStage == .copy else { return }
-        let result = session.gradeSolidCopy(text)
-        examCopyResult = result
-        _ = session.record(choice: text, ttr: 0)
-        noteSessionResult(correct: result.passed, ttr: 0)
-        examRevealed = true
-        examStage = .results
-        phase = .idle
-    }
-
-    // MARK: Questions
-
-    private func beginExamQuestions() {
-        guard examSession != nil else { return }
+        examCopyText = text
+        examCopyResult = session.submitCopy(text)
         examStage = .question
         loadExamQuestion()
     }
 
+    // MARK: Questions
+
     private func loadExamQuestion() {
         guard let session = examSession else { return }
-        examSelected = nil
         examAnswerCorrect = nil
-        let idx = min(session.questionIndex, max(0, session.questions.count - 1))
-        examQuestion = session.questions.isEmpty ? nil : session.questions[idx]
+        examQuestion = session.currentQuestion
         examQuestionNumber = session.questionIndex + 1
         summary = session.summary
         phase = .awaiting
     }
 
-    /// Record an answer to the current question (no auto-advance — the learner
-    /// taps Next to continue, so they can read the feedback).
-    func answerExamQuestion(_ choice: String) {
+    /// Fill in the current blank (no auto-advance — the learner taps Next to
+    /// continue, so they can read the feedback).
+    func answerExamQuestion(_ typed: String) {
         guard isExam, let session = examSession, examStage == .question,
               examAnswerCorrect == nil else { return }
-        let outcome = session.record(choice: choice, ttr: 0)
-        examSelected = choice
-        examAnswerCorrect = outcome.correct
+        examAnswerCorrect = session.answer(typed)
         examCorrectCount = session.correctCount
-        noteSessionResult(correct: outcome.correct, ttr: 0)
         phase = .answered
     }
 
-    /// Advance to the next question, or to the results when finished.
+    /// Advance to the next blank, or grade the exam when the last is done:
+    /// one exam is one attempt, passed on either path.
     func nextExamQuestion() {
         guard isExam, let session = examSession, examStage == .question else { return }
         if session.isComplete {
+            let result = session.result
+            examResult = result
+            noteSessionResult(correct: result.passed, ttr: 0)
             examRevealed = true
             examStage = .results
             phase = .idle
@@ -1299,24 +1289,9 @@ final class AppModel: ObservableObject {
         startExamMode()
     }
 
-    /// "7 / 10" style score for question mode.
-    var examScoreText: String {
-        guard let session = examSession else { return "" }
-        return "\(session.correctCount) / \(session.questions.count)"
-    }
-
-    /// Whether the exam was passed by the historical rule for its grading mode.
-    var examPassed: Bool {
-        guard let session = examSession else { return false }
-        switch session.grading {
-        case .solidCopy:
-            return examCopyResult?.passed ?? false
-        case .questions:
-            // Historically ~10 questions with a 7-of-10 (≈74%) passing bar.
-            let total = session.questions.count
-            return total > 0 && Double(session.correctCount) / Double(total) >= 0.7
-        }
-    }
+    /// Whether the exam passed, on either path (ARRL VEC: one minute of solid
+    /// copy, or 7 of 10 blanks).
+    var examPassed: Bool { examResult?.passed ?? false }
 
     // MARK: - QSO Simulator (MorseWalker-style pileup)
 
@@ -3207,7 +3182,7 @@ final class AppModel: ObservableObject {
     /// only the first, because a report that failed on the network should be
     /// retried by the next answer; it costs nothing while the day is already
     /// reported or nobody is paired.
-    private func markPracticedToday() {
+    func markPracticedToday() {
         var s = streak
         let before = s.current
         defer { reportBuddyPracticeDay() }   // after the streak has today, so the report sees it

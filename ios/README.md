@@ -92,6 +92,13 @@ testers, bug reports and feature chat live on
   short words and callsigns that split into their characters when hit.
   Waves, lives, combos, three difficulties, a gentle speed ramp in hear-it
   mode, and every hit and miss feeds your stats
+- **First Four**: just enough CW for a brand-new operator to hunt one POTA
+  activator — enter your callsign and state, then hear and send your call,
+  your state, ? and 73, and work through three short scenes: a busted call
+  (the activator sends a partial like N9?; you send your full call and wait),
+  a call nobody answers, and a whole hunter-side contact. Offered from the
+  first-run screen and the top of Home, a tutorial rather than a scored mode,
+  and it ends with a nudge to thank your first CW contact
 - **Pileup Runner**: call CQ and work a simulated pileup, with your own side
   keyed on the air: adjustable callers, speeds, QSB/QRN, cut numbers, bust
   behavior, callsign shapes, and a live log
@@ -99,8 +106,10 @@ testers, bug reports and feature chat live on
   CWops CWT, NCCC Sprint, ARRL Field Day) with authentic exchanges and speeds,
   a live score and rate, and an end-of-run scorecard
 - **Code Exam**: FCC/ARRL-style copy test at 5 / 13 / 20 WPM, every passage
-  carrying the letters, numerals, `. , ? /` and AR / SK / BT the real exams did
-  (one minute of solid copy — 25 / 65 / 100 in a row — or content questions)
+  carrying the letters, numerals, `. , ? /` and AR / SK / BT the real exams did,
+  graded the ARRL VEC way: copy it, then fill in 10 blanks from your copy; pass
+  on one minute of solid copy (25 / 65 / 100 in a row, numerals, punctuation and
+  prosigns counting two) or 7 of 10 answers (random or a bundled passage)
 - **Short Stories**: continuous copy of a public-domain fable (32 bundled), a
   longer classic sent in parts with a bookmark that keeps your place, or todays
   news: real RSS headlines sanitized to sendable Morse and hidden until you

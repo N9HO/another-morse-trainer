@@ -90,6 +90,13 @@ the iOS app's navy/teal look.
   short words and callsigns that split into their characters when hit.
   Waves, lives, combos, three difficulties, a gentle speed ramp in hear-it
   mode, and every hit and miss feeds your stats
+- **First Four**: just enough CW for a brand-new operator to hunt one POTA
+  activator — enter your callsign and state, then hear and send your call,
+  your state, ? and 73, and work through three short scenes: a busted call
+  (the activator sends a partial like N9?; you send your full call and wait),
+  a call nobody answers, and a whole hunter-side contact. Offered from the
+  first-run screen and the top of Home, a tutorial rather than a scored mode,
+  and it ends with a nudge to thank your first CW contact
 - **Pileup Runner**: a full QSO simulator: your callsign, eight exchange
   flavors (single caller → POTA → contests), realism controls (caller count,
   speed band, tone spread, QSB, QRN, cut numbers, bust behavior, callsign
@@ -101,9 +108,10 @@ the iOS app's navy/teal look.
   CWT, NCCC Sprint, ARRL Field Day) with authentic exchanges, speeds, live
   score/rate, and an end-of-run scorecard
 - **Code Exam**: FCC/ARRL-style copy test at 5 / 13 / 20 WPM, every passage
-  carrying the letters, numerals, `. , ? /` and AR / SK / BT the real exams did
-  (one minute of solid copy — 25 / 65 / 100 in a row — or content questions,
-  random or a bundled passage)
+  carrying the letters, numerals, `. , ? /` and AR / SK / BT the real exams did,
+  graded the ARRL VEC way: copy it, then fill in 10 blanks from your copy; pass
+  on one minute of solid copy (25 / 65 / 100 in a row, numerals, punctuation and
+  prosigns counting two) or 7 of 10 answers (random or a bundled passage)
 - **Sending Practice**: key it back (touch or MIDI key); quizzes can also be
   answered by keying
 - **On-screen paddles**: the on-screen key can be a straight key or a pair of

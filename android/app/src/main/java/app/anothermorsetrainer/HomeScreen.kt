@@ -83,6 +83,7 @@ internal data class HomeItem(
 fun HomeScreen(
     onPickStartHere: () -> Unit,
     onPickDailyDit: () -> Unit,
+    onPickFirstFour: () -> Unit,
     onPickJourney: () -> Unit,
     onPickQuiz: (QuizMode) -> Unit,
     onPickPileup: () -> Unit,
@@ -225,15 +226,25 @@ fun HomeScreen(
             // The newcomer's way in (#96), under it: the site's guide explains
             // how to begin and why the code is fast, but nothing on the tile
             // grid said so. Always visible — as useful in week three as on day one.
+            // First Four (#265), the four things a new operator needs to hunt
+            // one POTA activator and the contact itself, goes with "Start
+            // here", the other newcomer entry, above the grid — as on iOS. On
+            // a big tablet window the two stack beside Daily Dit, so First
+            // Four is not a thin strip across the 960 dp column.
             if (wide) {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                     Box(Modifier.weight(1f)) { DailyDitCard(onPickDailyDit) }
-                    Box(Modifier.weight(1f)) { StartHereCard(onPickStartHere) }
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        StartHereCard(onPickStartHere)
+                        FirstFourCard(onPickFirstFour)
+                    }
                 }
             } else {
                 DailyDitCard(onPickDailyDit)
                 Spacer(Modifier.height(12.dp))
                 StartHereCard(onPickStartHere)
+                Spacer(Modifier.height(12.dp))
+                FirstFourCard(onPickFirstFour)
             }
 
             Spacer(Modifier.height(24.dp))
@@ -347,6 +358,50 @@ private fun StartHereCard(onClick: () -> Unit) {
                 style = MaterialTheme.typography.labelSmall,
                 color = Brand.textSecondary
             )
+        }
+        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = Brand.textSecondary)
+    }
+}
+
+@Composable
+private fun FirstFourCard(onClick: () -> Unit) {
+    // Read so a save in First Four redraws the card on the way back.
+    @Suppress("UNUSED_VARIABLE")
+    val version = FirstFourStore.version
+    val progress = FirstFourStore.progress
+    val done = progress.isComplete
+    val subtitle = when {
+        done -> stringResource(R.string.first_four_home_sub_done)
+        progress.passedCount > 0 -> stringResource(
+            R.string.first_four_home_sub_progress,
+            progress.passedCount,
+            app.anothermorsetrainer.morsekit.FirstFourStage.entries.size
+        )
+        else -> stringResource(R.string.first_four_home_sub_new)
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .brandCard(cornerRadius = 14.dp)
+            .border(1.5.dp, Brand.teal.copy(alpha = 0.6f), RoundedCornerShape(14.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Icon(
+            if (done) Icons.Filled.CheckCircle else Icons.Filled.Podcasts,
+            contentDescription = null,
+            tint = if (done) Brand.tealBright else Brand.teal
+        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                stringResource(R.string.first_four_title),
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = Brand.textPrimary
+            )
+            Text(subtitle, style = MaterialTheme.typography.labelSmall, color = Brand.textSecondary)
         }
         Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = Brand.textSecondary)
     }

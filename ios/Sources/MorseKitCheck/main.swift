@@ -518,7 +518,7 @@ check("extra exam is 20 WPM", ExamSpeed.extra20.effectiveWpm == 20)
 
 print("\nExam passage & question generation:")
 do {
-    let session = ExamSession(speed: .general13, grading: .questions, rng: SeededRNG(seed: 42))
+    let session = ExamSession(speed: .general13, rng: SeededRNG(seed: 42))
     let p = session.passage
     check("passage names the operator from the pool", MorseData.opNames.contains(p.name))
     check("passage QTH is a US state from the pool", MorseData.qthList.contains(p.qth))
@@ -528,92 +528,72 @@ do {
     check("sent text keys BT separators as <BT>", p.sentText.contains(" <BT> "))
     check("sent text contains the operator name", p.sentText.contains(p.name))
     check("sent text signs portable with a slash", p.sentText.contains("\(p.deCall)/\(p.portable)"))
-    check("copy text drops the prosigns", !p.copyText.contains("<") && !p.copyText.contains("="))
+    check("copy text keeps the prosigns, bracketed (the ARRL graded them)",
+          p.copyText.contains("<BT>") && p.copyText.contains("<AR>") && p.copyText.contains("<SK>"))
     check("copy text keeps the punctuation", p.copyText.contains(".") && p.copyText.contains(","))
-    check("display text shows the <BT> prosign", p.displayText.contains("<BT>"))
     check("display text ends the message with <AR>", p.displayText.contains(" <AR> "))
     check("display text signs off with <SK>", p.displayText.hasSuffix(" <SK>"))
 
-    check("ten questions are generated", session.questions.count == 10)
-    var allFour = true, allDistinct = true, allIncludeAnswer = true
-    for q in session.questions {
-        if q.options.count != 4 { allFour = false }
-        if Set(q.options).count != q.options.count { allDistinct = false }
-        if !q.options.contains(q.answer) { allIncludeAnswer = false }
-    }
-    check("every question offers 4 options", allFour)
-    check("every question's options are distinct", allDistinct)
-    check("every question includes its correct answer", allIncludeAnswer)
-
-    let first = session.nextDrill()
-    check("a question drill carries a prompt", !first.question.isEmpty)
-    check("the first question plays the passage", first.playable == .text(p.sentText))
-    check("a wrong answer scores incorrect",
-          session.record(choice: "\u{1}nope", ttr: 0).correct == false)
-    let d2 = session.nextDrill()
-    check("a correct answer scores correct",
-          session.record(choice: d2.correct, ttr: 0).correct == true)
+    check("ten questions are generated", session.questions.count == ExamSession.questionCount)
+    check("seven right answers pass", ExamSession.questionsToPass == 7)
+    check("every answer is in the copy, so it can be read off it",
+          session.questions.allSatisfy { p.copyText.contains($0.answer) })
+    check("every prompt is a blank to fill", session.questions.allSatisfy { $0.prompt.contains("____") })
+    check("the first question is current", session.currentQuestion == session.questions.first)
+    check("a wrong answer scores incorrect", session.answer("\u{1}nope") == false)
+    let second = session.currentQuestion!
+    check("a right answer, typed in lower case, scores correct",
+          session.answer(second.answer.lowercased()) == true)
     check("correct count tracks right answers", session.correctCount == 1)
-    check("later questions don't replay the passage",
-          d2.playable == .text(""))
-
-    while !session.isComplete {
-        let d = session.nextDrill()
-        _ = session.record(choice: d.correct, ttr: 0)
-    }
+    while let q = session.currentQuestion { session.answer(q.answer) }
     check("exam completes after all questions are answered", session.isComplete)
+    check("answering past the end is ignored", session.answer("X") == false && session.correctCount == 9)
+    check("nine right with no copy passes on the questions",
+          session.result.passed && session.result.path == .questions)
 }
 
-print("\nExam solid-copy grading (one minute at the exam's speed):")
+print("\nExam solid-copy grading (one minute at the exam's speed, ARRL counting):")
 do {
     let sample = MorseData.examSamples.first { $0.speed == .novice5 }!
-    let session = ExamSession(speed: .novice5, grading: .solidCopy,
-                              passage: sample.passage, rng: SeededRNG(seed: 1))
+    let session = ExamSession(speed: .novice5, passage: sample.passage)
     let copy = session.passage.copyText
-    // The first `n` counted characters of the copy — spaces ride along free.
+    let symbols = ExamPassage.symbols(copy)
+    // The shortest prefix of the copy whose ARRL count reaches `n`.
     func counted(_ n: Int) -> String {
-        var out = "", seen = 0
-        for ch in copy {
-            if ch != " " { if seen == n { break }; seen += 1 }
-            out.append(ch)
+        var total = 0, out = ""
+        for s in symbols {
+            if total >= n { break }
+            total += ExamPassage.weight(of: s)
+            out += s
         }
         return out
     }
-    let nonSpace = copy.filter { $0 != " " }.count
+    let full = symbols.reduce(0) { $0 + ExamPassage.weight(of: $1) }
     check("novice solid-copy bar is 25", session.requiredRun == 25)
     for speed in ExamSpeed.allCases {
         let shortest = MorseData.examSamples(for: speed)
-            .map { $0.passage.copyText.filter { $0 != " " }.count }.min() ?? 0
-        check("\(speed.wpmLabel) passages are long enough to reach \(speed.requiredRun) in a row",
+            .map { ExamPassage.symbols($0.passage.copyText).reduce(0) { $0 + ExamPassage.weight(of: $1) } }
+            .min() ?? 0
+        check("\(speed.wpmLabel) passages are long enough to reach \(speed.requiredRun) counted",
               shortest >= speed.requiredRun)
     }
 
     let perfect = session.gradeSolidCopy(copy)
-    check("a perfect copy passes", perfect.passed && perfect.longestRun == nonSpace)
-    check("exactly 25 characters in a row passes",
-          session.gradeSolidCopy(counted(25)).passed)
-    let r24 = session.gradeSolidCopy(counted(24))
-    check("24 characters in a row fails", !r24.passed)
-    check("the 24-run reports a longest run of 24", r24.longestRun == 24)
+    check("a perfect copy passes with the passage's full count", perfect.passed && perfect.longestRun == full)
+    let at25 = session.gradeSolidCopy(counted(25))
+    check("a run counting 25 or 26 passes", at25.passed && at25.longestRun >= 25)
     check("garbage copy fails", !session.gradeSolidCopy("zzzz qqqq wwww").passed)
-    check("grading is case-insensitive",
-          session.gradeSolidCopy(counted(25).lowercased()).passed)
-    check("a stray '=' in the copy is tolerated",
-          session.gradeSolidCopy("= " + counted(25)).passed)
-    let general = ExamSession(speed: .general13, grading: .solidCopy, passage: sample.passage)
+    check("grading is case-insensitive", session.gradeSolidCopy(counted(25).lowercased()).passed)
+    check("writing every <BT> as = and <AR> as + grades the same",
+          session.gradeSolidCopy(copy.replacingOccurrences(of: "<BT>", with: "=")
+                                     .replacingOccurrences(of: "<AR>", with: "+")) == perfect)
+    check("leaving the prosigns out costs the run",
+          session.gradeSolidCopy(ExamPassage.normalize(copy.replacingOccurrences(of: "<BT>", with: " "))).longestRun < full)
+    let general = ExamSession(speed: .general13, passage: sample.passage)
     check("the same 25 fails at 13 WPM", !general.gradeSolidCopy(counted(25)).passed)
-    check("13 WPM passes at 65 and not at 64",
-          general.gradeSolidCopy(counted(65)).passed && !general.gradeSolidCopy(counted(64)).passed)
-    check("solid-copy label names the speed's bar",
-          ExamGrading.solidCopy.label(for: .extra20) == "Solid copy (100 in a row)")
-
-    check("record() grades a passing solid copy as correct",
-          session.record(choice: copy, ttr: 0).correct == true)
-    check("solid-copy drill exposes the copy target as the answer",
-          ExamSession(speed: .novice5, grading: .solidCopy,
-                      passage: sample.passage).nextDrill().correct == copy)
-
-    // Bundled library is available at each speed.
+    check("13 WPM passes at a run of 65", general.gradeSolidCopy(counted(65)).passed)
+    check("submitCopy keeps the grade for the result",
+          general.submitCopy(copy).passed && general.result.copy.passed && general.result.path == .solidCopy)
     check("bundled exam passages exist for every speed",
           !MorseData.examSamples(for: .novice5).isEmpty
           && !MorseData.examSamples(for: .general13).isEmpty
@@ -623,13 +603,18 @@ do {
 // MARK: - Shared Code Exam fixture
 //
 // fixtures/code-exam.json, read by this harness and by android
-// CodeExamFixtureTest. The pass bars, the required character set, the prosign
-// patterns and the grading cases are all derived from the historical FCC/VEC
-// rules written out in the fixture, not captured from either port (#262, #263).
+// CodeExamFixtureTest. The pass bars, the counting weights, the required
+// character set, the prosign patterns and every grading case are worked out by
+// hand from the ARRL VEC rules written out (with sources) in the fixture, not
+// captured from either port.
 struct CodeExamFixture: Decodable {
     struct PassBar: Decodable {
         struct Case: Decodable { let speed: String; let effectiveWpm: Int; let requiredRun: Int }
         let charactersPerWord: Int
+        let cases: [Case]
+    }
+    struct Weights: Decodable {
+        struct Case: Decodable { let symbol: String; let weight: Int }
         let cases: [Case]
     }
     struct Required: Decodable {
@@ -650,11 +635,32 @@ struct CodeExamFixture: Decodable {
         struct Case: Decodable { let sent: String; let typed: String; let longestRun: Int }
         let cases: [Case]
     }
+    struct SolidCopy: Decodable {
+        struct Case: Decodable {
+            let speed: String; let sent: String; let typed: String
+            let longestRun: Int; let passed: Bool
+        }
+        let cases: [Case]
+    }
+    struct Questions: Decodable {
+        struct Result: Decodable {
+            let speed: String; let longestRun: Int; let questionsCorrect: Int
+            let passed: Bool; let path: String
+        }
+        struct Answer: Decodable { let accepted: [String]; let typed: String; let right: Bool }
+        let asked: Int
+        let required: Int
+        let results: [Result]
+        let answers: [Answer]
+    }
     let passBar: PassBar
+    let weights: Weights
     let requiredCharacters: Required
     let prosignPatterns: Patterns
     let normalize: Normalize
     let longestRun: Runs
+    let solidCopy: SolidCopy
+    let questions: Questions
 }
 
 func loadCodeExamFixture() -> CodeExamFixture? {
@@ -662,7 +668,19 @@ func loadCodeExamFixture() -> CodeExamFixture? {
         .deletingLastPathComponent().deletingLastPathComponent()
         .deletingLastPathComponent().deletingLastPathComponent()
     guard let data = try? Data(contentsOf: root.appendingPathComponent("fixtures/code-exam.json")) else { return nil }
-    return try? JSONDecoder().decode(CodeExamFixture.self, from: data)
+    do {
+        return try JSONDecoder().decode(CodeExamFixture.self, from: data)
+    } catch {
+        print("    code-exam.json: \(error)")
+        return nil
+    }
+}
+
+/// A standalone sent line wrapped as a passage-free session: the fixture's
+/// solid-copy cases grade against a short line, not a whole passage.
+func codeExamRun(typed: String, sent: String) -> Int {
+    ExamSession.longestCommonRun(ExamPassage.symbols(ExamPassage.normalize(typed)),
+                                 ExamPassage.symbols(ExamPassage.normalize(sent)))
 }
 
 print("\nShared Code Exam fixture (fixtures/code-exam.json):")
@@ -675,7 +693,11 @@ if let fx = loadCodeExamFixture() {
         check("\(c.speed) is \(c.effectiveWpm) WPM effective", Int(speed.effectiveWpm) == c.effectiveWpm)
         check("\(c.speed) solid-copy bar is \(c.requiredRun)", speed.requiredRun == c.requiredRun)
         check("\(c.speed) session grades against \(c.requiredRun)",
-              ExamSession(speed: speed, grading: .solidCopy).gradeSolidCopy("").required == c.requiredRun)
+              ExamSession(speed: speed).gradeSolidCopy("").required == c.requiredRun)
+    }
+
+    for c in fx.weights.cases {
+        check("\(c.symbol.debugDescription) counts \(c.weight)", ExamPassage.weight(of: c.symbol) == c.weight)
     }
 
     let req = fx.requiredCharacters
@@ -696,10 +718,13 @@ if let fx = loadCodeExamFixture() {
     check("200 generated passages each send every required character", generatedOK)
     var allSendable = true
     for sample in MorseData.examSamples {
-        let plain = ExamPassage.normalize(sample.passage.sentText)
-        if !plain.allSatisfy({ $0 == " " || MorseCode.pattern(for: $0) != nil }) { allSendable = false }
+        for s in ExamPassage.symbols(sample.passage.copyText) where s != " " {
+            let keyable = s.count == 1 ? MorseCode.pattern(for: s.first!) != nil
+                                       : MorseData.prosigns.contains { $0.name == s }
+            if !keyable { allSendable = false }
+        }
     }
-    check("every bundled passage is keyable once its prosigns are set aside", allSendable)
+    check("every symbol of every bundled passage is keyable", allSendable)
 
     let rate = 44_100.0
     let t = MorseTiming(wpm: 20)
@@ -716,10 +741,37 @@ if let fx = loadCodeExamFixture() {
               ExamPassage.normalize(c.input) == c.normalized)
     }
     for c in fx.longestRun.cases {
-        let run = ExamSession.longestCommonRun(Array(ExamPassage.normalize(c.typed)),
-                                               Array(ExamPassage.normalize(c.sent)))
         check("run of \(c.typed.debugDescription) in \(c.sent.debugDescription) is \(c.longestRun)",
-              run == c.longestRun)
+              codeExamRun(typed: c.typed, sent: c.sent) == c.longestRun)
+    }
+    for c in fx.solidCopy.cases {
+        guard let speed = ExamSpeed(rawValue: c.speed) else {
+            check("fixture speed \(c.speed) exists", false); continue
+        }
+        let run = codeExamRun(typed: c.typed, sent: c.sent)
+        let result = ExamCopyResult(longestRun: run, required: speed.requiredRun)
+        check("\(c.speed): \(c.typed.debugDescription) counts \(c.longestRun) and \(c.passed ? "passes" : "fails")",
+              run == c.longestRun && result.passed == c.passed)
+    }
+
+    check("\(fx.questions.asked) questions are asked", ExamSession.questionCount == fx.questions.asked
+          && ExamSession(speed: .general13).questions.count == fx.questions.asked)
+    check("\(fx.questions.required) right pass", ExamSession.questionsToPass == fx.questions.required)
+    for c in fx.questions.results {
+        guard let speed = ExamSpeed(rawValue: c.speed) else {
+            check("fixture speed \(c.speed) exists", false); continue
+        }
+        let r = ExamResult(copy: ExamCopyResult(longestRun: c.longestRun, required: speed.requiredRun),
+                           questionsCorrect: c.questionsCorrect,
+                           questionsAsked: ExamSession.questionCount,
+                           questionsRequired: ExamSession.questionsToPass)
+        check("\(c.speed) run \(c.longestRun) + \(c.questionsCorrect)/10 → \(c.path)",
+              r.passed == c.passed && r.path.rawValue == c.path)
+    }
+    for c in fx.questions.answers {
+        let q = ExamQuestion(prompt: "____", answer: c.accepted[0], accepted: c.accepted)
+        check("\(c.typed.debugDescription) fills a blank of \(c.accepted) → \(c.right)",
+              q.accepts(c.typed) == c.right)
     }
 } else {
     check("fixtures/code-exam.json loads and decodes", false)
@@ -6665,6 +6717,209 @@ if let fx = loadSendingFixture() {
             && abs(manualEdges[0].timeMs - 100) <= 8 && abs(manualEdges[1].timeMs - 160) <= 8)
 } else {
     check("fixtures/sending-analysis.json loads and decodes", false)
+}
+
+// MARK: - First Four (#265)
+
+// fixtures/first-four.json, read by this harness AND by the Kotlin
+// FirstFourTest: stages and pass constants, call/state validation, copy and
+// send matching, busted-call partials, the station tables, every scene's
+// beats, graded scene runs, and one learner's progress answer by answer.
+print("\nFirst Four (fixtures/first-four.json):")
+func loadFirstFourFixture() -> [String: Any]? {
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent()
+        .deletingLastPathComponent().deletingLastPathComponent()
+    guard let data = try? Data(contentsOf: root.appendingPathComponent("fixtures/first-four.json")) else { return nil }
+    return (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+}
+if let fx = loadFirstFourFixture(),
+   let stages = fx["stages"] as? [String],
+   let elementStages = fx["elementStages"] as? [String],
+   let constants = fx["constants"] as? [String: Int],
+   let scenes = fx["scenes"] as? [[String: Any]],
+   let sceneRuns = fx["sceneRuns"] as? [[String: Any]],
+   let progressSteps = (fx["progressRun"] as? [String: Any])?["steps"] as? [[String: Any]] {
+    check("stage order", FirstFourStage.allCases.map(\.rawValue) == stages)
+    check("element stages", FirstFourStage.allCases.filter(\.isElement).map(\.rawValue) == elementStages)
+    check("pass constants",
+          constants["copyStreakToPass"] == FirstFour.copyStreakToPass
+          && constants["sendStreakToPass"] == FirstFour.sendStreakToPass
+          && constants["bustedRoundsToPass"] == FirstFour.bustedRoundsToPass
+          && constants["noReplyScenesToPass"] == FirstFour.noReplyScenesToPass
+          && constants["walkthroughRunsToPass"] == FirstFour.walkthroughRunsToPass)
+    check("default call", (fx["derivation"] as? [String: Any])?["defaultCall"] as? String == FirstFour.defaultCall)
+
+    let activatorRows = (fx["activators"] as? [[String: String]]) ?? []
+    check("activator table", activatorRows.map { FirstFour.Station(call: $0["call"] ?? "", state: $0["state"] ?? "") } == FirstFour.activators)
+    check("other-hunter table", (fx["otherHunters"] as? [String]) == FirstFour.otherHunters)
+    for p in (fx["activatorPicks"] as? [[String: Any]]) ?? [] {
+        let index = p["index"] as? Int ?? -1
+        let excluding = p["excluding"] as? String ?? ""
+        let got = FirstFour.activator(index: index, excluding: excluding)
+        check("activator pick \(index) excluding \(excluding)", got.call == p["call"] as? String)
+    }
+    for p in (fx["otherHunterPicks"] as? [[String: Any]]) ?? [] {
+        let index = p["index"] as? Int ?? -1
+        let excluding = p["excluding"] as? String ?? ""
+        let got = FirstFour.otherHunter(index: index, excluding: excluding)
+        check("other hunter pick \(index) excluding \(excluding)", got == p["call"] as? String)
+    }
+
+    for c in (fx["callCases"] as? [[String: Any]]) ?? [] {
+        let input = c["input"] as? String ?? ""
+        check("call '\(input)' normalises and validates",
+              FirstFour.normalizeCall(input) == c["normalized"] as? String
+              && FirstFour.isValidCall(input) == c["valid"] as? Bool)
+    }
+    for c in (fx["stateCases"] as? [[String: Any]]) ?? [] {
+        let input = c["input"] as? String ?? ""
+        check("state '\(input)' normalises and validates",
+              FirstFour.normalizeState(input) == c["normalized"] as? String
+              && FirstFour.isValidState(input) == c["valid"] as? Bool)
+    }
+    for c in (fx["prefillCases"] as? [[String: Any]]) ?? [] {
+        let saved = c["saved"] as? String ?? ""
+        check("prefill from saved '\(saved)'", FirstFour.prefillCall(saved: saved) == c["prefill"] as? String)
+    }
+    for c in (fx["elements"] as? [[String: Any]]) ?? [] {
+        let name = c["stage"] as? String ?? ""
+        let stage = FirstFourStage(rawValue: name)
+        let got = stage.flatMap { FirstFour.element($0, call: c["call"] as? String ?? "", state: c["state"] as? String ?? "") }
+        check("element text for \(name)", stage != nil && got == c["text"] as? String)
+    }
+    for c in (fx["copyCases"] as? [[String: Any]]) ?? [] {
+        let typed = c["typed"] as? String ?? ""
+        let expected = c["expected"] as? String ?? ""
+        check("copy '\(typed)' for '\(expected)'", FirstFour.copyMatches(typed, expected: expected) == c["match"] as? Bool)
+    }
+    for c in (fx["sendCases"] as? [[String: Any]]) ?? [] {
+        let sent = c["sent"] as? String ?? ""
+        let expected = c["expected"] as? String ?? ""
+        check("send '\(sent)' for '\(expected)'", FirstFour.sendMatches(sent, expected: expected) == c["match"] as? Bool)
+    }
+    for c in (fx["partialCases"] as? [[String: Any]]) ?? [] {
+        let call = c["call"] as? String ?? ""
+        check("partials of \(call)", FirstFour.partials(call: call) == c["partials"] as? [String])
+    }
+    for c in (fx["partialRounds"] as? [[String: Any]]) ?? [] {
+        let call = c["call"] as? String ?? ""
+        let round = c["round"] as? Int ?? -1
+        check("partial for \(call) round \(round)", FirstFour.partial(call: call, round: round) == c["partial"] as? String)
+    }
+
+    // Scenes, built from their inputs and compared beat by beat.
+    func firstFourScene(_ s: [String: Any]) -> [FirstFourBeat]? {
+        let call = s["call"] as? String ?? ""
+        let station = FirstFour.Station(call: s["activator"] as? String ?? "", state: s["activatorState"] as? String ?? "")
+        switch s["scene"] as? String {
+        case "bustedCall": return FirstFour.bustedCallScene(call: call, partial: s["partial"] as? String ?? "", activator: station)
+        case "noReplyA": return FirstFour.noReplySceneA(call: call, activator: station)
+        case "noReplyB": return FirstFour.noReplySceneB(call: call, activator: station, otherHunter: s["otherHunter"] as? String ?? "")
+        case "walkthrough": return FirstFour.walkthroughScene(call: call, state: s["state"] as? String ?? "", activator: station)
+        default: return nil
+        }
+    }
+    var builtScenes: [String: [FirstFourBeat]] = [:]
+    for s in scenes {
+        let name = s["name"] as? String ?? "?"
+        let rows = (s["beats"] as? [[String: Any]]) ?? []
+        let want: [FirstFourBeat] = rows.compactMap { b in
+            guard let kind = FirstFourBeat.Kind(rawValue: b["kind"] as? String ?? ""),
+                  let cue = FirstFourBeat.Cue(rawValue: b["cue"] as? String ?? "") else { return nil }
+            return FirstFourBeat(kind, b["text"] as? String ?? "", answer: b["answer"] as? String, cue: cue)
+        }
+        let got = firstFourScene(s)
+        if let got { builtScenes[name] = got }
+        if got != want {
+            print("      ↳ \(name): \((got ?? []).map { "\($0.kind.rawValue) \($0.text) \($0.cue.rawValue)" })")
+        }
+        check("scene: \(name)", got != nil && got == want && want.count == rows.count)
+    }
+
+    for r in sceneRuns {
+        let name = r["name"] as? String ?? "?"
+        guard let beats = builtScenes[r["scene"] as? String ?? ""] else {
+            check("scene run: \(name) (scene found)", false)
+            continue
+        }
+        var scene = FirstFourScene(beats: beats)
+        var verdictsOK = true
+        for step in (r["steps"] as? [[String: Any]]) ?? [] {
+            let text = step["text"] as? String ?? ""
+            let kind = step["response"] as? String ?? ""
+            let response: FirstFourScene.Response
+            switch kind {
+            case "continued": response = .continued
+            case "sent": response = .sent(text)
+            case "copied": response = .copied(text)
+            default: response = .waited
+            }
+            let verdict = scene.respond(response)
+            if verdict.rawValue != step["verdict"] as? String {
+                verdictsOK = false
+                print("      ↳ \(name): \(kind) '\(text)' gave \(verdict.rawValue)")
+            }
+        }
+        check("scene run: \(name)",
+              verdictsOK && scene.isFinished == r["finished"] as? Bool
+              && scene.mistakes == r["mistakes"] as? Int && scene.isClean == r["clean"] as? Bool)
+    }
+
+    var progress = FirstFourProgress()
+    var progressOK = true
+    for (i, step) in progressSteps.enumerated() {
+        let stage = FirstFourStage(rawValue: step["stage"] as? String ?? "") ?? .call
+        let passed = Set(step["passed"] as? [String] ?? [])
+        let next = step["next"] as? String
+        var ok = true
+        switch step["op"] as? String {
+        case "element":
+            let phase = FirstFourPhase(rawValue: step["phase"] as? String ?? "") ?? .copy
+            let done = progress.recordElement(stage, phase: phase, correct: step["correct"] as? Bool ?? false)
+            ok = done == step["phaseDone"] as? Bool
+                && progress.streak == step["streak"] as? Int
+                && Set(progress.passed.map(\.rawValue)) == passed
+                && Set(progress.copyPassed.map(\.rawValue)) == Set(step["copyPassed"] as? [String] ?? [])
+                && progress.nextStage?.rawValue == next
+        case "scene":
+            let passedNow = progress.recordScene(stage, clean: step["clean"] as? Bool ?? false)
+            ok = passedNow == step["stagePassed"] as? Bool
+                && progress.cleanRuns(stage) == step["cleanRuns"] as? Int
+                && Set(progress.passed.map(\.rawValue)) == passed
+                && progress.nextStage?.rawValue == next
+        case "noReplyScene":
+            let b = FirstFour.noReplyUsesSceneB(cleanRuns: progress.cleanRuns(.noReply))
+            ok = (b ? "B" : "A") == step["scene"] as? String
+        case "complete":
+            ok = progress.isComplete == step["complete"] as? Bool && progress.passedCount == step["passedCount"] as? Int
+        default:
+            ok = false
+        }
+        if !ok {
+            progressOK = false
+            print("      ↳ progress step \(i) (\(step["op"] as? String ?? "?")) differs")
+        }
+    }
+    check("progress run, answer by answer", progressOK && !progressSteps.isEmpty)
+
+    // Persistence: the passed stages and clean runs survive; the streak does not.
+    var saved = FirstFourProgress()
+    saved.recordElement(.call, phase: .copy, correct: true)
+    saved.recordScene(.walkthrough, clean: true)
+    for _ in 0..<FirstFour.bustedRoundsToPass { saved.recordScene(.bustedCall, clean: true) }
+    let restored = (try? JSONEncoder().encode(saved)).flatMap { try? JSONDecoder().decode(FirstFourProgress.self, from: $0) }
+    check("progress round-trips through JSON without its streak",
+          restored?.passed == saved.passed && restored?.cleanRuns(.walkthrough) == 1
+          && restored?.cleanRuns(.bustedCall) == FirstFour.bustedRoundsToPass && restored?.streak == 0)
+    check("an older or empty save decodes as a fresh start",
+          (try? JSONDecoder().decode(FirstFourProgress.self, from: Data("{}".utf8))) == FirstFourProgress())
+    var opening = FirstFourProgress()
+    for _ in 0..<FirstFour.copyStreakToPass { opening.recordElement(.state, phase: .copy, correct: true) }
+    check("an element stage opens on send once its copy is done",
+          opening.openingPhase(.state) == .send && opening.openingPhase(.call) == .copy)
+} else {
+    check("fixtures/first-four.json loads and decodes", false)
 }
 
 print("\n────────────────────────────")

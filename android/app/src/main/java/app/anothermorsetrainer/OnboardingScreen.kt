@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -16,6 +17,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -36,7 +38,7 @@ import androidx.compose.ui.unit.dp
  * the level can be changed later from Settings.
  */
 @Composable
-fun OnboardingScreen(onDone: () -> Unit) {
+fun OnboardingScreen(onDone: (openFirstFour: Boolean) -> Unit) {
     var selected by remember { mutableStateOf(Settings.proficiency) }
 
         CenteredScrollColumn(
@@ -87,11 +89,29 @@ fun OnboardingScreen(onDone: () -> Unit) {
                 onClick = {
                     Settings.completeOnboarding(selected)
                     JourneyStore.unlockForProficiency()
-                    onDone()
+                    onDone(false)
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = Brand.teal, contentColor = Brand.navy),
                 modifier = Modifier.fillMaxWidth().height(54.dp)
             ) { Text(stringResource(R.string.onboarding_start_practicing), fontWeight = FontWeight.Bold) }
+            // First Four (#265): a newcomer who wants to be on the air this
+            // weekend is exactly who it is for, and this is the one screen
+            // they are sure to see. Same answer recorded; then First Four.
+            TextButton(
+                onClick = {
+                    Settings.completeOnboarding(selected)
+                    JourneyStore.unlockForProficiency()
+                    onDone(true)
+                },
+                modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp)
+            ) {
+                Text(
+                    stringResource(R.string.first_four_onboarding_button),
+                    color = Brand.teal,
+                    fontWeight = FontWeight.SemiBold,
+                    textAlign = TextAlign.Center
+                )
+            }
         }
 }
 

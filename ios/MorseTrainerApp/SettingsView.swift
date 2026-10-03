@@ -779,10 +779,19 @@ struct SettingsView: View {
                     .autocorrectionDisabled()
                     .font(.system(.body, design: .monospaced))
             }
+            HStack {
+                Text("Your state")
+                Spacer()
+                TextField("Optional", text: $model.settings.qso.myState)
+                    .multilineTextAlignment(.trailing)
+                    .textInputAutocapitalization(.characters)
+                    .autocorrectionDisabled()
+                    .font(.system(.body, design: .monospaced))
+            }
         } header: {
             Text("Your Station")
         } footer: {
-            Text("Used across the app — sent when you call CQ and work stations in Pileup Runner, and drilled in CW 77 when you include them.")
+            Text("Used across the app — sent when you call CQ and work stations in Pileup Runner, drilled in CW 77 when you include them, and taught in First Four, which also uses your state.")
         }
         .listRowBackground(rowBackground(.yourStation))
     }
@@ -1164,7 +1173,7 @@ struct SettingsView: View {
         case .qrq:
             lines.append("QRQ speed: \(s.qrqSpeed.label)")
         case .exam:
-            lines.append("Exam: \(s.examSpeed.label) · \(s.examGrading.label(for: s.examSpeed))")
+            lines.append("Exam: \(s.examSpeed.label) · \(s.examSpeed.passLabel)")
         case .listen:
             lines.append("Listen: \(s.listenContent.label) · \(s.listenGap.label) · \(s.listenReadback.label)")
         case .cw77, .cw77Listen:
