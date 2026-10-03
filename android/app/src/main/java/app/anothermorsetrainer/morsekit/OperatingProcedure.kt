@@ -5,7 +5,7 @@ import kotlin.math.max
 
 // CW Operating Procedure (#294, #295): on-air etiquette for hunting POTA
 // activators, one rule at a time — eight lessons of concept, demo and quick
-// scenarios (the eighth is #294's zero beat / RIT / XIT / offset lesson, with
+// scenarios (the first is #294's zero beat / RIT / XIT / offset lesson, with
 // its pileup demo and a tune-to-zero-beat drill), and a "What should you do?"
 // mode over the lessons' scenarios. docs/operating-procedure-design.md is the
 // spec; every rule below is pinned by fixtures/operating-procedure.json, which
@@ -16,16 +16,20 @@ import kotlin.math.max
 // Call and state validation are this file's own copy of First Four's rules,
 // so the section never depends on First Four's port.
 
-/** The eight lessons, in the order the lesson list recommends. [raw] is the fixture's name. */
+/**
+ * The eight lessons, in the order the lesson list recommends. [raw] is the
+ * fixture's name. Offsetting (#294) comes first, straight after First Four
+ * (maintainer, 2026-10-03).
+ */
 enum class OpLesson(val raw: String) {
+    OFFSET("offset"),
     SIGNALS("signals"),
     WHEN("when"),
     ONCE("once"),
     PARTIAL("partial"),
     ME("me"),
     EXCHANGE("exchange"),
-    MISTAKE("mistake"),
-    OFFSET("offset");
+    MISTAKE("mistake");
 
     companion object {
         fun fromRaw(raw: String): OpLesson? = entries.firstOrNull { it.raw == raw }
@@ -47,22 +51,27 @@ sealed class OpChoice {
 /**
  * One quick question: a clip (what the activator just sent; may be empty), a
  * generated detail the situation text mentions (may be empty), and the
- * choices, **right answer first**. The screen shuffles them.
+ * choices, **the primary right answer first**. [accepted] lists every choice
+ * that counts as right (the exchange has two accepted forms). The screen
+ * shuffles the choices.
  */
 data class OpScenario(
     val id: String,
     val lesson: OpLesson,
     val clip: String,
     val detail: String = "",
-    val choices: List<OpChoice>
+    val choices: List<OpChoice>,
+    val accepted: List<Int> = listOf(0)
 ) {
-    val correct: OpChoice get() = choices[CORRECT_INDEX]
+    /** The primary right answer. */
+    val correct: OpChoice get() = choices[0]
     /** Every choice is send or stay silent: these make up "What should you do?". */
     val isAction: Boolean get() = choices.all { it.isAction }
 
-    companion object {
-        const val CORRECT_INDEX = 0
-    }
+    /** True when picking choice [index] (in [choices] order) is right. */
+    fun accepts(index: Int): Boolean = index in accepted
+    /** True when picking [choice] is right. */
+    fun accepts(choice: OpChoice): Boolean = accepts(choices.indexOf(choice))
 }
 
 /** A demo clip: an example of right or wrong (or just "listen"), as a short transcript. */
@@ -91,7 +100,7 @@ object OperatingProcedure {
 
     /** Scenarios dealt per "What should you do?" run. */
     const val SCENARIO_RUN_LENGTH = 10
-    /** Right answers in a row that pass lesson 8's zero-beat drill. */
+    /** Right answers in a row that pass the offsetting lesson's zero-beat drill. */
     const val ZERO_BEAT_STREAK_TO_PASS = 3
     /** How close to the activator's frequency counts as zero beat, in hertz. */
     const val ZERO_BEAT_TOLERANCE_HZ = 20.0
@@ -105,16 +114,21 @@ object OperatingProcedure {
     /** The RIT demo's control: ± this, in steps of [RIT_STEP_HZ]. */
     const val RIT_RANGE_HZ = 300.0
     const val RIT_STEP_HZ = 10.0
-    /** The error signal (eight dots, ITU-R M.1677-1 §3.2), as written and played. */
-    const val ERROR_SIGNAL = "EEEEEEEE"
-    /** …and as shown. */
-    const val ERROR_SIGNAL_DISPLAY = "········"
+    /**
+     * Where an error goes in a clip or a choice: `<ERR>` (any shape, picked
+     * when it plays) or `<ERR:n>` (row n of [errorVariants]). Not a prosign:
+     * an error can sound like anything, and the lesson teaches recognising
+     * it, not copying one shape (maintainer, 2026-10-03).
+     */
+    const val ERROR_TOKEN = "<ERR>"
+    /** How an error is shown: a word, never a fixed run of dots. */
+    const val ERROR_DISPLAY = "[error]"
     /** Stands in for a pileup-demo caller whose call is the learner's own. */
     const val REPLACEMENT_CALLER = "KC2VWM"
     /** The callsign Settings ships with — a placeholder, not the learner's. */
     const val DEFAULT_CALL = "W1AW"
 
-    /** Where lesson 8's drill starts the activator, round by round (hertz). */
+    /** Where the offsetting drill starts the activator, round by round (hertz). */
     val drillStarts: List<Double> = listOf(180.0, -120.0, 250.0, -70.0, 90.0, -210.0, 140.0, -260.0)
     /** The tuning buttons, in hertz. */
     val knobSteps: List<Double> = listOf(-50.0, -10.0, 10.0, 50.0)
@@ -180,7 +194,7 @@ object OperatingProcedure {
     }
 
     /**
-     * Lesson 4's rule: what is left of the partial once its "?"s are gone is
+     * The partial-calls rule: what is left of the partial once its "?"s are gone is
      * yours when it occurs, unbroken, in your call. A bare "?" is everyone's.
      */
     fun partialMatches(partial: String, call: String): Boolean {
@@ -227,13 +241,88 @@ object OperatingProcedure {
         return String(c)
     }
 
-    /** The error signal shown as dots. */
-    fun display(text: String): String = text.replace(ERROR_SIGNAL, ERROR_SIGNAL_DISPLAY)
+    /** A clip or choice as it is shown: every error token becomes [ERROR_DISPLAY]. */
+    fun display(text: String): String = clipParts(text).joinToString(" ") { part ->
+        when (part) {
+            is ClipPart.Text -> part.text
+            is ClipPart.Error -> ERROR_DISPLAY
+        }
+    }
 
-    /** The hunter's reply, the same as First Four's: report, state, 73. */
+    /** The hunter's reply, the same as First Four's: report, state, 73. The primary form. */
     fun reply(state: String): String = "5NN ${normalizeState(state)} 73"
 
-    /** Lesson 6's wrong example: a ragchew where a POTA exchange belongs. */
+    /**
+     * WB0RLJ's order (RST, state, BK; then 73 and dit-dit after their TU),
+     * accepted as a second form (maintainer, 2026-10-03). Its first turn.
+     */
+    fun replyBK(state: String): String = "5NN ${normalizeState(state)} BK"
+
+    /** …and its second, after the activator's `TU 73 E E`. */
+    const val CLOSE_BK = "73 E E"
+
+    // Errors
+
+    /**
+     * One way an error can sound: how many dits (5–8), sent run together
+     * (one keying, element gaps) or slapped as separate dits (character
+     * gaps), at the learner's speed times [speed].
+     */
+    data class ErrorVariant(val count: Int, val runTogether: Boolean, val speed: Double) {
+        /** Run together, as a dot pattern. */
+        val pattern: String get() = ".".repeat(count)
+        /** Slapped, as separate letters E. */
+        val spacedText: String get() = "E".repeat(count)
+    }
+
+    /** The shapes an error takes in the app, so no two sound alike. */
+    val errorVariants: List<ErrorVariant> = listOf(
+        ErrorVariant(8, true, 1.0),
+        ErrorVariant(5, true, 1.5),
+        ErrorVariant(6, false, 0.8),
+        ErrorVariant(7, true, 1.25),
+        ErrorVariant(5, false, 1.0),
+        ErrorVariant(8, false, 1.5),
+    )
+
+    /** Row [index] of [errorVariants], cycling. */
+    fun errorVariant(index: Int): ErrorVariant {
+        val n = errorVariants.size
+        return errorVariants[((index % n) + n) % n]
+    }
+
+    /** A piece of a clip: Morse text, or an error (with its row, if pinned). */
+    sealed class ClipPart {
+        data class Text(val text: String) : ClipPart()
+        data class Error(val row: Int?) : ClipPart()
+    }
+
+    /**
+     * Split a clip on its error tokens, so a player can sound each error in
+     * its own shape. Words are joined by single spaces; empty text is dropped.
+     */
+    fun clipParts(text: String): List<ClipPart> {
+        val parts = mutableListOf<ClipPart>()
+        val words = mutableListOf<String>()
+        fun flush() {
+            if (words.isNotEmpty()) parts += ClipPart.Text(words.joinToString(" "))
+            words.clear()
+        }
+        for (word in text.split(' ').filter { it.isNotEmpty() }) {
+            val pinned = if (word.startsWith("<ERR:") && word.endsWith(">")) {
+                word.substring(5, word.length - 1).toIntOrNull()
+            } else null
+            when {
+                word == ERROR_TOKEN -> { flush(); parts += ClipPart.Error(null) }
+                pinned != null -> { flush(); parts += ClipPart.Error(pinned) }
+                else -> words += word
+            }
+        }
+        flush()
+        return parts
+    }
+
+    /** The exchange lesson's wrong example: a ragchew where a POTA exchange belongs. */
     fun ragchew(call: String, state: String, activator: String): String {
         val c = normalizeCall(call)
         val s = normalizeState(state)
@@ -260,11 +349,26 @@ object OperatingProcedure {
         val myReply = reply(st)
         val last = me.takeLast(1)
         val stateWrong = shiftLast(st, 1)
+        val myReplyBK = replyBK(st)
+        val callWrong = shiftLast(me, 1)
+        val err = ERROR_TOKEN
         fun opt(vararg keys: String) = keys.map { OpChoice.Option(it) }
-        fun s(id: String, lesson: OpLesson, clip: String, choices: List<OpChoice>, detail: String = "") =
-            OpScenario(id, lesson, clip, detail, choices)
+        fun s(
+            id: String,
+            lesson: OpLesson,
+            clip: String,
+            choices: List<OpChoice>,
+            detail: String = "",
+            accepted: List<Int> = listOf(0)
+        ) = OpScenario(id, lesson, clip, detail, choices, accepted)
+        val both = listOf(0, 1)
 
         return listOf(
+            s("offset.pileup", OpLesson.OFFSET, "", opt("offsetSmall", "zeroBeat", "twoKUp")),
+            s("offset.rit", OpLesson.OFFSET, "", opt("rit", "xit", "pitch")),
+            s("offset.xit", OpLesson.OFFSET, "", opt("xit", "rit", "pitch")),
+            s("offset.tune", OpLesson.OFFSET, "", opt("tuneAway", "tuneOnQuick", "tuneOnLow")),
+
             s("signals.as", OpLesson.SIGNALS, "<AS>", opt("wait", "goAhead", "goodbye")),
             s("signals.qrz", OpLesson.SIGNALS, "QRZ?", opt("whoIsCalling", "sayAgain", "sorry")),
             s("signals.ee", OpLesson.SIGNALS, "E E", opt("goodbye", "error", "whoIsCalling")),
@@ -290,29 +394,33 @@ object OperatingProcedure {
                 listOf(mine, OpChoice.Send(last), silent)),
 
             s("me.other", OpLesson.ME, otherAck, listOf(silent, mine)),
-            s("me.mine", OpLesson.ME, theirAck, listOf(OpChoice.Send(myReply), mine, silent)),
+            s("me.mine", OpLesson.ME, theirAck,
+                listOf(OpChoice.Send(myReply), OpChoice.Send(myReplyBK), mine, silent), accepted = both),
             s("me.close", OpLesson.ME, "$near 5NN ${act.state} ${act.state} BK", listOf(silent, mine), near),
             s("me.closeAsked", OpLesson.ME, "$near?", listOf(mine, silent), near),
 
             s("exchange.reply", OpLesson.EXCHANGE, theirAck,
-                listOf(OpChoice.Send(myReply), OpChoice.Send(ragchew(me, st, act.call)), OpChoice.Send("$me 5NN $st"))),
-            s("exchange.agn", OpLesson.EXCHANGE, "AGN?", listOf(OpChoice.Send(myReply), mine, silent)),
+                listOf(
+                    OpChoice.Send(myReply), OpChoice.Send(myReplyBK),
+                    OpChoice.Send(ragchew(me, st, act.call)), OpChoice.Send("$me 5NN $st")
+                ),
+                accepted = both),
+            s("exchange.agn", OpLesson.EXCHANGE, "AGN?",
+                listOf(OpChoice.Send(myReply), OpChoice.Send(myReplyBK), mine, silent), accepted = both),
             s("exchange.dits", OpLesson.EXCHANGE, "TU 73 E E",
-                listOf(OpChoice.Send("E E"), mine, OpChoice.Send("TU 73 GL DE $me SK"))),
+                listOf(OpChoice.Send("E E"), OpChoice.Send(CLOSE_BK), mine, OpChoice.Send("TU 73 GL DE $me SK")),
+                accepted = both),
             s("exchange.stop", OpLesson.EXCHANGE, "QRZ?", listOf(silent, mine)),
 
             s("mistake.call", OpLesson.MISTAKE, "",
-                listOf(OpChoice.Send("$ERROR_SIGNAL $me"), OpChoice.Send("SRI $me"), silent), shiftLast(me, 1)),
+                listOf(OpChoice.Send("$err $me"), OpChoice.Send("SRI $me"), silent), callWrong),
             s("mistake.last", OpLesson.MISTAKE, "",
-                listOf(OpChoice.Send("$ERROR_SIGNAL $me"), OpChoice.Send("$ERROR_SIGNAL $last"), silent), shiftLast(me, -6)),
+                listOf(OpChoice.Send("$err $me"), OpChoice.Send("$err $last"), silent), shiftLast(me, -6)),
             s("mistake.state", OpLesson.MISTAKE, "",
-                listOf(OpChoice.Send("$ERROR_SIGNAL $st 73"), OpChoice.Send("5NN $stateWrong $st 73"), silent),
+                listOf(OpChoice.Send("$err $st 73"), OpChoice.Send("5NN $stateWrong $st 73"), silent),
                 "5NN $stateWrong"),
-
-            s("offset.pileup", OpLesson.OFFSET, "", opt("offsetSmall", "zeroBeat", "twoKUp")),
-            s("offset.rit", OpLesson.OFFSET, "", opt("rit", "xit", "pitch")),
-            s("offset.xit", OpLesson.OFFSET, "", opt("xit", "rit", "pitch")),
-            s("offset.tune", OpLesson.OFFSET, "", opt("tuneAway", "tuneOnQuick", "tuneOnLow")),
+            s("mistake.hear", OpLesson.MISTAKE, "$callWrong $err $theirAck",
+                listOf(OpChoice.Send(myReply), OpChoice.Send(myReplyBK), mine, silent), callWrong, accepted = both),
         )
     }
 
@@ -326,7 +434,7 @@ object OperatingProcedure {
 
     // Demos
 
-    /** A lesson's right/wrong clips. Lesson 8's demos are the pileup and RIT demos, so its list is empty. */
+    /** A lesson's right/wrong clips. The offsetting lesson's demos are the pileup and RIT demos, so its list is empty. */
     fun demos(lesson: OpLesson, call: String, state: String): List<OpDemo> {
         val me = normalizeCall(call)
         val st = normalizeState(state)
@@ -353,19 +461,26 @@ object OperatingProcedure {
                 wrong(line(a, notMinePartial(me)), line(y, me)),
                 right(line(a, me.take(2) + "?"), line(y, me)),
             )
-            OpLesson.ME -> listOf(
-                wrong(line(a, "${nearMiss(me)} 5NN ${act.state} ${act.state} BK"), line(y, me)),
-                right(line(a, theirAck), line(y, reply(st))),
-            )
+            OpLesson.ME -> {
+                val near = nearMiss(me)
+                listOf(
+                    wrong(line(a, "$near 5NN ${act.state} ${act.state} BK"), line(y, me)),
+                    right(line(a, "$near?"), line(y, me), line(a, theirAck)),
+                )
+            }
             OpLesson.EXCHANGE -> listOf(
                 wrong(line(a, theirAck), line(y, ragchew(me, st, act.call))),
                 right(line(a, theirAck), line(y, reply(st)), line(a, "TU 73 E E"), line(y, "E E")),
+                right(line(a, theirAck), line(y, replyBK(st)), line(a, "TU 73 E E"), line(y, CLOSE_BK)),
             )
             OpLesson.MISTAKE -> {
                 val wrongCall = shiftLast(me, 1)
                 listOf(
                     wrong(line(y, wrongCall)),
-                    right(line(y, "$wrongCall $ERROR_SIGNAL $me")),
+                    right(line(y, "$wrongCall $ERROR_TOKEN $me")),
+                    OpDemo(OpDemo.Kind.LISTEN, listOf(line(a, "$wrongCall <ERR:1> $me"))),
+                    OpDemo(OpDemo.Kind.LISTEN, listOf(line(a, "$wrongCall <ERR:2> $me"))),
+                    OpDemo(OpDemo.Kind.LISTEN, listOf(line(a, "$wrongCall <ERR:5> $me"))),
                 )
             }
             OpLesson.OFFSET -> emptyList()
@@ -473,8 +588,8 @@ class OpScenarioRun(val scenarios: List<OpScenario>) {
 
     /** Answer with [choice], its index in the scenario's right-first order. True when right. */
     fun answer(choice: Int): Boolean {
-        if (current == null) return false
-        val right = choice == OpScenario.CORRECT_INDEX
+        val s = current ?: return false
+        val right = s.accepts(choice)
         if (!right) mistakes++
         index++
         return right
@@ -491,7 +606,7 @@ class OpScenarioRun(val scenarios: List<OpScenario>) {
 
 /**
  * Which lessons have passed, which have a clean scenario run, and whether
- * lesson 8's drill has passed. Immutable, so a screen can hold it as state:
+ * the offsetting drill has passed. Immutable, so a screen can hold it as state:
  * each record returns the next progress and whether it passed a lesson just
  * now. The drill's in-a-row streak is not saved (three in a row means three
  * in one sitting).

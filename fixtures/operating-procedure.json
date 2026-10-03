@@ -14,27 +14,37 @@
   ],
   "derivation": {
     "rules": [
-      "Lessons, in order: signals, when, once, partial, me, exchange, mistake, offset.",
+      "Lessons, in order: offset, signals, when, once, partial, me, exchange, mistake (offsetting first, straight after First Four: maintainer, 2026-10-03).",
       "normalizeCall / normalizeState: upper-case and remove every whitespace character. Valid call: 3-10 characters of A-Z 0-9 '/', at least one letter and one digit. Valid state: 2-3 letters A-Z. prefillCall: the normalised call, or '' when it is W1AW (the settings placeholder).",
       "The activator is the first row of the activator table whose call is not the learner's; the other hunter likewise over the other-hunter table.",
-      "Choices are listed right answer first (correct index 0). A choice is {send: text}, {silent: true} or {option: key}. A scenario is an 'action' scenario when every choice is send or silent.",
+      "Choices are listed primary right answer first. 'accepted' lists every choice index that counts as right; when it is absent only index 0 does. A choice is {send: text}, {silent: true} or {option: key}. A scenario is an 'action' scenario when every choice is send or silent.",
       "shift(c, n): a letter steps through A-Z and a digit through 0-9 by n, wrapping; anything else is unchanged. 'Moved on one' is shift 1, 'moved back six' is shift -6.",
       "partialMatches(partial, call): upper-case, remove whitespace, strip every trailing '?'. Empty -> true (a bare '?' is everyone's). Otherwise true when what is left occurs as one contiguous run inside the normalised call.",
       "notMinePartial(call): the call up to and including its first digit, with that digit replaced by (digit + 2) mod 10; while the result occurs in the call, add 1 more (mod 10). Then append '?'.",
       "nearMiss(call): the first letter after the call's first digit, shifted -6; if there is no letter after the first digit, the call's last letter instead.",
-      "Partials used by lesson 4: prefix = first two characters + '?'; suffix = last two characters + '?'; fullCall = every character but the last + '?', whose missing part is the last character.",
-      "Mistake texts (lesson 7): call = call with its last character shifted 1; last = call with its last character shifted -6; state = '5NN ' + state with its last letter shifted 1.",
-      "Reply = '5NN ' + state + ' 73'. Ragchew = '<A> DE <C> TNX FER CALL UR 5NN 5NN NAME JOE QTH <S> <S> HW? <A> DE <C> KN'.",
-      "The error signal is written EEEEEEEE; display() replaces each EEEEEEEE with eight middle dots.",
+      "Partials used by the partial-calls lesson: prefix = first two characters + '?'; suffix = last two characters + '?'; fullCall = every character but the last + '?', whose missing part is the last character.",
+      "Mistake texts (lesson 'mistake'): call = call with its last character shifted 1; last = call with its last character shifted -6; state = '5NN ' + state with its last letter shifted 1. 'hear' plays the shifted call, an error, then the activator's acknowledgement of the real call.",
+      "Reply (primary, First Four's) = '5NN ' + state + ' 73'. ReplyBK (WB0RLJ's order, accepted too) = '5NN ' + state + ' BK', and after the activator's 'TU 73 E E' the close '73 E E' (accepted beside 'E E'). Ragchew = '<A> DE <C> TNX FER CALL UR 5NN 5NN NAME JOE QTH <S> <S> HW? <A> DE <C> KN'.",
+      "An error is written <ERR> (any shape, chosen when it plays) or <ERR:n> (row n of errorVariants, mod its count). It is not a prosign. clipParts splits a text on single spaces into runs of words and errors; display() joins the parts with single spaces, each error shown as errorDisplay. An error variant plays count dits at the learner's speed times speed: run together (element gaps) or as separate dits (character gaps).",
       "Pileup demo: callers in mix order W8KDP, KE0RJ, you, AB7TF, N4LQX; a caller equal to the learner's call becomes KC2VWM. wpm = max(5, learner wpm + delta); pitch = max(200, tone + offset).",
       "heardPitch(tone, station, vfo, rit) = tone + station - (vfo + rit). transmitOffset(station, vfo, xit) = vfo + xit - station. isZeroBeat(x) = |x| <= zeroBeatToleranceHz. audible(p) = max(200, p).",
       "Drill: round n starts at drillStarts[n mod count]; an answer is right when isZeroBeat(transmitOffset(start, vfo, 0)). zeroBeatStreakToPass right in a row passes the drill; a miss sets the streak to 0.",
-      "A scenario run answers each scenario once, in order; a wrong answer is a mistake and still moves on. The run is clean when finished with no mistakes. Answers after the end change nothing and return false.",
-      "Progress: recordRun(lesson, clean) adds the lesson to cleanRuns when clean. A lesson passes when it has a clean run and, for 'offset' only, the drill has passed too. nextLesson is the first lesson in order that has not passed; null when all have."
+      "A scenario run answers each scenario once, in order; an answer is right when its index is accepted. A wrong answer is a mistake and still moves on. The run is clean when finished with no mistakes. Answers after the end change nothing and return false.",
+      "Progress: recordRun(lesson, clean) adds the lesson to cleanRuns when clean. A lesson passes when it has a clean run and, for 'offset' only, the drill has passed too. nextLesson is the first lesson in order that has not passed; null when all have.",
+      "Is it me? (maintainer, 2026-10-03): a near-miss of your call without '?' (they are working that station) means stay silent; the near-miss with '?' means send your call once and listen for whether they correct to yours."
     ],
     "defaultCall": "W1AW"
   },
-  "lessons": ["signals", "when", "once", "partial", "me", "exchange", "mistake", "offset"],
+  "lessons": [
+    "offset",
+    "signals",
+    "when",
+    "once",
+    "partial",
+    "me",
+    "exchange",
+    "mistake"
+  ],
   "constants": {
     "scenarioRunLength": 10,
     "zeroBeatStreakToPass": 3,
@@ -45,251 +55,1878 @@
     "ritDemoStationOffsetHz": 200,
     "ritRangeHz": 300,
     "ritStepHz": 10,
-    "errorSignal": "EEEEEEEE",
-    "errorSignalDisplay": "········",
-    "replacementCaller": "KC2VWM"
+    "replacementCaller": "KC2VWM",
+    "errorToken": "<ERR>",
+    "errorDisplay": "[error]"
   },
   "activators": [
-    { "call": "K4RTZ", "state": "NC" },
-    { "call": "W0PQA", "state": "CO" }
+    {
+      "call": "K4RTZ",
+      "state": "NC"
+    },
+    {
+      "call": "W0PQA",
+      "state": "CO"
+    }
   ],
-  "otherHunters": ["W8KDP", "KE0RJ"],
-  "drillStarts": [180, -120, 250, -70, 90, -210, 140, -260],
-  "knobSteps": [-50, -10, 10, 50],
+  "otherHunters": [
+    "W8KDP",
+    "KE0RJ"
+  ],
+  "drillStarts": [
+    180,
+    -120,
+    250,
+    -70,
+    90,
+    -210,
+    140,
+    -260
+  ],
+  "knobSteps": [
+    -50,
+    -10,
+    10,
+    50
+  ],
   "validation": {
     "calls": [
-      { "raw": "n9ho", "normalized": "N9HO", "valid": true, "prefill": "N9HO" },
-      { "raw": " W1AW ", "normalized": "W1AW", "valid": true, "prefill": "" },
-      { "raw": "KB3/P", "normalized": "KB3/P", "valid": true, "prefill": "KB3/P" },
-      { "raw": "N9", "normalized": "N9", "valid": false, "prefill": "N9" },
-      { "raw": "ABCD", "normalized": "ABCD", "valid": false, "prefill": "ABCD" },
-      { "raw": "N9-HO", "normalized": "N9-HO", "valid": false, "prefill": "N9-HO" }
+      {
+        "raw": "n9ho",
+        "normalized": "N9HO",
+        "valid": true,
+        "prefill": "N9HO"
+      },
+      {
+        "raw": " W1AW ",
+        "normalized": "W1AW",
+        "valid": true,
+        "prefill": ""
+      },
+      {
+        "raw": "KB3/P",
+        "normalized": "KB3/P",
+        "valid": true,
+        "prefill": "KB3/P"
+      },
+      {
+        "raw": "N9",
+        "normalized": "N9",
+        "valid": false,
+        "prefill": "N9"
+      },
+      {
+        "raw": "ABCD",
+        "normalized": "ABCD",
+        "valid": false,
+        "prefill": "ABCD"
+      },
+      {
+        "raw": "N9-HO",
+        "normalized": "N9-HO",
+        "valid": false,
+        "prefill": "N9-HO"
+      }
     ],
     "states": [
-      { "raw": "wi", "normalized": "WI", "valid": true },
-      { "raw": "ONT", "normalized": "ONT", "valid": true },
-      { "raw": "W", "normalized": "W", "valid": false },
-      { "raw": "W1", "normalized": "W1", "valid": false }
+      {
+        "raw": "wi",
+        "normalized": "WI",
+        "valid": true
+      },
+      {
+        "raw": "ONT",
+        "normalized": "ONT",
+        "valid": true
+      },
+      {
+        "raw": "W",
+        "normalized": "W",
+        "valid": false
+      },
+      {
+        "raw": "W1",
+        "normalized": "W1",
+        "valid": false
+      }
     ]
   },
   "shift": [
-    { "char": "A", "by": 1, "result": "B" },
-    { "char": "Z", "by": 1, "result": "A" },
-    { "char": "H", "by": -6, "result": "B" },
-    { "char": "A", "by": -6, "result": "U" },
-    { "char": "9", "by": 1, "result": "0" },
-    { "char": "3", "by": -6, "result": "7" },
-    { "char": "/", "by": 1, "result": "/" }
+    {
+      "char": "A",
+      "by": 1,
+      "result": "B"
+    },
+    {
+      "char": "Z",
+      "by": 1,
+      "result": "A"
+    },
+    {
+      "char": "H",
+      "by": -6,
+      "result": "B"
+    },
+    {
+      "char": "A",
+      "by": -6,
+      "result": "U"
+    },
+    {
+      "char": "9",
+      "by": 1,
+      "result": "0"
+    },
+    {
+      "char": "3",
+      "by": -6,
+      "result": "7"
+    },
+    {
+      "char": "/",
+      "by": 1,
+      "result": "/"
+    }
   ],
   "partialMatches": [
-    { "partial": "N9?", "call": "N9HO", "matches": true },
-    { "partial": "N1?", "call": "N9HO", "matches": false },
-    { "partial": "HO?", "call": "N9HO", "matches": true },
-    { "partial": "9H?", "call": "N9HO", "matches": true },
-    { "partial": "?", "call": "N9HO", "matches": true },
-    { "partial": " ? ", "call": "N9HO", "matches": true },
-    { "partial": "n9?", "call": "N9HO", "matches": true },
-    { "partial": "N9HO?", "call": "N9HO", "matches": true },
-    { "partial": "N9HOX?", "call": "N9HO", "matches": false },
-    { "partial": "NH?", "call": "N9HO", "matches": false },
-    { "partial": "H?", "call": "N9HO", "matches": true },
-    { "partial": "N9??", "call": "n9ho", "matches": true }
+    {
+      "partial": "N9?",
+      "call": "N9HO",
+      "matches": true
+    },
+    {
+      "partial": "N1?",
+      "call": "N9HO",
+      "matches": false
+    },
+    {
+      "partial": "HO?",
+      "call": "N9HO",
+      "matches": true
+    },
+    {
+      "partial": "9H?",
+      "call": "N9HO",
+      "matches": true
+    },
+    {
+      "partial": "?",
+      "call": "N9HO",
+      "matches": true
+    },
+    {
+      "partial": " ? ",
+      "call": "N9HO",
+      "matches": true
+    },
+    {
+      "partial": "n9?",
+      "call": "N9HO",
+      "matches": true
+    },
+    {
+      "partial": "N9HO?",
+      "call": "N9HO",
+      "matches": true
+    },
+    {
+      "partial": "N9HOX?",
+      "call": "N9HO",
+      "matches": false
+    },
+    {
+      "partial": "NH?",
+      "call": "N9HO",
+      "matches": false
+    },
+    {
+      "partial": "H?",
+      "call": "N9HO",
+      "matches": true
+    },
+    {
+      "partial": "N9??",
+      "call": "n9ho",
+      "matches": true
+    }
   ],
   "notMinePartial": [
-    { "call": "N9HO", "partial": "N1?" },
-    { "call": "K4RTZ", "partial": "K6?" },
-    { "call": "W1AW", "partial": "W3?" },
-    { "call": "N3N5", "partial": "N6?" },
-    { "call": "KB3MZL", "partial": "KB5?" }
+    {
+      "call": "N9HO",
+      "partial": "N1?"
+    },
+    {
+      "call": "K4RTZ",
+      "partial": "K6?"
+    },
+    {
+      "call": "W1AW",
+      "partial": "W3?"
+    },
+    {
+      "call": "N3N5",
+      "partial": "N6?"
+    },
+    {
+      "call": "KB3MZL",
+      "partial": "KB5?"
+    }
   ],
   "nearMiss": [
-    { "call": "N9HO", "nearMiss": "N9BO" },
-    { "call": "KB3MZL", "nearMiss": "KB3GZL" },
-    { "call": "K4RTZ", "nearMiss": "K4LTZ" },
-    { "call": "W1AW", "nearMiss": "W1UW" },
-    { "call": "AA1", "nearMiss": "AU1" }
+    {
+      "call": "N9HO",
+      "nearMiss": "N9BO"
+    },
+    {
+      "call": "KB3MZL",
+      "nearMiss": "KB3GZL"
+    },
+    {
+      "call": "K4RTZ",
+      "nearMiss": "K4LTZ"
+    },
+    {
+      "call": "W1AW",
+      "nearMiss": "W1UW"
+    },
+    {
+      "call": "AA1",
+      "nearMiss": "AU1"
+    }
   ],
   "display": [
-    { "text": "N9HP EEEEEEEE N9HO", "display": "N9HP ········ N9HO" },
-    { "text": "EEEEEEEE WI 73", "display": "········ WI 73" },
-    { "text": "E E", "display": "E E" }
+    {
+      "text": "N9HP <ERR> N9HO",
+      "display": "N9HP [error] N9HO"
+    },
+    {
+      "text": "<ERR:4> WI 73",
+      "display": "[error] WI 73"
+    },
+    {
+      "text": "E E",
+      "display": "E E"
+    },
+    {
+      "text": "EEEEEEEE N9HO",
+      "display": "EEEEEEEE N9HO"
+    }
   ],
   "profiles": [
     {
       "call": "N9HO",
       "state": "WI",
-      "activator": { "call": "K4RTZ", "state": "NC" },
+      "activator": {
+        "call": "K4RTZ",
+        "state": "NC"
+      },
       "otherHunter": "W8KDP",
       "scenarios": [
-        { "id": "signals.as", "lesson": "signals", "clip": "<AS>", "detail": "", "choices": [{ "option": "wait" }, { "option": "goAhead" }, { "option": "goodbye" }] },
-        { "id": "signals.qrz", "lesson": "signals", "clip": "QRZ?", "detail": "", "choices": [{ "option": "whoIsCalling" }, { "option": "sayAgain" }, { "option": "sorry" }] },
-        { "id": "signals.ee", "lesson": "signals", "clip": "E E", "detail": "", "choices": [{ "option": "goodbye" }, { "option": "error" }, { "option": "whoIsCalling" }] },
-        { "id": "signals.bk", "lesson": "signals", "clip": "BK", "detail": "", "choices": [{ "option": "backToYou" }, { "option": "wait" }, { "option": "sorry" }] },
-        { "id": "signals.agn", "lesson": "signals", "clip": "AGN?", "detail": "", "choices": [{ "option": "sayAgain" }, { "option": "goodbye" }, { "option": "backToYou" }] },
-
-        { "id": "when.dits", "lesson": "when", "clip": "W8KDP TU 73 E E", "detail": "", "choices": [{ "send": "N9HO" }, { "silent": true }] },
-        { "id": "when.inProgress", "lesson": "when", "clip": "W8KDP 5NN NC NC BK", "detail": "", "choices": [{ "silent": true }, { "send": "N9HO" }] },
-        { "id": "when.as", "lesson": "when", "clip": "<AS>", "detail": "", "choices": [{ "silent": true }, { "send": "N9HO" }] },
-        { "id": "when.sriQrz", "lesson": "when", "clip": "SRI SRI QRZ?", "detail": "", "choices": [{ "send": "N9HO" }, { "silent": true }] },
-
-        { "id": "once.cq", "lesson": "once", "clip": "CQ POTA DE K4RTZ K", "detail": "", "choices": [{ "send": "N9HO" }, { "send": "K4RTZ DE N9HO K" }, { "send": "N9HO N9HO N9HO" }] },
-        { "id": "once.qrz", "lesson": "once", "clip": "QRZ?", "detail": "", "choices": [{ "send": "N9HO" }, { "send": "DE N9HO K" }, { "send": "N9HO N9HO" }] },
-        { "id": "once.dits", "lesson": "once", "clip": "W8KDP TU 73 E E", "detail": "", "choices": [{ "send": "N9HO" }, { "send": "K4RTZ N9HO" }, { "silent": true }] },
-
-        { "id": "partial.prefix", "lesson": "partial", "clip": "N9?", "detail": "", "choices": [{ "send": "N9HO" }, { "silent": true }] },
-        { "id": "partial.notMine", "lesson": "partial", "clip": "N1?", "detail": "", "choices": [{ "silent": true }, { "send": "N9HO" }] },
-        { "id": "partial.suffix", "lesson": "partial", "clip": "HO?", "detail": "", "choices": [{ "send": "N9HO" }, { "silent": true }] },
-        { "id": "partial.fullCall", "lesson": "partial", "clip": "N9H?", "detail": "", "choices": [{ "send": "N9HO" }, { "send": "O" }, { "silent": true }] },
-
-        { "id": "me.other", "lesson": "me", "clip": "W8KDP 5NN NC NC BK", "detail": "", "choices": [{ "silent": true }, { "send": "N9HO" }] },
-        { "id": "me.mine", "lesson": "me", "clip": "N9HO 5NN NC NC BK", "detail": "", "choices": [{ "send": "5NN WI 73" }, { "send": "N9HO" }, { "silent": true }] },
-        { "id": "me.close", "lesson": "me", "clip": "N9BO 5NN NC NC BK", "detail": "N9BO", "choices": [{ "silent": true }, { "send": "N9HO" }] },
-        { "id": "me.closeAsked", "lesson": "me", "clip": "N9BO?", "detail": "N9BO", "choices": [{ "send": "N9HO" }, { "silent": true }] },
-
-        { "id": "exchange.reply", "lesson": "exchange", "clip": "N9HO 5NN NC NC BK", "detail": "", "choices": [{ "send": "5NN WI 73" }, { "send": "K4RTZ DE N9HO TNX FER CALL UR 5NN 5NN NAME JOE QTH WI WI HW? K4RTZ DE N9HO KN" }, { "send": "N9HO 5NN WI" }] },
-        { "id": "exchange.agn", "lesson": "exchange", "clip": "AGN?", "detail": "", "choices": [{ "send": "5NN WI 73" }, { "send": "N9HO" }, { "silent": true }] },
-        { "id": "exchange.dits", "lesson": "exchange", "clip": "TU 73 E E", "detail": "", "choices": [{ "send": "E E" }, { "send": "N9HO" }, { "send": "TU 73 GL DE N9HO SK" }] },
-        { "id": "exchange.stop", "lesson": "exchange", "clip": "QRZ?", "detail": "", "choices": [{ "silent": true }, { "send": "N9HO" }] },
-
-        { "id": "mistake.call", "lesson": "mistake", "clip": "", "detail": "N9HP", "choices": [{ "send": "EEEEEEEE N9HO" }, { "send": "SRI N9HO" }, { "silent": true }] },
-        { "id": "mistake.last", "lesson": "mistake", "clip": "", "detail": "N9HI", "choices": [{ "send": "EEEEEEEE N9HO" }, { "send": "EEEEEEEE O" }, { "silent": true }] },
-        { "id": "mistake.state", "lesson": "mistake", "clip": "", "detail": "5NN WJ", "choices": [{ "send": "EEEEEEEE WI 73" }, { "send": "5NN WJ WI 73" }, { "silent": true }] },
-
-        { "id": "offset.pileup", "lesson": "offset", "clip": "", "detail": "", "choices": [{ "option": "offsetSmall" }, { "option": "zeroBeat" }, { "option": "twoKUp" }] },
-        { "id": "offset.rit", "lesson": "offset", "clip": "", "detail": "", "choices": [{ "option": "rit" }, { "option": "xit" }, { "option": "pitch" }] },
-        { "id": "offset.xit", "lesson": "offset", "clip": "", "detail": "", "choices": [{ "option": "xit" }, { "option": "rit" }, { "option": "pitch" }] },
-        { "id": "offset.tune", "lesson": "offset", "clip": "", "detail": "", "choices": [{ "option": "tuneAway" }, { "option": "tuneOnQuick" }, { "option": "tuneOnLow" }] }
+        {
+          "id": "offset.pileup",
+          "lesson": "offset",
+          "clip": "",
+          "detail": "",
+          "choices": [
+            {
+              "option": "offsetSmall"
+            },
+            {
+              "option": "zeroBeat"
+            },
+            {
+              "option": "twoKUp"
+            }
+          ]
+        },
+        {
+          "id": "offset.rit",
+          "lesson": "offset",
+          "clip": "",
+          "detail": "",
+          "choices": [
+            {
+              "option": "rit"
+            },
+            {
+              "option": "xit"
+            },
+            {
+              "option": "pitch"
+            }
+          ]
+        },
+        {
+          "id": "offset.xit",
+          "lesson": "offset",
+          "clip": "",
+          "detail": "",
+          "choices": [
+            {
+              "option": "xit"
+            },
+            {
+              "option": "rit"
+            },
+            {
+              "option": "pitch"
+            }
+          ]
+        },
+        {
+          "id": "offset.tune",
+          "lesson": "offset",
+          "clip": "",
+          "detail": "",
+          "choices": [
+            {
+              "option": "tuneAway"
+            },
+            {
+              "option": "tuneOnQuick"
+            },
+            {
+              "option": "tuneOnLow"
+            }
+          ]
+        },
+        {
+          "id": "signals.as",
+          "lesson": "signals",
+          "clip": "<AS>",
+          "detail": "",
+          "choices": [
+            {
+              "option": "wait"
+            },
+            {
+              "option": "goAhead"
+            },
+            {
+              "option": "goodbye"
+            }
+          ]
+        },
+        {
+          "id": "signals.qrz",
+          "lesson": "signals",
+          "clip": "QRZ?",
+          "detail": "",
+          "choices": [
+            {
+              "option": "whoIsCalling"
+            },
+            {
+              "option": "sayAgain"
+            },
+            {
+              "option": "sorry"
+            }
+          ]
+        },
+        {
+          "id": "signals.ee",
+          "lesson": "signals",
+          "clip": "E E",
+          "detail": "",
+          "choices": [
+            {
+              "option": "goodbye"
+            },
+            {
+              "option": "error"
+            },
+            {
+              "option": "whoIsCalling"
+            }
+          ]
+        },
+        {
+          "id": "signals.bk",
+          "lesson": "signals",
+          "clip": "BK",
+          "detail": "",
+          "choices": [
+            {
+              "option": "backToYou"
+            },
+            {
+              "option": "wait"
+            },
+            {
+              "option": "sorry"
+            }
+          ]
+        },
+        {
+          "id": "signals.agn",
+          "lesson": "signals",
+          "clip": "AGN?",
+          "detail": "",
+          "choices": [
+            {
+              "option": "sayAgain"
+            },
+            {
+              "option": "goodbye"
+            },
+            {
+              "option": "backToYou"
+            }
+          ]
+        },
+        {
+          "id": "when.dits",
+          "lesson": "when",
+          "clip": "W8KDP TU 73 E E",
+          "detail": "",
+          "choices": [
+            {
+              "send": "N9HO"
+            },
+            {
+              "silent": true
+            }
+          ]
+        },
+        {
+          "id": "when.inProgress",
+          "lesson": "when",
+          "clip": "W8KDP 5NN NC NC BK",
+          "detail": "",
+          "choices": [
+            {
+              "silent": true
+            },
+            {
+              "send": "N9HO"
+            }
+          ]
+        },
+        {
+          "id": "when.as",
+          "lesson": "when",
+          "clip": "<AS>",
+          "detail": "",
+          "choices": [
+            {
+              "silent": true
+            },
+            {
+              "send": "N9HO"
+            }
+          ]
+        },
+        {
+          "id": "when.sriQrz",
+          "lesson": "when",
+          "clip": "SRI SRI QRZ?",
+          "detail": "",
+          "choices": [
+            {
+              "send": "N9HO"
+            },
+            {
+              "silent": true
+            }
+          ]
+        },
+        {
+          "id": "once.cq",
+          "lesson": "once",
+          "clip": "CQ POTA DE K4RTZ K",
+          "detail": "",
+          "choices": [
+            {
+              "send": "N9HO"
+            },
+            {
+              "send": "K4RTZ DE N9HO K"
+            },
+            {
+              "send": "N9HO N9HO N9HO"
+            }
+          ]
+        },
+        {
+          "id": "once.qrz",
+          "lesson": "once",
+          "clip": "QRZ?",
+          "detail": "",
+          "choices": [
+            {
+              "send": "N9HO"
+            },
+            {
+              "send": "DE N9HO K"
+            },
+            {
+              "send": "N9HO N9HO"
+            }
+          ]
+        },
+        {
+          "id": "once.dits",
+          "lesson": "once",
+          "clip": "W8KDP TU 73 E E",
+          "detail": "",
+          "choices": [
+            {
+              "send": "N9HO"
+            },
+            {
+              "send": "K4RTZ N9HO"
+            },
+            {
+              "silent": true
+            }
+          ]
+        },
+        {
+          "id": "partial.prefix",
+          "lesson": "partial",
+          "clip": "N9?",
+          "detail": "",
+          "choices": [
+            {
+              "send": "N9HO"
+            },
+            {
+              "silent": true
+            }
+          ]
+        },
+        {
+          "id": "partial.notMine",
+          "lesson": "partial",
+          "clip": "N1?",
+          "detail": "",
+          "choices": [
+            {
+              "silent": true
+            },
+            {
+              "send": "N9HO"
+            }
+          ]
+        },
+        {
+          "id": "partial.suffix",
+          "lesson": "partial",
+          "clip": "HO?",
+          "detail": "",
+          "choices": [
+            {
+              "send": "N9HO"
+            },
+            {
+              "silent": true
+            }
+          ]
+        },
+        {
+          "id": "partial.fullCall",
+          "lesson": "partial",
+          "clip": "N9H?",
+          "detail": "",
+          "choices": [
+            {
+              "send": "N9HO"
+            },
+            {
+              "send": "O"
+            },
+            {
+              "silent": true
+            }
+          ]
+        },
+        {
+          "id": "me.other",
+          "lesson": "me",
+          "clip": "W8KDP 5NN NC NC BK",
+          "detail": "",
+          "choices": [
+            {
+              "silent": true
+            },
+            {
+              "send": "N9HO"
+            }
+          ]
+        },
+        {
+          "id": "me.mine",
+          "lesson": "me",
+          "clip": "N9HO 5NN NC NC BK",
+          "detail": "",
+          "choices": [
+            {
+              "send": "5NN WI 73"
+            },
+            {
+              "send": "5NN WI BK"
+            },
+            {
+              "send": "N9HO"
+            },
+            {
+              "silent": true
+            }
+          ],
+          "accepted": [
+            0,
+            1
+          ]
+        },
+        {
+          "id": "me.close",
+          "lesson": "me",
+          "clip": "N9BO 5NN NC NC BK",
+          "detail": "N9BO",
+          "choices": [
+            {
+              "silent": true
+            },
+            {
+              "send": "N9HO"
+            }
+          ]
+        },
+        {
+          "id": "me.closeAsked",
+          "lesson": "me",
+          "clip": "N9BO?",
+          "detail": "N9BO",
+          "choices": [
+            {
+              "send": "N9HO"
+            },
+            {
+              "silent": true
+            }
+          ]
+        },
+        {
+          "id": "exchange.reply",
+          "lesson": "exchange",
+          "clip": "N9HO 5NN NC NC BK",
+          "detail": "",
+          "choices": [
+            {
+              "send": "5NN WI 73"
+            },
+            {
+              "send": "5NN WI BK"
+            },
+            {
+              "send": "K4RTZ DE N9HO TNX FER CALL UR 5NN 5NN NAME JOE QTH WI WI HW? K4RTZ DE N9HO KN"
+            },
+            {
+              "send": "N9HO 5NN WI"
+            }
+          ],
+          "accepted": [
+            0,
+            1
+          ]
+        },
+        {
+          "id": "exchange.agn",
+          "lesson": "exchange",
+          "clip": "AGN?",
+          "detail": "",
+          "choices": [
+            {
+              "send": "5NN WI 73"
+            },
+            {
+              "send": "5NN WI BK"
+            },
+            {
+              "send": "N9HO"
+            },
+            {
+              "silent": true
+            }
+          ],
+          "accepted": [
+            0,
+            1
+          ]
+        },
+        {
+          "id": "exchange.dits",
+          "lesson": "exchange",
+          "clip": "TU 73 E E",
+          "detail": "",
+          "choices": [
+            {
+              "send": "E E"
+            },
+            {
+              "send": "73 E E"
+            },
+            {
+              "send": "N9HO"
+            },
+            {
+              "send": "TU 73 GL DE N9HO SK"
+            }
+          ],
+          "accepted": [
+            0,
+            1
+          ]
+        },
+        {
+          "id": "exchange.stop",
+          "lesson": "exchange",
+          "clip": "QRZ?",
+          "detail": "",
+          "choices": [
+            {
+              "silent": true
+            },
+            {
+              "send": "N9HO"
+            }
+          ]
+        },
+        {
+          "id": "mistake.call",
+          "lesson": "mistake",
+          "clip": "",
+          "detail": "N9HP",
+          "choices": [
+            {
+              "send": "<ERR> N9HO"
+            },
+            {
+              "send": "SRI N9HO"
+            },
+            {
+              "silent": true
+            }
+          ]
+        },
+        {
+          "id": "mistake.last",
+          "lesson": "mistake",
+          "clip": "",
+          "detail": "N9HI",
+          "choices": [
+            {
+              "send": "<ERR> N9HO"
+            },
+            {
+              "send": "<ERR> O"
+            },
+            {
+              "silent": true
+            }
+          ]
+        },
+        {
+          "id": "mistake.state",
+          "lesson": "mistake",
+          "clip": "",
+          "detail": "5NN WJ",
+          "choices": [
+            {
+              "send": "<ERR> WI 73"
+            },
+            {
+              "send": "5NN WJ WI 73"
+            },
+            {
+              "silent": true
+            }
+          ]
+        },
+        {
+          "id": "mistake.hear",
+          "lesson": "mistake",
+          "clip": "N9HP <ERR> N9HO 5NN NC NC BK",
+          "detail": "N9HP",
+          "choices": [
+            {
+              "send": "5NN WI 73"
+            },
+            {
+              "send": "5NN WI BK"
+            },
+            {
+              "send": "N9HO"
+            },
+            {
+              "silent": true
+            }
+          ],
+          "accepted": [
+            0,
+            1
+          ]
+        }
       ],
       "actionPool": [
-        "when.dits", "when.inProgress", "when.as", "when.sriQrz",
-        "once.cq", "once.qrz", "once.dits",
-        "partial.prefix", "partial.notMine", "partial.suffix", "partial.fullCall",
-        "me.other", "me.mine", "me.close", "me.closeAsked",
-        "exchange.reply", "exchange.agn", "exchange.dits", "exchange.stop",
-        "mistake.call", "mistake.last", "mistake.state"
+        "when.dits",
+        "when.inProgress",
+        "when.as",
+        "when.sriQrz",
+        "once.cq",
+        "once.qrz",
+        "once.dits",
+        "partial.prefix",
+        "partial.notMine",
+        "partial.suffix",
+        "partial.fullCall",
+        "me.other",
+        "me.mine",
+        "me.close",
+        "me.closeAsked",
+        "exchange.reply",
+        "exchange.agn",
+        "exchange.dits",
+        "exchange.stop",
+        "mistake.call",
+        "mistake.last",
+        "mistake.state",
+        "mistake.hear"
       ],
       "demos": {
+        "offset": [],
         "signals": [
-          { "kind": "listen", "lines": [{ "who": "activator", "text": "?" }] },
-          { "kind": "listen", "lines": [{ "who": "activator", "text": "AGN?" }] },
-          { "kind": "listen", "lines": [{ "who": "activator", "text": "<AS>" }] },
-          { "kind": "listen", "lines": [{ "who": "activator", "text": "BK" }] },
-          { "kind": "listen", "lines": [{ "who": "activator", "text": "SRI" }] },
-          { "kind": "listen", "lines": [{ "who": "activator", "text": "QRZ?" }] },
-          { "kind": "listen", "lines": [{ "who": "activator", "text": "E E" }] }
+          {
+            "kind": "listen",
+            "lines": [
+              {
+                "who": "activator",
+                "text": "?"
+              }
+            ]
+          },
+          {
+            "kind": "listen",
+            "lines": [
+              {
+                "who": "activator",
+                "text": "AGN?"
+              }
+            ]
+          },
+          {
+            "kind": "listen",
+            "lines": [
+              {
+                "who": "activator",
+                "text": "<AS>"
+              }
+            ]
+          },
+          {
+            "kind": "listen",
+            "lines": [
+              {
+                "who": "activator",
+                "text": "BK"
+              }
+            ]
+          },
+          {
+            "kind": "listen",
+            "lines": [
+              {
+                "who": "activator",
+                "text": "SRI"
+              }
+            ]
+          },
+          {
+            "kind": "listen",
+            "lines": [
+              {
+                "who": "activator",
+                "text": "QRZ?"
+              }
+            ]
+          },
+          {
+            "kind": "listen",
+            "lines": [
+              {
+                "who": "activator",
+                "text": "E E"
+              }
+            ]
+          }
         ],
         "when": [
-          { "kind": "wrong", "lines": [{ "who": "activator", "text": "W8KDP 5NN NC NC BK" }, { "who": "you", "text": "N9HO" }] },
-          { "kind": "right", "lines": [{ "who": "activator", "text": "W8KDP TU 73 E E" }, { "who": "you", "text": "N9HO" }] }
+          {
+            "kind": "wrong",
+            "lines": [
+              {
+                "who": "activator",
+                "text": "W8KDP 5NN NC NC BK"
+              },
+              {
+                "who": "you",
+                "text": "N9HO"
+              }
+            ]
+          },
+          {
+            "kind": "right",
+            "lines": [
+              {
+                "who": "activator",
+                "text": "W8KDP TU 73 E E"
+              },
+              {
+                "who": "you",
+                "text": "N9HO"
+              }
+            ]
+          }
         ],
         "once": [
-          { "kind": "wrong", "lines": [{ "who": "activator", "text": "CQ POTA DE K4RTZ K" }, { "who": "you", "text": "K4RTZ DE N9HO N9HO K" }] },
-          { "kind": "right", "lines": [{ "who": "activator", "text": "CQ POTA DE K4RTZ K" }, { "who": "you", "text": "N9HO" }] }
+          {
+            "kind": "wrong",
+            "lines": [
+              {
+                "who": "activator",
+                "text": "CQ POTA DE K4RTZ K"
+              },
+              {
+                "who": "you",
+                "text": "K4RTZ DE N9HO N9HO K"
+              }
+            ]
+          },
+          {
+            "kind": "right",
+            "lines": [
+              {
+                "who": "activator",
+                "text": "CQ POTA DE K4RTZ K"
+              },
+              {
+                "who": "you",
+                "text": "N9HO"
+              }
+            ]
+          }
         ],
         "partial": [
-          { "kind": "wrong", "lines": [{ "who": "activator", "text": "N1?" }, { "who": "you", "text": "N9HO" }] },
-          { "kind": "right", "lines": [{ "who": "activator", "text": "N9?" }, { "who": "you", "text": "N9HO" }] }
+          {
+            "kind": "wrong",
+            "lines": [
+              {
+                "who": "activator",
+                "text": "N1?"
+              },
+              {
+                "who": "you",
+                "text": "N9HO"
+              }
+            ]
+          },
+          {
+            "kind": "right",
+            "lines": [
+              {
+                "who": "activator",
+                "text": "N9?"
+              },
+              {
+                "who": "you",
+                "text": "N9HO"
+              }
+            ]
+          }
         ],
         "me": [
-          { "kind": "wrong", "lines": [{ "who": "activator", "text": "N9BO 5NN NC NC BK" }, { "who": "you", "text": "N9HO" }] },
-          { "kind": "right", "lines": [{ "who": "activator", "text": "N9HO 5NN NC NC BK" }, { "who": "you", "text": "5NN WI 73" }] }
+          {
+            "kind": "wrong",
+            "lines": [
+              {
+                "who": "activator",
+                "text": "N9BO 5NN NC NC BK"
+              },
+              {
+                "who": "you",
+                "text": "N9HO"
+              }
+            ]
+          },
+          {
+            "kind": "right",
+            "lines": [
+              {
+                "who": "activator",
+                "text": "N9BO?"
+              },
+              {
+                "who": "you",
+                "text": "N9HO"
+              },
+              {
+                "who": "activator",
+                "text": "N9HO 5NN NC NC BK"
+              }
+            ]
+          }
         ],
         "exchange": [
-          { "kind": "wrong", "lines": [{ "who": "activator", "text": "N9HO 5NN NC NC BK" }, { "who": "you", "text": "K4RTZ DE N9HO TNX FER CALL UR 5NN 5NN NAME JOE QTH WI WI HW? K4RTZ DE N9HO KN" }] },
-          { "kind": "right", "lines": [{ "who": "activator", "text": "N9HO 5NN NC NC BK" }, { "who": "you", "text": "5NN WI 73" }, { "who": "activator", "text": "TU 73 E E" }, { "who": "you", "text": "E E" }] }
+          {
+            "kind": "wrong",
+            "lines": [
+              {
+                "who": "activator",
+                "text": "N9HO 5NN NC NC BK"
+              },
+              {
+                "who": "you",
+                "text": "K4RTZ DE N9HO TNX FER CALL UR 5NN 5NN NAME JOE QTH WI WI HW? K4RTZ DE N9HO KN"
+              }
+            ]
+          },
+          {
+            "kind": "right",
+            "lines": [
+              {
+                "who": "activator",
+                "text": "N9HO 5NN NC NC BK"
+              },
+              {
+                "who": "you",
+                "text": "5NN WI 73"
+              },
+              {
+                "who": "activator",
+                "text": "TU 73 E E"
+              },
+              {
+                "who": "you",
+                "text": "E E"
+              }
+            ]
+          },
+          {
+            "kind": "right",
+            "lines": [
+              {
+                "who": "activator",
+                "text": "N9HO 5NN NC NC BK"
+              },
+              {
+                "who": "you",
+                "text": "5NN WI BK"
+              },
+              {
+                "who": "activator",
+                "text": "TU 73 E E"
+              },
+              {
+                "who": "you",
+                "text": "73 E E"
+              }
+            ]
+          }
         ],
         "mistake": [
-          { "kind": "wrong", "lines": [{ "who": "you", "text": "N9HP" }] },
-          { "kind": "right", "lines": [{ "who": "you", "text": "N9HP EEEEEEEE N9HO" }] }
-        ],
-        "offset": []
+          {
+            "kind": "wrong",
+            "lines": [
+              {
+                "who": "you",
+                "text": "N9HP"
+              }
+            ]
+          },
+          {
+            "kind": "right",
+            "lines": [
+              {
+                "who": "you",
+                "text": "N9HP <ERR> N9HO"
+              }
+            ]
+          },
+          {
+            "kind": "listen",
+            "lines": [
+              {
+                "who": "activator",
+                "text": "N9HP <ERR:1> N9HO"
+              }
+            ]
+          },
+          {
+            "kind": "listen",
+            "lines": [
+              {
+                "who": "activator",
+                "text": "N9HP <ERR:2> N9HO"
+              }
+            ]
+          },
+          {
+            "kind": "listen",
+            "lines": [
+              {
+                "who": "activator",
+                "text": "N9HP <ERR:5> N9HO"
+              }
+            ]
+          }
+        ]
       }
     },
     {
       "call": "K4RTZ",
       "state": "VA",
-      "activator": { "call": "W0PQA", "state": "CO" },
+      "activator": {
+        "call": "W0PQA",
+        "state": "CO"
+      },
       "otherHunter": "W8KDP",
       "scenarios": [
-        { "id": "signals.as", "lesson": "signals", "clip": "<AS>", "detail": "", "choices": [{ "option": "wait" }, { "option": "goAhead" }, { "option": "goodbye" }] },
-        { "id": "signals.qrz", "lesson": "signals", "clip": "QRZ?", "detail": "", "choices": [{ "option": "whoIsCalling" }, { "option": "sayAgain" }, { "option": "sorry" }] },
-        { "id": "signals.ee", "lesson": "signals", "clip": "E E", "detail": "", "choices": [{ "option": "goodbye" }, { "option": "error" }, { "option": "whoIsCalling" }] },
-        { "id": "signals.bk", "lesson": "signals", "clip": "BK", "detail": "", "choices": [{ "option": "backToYou" }, { "option": "wait" }, { "option": "sorry" }] },
-        { "id": "signals.agn", "lesson": "signals", "clip": "AGN?", "detail": "", "choices": [{ "option": "sayAgain" }, { "option": "goodbye" }, { "option": "backToYou" }] },
-
-        { "id": "when.dits", "lesson": "when", "clip": "W8KDP TU 73 E E", "detail": "", "choices": [{ "send": "K4RTZ" }, { "silent": true }] },
-        { "id": "when.inProgress", "lesson": "when", "clip": "W8KDP 5NN CO CO BK", "detail": "", "choices": [{ "silent": true }, { "send": "K4RTZ" }] },
-        { "id": "when.as", "lesson": "when", "clip": "<AS>", "detail": "", "choices": [{ "silent": true }, { "send": "K4RTZ" }] },
-        { "id": "when.sriQrz", "lesson": "when", "clip": "SRI SRI QRZ?", "detail": "", "choices": [{ "send": "K4RTZ" }, { "silent": true }] },
-
-        { "id": "once.cq", "lesson": "once", "clip": "CQ POTA DE W0PQA K", "detail": "", "choices": [{ "send": "K4RTZ" }, { "send": "W0PQA DE K4RTZ K" }, { "send": "K4RTZ K4RTZ K4RTZ" }] },
-        { "id": "once.qrz", "lesson": "once", "clip": "QRZ?", "detail": "", "choices": [{ "send": "K4RTZ" }, { "send": "DE K4RTZ K" }, { "send": "K4RTZ K4RTZ" }] },
-        { "id": "once.dits", "lesson": "once", "clip": "W8KDP TU 73 E E", "detail": "", "choices": [{ "send": "K4RTZ" }, { "send": "W0PQA K4RTZ" }, { "silent": true }] },
-
-        { "id": "partial.prefix", "lesson": "partial", "clip": "K4?", "detail": "", "choices": [{ "send": "K4RTZ" }, { "silent": true }] },
-        { "id": "partial.notMine", "lesson": "partial", "clip": "K6?", "detail": "", "choices": [{ "silent": true }, { "send": "K4RTZ" }] },
-        { "id": "partial.suffix", "lesson": "partial", "clip": "TZ?", "detail": "", "choices": [{ "send": "K4RTZ" }, { "silent": true }] },
-        { "id": "partial.fullCall", "lesson": "partial", "clip": "K4RT?", "detail": "", "choices": [{ "send": "K4RTZ" }, { "send": "Z" }, { "silent": true }] },
-
-        { "id": "me.other", "lesson": "me", "clip": "W8KDP 5NN CO CO BK", "detail": "", "choices": [{ "silent": true }, { "send": "K4RTZ" }] },
-        { "id": "me.mine", "lesson": "me", "clip": "K4RTZ 5NN CO CO BK", "detail": "", "choices": [{ "send": "5NN VA 73" }, { "send": "K4RTZ" }, { "silent": true }] },
-        { "id": "me.close", "lesson": "me", "clip": "K4LTZ 5NN CO CO BK", "detail": "K4LTZ", "choices": [{ "silent": true }, { "send": "K4RTZ" }] },
-        { "id": "me.closeAsked", "lesson": "me", "clip": "K4LTZ?", "detail": "K4LTZ", "choices": [{ "send": "K4RTZ" }, { "silent": true }] },
-
-        { "id": "exchange.reply", "lesson": "exchange", "clip": "K4RTZ 5NN CO CO BK", "detail": "", "choices": [{ "send": "5NN VA 73" }, { "send": "W0PQA DE K4RTZ TNX FER CALL UR 5NN 5NN NAME JOE QTH VA VA HW? W0PQA DE K4RTZ KN" }, { "send": "K4RTZ 5NN VA" }] },
-        { "id": "exchange.agn", "lesson": "exchange", "clip": "AGN?", "detail": "", "choices": [{ "send": "5NN VA 73" }, { "send": "K4RTZ" }, { "silent": true }] },
-        { "id": "exchange.dits", "lesson": "exchange", "clip": "TU 73 E E", "detail": "", "choices": [{ "send": "E E" }, { "send": "K4RTZ" }, { "send": "TU 73 GL DE K4RTZ SK" }] },
-        { "id": "exchange.stop", "lesson": "exchange", "clip": "QRZ?", "detail": "", "choices": [{ "silent": true }, { "send": "K4RTZ" }] },
-
-        { "id": "mistake.call", "lesson": "mistake", "clip": "", "detail": "K4RTA", "choices": [{ "send": "EEEEEEEE K4RTZ" }, { "send": "SRI K4RTZ" }, { "silent": true }] },
-        { "id": "mistake.last", "lesson": "mistake", "clip": "", "detail": "K4RTT", "choices": [{ "send": "EEEEEEEE K4RTZ" }, { "send": "EEEEEEEE Z" }, { "silent": true }] },
-        { "id": "mistake.state", "lesson": "mistake", "clip": "", "detail": "5NN VB", "choices": [{ "send": "EEEEEEEE VA 73" }, { "send": "5NN VB VA 73" }, { "silent": true }] },
-
-        { "id": "offset.pileup", "lesson": "offset", "clip": "", "detail": "", "choices": [{ "option": "offsetSmall" }, { "option": "zeroBeat" }, { "option": "twoKUp" }] },
-        { "id": "offset.rit", "lesson": "offset", "clip": "", "detail": "", "choices": [{ "option": "rit" }, { "option": "xit" }, { "option": "pitch" }] },
-        { "id": "offset.xit", "lesson": "offset", "clip": "", "detail": "", "choices": [{ "option": "xit" }, { "option": "rit" }, { "option": "pitch" }] },
-        { "id": "offset.tune", "lesson": "offset", "clip": "", "detail": "", "choices": [{ "option": "tuneAway" }, { "option": "tuneOnQuick" }, { "option": "tuneOnLow" }] }
+        {
+          "id": "offset.pileup",
+          "lesson": "offset",
+          "clip": "",
+          "detail": "",
+          "choices": [
+            {
+              "option": "offsetSmall"
+            },
+            {
+              "option": "zeroBeat"
+            },
+            {
+              "option": "twoKUp"
+            }
+          ]
+        },
+        {
+          "id": "offset.rit",
+          "lesson": "offset",
+          "clip": "",
+          "detail": "",
+          "choices": [
+            {
+              "option": "rit"
+            },
+            {
+              "option": "xit"
+            },
+            {
+              "option": "pitch"
+            }
+          ]
+        },
+        {
+          "id": "offset.xit",
+          "lesson": "offset",
+          "clip": "",
+          "detail": "",
+          "choices": [
+            {
+              "option": "xit"
+            },
+            {
+              "option": "rit"
+            },
+            {
+              "option": "pitch"
+            }
+          ]
+        },
+        {
+          "id": "offset.tune",
+          "lesson": "offset",
+          "clip": "",
+          "detail": "",
+          "choices": [
+            {
+              "option": "tuneAway"
+            },
+            {
+              "option": "tuneOnQuick"
+            },
+            {
+              "option": "tuneOnLow"
+            }
+          ]
+        },
+        {
+          "id": "signals.as",
+          "lesson": "signals",
+          "clip": "<AS>",
+          "detail": "",
+          "choices": [
+            {
+              "option": "wait"
+            },
+            {
+              "option": "goAhead"
+            },
+            {
+              "option": "goodbye"
+            }
+          ]
+        },
+        {
+          "id": "signals.qrz",
+          "lesson": "signals",
+          "clip": "QRZ?",
+          "detail": "",
+          "choices": [
+            {
+              "option": "whoIsCalling"
+            },
+            {
+              "option": "sayAgain"
+            },
+            {
+              "option": "sorry"
+            }
+          ]
+        },
+        {
+          "id": "signals.ee",
+          "lesson": "signals",
+          "clip": "E E",
+          "detail": "",
+          "choices": [
+            {
+              "option": "goodbye"
+            },
+            {
+              "option": "error"
+            },
+            {
+              "option": "whoIsCalling"
+            }
+          ]
+        },
+        {
+          "id": "signals.bk",
+          "lesson": "signals",
+          "clip": "BK",
+          "detail": "",
+          "choices": [
+            {
+              "option": "backToYou"
+            },
+            {
+              "option": "wait"
+            },
+            {
+              "option": "sorry"
+            }
+          ]
+        },
+        {
+          "id": "signals.agn",
+          "lesson": "signals",
+          "clip": "AGN?",
+          "detail": "",
+          "choices": [
+            {
+              "option": "sayAgain"
+            },
+            {
+              "option": "goodbye"
+            },
+            {
+              "option": "backToYou"
+            }
+          ]
+        },
+        {
+          "id": "when.dits",
+          "lesson": "when",
+          "clip": "W8KDP TU 73 E E",
+          "detail": "",
+          "choices": [
+            {
+              "send": "K4RTZ"
+            },
+            {
+              "silent": true
+            }
+          ]
+        },
+        {
+          "id": "when.inProgress",
+          "lesson": "when",
+          "clip": "W8KDP 5NN CO CO BK",
+          "detail": "",
+          "choices": [
+            {
+              "silent": true
+            },
+            {
+              "send": "K4RTZ"
+            }
+          ]
+        },
+        {
+          "id": "when.as",
+          "lesson": "when",
+          "clip": "<AS>",
+          "detail": "",
+          "choices": [
+            {
+              "silent": true
+            },
+            {
+              "send": "K4RTZ"
+            }
+          ]
+        },
+        {
+          "id": "when.sriQrz",
+          "lesson": "when",
+          "clip": "SRI SRI QRZ?",
+          "detail": "",
+          "choices": [
+            {
+              "send": "K4RTZ"
+            },
+            {
+              "silent": true
+            }
+          ]
+        },
+        {
+          "id": "once.cq",
+          "lesson": "once",
+          "clip": "CQ POTA DE W0PQA K",
+          "detail": "",
+          "choices": [
+            {
+              "send": "K4RTZ"
+            },
+            {
+              "send": "W0PQA DE K4RTZ K"
+            },
+            {
+              "send": "K4RTZ K4RTZ K4RTZ"
+            }
+          ]
+        },
+        {
+          "id": "once.qrz",
+          "lesson": "once",
+          "clip": "QRZ?",
+          "detail": "",
+          "choices": [
+            {
+              "send": "K4RTZ"
+            },
+            {
+              "send": "DE K4RTZ K"
+            },
+            {
+              "send": "K4RTZ K4RTZ"
+            }
+          ]
+        },
+        {
+          "id": "once.dits",
+          "lesson": "once",
+          "clip": "W8KDP TU 73 E E",
+          "detail": "",
+          "choices": [
+            {
+              "send": "K4RTZ"
+            },
+            {
+              "send": "W0PQA K4RTZ"
+            },
+            {
+              "silent": true
+            }
+          ]
+        },
+        {
+          "id": "partial.prefix",
+          "lesson": "partial",
+          "clip": "K4?",
+          "detail": "",
+          "choices": [
+            {
+              "send": "K4RTZ"
+            },
+            {
+              "silent": true
+            }
+          ]
+        },
+        {
+          "id": "partial.notMine",
+          "lesson": "partial",
+          "clip": "K6?",
+          "detail": "",
+          "choices": [
+            {
+              "silent": true
+            },
+            {
+              "send": "K4RTZ"
+            }
+          ]
+        },
+        {
+          "id": "partial.suffix",
+          "lesson": "partial",
+          "clip": "TZ?",
+          "detail": "",
+          "choices": [
+            {
+              "send": "K4RTZ"
+            },
+            {
+              "silent": true
+            }
+          ]
+        },
+        {
+          "id": "partial.fullCall",
+          "lesson": "partial",
+          "clip": "K4RT?",
+          "detail": "",
+          "choices": [
+            {
+              "send": "K4RTZ"
+            },
+            {
+              "send": "Z"
+            },
+            {
+              "silent": true
+            }
+          ]
+        },
+        {
+          "id": "me.other",
+          "lesson": "me",
+          "clip": "W8KDP 5NN CO CO BK",
+          "detail": "",
+          "choices": [
+            {
+              "silent": true
+            },
+            {
+              "send": "K4RTZ"
+            }
+          ]
+        },
+        {
+          "id": "me.mine",
+          "lesson": "me",
+          "clip": "K4RTZ 5NN CO CO BK",
+          "detail": "",
+          "choices": [
+            {
+              "send": "5NN VA 73"
+            },
+            {
+              "send": "5NN VA BK"
+            },
+            {
+              "send": "K4RTZ"
+            },
+            {
+              "silent": true
+            }
+          ],
+          "accepted": [
+            0,
+            1
+          ]
+        },
+        {
+          "id": "me.close",
+          "lesson": "me",
+          "clip": "K4LTZ 5NN CO CO BK",
+          "detail": "K4LTZ",
+          "choices": [
+            {
+              "silent": true
+            },
+            {
+              "send": "K4RTZ"
+            }
+          ]
+        },
+        {
+          "id": "me.closeAsked",
+          "lesson": "me",
+          "clip": "K4LTZ?",
+          "detail": "K4LTZ",
+          "choices": [
+            {
+              "send": "K4RTZ"
+            },
+            {
+              "silent": true
+            }
+          ]
+        },
+        {
+          "id": "exchange.reply",
+          "lesson": "exchange",
+          "clip": "K4RTZ 5NN CO CO BK",
+          "detail": "",
+          "choices": [
+            {
+              "send": "5NN VA 73"
+            },
+            {
+              "send": "5NN VA BK"
+            },
+            {
+              "send": "W0PQA DE K4RTZ TNX FER CALL UR 5NN 5NN NAME JOE QTH VA VA HW? W0PQA DE K4RTZ KN"
+            },
+            {
+              "send": "K4RTZ 5NN VA"
+            }
+          ],
+          "accepted": [
+            0,
+            1
+          ]
+        },
+        {
+          "id": "exchange.agn",
+          "lesson": "exchange",
+          "clip": "AGN?",
+          "detail": "",
+          "choices": [
+            {
+              "send": "5NN VA 73"
+            },
+            {
+              "send": "5NN VA BK"
+            },
+            {
+              "send": "K4RTZ"
+            },
+            {
+              "silent": true
+            }
+          ],
+          "accepted": [
+            0,
+            1
+          ]
+        },
+        {
+          "id": "exchange.dits",
+          "lesson": "exchange",
+          "clip": "TU 73 E E",
+          "detail": "",
+          "choices": [
+            {
+              "send": "E E"
+            },
+            {
+              "send": "73 E E"
+            },
+            {
+              "send": "K4RTZ"
+            },
+            {
+              "send": "TU 73 GL DE K4RTZ SK"
+            }
+          ],
+          "accepted": [
+            0,
+            1
+          ]
+        },
+        {
+          "id": "exchange.stop",
+          "lesson": "exchange",
+          "clip": "QRZ?",
+          "detail": "",
+          "choices": [
+            {
+              "silent": true
+            },
+            {
+              "send": "K4RTZ"
+            }
+          ]
+        },
+        {
+          "id": "mistake.call",
+          "lesson": "mistake",
+          "clip": "",
+          "detail": "K4RTA",
+          "choices": [
+            {
+              "send": "<ERR> K4RTZ"
+            },
+            {
+              "send": "SRI K4RTZ"
+            },
+            {
+              "silent": true
+            }
+          ]
+        },
+        {
+          "id": "mistake.last",
+          "lesson": "mistake",
+          "clip": "",
+          "detail": "K4RTT",
+          "choices": [
+            {
+              "send": "<ERR> K4RTZ"
+            },
+            {
+              "send": "<ERR> Z"
+            },
+            {
+              "silent": true
+            }
+          ]
+        },
+        {
+          "id": "mistake.state",
+          "lesson": "mistake",
+          "clip": "",
+          "detail": "5NN VB",
+          "choices": [
+            {
+              "send": "<ERR> VA 73"
+            },
+            {
+              "send": "5NN VB VA 73"
+            },
+            {
+              "silent": true
+            }
+          ]
+        },
+        {
+          "id": "mistake.hear",
+          "lesson": "mistake",
+          "clip": "K4RTA <ERR> K4RTZ 5NN CO CO BK",
+          "detail": "K4RTA",
+          "choices": [
+            {
+              "send": "5NN VA 73"
+            },
+            {
+              "send": "5NN VA BK"
+            },
+            {
+              "send": "K4RTZ"
+            },
+            {
+              "silent": true
+            }
+          ],
+          "accepted": [
+            0,
+            1
+          ]
+        }
       ]
     }
   ],
   "pileupDemo": {
-    "passes": ["zeroBeat", "youOffset", "allOffset"],
+    "passes": [
+      "zeroBeat",
+      "youOffset",
+      "allOffset"
+    ],
     "cases": [
       {
-        "call": "N9HO", "tone": 600, "wpm": 20,
+        "call": "N9HO",
+        "tone": 600,
+        "wpm": 20,
         "voices": {
           "zeroBeat": [
-            { "text": "W8KDP", "pitch": 600, "wpm": 22, "gain": 0.80, "delay": 0.15, "isYou": false },
-            { "text": "KE0RJ", "pitch": 600, "wpm": 18, "gain": 0.90, "delay": 0.30, "isYou": false },
-            { "text": "N9HO", "pitch": 600, "wpm": 20, "gain": 1.00, "delay": 0.00, "isYou": true },
-            { "text": "AB7TF", "pitch": 600, "wpm": 24, "gain": 0.70, "delay": 0.10, "isYou": false },
-            { "text": "N4LQX", "pitch": 600, "wpm": 19, "gain": 0.85, "delay": 0.22, "isYou": false }
+            {
+              "text": "W8KDP",
+              "pitch": 600,
+              "wpm": 22,
+              "gain": 0.8,
+              "delay": 0.15,
+              "isYou": false
+            },
+            {
+              "text": "KE0RJ",
+              "pitch": 600,
+              "wpm": 18,
+              "gain": 0.9,
+              "delay": 0.3,
+              "isYou": false
+            },
+            {
+              "text": "N9HO",
+              "pitch": 600,
+              "wpm": 20,
+              "gain": 1.0,
+              "delay": 0.0,
+              "isYou": true
+            },
+            {
+              "text": "AB7TF",
+              "pitch": 600,
+              "wpm": 24,
+              "gain": 0.7,
+              "delay": 0.1,
+              "isYou": false
+            },
+            {
+              "text": "N4LQX",
+              "pitch": 600,
+              "wpm": 19,
+              "gain": 0.85,
+              "delay": 0.22,
+              "isYou": false
+            }
           ],
           "youOffset": [
-            { "text": "W8KDP", "pitch": 600, "wpm": 22, "gain": 0.80, "delay": 0.15, "isYou": false },
-            { "text": "KE0RJ", "pitch": 600, "wpm": 18, "gain": 0.90, "delay": 0.30, "isYou": false },
-            { "text": "N9HO", "pitch": 680, "wpm": 20, "gain": 1.00, "delay": 0.00, "isYou": true },
-            { "text": "AB7TF", "pitch": 600, "wpm": 24, "gain": 0.70, "delay": 0.10, "isYou": false },
-            { "text": "N4LQX", "pitch": 600, "wpm": 19, "gain": 0.85, "delay": 0.22, "isYou": false }
+            {
+              "text": "W8KDP",
+              "pitch": 600,
+              "wpm": 22,
+              "gain": 0.8,
+              "delay": 0.15,
+              "isYou": false
+            },
+            {
+              "text": "KE0RJ",
+              "pitch": 600,
+              "wpm": 18,
+              "gain": 0.9,
+              "delay": 0.3,
+              "isYou": false
+            },
+            {
+              "text": "N9HO",
+              "pitch": 680,
+              "wpm": 20,
+              "gain": 1.0,
+              "delay": 0.0,
+              "isYou": true
+            },
+            {
+              "text": "AB7TF",
+              "pitch": 600,
+              "wpm": 24,
+              "gain": 0.7,
+              "delay": 0.1,
+              "isYou": false
+            },
+            {
+              "text": "N4LQX",
+              "pitch": 600,
+              "wpm": 19,
+              "gain": 0.85,
+              "delay": 0.22,
+              "isYou": false
+            }
           ],
           "allOffset": [
-            { "text": "W8KDP", "pitch": 440, "wpm": 22, "gain": 0.80, "delay": 0.15, "isYou": false },
-            { "text": "KE0RJ", "pitch": 530, "wpm": 18, "gain": 0.90, "delay": 0.30, "isYou": false },
-            { "text": "N9HO", "pitch": 680, "wpm": 20, "gain": 1.00, "delay": 0.00, "isYou": true },
-            { "text": "AB7TF", "pitch": 630, "wpm": 24, "gain": 0.70, "delay": 0.10, "isYou": false },
-            { "text": "N4LQX", "pitch": 750, "wpm": 19, "gain": 0.85, "delay": 0.22, "isYou": false }
+            {
+              "text": "W8KDP",
+              "pitch": 440,
+              "wpm": 22,
+              "gain": 0.8,
+              "delay": 0.15,
+              "isYou": false
+            },
+            {
+              "text": "KE0RJ",
+              "pitch": 530,
+              "wpm": 18,
+              "gain": 0.9,
+              "delay": 0.3,
+              "isYou": false
+            },
+            {
+              "text": "N9HO",
+              "pitch": 680,
+              "wpm": 20,
+              "gain": 1.0,
+              "delay": 0.0,
+              "isYou": true
+            },
+            {
+              "text": "AB7TF",
+              "pitch": 630,
+              "wpm": 24,
+              "gain": 0.7,
+              "delay": 0.1,
+              "isYou": false
+            },
+            {
+              "text": "N4LQX",
+              "pitch": 750,
+              "wpm": 19,
+              "gain": 0.85,
+              "delay": 0.22,
+              "isYou": false
+            }
           ]
         }
       },
       {
-        "call": "w8kdp", "tone": 300, "wpm": 6,
+        "call": "w8kdp",
+        "tone": 300,
+        "wpm": 6,
         "voices": {
           "allOffset": [
-            { "text": "KC2VWM", "pitch": 200, "wpm": 8, "gain": 0.80, "delay": 0.15, "isYou": false },
-            { "text": "KE0RJ", "pitch": 230, "wpm": 5, "gain": 0.90, "delay": 0.30, "isYou": false },
-            { "text": "W8KDP", "pitch": 380, "wpm": 6, "gain": 1.00, "delay": 0.00, "isYou": true },
-            { "text": "AB7TF", "pitch": 330, "wpm": 10, "gain": 0.70, "delay": 0.10, "isYou": false },
-            { "text": "N4LQX", "pitch": 450, "wpm": 5, "gain": 0.85, "delay": 0.22, "isYou": false }
+            {
+              "text": "KC2VWM",
+              "pitch": 200,
+              "wpm": 8,
+              "gain": 0.8,
+              "delay": 0.15,
+              "isYou": false
+            },
+            {
+              "text": "KE0RJ",
+              "pitch": 230,
+              "wpm": 5,
+              "gain": 0.9,
+              "delay": 0.3,
+              "isYou": false
+            },
+            {
+              "text": "W8KDP",
+              "pitch": 380,
+              "wpm": 6,
+              "gain": 1.0,
+              "delay": 0.0,
+              "isYou": true
+            },
+            {
+              "text": "AB7TF",
+              "pitch": 330,
+              "wpm": 10,
+              "gain": 0.7,
+              "delay": 0.1,
+              "isYou": false
+            },
+            {
+              "text": "N4LQX",
+              "pitch": 450,
+              "wpm": 5,
+              "gain": 0.85,
+              "delay": 0.22,
+              "isYou": false
+            }
           ]
         }
       }
@@ -297,64 +1934,448 @@
   },
   "offsetMaths": {
     "heardPitch": [
-      { "tone": 600, "station": 200, "vfo": 0, "rit": 0, "pitch": 800 },
-      { "tone": 600, "station": 200, "vfo": 0, "rit": 200, "pitch": 600 },
-      { "tone": 600, "station": -120, "vfo": -100, "rit": 0, "pitch": 580 },
-      { "tone": 500, "station": 0, "vfo": 0, "rit": -50, "pitch": 550 }
+      {
+        "tone": 600,
+        "station": 200,
+        "vfo": 0,
+        "rit": 0,
+        "pitch": 800
+      },
+      {
+        "tone": 600,
+        "station": 200,
+        "vfo": 0,
+        "rit": 200,
+        "pitch": 600
+      },
+      {
+        "tone": 600,
+        "station": -120,
+        "vfo": -100,
+        "rit": 0,
+        "pitch": 580
+      },
+      {
+        "tone": 500,
+        "station": 0,
+        "vfo": 0,
+        "rit": -50,
+        "pitch": 550
+      }
     ],
     "transmitOffset": [
-      { "station": 200, "vfo": 0, "xit": 0, "offset": -200 },
-      { "station": 200, "vfo": 180, "xit": 0, "offset": -20 },
-      { "station": 200, "vfo": 170, "xit": 0, "offset": -30 },
-      { "station": 0, "vfo": 0, "xit": 60, "offset": 60 },
-      { "station": -70, "vfo": -70, "xit": 0, "offset": 0 }
+      {
+        "station": 200,
+        "vfo": 0,
+        "xit": 0,
+        "offset": -200
+      },
+      {
+        "station": 200,
+        "vfo": 180,
+        "xit": 0,
+        "offset": -20
+      },
+      {
+        "station": 200,
+        "vfo": 170,
+        "xit": 0,
+        "offset": -30
+      },
+      {
+        "station": 0,
+        "vfo": 0,
+        "xit": 60,
+        "offset": 60
+      },
+      {
+        "station": -70,
+        "vfo": -70,
+        "xit": 0,
+        "offset": 0
+      }
     ],
     "isZeroBeat": [
-      { "offset": 0, "zeroBeat": true },
-      { "offset": 20, "zeroBeat": true },
-      { "offset": -20, "zeroBeat": true },
-      { "offset": 21, "zeroBeat": false },
-      { "offset": -30, "zeroBeat": false }
+      {
+        "offset": 0,
+        "zeroBeat": true
+      },
+      {
+        "offset": 20,
+        "zeroBeat": true
+      },
+      {
+        "offset": -20,
+        "zeroBeat": true
+      },
+      {
+        "offset": 21,
+        "zeroBeat": false
+      },
+      {
+        "offset": -30,
+        "zeroBeat": false
+      }
     ],
     "audible": [
-      { "pitch": 150, "audible": 200 },
-      { "pitch": 200, "audible": 200 },
-      { "pitch": 800, "audible": 800 }
+      {
+        "pitch": 150,
+        "audible": 200
+      },
+      {
+        "pitch": 200,
+        "audible": 200
+      },
+      {
+        "pitch": 800,
+        "audible": 800
+      }
     ],
     "drillStart": [
-      { "round": 0, "start": 180 },
-      { "round": 7, "start": -260 },
-      { "round": 8, "start": 180 },
-      { "round": 11, "start": -70 },
-      { "round": -1, "start": -260 }
+      {
+        "round": 0,
+        "start": 180
+      },
+      {
+        "round": 7,
+        "start": -260
+      },
+      {
+        "round": 8,
+        "start": 180
+      },
+      {
+        "round": 11,
+        "start": -70
+      },
+      {
+        "round": -1,
+        "start": -260
+      }
     ]
   },
   "runs": [
     {
-      "lessonScenarios": ["when.dits", "when.inProgress", "when.as", "when.sriQrz"],
-      "answers": [0, 0, 0, 0],
-      "results": [true, true, true, true],
+      "lessonScenarios": [
+        "when.dits",
+        "when.inProgress",
+        "when.as",
+        "when.sriQrz"
+      ],
+      "answers": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "results": [
+        true,
+        true,
+        true,
+        true
+      ],
       "clean": true
     },
     {
-      "lessonScenarios": ["when.dits", "when.inProgress", "when.as", "when.sriQrz"],
-      "answers": [0, 1, 0, 0, 0],
-      "results": [true, false, true, true, false],
+      "lessonScenarios": [
+        "when.dits",
+        "when.inProgress",
+        "when.as",
+        "when.sriQrz"
+      ],
+      "answers": [
+        0,
+        1,
+        0,
+        0,
+        0
+      ],
+      "results": [
+        true,
+        false,
+        true,
+        true,
+        false
+      ],
       "clean": false,
       "$comment": "The second answer is wrong; the run still moves on. The fifth answer comes after the end and returns false."
+    },
+    {
+      "lessonScenarios": [
+        "me.mine",
+        "exchange.reply",
+        "exchange.dits",
+        "mistake.hear"
+      ],
+      "answers": [
+        1,
+        0,
+        1,
+        2
+      ],
+      "results": [
+        true,
+        true,
+        true,
+        false
+      ],
+      "clean": false,
+      "$comment": "Either exchange form is right (indices 0 and 1); answering mistake.hear with your call again is not."
+    },
+    {
+      "lessonScenarios": [
+        "exchange.reply",
+        "exchange.agn"
+      ],
+      "answers": [
+        1,
+        1
+      ],
+      "results": [
+        true,
+        true
+      ],
+      "clean": true
     }
   ],
   "progressScript": [
-    { "do": "run", "lesson": "signals", "clean": true, "passed": ["signals"], "next": "when", "passedNow": true },
-    { "do": "run", "lesson": "when", "clean": false, "passed": ["signals"], "next": "when", "passedNow": false },
-    { "do": "run", "lesson": "offset", "clean": true, "passed": ["signals"], "next": "when", "passedNow": false },
-    { "do": "drill", "correct": true, "streak": 1, "drillPassed": false, "passed": ["signals"] },
-    { "do": "drill", "correct": false, "streak": 0, "drillPassed": false, "passed": ["signals"] },
-    { "do": "drill", "correct": true, "streak": 1, "drillPassed": false, "passed": ["signals"] },
-    { "do": "drill", "correct": true, "streak": 2, "drillPassed": false, "passed": ["signals"] },
-    { "do": "drill", "correct": true, "streak": 0, "drillPassed": true, "passed": ["signals", "offset"], "passedNow": true },
-    { "do": "run", "lesson": "signals", "clean": true, "passed": ["signals", "offset"], "next": "when", "passedNow": false },
-    { "do": "run", "lesson": "when", "clean": true, "passed": ["signals", "when", "offset"], "next": "once", "passedNow": true },
-    { "do": "encode", "json": { "passed": ["offset", "signals", "when"], "cleanRuns": ["offset", "signals", "when"], "drillPassed": true } }
+    {
+      "do": "run",
+      "lesson": "signals",
+      "clean": true,
+      "passed": [
+        "signals"
+      ],
+      "next": "offset",
+      "passedNow": true
+    },
+    {
+      "do": "run",
+      "lesson": "when",
+      "clean": false,
+      "passed": [
+        "signals"
+      ],
+      "next": "offset",
+      "passedNow": false
+    },
+    {
+      "do": "run",
+      "lesson": "offset",
+      "clean": true,
+      "passed": [
+        "signals"
+      ],
+      "next": "offset",
+      "passedNow": false
+    },
+    {
+      "do": "drill",
+      "correct": true,
+      "streak": 1,
+      "drillPassed": false,
+      "passed": [
+        "signals"
+      ]
+    },
+    {
+      "do": "drill",
+      "correct": false,
+      "streak": 0,
+      "drillPassed": false,
+      "passed": [
+        "signals"
+      ]
+    },
+    {
+      "do": "drill",
+      "correct": true,
+      "streak": 1,
+      "drillPassed": false,
+      "passed": [
+        "signals"
+      ]
+    },
+    {
+      "do": "drill",
+      "correct": true,
+      "streak": 2,
+      "drillPassed": false,
+      "passed": [
+        "signals"
+      ]
+    },
+    {
+      "do": "drill",
+      "correct": true,
+      "streak": 0,
+      "drillPassed": true,
+      "passed": [
+        "signals",
+        "offset"
+      ],
+      "passedNow": true
+    },
+    {
+      "do": "run",
+      "lesson": "signals",
+      "clean": true,
+      "passed": [
+        "signals",
+        "offset"
+      ],
+      "next": "when",
+      "passedNow": false
+    },
+    {
+      "do": "run",
+      "lesson": "when",
+      "clean": true,
+      "passed": [
+        "signals",
+        "when",
+        "offset"
+      ],
+      "next": "once",
+      "passedNow": true
+    },
+    {
+      "do": "encode",
+      "json": {
+        "passed": [
+          "offset",
+          "signals",
+          "when"
+        ],
+        "cleanRuns": [
+          "offset",
+          "signals",
+          "when"
+        ],
+        "drillPassed": true
+      }
+    }
+  ],
+  "errorVariants": [
+    {
+      "count": 8,
+      "runTogether": true,
+      "speed": 1.0
+    },
+    {
+      "count": 5,
+      "runTogether": true,
+      "speed": 1.5
+    },
+    {
+      "count": 6,
+      "runTogether": false,
+      "speed": 0.8
+    },
+    {
+      "count": 7,
+      "runTogether": true,
+      "speed": 1.25
+    },
+    {
+      "count": 5,
+      "runTogether": false,
+      "speed": 1.0
+    },
+    {
+      "count": 8,
+      "runTogether": false,
+      "speed": 1.5
+    }
+  ],
+  "errorVariantPicks": [
+    {
+      "index": 0,
+      "count": 8,
+      "pattern": "........",
+      "spacedText": "EEEEEEEE"
+    },
+    {
+      "index": 4,
+      "count": 5,
+      "pattern": ".....",
+      "spacedText": "EEEEE"
+    },
+    {
+      "index": 6,
+      "count": 8,
+      "pattern": "........",
+      "spacedText": "EEEEEEEE"
+    },
+    {
+      "index": -1,
+      "count": 8,
+      "pattern": "........",
+      "spacedText": "EEEEEEEE"
+    }
+  ],
+  "clipParts": [
+    {
+      "text": "N9HP <ERR> N9HO",
+      "parts": [
+        {
+          "text": "N9HP"
+        },
+        {
+          "error": null
+        },
+        {
+          "text": "N9HO"
+        }
+      ]
+    },
+    {
+      "text": "N9HP <ERR:2> N9HO 5NN NC NC BK",
+      "parts": [
+        {
+          "text": "N9HP"
+        },
+        {
+          "error": 2
+        },
+        {
+          "text": "N9HO 5NN NC NC BK"
+        }
+      ]
+    },
+    {
+      "text": "<ERR> WI 73",
+      "parts": [
+        {
+          "error": null
+        },
+        {
+          "text": "WI 73"
+        }
+      ]
+    },
+    {
+      "text": "CQ POTA",
+      "parts": [
+        {
+          "text": "CQ POTA"
+        }
+      ]
+    },
+    {
+      "text": "<ERR> <ERR:1>",
+      "parts": [
+        {
+          "error": null
+        },
+        {
+          "error": 1
+        }
+      ]
+    },
+    {
+      "text": "",
+      "parts": []
+    }
   ]
 }

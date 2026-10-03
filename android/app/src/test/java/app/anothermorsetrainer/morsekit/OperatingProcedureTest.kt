@@ -53,8 +53,8 @@ class OperatingProcedureTest {
         assertEquals(c.getDouble("ritDemoStationOffsetHz"), OperatingProcedure.RIT_DEMO_STATION_OFFSET_HZ, 0.0)
         assertEquals(c.getDouble("ritRangeHz"), OperatingProcedure.RIT_RANGE_HZ, 0.0)
         assertEquals(c.getDouble("ritStepHz"), OperatingProcedure.RIT_STEP_HZ, 0.0)
-        assertEquals(c.getString("errorSignal"), OperatingProcedure.ERROR_SIGNAL)
-        assertEquals(c.getString("errorSignalDisplay"), OperatingProcedure.ERROR_SIGNAL_DISPLAY)
+        assertEquals(c.getString("errorToken"), OperatingProcedure.ERROR_TOKEN)
+        assertEquals(c.getString("errorDisplay"), OperatingProcedure.ERROR_DISPLAY)
         assertEquals(c.getString("replacementCaller"), OperatingProcedure.REPLACEMENT_CALLER)
         assertEquals(fixture.getJSONObject("derivation").getString("defaultCall"), OperatingProcedure.DEFAULT_CALL)
         assertEquals(
@@ -108,6 +108,29 @@ class OperatingProcedureTest {
     }
 
     @Test
+    fun errorsComeInManyShapes() {
+        val want = objects(fixture.getJSONArray("errorVariants")).map {
+            OperatingProcedure.ErrorVariant(it.getInt("count"), it.getBoolean("runTogether"), it.getDouble("speed"))
+        }
+        assertEquals(want, OperatingProcedure.errorVariants)
+        assertTrue("every error is 5-8 dits", OperatingProcedure.errorVariants.all { it.count in 5..8 })
+        for (p in objects(fixture.getJSONArray("errorVariantPicks"))) {
+            val v = OperatingProcedure.errorVariant(p.getInt("index"))
+            assertEquals("variant ${p.getInt("index")} count", p.getInt("count"), v.count)
+            assertEquals("variant ${p.getInt("index")} pattern", p.getString("pattern"), v.pattern)
+            assertEquals("variant ${p.getInt("index")} spaced", p.getString("spacedText"), v.spacedText)
+        }
+        for (c in objects(fixture.getJSONArray("clipParts"))) {
+            val text = c.getString("text")
+            val parts = objects(c.getJSONArray("parts")).map { part ->
+                if (part.has("text")) OperatingProcedure.ClipPart.Text(part.getString("text"))
+                else OperatingProcedure.ClipPart.Error(if (part.isNull("error")) null else part.getInt("error"))
+            }
+            assertEquals("clip parts of '$text'", parts, OperatingProcedure.clipParts(text))
+        }
+    }
+
+    @Test
     fun everyScenarioAndDemoForBothProfiles() {
         for (profile in objects(fixture.getJSONArray("profiles"))) {
             val call = profile.getString("call")
@@ -122,7 +145,8 @@ class OperatingProcedureTest {
                     lesson = lesson(s.getString("lesson")),
                     clip = s.getString("clip"),
                     detail = s.getString("detail"),
-                    choices = objects(s.getJSONArray("choices")).map(::choice)
+                    choices = objects(s.getJSONArray("choices")).map(::choice),
+                    accepted = s.optJSONArray("accepted")?.let { a -> (0 until a.length()).map { a.getInt(it) } } ?: listOf(0)
                 )
             }
             val got = OperatingProcedure.scenarios(call, state)

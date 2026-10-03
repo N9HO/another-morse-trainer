@@ -2,7 +2,7 @@ import Foundation
 
 // CW Operating Procedure (#294, #295): on-air etiquette for hunting POTA
 // activators, one rule at a time — eight lessons of concept, demo and quick
-// scenarios (the eighth is #294's zero beat / RIT / XIT / offset lesson, with
+// scenarios (the first is #294's zero beat / RIT / XIT / offset lesson, with
 // its pileup demo and a tune-to-zero-beat drill), and a "What should you do?"
 // mode over the lessons' scenarios. docs/operating-procedure-design.md is the
 // spec; every rule below is pinned by fixtures/operating-procedure.json, which
@@ -12,9 +12,10 @@ import Foundation
 // Call and state validation are this file's own copy of First Four's rules,
 // so the section never depends on First Four's port (desktop has none yet).
 
-/// The eight lessons, in the order the lesson list recommends.
+/// The eight lessons, in the order the lesson list recommends. Offsetting
+/// (#294) comes first, straight after First Four (maintainer, 2026-10-03).
 public enum OpLesson: String, CaseIterable, Codable, Sendable {
-    case signals, when, once, partial, me, exchange, mistake, offset
+    case offset, signals, when, once, partial, me, exchange, mistake
 }
 
 /// What a scenario offers the learner.
@@ -37,25 +38,35 @@ public enum OpChoice: Equatable, Hashable, Sendable {
 
 /// One quick question: a clip (what the activator just sent; may be empty),
 /// a generated detail the situation text mentions (may be empty), and the
-/// choices, **right answer first**. The screen shuffles them.
+/// choices, **the primary right answer first**. `accepted` lists every choice
+/// that counts as right (the exchange has two accepted forms). The screen
+/// shuffles the choices.
 public struct OpScenario: Equatable, Sendable {
     public let id: String
     public let lesson: OpLesson
     public let clip: String
     public let detail: String
     public let choices: [OpChoice]
+    public let accepted: [Int]
 
-    public init(id: String, lesson: OpLesson, clip: String, detail: String = "", choices: [OpChoice]) {
+    public init(id: String, lesson: OpLesson, clip: String, detail: String = "", choices: [OpChoice],
+                accepted: [Int] = [0]) {
         self.id = id
         self.lesson = lesson
         self.clip = clip
         self.detail = detail
         self.choices = choices
+        self.accepted = accepted
     }
 
-    /// Index of the right choice in `choices`.
-    public static let correctIndex = 0
-    public var correct: OpChoice { choices[Self.correctIndex] }
+    /// The primary right answer.
+    public var correct: OpChoice { choices[0] }
+    /// True when picking choice `index` (in `choices` order) is right.
+    public func accepts(index: Int) -> Bool { accepted.contains(index) }
+    /// True when picking `choice` is right.
+    public func accepts(_ choice: OpChoice) -> Bool {
+        choices.firstIndex(of: choice).map(accepts(index:)) ?? false
+    }
     /// Every choice is send or stay silent: these make up "What should you do?".
     public var isAction: Bool { choices.allSatisfy(\.isAction) }
 }
@@ -102,7 +113,7 @@ public enum OperatingProcedure {
 
     /// Scenarios dealt per "What should you do?" run.
     public static let scenarioRunLength = 10
-    /// Right answers in a row that pass lesson 8's zero-beat drill.
+    /// Right answers in a row that pass the offsetting lesson's zero-beat drill.
     public static let zeroBeatStreakToPass = 3
     /// How close to the activator's frequency counts as zero beat, in hertz.
     public static let zeroBeatToleranceHz = 20.0
@@ -116,16 +127,19 @@ public enum OperatingProcedure {
     /// The RIT demo's control: ± this, in steps of `ritStepHz`.
     public static let ritRangeHz = 300.0
     public static let ritStepHz = 10.0
-    /// The error signal (eight dots, ITU-R M.1677-1 §3.2), as it is written and played.
-    public static let errorSignal = "EEEEEEEE"
-    /// …and as it is shown.
-    public static let errorSignalDisplay = "········"
+    /// Where an error goes in a clip or a choice: `<ERR>` (any shape, picked
+    /// when it plays) or `<ERR:n>` (row n of `errorVariants`). Not a prosign:
+    /// an error can sound like anything, and the lesson teaches recognising
+    /// it, not copying one shape (maintainer, 2026-10-03).
+    public static let errorToken = "<ERR>"
+    /// How an error is shown: a word, never a fixed run of dots.
+    public static let errorDisplay = "[error]"
     /// Stands in for a pileup-demo caller whose call is the learner's own.
     public static let replacementCaller = "KC2VWM"
     /// The callsign Settings ships with — a placeholder, not the learner's.
     public static let defaultCall = "W1AW"
 
-    /// Where lesson 8's drill starts the activator, round by round (hertz).
+    /// Where the offsetting drill starts the activator, round by round (hertz).
     public static let drillStarts: [Double] = [180, -120, 250, -70, 90, -210, 140, -260]
     /// The tuning buttons, in hertz.
     public static let knobSteps: [Double] = [-50, -10, 10, 50]
@@ -204,7 +218,7 @@ public enum OperatingProcedure {
         return c
     }
 
-    /// Lesson 4's rule: what is left of the partial once its "?"s are gone is
+    /// The partial-calls rule: what is left of the partial once its "?"s are gone is
     /// yours when it occurs, unbroken, in your call. A bare "?" is everyone's.
     public static func partialMatches(_ partial: String, call: String) -> Bool {
         var p = normalizeCall(partial)
@@ -244,17 +258,99 @@ public enum OperatingProcedure {
         return String(c)
     }
 
-    /// The error signal shown as dots.
+    /// A clip or choice as it is shown: every error token becomes `errorDisplay`.
     public static func display(_ text: String) -> String {
-        text.replacingOccurrences(of: errorSignal, with: errorSignalDisplay)
+        clipParts(text).map { part in
+            switch part {
+            case .text(let t): return t
+            case .error: return errorDisplay
+            }
+        }.joined(separator: " ")
     }
 
-    /// The hunter's reply, the same as First Four's: report, state, 73.
+    /// The hunter's reply, the same as First Four's: report, state, 73. The
+    /// primary form.
     public static func reply(state: String) -> String {
         "5NN \(normalizeState(state)) 73"
     }
 
-    /// Lesson 6's wrong example: a ragchew where a POTA exchange belongs.
+    /// WB0RLJ's order (RST, state, BK; then 73 and dit-dit after their TU),
+    /// accepted as a second form (maintainer, 2026-10-03). Its first turn.
+    public static func replyBK(state: String) -> String {
+        "5NN \(normalizeState(state)) BK"
+    }
+
+    /// …and its second, after the activator's `TU 73 E E`.
+    public static let closeBK = "73 E E"
+
+    // MARK: Errors
+
+    /// One way an error can sound: how many dits (5–8), sent run together
+    /// (one keying, element gaps) or slapped as separate dits (character
+    /// gaps), at the learner's speed times `speed`.
+    public struct ErrorVariant: Equatable, Sendable {
+        public let count: Int
+        public let runTogether: Bool
+        public let speed: Double
+        public init(count: Int, runTogether: Bool, speed: Double) {
+            self.count = count
+            self.runTogether = runTogether
+            self.speed = speed
+        }
+
+        /// Run together, as a dot pattern.
+        public var pattern: String { String(repeating: ".", count: count) }
+        /// Slapped, as separate letters E.
+        public var spacedText: String { String(repeating: "E", count: count) }
+    }
+
+    /// The shapes an error takes in the app, so no two sound alike.
+    public static let errorVariants: [ErrorVariant] = [
+        ErrorVariant(count: 8, runTogether: true, speed: 1.0),
+        ErrorVariant(count: 5, runTogether: true, speed: 1.5),
+        ErrorVariant(count: 6, runTogether: false, speed: 0.8),
+        ErrorVariant(count: 7, runTogether: true, speed: 1.25),
+        ErrorVariant(count: 5, runTogether: false, speed: 1.0),
+        ErrorVariant(count: 8, runTogether: false, speed: 1.5),
+    ]
+
+    /// Row `index` of `errorVariants`, cycling.
+    public static func errorVariant(_ index: Int) -> ErrorVariant {
+        let n = errorVariants.count
+        return errorVariants[((index % n) + n) % n]
+    }
+
+    /// A piece of a clip: Morse text, or an error (with its row, if pinned).
+    public enum ClipPart: Equatable, Sendable {
+        case text(String)
+        case error(Int?)
+    }
+
+    /// Split a clip on its error tokens, so a player can sound each error in
+    /// its own shape. Words are joined by single spaces; empty text is dropped.
+    public static func clipParts(_ text: String) -> [ClipPart] {
+        var parts: [ClipPart] = []
+        var words: [String] = []
+        func flush() {
+            if !words.isEmpty { parts.append(.text(words.joined(separator: " "))) }
+            words = []
+        }
+        for word in text.split(separator: " ").map(String.init) {
+            if word == errorToken {
+                flush()
+                parts.append(.error(nil))
+            } else if word.hasPrefix("<ERR:"), word.hasSuffix(">"), let n = Int(word.dropFirst(5).dropLast()) {
+                flush()
+                parts.append(.error(n))
+            } else {
+                words.append(word)
+            }
+        }
+        flush()
+        return parts
+    }
+
+    /// The exchange lesson's wrong example: a ragchew where a POTA exchange belongs.
     public static func ragchew(call: String, state: String, activator: String) -> String {
         let c = normalizeCall(call)
         let s = normalizeState(state)
@@ -281,8 +377,19 @@ public enum OperatingProcedure {
         let callLast = String(chars.dropLast()) + (chars.last.map { String(shift($0, by: -6)) } ?? "")
         let stChars = Array(st)
         let stateWrong = String(stChars.dropLast()) + (stChars.last.map { String(shift($0, by: 1)) } ?? "")
+        let myReplyBK = replyBK(state: st)
+        let err = errorToken
 
         return [
+            OpScenario(id: "offset.pileup", lesson: .offset, clip: "",
+                       choices: [.option("offsetSmall"), .option("zeroBeat"), .option("twoKUp")]),
+            OpScenario(id: "offset.rit", lesson: .offset, clip: "",
+                       choices: [.option("rit"), .option("xit"), .option("pitch")]),
+            OpScenario(id: "offset.xit", lesson: .offset, clip: "",
+                       choices: [.option("xit"), .option("rit"), .option("pitch")]),
+            OpScenario(id: "offset.tune", lesson: .offset, clip: "",
+                       choices: [.option("tuneAway"), .option("tuneOnQuick"), .option("tuneOnLow")]),
+
             OpScenario(id: "signals.as", lesson: .signals, clip: "<AS>",
                        choices: [.option("wait"), .option("goAhead"), .option("goodbye")]),
             OpScenario(id: "signals.qrz", lesson: .signals, clip: "QRZ?",
@@ -317,36 +424,32 @@ public enum OperatingProcedure {
 
             OpScenario(id: "me.other", lesson: .me, clip: otherAck, choices: [.silent, mine]),
             OpScenario(id: "me.mine", lesson: .me, clip: theirAck,
-                       choices: [.send(myReply), mine, .silent]),
+                       choices: [.send(myReply), .send(myReplyBK), mine, .silent], accepted: [0, 1]),
             OpScenario(id: "me.close", lesson: .me, clip: "\(near) 5NN \(act.state) \(act.state) BK",
                        detail: near, choices: [.silent, mine]),
             OpScenario(id: "me.closeAsked", lesson: .me, clip: "\(near)?", detail: near,
                        choices: [mine, .silent]),
 
             OpScenario(id: "exchange.reply", lesson: .exchange, clip: theirAck,
-                       choices: [.send(myReply), .send(ragchew(call: me, state: st, activator: act.call)),
-                                 .send("\(me) 5NN \(st)")]),
+                       choices: [.send(myReply), .send(myReplyBK),
+                                 .send(ragchew(call: me, state: st, activator: act.call)),
+                                 .send("\(me) 5NN \(st)")], accepted: [0, 1]),
             OpScenario(id: "exchange.agn", lesson: .exchange, clip: "AGN?",
-                       choices: [.send(myReply), mine, .silent]),
+                       choices: [.send(myReply), .send(myReplyBK), mine, .silent], accepted: [0, 1]),
             OpScenario(id: "exchange.dits", lesson: .exchange, clip: "TU 73 E E",
-                       choices: [.send("E E"), mine, .send("TU 73 GL DE \(me) SK")]),
+                       choices: [.send("E E"), .send(closeBK), mine, .send("TU 73 GL DE \(me) SK")],
+                       accepted: [0, 1]),
             OpScenario(id: "exchange.stop", lesson: .exchange, clip: "QRZ?", choices: [.silent, mine]),
 
             OpScenario(id: "mistake.call", lesson: .mistake, clip: "", detail: callWrong,
-                       choices: [.send("\(errorSignal) \(me)"), .send("SRI \(me)"), .silent]),
+                       choices: [.send("\(err) \(me)"), .send("SRI \(me)"), .silent]),
             OpScenario(id: "mistake.last", lesson: .mistake, clip: "", detail: callLast,
-                       choices: [.send("\(errorSignal) \(me)"), .send("\(errorSignal) \(last)"), .silent]),
+                       choices: [.send("\(err) \(me)"), .send("\(err) \(last)"), .silent]),
             OpScenario(id: "mistake.state", lesson: .mistake, clip: "", detail: "5NN \(stateWrong)",
-                       choices: [.send("\(errorSignal) \(st) 73"), .send("5NN \(stateWrong) \(st) 73"), .silent]),
-
-            OpScenario(id: "offset.pileup", lesson: .offset, clip: "",
-                       choices: [.option("offsetSmall"), .option("zeroBeat"), .option("twoKUp")]),
-            OpScenario(id: "offset.rit", lesson: .offset, clip: "",
-                       choices: [.option("rit"), .option("xit"), .option("pitch")]),
-            OpScenario(id: "offset.xit", lesson: .offset, clip: "",
-                       choices: [.option("xit"), .option("rit"), .option("pitch")]),
-            OpScenario(id: "offset.tune", lesson: .offset, clip: "",
-                       choices: [.option("tuneAway"), .option("tuneOnQuick"), .option("tuneOnLow")]),
+                       choices: [.send("\(err) \(st) 73"), .send("5NN \(stateWrong) \(st) 73"), .silent]),
+            OpScenario(id: "mistake.hear", lesson: .mistake, clip: "\(callWrong) \(err) \(theirAck)",
+                       detail: callWrong,
+                       choices: [.send(myReply), .send(myReplyBK), mine, .silent], accepted: [0, 1]),
         ]
     }
 
@@ -362,7 +465,7 @@ public enum OperatingProcedure {
 
     // MARK: Demos
 
-    /// A lesson's right/wrong clips. Lesson 8's demos are the pileup and RIT
+    /// A lesson's right/wrong clips. The offsetting lesson's demos are the pileup and RIT
     /// demos below, so its list is empty.
     public static func demos(_ lesson: OpLesson, call rawCall: String, state rawState: String) -> [OpDemo] {
         let me = normalizeCall(rawCall)
@@ -390,21 +493,27 @@ public enum OperatingProcedure {
                 OpDemo(.right, [.init(.activator, String(chars.prefix(2)) + "?"), .init(.you, me)]),
             ]
         case .me:
+            let near = nearMiss(call: me)
             return [
-                OpDemo(.wrong, [.init(.activator, "\(nearMiss(call: me)) 5NN \(act.state) \(act.state) BK"), .init(.you, me)]),
-                OpDemo(.right, [.init(.activator, theirAck), .init(.you, reply(state: st))]),
+                OpDemo(.wrong, [.init(.activator, "\(near) 5NN \(act.state) \(act.state) BK"), .init(.you, me)]),
+                OpDemo(.right, [.init(.activator, "\(near)?"), .init(.you, me), .init(.activator, theirAck)]),
             ]
         case .exchange:
             return [
                 OpDemo(.wrong, [.init(.activator, theirAck), .init(.you, ragchew(call: me, state: st, activator: act.call))]),
                 OpDemo(.right, [.init(.activator, theirAck), .init(.you, reply(state: st)),
                                 .init(.activator, "TU 73 E E"), .init(.you, "E E")]),
+                OpDemo(.right, [.init(.activator, theirAck), .init(.you, replyBK(state: st)),
+                                .init(.activator, "TU 73 E E"), .init(.you, closeBK)]),
             ]
         case .mistake:
             let wrong = String(chars.dropLast()) + (chars.last.map { String(shift($0, by: 1)) } ?? "")
             return [
                 OpDemo(.wrong, [.init(.you, wrong)]),
-                OpDemo(.right, [.init(.you, "\(wrong) \(errorSignal) \(me)")]),
+                OpDemo(.right, [.init(.you, "\(wrong) \(errorToken) \(me)")]),
+                OpDemo(.listen, [.init(.activator, "\(wrong) <ERR:1> \(me)")]),
+                OpDemo(.listen, [.init(.activator, "\(wrong) <ERR:2> \(me)")]),
+                OpDemo(.listen, [.init(.activator, "\(wrong) <ERR:5> \(me)")]),
             ]
         case .offset:
             return []
@@ -507,11 +616,12 @@ public struct OpScenarioRun: Equatable, Sendable {
     public var isClean: Bool { isFinished && mistakes == 0 }
 
     /// Answer the current scenario with `choice` (its index in the scenario's
-    /// own, right-first order). True when right; false when wrong or finished.
+    /// own order). True when it is one of the accepted answers; false when
+    /// wrong or finished.
     @discardableResult
     public mutating func answer(_ choice: Int) -> Bool {
-        guard current != nil else { return false }
-        let right = choice == OpScenario.correctIndex
+        guard let s = current else { return false }
+        let right = s.accepts(index: choice)
         if !right { mistakes += 1 }
         index += 1
         return right
@@ -528,7 +638,7 @@ public struct OpScenarioRun: Equatable, Sendable {
 // MARK: - Progress
 
 /// Which lessons have passed, which have a clean scenario run, and whether
-/// lesson 8's drill has passed. Persisted by the app; the drill's in-a-row
+/// the offsetting drill has passed. Persisted by the app; the drill's in-a-row
 /// streak is not (three in a row means three in one sitting).
 public struct OperatingProcedureProgress: Codable, Equatable, Sendable {
     public private(set) var passed: Set<OpLesson> = []
@@ -571,7 +681,7 @@ public struct OperatingProcedureProgress: Codable, Equatable, Sendable {
         return settle(lesson)
     }
 
-    /// Count one drill answer. True when it passed lesson 8 just now.
+    /// Count one drill answer. True when it passed the offsetting lesson just now.
     @discardableResult
     public mutating func recordDrill(correct: Bool) -> Bool {
         guard correct else { drillStreak = 0; return false }

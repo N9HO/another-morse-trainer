@@ -57,7 +57,7 @@ class OperatingProcedureStoreCodecTest {
             val p = OperatingProcedureStore.decode(raw)
             assertTrue("'$raw' decodes as a fresh start", p.passed.isEmpty() && p.cleanRuns.isEmpty())
             assertFalse(p.drillPassed)
-            assertEquals(OpLesson.SIGNALS, p.nextLesson)
+            assertEquals(OpLesson.entries.first(), p.nextLesson)
         }
     }
 
@@ -65,6 +65,6 @@ class OperatingProcedureStoreCodecTest {
     fun unknownLessonNamesAreSkipped() {
         val p = OperatingProcedureStore.decode("""{"passed":["signals","fromANewerBuild"],"cleanRuns":["signals"],"drillPassed":false}""")
         assertEquals(setOf(OpLesson.SIGNALS), p.passed)
-        assertEquals(OpLesson.WHEN, p.nextLesson)
+        assertEquals("offsetting comes first", OpLesson.OFFSET, p.nextLesson)
     }
 }

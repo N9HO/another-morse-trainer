@@ -6876,8 +6876,8 @@ if let fx = loadOpFixture(),
           && opNum(constants["ritDemoStationOffsetHz"]) == OperatingProcedure.ritDemoStationOffsetHz
           && opNum(constants["ritRangeHz"]) == OperatingProcedure.ritRangeHz
           && opNum(constants["ritStepHz"]) == OperatingProcedure.ritStepHz
-          && constants["errorSignal"] as? String == OperatingProcedure.errorSignal
-          && constants["errorSignalDisplay"] as? String == OperatingProcedure.errorSignalDisplay
+          && constants["errorToken"] as? String == OperatingProcedure.errorToken
+          && constants["errorDisplay"] as? String == OperatingProcedure.errorDisplay
           && constants["replacementCaller"] as? String == OperatingProcedure.replacementCaller)
     check("op: default call", (fx["derivation"] as? [String: Any])?["defaultCall"] as? String == OperatingProcedure.defaultCall)
     let actRows = (fx["activators"] as? [[String: String]]) ?? []
@@ -6886,6 +6886,26 @@ if let fx = loadOpFixture(),
     check("op: other hunters", (fx["otherHunters"] as? [String]) == OperatingProcedure.otherHunters)
     check("op: drill starts", ((fx["drillStarts"] as? [NSNumber]) ?? []).map(\.doubleValue) == OperatingProcedure.drillStarts)
     check("op: knob steps", ((fx["knobSteps"] as? [NSNumber]) ?? []).map(\.doubleValue) == OperatingProcedure.knobSteps)
+    let variantRows = (fx["errorVariants"] as? [[String: Any]]) ?? []
+    check("op: error variants", !variantRows.isEmpty && variantRows.map {
+        OperatingProcedure.ErrorVariant(count: $0["count"] as? Int ?? 0, runTogether: $0["runTogether"] as? Bool ?? false,
+                                        speed: opNum($0["speed"]))
+    } == OperatingProcedure.errorVariants)
+    check("op: every error is 5–8 dits", OperatingProcedure.errorVariants.allSatisfy { (5...8).contains($0.count) })
+    for p in (fx["errorVariantPicks"] as? [[String: Any]]) ?? [] {
+        let i = p["index"] as? Int ?? 0
+        let v = OperatingProcedure.errorVariant(i)
+        check("op: error variant \(i)", v.count == p["count"] as? Int && v.pattern == p["pattern"] as? String
+              && v.spacedText == p["spacedText"] as? String)
+    }
+    for c in (fx["clipParts"] as? [[String: Any]]) ?? [] {
+        let text = c["text"] as? String ?? ""
+        let want: [OperatingProcedure.ClipPart] = ((c["parts"] as? [[String: Any]]) ?? []).map { part in
+            if let t = part["text"] as? String { return .text(t) }
+            return .error(part["error"] as? Int)
+        }
+        check("op: clip parts of '\(text)'", OperatingProcedure.clipParts(text) == want)
+    }
 
     let validation = fx["validation"] as? [String: Any] ?? [:]
     for c in validation["calls"] as? [[String: Any]] ?? [] {
@@ -6935,7 +6955,8 @@ if let fx = loadOpFixture(),
                        lesson: OpLesson(rawValue: s["lesson"] as? String ?? "") ?? .signals,
                        clip: s["clip"] as? String ?? "",
                        detail: s["detail"] as? String ?? "",
-                       choices: (s["choices"] as? [[String: Any]] ?? []).compactMap(opChoice))
+                       choices: (s["choices"] as? [[String: Any]] ?? []).compactMap(opChoice),
+                       accepted: (s["accepted"] as? [Int]) ?? [0])
         }
         let got = OperatingProcedure.scenarios(call: call, state: state)
         check("op: \(call) has \(want.count) scenarios", got.count == want.count && !want.isEmpty)
