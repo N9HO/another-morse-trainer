@@ -22,6 +22,12 @@ Usage:
                                            # upload the PNGs in <dir> as e.g.
                                            # APP_IPHONE_67 screenshots (idempotent
                                            # by file name)
+  python3 tools/asc-api.py devid-profile <out-file>
+                                           # find-or-create the Mac Catalyst
+                                           # Developer ID profile for the bundle
+                                           # with the team's Developer ID
+                                           # Application certificate, and write
+                                           # it to <out-file>; prints its name
   python3 tools/asc-api.py prepare <version-string> <metadata-json>
                                            # apply tools/store-metadata.json (age
                                            # rating, categories, listing text,
@@ -447,6 +453,72 @@ def main():
                   f'autoNotify={a.get("hasAccessToAllBuilds")} publicLink={a.get("publicLinkEnabled")}')
         if st != 200:
             print(d)
+
+    elif cmd == "devid-profile":
+        # The developer-id channel's provisioning profile. xcodebuild cannot
+        # make one with an API key (it only tries the cloud-managed Developer
+        # ID certificate, which API keys are refused: FB16835802), so it is
+        # made here and the export signs manually. Kept under one name and
+        # reused while it is ACTIVE and names the current certificate; a new
+        # certificate gets a new profile.
+        if len(sys.argv) < 3:
+            print("usage: devid-profile <out-file>"); sys.exit(2)
+        out = sys.argv[2]
+        bundle = os.environ["ASC_BUNDLE_ID"]
+        name = "AMT Developer ID (Mac Catalyst)"
+        ptype = "MAC_CATALYST_APP_DIRECT"
+
+        st, d = call("GET", "/v1/certificates?limit=200"
+                            "&fields[certificates]=certificateType,displayName,expirationDate,serialNumber")
+        certs = [c for c in d.get("data", [])
+                 if (c["attributes"].get("certificateType") or "").startswith("DEVELOPER_ID_APPLICATION")
+                 and "MANAGED" not in c["attributes"]["certificateType"]]
+        if not certs:
+            print(f"No Developer ID Application certificate on the team (HTTP {st})."); sys.exit(1)
+        cert = max(certs, key=lambda c: c["attributes"].get("expirationDate") or "")
+        print(f"  certificate {cert['id']} ({cert['attributes']['certificateType']}, "
+              f"expires {cert['attributes'].get('expirationDate')})")
+
+        st, d = call("GET", f"/v1/bundleIds?filter[identifier]={urllib.parse.quote(bundle)}")
+        bid = next((b["id"] for b in d.get("data", []) if b["attributes"]["identifier"] == bundle), None)
+        if not bid:
+            print(f"Bundle ID {bundle} not found (HTTP {st})."); sys.exit(1)
+
+        st, d = call("GET", f"/v1/profiles?filter[name]={urllib.parse.quote(name)}"
+                            f"&filter[profileType]={ptype}&include=certificates&limit=20")
+        profile = None
+        for p in d.get("data", []):
+            certs_on = {c["id"] for c in p["relationships"]["certificates"].get("data", [])} \
+                if "data" in p["relationships"].get("certificates", {}) else set()
+            if p["attributes"].get("profileState") == "ACTIVE" and cert["id"] in certs_on:
+                profile = p
+                break
+        if profile is None:
+            # A stale one (expired, or for an older certificate) would make
+            # the name ambiguous; remove it before making the new one.
+            for p in d.get("data", []):
+                call("DELETE", f"/v1/profiles/{p['id']}")
+                print(f"  removed stale profile {p['id']}")
+            st, d = call("POST", "/v1/profiles", {"data": {
+                "type": "profiles",
+                "attributes": {"name": name, "profileType": ptype},
+                "relationships": {
+                    "bundleId": {"data": {"type": "bundleIds", "id": bid}},
+                    "certificates": {"data": [{"type": "certificates", "id": cert["id"]}]},
+                }}})
+            if st != 201:
+                print(f"Could not create the profile: HTTP {st} {d}"); sys.exit(1)
+            profile = d["data"]
+            print(f"  created profile {profile['id']}")
+        else:
+            print(f"  reusing profile {profile['id']}")
+        content = profile["attributes"].get("profileContent")
+        if not content:
+            st, d = call("GET", f"/v1/profiles/{profile['id']}")
+            content = d["data"]["attributes"]["profileContent"]
+        with open(out, "wb") as f:
+            f.write(base64.b64decode(content))
+        print(name)
 
     elif cmd == "builds":
         st, d = call("GET", f"/v1/builds?filter[app]={app}{_platform_filter()}&sort=-version&limit=5"

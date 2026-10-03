@@ -44,8 +44,11 @@
 # FB16835802 (seen 2026-10-03). So the developer-id channel needs the
 # certificate and its private key in the keychain: CI imports them from the
 # DEVID_APP_P12 secrets into its throwaway keychain, and a local run uses the
-# one in the login keychain. The provisioning profile is still made
-# automatically through the API key. Notarization uses the same API key.
+# one in the login keychain. The export signs manually with a provisioning
+# profile `asc-api.py devid-profile` finds or makes through the API key, and
+# notarization uses the same key. The download has no App Attest (see
+# Config/MorseTrainer-macCatalyst-developerID.entitlements), so it reads the
+# leaderboard but cannot post to it.
 # The build number is not consumed: nothing reaches App Store Connect.
 #
 # RELEASE_PLATFORM picks which build of the one MorseTrainer target ships:
@@ -187,6 +190,10 @@ xcodebuild -project MorseTrainer.xcodeproj -scheme MorseTrainer -configuration R
 # export keeps them.
 ENTITLEMENTS=Config/MorseTrainer.entitlements
 [ "$PLATFORM" = "maccatalyst" ] && ENTITLEMENTS=Config/MorseTrainer-macCatalyst.entitlements
+# The download drops App Attest: a Developer ID profile cannot carry it (see
+# the comment in that file), and an entitlement the profile lacks stops the
+# app from launching.
+[ "$CHANNEL" = "developer-id" ] && ENTITLEMENTS=Config/MorseTrainer-macCatalyst-developerID.entitlements
 #
 # Notarization also requires the hardened runtime, which the project does not
 # turn on (the Mac App Store does not need it). Recorded here the same way for
@@ -198,15 +205,41 @@ codesign --force --sign - --generate-entitlement-der ${RUNTIME_OPTS[@]+"${RUNTIM
   --entitlements "$ENTITLEMENTS" \
   "$ARCHIVE/Products/Applications/MorseTrainer.app"
 
+EXPORT_AUTH=(-allowProvisioningUpdates
+  -authenticationKeyPath "$ASC_KEY_PATH"
+  -authenticationKeyID "$ASC_KEY_ID"
+  -authenticationKeyIssuerID "$ASC_ISSUER_ID")
+if [ "$CHANNEL" = "developer-id" ]; then
+  # Signed manually. Automatic signing with the API key goes looking for the
+  # cloud-managed Developer ID certificate and stops at the 403 (FB16835802)
+  # even with the real certificate in the keychain, so the profile is made
+  # through the API by asc-api.py and named in the export options.
+  echo "▸ Fetching the Developer ID provisioning profile…"
+  PROFILE_FILE="$(mktemp -d)/devid.provisionprofile"
+  python3 tools/asc-api.py devid-profile "$PROFILE_FILE"
+  PROFILE_PLIST="$(mktemp)"
+  security cms -D -i "$PROFILE_FILE" > "$PROFILE_PLIST"
+  PROFILE_UUID=$(plutil -extract UUID raw "$PROFILE_PLIST")
+  PROFILE_NAME=$(plutil -extract Name raw "$PROFILE_PLIST")
+  # Xcode 16 and later read the first directory, older ones the second.
+  for d in "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles" \
+           "$HOME/Library/MobileDevice/Provisioning Profiles"; do
+    mkdir -p "$d"
+    cp "$PROFILE_FILE" "$d/$PROFILE_UUID.provisionprofile"
+  done
+  DEVID_PLIST="$(mktemp -d)/ExportOptions-developer-id.plist"
+  cp "$EXPORT_PLIST" "$DEVID_PLIST"
+  plutil -replace provisioningProfiles -json "{\"$ASC_BUNDLE_ID\":\"$PROFILE_NAME\"}" "$DEVID_PLIST"
+  EXPORT_PLIST="$DEVID_PLIST"
+  EXPORT_AUTH=()
+fi
+
 echo "▸ Exporting ($PLATFORM, $CHANNEL, $(plutil -extract method raw -o - "$EXPORT_PLIST"))…"
 xcodebuild -exportArchive \
   -archivePath "$ARCHIVE" \
   -exportOptionsPlist "$EXPORT_PLIST" \
   -exportPath "$EXPORT_DIR" \
-  -allowProvisioningUpdates \
-  -authenticationKeyPath "$ASC_KEY_PATH" \
-  -authenticationKeyID "$ASC_KEY_ID" \
-  -authenticationKeyIssuerID "$ASC_ISSUER_ID"
+  ${EXPORT_AUTH[@]+"${EXPORT_AUTH[@]}"}
 
 if [ "$CHANNEL" = "developer-id" ]; then
   APP="$EXPORT_DIR/MorseTrainer.app"
@@ -226,10 +259,10 @@ if [ "$CHANNEL" = "developer-id" ]; then
   if ! printf '%s' "$ENTS" | grep -q '"com.apple.security.app-sandbox":true'; then
     echo "❌ The Mac app is not sandboxed."; exit 1
   fi
-  # Reported, not enforced: without it the app still runs, and the
-  # leaderboard stays read-only (LeaderboardClient checks isSupported).
-  if ! printf '%s' "$ENTS" | grep -q '"com.apple.developer.devicecheck.appattest-environment"'; then
-    echo "⚠️  No App Attest entitlement: this build cannot post to the leaderboard."
+  # Dropped on purpose (see the entitlements file): the leaderboard is
+  # read-only in the download.
+  if printf '%s' "$ENTS" | grep -q '"com.apple.developer.devicecheck.appattest-environment"'; then
+    echo "❌ The download claims App Attest, which its Developer ID profile cannot grant."; exit 1
   fi
 
   # notarytool takes a zip, not a bare .app. The ticket is then stapled to

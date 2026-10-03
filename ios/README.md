@@ -267,7 +267,8 @@ there is one target and one code base; the Mac-only code is in
   (`AnotherMorseTrainer-Mac.zip`). Nothing goes to App Store Connect, no
   build number is spent and no tag is made. It signs with the Developer ID
   certificate in the `DEVID_APP_P12` secrets, because cloud signing cannot
-  do Developer ID with an API key:
+  do Developer ID with an API key. A Developer ID profile cannot carry App
+  Attest, so the download reads the leaderboard but cannot post to it:
   `gh workflow run ios-release.yml --ref main -f platform=maccatalyst -f channel=developer-id`.
 
 ## Build

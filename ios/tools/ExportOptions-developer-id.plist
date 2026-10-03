@@ -9,9 +9,14 @@
          is Developer ID-signed and notarized; an App Store-signed one does
          not open outside the Mac App Store at all.
 
-         Signing is cloud-managed, as in ExportOptions.plist: the same Admin
-         App Store Connect API key, no certificate in the keychain and no
-         profile on disk. Apple holds the Developer ID private key. -->
+         NOT cloud-managed, unlike ExportOptions.plist: xcodebuild with an App
+         Store Connect API key, even an Admin one, is refused the
+         cloud-managed Developer ID certificate ("Cloud signing permission
+         error", 403; Apple bug FB16835802). So signing is manual: the
+         Developer ID Application certificate is in the keychain (CI imports
+         it from the DEVID_APP_P12 secrets), and upload-testflight.sh fetches
+         the profile with `asc-api.py devid-profile` and adds it here as
+         provisioningProfiles before exporting. -->
     <key>method</key>
     <string>developer-id</string>
     <key>destination</key>
@@ -19,7 +24,9 @@
     <key>teamID</key>
     <string>F6ASU3CH5M</string>
     <key>signingStyle</key>
-    <string>automatic</string>
+    <string>manual</string>
+    <key>signingCertificate</key>
+    <string>Developer ID Application</string>
     <key>manageAppVersionAndBuildNumber</key>
     <false/>
 </dict>

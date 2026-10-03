@@ -228,8 +228,8 @@ jobs:
 
       # Cloud signing cannot produce Developer ID with an API key (Apple bug
       # FB16835802: 403 on cloud-managed Developer ID certificates), so this
-      # channel signs with a real certificate. Xcode prefers one it finds in
-      # the keychain; the profile is still made through the API key.
+      # channel signs manually with a real certificate; the script makes the
+      # provisioning profile through the API key.
       - name: Import the Developer ID certificate (developer-id channel only)
         if: github.event.inputs.channel == 'developer-id'
         env:
