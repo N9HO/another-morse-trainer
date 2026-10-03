@@ -120,6 +120,9 @@ fun FroggerScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
     val flashSank = stringResource(R.string.frogger_flash_sank)
     val flashSplash = stringResource(R.string.frogger_flash_splash)
     val flashAcross = stringResource(R.string.frogger_flash_across)
+    // The first wave of each harder label stage says what changed (#296).
+    val flashWaveMemory = stringResource(R.string.frogger_flash_wave_memory)
+    val flashWaveHidden = stringResource(R.string.frogger_flash_wave_hidden)
 
     var phase by rememberSaveable { mutableStateOf(FrogPhase.SETUP) }
     // The shared leaderboard's first-play prompt (#226): raised by Start and
@@ -366,7 +369,11 @@ fun FroggerScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
                 }
                 is FroggerEvent.Crossed -> {
                     if (Settings.hapticsEnabled) haptics.success()
-                    flash = flashAcross.format(event.points, g.wave) to now + 1200
+                    flash = when (g.wave) {
+                        FroggerGame.memoryFromWave -> flashWaveMemory.format(g.wave) to now + 2500
+                        FroggerGame.hiddenFromWave -> flashWaveHidden.format(g.wave) to now + 2500
+                        else -> flashAcross.format(event.points, g.wave) to now + 1200
+                    }
                     cueToneEnd.clear()
                 }
                 is FroggerEvent.Entered -> {
@@ -643,7 +650,13 @@ private fun FroggerRun(
         }
         Spacer(Modifier.height(8.dp))
         Text(
-            stringResource(if (stage == FroggerLabelStage.HIDDEN) R.string.frogger_tap_to_replay_hidden else R.string.frogger_tap_to_replay),
+            stringResource(
+                when (stage) {
+                    FroggerLabelStage.HIDDEN -> R.string.frogger_tap_to_replay_hidden
+                    FroggerLabelStage.MEMORY -> R.string.frogger_tap_to_replay_memory
+                    FroggerLabelStage.VISIBLE -> R.string.frogger_tap_to_replay
+                }
+            ),
             style = MaterialTheme.typography.labelSmall, color = Brand.textSecondary,
             textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()
         )
