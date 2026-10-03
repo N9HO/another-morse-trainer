@@ -933,6 +933,49 @@ class PileupEngine(
             return t == "TU" || t == "TU GL" || t == "73" || t == "TU 73" || t == "R TU"
         }
 
+        // Your side of the QSO: what Contest keys for your CQ, your sign-off
+        // and each smart-box send — the words the iOS Pileup Runner and
+        // Contest key (#320). Pinned by fixtures/qso-self-keying.json.
+
+        /** Your CQ for this exchange, carrying your callsign. */
+        fun cqText(mode: QSOContestMode, myCall: String): String {
+            val me = myCall
+            return when (mode) {
+                QSOContestMode.Pota -> "CQ POTA DE $me $me K"
+                QSOContestMode.BasicContest -> "CQ TEST $me $me"
+                QSOContestMode.Cwt -> "CQ CWT $me"
+                QSOContestMode.Sst -> "CQ SST $me"
+                QSOContestMode.Mst -> "CQ MST $me"
+                QSOContestMode.Sprint -> "CQ NS $me"
+                QSOContestMode.FieldDay -> "CQ FD $me $me"
+                QSOContestMode.SingleCaller -> "CQ CQ DE $me $me K"
+            }
+        }
+
+        /** Your sign-off once a contact is logged. */
+        fun signOffText(myCall: String): String = "TU $myCall"
+
+        /**
+         * What you put on the air for a smart-box send, given the phase
+         * before and after it and the call of the station now being worked.
+         */
+        fun selfSendText(input: String, pre: Phase, post: Phase, workingCall: String?): String {
+            val t = input.trim().uppercase()
+            if (isQRS(t)) return "QRS PSE"
+            if (isQRQ(t)) return "QRQ"
+            if (t.isEmpty() || isRepeat(t)) return "AGN?"
+            // You just nailed a full call -> you call them and send your report.
+            if (post is Phase.Working && !isWorkingPhase(pre)) return "${workingCall ?: fragment(t)} 5NN"
+            // Still working (a miss) -> ask again.
+            if (pre is Phase.Working && post is Phase.Working) return "AGN?"
+            // Copied it -> a quick roger, no real on-air needed.
+            if (post is Phase.ReadyToLog) return "R"
+            // A partial query into the pileup -> send it with a query mark.
+            return if (t.endsWith("?")) t else "$t?"
+        }
+
+        private fun isWorkingPhase(p: Phase): Boolean = p is Phase.Working || p is Phase.ReadyToLog
+
         /**
          * Closed-range double like Swift's `Double.random(in: a...b)`: tolerates
          * `a == b` (Kotlin's [Random.nextDouble] throws on an empty range).

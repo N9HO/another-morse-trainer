@@ -3544,6 +3544,64 @@ do {
     }
 }
 
+// Shared self-keying fixture (#320): your CQ, your TU and each smart-box send,
+// as Pileup Runner and Contest key them. fixtures/qso-self-keying.json is read
+// by this harness AND by the android and desktop QSOSelfKeyingTest.
+struct SelfKeyingFixture: Decodable {
+    struct CQ: Decodable { let mode, call, text: String }
+    struct SignOff: Decodable { let call, text: String }
+    struct Send: Decodable {
+        let typed, pre, post, text: String
+        let working: String?
+    }
+    let cq: [CQ]
+    let signOff: [SignOff]
+    let send: [Send]
+}
+print("\nShared self-keying fixture (fixtures/qso-self-keying.json):")
+do {
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent()
+        .deletingLastPathComponent().deletingLastPathComponent()
+    func phase(_ s: String) -> PileupEngine.Phase? {
+        switch s {
+        case "idle": return .idle
+        case "pileup": return .pileup
+        case "working": return .working(id: 1)
+        case "readyToLog": return .readyToLog(id: 1)
+        default: return nil
+        }
+    }
+    if let data = try? Data(contentsOf: root.appendingPathComponent("fixtures/qso-self-keying.json")),
+       let fx = try? JSONDecoder().decode(SelfKeyingFixture.self, from: data) {
+        var allOK = true
+        for c in fx.cq {
+            guard let mode = QSOContestMode(rawValue: c.mode) else {
+                allOK = false; print("  ✗ unknown mode \(c.mode)"); continue
+            }
+            let got = PileupEngine.cqText(mode: mode, myCall: c.call)
+            if got != c.text { allOK = false; print("  ✗ CQ \(c.mode) = \"\(got)\", fixture says \"\(c.text)\"") }
+        }
+        for c in fx.signOff where PileupEngine.signOffText(myCall: c.call) != c.text {
+            allOK = false; print("  ✗ sign-off for \(c.call) should be \"\(c.text)\"")
+        }
+        for c in fx.send {
+            guard let pre = phase(c.pre), let post = phase(c.post) else {
+                allOK = false; print("  ✗ unknown phase in \(c.pre)/\(c.post)"); continue
+            }
+            let got = PileupEngine.selfSendText(input: c.typed, pre: pre, post: post, workingCall: c.working)
+            if got != c.text {
+                allOK = false
+                print("  ✗ send \"\(c.typed)\" \(c.pre)->\(c.post) = \"\(got)\", fixture says \"\(c.text)\"")
+            }
+        }
+        check("self-keying text matches the fixture across \(fx.cq.count + fx.signOff.count + fx.send.count) cases",
+              allOK && !fx.cq.isEmpty && !fx.send.isEmpty)
+    } else {
+        check("fixtures/qso-self-keying.json loads and decodes", false)
+    }
+}
+
 // MARK: - Shared Daily Dit fixture
 //
 // fixtures/daily-dit.json, consumed by this harness AND by android

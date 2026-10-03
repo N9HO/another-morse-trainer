@@ -910,3 +910,53 @@ public final class PileupEngine {
         })
     }
 }
+
+// MARK: - Your side of the QSO
+
+/// What you key on your side of a Pileup Runner or Contest run: your CQ, your
+/// sign-off, and each smart-box send. Pinned by fixtures/qso-self-keying.json,
+/// which the Android and desktop Contest read too (#320).
+extension PileupEngine {
+    /// Your CQ for this exchange, carrying your callsign.
+    public static func cqText(mode: QSOContestMode, myCall me: String) -> String {
+        switch mode {
+        case .pota:         return "CQ POTA DE \(me) \(me) K"
+        case .basicContest: return "CQ TEST \(me) \(me)"
+        case .cwt:          return "CQ CWT \(me)"
+        case .sst:          return "CQ SST \(me)"
+        case .mst:          return "CQ MST \(me)"
+        case .sprint:       return "CQ NS \(me)"
+        case .fieldDay:     return "CQ FD \(me) \(me)"
+        case .singleCaller: return "CQ CQ DE \(me) \(me) K"
+        }
+    }
+
+    /// Your sign-off once a contact is logged.
+    public static func signOffText(myCall: String) -> String { "TU \(myCall)" }
+
+    /// What you put on the air for a smart-box send, given the phase before
+    /// and after it and the call of the station now being worked.
+    public static func selfSendText(input: String, pre: Phase, post: Phase,
+                                    workingCall: String?) -> String {
+        let t = input.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        if isQRS(t) { return "QRS PSE" }
+        if isQRQ(t) { return "QRQ" }
+        if t.isEmpty || isRepeat(t) { return "AGN?" }
+        // You just nailed a full call -> you call them and send your report.
+        if case .working = post, !isWorkingPhase(pre) {
+            return "\(workingCall ?? fragment(t)) 5NN"
+        }
+        // Still working (a miss) -> ask again.
+        if case .working = pre, case .working = post { return "AGN?" }
+        // Copied it -> a quick roger, no real on-air needed.
+        if case .readyToLog = post { return "R" }
+        // A partial query into the pileup -> send it with a query mark.
+        return t.hasSuffix("?") ? t : t + "?"
+    }
+
+    private static func isWorkingPhase(_ p: Phase) -> Bool {
+        if case .working = p { return true }
+        if case .readyToLog = p { return true }
+        return false
+    }
+}
