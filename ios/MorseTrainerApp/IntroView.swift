@@ -27,6 +27,8 @@ struct IntroView: View {
     /// First Four (#265): the guided path to a first POTA contact.
     @State private var showingFirstFour = false
     @State private var firstFourProgress = FirstFourStore.load()
+    /// CW Operating Procedure (#294, #295): a grid tile, like Games.
+    @State private var showingOperating = false
     @State private var showingSendingDrill = false
     @State private var showingSendingAnalyzer = false
     @State private var showingCWDecoder = false
@@ -115,6 +117,11 @@ struct IntroView: View {
             firstFourProgress = FirstFourStore.load()
         }) {
             FirstFourView().environmentObject(model).pageSizedSheet()
+        }
+        .sheet(isPresented: $showingOperating, onDismiss: {
+            firstFourProgress = FirstFourStore.load()
+        }) {
+            OperatingProcedureView().environmentObject(model).pageSizedSheet()
         }
         .sheet(isPresented: $showingSendingDrill) {
             SendingDrillView().environmentObject(model).pageSizedSheet()
@@ -473,6 +480,16 @@ struct IntroView: View {
                          isSelected: model.learningMode.isGame) {
                     Haptics.selection()
                     showingGames = true
+                }
+                // CW Operating Procedure (#294, #295): lessons you come back
+                // to, so a tile rather than another card above the grid. It
+                // opens its own screen, never the session setup sheet.
+                ModeTile(title: "Operating Procedure",
+                         icon: "checklist",
+                         tagline: "POTA etiquette, zero beat",
+                         isSelected: false) {
+                    Haptics.selection()
+                    showingOperating = true
                 }
             }
         }
