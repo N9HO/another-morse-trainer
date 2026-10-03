@@ -29,7 +29,7 @@ in both directions (copy by ear, send on a key), exactly four things:
 4. **73** (best regards — how a contact ends).
 
 It then puts those four to work in three short scripted scenes: a **busted
-call** (the activator sends `N9?`; you send your full call and wait), an
+call** (the activator sends `K9?`; you send your full call and wait), an
 **unanswered call** (you call and nothing comes back, or someone else is
 answered; that is normal), and a **walkthrough** of a whole minimal hunter-side
 POTA contact. Finishing the walkthrough ends on the follow-up nudge.
@@ -64,7 +64,7 @@ of beats (below).
 | 2 | Your state | Same, with the state | same |
 | 3 | ? | Same, with `?` | same |
 | 4 | 73 | Same, with `73` | same |
-| 5 | Busted call | Activator sends a partial of your call (`N9?`, `N9H?` or a bare `?`); you send your full call and wait for the acknowledgement | 3 clean rounds |
+| 5 | Busted call | Activator sends a partial of your call (`K9?`, `K9Q?` or a bare `?`); you send your full call and wait for the acknowledgement | 3 clean rounds |
 | 6 | No reply | Two scenes: nobody answers (call again), and the activator answers someone else (wait, then call when they send QRZ) | each scene once, clean |
 | 7 | Walkthrough | The whole contact, start to finish | 2 clean runs |
 
@@ -90,13 +90,14 @@ POTA activators commonly send in the high teens to low twenties, but a brand
 new operator starts wherever they are, and the settings are one tap away.
 
 **Copy grading.** Typed text is upper-cased and compared with every space
-removed, so `n9ho`, `N9HO ` and `N 9 H O` are all a correct copy of `N9HO`.
+removed, so `k9qro`, `K9QRO ` and `K 9 Q R O` are all a correct copy of
+`K9QRO`.
 
 **Send grading.** The keyed text comes from the same decoder every keying
 mode uses (`SendingKeyer`): on-screen key (straight or paddles, per
 Settings), or a hardware Vail / BLE-MIDI key. It is compared the same way,
 spaces removed, because a beginner's word spacing is exactly what the
-decoder is least sure of. Sending your call **twice** (`N9HO N9HO`) is also
+decoder is least sure of. Sending your call **twice** (`K9QRO K9QRO`) is also
 accepted wherever your call is expected; it is common practice on the air.
 The send auto-submits once the decoded text is at least as long as the
 expected text and the key has gone idle, as Sending Practice does; Submit
@@ -123,46 +124,50 @@ screen shows beside it (`cq`, `callThem`, `partial`, `resend`, `ack`,
 cue is what the fixture pins, so the two apps explain the same beat at the
 same moment.
 
-With call `N9HO`, state `WI`, activator `K4RTZ` in `NC`, and another hunter
-`W8KDP`:
+With call `K9QRO`, state `WI`, activator `K4RTZ` in `NC`, and another hunter
+`W8KDP`. (`K9QRO` is a stand-in that cannot be a real station: the FCC does
+not issue a suffix in the Q-signal block QRA–QUZ. The examples do not use
+`W1AW`, because that is the settings placeholder First Four treats as "no
+callsign yet"; see below.)
 
-**Busted call** (partial `N9?`):
+**Busted call** (partial `K9?`):
 
     hear   CQ POTA DE K4RTZ K          cq
-    send   N9HO                        callThem
-    hear   N9?                         partial
-    send   N9HO                        resend
-    hear   N9HO 5NN NC NC BK           ack
+    send   K9QRO                       callThem
+    hear   K9?                         partial
+    send   K9QRO                       resend
+    hear   K9QRO 5NN NC NC BK          ack
 
 The partials for a call are a bare `?` and then every proper prefix of two
-or more characters followed by `?`: `?`, `N9?`, `N9H?` for `N9HO`. Round *n*
-uses partial *n* modulo the list, so the three rounds for `N9HO` see all
-three shapes. The bare `?` is where the third of the four earns its place:
-it is what an activator sends when they heard someone and caught nothing.
+or more characters followed by `?`: `?`, `K9?`, `K9Q?`, `K9QR?` for
+`K9QRO`. Round *n* uses partial *n* modulo the list, so the three rounds for
+`K9QRO` see `?`, `K9?` and `K9Q?`; a four-character call sees all three of
+its shapes. The bare `?` is where the third of the four earns its place: it
+is what an activator sends when they heard someone and caught nothing.
 
 **No reply**, scene A (nobody answers):
 
     hear    CQ POTA DE K4RTZ K         cq
-    send    N9HO                       callThem
+    send    K9QRO                      callThem
     silence                            noReply
-    send    N9HO                       callAgain
-    hear    N9HO 5NN NC NC BK          ack
+    send    K9QRO                      callAgain
+    hear    K9QRO 5NN NC NC BK         ack
 
 **No reply**, scene B (the activator answers someone else):
 
     hear    CQ POTA DE K4RTZ K         cq
-    send    N9HO                       callThem
+    send    K9QRO                      callThem
     hear    W8KDP 5NN NC NC BK         otherStation
     wait                               stayQuiet
     hear    TU 73 QRZ                  qrz
-    send    N9HO                       callAgain
-    hear    N9HO 5NN NC NC BK          ack
+    send    K9QRO                      callAgain
+    hear    K9QRO 5NN NC NC BK         ack
 
 **Walkthrough**:
 
     hear    CQ POTA DE K4RTZ K4RTZ K   cq
-    send    N9HO                       callThem
-    copy    N9HO 5NN NC NC BK → NC     theirExchange
+    send    K9QRO                      callThem
+    copy    K9QRO 5NN NC NC BK → NC    theirExchange
     send    5NN WI 73                  yourExchange
     hear    TU 73 E E                  signOff
 
@@ -303,7 +308,7 @@ line, and the user guide gains a First Four section in the same release
    `myState` as your exchange, and CW 77 drill it with your call and name?
 6. **Copy of your call among look-alikes.** Copying your own call always
    plays your own call. A harder copy phase would mix in near-miss calls
-   (`N9HQ`) and ask "was that you?". Left for a follow-up.
+   (`K9QRQ`) and ask "was that you?". Left for a follow-up.
 7. **Onboarding button wording.** "Or learn just enough for your first POTA
    contact" — fine, or should first run ask "What brings you here?" and route
    on the answer?

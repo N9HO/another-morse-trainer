@@ -344,8 +344,8 @@ fun PileupScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) 
             return
         }
         submit(keyed = true)
-        // A keyer cannot edit the box, so a kept partial ("N9" after "N9?")
-        // would have the next keyed call appended to it — "N9N9HO", a bust
+        // A keyer cannot edit the box, so a kept partial ("W1" after "W1?")
+        // would have the next keyed call appended to it — "W1W1AW", a bust
         // every time. A keyed send always empties it.
         input = ""
     }

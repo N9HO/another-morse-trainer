@@ -14,7 +14,7 @@ class CWTextTest {
         assertTrue(CWText.isSendable(' '))
         assertTrue(CWText.isSendable('?'))
         assertTrue(!CWText.isSendable('#'))
-        assertTrue(CWText.isFullySendable("CQ DE N9HO"))
+        assertTrue(CWText.isFullySendable("CQ DE W1AW"))
         assertTrue(!CWText.isFullySendable("HELLO!"))
     }
 

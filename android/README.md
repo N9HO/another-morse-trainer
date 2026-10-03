@@ -93,7 +93,7 @@ the iOS app's navy/teal look.
 - **First Four**: just enough CW for a brand-new operator to hunt one POTA
   activator — enter your callsign and state, then hear and send your call,
   your state, ? and 73, and work through three short scenes: a busted call
-  (the activator sends a partial like N9?; you send your full call and wait),
+  (the activator sends a partial like K9?; you send your full call and wait),
   a call nobody answers, and a whole hunter-side contact. Offered from the
   first-run screen and the top of Home, a tutorial rather than a scored mode,
   and it ends with a nudge to thank your first CW contact

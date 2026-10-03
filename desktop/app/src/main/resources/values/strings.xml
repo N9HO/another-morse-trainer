@@ -694,7 +694,7 @@
     <string name="op_station_heading">CW Operating Procedure</string>
     <string name="op_station_lead">The lessons use your own callsign and state, so every example sounds like your next contact.</string>
     <string name="op_station_call_label">Your callsign</string>
-    <string name="op_station_call_placeholder">N9HO</string>
+    <string name="op_station_call_placeholder">W1AW</string>
     <string name="op_station_state_label">Your state or province</string>
     <string name="op_station_state_placeholder">WI</string>
     <string name="op_station_call_invalid">A callsign is 3 to 10 letters and digits (and /), with at least one of each.</string>

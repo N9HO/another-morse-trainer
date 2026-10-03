@@ -402,7 +402,7 @@ private fun OpStationCard(editing: Boolean, onSaved: () -> Unit) {
             onValueChange = { callField = it.uppercase() },
             singleLine = true,
             label = { Text(stringResource(R.string.op_your_call)) },
-            placeholder = { Text("N9HO") },
+            placeholder = { Text("W1AW") },
             textStyle = MaterialTheme.typography.titleMedium.copy(fontFamily = FontFamily.Monospace),
             keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters, imeAction = ImeAction.Next),
             modifier = Modifier.fillMaxWidth()

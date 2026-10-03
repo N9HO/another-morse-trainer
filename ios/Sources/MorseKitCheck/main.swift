@@ -854,7 +854,7 @@ do {
 
     // #85: a partial is whatever you managed to copy, and it is not always the
     // front of the call — a trailing letter is what two stations on top of each
-    // other leave you, and "9H?" for N9HO queries the middle. Prefix-only
+    // other leave you, and "1A?" for W1AW queries the middle. Prefix-only
     // matching sent those to the busted-call path, which on the silence setting
     // meant no reply at all. Every substring of a live call must draw one.
     do {
@@ -2070,12 +2070,12 @@ if let fx = loadCW77Fixture() {
         }
     }
     check("the callsign/name rule matches every fixture case", personalOK)
-    let mine = MorseData.cw77Personal(callsign: "n9ho", name: "Justin")
+    let mine = MorseData.cw77Personal(callsign: "k9qro", name: "Justin")
     check("a personal callsign is answered as \"your call sign\", the name as \"your name\"",
           mine.map(\.meaning) == [fx.personal.callsignMeaning, fx.personal.nameMeaning])
     let withMe = MorseData.cw77Items(personal: mine)
     check("personal items follow the 70",
-          withMe.count == 72 && withMe.suffix(2).map(\.display) == ["N9HO", "JUSTIN"]
+          withMe.count == 72 && withMe.suffix(2).map(\.display) == ["K9QRO", "JUSTIN"]
           && Set(withMe.map(\.id)).count == 72)
 
     // The standalone CW 77 mode: two styles over the same list.
@@ -6319,23 +6319,23 @@ do {
     check("exactly 64 is", LeaderboardTranscriptItem.fixed(sent: String(repeating: "A", count: 64), answered: "", reaction: 0).isPlausible)
 
     // Display names: the server's rule, word for word.
-    check("a callsign is a fine name", LeaderboardDisplayName.isValid("N9HO"))
-    check("names are uppercased and space-collapsed", LeaderboardDisplayName.normalize("  n9ho   /p ") == "N9HO /P")
+    check("a callsign is a fine name", LeaderboardDisplayName.isValid("W1AW"))
+    check("names are uppercased and space-collapsed", LeaderboardDisplayName.normalize("  w1aw   /p ") == "W1AW /P")
     check("two characters is the floor", LeaderboardDisplayName.isValid("AB") && !LeaderboardDisplayName.isValid("A"))
     check("twelve is the cap", LeaderboardDisplayName.isValid("ABCDEFGHIJKL") && !LeaderboardDisplayName.isValid("ABCDEFGHIJKLM"))
     check("length is measured after trimming", LeaderboardDisplayName.isValid("  A  ") == false)
-    check("slash and hyphen are allowed", LeaderboardDisplayName.isValid("W1AW/4") && LeaderboardDisplayName.isValid("N9HO-M"))
-    check("it must start with a letter or digit", LeaderboardDisplayName.isValid("/N9HO") == false && LeaderboardDisplayName.isValid("-AB") == false)
-    check("punctuation outside the set is refused", LeaderboardDisplayName.isValid("N9HO!") == false)
+    check("slash and hyphen are allowed", LeaderboardDisplayName.isValid("W1AW/4") && LeaderboardDisplayName.isValid("W1AW-M"))
+    check("it must start with a letter or digit", LeaderboardDisplayName.isValid("/W1AW") == false && LeaderboardDisplayName.isValid("-AB") == false)
+    check("punctuation outside the set is refused", LeaderboardDisplayName.isValid("W1AW!") == false)
     check("non-ASCII letters are refused", LeaderboardDisplayName.isValid("ÜBER") == false)
     check("the deny list looks through spaces and digits", LeaderboardDisplayName.isValid("NA ZI") == false && LeaderboardDisplayName.isValid("N4ZI"))
     check("length message matches the server's",
           LeaderboardDisplayName.problem(with: "A") == "Display name must be 2 to 12 characters")
     check("character message matches the server's",
-          LeaderboardDisplayName.problem(with: "N9HO!") == "Display name may use letters, digits, space, / and -")
+          LeaderboardDisplayName.problem(with: "W1AW!") == "Display name may use letters, digits, space, / and -")
     check("deny message matches the server's",
           LeaderboardDisplayName.problem(with: "NAZI") == "Display name not allowed")
-    check("a good name has no problem", LeaderboardDisplayName.problem(with: "n9ho") == nil)
+    check("a good name has no problem", LeaderboardDisplayName.problem(with: "w1aw") == nil)
 
     // Run speeds.
     let speeds = LeaderboardRunSpeeds(characterWpm: 25.4, effectiveWpm: 18.2)
@@ -6357,12 +6357,12 @@ do {
     let start = LeaderboardStartRequest(mode: .contest, speeds: band, challenge: "C", attestation: att)
     check("start request carries mode, speeds, challenge and attestation",
           json(start) == #"{"attestation":{"payload":{"assertion":"S","clientData":"C","keyId":"K"},"platform":"ios"},"challenge":"C","characterWpm":28,"effectiveWpm":18,"mode":"contest","platform":"ios"}"#)
-    let submit = LeaderboardSubmitRequest(runToken: "T", displayName: "N9HO", transcript: [fixed], attestation: att)
+    let submit = LeaderboardSubmitRequest(runToken: "T", displayName: "W1AW", transcript: [fixed], attestation: att)
     check("submit request carries the transcript",
-          json(submit) == #"{"attestation":{"payload":{"assertion":"S","clientData":"C","keyId":"K"},"platform":"ios"},"displayName":"N9HO","runToken":"T","transcript":[{"answered":"K1ABC 599 BOB OH","reactionMs":1235,"sent":"K1ABC 599 BOB OH"}]}"#)
-    let boardJSON = #"{"mode":"invaders","rows":[{"rank":1,"displayName":"N9HO","metric":340,"platform":"ios","date":"2026-09-08"}]}"#
+          json(submit) == #"{"attestation":{"payload":{"assertion":"S","clientData":"C","keyId":"K"},"platform":"ios"},"displayName":"W1AW","runToken":"T","transcript":[{"answered":"K1ABC 599 BOB OH","reactionMs":1235,"sent":"K1ABC 599 BOB OH"}]}"#)
+    let boardJSON = #"{"mode":"invaders","rows":[{"rank":1,"displayName":"W1AW","metric":340,"platform":"ios","date":"2026-09-08"}]}"#
     let board = try? JSONDecoder().decode(LeaderboardBoardResponse.self, from: Data(boardJSON.utf8))
-    check("a board decodes", board?.rows.first?.displayName == "N9HO" && board?.rows.first?.metricLabel == "340")
+    check("a board decodes", board?.rows.first?.displayName == "W1AW" && board?.rows.first?.metricLabel == "340")
     let submitJSON = #"{"accepted":true,"metric":340,"correct":17,"total":20,"rank":12,"personalBest":true}"#
     let result = try? JSONDecoder().decode(LeaderboardSubmitResponse.self, from: Data(submitJSON.utf8))
     check("a submit answer decodes", result?.rank == 12 && result?.metric == 340 && result?.personalBest == true)
@@ -6423,10 +6423,10 @@ do {
     func json<T: Encodable>(_ v: T) -> String { String(decoding: (try? enc.encode(v)) ?? Data(), as: UTF8.self) }
     let attJSON = #""attestation":{"payload":{"assertion":"S","clientData":"C","keyId":"K"},"platform":"ios"}"#
     check("invite request carries challenge, attestation and display name",
-          json(BuddyInviteRequest(challenge: "C", attestation: att, displayName: "N9HO")) == "{\(attJSON),\"challenge\":\"C\",\"displayName\":\"N9HO\"}")
+          json(BuddyInviteRequest(challenge: "C", attestation: att, displayName: "W1AW")) == "{\(attJSON),\"challenge\":\"C\",\"displayName\":\"W1AW\"}")
     check("join request carries the code and today",
-          json(BuddyJoinRequest(challenge: "C", attestation: att, displayName: "N9HO", code: "ABC234", today: "2026-09-11"))
-          == "{\(attJSON),\"challenge\":\"C\",\"code\":\"ABC234\",\"displayName\":\"N9HO\",\"today\":\"2026-09-11\"}")
+          json(BuddyJoinRequest(challenge: "C", attestation: att, displayName: "W1AW", code: "ABC234", today: "2026-09-11"))
+          == "{\(attJSON),\"challenge\":\"C\",\"code\":\"ABC234\",\"displayName\":\"W1AW\",\"today\":\"2026-09-11\"}")
     check("day request carries day and today",
           json(BuddyDayRequest(challenge: "C", attestation: att, day: "2026-09-11", today: "2026-09-11"))
           == "{\(attJSON),\"challenge\":\"C\",\"day\":\"2026-09-11\",\"today\":\"2026-09-11\"}")

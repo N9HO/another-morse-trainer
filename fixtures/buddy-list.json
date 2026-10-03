@@ -45,7 +45,7 @@
       "buddies": [
         { "name": "W1AW", "practisedToday": true, "streak": 3 },
         { "name": "K1ABC", "practisedToday": true, "streak": 40 },
-        { "name": "N9HO", "practisedToday": true, "streak": 0 }
+        { "name": "K9QRO", "practisedToday": true, "streak": 0 }
       ],
       "digest": { "count": 3, "allPractised": true, "waitingNames": [], "waitingMore": 0, "bestStreak": 40 },
       "home": "All 3 buddies practiced today · best: 40-day buddy streak", "reminder": null
@@ -67,11 +67,11 @@
       "buddies": [
         { "name": "W1AW", "practisedToday": false, "streak": 0 },
         { "name": "K1ABC", "practisedToday": true, "streak": 0 },
-        { "name": "N9HO", "practisedToday": false, "streak": 0 }
+        { "name": "K9QRO", "practisedToday": false, "streak": 0 }
       ],
-      "digest": { "count": 3, "allPractised": false, "waitingNames": ["W1AW", "N9HO"], "waitingMore": 0, "bestStreak": 0 },
-      "home": "W1AW and N9HO haven't practiced yet today · no buddy streak yet",
-      "reminder": "W1AW and N9HO haven't practiced yet today (as of 6:10 pm)"
+      "digest": { "count": 3, "allPractised": false, "waitingNames": ["W1AW", "K9QRO"], "waitingMore": 0, "bestStreak": 0 },
+      "home": "W1AW and K9QRO haven't practiced yet today · no buddy streak yet",
+      "reminder": "W1AW and K9QRO haven't practiced yet today (as of 6:10 pm)"
     },
     {
       "name": "several, more waiting than are named",
@@ -79,7 +79,7 @@
       "buddies": [
         { "name": "W1AW", "practisedToday": false, "streak": 2 },
         { "name": "K1ABC", "practisedToday": false, "streak": 9 },
-        { "name": "N9HO", "practisedToday": false, "streak": 1 },
+        { "name": "K9QRO", "practisedToday": false, "streak": 1 },
         { "name": "VE3XYZ", "practisedToday": true, "streak": 5 },
         { "name": "G4ABC", "practisedToday": false, "streak": 0 }
       ],
@@ -123,8 +123,8 @@
     },
     {
       "name": "tolerant: nameless entries dropped, negative streak clamped, bad day blanked, maxBuddies raised to the list",
-      "body": { "buddies": [ { "id": "p-1", "displayName": "", "streak": 3 }, { "displayName": "N9HO", "streak": -4 } ], "myStreak": -1, "today": "soon" },
-      "expect": { "buddies": [ { "id": "", "name": "N9HO", "practisedToday": false, "streak": 0 } ], "maxBuddies": 1, "myStreak": 0, "practisedToday": false, "today": "", "joined": "" }
+      "body": { "buddies": [ { "id": "p-1", "displayName": "", "streak": 3 }, { "displayName": "K9QRO", "streak": -4 } ], "myStreak": -1, "today": "soon" },
+      "expect": { "buddies": [ { "id": "", "name": "K9QRO", "practisedToday": false, "streak": 0 } ], "maxBuddies": 1, "myStreak": 0, "practisedToday": false, "today": "", "joined": "" }
     },
     {
       "name": "not a status",

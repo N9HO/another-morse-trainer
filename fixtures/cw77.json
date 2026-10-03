@@ -146,37 +146,37 @@
     "cases": [
       {
         "why": "listen, switch off: the 70, each answered by its meaning",
-        "style": "listen", "includeMe": false, "callsign": "n9ho", "name": "Justin",
+        "style": "listen", "includeMe": false, "callsign": "k9qro", "name": "Justin",
         "count": 70,
         "first": { "display": "VVV", "answer": "test signal — tuning up" },
         "tail": [ { "display": "DX", "answer": "distance" } ]
       },
       {
         "why": "listen, switch on: callsign then name after the 70",
-        "style": "listen", "includeMe": true, "callsign": "n9ho", "name": "Justin",
+        "style": "listen", "includeMe": true, "callsign": "k9qro", "name": "Justin",
         "count": 72,
         "first": { "display": "VVV", "answer": "test signal — tuning up" },
         "tail": [
           { "display": "DX", "answer": "distance" },
-          { "display": "N9HO", "answer": "your call sign" },
+          { "display": "K9QRO", "answer": "your call sign" },
           { "display": "JUSTIN", "answer": "your name" }
         ]
       },
       {
         "why": "quiz, switch off: the 70, each answered by its token",
-        "style": "quiz", "includeMe": false, "callsign": "n9ho", "name": "Justin",
+        "style": "quiz", "includeMe": false, "callsign": "k9qro", "name": "Justin",
         "count": 70, "keyable": 65,
         "first": { "display": "VVV", "answer": "VVV" },
         "tail": [ { "display": "DX", "answer": "DX" } ]
       },
       {
         "why": "quiz, switch on: callsign then name after the 70, both keyable",
-        "style": "quiz", "includeMe": true, "callsign": "n9ho", "name": "Justin",
+        "style": "quiz", "includeMe": true, "callsign": "k9qro", "name": "Justin",
         "count": 72, "keyable": 67,
         "first": { "display": "VVV", "answer": "VVV" },
         "tail": [
           { "display": "DX", "answer": "DX" },
-          { "display": "N9HO", "answer": "N9HO" },
+          { "display": "K9QRO", "answer": "K9QRO" },
           { "display": "JUSTIN", "answer": "JUSTIN" }
         ]
       },
@@ -212,10 +212,10 @@
     "cases": [
       {
         "why": "callsign and name",
-        "callsign": "n9ho",
+        "callsign": "k9qro",
         "name": "Justin",
         "expected": [
-          "N9HO",
+          "K9QRO",
           "JUSTIN"
         ]
       },
@@ -266,35 +266,35 @@
       },
       {
         "why": "unsendable characters are stripped",
-        "callsign": "N9HO!",
+        "callsign": "K9QRO!",
         "name": "O'Brien",
         "expected": [
-          "N9HO",
+          "K9QRO",
           "OBRIEN"
         ]
       },
       {
         "why": "a name with nothing sendable is unset",
-        "callsign": "N9HO",
+        "callsign": "K9QRO",
         "name": "***",
         "expected": [
-          "N9HO"
+          "K9QRO"
         ]
       },
       {
         "why": "a name already in the list is not added twice",
-        "callsign": "N9HO",
+        "callsign": "K9QRO",
         "name": "Hi",
         "expected": [
-          "N9HO"
+          "K9QRO"
         ]
       },
       {
         "why": "a name equal to the callsign is not added twice",
-        "callsign": "N9HO",
-        "name": "n9ho",
+        "callsign": "K9QRO",
+        "name": "k9qro",
         "expected": [
-          "N9HO"
+          "K9QRO"
         ]
       }
     ]

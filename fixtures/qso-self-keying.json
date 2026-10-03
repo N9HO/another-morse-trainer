@@ -12,18 +12,18 @@
     "consumers": "contestConfig, logOnSend and recallAfterLog are checked by the same three readers as the rest of this file."
   },
   "cq": [
-    {"mode": "singleCaller", "call": "N9HO", "text": "CQ CQ DE N9HO N9HO K"},
-    {"mode": "pota",         "call": "N9HO", "text": "CQ POTA DE N9HO N9HO K"},
-    {"mode": "basicContest", "call": "N9HO", "text": "CQ TEST N9HO N9HO"},
-    {"mode": "cwt",          "call": "N9HO", "text": "CQ CWT N9HO"},
-    {"mode": "sst",          "call": "N9HO", "text": "CQ SST N9HO"},
-    {"mode": "mst",          "call": "N9HO", "text": "CQ MST N9HO"},
-    {"mode": "sprint",       "call": "N9HO", "text": "CQ NS N9HO"},
-    {"mode": "fieldDay",     "call": "N9HO", "text": "CQ FD N9HO N9HO"},
+    {"mode": "singleCaller", "call": "K9QRO", "text": "CQ CQ DE K9QRO K9QRO K"},
+    {"mode": "pota",         "call": "K9QRO", "text": "CQ POTA DE K9QRO K9QRO K"},
+    {"mode": "basicContest", "call": "K9QRO", "text": "CQ TEST K9QRO K9QRO"},
+    {"mode": "cwt",          "call": "K9QRO", "text": "CQ CWT K9QRO"},
+    {"mode": "sst",          "call": "K9QRO", "text": "CQ SST K9QRO"},
+    {"mode": "mst",          "call": "K9QRO", "text": "CQ MST K9QRO"},
+    {"mode": "sprint",       "call": "K9QRO", "text": "CQ NS K9QRO"},
+    {"mode": "fieldDay",     "call": "K9QRO", "text": "CQ FD K9QRO K9QRO"},
     {"mode": "sst",          "call": "W1AW", "text": "CQ SST W1AW"}
   ],
   "signOff": [
-    {"call": "N9HO", "text": "TU N9HO"},
+    {"call": "K9QRO", "text": "TU K9QRO"},
     {"call": "W1AW", "text": "TU W1AW"}
   ],
   "send": [
@@ -43,7 +43,7 @@
     {"typed": "k1a",     "pre": "pileup",     "post": "pileup",     "working": null,    "text": "K1A?"},
     {"typed": "K1A?",    "pre": "pileup",     "post": "pileup",     "working": null,    "text": "K1A?"},
     {"typed": "W?U",     "pre": "pileup",     "post": "pileup",     "working": null,    "text": "W?U?"},
-    {"typed": "N9HS",    "pre": "readyToLog", "post": "working",    "working": "N9HO",  "text": "N9HS?"}
+    {"typed": "W1AQ",    "pre": "readyToLog", "post": "working",    "working": "W1AW",  "text": "W1AQ?"}
   ],
   "contestConfig": {
     "realism": {

@@ -206,7 +206,7 @@ object OperatingProcedure {
     /**
      * A partial that is certainly not yours: your call up to its first digit,
      * that digit moved on two (then one more at a time while it is still in
-     * your call). `N9HO` → `N1?`.
+     * your call). `K9QRO` → `K1?`.
      */
     fun notMinePartial(call: String): String {
         val me = normalizeCall(call)
@@ -225,7 +225,7 @@ object OperatingProcedure {
 
     /**
      * A call one letter from yours: the first letter after your first digit
-     * moved back six (`N9HO` → `N9BO`); with no letter there, your last letter.
+     * moved back six (`K9QRO` → `K9KRO`); with no letter there, your last letter.
      */
     fun nearMiss(call: String): String {
         val c = normalizeCall(call).toCharArray()

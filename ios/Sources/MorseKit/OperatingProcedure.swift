@@ -229,7 +229,7 @@ public enum OperatingProcedure {
 
     /// A partial that is certainly not yours: your call up to its first digit,
     /// that digit moved on two (then one more at a time while it is still in
-    /// your call). `N9HO` → `N1?`.
+    /// your call). `K9QRO` → `K1?`.
     public static func notMinePartial(call: String) -> String {
         let c = Array(normalizeCall(call))
         guard let d = c.firstIndex(where: isDigit) else { return "?" }
@@ -246,7 +246,7 @@ public enum OperatingProcedure {
     }
 
     /// A call one letter from yours: the first letter after your first digit
-    /// moved back six (`N9HO` → `N9BO`); with no letter there, your last letter.
+    /// moved back six (`K9QRO` → `K9KRO`); with no letter there, your last letter.
     public static func nearMiss(call: String) -> String {
         var c = Array(normalizeCall(call))
         guard !c.isEmpty else { return "" }
