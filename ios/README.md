@@ -99,6 +99,18 @@ testers, bug reports and feature chat live on
   a call nobody answers, and a whole hunter-side contact. Offered from the
   first-run screen and the top of Home, a tutorial rather than a scored mode,
   and it ends with a nudge to thank your first CW contact
+- **Operating Procedure**: CW etiquette for hunting POTA activators, one
+  rule at a time, with your own callsign and state in every example: eight
+  short lessons (signals, when to call, sending your call once, partial
+  calls, "is it me?", the exchange, fixing mistakes, and offsetting), each a
+  concept card, right-and-wrong audio examples and a few quick scenarios. The
+  offsetting lesson explains zero beat, RIT, XIT and CW pitch (with what Icom,
+  Yaesu, Kenwood, Elecraft and FlexRadio call them), plays the same pileup
+  three ways (everyone zero beat, only you offset, everyone offset), lets you
+  move an RIT and hear what it does, and drills tuning to zero beat by ear.
+  "What should you do?" deals ten situations from every lesson. A tile on
+  Home, linked with First Four; not a scored mode. After WB0RLJ's "Advice for CW POTA Hunters"
+  and the POTA CW Guide
 - **Pileup Runner**: call CQ and work a simulated pileup, with your own side
   keyed on the air: adjustable callers, speeds, QSB/QRN, cut numbers, bust
   behavior, callsign shapes, and a live log

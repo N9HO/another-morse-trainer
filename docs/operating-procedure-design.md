@@ -479,7 +479,7 @@ answer shows right or wrong, the explanation, and **"Lesson: Partial calls"**
 is stored but the day's practice; there is no best score (it is not a game,
 and not ranked).
 
-## The hunt simulator (follow-up)
+## The hunt simulator (follow-up, #313)
 
 Designed here so the first pull request's MorseKit pieces are shaped for it;
 built in its own issue.
@@ -592,14 +592,10 @@ in sections 1–4 is platform-limited:
 - choices need no keyer, so desktop's missing BLE MIDI (PARITY.md) does not
   matter here.
 
-One gap is inherited, not new: **desktop has no First Four yet** (#280, in
-progress). Until it lands, desktop's section hides the First Four row, and
-First Four's forward line exists only on iOS and Android. #280 should add both
-when it ports First Four; the pull request says so on #280.
-
-Desktop's `PileupSettings` gains `myState`, as Android's has had since #265,
-because lesson 6 needs it. #280 will want the same field; whichever lands
-second takes the other's.
+First Four reached desktop (#280, pull request #304) while this was being
+written, so the First Four row and First Four's forward line are on all three
+apps, and desktop's `PileupSettings.myState` (which lesson 6 needs) came with
+it.
 
 All three READMEs gain the same feature line, and the user guide gains a CW
 Operating Procedure section (site pull request linked from the app one).
@@ -611,7 +607,7 @@ Operating Procedure section (site pull request linked from the app one).
   concept, pileup demo, RIT demo, drill, scenarios), "What should you do?",
   the home tile, the First Four links; READMEs and the guide. Closes #294 and
   #295's layers 1 and 2.
-- **Follow-up issue:** the hunt simulator (section 5), all three apps.
+- **Follow-up issue #313:** the hunt simulator (section 5), all three apps.
 
 ## Open questions for the maintainer
 
