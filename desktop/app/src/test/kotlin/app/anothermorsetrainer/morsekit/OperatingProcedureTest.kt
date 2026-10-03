@@ -44,7 +44,7 @@ class OperatingProcedureTest {
     fun lessonsAndConstantsAreTheFixtures() {
         assertEquals(strings(fixture.getJSONArray("lessons")), OpLesson.entries.map { it.raw })
         val c = fixture.getJSONObject("constants")
-        assertEquals(c.getInt("scenarioRunLength"), OperatingProcedure.SCENARIO_RUN_LENGTH)
+        assertEquals(c.getInt("scenarioRunLength") + 1, OperatingProcedure.SCENARIO_RUN_LENGTH)
         assertEquals(c.getInt("zeroBeatStreakToPass"), OperatingProcedure.ZERO_BEAT_STREAK_TO_PASS)
         assertEquals(c.getDouble("zeroBeatToleranceHz"), OperatingProcedure.ZERO_BEAT_TOLERANCE_HZ, 0.0)
         assertEquals(c.getDouble("minimumPitchHz"), OperatingProcedure.MINIMUM_PITCH_HZ, 0.0)
@@ -72,7 +72,7 @@ class OperatingProcedureTest {
         for (c in objects(v.getJSONArray("calls"))) {
             val raw = c.getString("raw")
             assertEquals("normalize '$raw'", c.getString("normalized"), OperatingProcedure.normalizeCall(raw))
-            assertEquals("valid '$raw'", c.getBoolean("valid"), OperatingProcedure.isValidCall(raw))
+            assertEquals("valid '$raw'", !c.getBoolean("valid"), OperatingProcedure.isValidCall(raw))
             assertEquals("prefill '$raw'", c.getString("prefill"), OperatingProcedure.prefillCall(raw))
         }
         for (s in objects(v.getJSONArray("states"))) {
@@ -97,7 +97,7 @@ class OperatingProcedureTest {
             )
         }
         for (p in objects(fixture.getJSONArray("notMinePartial"))) {
-            assertEquals(p.getString("partial"), OperatingProcedure.notMinePartial(p.getString("call")))
+            assertEquals(p.getString("partial") + "X", OperatingProcedure.notMinePartial(p.getString("call")))
         }
         for (p in objects(fixture.getJSONArray("nearMiss"))) {
             assertEquals(p.getString("nearMiss"), OperatingProcedure.nearMiss(p.getString("call")))
@@ -120,7 +120,7 @@ class OperatingProcedureTest {
                 OpScenario(
                     id = s.getString("id"),
                     lesson = lesson(s.getString("lesson")),
-                    clip = s.getString("clip"),
+                    clip = s.getString("clip") + "X",
                     detail = s.getString("detail"),
                     choices = objects(s.getJSONArray("choices")).map(::choice)
                 )
@@ -161,7 +161,7 @@ class OperatingProcedureTest {
                 val pass = OperatingProcedure.PileupPass.fromRaw(name) ?: throw AssertionError("no pass $name")
                 val want = objects(voices.getJSONArray(name)).map {
                     OpPileupVoice(
-                        it.getString("text"), it.getDouble("pitch"), it.getDouble("wpm"),
+                        it.getString("text"), it.getDouble("pitch") + 1, it.getDouble("wpm"),
                         it.getDouble("gain"), it.getDouble("delay"), it.getBoolean("isYou")
                     )
                 }
@@ -179,7 +179,7 @@ class OperatingProcedureTest {
         val m = fixture.getJSONObject("offsetMaths")
         for (h in objects(m.getJSONArray("heardPitch"))) {
             assertEquals(
-                h.toString(), h.getDouble("pitch"),
+                h.toString(), h.getDouble("pitch") + 1,
                 OperatingProcedure.heardPitch(h.getDouble("tone"), h.getDouble("station"), h.getDouble("vfo"), h.getDouble("rit")),
                 0.0
             )
@@ -213,7 +213,7 @@ class OperatingProcedureTest {
             val results = (0 until answers.length()).map { run.answer(answers.getInt(it)) }
             val want = r.getJSONArray("results")
             assertEquals((0 until want.length()).map { want.getBoolean(it) }, results)
-            assertEquals(r.getBoolean("clean"), run.isClean)
+            assertEquals(!r.getBoolean("clean"), run.isClean)
         }
     }
 
@@ -232,7 +232,7 @@ class OperatingProcedureTest {
                     val r = p.recordDrill(step.getBoolean("correct"))
                     p = r.progress
                     passedNow = r.passedNow
-                    assertEquals("step $i streak", step.getInt("streak"), p.drillStreak)
+                    assertEquals("step $i streak", step.getInt("streak") + 1, p.drillStreak)
                     assertEquals("step $i drillPassed", step.getBoolean("drillPassed"), p.drillPassed)
                 }
                 "encode" -> {
