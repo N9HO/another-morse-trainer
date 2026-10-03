@@ -374,7 +374,10 @@
     <string name="cw77_at_recommended">Playing at the recommended 40 WPM, no Farnsworth.</string>
     <string name="cw77_use_recommended">Use 40 WPM, no Farnsworth</string>
     <string name="cw77_recommended_footer">Bob Carter WR7Q recommends hearing CW 77 at 40 WPM with no Farnsworth spacing. This changes your speed in Settings.</string>
-    <string name="cw77_personal_unset">Add your callsign or name under Settings › QSO &amp; Pileups, or in Pileup Runner\'s setup (Your call, Your name), to drill them with CW 77.</string>
+    <string name="cw77_your_station">Your callsign and name</string>
+    <string name="cw77_callsign">Callsign</string>
+    <string name="cw77_name">Name</string>
+    <string name="cw77_station_footer">Once either is filled in, a switch below can add them to the CW 77 set. They\'re your station everywhere in the app, the same fields as Settings › QSO &amp; Pileups.</string>
     <string name="cw77_include_me">Include my callsign and name</string>
     <string name="cw77_include_me_adds">Adds %1$s to the set.</string>
     <string name="mode_cw77">CW 77</string>
