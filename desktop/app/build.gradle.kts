@@ -8,13 +8,14 @@ plugins {
 }
 
 // ---- Version ----
-// Independent of the iOS and Android numbers (CLAUDE.md, "Versions, tags, CI").
+// The shared app version, the same on every platform (CLAUDE.md, "Versions,
+// tags, CI"); desktopVersionCode is desktop's own build counter.
 // jpackage's MSI wants MAJOR.MINOR.PATCH with MAJOR > 0; the MSIX manifest
 // wants four parts with the last one 0 (the Store reserves it), so the MSIX
 // version is "$desktopVersionName.0" and every Store submission moves PATCH.
 // Release tags are desktop-v<versionName>.
-val desktopVersionName = "1.0.0"
-val desktopVersionCode = 1
+val desktopVersionName = "2.0.0"
+val desktopVersionCode = 2
 
 kotlin {
     jvmToolchain(21)

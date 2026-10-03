@@ -67,6 +67,15 @@ divergences the last audit found and had not yet closed.
 
 What this means when you make a change:
 
+- **Every fix and every feature is checked on every app.** When you fix a
+  bug on one platform, check whether the same bug exists on each of the
+  others, by reading that tree's code (and running its tests or CI), and fix
+  it there in the same pull request. Say in the pull request what you found
+  on each: fixed, not present (and why), or tracked in a paired issue. The
+  same goes for a new feature or a behaviour change: it is built on every
+  app, or the missing side has a paired issue before the pull request
+  merges. "I only looked at the platform it was reported on" is never the
+  answer.
 - **Parity is part of the definition of done.** An issue that changes what a
   user sees is complete when every app has the behaviour, not when one does.
   When you are asked to implement a feature or fix a behaviour bug, do every
@@ -247,13 +256,26 @@ Standing traps, all deliberate:
 
 ## Versions, tags, CI
 
-- **The two apps are not coupled.** Independent version numbers, independent
-  release cadences. Never bump one "to match" the other. The current numbers
-  are not repeated here on purpose — they went stale the first release after
-  they were written. Read them from the source of truth:
-  - iOS: `CURRENT_PROJECT_VERSION` / `MARKETING_VERSION` in
+- **One version number for every app** (decided 2026-10-03, starting at
+  2.0.0). iPhone/iPad/Mac, Android and desktop always carry the same version
+  string, because they ship the same features. When the version moves, it
+  moves on all three in the same pull request. **Never change it without the
+  maintainer saying so**: a new version string sends the Apple builds back
+  through Beta App Review.
+- **Build numbers stay per platform.** Each store has its own counter (iOS
+  and Mac share `CURRENT_PROJECT_VERSION`; Play needs a new `versionCode`
+  for every upload; desktop has `desktopVersionCode`). Testing releases move
+  only the build number. A build number that a store has accepted can't be
+  reused; one that was rejected at upload can.
+- **An approved Apple version is closed.** Once App Store review approves a
+  version, Apple refuses every further build under it, TestFlight included,
+  so the next Apple build needs a new shared version. Plan the version move
+  before submitting to App Review.
+- The current numbers are not repeated here on purpose. Read them from the
+  source of truth:
+  - iOS and Mac: `MARKETING_VERSION` / `CURRENT_PROJECT_VERSION` in
     `ios/MorseTrainer.xcodeproj/project.pbxproj`
-  - Android: `versionCode` / `versionName` in `android/app/build.gradle.kts`
+  - Android: `versionName` / `versionCode` in `android/app/build.gradle.kts`
   - Desktop: `desktopVersionName` / `desktopVersionCode` in
     `desktop/app/build.gradle.kts`
 - Release tags are namespaced: **`ios-v*`** and **`android-v*`**. A bare `v*`
