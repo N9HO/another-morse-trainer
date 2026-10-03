@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.sp
 import app.anothermorsetrainer.morsekit.ContestLength
 import app.anothermorsetrainer.morsekit.ContestType
 import app.anothermorsetrainer.morsekit.LeaderboardItem
+import app.anothermorsetrainer.morsekit.MorseItem
 import app.anothermorsetrainer.morsekit.MorseTiming
 import app.anothermorsetrainer.morsekit.PileupConfig
 import app.anothermorsetrainer.morsekit.PileupEngine
@@ -270,25 +271,52 @@ fun ContestScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
         return action
     }
 
-    fun perform(action: PileupEngine.Action) {
+    /** Key my side first (when enabled), then hand the audio back to the pileup. */
+    fun playSelfThen(text: String?, then: () -> Unit) {
+        val t = text?.takeIf { PileupSettings.keyMySide && it.isNotBlank() }
+        if (t == null) { then(); return }
+        player.play(MorseItem.Playable.Text(t), Settings.sidetoneHz, Settings.timing(), onFinished = then)
+    }
+
+    /**
+     * Apply [action]: key your side first — [selfText], or "TU" and your
+     * callsign once a contact is logged — then play the replies. The same
+     * words, at the same moments, as the iOS Contest (#320); "Key my side in
+     * Morse" off keeps it silent. [keyed] marks a send from a hardware key
+     * (#251): the operator already heard it as sidetone, so their side — the
+     * TU included — is not keyed again.
+     */
+    fun perform(action: PileupEngine.Action, selfText: String? = null, keyed: Boolean = false) {
+        val mine = if (keyed) null else selfText
         when (action) {
-            is PileupEngine.Action.Play -> player.playPileup(action.voices.map { it.toMix() }) {}
-            PileupEngine.Action.Silence -> player.stop()
-            is PileupEngine.Action.Logged -> if (Settings.hapticsEnabled) haptics.success()
+            is PileupEngine.Action.Play -> playSelfThen(mine) {
+                player.playPileup(action.voices.map { it.toMix() }) {}
+            }
+            PileupEngine.Action.Silence -> {
+                player.stop()
+                playSelfThen(mine) {}
+            }
+            is PileupEngine.Action.Logged -> {
+                if (Settings.hapticsEnabled) haptics.success()
+                playSelfThen(if (keyed) null else PileupEngine.signOffText(PileupSettings.effectiveCall)) {}
+            }
         }
         rev++
         syncRun()
     }
 
-    fun submit() {
+    fun submit(keyed: Boolean = false) {
         val e = engine ?: return
         if (input.isBlank()) return
         val raw = input.trim()
+        val pre = e.phase
         val action = tracked(raw) { e.send(raw) }
+        // What goes on the air for it: "K1ABC 5NN", "R", "AGN?", "K1A?"...
+        val said = PileupEngine.selfSendText(raw, pre, e.phase, e.workingStation?.call)
         // Keep a typed repeat request's partial call in the box (iOS #49).
         val frag = PileupEngine.fragment(raw)
         input = if (raw.endsWith("?") && frag.isNotEmpty() && e.phase is PileupEngine.Phase.Pileup) frag else ""
-        perform(action)
+        perform(action, selfText = said, keyed = keyed)
     }
 
     /**
@@ -307,7 +335,7 @@ fun ContestScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
             perform(e.callCQ())
             return
         }
-        submit()
+        submit(keyed = true)
         // A keyer cannot edit the box, so a kept partial ("N9" after "N9?")
         // would have the next keyed call appended to it — "N9N9HO", a bust
         // every time. A keyed send always empties it.
@@ -371,8 +399,8 @@ fun ContestScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
                 onSend = ::submit,
                 reveal = reveal,
                 onToggleReveal = { reveal = !reveal },
-                onCQ = { perform(e.callCQ()) },
-                onRepeat = { perform(e.repeatRequest()) },
+                onCQ = { perform(e.callCQ(), selfText = PileupEngine.cqText(contest.qsoMode, PileupSettings.effectiveCall)) },
+                onRepeat = { perform(e.repeatRequest(), selfText = "AGN?") },
                 onLog = { perform(tracked(null) { e.logCurrent() }) },
                 onSettings = { showSettings = true },
                 onSwitchMode = ::switchTo,
@@ -415,6 +443,8 @@ private fun ContestSetup(
     onStart: () -> Unit, onBack: () -> Unit,
     onSwitchMode: (TrainingMode) -> Unit
 ) {
+    // Contest keys your callsign too (#320): ask for it once while it is unset (#297).
+    StationPromptHost()
     Column(modifier = Modifier.fillMaxSize()) {
         Row(modifier = Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
             TextButton(onClick = onBack) { Text(stringResource(R.string.common_back), color = Brand.teal) }
