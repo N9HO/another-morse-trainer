@@ -11,6 +11,11 @@
 #   testflight the testing path: set What to Test from the same
 #              tools/whatsnew/whatsnew-en-US, submit for Beta App Review and
 #              hand the build to the previous build's testers.
+#   developer-id  the Mac download (maccatalyst only): NOTHING goes to App
+#              Store Connect. The app is exported Developer ID-signed,
+#              notarized, stapled and zipped as
+#              build/export/AnotherMorseTrainer-Mac.zip, the file a GitHub
+#              release offers. See "Developer ID" below.
 # Every upload lands in TestFlight regardless, so internal testers still get
 # a production build before Apple has finished reviewing it.
 #
@@ -28,6 +33,20 @@
 #         RELEASE_CHANNEL=testflight ./tools/upload-testflight.sh  # beta, not App Review
 #         RELEASE_PLATFORM=maccatalyst RELEASE_CHANNEL=testflight ./tools/upload-testflight.sh
 #                                                              # the Mac build, not the iPhone one
+#         RELEASE_PLATFORM=maccatalyst RELEASE_CHANNEL=developer-id ./tools/upload-testflight.sh
+#                                                              # the notarized Mac download
+#
+# Developer ID: a Mac app downloaded from the web opens only when it is
+# signed with the team's Developer ID Application certificate and notarized.
+# That certificate CANNOT be cloud-managed from here: xcodebuild with an App
+# Store Connect API key, even an Admin one, gets "Cloud signing permission
+# error" (403 on DEVELOPER_ID_APPLICATION_MANAGED), a known Apple bug,
+# FB16835802 (seen 2026-10-03). So the developer-id channel needs the
+# certificate and its private key in the keychain: CI imports them from the
+# DEVID_APP_P12 secrets into its throwaway keychain, and a local run uses the
+# one in the login keychain. The provisioning profile is still made
+# automatically through the API key. Notarization uses the same API key.
+# The build number is not consumed: nothing reaches App Store Connect.
 #
 # RELEASE_PLATFORM picks which build of the one MorseTrainer target ships:
 #   ios          (default) the iPhone build, archived for generic/platform=iOS
@@ -61,9 +80,19 @@ source "$AUTH"
 
 CHANNEL="${RELEASE_CHANNEL:-appstore}"
 case "$CHANNEL" in
-  appstore|testflight) ;;
-  *) echo "❌ RELEASE_CHANNEL must be 'appstore' or 'testflight', not '$CHANNEL'."; exit 1 ;;
+  appstore|testflight|developer-id) ;;
+  *) echo "❌ RELEASE_CHANNEL must be 'appstore', 'testflight' or 'developer-id', not '$CHANNEL'."; exit 1 ;;
 esac
+if [ "$CHANNEL" = "developer-id" ]; then
+  if [ "${RELEASE_PLATFORM:-ios}" != "maccatalyst" ]; then
+    echo "❌ RELEASE_CHANNEL=developer-id is the Mac download; set RELEASE_PLATFORM=maccatalyst."; exit 1
+  fi
+  # It never uploads, so a dry run would be the same run, and there is no
+  # submission to redo.
+  if [ "${DRY_RUN:-0}" = "1" ] || [ "${SUBMIT_ONLY:-0}" = "1" ]; then
+    echo "❌ RELEASE_CHANNEL=developer-id uploads nothing; DRY_RUN and SUBMIT_ONLY do not apply."; exit 1
+  fi
+fi
 
 PLATFORM="${RELEASE_PLATFORM:-ios}"
 case "$PLATFORM" in
@@ -98,7 +127,7 @@ NOTES="tools/whatsnew/whatsnew-en-US"
 if [ "$PLATFORM" = "maccatalyst" ] && [ -s tools/whatsnew/whatsnew-mac-en-US ]; then
   NOTES="tools/whatsnew/whatsnew-mac-en-US"
 fi
-if [ "${DRY_RUN:-0}" != "1" ] && [ ! -s "$NOTES" ]; then
+if [ "${DRY_RUN:-0}" != "1" ] && [ "$CHANNEL" != "developer-id" ] && [ ! -s "$NOTES" ]; then
   echo "❌ $NOTES is missing or empty. Write the notes for this build before releasing."
   exit 1
 fi
@@ -119,6 +148,7 @@ if [ "${DRY_RUN:-0}" = "1" ]; then
   plutil -replace destination -string export "$EXPORT_PLIST"
   echo "▸ DRY RUN: exporting to disk, not uploading."
 fi
+[ "$CHANNEL" = "developer-id" ] && EXPORT_PLIST="tools/ExportOptions-developer-id.plist"
 
 if [ "${SUBMIT_ONLY:-0}" = "1" ]; then
   echo "▸ SUBMIT_ONLY: skipping archive and upload; submitting the build already in App Store Connect."
@@ -156,12 +186,18 @@ xcodebuild -project MorseTrainer.xcodeproj -scheme MorseTrainer -configuration R
 # export keeps them.
 ENTITLEMENTS=Config/MorseTrainer.entitlements
 [ "$PLATFORM" = "maccatalyst" ] && ENTITLEMENTS=Config/MorseTrainer-macCatalyst.entitlements
+#
+# Notarization also requires the hardened runtime, which the project does not
+# turn on (the Mac App Store does not need it). Recorded here the same way for
+# the developer-id channel only, so the App Store builds are unchanged.
+RUNTIME_OPTS=()
+[ "$CHANNEL" = "developer-id" ] && RUNTIME_OPTS=(--options runtime)
 echo "▸ Recording $ENTITLEMENTS on the archived app (ad-hoc)…"
-codesign --force --sign - --generate-entitlement-der \
+codesign --force --sign - --generate-entitlement-der ${RUNTIME_OPTS[@]+"${RUNTIME_OPTS[@]}"} \
   --entitlements "$ENTITLEMENTS" \
   "$ARCHIVE/Products/Applications/MorseTrainer.app"
 
-echo "▸ Exporting + uploading to TestFlight ($PLATFORM)…"
+echo "▸ Exporting ($PLATFORM, $CHANNEL, $(plutil -extract method raw -o - "$EXPORT_PLIST"))…"
 xcodebuild -exportArchive \
   -archivePath "$ARCHIVE" \
   -exportOptionsPlist "$EXPORT_PLIST" \
@@ -170,6 +206,60 @@ xcodebuild -exportArchive \
   -authenticationKeyPath "$ASC_KEY_PATH" \
   -authenticationKeyID "$ASC_KEY_ID" \
   -authenticationKeyIssuerID "$ASC_ISSUER_ID"
+
+if [ "$CHANNEL" = "developer-id" ]; then
+  APP="$EXPORT_DIR/MorseTrainer.app"
+  [ -d "$APP" ] || { echo "❌ No MorseTrainer.app in $EXPORT_DIR:"; ls -la "$EXPORT_DIR"; exit 1; }
+  SIGINFO=$(codesign -dvvv "$APP" 2>&1)
+  echo "▸ Signature on the exported app:"
+  printf '%s\n' "$SIGINFO" | grep -E '^Authority=|^TeamIdentifier=|^Identifier=|^CodeDirectory' | sed 's/^/    /'
+  if ! printf '%s\n' "$SIGINFO" | grep -q '^Authority=Developer ID Application'; then
+    echo "❌ The export is not signed by a Developer ID Application certificate."; exit 1
+  fi
+  if ! printf '%s\n' "$SIGINFO" | grep -qE '^CodeDirectory .*flags=.*runtime'; then
+    echo "❌ The export does not have the hardened runtime; notarization would refuse it."
+    printf '%s\n' "$SIGINFO" | grep '^CodeDirectory'; exit 1
+  fi
+  ENTS=$(codesign -d --entitlements - --xml "$APP" 2>/dev/null | plutil -convert json -o - - 2>/dev/null || true)
+  echo "▸ Entitlements on the exported app: $ENTS"
+  if ! printf '%s' "$ENTS" | grep -q '"com.apple.security.app-sandbox":true'; then
+    echo "❌ The Mac app is not sandboxed."; exit 1
+  fi
+  # Reported, not enforced: without it the app still runs, and the
+  # leaderboard stays read-only (LeaderboardClient checks isSupported).
+  if ! printf '%s' "$ENTS" | grep -q '"com.apple.developer.devicecheck.appattest-environment"'; then
+    echo "⚠️  No App Attest entitlement: this build cannot post to the leaderboard."
+  fi
+
+  # notarytool takes a zip, not a bare .app. The ticket is then stapled to
+  # the app, so it opens offline, and the stapled app is zipped again for
+  # the download. ditto keeps the extended attributes and symlinks a plain
+  # `zip` would mangle.
+  ZIP="$EXPORT_DIR/AnotherMorseTrainer-Mac.zip"
+  ditto -c -k --keepParent "$APP" "$EXPORT_DIR/notarize.zip"
+  echo "▸ Notarizing (waits for Apple)…"
+  NOTARY=$(xcrun notarytool submit "$EXPORT_DIR/notarize.zip" \
+      --key "$ASC_KEY_PATH" --key-id "$ASC_KEY_ID" --issuer "$ASC_ISSUER_ID" \
+      --wait --timeout 1h --output-format json) && NOTARY_RC=0 || NOTARY_RC=$?
+  printf '%s\n' "$NOTARY"
+  SUBMISSION=$(printf '%s' "$NOTARY" | plutil -extract id raw -o - - 2>/dev/null || true)
+  STATUS=$(printf '%s' "$NOTARY" | plutil -extract status raw -o - - 2>/dev/null || true)
+  if [ "$NOTARY_RC" != "0" ] || [ "$STATUS" != "Accepted" ]; then
+    echo "❌ Notarization did not succeed (status: ${STATUS:-unknown}). Apple's log:"
+    [ -n "$SUBMISSION" ] && xcrun notarytool log "$SUBMISSION" \
+      --key "$ASC_KEY_PATH" --key-id "$ASC_KEY_ID" --issuer "$ASC_ISSUER_ID" || true
+    exit 1
+  fi
+  rm -f "$EXPORT_DIR/notarize.zip"
+  xcrun stapler staple "$APP"
+  xcrun stapler validate "$APP"
+  echo "▸ Gatekeeper's verdict:"
+  spctl -a -vvv -t exec "$APP" 2>&1 | sed 's/^/    /'
+  spctl -a -t exec "$APP"
+  ditto -c -k --keepParent "$APP" "$ZIP"
+  echo "✅ Developer ID-signed, notarized and stapled: $ZIP. Nothing was uploaded to App Store Connect."
+  exit 0
+fi
 
 if [ "${DRY_RUN:-0}" = "1" ]; then
   # Prove the export is genuinely App Store distribution-signed. Cloud signing

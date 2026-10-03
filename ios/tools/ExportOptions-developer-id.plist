@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- The Mac build for direct download (RELEASE_CHANNEL=developer-id):
+         signed with the team's Developer ID Application certificate and
+         written to disk, never uploaded. upload-testflight.sh then notarizes
+         and staples it. A Mac app downloaded from the web opens only when it
+         is Developer ID-signed and notarized; an App Store-signed one does
+         not open outside the Mac App Store at all.
+
+         Signing is cloud-managed, as in ExportOptions.plist: the same Admin
+         App Store Connect API key, no certificate in the keychain and no
+         profile on disk. Apple holds the Developer ID private key. -->
+    <key>method</key>
+    <string>developer-id</string>
+    <key>destination</key>
+    <string>export</string>
+    <key>teamID</key>
+    <string>F6ASU3CH5M</string>
+    <key>signingStyle</key>
+    <string>automatic</string>
+    <key>manageAppVersionAndBuildNumber</key>
+    <false/>
+</dict>
+</plist>

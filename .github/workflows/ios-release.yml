@@ -26,6 +26,14 @@ name: iOS release (App Store upload)
 # mac-beta-v<version>-b<build> (which discord-release.yml does not announce).
 # Tags always ship the iPhone build.
 #
+# `channel: developer-id` with `platform: maccatalyst` is the Mac DOWNLOAD,
+# for a GitHub release: exported Developer ID-signed, notarized and stapled,
+# and uploaded as the workflow artifact `mac-developer-id`
+# (AnotherMorseTrainer-Mac.zip). It uploads nothing to App Store Connect,
+# spends no build number and is never tagged. Cloud signing cannot do
+# Developer ID with an API key (Apple bug FB16835802), so this channel alone
+# imports the certificate from DEVID_APP_P12 / DEVID_APP_P12_PASSWORD.
+#
 # Every successful upload is TAGGED, by the `tag` job below, so the Discord
 # announcement has a name and each changelog starts where the last one ended:
 #   ios-v<MARKETING_VERSION>-b<build>       an App Store submission
@@ -49,6 +57,10 @@ name: iOS release (App Store upload)
 #   ASC_ISSUER_ID  - the team's issuer UUID (same for every key)
 #   ASC_APP_ID     - the app's numeric App Store Connect id
 #   ASC_API_KEY_P8 - base64 of the key's .p8  (`base64 -i AuthKey_XXX.p8`)
+# For the developer-id channel only:
+#   DEVID_APP_P12          - base64 of a .p12 holding the Developer ID
+#                            Application certificate and its private key
+#   DEVID_APP_P12_PASSWORD - that .p12's password
 # Optional, read by `asc-api.py prepare` for the App Review contact:
 #   ASC_REVIEW_FIRST_NAME, ASC_REVIEW_LAST_NAME, ASC_REVIEW_PHONE, ASC_REVIEW_EMAIL
 #
@@ -70,13 +82,14 @@ on:
         required: false
         default: "false"
       channel:
-        description: 'Where the upload is submitted: appstore (App Review, default) or testflight (Beta App Review)'
+        description: 'Where it goes: appstore (App Review, default), testflight (Beta App Review) or developer-id (Mac download artifact, uploads nothing)'
         required: false
         default: "appstore"
         type: choice
         options:
           - appstore
           - testflight
+          - developer-id
       # Which build of the app: the iPhone one (default, and what every tag
       # push ships) or the Mac Catalyst one (#264). The Mac build is
       # TestFlight-only for now; the script refuses maccatalyst + appstore.
@@ -135,7 +148,7 @@ jobs:
       # App Store release with the last App Store release, since its notes
       # usually gather what the TestFlight builds before it already said.
       - name: Warn if the release notes are unchanged since the last release
-        if: github.event.inputs.dry_run != 'true' && github.event.inputs.submit_only != 'true'
+        if: github.event.inputs.dry_run != 'true' && github.event.inputs.submit_only != 'true' && github.event.inputs.channel != 'developer-id'
         env:
           RELEASE_CHANNEL: ${{ github.event.inputs.channel || 'appstore' }}
         run: |
@@ -209,6 +222,43 @@ jobs:
           security unlock-keychain -p "$PW" "$KC"
           security list-keychains -d user -s "$KC" login.keychain-db
           security default-keychain -d user -s "$KC"
+          # Only the Developer ID export needs this; save the password for it.
+          echo "::add-mask::$PW"
+          echo "KEYCHAIN_PASSWORD=$PW" >> "$GITHUB_ENV"
+
+      # Cloud signing cannot produce Developer ID with an API key (Apple bug
+      # FB16835802: 403 on cloud-managed Developer ID certificates), so this
+      # channel signs with a real certificate. Xcode prefers one it finds in
+      # the keychain; the profile is still made through the API key.
+      - name: Import the Developer ID certificate (developer-id channel only)
+        if: github.event.inputs.channel == 'developer-id'
+        env:
+          DEVID_APP_P12: ${{ secrets.DEVID_APP_P12 }}
+          DEVID_APP_P12_PASSWORD: ${{ secrets.DEVID_APP_P12_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -z "$DEVID_APP_P12" ] || [ -z "$DEVID_APP_P12_PASSWORD" ]; then
+            echo "::error::DEVID_APP_P12 and DEVID_APP_P12_PASSWORD must be set for the developer-id channel."
+            exit 1
+          fi
+          P12="$RUNNER_TEMP/devid.p12"
+          printf '%s' "$DEVID_APP_P12" | base64 -d > "$P12"
+          security import "$P12" -k "$KEYCHAIN_PATH" -P "$DEVID_APP_P12_PASSWORD" \
+            -f pkcs12 -T /usr/bin/codesign -T /usr/bin/security -T /usr/bin/xcodebuild
+          rm -f "$P12"
+          # Without this codesign stops at a keychain access prompt nobody answers.
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s \
+            -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH" > /dev/null
+          # The chain up to Apple's root: the Developer ID G2 intermediate is
+          # not guaranteed to be on the runner image.
+          curl -fsSL https://www.apple.com/certificateauthority/DeveloperIDG2CA.cer \
+            -o "$RUNNER_TEMP/DeveloperIDG2CA.cer"
+          security import "$RUNNER_TEMP/DeveloperIDG2CA.cer" -k "$KEYCHAIN_PATH" || true
+          security find-identity -v -p codesigning "$KEYCHAIN_PATH"
+          if ! security find-identity -v -p codesigning "$KEYCHAIN_PATH" | grep -q 'Developer ID Application'; then
+            echo "::error::No valid Developer ID Application identity after the import."
+            exit 1
+          fi
 
       - name: Archive, cloud-sign, upload and submit
         env:
@@ -229,11 +279,23 @@ jobs:
           ASC_REVIEW_EMAIL: ${{ secrets.ASC_REVIEW_EMAIL }}
         run: ./tools/upload-testflight.sh
 
-      # The name the `tag` job pushes and the announcement uses. Empty on a dry
-      # run, which uploads nothing.
+      # The Mac download: never uploaded to App Store Connect, so it is
+      # handed over here instead. Attach it to a GitHub release by hand.
+      - name: Save the notarized Mac download
+        if: github.event.inputs.channel == 'developer-id'
+        uses: actions/upload-artifact@v6
+        with:
+          name: mac-developer-id
+          path: ios/build/export/AnotherMorseTrainer-Mac.zip
+          if-no-files-found: error
+          retention-days: 30
+
+      # The name the `tag` job pushes and the announcement uses. Empty on a
+      # dry run, which uploads nothing, and on a developer-id run, which
+      # uploads nothing to App Store Connect either: no tag, no announcement.
       - name: Name the release tag
         id: tag
-        if: github.event.inputs.dry_run != 'true'
+        if: github.event.inputs.dry_run != 'true' && github.event.inputs.channel != 'developer-id'
         env:
           RELEASE_CHANNEL: ${{ github.event.inputs.channel || 'appstore' }}
           RELEASE_PLATFORM: ${{ github.event.inputs.platform || 'ios' }}
@@ -266,7 +328,7 @@ jobs:
           security list-keychains -d user -s login.keychain-db || true
           security default-keychain -d user -s login.keychain-db || true
           security delete-keychain "${KEYCHAIN_PATH:-}" 2>/dev/null || true
-          rm -f "$RUNNER_TEMP"/AuthKey_*.p8 tools/asc-auth.sh || true
+          rm -f "$RUNNER_TEMP"/AuthKey_*.p8 "$RUNNER_TEMP"/devid.p12 tools/asc-auth.sh || true
 
       - name: Save the archive logs on failure
         if: failure()
