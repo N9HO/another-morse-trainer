@@ -1,0 +1,42 @@
+{
+  "about": [
+    "Voice answers: what the speech recogniser writes down, and the answer it must grade as (#300).",
+    "Read by the iOS MorseKitCheck harness (VoiceMatcher.interpret) and by the Kotlin VoiceMatchingFixtureTest on Android and desktop.",
+    "Each case is a drill: `heard` is the recogniser's best transcript then its alternatives, exactly as it formats them",
+    "(capitals, digits, punctuation and all); `candidates` are the drill's answer options; `token` is the answer the learner said.",
+    "`confident: true` means the answer is graded without a 'Did you say…?' prompt. It is set only where `heard` contains an",
+    "exact spoken form of the answer: the NATO/ICAO word, the English letter name, the digit or its word, the symbol's name,",
+    "or the character itself. `confident` is left out where only the answer is pinned.",
+    "The expected answers come from those spoken forms, not from running either port.",
+    "Recognisers format a spoken number as a digit and a spoken symbol name as the symbol, so 'slash' arrives as '/'.",
+    "They also add sentence punctuation ('Kilo.', 'Mike?'), which is noise, not an answer."
+  ],
+  "cases": [
+    { "name": "NATO word", "heard": ["Kilo"], "candidates": ["K", "M", "R", "S"], "token": "K", "confident": true },
+    { "name": "NATO word with a full stop added", "heard": ["Kilo."], "candidates": ["K", "M", "R", "S"], "token": "K", "confident": true },
+    { "name": "NATO word written as a question", "heard": ["Mike?"], "candidates": ["K", "M", "R", "S"], "token": "M", "confident": true },
+    { "name": "the right word among the alternatives", "heard": ["Keylow", "Kilo"], "candidates": ["K", "M", "R", "S"], "token": "K", "confident": true },
+    { "name": "NATO word for A", "heard": ["Alpha"], "candidates": ["A", "U", "P", "T"], "token": "A", "confident": true },
+    { "name": "bare letter", "heard": ["A"], "candidates": ["A", "U", "P", "T"], "token": "A", "confident": true },
+    { "name": "letter name 'ay'", "heard": ["Ay"], "candidates": ["A", "U", "P", "T"], "token": "A", "confident": true },
+    { "name": "letter name 'oh'", "heard": ["Oh"], "candidates": ["O", "W", "I", "L"], "token": "O", "confident": true },
+    { "name": "bare letter O", "heard": ["O"], "candidates": ["O", "W", "I", "L"], "token": "O", "confident": true },
+    { "name": "letter name 'double you'", "heard": ["Double you"], "candidates": ["O", "W", "I", "L"], "token": "W", "confident": true },
+    { "name": "NATO X-ray as the recogniser hyphenates it", "heard": ["X-ray"], "candidates": ["X", "D", "6", "1"], "token": "X", "confident": true },
+    { "name": "ICAO spelling Whisky", "heard": ["Whisky"], "candidates": ["O", "W", "I", "L"], "token": "W" },
+    { "name": "ICAO spelling Juliett", "heard": ["Juliett"], "candidates": ["J", "E", "F", "N"], "token": "J" },
+    { "name": "a spoken digit written as a digit", "heard": ["5"], "candidates": ["5", "G", "0", "Y"], "token": "5", "confident": true },
+    { "name": "a spoken digit written as a word", "heard": ["Five"], "candidates": ["5", "G", "0", "Y"], "token": "5", "confident": true },
+    { "name": "ham digit 'niner'", "heard": ["Niner"], "candidates": ["9", "Q", "Z", "H"], "token": "9", "confident": true },
+    { "name": "'slash' written as the symbol", "heard": ["/"], "candidates": ["/", "5", "G", "0"], "token": "/", "confident": true },
+    { "name": "'slash' written as a word", "heard": ["Slash"], "candidates": ["/", "5", "G", "0"], "token": "/", "confident": true },
+    { "name": "'question mark' written as the symbol", "heard": ["?"], "candidates": ["?", "B", "4", "2"], "token": "?", "confident": true },
+    { "name": "'question mark' written as words", "heard": ["Question mark"], "candidates": ["?", "B", "4", "2"], "token": "?", "confident": true },
+    { "name": "'period' written as the symbol", "heard": ["."], "candidates": [".", "N", "J", "E"], "token": ".", "confident": true },
+    { "name": "'period' written as a word", "heard": ["Period"], "candidates": [".", "N", "J", "E"], "token": ".", "confident": true },
+    { "name": "'comma' written as the symbol", "heard": [","], "candidates": [",", "G", "5", "F"], "token": ",", "confident": true },
+    { "name": "'comma' written as a word", "heard": ["Comma"], "candidates": [",", "G", "5", "F"], "token": ",", "confident": true },
+    { "name": "a word answer spelled in NATO", "heard": ["Charlie Quebec"], "candidates": ["CQ", "DE", "RST"], "token": "CQ", "confident": true },
+    { "name": "a word answer said as itself", "heard": ["CQ"], "candidates": ["CQ", "DE", "RST"], "token": "CQ", "confident": true }
+  ]
+}

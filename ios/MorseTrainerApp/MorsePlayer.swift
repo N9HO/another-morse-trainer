@@ -80,16 +80,36 @@ final class MorsePlayer {
     private var sessionClaim: AudioSession.Claim?
     /// The `AudioSession.resetGeneration` this engine was built against.
     private var builtForReset = 0
+    private var engineObservation: EngineConfigurationObserver?
 
     init() {
         buildEngine()
         // Not pre-warmed here: activating would claim the session — and now
         // pause other apps' audio — at launch. AppModel.start() warms it as a
         // session begins, before the first tone.
+
+        // A route or hardware-format change (Bluetooth connecting, the session
+        // gaining a microphone for voice answers) stops the engine without a
+        // word. It used to stay stopped until the next sound, so whatever was
+        // playing — the rest of a character, the noise floor that keeps
+        // Bluetooth awake — went silent mid-item (#301). Restart it at once.
+        engineObservation = EngineConfigurationObserver { [weak self] changed in
+            Task { @MainActor in self?.engineConfigurationChanged(changed) }
+        }
     }
 
     deinit {
         if let sessionClaim { AudioSession.shared.release(sessionClaim) }
+    }
+
+    /// Restart our engine after a configuration change stopped it — only while
+    /// a session holds the route, so `releaseSession()`'s own stop stays put.
+    /// The render state lives in `state`, so playback resumes where it was.
+    private func engineConfigurationChanged(_ changed: ObjectIdentifier?) {
+        guard changed == ObjectIdentifier(engine), sessionClaim != nil, !engine.isRunning else { return }
+        engine.prepare()
+        try? engine.start()
+        sourceNode.volume = Self.routeGain()
     }
 
     /// Attach a fresh source node to the current engine. The render state lives

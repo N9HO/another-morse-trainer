@@ -493,6 +493,41 @@ do {
           matcher.interpret(["wotsit"], candidates: ["B", "D"]).token == "B")
 }
 
+// fixtures/voice-matching.json — the same file the Kotlin
+// VoiceMatchingFixtureTest reads on Android and desktop (#300). Transcripts are
+// written the way a recogniser formats them, so "slash" arrives as "/".
+print("\nVoice matching (fixtures/voice-matching.json):")
+struct VoiceMatchingFixture: Decodable {
+    struct Case: Decodable {
+        let name: String
+        let heard: [String]
+        let candidates: [String]
+        let token: String
+        let confident: Bool?
+    }
+    let cases: [Case]
+}
+func loadVoiceMatchingFixture() -> VoiceMatchingFixture? {
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent()
+        .deletingLastPathComponent().deletingLastPathComponent()
+    guard let data = try? Data(contentsOf: root.appendingPathComponent("fixtures/voice-matching.json")) else { return nil }
+    return try? JSONDecoder().decode(VoiceMatchingFixture.self, from: data)
+}
+if let fx = loadVoiceMatchingFixture(), !fx.cases.isEmpty {
+    let matcher = VoiceMatcher()
+    for c in fx.cases {
+        let got = matcher.interpret(c.heard, candidates: c.candidates)
+        check("voice: \(c.name) → \(c.token)", got.token == c.token)
+        if let confident = c.confident {
+            check("voice: \(c.name) is \(confident ? "" : "not ")graded without asking",
+                  got.isConfident == confident)
+        }
+    }
+} else {
+    check("fixtures/voice-matching.json loads and decodes", false)
+}
+
 // QRQ high-speed timing (35 / 40 WPM)
 print("\nQRQ high-speed timing:")
 check("35 WPM dit ≈ 34.29 ms", approxEqual(MorseTiming(wpm: 35).dit, 1.2 / 35))

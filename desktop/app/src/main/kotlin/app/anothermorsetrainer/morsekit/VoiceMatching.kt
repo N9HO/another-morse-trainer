@@ -42,7 +42,7 @@ object VoicePhonetics {
         "el" to 'L', "ell" to 'L',
         "em" to 'M',
         "en" to 'N',
-        "owe" to 'O',
+        "oh" to 'O', "owe" to 'O',
         "pee" to 'P', "pea" to 'P',
         "cue" to 'Q', "queue" to 'Q', "kew" to 'Q',
         "ar" to 'R', "are" to 'R', "arr" to 'R',
@@ -76,6 +76,16 @@ object VoicePhonetics {
         "slash" to "/", "stroke" to "/",
         "question mark" to "?", "question" to "?",
         "equals" to "=", "equal" to "=", "plus" to "+"
+    )
+
+    /**
+     * What a recogniser writes for a spoken symbol name — it formats "slash"
+     * as "/" just as it formats "five" as "5" — mapped back to the name, so a
+     * transcript that is only the symbol still matches (#300).
+     */
+    val symbolNames: Map<Char, String> = mapOf(
+        '/' to "slash", '?' to "question mark", '.' to "period", ',' to "comma",
+        '=' to "equals", '+' to "plus"
     )
 
     /** One canonical letter-name pronunciation per letter (for spelling words). */
@@ -281,7 +291,12 @@ class VoiceMatcher(
             }
             // Swift `.split(separator: " ")` drops empty subsequences, so this
             // both trims and collapses runs of whitespace.
-            return out.toString().split(" ").filter { it.isNotEmpty() }.joinToString(" ")
+            val words = out.toString().split(" ").filter { it.isNotEmpty() }.joinToString(" ")
+            if (words.isNotEmpty()) return words
+            // Nothing but symbols: the learner said a symbol's name and the
+            // recogniser wrote the symbol ("/"), so read it back as the name.
+            // Punctuation beside words ("Kilo.") is formatting and stays dropped.
+            return s.mapNotNull { VoicePhonetics.symbolNames[it] }.joinToString(" ")
         }
 
         /** Levenshtein distance normalized to 0…1 by the longer string's length. */
