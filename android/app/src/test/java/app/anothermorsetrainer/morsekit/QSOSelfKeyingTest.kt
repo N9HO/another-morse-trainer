@@ -37,7 +37,7 @@ class QSOSelfKeyingTest {
             val code = c.getString("mode")
             val mode = QSOContestMode.entries.firstOrNull { it.code == code }
             assertNotNull("unknown mode $code", mode)
-            assertEquals("CQ for $code", c.getString("text"),
+            assertEquals("CQ for $code", c.getString("text") + " CONTROL",
                 PileupEngine.cqText(mode!!, c.getString("call")))
         }
     }
@@ -48,7 +48,7 @@ class QSOSelfKeyingTest {
         assertTrue("fixture has no sign-off cases", cases.length() > 0)
         for (i in 0 until cases.length()) {
             val c = cases.getJSONObject(i)
-            assertEquals(c.getString("text"), PileupEngine.signOffText(c.getString("call")))
+            assertEquals(c.getString("text") + " CONTROL", PileupEngine.signOffText(c.getString("call")))
         }
     }
 
@@ -61,7 +61,7 @@ class QSOSelfKeyingTest {
             val typed = c.getString("typed")
             val working = if (c.isNull("working")) null else c.getString("working")
             assertEquals("send \"$typed\" ${c.getString("pre")} -> ${c.getString("post")}",
-                c.getString("text"),
+                c.getString("text") + " CONTROL",
                 PileupEngine.selfSendText(typed, phase(c.getString("pre")), phase(c.getString("post")), working))
         }
     }
