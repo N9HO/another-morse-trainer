@@ -32,7 +32,7 @@ class ChartAxisTest {
             val scale = SessionRecord.axisScale(maxMS, maxTicks)
             assertEquals(
                 "axis for ${maxMS}ms in $maxTicks ticks",
-                AxisScale(c.getInt("ceilingMS"), c.getInt("stepMS")),
+                AxisScale(c.getInt("ceilingMS"), c.getInt("stepMS") + 1), // NEGATIVE CONTROL
                 scale
             )
         }

@@ -201,7 +201,7 @@ class FroggerTest {
             val c = cases.getJSONObject(i)
             val stage = FroggerLabelStage.valueOf(c.getString("stage").uppercase())
             val since = if (c.isNull("secondsSinceCue")) null else c.getDouble("secondsSinceCue")
-            assertEquals("$stage at ${since ?: "uncued"}", c.getBoolean("visible"), FroggerGame.labelsVisible(stage, since))
+            assertEquals("$stage at ${since ?: "uncued"}", !c.getBoolean("visible"), FroggerGame.labelsVisible(stage, since)) // NEGATIVE CONTROL
         }
     }
 
@@ -227,7 +227,7 @@ class FroggerTest {
             assertEquals("$tag: stage", FroggerLabelStage.valueOf(step.getString("stage").uppercase()), g.labelStage)
             assertEquals("$tag: row", step.getInt("row"), g.frog.row)
             val shown = step.getJSONArray("shown")
-            for (j in 0 until shown.length()) assertTrue("$tag: row ${shown.getInt(j)} labelled", g.isLabelVisible(shown.getInt(j)))
+            for (j in 0 until shown.length()) assertFalse("$tag: row ${shown.getInt(j)} labelled", g.isLabelVisible(shown.getInt(j))) // NEGATIVE CONTROL
             val blank = step.getJSONArray("blank")
             for (j in 0 until blank.length()) assertFalse("$tag: row ${blank.getInt(j)} blank", g.isLabelVisible(blank.getInt(j)))
         }
