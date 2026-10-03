@@ -1,6 +1,7 @@
 # CW Operating Procedure: design notes
 
-Status: **design for review, with the first part built.** Written 2026-10-03
+Status: **built on all three apps, with the maintainer's decisions applied**
+(see "Decisions" at the end). Written 2026-10-03
 for issues #294 (zero beating, RIT/XIT/offset, with a pileup demo) and #295
 (a CW Operating Procedure section for POTA hunting: lessons, scenarios, a hunt
 simulator). Both were reported via Discord by Justin R.; #295's content is
@@ -20,8 +21,10 @@ Every number below is a named constant in MorseKit on each port, pinned by
 Operating practice is taken from these, in this order of precedence. Where
 they disagree the note says so and says which one the app follows.
 
-1. **WB0RLJ, "Advice for CW POTA Hunters"** (on WB0RLJ's QRZ.com page,
-   <https://www.qrz.com/db/WB0RLJ>; the page needs a QRZ login). The issue
+1. **WB0RLJ (Jim Vaughan), "Advice for CW POTA Hunters"**, on his QRZ.com
+   page, <https://www.qrz.com/db/WB0RLJ#Advice> (the page needs a QRZ login).
+   He posts recordings of his daily activations on YouTube,
+   <https://www.youtube.com/@WB0RLJ>. The issue
    (#295) lists its points: the prosigns and signals a hunter hears; call right
    after the activator's dit-dit, without waiting for a CQ; send your call once
    with no `DE`, no `K` and no repeats; answer a partial only if those
@@ -55,9 +58,10 @@ they disagree the note says so and says which one the app follows.
    quiet when the DX station comes back to a partial that does not resemble
    your call, or to another station.
 5. **ITU-R M.1677-1**, *International Morse code* (2009), §3.2 (the error
-   signal: eight dots).
+   signal, written as eight dots). The app does not teach that one shape; see
+   the mistakes lesson.
 6. Manufacturers' manuals, for what the controls are called on real rigs
-   (lesson 8): Icom IC-7300 (RIT, ∂TX, CW PITCH, AUTOTUNE), Yaesu FTDX10 (CLAR
+   (the offsetting lesson): Icom IC-7300 (RIT, ∂TX, CW PITCH, AUTOTUNE), Yaesu FTDX10 (CLAR
    RX / CLAR TX, CW PITCH, ZIN/SPOT), Kenwood TS-890S (RIT, XIT, CW pitch, CW
    T. auto tune), Elecraft KX3 (RIT, XIT, PITCH, SPOT and auto-spot),
    FlexRadio SmartSDR (RIT and XIT on the slice flag, the pitch line on the
@@ -78,7 +82,7 @@ hunting POTA activators, one rule at a time. It has three layers, as #295
 asks:
 
 1. **Lessons** — eight short lessons, each a concept card, an audio demo of
-   right and wrong, and three to five quick scenarios. Lesson 8 is #294's
+   right and wrong, and three to five quick scenarios. The first is #294's
    zero-beat / RIT / XIT / offset lesson, with its pileup demo and a
    tune-to-zero-beat drill.
 2. **"What should you do?"** — a scenario mode: a clip plays, you choose what
@@ -93,7 +97,7 @@ asks:
   no leaderboard mode, nothing submitted (`docs/high-scores-design.md`, "Which
   modes are eligible"). The hunt simulator, when it lands, is not ranked
   either: its outcome depends on a random activator, and its grading is about
-  procedure, not speed (open question 6).
+  procedure, not speed (decided: maintainer, 2026-10-03, and on #313).
 - **Not a session.** No `SessionRecord`, no Koch ladder, no character stats.
   As in First Four and Daily Dit, a graded answer marks the day as practised
   (`markPracticedToday` on iOS, `Stats.recordPracticeDay` on Android and
@@ -127,36 +131,37 @@ They link instead, in both directions:
   and opens it. Once it is complete, the row reads "First Four ✓" and still
   opens it, for review.
 - **First Four → section.** First Four's finale card gains one line: "Ready
-  for more? CW Operating Procedure, on the home screen, covers pileups,
-  partial calls and zero beat."
+  for more? Operating Procedure, the card just below First Four on the home
+  screen, is the next step: zero beat, pileups and partial calls." On Home the
+  section's card sits directly under First Four's.
 
 **No duplicated content.** Where the two overlap, the section *refers back*
 rather than re-teaching:
 
 | Topic | First Four | CW Operating Procedure |
 |---|---|---|
-| `?`, `73` | Hear and key them | Lesson 1 lists them with the other signals and moves on |
-| Busted call (`N9?`) | Keyed scene: resend your call | Lesson 4 adds the rule First Four leaves out: stay silent when the partial is *not* yours (`N1?`), First Four's open question 4 |
-| No reply / someone else answered | Keyed scenes | Lesson 5 adds the close-but-wrong call (`N9BO`) |
-| The exchange | `5NN WI 73`, keyed | Lesson 6 keeps exactly that reply and adds the activator's `E E`, your `E E` back, and stopping |
+| `?`, `73` | Hear and key them | Signals (lesson 2) lists them with the other signals and moves on |
+| Busted call (`N9?`) | Keyed scene: resend your call | Partial calls (lesson 5) adds the rule First Four leaves out: stay silent when the partial is *not* yours (`N1?`), First Four's open question 4 |
+| No reply / someone else answered | Keyed scenes | Is it me? (lesson 6) adds the close-but-wrong call (`N9BO`, and `N9BO?`) |
+| The exchange | `5NN WI 73`, keyed | The exchange (lesson 7) keeps that reply as the primary form, accepts WB0RLJ's `5NN WI BK` … `73 E E` too, and adds the activator's `E E`, yours back, and stopping |
 
-Lesson 6 deliberately keeps First Four's reply (`5NN <state> 73`) as the right
-answer so the two never contradict each other. Its explanation says that
-sending your state twice, or ending with `BK`, is just as common (First Four's
-open question 2 is the same question).
+The exchange lesson keeps First Four's reply (`5NN <state> 73`) as the primary
+right answer so the two never contradict each other, and accepts WB0RLJ's
+order as a second form (decision 4).
 
 One small tension is called out rather than hidden: First Four's *grading*
 accepts your call sent twice (`N9HO N9HO`), because the decoder is lenient and
-it is common on the air; lesson 3 *teaches* once, as WB0RLJ, the POTA CW Guide
+it is common on the air; the send-your-call-once lesson *teaches* once, as WB0RLJ, the POTA CW Guide
 and ON4UN/ON4WW all do. First Four's grading is not changed.
 
 ## The lessons
 
-Eight lessons, in #295's order. Each has:
+Eight lessons: #295's order, except that offsetting (#294) comes first, straight
+after First Four (decision 2). Each has:
 
 - a **concept card**: a few short paragraphs, each platform's own words;
 - an **audio demo**: one or more labelled clips, each a "right" or "wrong"
-  example (or, for lesson 1, just "this is what it sounds like"); Play plays a
+  example (or, for the signals lesson, just "this is what it sounds like"); Play plays a
   clip at the learner's speed and tone;
 - **three to five scenarios**, run in order. A scenario plays a clip (what the
   activator just sent; some have no clip, only a situation), then offers two
@@ -166,13 +171,14 @@ Eight lessons, in #295's order. Each has:
   - **option** *key* — a named answer, for questions that are not "send or
     not" (what a signal means, which control to use).
 
-  Exactly one choice is right. The screen then shows the explanation for that
+  One choice is right (the primary answer); a scenario can accept more than
+  one (`accepted`), as the exchange's do. The screen then shows the explanation for that
   scenario (each platform's own words, keyed by the scenario's id, which the
   fixture pins) and moves on with Next.
 
 **Passing a lesson** is a **clean run**: every scenario answered right first
 time, in one sitting. A wrong answer shows the explanation and the run carries
-on to the end, but it is not clean; "Go again" restarts it. Lesson 8 also has a
+on to the end, but it is not clean; "Go again" restarts it. The offsetting lesson also has a
 drill (below), and passes when both the drill and a clean run are done, in
 either order.
 
@@ -196,168 +202,7 @@ every scenario for two profiles.
 
 With call `N9HO`, state `WI` (the fixture's first profile), the lessons are:
 
-### 1. Signals
-
-What a hunter hears from an activator, and what each means:
-
-| Signal | Means |
-|---|---|
-| `?` | Say again — I didn't get it all |
-| `AGN?` | Send that again |
-| `<AS>` (di-dah-di-di-dit, run together) | Wait — stand by |
-| `BK` | Back to you |
-| `SRI` | Sorry |
-| `QRZ?` | Who is calling me? |
-| `E E` (dit-dit) | The friendly sign-off: this contact is done |
-
-Demo: each signal, played in turn. Scenarios (option choices; the clip plays,
-"What does this mean?"):
-
-| id | Clip | Choices (right first) |
-|---|---|---|
-| `signals.as` | `<AS>` | wait · go ahead · goodbye |
-| `signals.qrz` | `QRZ?` | who is calling · say again · sorry |
-| `signals.ee` | `E E` | goodbye · error · who is calling |
-| `signals.bk` | `BK` | back to you · wait · sorry |
-| `signals.agn` | `AGN?` | say again · goodbye · back to you |
-
-(On screen the choices are shuffled per run; the fixture pins them in this
-right-first order, with `correct: 0`.)
-
-### 2. When to call
-
-The activator ends each contact with `73` or `TU` and a dit-dit (`E E`). That
-is the moment to call — straight away. Don't wait for a CQ: in a pileup many
-activators never send one between contacts. While a contact is going on, stay
-quiet.
-
-Demo: wrong — calling over `W8KDP 5NN NC NC BK`; right — calling after
-`W8KDP TU 73 E E`.
-
-| id | Clip | Choices (right first) |
-|---|---|---|
-| `when.dits` | `W8KDP TU 73 E E` | send `N9HO` · silent (wait for a CQ) |
-| `when.inProgress` | `W8KDP 5NN NC NC BK` | silent · send `N9HO` |
-| `when.as` | `<AS>` | silent · send `N9HO` |
-| `when.sriQrz` | `SRI SRI QRZ?` | send `N9HO` · silent |
-
-### 3. Send your call once
-
-The activator knows their own call, and you are on their frequency, so they
-know who you're calling. Send just your call, once: no `DE`, no `K`, no
-activator's call, no repeats. Then listen.
-
-Demo: wrong — `K4RTZ DE N9HO N9HO K`; right — `N9HO`.
-
-| id | Clip | Choices (right first) |
-|---|---|---|
-| `once.cq` | `CQ POTA DE K4RTZ K` | send `N9HO` · send `K4RTZ DE N9HO K` · send `N9HO N9HO N9HO` |
-| `once.qrz` | `QRZ?` | send `N9HO` · send `DE N9HO K` · send `N9HO N9HO` |
-| `once.dits` | `W8KDP TU 73 E E` | send `N9HO` · send `K4RTZ N9HO` · silent |
-
-### 4. Partial calls
-
-When the activator sends part of a call and `?`, answer **only if those
-characters are in your call**, and answer with your **full** call, once. A
-bare `?` means they heard someone and caught nothing: anyone who called can
-send again.
-
-The match rule, pinned: strip the trailing `?`; if what is left is empty (a
-bare `?`), it is everyone's; otherwise it is yours when it appears, as one
-unbroken run of characters, anywhere in your call (prefix `N9`, middle `9H`,
-suffix `HO`).
-
-The "not yours" partial for a call is generated, so it is never accidentally
-yours: take the call up to and including its first digit, and replace that
-digit with (digit + 2) mod 10; if the result happens to be in the call, keep
-adding 1 (mod 10) until it is not. For `N9HO` that is `N1?` — #295's own
-example. A call with no digit (not valid here) is not given one.
-
-| id | Clip | Choices (right first) |
-|---|---|---|
-| `partial.prefix` | `N9?` | send `N9HO` · silent |
-| `partial.notMine` | `N1?` | silent · send `N9HO` |
-| `partial.suffix` | `HO?` (last two characters) | send `N9HO` · silent |
-| `partial.fullCall` | `N9H?` (all but the last character) | send `N9HO` · send `O` (just the missing part) · silent |
-
-### 5. Is it me?
-
-Listen to *who* the activator comes back to. Your call: it's you. Another
-call: that contact is in progress, stay quiet until it ends with dit-dit. A
-call one character away from yours (`N9BO` for `N9HO`): **treat it as someone
-else's** — there may well be an `N9BO` you can't hear — and stay quiet. If
-nobody answers it and the activator asks again *as a question* (`N9BO?`), they
-are unsure what they heard: then send your full call, once, so they can
-correct it.
-
-That is this note's answer to #295's open design question ("decide and
-document the rule for when the activator repeatedly sends a wrong call that is
-close to yours"). It follows the DX Code of Conduct as the POTA Hunter Guide
-adopts it (don't transmit when the activator calls another callsign) for the
-first time, and ON4UN/ON4WW §III.1 (make sure you are logged correctly) once
-the activator is asking. Open question 3 asks the maintainer to confirm it.
-
-The near-miss call is generated, so the fixture can pin it for any call: take
-the first letter after the call's first digit and move it **back six letters**,
-wrapping `A` round to `U` (`N9HO` → `N9BO`, #295's own example; `KB3MZL` →
-`KB3GZL`). Back, so the result is never the input; one letter, so it is
-genuinely close. A call with no letter after its first digit moves its last
-letter instead.
-
-| id | Clip | Choices (right first) |
-|---|---|---|
-| `me.other` | `W8KDP 5NN NC NC BK` | silent · send `N9HO` |
-| `me.mine` | `N9HO 5NN NC NC BK` | send `5NN WI 73` · send `N9HO` · silent |
-| `me.close` | `N9BO 5NN NC NC BK` | silent · send `N9HO` |
-| `me.closeAsked` | `N9BO?` (after silence) | send `N9HO` · silent |
-
-### 6. The exchange
-
-When they come back with your call, report and state, reply with your report
-and state and `73` — the same reply First Four teaches (`5NN WI 73`). They
-finish with `TU 73 E E`; send `E E` back. Then **stop**: the next `QRZ?` is
-for someone else.
-
-Demo: wrong — a ragchew-length reply,
-`K4RTZ DE N9HO TNX FER CALL UR 5NN 5NN NAME JOE QTH WI WI HW? K4RTZ DE N9HO KN`;
-right — `5NN WI 73`, then `E E`.
-
-| id | Clip | Choices (right first) |
-|---|---|---|
-| `exchange.reply` | `N9HO 5NN NC NC BK` | send `5NN WI 73` · send the ragchew · send `N9HO 5NN WI` |
-| `exchange.agn` | `AGN?` (after your reply) | send `5NN WI 73` · send `N9HO` · silent |
-| `exchange.dits` | `TU 73 E E` | send `E E` · send `N9HO` · send `TU 73 GL DE N9HO SK` |
-| `exchange.stop` | `QRZ?` (after your `E E`) | silent · send `N9HO` |
-
-### 7. Mistakes
-
-If you send a wrong character, send a string of dits — the error signal, eight
-dots (ITU-R M.1677-1 §3.2) — and then send the word again, correctly, from the
-start: your whole call, not just the bad letter. Don't go quiet and hope.
-
-In the app's text the error signal is written `EEEEEEEE` (eight `E`s, which is
-how it plays) and shown as `········`.
-
-Demo: wrong — `N9HP` and silence; right — `N9HP EEEEEEEE N9HO`.
-
-| id | Situation (no clip) | Choices (right first) |
-|---|---|---|
-| `mistake.call` | You keyed `N9HP` instead of your call | send `EEEEEEEE N9HO` · send `SRI N9HO` · silent |
-| `mistake.last` | You keyed `N9HI` — only the last letter is wrong | send `EEEEEEEE N9HO` · send `EEEEEEEE O` · silent |
-| `mistake.state` | In your reply you keyed `5NN WJ` | send `EEEEEEEE WI 73` · send `5NN WJ WI 73` · silent |
-
-The mistaken text in each situation is generated, and the fixture pins it for
-both profiles. "Moved on one" and "moved back six" step a letter through
-`A`–`Z` and a digit through `0`–`9`, wrapping:
-
-- `mistake.call`: the call with its last character moved on one (`N9HO` →
-  `N9HP`);
-- `mistake.last`: the call with its last character moved back six (`N9HO` →
-  `N9HI`);
-- `mistake.state`: the state with its last letter moved on one (`WI` → `WJ`),
-  so the situation reads "In your reply you keyed `5NN WJ`".
-
-### 8. Offsetting: zero beat, RIT, XIT (#294)
+### 1. Offsetting: zero beat, RIT, XIT (#294)
 
 The one lesson with more than a concept card and scenarios.
 
@@ -417,7 +262,7 @@ tone setting plus their offset. The callers, in the order they are mixed:
 (any caller whose call equals the learner's is replaced by `KC2VWM`; speeds
 never go below 5 WPM; a pitch never below 200 Hz — the floor the Pileup
 Runner's mixer already applies.) Each caller sends their call once, which is
-lesson 3's point too.
+the send-your-call-once lesson's point too.
 
 80 Hz is inside the POTA CW Guide's 20–100 Hz and far enough apart to hear
 plainly at any tone the app offers; the others' offsets are spread wider than a
@@ -463,15 +308,217 @@ In the drill RIT and XIT are 0; in the RIT demo VFO and XIT are 0.
 | `offset.xit` | You want to transmit 60 Hz off without changing how they sound | XIT · RIT · pitch |
 | `offset.tune` | You need to tune your antenna tuner | 1 kHz or more away, low power · on their frequency, quickly · on their frequency, low power |
 
-Lesson 8 passes when the drill has passed **and** a clean scenario run is done.
+The offsetting lesson passes when the drill has passed **and** a clean scenario run is done.
+
+### 2. Signals
+
+What a hunter hears from an activator, and what each means:
+
+| Signal | Means |
+|---|---|
+| `?` | Say again — I didn't get it all |
+| `AGN?` | Send that again |
+| `<AS>` (di-dah-di-di-dit, run together) | Wait — stand by |
+| `BK` | Back to you |
+| `SRI` | Sorry |
+| `QRZ?` | Who is calling me? |
+| `E E` (dit-dit) | The friendly sign-off: this contact is done |
+
+Demo: each signal, played in turn. Scenarios (option choices; the clip plays,
+"What does this mean?"):
+
+| id | Clip | Choices (right first) |
+|---|---|---|
+| `signals.as` | `<AS>` | wait · go ahead · goodbye |
+| `signals.qrz` | `QRZ?` | who is calling · say again · sorry |
+| `signals.ee` | `E E` | goodbye · error · who is calling |
+| `signals.bk` | `BK` | back to you · wait · sorry |
+| `signals.agn` | `AGN?` | say again · goodbye · back to you |
+
+(On screen the choices are shuffled per run; the fixture pins them in this
+right-first order, with `correct: 0`.)
+
+### 3. When to call
+
+The activator ends each contact with `73` or `TU` and a dit-dit (`E E`). That
+is the moment to call — straight away. Don't wait for a CQ: in a pileup many
+activators never send one between contacts. While a contact is going on, stay
+quiet.
+
+Demo: wrong — calling over `W8KDP 5NN NC NC BK`; right — calling after
+`W8KDP TU 73 E E`.
+
+| id | Clip | Choices (right first) |
+|---|---|---|
+| `when.dits` | `W8KDP TU 73 E E` | send `N9HO` · silent (wait for a CQ) |
+| `when.inProgress` | `W8KDP 5NN NC NC BK` | silent · send `N9HO` |
+| `when.as` | `<AS>` | silent · send `N9HO` |
+| `when.sriQrz` | `SRI SRI QRZ?` | send `N9HO` · silent |
+
+### 4. Send your call once
+
+The activator knows their own call, and you are on their frequency, so they
+know who you're calling. Send just your call, once: no `DE`, no `K`, no
+activator's call, no repeats. Then listen.
+
+Demo: wrong — `K4RTZ DE N9HO N9HO K`; right — `N9HO`.
+
+| id | Clip | Choices (right first) |
+|---|---|---|
+| `once.cq` | `CQ POTA DE K4RTZ K` | send `N9HO` · send `K4RTZ DE N9HO K` · send `N9HO N9HO N9HO` |
+| `once.qrz` | `QRZ?` | send `N9HO` · send `DE N9HO K` · send `N9HO N9HO` |
+| `once.dits` | `W8KDP TU 73 E E` | send `N9HO` · send `K4RTZ N9HO` · silent |
+
+### 5. Partial calls
+
+When the activator sends part of a call and `?`, answer **only if those
+characters are in your call**, and answer with your **full** call, once. A
+bare `?` means they heard someone and caught nothing: anyone who called can
+send again.
+
+The match rule, pinned: strip the trailing `?`; if what is left is empty (a
+bare `?`), it is everyone's; otherwise it is yours when it appears, as one
+unbroken run of characters, anywhere in your call (prefix `N9`, middle `9H`,
+suffix `HO`).
+
+The "not yours" partial for a call is generated, so it is never accidentally
+yours: take the call up to and including its first digit, and replace that
+digit with (digit + 2) mod 10; if the result happens to be in the call, keep
+adding 1 (mod 10) until it is not. For `N9HO` that is `N1?` — #295's own
+example. A call with no digit (not valid here) is not given one.
+
+| id | Clip | Choices (right first) |
+|---|---|---|
+| `partial.prefix` | `N9?` | send `N9HO` · silent |
+| `partial.notMine` | `N1?` | silent · send `N9HO` |
+| `partial.suffix` | `HO?` (last two characters) | send `N9HO` · silent |
+| `partial.fullCall` | `N9H?` (all but the last character) | send `N9HO` · send `O` (just the missing part) · silent |
+
+### 6. Is it me?
+
+Listen to *who* the activator comes back to. Your call: it's you. Another
+call: that contact is in progress, so stay quiet until it ends with dit-dit.
+
+A call one character away from yours (`N9BO` for `N9HO`) depends on whether it
+ends in a question mark (maintainer, 2026-10-03):
+
+- **Without a question mark** (`N9BO 5NN NC NC BK`): they are working `N9BO`.
+  Stay silent.
+- **With a question mark** (`N9BO?`): they aren't sure what they heard. Send
+  your call once, then listen for whether they come back with yours.
+
+That answers #295's open design question ("decide and document the rule for
+when the activator repeatedly sends a wrong call that is close to yours"). It
+fits the DX Code of Conduct as the POTA Hunter Guide adopts it (don't transmit
+when the activator works another callsign) and ON4UN/ON4WW §III.1 (make sure
+you are logged correctly when the activator is asking).
+
+The near-miss call is generated, so the fixture can pin it for any call: take
+the first letter after the call's first digit and move it **back six letters**,
+wrapping `A` round to `U` (`N9HO` → `N9BO`, #295's own example; `KB3MZL` →
+`KB3GZL`). Back, so the result is never the input; one letter, so it is
+genuinely close. A call with no letter after its first digit moves its last
+letter instead.
+
+Demo: wrong — answering `N9BO 5NN NC NC BK` with `N9HO`; right — `N9BO?`, you
+send `N9HO`, and they come back `N9HO 5NN NC NC BK`.
+
+| id | Clip | Choices (accepted first) |
+|---|---|---|
+| `me.other` | `W8KDP 5NN NC NC BK` | silent · send `N9HO` |
+| `me.mine` | `N9HO 5NN NC NC BK` | send `5NN WI 73` ✓ · send `5NN WI BK` ✓ · send `N9HO` · silent |
+| `me.close` | `N9BO 5NN NC NC BK` | silent · send `N9HO` |
+| `me.closeAsked` | `N9BO?` | send `N9HO` · silent |
+
+### 7. The exchange
+
+When they come back with your call, report and state, reply. Two forms are
+right (maintainer, 2026-10-03):
+
+- **Primary: `5NN WI 73`**, the reply First Four teaches. They finish with
+  `TU 73 E E`; send `E E` back.
+- **WB0RLJ's order: RST, state, BK, 73, dit-dit.** The app reads that as two
+  turns: `5NN WI BK`, then, after their `TU 73 E E`, `73 E E`.
+
+Then **stop**: the next `QRZ?` is for someone else. Scenarios accept either
+form wherever a reply or a close is asked for (`accepted` in the fixture).
+
+Demo: wrong — a ragchew-length reply,
+`K4RTZ DE N9HO TNX FER CALL UR 5NN 5NN NAME JOE QTH WI WI HW? K4RTZ DE N9HO KN`;
+right — `5NN WI 73`, then `E E`; right — `5NN WI BK`, then `73 E E`.
+
+| id | Clip | Choices (accepted first) |
+|---|---|---|
+| `exchange.reply` | `N9HO 5NN NC NC BK` | send `5NN WI 73` ✓ · send `5NN WI BK` ✓ · send the ragchew · send `N9HO 5NN WI` |
+| `exchange.agn` | `AGN?` (after your reply) | send `5NN WI 73` ✓ · send `5NN WI BK` ✓ · send `N9HO` · silent |
+| `exchange.dits` | `TU 73 E E` | send `E E` ✓ · send `73 E E` ✓ · send `N9HO` · send `TU 73 GL DE N9HO SK` |
+| `exchange.stop` | `QRZ?` (after your `E E`) | silent · send `N9HO` |
+
+### 8. Mistakes
+
+If you send a wrong character, send an error, then send the word again,
+correctly, from the start: your whole call, not just the bad letter. Don't go
+quiet and hope.
+
+**An error is not one fixed signal, and not a prosign** (maintainer,
+2026-10-03). ITU-R M.1677-1 §3.2 writes it as eight dots, but on the air it can
+be anything: a quick run of dits, five to eight of them, or someone slapping
+the key, fast or slow, run together or ragged. So the lesson teaches
+*recognising* an error and ignoring what came just before it, not copying one
+shape.
+
+In the app's text an error is the token `<ERR>`. It is never shown as dots:
+the screen says `[error]`. When it plays, each error takes one of six shapes
+(`errorVariants` in the fixture), picked at random unless the clip pins one
+with `<ERR:n>`:
+
+| Row | Dits | Sent | Speed (× your WPM) |
+|---|---|---|---|
+| 0 | 8 | run together | 1.0 |
+| 1 | 5 | run together | 1.5 |
+| 2 | 6 | slapped (character gaps) | 0.8 |
+| 3 | 7 | run together | 1.25 |
+| 4 | 5 | slapped | 1.0 |
+| 5 | 8 | slapped | 1.5 |
+
+"Run together" plays the dits as one keying (element gaps); "slapped" plays
+separate dits (character gaps). A clip is split into pieces at each error
+(`clipParts`) and the pieces play a word gap apart.
+
+Demo: wrong — `N9HP` and silence; right — `N9HP <ERR> N9HO`; then three
+"listen" examples of the activator doing it, each in a different shape
+(`<ERR:1>`, `<ERR:2>`, `<ERR:5>`).
+
+| id | Situation / clip | Choices (accepted first) |
+|---|---|---|
+| `mistake.call` | You keyed `N9HP` instead of your call | send `<ERR> N9HO` · send `SRI N9HO` · silent |
+| `mistake.last` | You keyed `N9HI`; only the last letter is wrong | send `<ERR> N9HO` · send `<ERR> O` · silent |
+| `mistake.state` | In your reply you keyed `5NN WJ` | send `<ERR> WI 73` · send `5NN WJ WI 73` · silent |
+| `mistake.hear` | Clip: `N9HP <ERR> N9HO 5NN NC NC BK` | send `5NN WI 73` ✓ · send `5NN WI BK` ✓ · send `N9HO` · silent |
+
+`mistake.hear` is the recognition one: the activator fumbles your call, sends
+an error, and gets it right. Recognising the error means the right thing is
+your exchange, not another call.
+
+The mistaken text in each situation is generated, and the fixture pins it for
+both profiles. "Moved on one" and "moved back six" step a letter through
+`A`–`Z` and a digit through `0`–`9`, wrapping:
+
+- `mistake.call` and `mistake.hear`: the call with its last character moved on
+  one (`N9HO` → `N9HP`);
+- `mistake.last`: the call with its last character moved back six (`N9HO` →
+  `N9HI`);
+- `mistake.state`: the state with its last letter moved on one (`WI` → `WJ`),
+  so the situation reads "In your reply you keyed `5NN WJ`".
 
 ## "What should you do?"
 
 A scenario mode over the lessons. The pool is every scenario whose choices
-are *send* or *silent* — the "action" scenarios (lessons 2–7; lesson 1's and
-lesson 8's are about meanings and controls, so they stay in their lessons). It
-contains #295's five examples: `N1?` (stay silent), `N9?` (send `N9HO`),
-`<AS>` (wait), `SRI SRI QRZ?` (call now) and `N9BO` (stay silent).
+are *send* or *silent* — the "action" scenarios (lessons 3–8; the offsetting
+and signals lessons are about controls and meanings, so they stay in their
+lessons). It contains #295's five examples: `N1?` (stay silent), `N9?` (send
+`N9HO`), `<AS>` (wait), `SRI SRI QRZ?` (call now) and `N9BO` (stay silent), and
+its partner `N9BO?` (send your call once).
 
 A run deals the pool shuffled, ten at a time (`scenarioRunLength`). Each
 answer shows right or wrong, the explanation, and **"Lesson: Partial calls"**
@@ -503,7 +550,7 @@ It reuses, not forks:
 you*. The activator decides from its mix (all hunters); you hear yours (a
 subset: some hunters inaudible to you, some weaker). That is what makes
 one-sided contacts and "quiet" frequencies that are actually busy — the
-situations lessons 2 and 5 are about.
+situations the when-to-call and is-it-me lessons are about.
 
 **The activator**, a state machine: `cq` → `listen` → `pick` (the strongest
 decodable call, or a partial) → `query` (`N9?`, or `?`) → `exchange` → `73 E E`
@@ -523,9 +570,9 @@ theirs); tune-up carrier; QRP (very weak at the activator).
 
 **Grading**, per contact attempt: timing (calling over a contact makes the
 activator send `AGN?` to the other station, and counts against you);
-sending your full call once; partial handling (lesson 4's rule); offset (your
+sending your full call once; partial handling (the partial-calls rule); offset (your
 XIT, from a control on screen, within 20–100 Hz in a pileup); the exchange
-(lesson 6).
+(either accepted form).
 
 **Difficulty:** pileup size, WPM, QSB/QRN, the percentage of hunters you can't
 hear, and the bust rate.
@@ -533,15 +580,19 @@ hear, and the bust rate.
 **Debrief:** a timeline of "what you heard" against "what the activator
 heard", contact by contact, with each grading point linked to its lesson.
 
+**Not ranked** (decided: maintainer, 2026-10-03; recorded on #313).
+
 ## Where it lives
 
-**Home.** A tile in the mode grid, next to Games: **Operating Procedure**,
-"POTA etiquette, zero beat". A grid tile, not another card above the grid: the
-cards above the grid are for things a newcomer must find first or that expire
-(Daily Dit, Start here, First Four); this is a section you return to, like the
-Games tile. Like the Games tile it opens its own screen and never the session
-setup sheet: it has no session length or answer style, and no place in the
-mid-session mode switcher.
+**Home.** A card directly under First Four (decision 1), in First Four's card
+style: **Operating Procedure**, "The next step after First Four · pileups,
+partials, zero beat", then "3 of 8 lessons · the next step after First Four"
+once started, and a tick when every lesson has passed. It follows First Four's
+wide-layout placement exactly: on a big iPad window, an Android tablet or a
+wide desktop window it stacks under Start here and First Four, beside Daily
+Dit. On a phone it sits under First Four. It opens its own screen, never the
+session setup sheet: it has no session length or answer style, and no place
+in the mid-session mode switcher.
 
 **Screens.** iOS: `OperatingProcedureView`, a sheet from Home, like First Four.
 Android: `OperatingProcedureScreen`, a route like `Route.FirstFour`. Desktop:
@@ -556,12 +607,15 @@ practice beside it, so the explanation stays in view while you answer.
 
 **Progress** is stored under its own key (`MorseTrainer.operatingProcedure` in
 `UserDefaults`; `amt_operating_procedure` preferences on Android; the desktop
-`Prefs` node of the same name): which lessons have passed, and whether lesson
-8's drill and its scenario run have. "Start over" on the section clears it.
+`Prefs` node of the same name): which lessons have passed, which have a clean
+scenario run, and whether the offsetting drill has. "Start over" on the section clears it.
 
-**Credit.** The section's foot, and the lesson list's header in the guide,
-say: "Procedure after WB0RLJ's *Advice for CW POTA Hunters*, with thanks; and
-the Parks on the Air CW Guide."
+**Credit** (decision 8). The section's foot says "Procedure after WB0RLJ's
+*Advice for CW POTA Hunters*, with thanks, and the Parks on the Air CW Guide",
+with two links under it: *Advice for CW POTA Hunters* (QRZ.com,
+<https://www.qrz.com/db/WB0RLJ#Advice>) and *Jim Vaughan (WB0RLJ) on YouTube*
+(<https://www.youtube.com/@WB0RLJ>, his daily activations). The guide credits
+him the same way.
 
 ## Where the code goes
 
@@ -585,7 +639,7 @@ hand — not captured from a port. Read by `MorseKitCheck` (Swift),
 ## Parity
 
 All three apps in one pull request: the same lessons, scenarios, demos, drill,
-scenario mode, constants, home tile, wide layouts, progress and credit. Nothing
+scenario mode, constants, home card, wide layouts, progress and credit. Nothing
 in sections 1–4 is platform-limited:
 
 - the audio is the pileup mixer every port already has;
@@ -594,7 +648,7 @@ in sections 1–4 is platform-limited:
 
 First Four reached desktop (#280, pull request #304) while this was being
 written, so the First Four row and First Four's forward line are on all three
-apps, and desktop's `PileupSettings.myState` (which lesson 6 needs) came with
+apps, and desktop's `PileupSettings.myState` (which the exchange lesson needs) came with
 it.
 
 All three READMEs gain the same feature line, and the user guide gains a CW
@@ -603,31 +657,45 @@ Operating Procedure section (site pull request linked from the app one).
 ## What ships when
 
 - **This pull request:** this note; MorseKit + fixture + tests on all three
-  ports; the section, all eight lessons (with #294's lesson 8 complete:
-  concept, pileup demo, RIT demo, drill, scenarios), "What should you do?",
-  the home tile, the First Four links; READMEs and the guide. Closes #294 and
+  ports; the section, all eight lessons (with #294's offsetting lesson
+  first and complete: concept, pileup demo, RIT demo, drill, scenarios),
+  "What should you do?", the home card under First Four, the First Four
+  links; READMEs and the guide. Closes #294 and
   #295's layers 1 and 2.
 - **Follow-up issue #313:** the hunt simulator (section 5), all three apps.
 
-## Open questions for the maintainer
+## Decisions (maintainer, 2026-10-03)
 
-1. **Placement.** A grid tile next to Games, or a card under First Four?
-2. **Lesson order.** #295's order puts offsetting last. It is the only lesson
-   with a drill and the one #294 asked for on its own; should it come first,
-   or straight after First Four?
-3. **The near-miss rule** (lesson 5): stay silent on `N9BO`; send your call
-   once if the activator asks `N9BO?` after silence. Right, or always silent?
-4. **The exchange** (lesson 6): `5NN WI 73` (First Four's), with the state-twice
-   and `BK` forms mentioned. Should the app standardise on one form across both
-   First Four and this section — and is WB0RLJ's order "RST, state, BK, 73,
-   dit-dit" a different reply shape than this?
-5. **Mistakes** (lesson 7): eight `E`s, played with character spacing, as the
-   error signal. Fine, or should it be a true run-together eight-dot `HH`,
-   which needs a new entry in the prosign table (and would then appear in the
-   Prosigns quiz)?
-6. **The hunt sim's grading.** Ranked or not when it lands? This note says not.
-7. **Demo offsets.** 80 Hz for you and ±160 Hz for the widest caller — wider
-   than POTA's 20–100 Hz — so the demo is obvious on a phone speaker. Too wide?
-8. **Credit wording** for WB0RLJ: is "Procedure after WB0RLJ's *Advice for CW
-   POTA Hunters*, with thanks" what WB0RLJ would want, and should it link to
-   the QRZ page?
+The eight open questions this note first ended with, as the maintainer
+answered them. The note above already reflects each one.
+
+1. **Placement: a card on Home, directly under First Four**, presented as its
+   next step. It uses First Four's card style and the same wide-layout
+   placement: stacked under Start here and First Four beside Daily Dit on a
+   big iPad, Android tablet or desktop window, and one under another on a
+   phone. It is not a grid tile.
+2. **Lesson order: offsetting first.** The zero beat / RIT / XIT / offset
+   lesson (#294) comes straight after First Four. The other seven keep #295's
+   order and are renumbered 2–8. The fixture's `lessons` order and its
+   progress script changed with it. The fixture is the spec, and the spec
+   changed.
+3. **Near-miss rule.** If the activator sends a near-miss of your call *with* a
+   question mark (`N9BO?`), send your call once and listen for whether they
+   correct to yours. *Without* one (`N9BO 5NN …`, working `N9BO`), stay silent.
+   This is now lesson 6.
+4. **The exchange.** `5NN WI 73` (First Four's) stays the primary form.
+   WB0RLJ's order — RST, state, BK, 73, dit-dit — is taught as an accepted
+   second form, and scenario grading accepts both. This is now lesson 7.
+5. **Mistakes.** The error signal is not a prosign and not one fixed eight-`E`
+   pattern. An error can be anything: a run of dits, or someone slapping the
+   key 5–8 times. The examples vary in count (5–8), speed and spacing, and the
+   lesson teaches recognising an error rather than copying a shape. This is
+   now lesson 8.
+6. **The hunt simulator (#313) is not ranked.** This is recorded on #313.
+7. **Demo offsets are unchanged:** 80 Hz for you, and ±160 Hz for the widest
+   caller.
+8. **Credit.** "Procedure after WB0RLJ's *Advice for CW POTA Hunters*, with
+   thanks", linked to <https://www.qrz.com/db/WB0RLJ#Advice>. Also a link to
+   his YouTube channel, <https://www.youtube.com/@WB0RLJ> ("Jim Vaughan
+   (WB0RLJ)"), where he posts recordings of his daily activations. Both links
+   appear in all three apps, in this note and in the guide.
