@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- The Mac download's entitlements (RELEASE_CHANNEL=developer-id in
+	     tools/upload-testflight.sh). Not referenced by the project: the
+	     script records these on the archived app before the Developer ID
+	     export. Keep in step with MorseTrainer-macCatalyst.entitlements,
+	     except for the one difference below.
+
+	     NO App Attest. A Mac Catalyst Developer ID provisioning profile does
+	     not carry com.apple.developer.devicecheck.appattest-environment
+	     (checked 2026-10-03 on the profile App Store Connect generates for
+	     this bundle ID, which has the APP_ATTEST capability), and an app that
+	     claims an entitlement its profile lacks does not launch. So the
+	     downloaded Mac app reads the leaderboard and cannot post to it.
+	     Either DCAppAttestService reports unsupported (AppModel+Leaderboard
+	     then shows "This Mac cannot attest…" and never starts a run) or the
+	     attestation fails and the summary shows that error. Nothing is
+	     submitted either way. -->
+	<key>com.apple.security.app-sandbox</key>
+	<true/>
+	<key>com.apple.security.network.client</key>
+	<true/>
+	<key>com.apple.security.device.audio-input</key>
+	<true/>
+</dict>
+</plist>

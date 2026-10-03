@@ -261,6 +261,15 @@ there is one target and one code base; the Mac-only code is in
   The run is tagged `mac-beta-v<version>-b<build>`, which the Discord
   announcer ignores. Dry run first:
   `gh workflow run ios-release.yml --ref main -f dry_run=true -f platform=maccatalyst -f channel=testflight`.
+- **The download**: `channel: developer-id` with `platform: maccatalyst`
+  builds the Mac app for a GitHub release instead: Developer ID-signed,
+  notarized, stapled and zipped as the `mac-developer-id` artifact
+  (`AnotherMorseTrainer-Mac.zip`). Nothing goes to App Store Connect, no
+  build number is spent and no tag is made. It signs with the Developer ID
+  certificate in the `DEVID_APP_P12` secrets, because cloud signing cannot
+  do Developer ID with an API key. A Developer ID profile cannot carry App
+  Attest, so the download reads the leaderboard but cannot post to it:
+  `gh workflow run ios-release.yml --ref main -f platform=maccatalyst -f channel=developer-id`.
 
 ## Build
 
