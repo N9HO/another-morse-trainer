@@ -144,31 +144,40 @@ private struct RecognitionTimeChart: View {
     let idealMS: Int
 
     private let gutter: CGFloat = 22       // character-label column
+    private let trailing: CGFloat = 56     // room for the longest bar's value label
     private let rowHeight: CGFloat = 24
     private let topInset: CGFloat = 18     // room for the "ideal" label
     private let axisHeight: CGFloat = 20
+    /// The narrowest gap between two axis labels: "12,500" plus some air.
+    private static let minTickSpacing: CGFloat = 48
+    private static let axisLabelWidth: CGFloat = 46
 
-    private var maxMS: Int {
-        let observed = rows.compactMap { $0.result?.medianMS }.max() ?? 0
-        return SessionRecord.axisCeilingMS(max(observed, idealMS))
+    private var observedMaxMS: Int {
+        max(rows.compactMap { $0.result?.medianMS }.max() ?? 0, idealMS)
     }
-    private var gridValues: [Int] { Array(stride(from: 250, through: maxMS, by: 250)) }
 
     var body: some View {
         let rowsHeight = CGFloat(rows.count) * rowHeight
         GeometryReader { geo in
             let plotX = gutter
-            let plotW = max(1, geo.size.width - gutter)
+            // The value label rides past the end of its bar, so the plot stops
+            // short of the trailing edge and even the longest bar's label fits.
+            let plotW = max(1, geo.size.width - gutter - trailing)
+            // As many ticks as fit their labels side by side (#299): a long
+            // outlier on a phone widens the step rather than crowding them.
+            let scale = SessionRecord.axisScale(maxMS: observedMaxMS,
+                                                maxTicks: Int(plotW / Self.minTickSpacing))
+            let maxMS = scale.ceilingMS
             ZStack(alignment: .topLeading) {
                 // Gridlines
-                ForEach(gridValues, id: \.self) { v in
+                ForEach(scale.ticks.dropFirst(), id: \.self) { v in
                     Rectangle()
                         .fill(Theme.hairline)
                         .frame(width: 1, height: rowsHeight)
-                        .offset(x: plotX + xFrac(v) * plotW, y: topInset)
+                        .offset(x: plotX + xFrac(v, maxMS) * plotW, y: topInset)
                 }
                 // Dashed "ideal" reference line + label
-                let idealX = plotX + xFrac(idealMS) * plotW
+                let idealX = plotX + xFrac(idealMS, maxMS) * plotW
                 DashedVLine()
                     .stroke(style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
                     .foregroundStyle(Color.white.opacity(0.45))
@@ -182,30 +191,33 @@ private struct RecognitionTimeChart: View {
 
                 // Bars
                 ForEach(Array(rows.enumerated()), id: \.element.id) { idx, row in
-                    rowView(row, y: topInset + CGFloat(idx) * rowHeight, plotX: plotX, plotW: plotW)
+                    rowView(row, y: topInset + CGFloat(idx) * rowHeight, plotX: plotX, plotW: plotW, maxMS: maxMS)
                 }
 
-                // Axis labels
-                ForEach([0] + gridValues, id: \.self) { v in
+                // Axis labels, each centred on its tick.
+                ForEach(scale.ticks, id: \.self) { v in
                     Text("\(v)")
-                        .font(.caption2)
+                        .font(.caption2.monospacedDigit())
                         .foregroundStyle(Theme.textSecondary)
-                        .fixedSize()
-                        .offset(x: plotX + xFrac(v) * plotW - 8, y: topInset + rowsHeight + 2)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                        .frame(width: Self.axisLabelWidth)
+                        .offset(x: plotX + xFrac(v, maxMS) * plotW - Self.axisLabelWidth / 2,
+                                y: topInset + rowsHeight + 2)
                 }
             }
         }
         .frame(height: topInset + rowsHeight + axisHeight)
     }
 
-    private func xFrac(_ ms: Int) -> CGFloat { CGFloat(ms) / CGFloat(maxMS) }
+    private func xFrac(_ ms: Int, _ maxMS: Int) -> CGFloat { CGFloat(ms) / CGFloat(maxMS) }
 
     private func rowView(_ row: SessionRecord.ChartRow, y: CGFloat,
-                         plotX: CGFloat, plotW: CGFloat) -> some View {
+                         plotX: CGFloat, plotW: CGFloat, maxMS: Int) -> some View {
         let ms = row.result?.medianMS
         let attempts = row.result?.attempts ?? 0
         let accuracy = row.result?.accuracy ?? 0
-        let barW = ms.map { max(2, xFrac($0) * plotW) } ?? 0
+        let barW = ms.map { max(2, xFrac($0, maxMS) * plotW) } ?? 0
         let color = SessionDetailView.accuracyColor(accuracy)
         return ZStack(alignment: .topLeading) {
             Text(row.character)

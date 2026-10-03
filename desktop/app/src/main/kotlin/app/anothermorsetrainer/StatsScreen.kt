@@ -898,8 +898,8 @@ private fun SessionDetail(record: SessionRecord, onBack: () -> Unit) {
 
 /**
  * The per-character recognition chart with its scaffolding — the iOS
- * `RecognitionTimeChart`: hairline gridlines every 250 ms, a millisecond axis
- * along the bottom, and a dashed reference line at the recognize-within goal
+ * `RecognitionTimeChart`: hairline gridlines at each labelled tick, a
+ * millisecond axis along the bottom spaced so its labels never crowd (#299), and a dashed reference line at the recognize-within goal
  * labelled "ideal". The axis ceiling always includes the goal so the line is
  * on the chart even when every bar beats it.
  *
@@ -910,8 +910,6 @@ private fun SessionDetail(record: SessionRecord, onBack: () -> Unit) {
 @Composable
 private fun SessionChart(rows: List<SessionRecord.ChartRow>, idealMs: Int) {
     val observed = rows.mapNotNull { it.result?.medianMS }.maxOrNull() ?: 0
-    val axisMax = SessionRecord.axisCeilingMS(maxOf(observed, idealMs))
-    val gridValues = (250..axisMax step 250).toList()
     val gutter = 28.dp          // character-label column (SessionCharRow)
     val trailing = 60.dp        // value column: 52.dp + 8.dp start padding
     val rowHeight = 22.dp
@@ -921,6 +919,11 @@ private fun SessionChart(rows: List<SessionRecord.ChartRow>, idealMs: Int) {
     val rowsHeight = rowHeight * rows.size + rowGap * (rows.size - 1).coerceAtLeast(0)
     BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
         val plotW = (maxWidth - gutter - trailing).coerceAtLeast(1.dp)
+        // As many ticks as fit their labels side by side (#299): a long
+        // outlier on a phone widens the step rather than crowding them.
+        val scale = SessionRecord.axisScale(maxOf(observed, idealMs), (plotW / AXIS_MIN_TICK_SPACING).toInt())
+        val axisMax = scale.ceilingMS
+        val gridValues = scale.ticks.drop(1)
         fun xOf(ms: Int) = gutter + plotW * (ms.toFloat() / axisMax)
 
         Column(modifier = Modifier.fillMaxWidth().padding(top = topInset, bottom = axisHeight)) {
@@ -953,16 +956,25 @@ private fun SessionChart(rows: List<SessionRecord.ChartRow>, idealMs: Int) {
             color = Brand.textSecondary,
             modifier = Modifier.offset(x = (xOf(idealMs) - 28.dp).coerceAtLeast(gutter), y = 0.dp)
         )
-        for (v in listOf(0) + gridValues) {
+        // Each label centred on its tick.
+        for (v in scale.ticks) {
             Text(
-                "$v",
+                "%,d".format(v),
                 style = MaterialTheme.typography.labelSmall,
                 color = Brand.textSecondary,
-                modifier = Modifier.offset(x = xOf(v) - 8.dp, y = topInset + rowsHeight + 2.dp)
+                maxLines = 1,
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .offset(x = xOf(v) - AXIS_LABEL_WIDTH / 2, y = topInset + rowsHeight + 2.dp)
+                    .width(AXIS_LABEL_WIDTH)
             )
         }
     }
 }
+
+/** The narrowest gap between two axis labels: "12,500" plus some air. */
+private val AXIS_MIN_TICK_SPACING = 48.dp
+private val AXIS_LABEL_WIDTH = 46.dp
 
 @Composable
 private fun DetailRow(label: String, value: String) {
