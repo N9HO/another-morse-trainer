@@ -787,19 +787,16 @@ private struct ModeOptionsCard: View {
                 inlinePicker(title: "What to copy",
                              selection: storyContentBinding) { (c: StoryContent) in c.label }
                 if model.settings.story.content == .serials {
-                    HStack {
-                        Text("Which story")
-                            .font(.subheadline)
-                            .foregroundStyle(.primary)
-                        Spacer(minLength: 12)
+                    // A long title ("The Adventure of the Speckled Band") drops
+                    // under its label rather than wrapping in a narrow trailing
+                    // column over the bookmark line below (#302).
+                    pickerRow("Which story",
+                              value: MorseData.serials.first { $0.id == serialBinding.wrappedValue }?.title ?? "") {
                         Picker("Which story", selection: serialBinding) {
                             ForEach(MorseData.serials) { serial in
                                 Text(serial.title).tag(serial.id)
                             }
                         }
-                        .pickerStyle(.menu)
-                        .tint(Theme.tealBright)
-                        .labelsHidden()
                     }
                     if let resume = model.serialResume(for: serialBinding.wrappedValue) {
                         Label {
@@ -1180,19 +1177,61 @@ private struct ModeOptionsCard: View {
         selection: Binding<T>,
         label: @escaping (T) -> String
     ) -> some View where T.AllCases: RandomAccessCollection {
-        HStack {
-            Text(title)
-                .font(.subheadline)
-                .foregroundStyle(.primary)
-            Spacer(minLength: 12)
+        pickerRow(title, value: label(selection.wrappedValue)) {
             Picker(title, selection: selection) {
                 ForEach(Array(T.allCases)) { value in
                     Text(label(value)).tag(value)
                 }
             }
-            .pickerStyle(.menu)
-            .tint(Theme.tealBright)
-            .labelsHidden()
+        }
+    }
+
+    /// A label and its menu of choices: side by side when the choice fits
+    /// beside the label on one line, otherwise the choice under the label
+    /// with the card's full width, wrapping as it must (#302). A plain menu
+    /// `Picker` squeezed a long choice ("The Adventure of the Speckled Band")
+    /// into a narrow trailing column, and the wrapped label's last line drew
+    /// over the row below; here the shown choice is an ordinary `Text`, so
+    /// the row grows to hold it at any width or text size. The picker itself
+    /// lives in the menu, which keeps the checkmark on the current choice.
+    private func pickerRow<P: View>(_ title: String, value: String,
+                                    @ViewBuilder picker: () -> P) -> some View {
+        let options = picker()
+        func menu(wraps: Bool) -> some View {
+            Menu {
+                options
+                    .pickerStyle(.inline)
+                    .labelsHidden()
+            } label: {
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    Text(value)
+                        .multilineTextAlignment(wraps ? .leading : .trailing)
+                        .fixedSize(horizontal: !wraps, vertical: true)
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.caption.weight(.semibold))
+                }
+                .foregroundStyle(Theme.tealBright)
+            }
+            .accessibilityLabel(title)
+            .accessibilityValue(value)
+        }
+        return ViewThatFits(in: .horizontal) {
+            HStack {
+                Text(title)
+                    .font(.subheadline)
+                    .foregroundStyle(.primary)
+                    .fixedSize()
+                Spacer(minLength: 12)
+                menu(wraps: false)
+            }
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.subheadline)
+                    .foregroundStyle(.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+                menu(wraps: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 }
