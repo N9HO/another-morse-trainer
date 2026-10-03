@@ -64,6 +64,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
@@ -286,6 +287,10 @@ private val OP_WRONG = Brand.warning
  * mixer, and the drill's and RIT demo's tones. A newer play cancels the rest
  * of an older demo; leaving the screen stops everything.
  */
+/** WB0RLJ's "Advice for CW POTA Hunters", and his channel (the section's credit). */
+internal const val OP_ADVICE_URL = "https://www.qrz.com/db/WB0RLJ#Advice"
+internal const val OP_YOUTUBE_URL = "https://www.youtube.com/@WB0RLJ"
+
 private class OpAudio(private val scope: CoroutineScope) {
     private val player = MorsePlayer()
     private var lines: Job? = null
@@ -295,15 +300,37 @@ private class OpAudio(private val scope: CoroutineScope) {
         lines = null
     }
 
-    /** One transmission. Returns its length in seconds. */
-    private fun sound(text: String): Double {
-        if (text.isEmpty()) return 0.0
-        return player.replaySound(MorseItem.Playable.Text(text), Settings.sidetoneHz, Settings.timing())
+    /**
+     * Sound one transmission, piece by piece: text at the learner's timing,
+     * and each error (`<ERR>`) in its own shape — 5 to 8 dits, run together
+     * or slapped, at its own speed (maintainer, 2026-10-03) — a word gap
+     * apart. Suspends until it has played.
+     */
+    private suspend fun sound(text: String) {
+        val timing = Settings.timing()
+        val parts = OperatingProcedure.clipParts(text)
+        parts.forEachIndexed { i, part ->
+            val seconds = when (part) {
+                is OperatingProcedure.ClipPart.Text ->
+                    player.replaySound(MorseItem.Playable.Text(part.text), Settings.sidetoneHz, timing)
+                is OperatingProcedure.ClipPart.Error -> {
+                    val v = OperatingProcedure.errorVariant(
+                        part.row ?: Random.nextInt(OperatingProcedure.errorVariants.size)
+                    )
+                    val t = MorseTiming(maxOf(OperatingProcedure.MINIMUM_WPM, Settings.characterWpm * v.speed))
+                    val playable = if (v.runTogether) MorseItem.Playable.Pattern(v.pattern)
+                    else MorseItem.Playable.Text(v.spacedText)
+                    player.replaySound(playable, Settings.sidetoneHz, t)
+                }
+            }
+            val gap = if (i < parts.lastIndex) timing.wordGap else 0.0
+            delay(((seconds + gap) * 1000).toLong())
+        }
     }
 
     fun play(text: String) {
         cancelLines()
-        sound(text)
+        lines = scope.launch { sound(text) }
     }
 
     /** [onLine] is told which line is sounding, and null once it has all played (or was cut short). */
@@ -313,8 +340,8 @@ private class OpAudio(private val scope: CoroutineScope) {
             try {
                 for (i in demoLines.indices) {
                     onLine(i)
-                    val seconds = sound(demoLines[i].text)
-                    delay(((seconds + 0.6) * 1000).toLong())
+                    sound(demoLines[i].text)
+                    delay(600)
                 }
             } finally {
                 onLine(null)
@@ -609,6 +636,8 @@ private fun OpHome(
             textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth()
         )
+        // The credit (maintainer, 2026-10-03): WB0RLJ's advice, linked, and
+        // his channel of daily activation recordings.
         Text(
             stringResource(R.string.op_credit),
             fontSize = 12.sp,
@@ -616,6 +645,15 @@ private fun OpHome(
             textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth()
         )
+        val uriHandler = LocalUriHandler.current
+        Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+            TextButton(onClick = { uriHandler.openUri(OP_ADVICE_URL) }) {
+                Text(stringResource(R.string.op_credit_advice), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Brand.teal)
+            }
+            TextButton(onClick = { uriHandler.openUri(OP_YOUTUBE_URL) }) {
+                Text(stringResource(R.string.op_credit_youtube), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Brand.teal)
+            }
+        }
 
         if (progress.passedCount > 0 || progress.drillPassed || progress.cleanRuns.isNotEmpty()) {
             TextButton(onClick = onStartOver, modifier = Modifier.align(Alignment.CenterHorizontally)) {
@@ -1162,7 +1200,7 @@ private fun OpScenarioCard(
         order.forEach { choice ->
             val bg = when {
                 picked == null -> Brand.navyRaised
-                choice == scenario.correct -> Brand.teal.copy(alpha = 0.35f)
+                scenario.accepts(choice) -> Brand.teal.copy(alpha = 0.35f)
                 choice == picked -> OP_WRONG.copy(alpha = 0.3f)
                 else -> Brand.navyRaised.copy(alpha = 0.6f)
             }
@@ -1182,7 +1220,7 @@ private fun OpScenarioCard(
                     color = Brand.textPrimary,
                     modifier = Modifier.weight(1f)
                 )
-                if (picked != null && choice == scenario.correct) {
+                if (picked != null && scenario.accepts(choice)) {
                     Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = Brand.tealBright, modifier = Modifier.size(20.dp))
                 } else if (picked == choice) {
                     Icon(Icons.Filled.Cancel, contentDescription = null, tint = OP_WRONG, modifier = Modifier.size(20.dp))
@@ -1190,7 +1228,7 @@ private fun OpScenarioCard(
             }
         }
         if (picked != null) {
-            val right = picked == scenario.correct
+            val right = scenario.accepts(picked)
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
                     stringResource(if (right) R.string.op_right else R.string.op_not_this_time),
@@ -1353,7 +1391,7 @@ private fun OpScenarioMode(modifier: Modifier, call: String, state: String, audi
                     OpScenarioCard(scenario, call, state, picked, audio) { choice ->
                         picked = choice
                         noteOperatingPractice()
-                        if (choice == scenario.correct) right += 1
+                        if (scenario.accepts(choice)) right += 1
                     }
                 }
                 if (picked != null) {
@@ -1467,16 +1505,22 @@ private object OpCopy {
             OpLesson.WHEN -> listOf(s(R.string.op_concept_when_1), s(R.string.op_concept_when_2), s(R.string.op_concept_when_3))
             OpLesson.ONCE -> listOf(s(R.string.op_concept_once_1), s(R.string.op_concept_once_2), s(R.string.op_concept_once_3))
             OpLesson.PARTIAL -> listOf(s(R.string.op_concept_partial_1), s(R.string.op_concept_partial_2), s(R.string.op_concept_partial_3))
-            OpLesson.ME -> listOf(s(R.string.op_concept_me_1), s(R.string.op_concept_me_2), s(R.string.op_concept_me_3, near, call))
+            OpLesson.ME -> listOf(
+                s(R.string.op_concept_me_1),
+                s(R.string.op_concept_me_2),
+                s(R.string.op_concept_me_3, near, call),
+                s(R.string.op_concept_me_4, near)
+            )
             OpLesson.EXCHANGE -> listOf(
                 s(R.string.op_concept_exchange_1, OperatingProcedure.reply(state)),
-                s(R.string.op_concept_exchange_2),
-                s(R.string.op_concept_exchange_3)
+                s(R.string.op_concept_exchange_2, OperatingProcedure.replyBK(state), OperatingProcedure.CLOSE_BK),
+                s(R.string.op_concept_exchange_3),
+                s(R.string.op_concept_exchange_4)
             )
             OpLesson.MISTAKE -> listOf(
                 s(R.string.op_concept_mistake_1),
                 s(R.string.op_concept_mistake_2),
-                s(R.string.op_concept_mistake_3, OperatingProcedure.ERROR_SIGNAL_DISPLAY)
+                s(R.string.op_concept_mistake_3, OperatingProcedure.ERROR_DISPLAY)
             )
             OpLesson.OFFSET -> listOf(
                 s(R.string.op_concept_offset_1),
@@ -1508,7 +1552,6 @@ private object OpCopy {
             "signals.as", "signals.qrz", "signals.ee", "signals.bk", "signals.agn" -> r(R.string.op_sit_signals)
             "when.dits", "when.inProgress", "when.as", "when.sriQrz" -> r(R.string.op_sit_when, act)
             "once.cq", "once.qrz", "once.dits" -> r(R.string.op_sit_once, act)
-            "me.closeAsked" -> r(R.string.op_sit_me_close_asked, s.detail)
             "exchange.agn" -> r(R.string.op_sit_exchange_agn)
             "exchange.stop" -> r(R.string.op_sit_exchange_stop)
             "mistake.call" -> r(R.string.op_sit_mistake_call, s.detail)
@@ -1586,9 +1629,9 @@ private object OpCopy {
             "partial.suffix" -> r(R.string.op_exp_partial_suffix, s.clip)
             "partial.fullCall" -> r(R.string.op_exp_partial_full_call)
             "me.other" -> r(R.string.op_exp_me_other, other)
-            "me.mine" -> r(R.string.op_exp_me_mine, OperatingProcedure.reply(state))
+            "me.mine" -> r(R.string.op_exp_me_mine, OperatingProcedure.reply(state), OperatingProcedure.replyBK(state))
             "me.close" -> r(R.string.op_exp_me_close, s.detail)
-            "me.closeAsked" -> r(R.string.op_exp_me_close_asked)
+            "me.closeAsked" -> r(R.string.op_exp_me_close_asked, s.detail)
             "exchange.reply" -> r(R.string.op_exp_exchange_reply)
             "exchange.agn" -> r(R.string.op_exp_exchange_agn)
             "exchange.dits" -> r(R.string.op_exp_exchange_dits)
@@ -1596,6 +1639,7 @@ private object OpCopy {
             "mistake.call" -> r(R.string.op_exp_mistake_call)
             "mistake.last" -> r(R.string.op_exp_mistake_last)
             "mistake.state" -> r(R.string.op_exp_mistake_state)
+            "mistake.hear" -> r(R.string.op_exp_mistake_hear, s.detail)
             "offset.pileup" -> r(R.string.op_exp_offset_pileup)
             "offset.rit" -> r(R.string.op_exp_offset_rit)
             "offset.xit" -> r(R.string.op_exp_offset_xit)
