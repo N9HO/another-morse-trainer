@@ -476,6 +476,8 @@ private fun FirstFourFinale() {
         Text(stringResource(R.string.first_four_finale_title), fontWeight = FontWeight.SemiBold, color = Brand.tealBright)
         Text(stringResource(R.string.first_four_finale_body1), style = MaterialTheme.typography.bodyMedium, color = Brand.textPrimary)
         Text(stringResource(R.string.first_four_finale_body2), style = MaterialTheme.typography.bodyMedium, color = Brand.textSecondary)
+        // The forward link to the next step (docs/operating-procedure-design.md).
+        Text(stringResource(R.string.op_first_four_finale_more), style = MaterialTheme.typography.bodyMedium, color = Brand.textSecondary)
     }
 }
 

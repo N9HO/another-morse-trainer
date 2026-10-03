@@ -703,6 +703,10 @@
     <string name="op_home_station">%1$s · %2$s</string>
     <string name="op_home_passed_count">%1$d of %2$d lessons passed</string>
     <string name="op_change">Change</string>
+    <string name="op_first_four_done">First Four ✓</string>
+    <string name="op_first_four_new">New to CW on the air? Start with First Four</string>
+    <string name="op_first_four_sub">Your call, your state, ?, 73 — heard and sent</string>
+    <string name="op_first_four_finale_more">Ready for more? CW Operating Procedure, on the home screen, covers pileups, partial calls and zero beat.</string>
     <string name="op_begin">Begin: %1$s</string>
     <string name="op_continue">Continue: %1$s</string>
     <string name="op_all_passed">Every lesson passed</string>
