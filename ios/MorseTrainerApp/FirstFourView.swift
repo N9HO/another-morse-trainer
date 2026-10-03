@@ -283,6 +283,11 @@ struct FirstFourFinale: View {
                 .font(.subheadline)
                 .foregroundStyle(Theme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
+            // The forward link to the next step (docs/operating-procedure-design.md).
+            Text("Ready for more? CW Operating Procedure, on the home screen, covers pileups, partial calls and zero beat.")
+                .font(.subheadline)
+                .foregroundStyle(Theme.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(16)

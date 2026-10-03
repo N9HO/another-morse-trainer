@@ -339,6 +339,9 @@ final class AppModel: ObservableObject {
 
     /// Not private: First Four (`AppModel+FirstFour.swift`) plays through it.
     let player = MorsePlayer()
+    /// CW Operating Procedure's playback token (`AppModel+OperatingProcedure.swift`):
+    /// a newer clip or a stop cancels a demo's remaining lines.
+    var operatingGeneration = 0
     private let speech = SpeechPlayer()
     private var toneEndDate: Date?
     private var advanceGeneration = 0
