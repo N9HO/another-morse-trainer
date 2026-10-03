@@ -19,6 +19,7 @@ name: Discord release announcement
 #   ios-v*          App Store submission     android-v*       Play production
 #   ios-beta-v*     TestFlight build         android-beta-v*  Play alpha/internal
 #   mac-beta-v*     Mac TestFlight build (Mac Catalyst)
+#   desktop-v*      Desktop GitHub Release (a -beta suffix marks a beta); manual runs only
 # The changelog runs from the previous tag of the same platform, of either
 # kind, so every build lists only what is new since the one before it.
 #
@@ -42,10 +43,13 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Tag to announce (ios-v*, ios-beta-v*, mac-beta-v*, android-v* or android-beta-v*)'
+        description: 'Tag to announce (ios-v*, ios-beta-v*, mac-beta-v*, android-v*, android-beta-v* or desktop-v*)'
         required: false
       testflight_link:
         description: 'Public TestFlight join link to include (https://testflight.apple.com/join/…)'
+        required: false
+      message:
+        description: 'Optional announcement text that replaces the generated blurb and changelog (Discord markdown, up to 4096 characters)'
         required: false
       dry_run:
         description: 'Set to "true" to print the payload without posting'
@@ -105,6 +109,8 @@ jobs:
             android-v*)         PLATFORM=android; KIND=release ;;
             android-beta-v*)    PLATFORM=android; KIND=beta ;;
             mac-beta-v*)        PLATFORM=mac;     KIND=beta ;;
+            desktop-v*-beta*)   PLATFORM=desktop; KIND=beta ;;
+            desktop-v*)         PLATFORM=desktop; KIND=release ;;
             *)
               echo "::notice::'$TAG' is not a release tag (workflow: ${RUN_WORKFLOW:-manual}) — nothing to announce."
               echo "skip=true" >> "$GITHUB_OUTPUT"
@@ -172,6 +178,9 @@ jobs:
           if [ "$PLATFORM" = "ios" ] || [ "$PLATFORM" = "mac" ]; then
             LOG="$(git log --no-merges -25 --pretty=format:'• %s' "$RANGE" -- \
                    ios ':(exclude)ios/tools' ':(exclude)ios/HANDOFF.md')"
+          elif [ "$PLATFORM" = "desktop" ]; then
+            LOG="$(git log --no-merges -25 --pretty=format:'• %s' "$RANGE" -- \
+                   desktop ':(exclude)desktop/packaging')"
           else
             LOG="$(git log --no-merges -25 --pretty=format:'• %s' "$RANGE" -- \
                    android ':(exclude)android/tools' ':(exclude)android/HANDOFF.md')"
@@ -214,9 +223,18 @@ jobs:
           CHANGELOG: ${{ steps.info.outputs.changelog }}
           TS: ${{ steps.info.outputs.ts }}
           LINK: ${{ steps.rel.outputs.link }}
+          MESSAGE: ${{ github.event.inputs.message }}
+          REPO: ${{ github.repository }}
           DRY_RUN: ${{ github.event.inputs.dry_run }}
         run: |
           set -euo pipefail
+
+          # A desktop release is a GitHub Release with files to download, so
+          # its title links to the release page rather than a compare view.
+          URL="$COMPARE"
+          if [ "$PLATFORM" = "desktop" ]; then
+            URL="https://github.com/${REPO}/releases/tag/${TAG}"
+          fi
 
           if [ "$PLATFORM" = "ios" ]; then
             EMOJI="📱"; LABEL="iOS"; COLOR=3447003
@@ -228,6 +246,9 @@ jobs:
           elif [ "$PLATFORM" = "mac" ]; then
             EMOJI="💻"; LABEL="Mac"; COLOR=10181046
             BLURB="A new Mac TestFlight build is out. Testers get it once Apple's beta review passes; install TestFlight from the Mac App Store first."
+          elif [ "$PLATFORM" = "desktop" ]; then
+            EMOJI="🖥️"; LABEL="Desktop"; COLOR=15105570
+            BLURB="New desktop downloads are on the release page."
           else
             EMOJI="🤖"; LABEL="Android"; COLOR=3066993
             if [ "$KIND" = "beta" ]; then
@@ -240,7 +261,8 @@ jobs:
           # jq builds correctly-escaped JSON from the raw values.
           PAYLOAD="$(jq -n \
             --arg tag "$TAG" \
-            --arg compare "$COMPARE" \
+            --arg compare "$URL" \
+            --arg message "${MESSAGE:-}" \
             --arg log "$CHANGELOG" \
             --arg ts "$TS" \
             --arg link "${LINK:-}" \
@@ -253,10 +275,11 @@ jobs:
               embeds: [{
                 title: "\($emoji) New build — \($tag)",
                 url: $compare,
-                description: ((if $link != ""
-                               then "A new TestFlight build is out.\n\n🔗 **Join the beta:** \($link)\n\n"
-                               else $blurb + "\n\n" end)
-                              + "**Changelog**\n\($log)"),
+                description: (if $message != "" then $message
+                              else ((if $link != ""
+                                     then "A new TestFlight build is out.\n\n🔗 **Join the beta:** \($link)\n\n"
+                                     else $blurb + "\n\n" end)
+                                    + "**Changelog**\n\($log)") end),
                 color: $color,
                 footer: { text: "Another Morse Trainer • \($label)" },
                 timestamp: $ts
