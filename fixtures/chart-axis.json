@@ -1,0 +1,39 @@
+{
+  "$comment": [
+    "The Session Detail recognition chart's millisecond axis (#299), pinned for",
+    "every port: SessionRecord.axisScale in ios/Sources/MorseKit/SessionHistory.swift",
+    "and the Kotlin SessionRecord.axisScale in android/ and desktop/ morsekit.",
+    "Read by ios/Sources/MorseKitCheck/main.swift and by ChartAxisTest.kt in",
+    "android/app/src/test and desktop/app/src/test.",
+    "",
+    "Every expected value was worked out by hand from 'rule', not captured from",
+    "either port. Do not regenerate it to make a failing test pass; change it",
+    "only when the rule is meant to change."
+  ],
+  "rule": [
+    "floored = max(1000, maxMS); limit = max(1, maxTicks).",
+    "Candidate steps, in order: 250, 500, then for each power of ten d from",
+    "1000 up: d, 2d, 2.5d, 5d. The step is the first candidate for which",
+    "ceil(floored / step) <= limit. The ceiling is ceil(floored / step) * step.",
+    "Ticks run 0, step, 2*step ... ceiling, so there are ceiling/step + 1 labels.",
+    "The apps choose maxTicks from the width the plot has, so a long outlier",
+    "on a phone widens the step instead of crowding the labels together."
+  ],
+  "cases": [
+    { "maxMS": 300,   "maxTicks": 8,  "ceilingMS": 1000,  "stepMS": 250,   "note": "short session, room to spare: every 250 ms, as before" },
+    { "maxMS": 1105,  "maxTicks": 8,  "ceilingMS": 1250,  "stepMS": 250,   "note": "the old axisCeilingMS axis when it fits" },
+    { "maxMS": 750,   "maxTicks": 20, "ceilingMS": 1000,  "stepMS": 250,   "note": "never under 1000 ms" },
+    { "maxMS": 11033, "maxTicks": 6,  "ceilingMS": 12000, "stepMS": 2000,  "note": "the #299 report: an 11 s outlier on a phone" },
+    { "maxMS": 11033, "maxTicks": 12, "ceilingMS": 12000, "stepMS": 1000,  "note": "the same session on an iPad" },
+    { "maxMS": 11033, "maxTicks": 24, "ceilingMS": 11500, "stepMS": 500,   "note": "and on a wide desktop window" },
+    { "maxMS": 4768,  "maxTicks": 6,  "ceilingMS": 5000,  "stepMS": 1000,  "note": "" },
+    { "maxMS": 2731,  "maxTicks": 4,  "ceilingMS": 3000,  "stepMS": 1000,  "note": "" },
+    { "maxMS": 1000,  "maxTicks": 2,  "ceilingMS": 1000,  "stepMS": 500,   "note": "" },
+    { "maxMS": 1000,  "maxTicks": 1,  "ceilingMS": 1000,  "stepMS": 1000,  "note": "" },
+    { "maxMS": 0,     "maxTicks": 0,  "ceilingMS": 1000,  "stepMS": 1000,  "note": "no room at all still draws 0 and the ceiling" },
+    { "maxMS": 7600,  "maxTicks": 4,  "ceilingMS": 8000,  "stepMS": 2000,  "note": "" },
+    { "maxMS": 12600, "maxTicks": 5,  "ceilingMS": 15000, "stepMS": 5000,  "note": "2000 needs 7 and 2500 needs 6" },
+    { "maxMS": 23000, "maxTicks": 6,  "ceilingMS": 25000, "stepMS": 5000,  "note": "2500 needs 10" },
+    { "maxMS": 60000, "maxTicks": 3,  "ceilingMS": 60000, "stepMS": 20000, "note": "the next decade" }
+  ]
+}

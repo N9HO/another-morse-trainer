@@ -136,7 +136,39 @@ data class SessionRecord(
             val floored = maxOf(1000, ms)
             return ((floored + 249) / 250) * 250
         }
+
+        /**
+         * The axis for a chart whose longest value is [maxMS], with room for at
+         * most [maxTicks] intervals across its width (#299). The step is the
+         * first of 250, 500, then 1, 2, 2.5 and 5 times each power of ten from
+         * 1000, that splits max(1000, maxMS) into no more than max(1, maxTicks)
+         * intervals; the ceiling is that value rounded up to a whole step. With
+         * room for every 250 ms tick this is [axisCeilingMS]'s axis; a long
+         * outlier on a narrow chart widens the step instead of crowding labels.
+         * Pinned by fixtures/chart-axis.json on every port.
+         */
+        fun axisScale(maxMS: Int, maxTicks: Int): AxisScale {
+            val floored = maxOf(1000, maxMS)
+            val limit = maxOf(1, maxTicks)
+            fun intervals(step: Int) = (floored + step - 1) / step
+            for (step in listOf(250, 500)) {
+                if (intervals(step) <= limit) return AxisScale(intervals(step) * step, step)
+            }
+            var decade = 1000
+            while (true) {
+                for (step in listOf(decade, decade * 2, decade * 5 / 2, decade * 5)) {
+                    if (intervals(step) <= limit) return AxisScale(intervals(step) * step, step)
+                }
+                decade *= 10
+            }
+        }
     }
+}
+
+/** The recognition chart's millisecond axis: where it ends and how far apart its labelled ticks are. */
+data class AxisScale(val ceilingMS: Int, val stepMS: Int) {
+    /** The labelled values, 0 through the ceiling. */
+    val ticks: List<Int> get() = (0..ceilingMS step stepMS).toList()
 }
 
 /**

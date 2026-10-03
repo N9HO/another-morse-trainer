@@ -1659,6 +1659,35 @@ do {
     }
 }
 
+// The recognition chart's axis (#299), against fixtures/chart-axis.json —
+// the same file the Kotlin ChartAxisTest reads on Android and desktop.
+print("\nRecognition chart axis (fixtures/chart-axis.json):")
+struct ChartAxisFixture: Decodable {
+    struct Case: Decodable { let maxMS: Int; let maxTicks: Int; let ceilingMS: Int; let stepMS: Int }
+    let cases: [Case]
+}
+func loadChartAxisFixture() -> ChartAxisFixture? {
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent()
+        .deletingLastPathComponent().deletingLastPathComponent()
+    guard let data = try? Data(contentsOf: root.appendingPathComponent("fixtures/chart-axis.json")) else { return nil }
+    return try? JSONDecoder().decode(ChartAxisFixture.self, from: data)
+}
+if let fx = loadChartAxisFixture(), !fx.cases.isEmpty {
+    for c in fx.cases {
+        let scale = SessionRecord.axisScale(maxMS: c.maxMS, maxTicks: c.maxTicks)
+        check("axis for \(c.maxMS)ms in \(c.maxTicks) ticks ends at \(c.ceilingMS) every \(c.stepMS)",
+              scale.ceilingMS == c.ceilingMS && scale.stepMS == c.stepMS)
+    }
+    check("every axis fits its tick budget and starts at 0",
+          fx.cases.allSatisfy { c in
+              let ticks = SessionRecord.axisScale(maxMS: c.maxMS, maxTicks: c.maxTicks).ticks
+              return ticks.first == 0 && ticks.count - 1 <= max(1, c.maxTicks)
+          })
+} else {
+    check("fixtures/chart-axis.json loads and decodes", false)
+}
+
 // Per-mode personal bests (docs/high-scores-design.md, step 1), against
 // fixtures/mode-bests.json — the same file the Kotlin ModeBestsTest reads.
 print("\nPer-mode personal bests (fixtures/mode-bests.json):")
