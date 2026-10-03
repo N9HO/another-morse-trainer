@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.Abc
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.Checklist
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.FlashOn
@@ -94,6 +95,7 @@ fun HomeScreen(
     onPickQrq: () -> Unit,
     onPickRapidFire: () -> Unit,
     onPickGames: () -> Unit,
+    onPickOperating: () -> Unit,
     onPickStory: () -> Unit,
     onPickSending: () -> Unit,
     onPickSendingDrills: () -> Unit,
@@ -153,7 +155,10 @@ fun HomeScreen(
         HomeItem(stringResource(R.string.mode_reference), stringResource(R.string.home_look_it_up), Icons.AutoMirrored.Filled.ListAlt, onPickReference) +
         // The six arcade games behind one tile at the end of the grid (#207):
         // the menu had outgrown two screens of tiles. Same place as on iOS.
-        HomeItem(stringResource(R.string.mode_games), stringResource(R.string.home_six_arcade_modes), Icons.Filled.SportsEsports, onPickGames)
+        HomeItem(stringResource(R.string.mode_games), stringResource(R.string.home_six_arcade_modes), Icons.Filled.SportsEsports, onPickGames) +
+        // CW Operating Procedure (#294, #295): a section you return to, so a
+        // grid tile beside Games rather than a card above the grid.
+        HomeItem(stringResource(R.string.op_title), stringResource(R.string.op_home_tagline), Icons.Filled.Checklist, onPickOperating)
 
     // A big tablet window: a wider column, the tiles four across, and the
     // Daily Dit and Start here cards side by side (iOS IntroView, same rule).
