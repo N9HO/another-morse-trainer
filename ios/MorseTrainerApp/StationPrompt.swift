@@ -1,15 +1,16 @@
 // StationPrompt.swift
-// Set up Your Station on first entry to Pileup Runner (#297). Pileup Runner
-// keys your callsign when you call CQ and sign off, and until it is set that
+// Set up Your Station on first entry to Pileup Runner or Contest (#297).
+// Both key your callsign when you call CQ and sign off, and until it is set that
 // callsign is the W1AW placeholder: a first-time user found themselves on
-// the air as W1AW with no idea why. So the first time Pileup Runner's setup
+// the air as W1AW with no idea why. So the first time either mode's setup
 // opens while the callsign is still blank or W1AW, it asks for the station:
 // callsign, and optionally name and state (CW 77 and First Four use those).
 //
 // Asked once. "Save" and "Not now" both answer it for good; Settings ›
 // QSO & Pileups › Your Station is where to change the station later, and
 // the prompt says so. An install whose callsign is already set is never
-// asked. The Android and desktop twins are `StationPrompt.kt`.
+// asked. The Android and desktop twins are `StationPrompt.kt`; their
+// Contest does not send your callsign, so there it is Pileup Runner only.
 
 import SwiftUI
 
@@ -25,7 +26,7 @@ enum StationPrompt {
 }
 
 /// The alert, raised once when the view it is attached to appears for
-/// `mode` == Pileup Runner with the callsign unset.
+/// Pileup Runner or Contest with the callsign unset.
 private struct StationPromptModifier: ViewModifier {
     @EnvironmentObject var model: AppModel
     let active: Bool
@@ -64,7 +65,7 @@ private struct StationPromptModifier: ViewModifier {
                     asked = true
                 }
             } message: {
-                Text("Pileup Runner sends your callsign when you call CQ and sign off. Until you set it, it sends W1AW. Your name and state are optional; CW 77 and First Four use them. You can change all three later in Settings › QSO & Pileups › Your Station.")
+                Text("Pileup Runner and Contest send your callsign when you call CQ and sign off. Until you set it, it sends W1AW. Your name and state are optional; CW 77 and First Four use them. You can change all three later in Settings › QSO & Pileups › Your Station.")
             }
     }
 }
