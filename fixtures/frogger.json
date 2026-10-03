@@ -41,9 +41,11 @@
       "the goal, which also starts the next wave: lanes are laid out afresh at",
       "the new wave's speeds, the frog returns to the start bank, the combo",
       "is kept. Labels: waves 1-2 always shown ('visible'); waves 3-4 a lane's",
-      "labels hide once it has been cued ('memory'); from wave 5 labels are",
-      "never shown and objects announce their own character in Morse as they",
-      "enter ('hidden').",
+      "labels show until memoryLookSeconds of game time after it was cued, then",
+      "hide ('memory'; a lane not yet cued this crossing keeps its labels, and",
+      "a death or a crossing clears every cue, so the labels come back); from",
+      "wave 5 labels are never shown and objects announce their own character",
+      "in Morse as they enter ('hidden').",
       "Speed ramp: a game opens rampStartOffset WPM under the character speed,",
       "never under minWpm; every decisionsPerStep correct decisions in total",
       "step it up rampStep WPM, capped at the character speed; a death steps",
@@ -65,7 +67,8 @@
     "minWpm": 15,
     "rampStartOffset": 8,
     "rampStep": 2,
-    "decisionsPerStep": 4
+    "decisionsPerStep": 4,
+    "memoryLookSeconds": 3.0
   },
   "lanes": [
     {
@@ -743,5 +746,161 @@
       "bestWpm": 19.0,
       "isOver": false
     }
+  },
+  "labelVisibility": {
+    "$comment": [
+      "#296: whether a lane's labels are drawn, by stage and by game seconds",
+      "since the lane was cued (null: not cued this crossing). Before #296 a",
+      "memory-stage lane went blank the instant it was cued, so the lane the",
+      "player had to choose in was always blank."
+    ],
+    "cases": [
+      {
+        "stage": "visible",
+        "secondsSinceCue": null,
+        "visible": true
+      },
+      {
+        "stage": "visible",
+        "secondsSinceCue": 0.0,
+        "visible": true
+      },
+      {
+        "stage": "visible",
+        "secondsSinceCue": 10.0,
+        "visible": true
+      },
+      {
+        "stage": "memory",
+        "secondsSinceCue": null,
+        "visible": true
+      },
+      {
+        "stage": "memory",
+        "secondsSinceCue": 0.0,
+        "visible": true
+      },
+      {
+        "stage": "memory",
+        "secondsSinceCue": 2.99,
+        "visible": true
+      },
+      {
+        "stage": "memory",
+        "secondsSinceCue": 3.0,
+        "visible": false
+      },
+      {
+        "stage": "memory",
+        "secondsSinceCue": 7.0,
+        "visible": false
+      },
+      {
+        "stage": "hidden",
+        "secondsSinceCue": null,
+        "visible": false
+      },
+      {
+        "stage": "hidden",
+        "secondsSinceCue": 0.0,
+        "visible": false
+      }
+    ]
+  },
+  "memoryScenario": {
+    "$comment": [
+      "#296, played on the game itself: the same one-character pool as",
+      "'scenario' (every object and cue is K, so no hop can be wrong),",
+      "Normal difficulty, characterWpm 25. 'openingHops' hops straight up",
+      "from a new game, with no time passing, cross waves 1 and 2 (lanes are",
+      "laid out with an object centred at x = 0.5, under the frog). Each",
+      "step then is one 'advance' (seconds) or one 'move'. After it, 'shown'",
+      "lists rows whose labels must be drawn and 'blank' rows whose labels",
+      "must not be."
+    ],
+    "pool": "K",
+    "difficulty": "normal",
+    "characterWpm": 25.0,
+    "openingHops": 16,
+    "steps": [
+      {
+        "note": "wave 3 has just begun and lane 1 was cued at once: its labels must still show",
+        "wave": 3,
+        "stage": "memory",
+        "row": 0,
+        "shown": [
+          1,
+          2,
+          3,
+          5,
+          6,
+          7
+        ],
+        "blank": []
+      },
+      {
+        "advance": 2.9,
+        "wave": 3,
+        "stage": "memory",
+        "row": 0,
+        "shown": [
+          1,
+          2,
+          3,
+          5,
+          6,
+          7
+        ],
+        "blank": []
+      },
+      {
+        "advance": 0.2,
+        "wave": 3,
+        "stage": "memory",
+        "row": 0,
+        "shown": [
+          2,
+          3,
+          5,
+          6,
+          7
+        ],
+        "blank": [
+          1
+        ]
+      },
+      {
+        "move": "up",
+        "wave": 3,
+        "stage": "memory",
+        "row": 1,
+        "shown": [
+          2,
+          3,
+          5,
+          6,
+          7
+        ],
+        "blank": [
+          1
+        ]
+      },
+      {
+        "advance": 3.5,
+        "wave": 3,
+        "stage": "memory",
+        "row": 1,
+        "shown": [
+          3,
+          5,
+          6,
+          7
+        ],
+        "blank": [
+          1,
+          2
+        ]
+      }
+    ]
   }
 }

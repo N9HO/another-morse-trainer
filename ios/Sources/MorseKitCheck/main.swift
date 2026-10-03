@@ -5398,6 +5398,7 @@ struct FroggerFixture: Decodable {
         let pointsPerHop, pointsPerDecision, pointsPerCrossing, memoryFromWave, hiddenFromWave: Int
         let minWpm, rampStartOffset, rampStep: Double
         let decisionsPerStep: Int
+        let memoryLookSeconds: Double
     }
     struct Lane: Decodable { let row: Int; let kind: String; let direction, count: Int; let width, baseSpeed: Double }
     struct Speed: Decodable { let baseSpeed: Double; let wave: Int; let difficulty: String; let speed: Double }
@@ -5424,6 +5425,18 @@ struct FroggerFixture: Decodable {
     let labelStage: [Stage]
     let rampStartTable: [RampRow]
     let scenario: Scenario
+    struct VisibilityCase: Decodable { let stage: String; let secondsSinceCue: Double?; let visible: Bool }
+    struct VisibilityTable: Decodable { let cases: [VisibilityCase] }
+    struct MemoryStep: Decodable {
+        let advance: Double?; let move: String?
+        let wave: Int; let stage: String; let row: Int; let shown, blank: [Int]
+    }
+    struct MemoryScenario: Decodable {
+        let pool, difficulty: String; let characterWpm: Double; let openingHops: Int
+        let steps: [MemoryStep]
+    }
+    let labelVisibility: VisibilityTable
+    let memoryScenario: MemoryScenario
 }
 
 func loadFroggerFixture() -> FroggerFixture? {
@@ -5463,7 +5476,8 @@ if let fx = loadFroggerFixture() {
           && approxEqual(FroggerGame.maxLaneSpeed, d.maxLaneSpeed)
           && FroggerGame.pointsPerHop == d.pointsPerHop && FroggerGame.pointsPerDecision == d.pointsPerDecision
           && FroggerGame.pointsPerCrossing == d.pointsPerCrossing
-          && FroggerGame.memoryFromWave == d.memoryFromWave && FroggerGame.hiddenFromWave == d.hiddenFromWave)
+          && FroggerGame.memoryFromWave == d.memoryFromWave && FroggerGame.hiddenFromWave == d.hiddenFromWave
+          && FroggerGame.memoryLookSeconds == d.memoryLookSeconds)
     check("the ramp constants are the fixture's",
           FroggerGame.minWpm == d.minWpm && FroggerGame.rampStartOffset == d.rampStartOffset
           && FroggerGame.rampStep == d.rampStep && FroggerGame.decisionsPerRampStep == d.decisionsPerStep)
@@ -5556,6 +5570,38 @@ if let fx = loadFroggerFixture() {
           g.decisions == sc.final.decisions && g.misses == sc.final.misses
           && approxEqual(g.bestWpm, sc.final.bestWpm) && g.isOver == sc.final.isOver
           && approxEqual(g.accuracy, Double(sc.final.decisions) / Double(sc.final.decisions + sc.final.misses)))
+
+    // #296: a memory-stage lane keeps its labels for a look after its cue.
+    var visibilityOK = !fx.labelVisibility.cases.isEmpty
+    for c in fx.labelVisibility.cases {
+        guard let stage = FroggerLabelStage(rawValue: c.stage) else { visibilityOK = false; continue }
+        if FroggerGame.labelsVisible(stage: stage, secondsSinceCue: c.secondsSinceCue) != c.visible {
+            visibilityOK = false
+            print("      ↳ \(c.stage) at \(c.secondsSinceCue.map { "\($0) s" } ?? "uncued"): fixture says \(c.visible)")
+        }
+    }
+    check("label visibility follows the fixture table across \(fx.labelVisibility.cases.count) cases", visibilityOK)
+    let ms = fx.memoryScenario
+    let mg = FroggerGame(config: .init(characters: Array(ms.pool),
+                                       difficulty: InvadersDifficulty(rawValue: ms.difficulty) ?? .normal,
+                                       characterWpm: ms.characterWpm),
+                         rng: SeededRNG(seed: 296))
+    for _ in 0..<ms.openingHops { mg.move(.up) }
+    var memoryOK = !ms.steps.isEmpty
+    for (i, step) in ms.steps.enumerated() {
+        if let seconds = step.advance {
+            mg.advance(by: seconds)
+        } else if let move = step.move, let direction = FroggerDirection(rawValue: move) {
+            mg.move(direction)
+        }
+        let shown = (1...7).filter { mg.isLabelVisible(row: $0) }
+        if mg.wave != step.wave || mg.labelStage.rawValue != step.stage || mg.frog.row != step.row
+            || !step.shown.allSatisfy(shown.contains) || step.blank.contains(where: shown.contains) {
+            memoryOK = false
+            print("      ↳ memory step \(i): wave \(mg.wave) \(mg.labelStage) row \(mg.frog.row) labels on \(shown); fixture says wave \(step.wave) \(step.stage) row \(step.row) shown \(step.shown) blank \(step.blank)")
+        }
+    }
+    check("wave 3 shows a cued lane's labels for a look, then hides them (\(ms.steps.count) steps)", memoryOK)
 } else {
     check("fixtures/frogger.json loads and decodes", false)
 }
@@ -5645,12 +5691,18 @@ do {
     check("three drownings end the game", deaths == 3 && over && o.isOver && o.lives == 0)
     check("a finished game ignores hops and time", o.move(.up).isEmpty && o.advance(by: 1).isEmpty)
 
-    // Memory stage: a lane's labels hide once it is cued; hidden stage: never shown.
+    // Memory stage: a lane's labels hide a look after it is cued (#296);
+    // hidden stage: never shown.
     let m = FroggerGame(config: .init(characters: ["K"]), rng: SeededRNG(seed: 6))
     check("labels are visible in wave 1", m.labelStage == .visible && (1...7).allSatisfy { m.isLabelVisible(row: $0) })
     for _ in 0..<2 { for _ in 0..<8 { m.move(.up) } }
-    check("wave 3 hides a lane's labels once it is cued",
-          m.wave == 3 && m.labelStage == .memory && !m.isLabelVisible(row: 1) && m.isLabelVisible(row: 2))
+    check("wave 3 still labels the lane it has just cued",
+          m.wave == 3 && m.labelStage == .memory && m.isLabelVisible(row: 1) && m.isLabelVisible(row: 2))
+    let look = FroggerGame(config: .init(characters: ["K"]), rng: SeededRNG(seed: 6))
+    for _ in 0..<2 { for _ in 0..<8 { look.move(.up) } }
+    look.advance(by: FroggerGame.memoryLookSeconds + 0.1)
+    check("wave 3 hides a cued lane's labels after the look, not an uncued one's",
+          !look.isLabelVisible(row: 1) && look.isLabelVisible(row: 2))
     for _ in 0..<2 { for _ in 0..<8 { m.move(.up) } }
     check("wave 5 never shows a label", m.wave == 5 && m.labelStage == .hidden && !(1...7).contains { m.isLabelVisible(row: $0) })
 

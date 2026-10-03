@@ -897,6 +897,7 @@
     <string name="frogger_play_again">Play again</string>
     <string name="frogger_end_game">End game</string>
     <string name="frogger_tap_to_replay">Tap the board to hear the next lane\'s cue again</string>
+    <string name="frogger_tap_to_replay_memory">Labels hide three seconds after the cue: keep your eye on the one you heard. Tap the board to hear the cue again</string>
     <string name="frogger_tap_to_replay_hidden">Tap the board to hear the next lane\'s cue again; the traffic announces itself</string>
     <string name="frogger_hop_up">Hop up</string>
     <string name="frogger_hop_down">Hop down</string>
@@ -906,13 +907,15 @@
     <!-- Speed ramp: start, step, decisions per step, target -->
     <string name="frogger_speed_ramp_note">Cues sent from %1$d WPM, stepping up %2$d WPM every %3$d safe crossings of a lane to your %4$d WPM character speed. Losing a life steps it back.</string>
     <string name="frogger_speed_flat_note">Cues sent at your %1$d WPM character speed.</string>
-    <string name="frogger_labels_note">Labels show for the first two crossings, hide once a lane is cued from the third, and from the fifth the traffic announces itself in Morse instead.</string>
+    <string name="frogger_labels_note">Labels show for the first two crossings. From the third, a lane\'s labels show for three seconds after its cue and then hide, so keep your eye on the one you heard. From the fifth, the traffic announces itself in Morse instead.</string>
     <string name="frogger_speed_reached">Speed reached: %1$d WPM</string>
     <!-- Flashes on the board: the wrong label and the cue -->
     <string name="frogger_flash_hit">Hit by %1$s, not %2$s</string>
     <string name="frogger_flash_sank">%1$s sank, not %2$s</string>
     <string name="frogger_flash_splash">Splash — the log was %1$s</string>
     <string name="frogger_flash_across">Across! +%1$d — wave %2$d</string>
+    <string name="frogger_flash_wave_memory">Wave %1$d: labels hide after the cue</string>
+    <string name="frogger_flash_wave_hidden">Wave %1$d: no labels, listen to the traffic</string>
     <!-- CW Asteroids (#189) -->
     <string name="mode_asteroids">CW Asteroids</string>
     <string name="home_arcade_sending">Arcade sending</string>
