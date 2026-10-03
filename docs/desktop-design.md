@@ -445,8 +445,9 @@ Order:
    recorded in `PARITY.md`: the buddy-line home switch (#253, PR #272; the
    desktop has no buddies, so there is no line to hide; the catalog keeps
    the shared search terms) and the built-in-speaker headroom (#259, PR #271;
-   Java Sound cannot tell a laptop's speaker from its headphone jack). Still
-   owed: First Four (#265, PR #276), tracked for desktop in #280.
+   Java Sound cannot tell a laptop's speaker from its headphone jack). First
+   Four (#265, PR #276) followed in #280, with `FirstFourTest` reading
+   `fixtures/first-four.json`.
 4. Smaller desktop follow-ups found while porting: Settings search still
    indexes the settings the desktop hides (haptics, voice, reminder time,
    leaderboard sharing, buddies) and lands on the explanatory note; R to

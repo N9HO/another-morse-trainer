@@ -54,6 +54,9 @@ object PileupSettings {
     /** Your first name, optional. Only CW 77's "include my callsign and name" uses it so far (#240). */
     var myName by mutableStateOf("")
         private set
+    /** Your state (or province) abbreviation, optional. Only First Four reads it so far (#265, #280). */
+    var myState by mutableStateOf("")
+        private set
     var mode by mutableStateOf(QSOContestMode.Pota)
         private set
     var maxStations by mutableIntStateOf(4)
@@ -108,6 +111,7 @@ object PileupSettings {
         prefs = Prefs.open("amt_pileup")
         myCall = prefs.getString("myCall", DEFAULT_CALL) ?: DEFAULT_CALL
         myName = prefs.getString("myName", "") ?: ""
+        myState = prefs.getString("myState", "") ?: ""
         mode = QSOContestMode.allCases.firstOrNull { it.code == prefs.getString("mode", null) }
             ?: QSOContestMode.Pota
         maxStations = prefs.getInt("maxStations", 4).coerceIn(1, 8)
@@ -154,6 +158,11 @@ object PileupSettings {
 
     fun updateMyName(value: String) {
         myName = value
+        persist()
+    }
+
+    fun updateMyState(value: String) {
+        myState = value.uppercase().filter { it.isLetter() }.take(3)
         persist()
     }
 
@@ -243,6 +252,7 @@ object PileupSettings {
         prefs.edit {
             putString("myCall", myCall)
             putString("myName", myName)
+            putString("myState", myState)
             putString("mode", mode.code)
             putInt("maxStations", maxStations)
             putFloat("minWpm", minWpm.toFloat())

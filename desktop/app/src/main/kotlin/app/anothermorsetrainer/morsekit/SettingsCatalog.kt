@@ -141,9 +141,6 @@ object SettingsCatalog {
         // QSO & Pileups
         e("myCall", "Your callsign", listOf("call sign", "call", "station", "my call", "w1aw"), SettingsSection.PILEUP),
         e("myName", "Your name", listOf("name", "operator", "op", "cw 77", "cwops"), SettingsSection.PILEUP),
-        // First Four's state (#265). Not on desktop until First Four is
-        // ported (#280): kept in the catalog, like the other settings desktop
-        // hides, so it matches the shared fixture's list (SettingsCatalogTest).
         e("myState", "Your state", listOf("state", "province", "qth", "first four", "pota"), SettingsSection.PILEUP),
         e("exchange", "Exchange", listOf("pileup runner mode", "pota", "contest", "sprint", "cwt", "sst", "single caller", "mode"), SettingsSection.PILEUP),
         e("maxCallers", "Callers", listOf("max callers", "pileup size", "stations", "how many"), SettingsSection.PILEUP),
