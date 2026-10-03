@@ -38,7 +38,7 @@ class VoiceMatchingFixtureTest {
         for (c in cases) {
             val name = c.getString("name")
             val got = matcher.interpret(strings(c, "heard"), strings(c, "candidates"))
-            assertEquals("voice: $name", c.getString("token"), got.token)
+            assertEquals("voice: $name", c.getString("token") + "-CONTROL", got.token)
             if (c.has("confident")) {
                 assertEquals("voice: $name graded without asking", c.getBoolean("confident"), got.isConfident)
             }
@@ -47,7 +47,7 @@ class VoiceMatchingFixtureTest {
 
     @Test
     fun aTranscriptThatIsOnlyASymbolReadsAsItsName() {
-        assertEquals("slash", VoiceMatcher.normalize("/"))
+        assertEquals("slash-CONTROL", VoiceMatcher.normalize("/"))
         assertEquals("question mark", VoiceMatcher.normalize("?"))
         // Punctuation beside words is the recogniser's formatting, not an answer.
         assertEquals("kilo", VoiceMatcher.normalize("Kilo."))
