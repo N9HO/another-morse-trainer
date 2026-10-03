@@ -3602,6 +3602,144 @@ do {
     }
 }
 
+// The same fixture's run rules (#323): the Contest engine built from the
+// Pileup realism config, any send logging a copied exchange, and the re-call
+// after TU. Read by this harness AND by the android and desktop
+// QSOSelfKeyingTest, so all three apps run the same engine.
+struct QSORunFixture: Decodable {
+    struct Realism: Decodable {
+        let mode: String
+        let maxStations: Int
+        let minWPM, maxWPM, toneSpread, minDelay, maxDelay: Double
+        let minVolume, maxVolume, qrnLevel: Float
+        let qsbEnabled, cutNumbersEnabled, rstRequired, giveUpEnabled, usOnly: Bool
+        let cutDigits, bustBehavior: String
+    }
+    struct ContestCase: Decodable {
+        let contest, mode: String
+        let maxCallers, maxStations: Int
+        let minWPM, maxWPM: Double
+    }
+    struct ContestConfig: Decodable {
+        let realism: Realism
+        let carried: [String]
+        let cases: [ContestCase]
+    }
+    struct LogOnSend: Decodable { let phase, typed: String; let logs: Bool }
+    struct Recall: Decodable { let mode: String; let maxStations: Int; let autoRecall, recalls: Bool }
+    let contestConfig: ContestConfig
+    let logOnSend: [LogOnSend]
+    let recallAfterLog: [Recall]
+}
+print("\nShared QSO run rules (fixtures/qso-self-keying.json, #323):")
+do {
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent()
+        .deletingLastPathComponent().deletingLastPathComponent()
+    if let data = try? Data(contentsOf: root.appendingPathComponent("fixtures/qso-self-keying.json")),
+       let fx = try? JSONDecoder().decode(QSORunFixture.self, from: data) {
+        // Contest config from the realism config.
+        let r = fx.contestConfig.realism
+        var base = PileupConfig()
+        var cfgOK = true
+        if let m = QSOContestMode(rawValue: r.mode) { base.mode = m } else { cfgOK = false }
+        if let b = BustBehavior(rawValue: r.bustBehavior) { base.bustBehavior = b } else { cfgOK = false }
+        base.maxStations = r.maxStations
+        base.minWPM = r.minWPM; base.maxWPM = r.maxWPM
+        base.toneSpread = r.toneSpread
+        base.minVolume = r.minVolume; base.maxVolume = r.maxVolume
+        base.minDelay = r.minDelay; base.maxDelay = r.maxDelay
+        base.qsbEnabled = r.qsbEnabled; base.qrnLevel = r.qrnLevel
+        base.cutNumbersEnabled = r.cutNumbersEnabled; base.cutDigits = Set(r.cutDigits)
+        base.rstRequired = r.rstRequired; base.giveUpEnabled = r.giveUpEnabled
+        base.usOnly = r.usOnly
+        let carriedFields: [String: (PileupConfig) -> AnyHashable] = [
+            "toneSpread": { $0.toneSpread }, "minVolume": { $0.minVolume }, "maxVolume": { $0.maxVolume },
+            "minDelay": { $0.minDelay }, "maxDelay": { $0.maxDelay }, "qsbEnabled": { $0.qsbEnabled },
+            "qrnLevel": { $0.qrnLevel }, "cutNumbersEnabled": { $0.cutNumbersEnabled },
+            "cutDigits": { $0.cutDigits }, "bustBehavior": { $0.bustBehavior },
+            "giveUpEnabled": { $0.giveUpEnabled }, "usOnly": { $0.usOnly },
+        ]
+        for c in fx.contestConfig.cases {
+            guard let type = ContestType(rawValue: c.contest) else {
+                cfgOK = false; print("  ✗ unknown contest \(c.contest)"); continue
+            }
+            let got = base.forContest(type, maxStations: c.maxCallers)
+            if got.mode.rawValue != c.mode || got.minWPM != c.minWPM || got.maxWPM != c.maxWPM
+                || got.maxStations != c.maxStations || got.rstRequired {
+                cfgOK = false
+                print("  ✗ contest \(c.contest): \(got.mode.rawValue) \(got.minWPM)-\(got.maxWPM) WPM, \(got.maxStations) callers, RST \(got.rstRequired)")
+            }
+            for f in fx.contestConfig.carried {
+                guard let read = carriedFields[f] else { cfgOK = false; print("  ✗ unknown carried field \(f)"); continue }
+                if read(got) != read(base) { cfgOK = false; print("  ✗ contest \(c.contest) dropped realism \(f)") }
+            }
+        }
+        check("Contest config carries the Pileup realism settings across \(fx.contestConfig.cases.count) contests",
+              cfgOK && !fx.contestConfig.cases.isEmpty && !fx.contestConfig.carried.isEmpty)
+
+        // Any send logs a copied exchange; a send while working never does.
+        var logOK = true
+        for c in fx.logOnSend {
+            var cfg = PileupConfig(); cfg.mode = .singleCaller; cfg.giveUpEnabled = false
+            let e = PileupEngine(config: cfg)
+            _ = e.callCQ()
+            guard let s = e.stations.first else { logOK = false; continue }
+            _ = e.send(s.call)
+            if c.phase == "readyToLog" { _ = e.send(e.expectedCopy ?? "") }
+            let reached: Bool
+            switch (c.phase, e.phase) {
+            case ("working", .working), ("readyToLog", .readyToLog): reached = true
+            default: reached = false
+            }
+            guard reached else { logOK = false; print("  ✗ could not reach \(c.phase)"); continue }
+            let action = e.send(c.typed)
+            let logged = action == .logged(call: s.call) && e.qsoCount == 1
+            if logged != c.logs {
+                logOK = false
+                print("  ✗ \"\(c.typed)\" in \(c.phase): logged \(logged), fixture says \(c.logs)")
+            }
+        }
+        check("a send logs a copied exchange as the fixture says (\(fx.logOnSend.count) cases)",
+              logOK && !fx.logOnSend.isEmpty)
+
+        // The re-call after TU.
+        var recallOK = true
+        for c in fx.recallAfterLog {
+            guard let mode = QSOContestMode(rawValue: c.mode) else { recallOK = false; continue }
+            var cfg = PileupConfig(); cfg.mode = mode; cfg.maxStations = c.maxStations; cfg.giveUpEnabled = false
+            let e = PileupEngine(config: cfg)
+            _ = e.callCQ()
+            guard let s = e.stations.first else { recallOK = false; continue }
+            _ = e.send(s.call)
+            _ = e.send(e.expectedCopy ?? "")
+            guard e.send("TU") == .logged(call: s.call) else {
+                recallOK = false; print("  ✗ \(c.mode): could not log the first station"); continue
+            }
+            let waiting = e.activeCount
+            let action = e.recallAfterLog(enabled: c.autoRecall)
+            let recalled: Bool
+            if case .play(let v) = action {
+                recalled = true
+                if v.count != waiting || waiting == 0 || e.phase != .pileup {
+                    recallOK = false
+                    print("  ✗ \(c.mode): \(v.count) voices for \(waiting) waiting, phase \(e.phase)")
+                }
+            } else {
+                recalled = false
+            }
+            if recalled != c.recalls {
+                recallOK = false
+                print("  ✗ \(c.mode) re-call \(c.autoRecall): recalled \(recalled), fixture says \(c.recalls)")
+            }
+        }
+        check("re-call after TU matches the fixture (\(fx.recallAfterLog.count) cases)",
+              recallOK && !fx.recallAfterLog.isEmpty)
+    } else {
+        check("fixtures/qso-self-keying.json run rules load and decode", false)
+    }
+}
+
 // MARK: - Shared Daily Dit fixture
 //
 // fixtures/daily-dit.json, consumed by this harness AND by android

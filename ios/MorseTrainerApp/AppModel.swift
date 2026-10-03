@@ -1396,15 +1396,11 @@ final class AppModel: ObservableObject {
     /// Contest config: start from the shared realism preferences (signals,
     /// callsign shapes, cut numbers) but pin the contest's own exchange and its
     /// authentic speed band, and never require RST (SST/CWT carry none).
+    /// The mapping lives in MorseKit (`PileupConfig.forContest`), pinned by
+    /// fixtures/qso-self-keying.json so the Android and desktop Contest build
+    /// the same engine (#323).
     private func contestConfig() -> PileupConfig {
-        let contest = settings.contest.type
-        var c = qsoConfig()
-        c.mode = contest.qsoMode
-        c.minWPM = contest.minWPM
-        c.maxWPM = contest.maxWPM
-        c.maxStations = max(1, settings.qso.maxStations)
-        c.rstRequired = false
-        return c
+        qsoConfig().forContest(settings.contest.type, maxStations: settings.qso.maxStations)
     }
 
     // The single smart box: one action drives CQ / Send / TU by phase. Each turn
@@ -1493,8 +1489,10 @@ final class AppModel: ObservableObject {
         // in the pileup call again on their own, right after your TU, so you can
         // work the next one without having to send AGN first (issue #35). With
         // "Pileup re-calls after TU" off the run waits for you instead.
-        if loggedContact, settings.qso.autoRecall, pileup.activeCount > 0,
-           case .play(let v) = pileup.repeatRequest() {
+        // The rule is MorseKit's `recallAfterLog`, pinned by
+        // fixtures/qso-self-keying.json for every app (#323).
+        if loggedContact,
+           case .play(let v) = pileup.recallAfterLog(enabled: settings.qso.autoRecall) {
             response = v.map(mapVoice)
         }
         // "Key my side in Morse" off: your CQ, calls and TU still drive the
