@@ -104,8 +104,9 @@ case "$PLATFORM" in
     DESTINATION='generic/platform=macOS,variant=Mac Catalyst'
     PACKAGE_EXT=pkg
     export ASC_PLATFORM=MAC_OS
-    # A dry run submits nothing, so the channel does not matter to it.
-    if [ "$CHANNEL" != "testflight" ] && [ "${DRY_RUN:-0}" != "1" ]; then
+    # A dry run submits nothing, so the channel does not matter to it, and
+    # the developer-id download never reaches App Store Connect.
+    if [ "$CHANNEL" = "appstore" ] && [ "${DRY_RUN:-0}" != "1" ]; then
       echo "❌ The Mac build ships through TestFlight only for now (RELEASE_CHANNEL=testflight)."
       echo "   The Mac App Store version (screenshots, review notes) is set up in App Store Connect first."
       exit 1
