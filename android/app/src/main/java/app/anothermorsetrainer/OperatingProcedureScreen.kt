@@ -65,6 +65,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -241,6 +242,10 @@ fun OperatingProcedureScreen(onBack: () -> Unit, onOpenFirstFour: () -> Unit) {
     }
 }
 
+/** WB0RLJ's "Advice for CW POTA Hunters", and his channel (the section's credit). */
+internal const val OP_ADVICE_URL = "https://www.qrz.com/db/WB0RLJ#Advice"
+internal const val OP_YOUTUBE_URL = "https://www.youtube.com/@WB0RLJ"
+
 // The open level, as a saveable string.
 private const val OP_HOME = "home"
 private const val OP_SCENARIOS = "scenarios"
@@ -263,14 +268,38 @@ private const val OP_LINE_GAP_SECONDS = 0.6
 private class OpAudio(private val player: MorsePlayer, private val scope: CoroutineScope) {
     private var job: Job? = null
 
-    private fun sound(text: String): Double =
-        if (text.isEmpty()) 0.0
-        else player.replaySound(MorseItem.Playable.Text(text), Settings.sidetoneHz, Settings.timing())
+    /**
+     * Sound one transmission, piece by piece: text at the learner's timing,
+     * and each error (`<ERR>`) in its own shape — 5 to 8 dits, run together
+     * or slapped, at its own speed (maintainer, 2026-10-03) — a word gap apart.
+     * Suspends until it has played.
+     */
+    private suspend fun sound(text: String) {
+        val timing = Settings.timing()
+        val parts = OperatingProcedure.clipParts(text)
+        parts.forEachIndexed { i, part ->
+            val seconds = when (part) {
+                is OperatingProcedure.ClipPart.Text ->
+                    player.replaySound(MorseItem.Playable.Text(part.text), Settings.sidetoneHz, timing)
+                is OperatingProcedure.ClipPart.Error -> {
+                    val v = OperatingProcedure.errorVariant(
+                        part.row ?: Random.nextInt(OperatingProcedure.errorVariants.size)
+                    )
+                    val t = MorseTiming(maxOf(OperatingProcedure.MINIMUM_WPM, Settings.characterWpm * v.speed))
+                    val playable = if (v.runTogether) MorseItem.Playable.Pattern(v.pattern)
+                    else MorseItem.Playable.Text(v.spacedText)
+                    player.replaySound(playable, Settings.sidetoneHz, t)
+                }
+            }
+            val gap = if (i < parts.lastIndex) timing.wordGap else 0.0
+            delay(((seconds + gap) * 1000).toLong())
+        }
+    }
 
-    /** One transmission. Returns its length in seconds. */
-    fun play(text: String): Double {
+    /** One transmission; a newer sound replaces it. */
+    fun play(text: String) {
         job?.cancel()
-        return sound(text)
+        job = scope.launch { sound(text) }
     }
 
     /** A demo's lines in turn; [onLine] is told which is sounding, then null once all have played. */
@@ -279,8 +308,8 @@ private class OpAudio(private val player: MorsePlayer, private val scope: Corout
         job = scope.launch {
             for (i in lines.indices) {
                 onLine(i)
-                val seconds = sound(lines[i].text)
-                delay(((seconds + OP_LINE_GAP_SECONDS) * 1000).toLong())
+                sound(lines[i].text)
+                delay((OP_LINE_GAP_SECONDS * 1000).toLong())
             }
             onLine(null)
         }
@@ -492,6 +521,8 @@ private fun OpHome(
         textAlign = TextAlign.Center,
         modifier = Modifier.fillMaxWidth()
     )
+    // The credit (maintainer, 2026-10-03): WB0RLJ's advice, linked, and his
+    // channel of daily activation recordings.
     Text(
         stringResource(R.string.op_credit),
         style = MaterialTheme.typography.labelSmall,
@@ -499,6 +530,15 @@ private fun OpHome(
         textAlign = TextAlign.Center,
         modifier = Modifier.fillMaxWidth()
     )
+    val uriHandler = LocalUriHandler.current
+    Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+        TextButton(onClick = { uriHandler.openUri(OP_ADVICE_URL) }) {
+            Text(stringResource(R.string.op_credit_advice), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold, color = Brand.teal)
+        }
+        TextButton(onClick = { uriHandler.openUri(OP_YOUTUBE_URL) }) {
+            Text(stringResource(R.string.op_credit_youtube), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold, color = Brand.teal)
+        }
+    }
 
     if (progress.passedCount > 0 || progress.drillPassed || progress.cleanRuns.isNotEmpty()) {
         TextButton(onClick = onReset, modifier = Modifier.fillMaxWidth()) {
@@ -1084,7 +1124,7 @@ private fun OpScenarioCard(
         for (choice in order) {
             val background = when {
                 picked == null -> Brand.navyRaised
-                choice == scenario.correct -> Brand.teal.copy(alpha = 0.35f)
+                scenario.accepts(choice) -> Brand.teal.copy(alpha = 0.35f)
                 choice == picked -> Brand.warning.copy(alpha = 0.3f)
                 else -> Brand.navyRaised.copy(alpha = 0.6f)
             }
@@ -1105,7 +1145,7 @@ private fun OpScenarioCard(
                     color = Brand.textPrimary,
                     modifier = Modifier.weight(1f)
                 )
-                if (picked != null && choice == scenario.correct) {
+                if (picked != null && scenario.accepts(choice)) {
                     Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = Brand.tealBright)
                 } else if (picked == choice) {
                     Icon(Icons.Filled.Close, contentDescription = null, tint = Brand.warning)
@@ -1113,7 +1153,7 @@ private fun OpScenarioCard(
             }
         }
         if (picked != null) {
-            val right = picked == scenario.correct
+            val right = scenario.accepts(picked)
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
                     stringResource(if (right) R.string.op_right else R.string.op_not_this_time),
@@ -1245,7 +1285,7 @@ private fun OpLessonRun(
                     picked = choice
                     opPractised()
                     if (Settings.hapticsEnabled) {
-                        if (choice == scenario.correct) haptics.success() else haptics.error()
+                        if (scenario.accepts(choice)) haptics.success() else haptics.error()
                     }
                 }
                 if (picked != null) {
@@ -1294,7 +1334,7 @@ private fun OpScenarioMode(call: String, state: String, audio: OpAudio, onOpenLe
             OpScenarioCard(scenario, call, state, picked, audio) { choice ->
                 picked = choice
                 opPractised()
-                if (choice == scenario.correct) {
+                if (scenario.accepts(choice)) {
                     right++
                     if (Settings.hapticsEnabled) haptics.success()
                 } else if (Settings.hapticsEnabled) {
@@ -1420,16 +1460,18 @@ private fun opConcept(lesson: OpLesson, call: String, state: String): List<Strin
         stringResource(R.string.op_concept_me_1),
         stringResource(R.string.op_concept_me_2),
         stringResource(R.string.op_concept_me_3, OperatingProcedure.nearMiss(call), call),
+        stringResource(R.string.op_concept_me_4, OperatingProcedure.nearMiss(call)),
     )
     OpLesson.EXCHANGE -> listOf(
         stringResource(R.string.op_concept_exchange_1, OperatingProcedure.reply(state)),
-        stringResource(R.string.op_concept_exchange_2),
+        stringResource(R.string.op_concept_exchange_2, OperatingProcedure.replyBK(state), OperatingProcedure.CLOSE_BK),
         stringResource(R.string.op_concept_exchange_3),
+        stringResource(R.string.op_concept_exchange_4),
     )
     OpLesson.MISTAKE -> listOf(
         stringResource(R.string.op_concept_mistake_1),
         stringResource(R.string.op_concept_mistake_2),
-        stringResource(R.string.op_concept_mistake_3, OperatingProcedure.ERROR_SIGNAL_DISPLAY),
+        stringResource(R.string.op_concept_mistake_3, OperatingProcedure.ERROR_DISPLAY),
     )
     OpLesson.OFFSET -> listOf(
         stringResource(R.string.op_concept_offset_1),
@@ -1472,7 +1514,6 @@ private fun opSituation(s: OpScenario, call: String): String {
             stringResource(R.string.op_sit_activator_sends)
         "when.dits", "when.inProgress", "when.as", "when.sriQrz" -> stringResource(R.string.op_sit_waiting, act)
         "once.cq", "once.qrz", "once.dits" -> stringResource(R.string.op_sit_time_to_call, act)
-        "me.closeAsked" -> stringResource(R.string.op_sit_close_asked, s.detail)
         "exchange.agn" -> stringResource(R.string.op_sit_exchange_agn)
         "exchange.stop" -> stringResource(R.string.op_sit_exchange_stop)
         "mistake.call" -> stringResource(R.string.op_sit_mistake_call, s.detail)
@@ -1553,9 +1594,9 @@ private fun opExplanation(s: OpScenario, call: String, state: String): String {
         "partial.suffix" -> stringResource(R.string.op_ex_partial_suffix, s.clip)
         "partial.fullCall" -> stringResource(R.string.op_ex_partial_full_call)
         "me.other" -> stringResource(R.string.op_ex_me_other, other)
-        "me.mine" -> stringResource(R.string.op_ex_me_mine, OperatingProcedure.reply(state))
+        "me.mine" -> stringResource(R.string.op_ex_me_mine, OperatingProcedure.reply(state), OperatingProcedure.replyBK(state))
         "me.close" -> stringResource(R.string.op_ex_me_close, s.detail)
-        "me.closeAsked" -> stringResource(R.string.op_ex_me_close_asked)
+        "me.closeAsked" -> stringResource(R.string.op_ex_me_close_asked, s.detail)
         "exchange.reply" -> stringResource(R.string.op_ex_exchange_reply)
         "exchange.agn" -> stringResource(R.string.op_ex_exchange_agn)
         "exchange.dits" -> stringResource(R.string.op_ex_exchange_dits)
@@ -1563,6 +1604,7 @@ private fun opExplanation(s: OpScenario, call: String, state: String): String {
         "mistake.call" -> stringResource(R.string.op_ex_mistake_call)
         "mistake.last" -> stringResource(R.string.op_ex_mistake_last)
         "mistake.state" -> stringResource(R.string.op_ex_mistake_state)
+        "mistake.hear" -> stringResource(R.string.op_ex_mistake_hear, s.detail)
         "offset.pileup" -> stringResource(R.string.op_ex_offset_pileup)
         "offset.rit" -> stringResource(R.string.op_ex_offset_rit)
         "offset.xit" -> stringResource(R.string.op_ex_offset_xit)

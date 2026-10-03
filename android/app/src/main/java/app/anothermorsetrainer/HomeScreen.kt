@@ -157,10 +157,7 @@ fun HomeScreen(
         HomeItem(stringResource(R.string.mode_reference), stringResource(R.string.home_look_it_up), Icons.AutoMirrored.Filled.ListAlt, onPickReference) +
         // The six arcade games behind one tile at the end of the grid (#207):
         // the menu had outgrown two screens of tiles. Same place as on iOS.
-        HomeItem(stringResource(R.string.mode_games), stringResource(R.string.home_six_arcade_modes), Icons.Filled.SportsEsports, onPickGames) +
-        // CW Operating Procedure (#294, #295): lessons you come back to, so a
-        // tile rather than another card above the grid. Same place as on iOS.
-        HomeItem(stringResource(R.string.op_title), stringResource(R.string.op_home_tagline), Icons.Filled.Checklist, onPickOperating)
+        HomeItem(stringResource(R.string.mode_games), stringResource(R.string.home_six_arcade_modes), Icons.Filled.SportsEsports, onPickGames)
 
     // A big tablet window: a wider column, the tiles four across, and the
     // Daily Dit and Start here cards side by side (iOS IntroView, same rule).
@@ -242,6 +239,7 @@ fun HomeScreen(
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         StartHereCard(onPickStartHere)
                         FirstFourCard(onPickFirstFour)
+                        OperatingCard(onPickOperating)
                     }
                 }
             } else {
@@ -250,6 +248,8 @@ fun HomeScreen(
                 StartHereCard(onPickStartHere)
                 Spacer(Modifier.height(12.dp))
                 FirstFourCard(onPickFirstFour)
+                Spacer(Modifier.height(12.dp))
+                OperatingCard(onPickOperating)
             }
 
             Spacer(Modifier.height(24.dp))
@@ -402,6 +402,55 @@ private fun FirstFourCard(onClick: () -> Unit) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 stringResource(R.string.first_four_title),
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = Brand.textPrimary
+            )
+            Text(subtitle, style = MaterialTheme.typography.labelSmall, color = Brand.textSecondary)
+        }
+        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = Brand.textSecondary)
+    }
+}
+
+/**
+ * CW Operating Procedure (#294, #295): directly under First Four, as its next
+ * step (maintainer, 2026-10-03) — the same card, in the same place on a wide
+ * window. As on iOS.
+ */
+@Composable
+private fun OperatingCard(onClick: () -> Unit) {
+    // Read so a save in the section redraws the card on the way back.
+    @Suppress("UNUSED_VARIABLE")
+    val version = OperatingProcedureStore.version
+    val progress = OperatingProcedureStore.progress
+    val done = progress.isComplete
+    val subtitle = when {
+        done -> stringResource(R.string.op_home_sub_done)
+        progress.passedCount > 0 -> stringResource(
+            R.string.op_home_sub_progress,
+            progress.passedCount,
+            app.anothermorsetrainer.morsekit.OpLesson.entries.size
+        )
+        else -> stringResource(R.string.op_home_tagline)
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .brandCard(cornerRadius = 14.dp)
+            .border(1.5.dp, Brand.teal.copy(alpha = 0.6f), RoundedCornerShape(14.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Icon(
+            if (done) Icons.Filled.CheckCircle else Icons.Filled.Checklist,
+            contentDescription = null,
+            tint = if (done) Brand.tealBright else Brand.teal
+        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                stringResource(R.string.op_title),
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.SemiBold,
                 color = Brand.textPrimary

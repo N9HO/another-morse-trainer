@@ -787,8 +787,10 @@
 
     <!-- CW Operating Procedure (#294, #295, docs/operating-procedure-design.md). Twin of OperatingProcedureView.swift (OpCopy). -->
     <string name="op_title">Operating Procedure</string>
-    <string name="op_home_tagline">POTA etiquette, zero beat</string>
-    <string name="op_first_four_finale_more">Ready for more? CW Operating Procedure, on the home screen, covers pileups, partial calls and zero beat.</string>
+    <string name="op_home_tagline">The next step after First Four · pileups, partials, zero beat</string>
+    <string name="op_home_sub_progress">%1$d of %2$d lessons · the next step after First Four</string>
+    <string name="op_home_sub_done">Every lesson passed · pileups, partials, zero beat</string>
+    <string name="op_first_four_finale_more">Ready for more? Operating Procedure, the card just below First Four on the home screen, is the next step: zero beat, pileups and partial calls.</string>
     <string name="op_lessons_back">‹ Lessons</string>
     <string name="op_start_over_title">Start Operating Procedure over?</string>
     <string name="op_start_over_body">Every lesson goes back to not passed. Your callsign and state stay as they are.</string>
@@ -817,6 +819,8 @@
     <string name="op_scenarios_sub">%1$d quick situations from every lesson</string>
     <string name="op_speed_note">Everything plays at your own speed (%1$d WPM) and tone — change them in Settings. Any lesson can be opened at any time.</string>
     <string name="op_credit">Procedure after WB0RLJ\'s “Advice for CW POTA Hunters”, with thanks, and the Parks on the Air CW Guide.</string>
+    <string name="op_credit_advice">Advice for CW POTA Hunters (QRZ.com)</string>
+    <string name="op_credit_youtube">Jim Vaughan (WB0RLJ) on YouTube — his daily activations</string>
     <string name="op_passed">Passed</string>
 
     <string name="op_lesson_signals">Signals</string>
@@ -833,7 +837,7 @@
     <string name="op_sub_partial">Answer only if it\'s in your call</string>
     <string name="op_sub_me">Who did they come back to?</string>
     <string name="op_sub_exchange">Report, state, 73, dit-dit — then stop</string>
-    <string name="op_sub_mistake">A string of dits, then send it again</string>
+    <string name="op_sub_mistake">Send an error, then send it again</string>
     <string name="op_sub_offset">Zero beat, RIT, XIT and the pileup</string>
 
     <string name="op_signal_question">Say again — they didn\'t get it all</string>
@@ -857,13 +861,15 @@
     <string name="op_concept_partial_3">When it is yours, send your full call, once — never just the missing part. A bare ? means they heard someone and caught nothing: anyone who called can send again.</string>
     <string name="op_concept_me_1">After you call, listen to who the activator comes back to. Your call: it\'s you — send your exchange.</string>
     <string name="op_concept_me_2">Another call: that contact is in progress. Stay quiet until it ends with the dit-dit.</string>
-    <string name="op_concept_me_3">A call one letter from yours (like %1$s for %2$s): treat it as someone else\'s — there may well be a %1$s you can\'t hear. If nobody answers and the activator asks again as a question (%1$s?), send your full call once so they can sort it out.</string>
-    <string name="op_concept_exchange_1">When they come back with your call, a report and their state, reply with your report, your state and 73: %1$s.</string>
-    <string name="op_concept_exchange_2">5NN is 599, the report nearly every POTA contact carries. Sending your state twice, or ending with BK, is just as common.</string>
-    <string name="op_concept_exchange_3">They finish with TU 73 and the dit-dit. Send E E back — then stop. The next QRZ? is for someone else.</string>
-    <string name="op_concept_mistake_1">Everyone fumbles a character. When you do, send a string of dits — the error signal, eight dits — and then send the word again, correctly, from the start.</string>
-    <string name="op_concept_mistake_2">In your call, that means your whole call, not just the letter you fixed. Don\'t go quiet and hope: the activator may log what you sent.</string>
-    <string name="op_concept_mistake_3">Here the error signal is shown as %1$s.</string>
+    <string name="op_concept_me_3">A call one letter from yours, like %1$s for %2$s, sent without a question mark: they\'re working %1$s. Stay silent.</string>
+    <string name="op_concept_me_4">The same call with a question mark (%1$s?): they\'re not sure what they heard. Send your call once, then listen for whether they come back with yours.</string>
+    <string name="op_concept_exchange_1">When they come back with your call, a report and their state, reply with your report, your state and 73: %1$s. That\'s the form First Four teaches.</string>
+    <string name="op_concept_exchange_2">WB0RLJ\'s order works too: report, state and BK (%1$s), then, after their TU 73 and dit-dit, %2$s. Either form is right here.</string>
+    <string name="op_concept_exchange_3">5NN is 599, the report nearly every POTA contact carries.</string>
+    <string name="op_concept_exchange_4">They finish with TU 73 and the dit-dit. Send E E (or 73 E E) back — then stop. The next QRZ? is for someone else.</string>
+    <string name="op_concept_mistake_1">Everyone fumbles a character. When you do, send an error, then send the word again, correctly, from the start: your whole call, not just the letter you fixed. Don\'t go quiet and hope; the activator may log what you sent.</string>
+    <string name="op_concept_mistake_2">An error isn\'t one fixed signal. It can be a quick run of dits, five to eight of them, or someone slapping the key: fast or slow, run together or ragged. Don\'t copy its shape. Recognise it, forget what came just before it, and copy what follows.</string>
+    <string name="op_concept_mistake_3">Here an error is shown as %1$s. Play the examples: no two sound alike.</string>
     <string name="op_concept_offset_1">Pitch. On CW, the tone you hear is how far the signal is from where your receiver is tuned, plus your rig\'s CW pitch setting. Your sidetone is set to that same pitch. So a station that sounds exactly like your sidetone is on the frequency you\'d transmit on.</string>
     <string name="op_concept_offset_2">Zero beat. Being on exactly the same frequency is called zero beat. Play two tones a few hertz apart and you hear a slow beat; at the same frequency the beat stops. Zero beat is how you get onto a station\'s frequency.</string>
     <string name="op_concept_offset_3">Offset. In a pileup, everyone zero beat sounds like one long tone and nobody gets copied. Call a little off — 20 to 100 Hz, the Parks on the Air CW Guide says — and you\'re on your own pitch in the activator\'s ears, still well inside their filter.</string>
@@ -942,7 +948,6 @@
     <string name="op_sit_activator_sends">The activator sends:</string>
     <string name="op_sit_waiting">You\'re waiting to call %1$s. You hear:</string>
     <string name="op_sit_time_to_call">Time to call %1$s. You hear:</string>
-    <string name="op_sit_close_asked">Nobody answered %1$s. Then the activator sends:</string>
     <string name="op_sit_exchange_agn">You\'ve sent your exchange. The activator sends:</string>
     <string name="op_sit_exchange_stop">You\'ve sent E E back: the contact is done. Then you hear:</string>
     <string name="op_sit_mistake_call">You meant to send your call, but keyed %1$s.</string>
@@ -998,16 +1003,17 @@
     <string name="op_ex_partial_suffix">%1$s matches the end of your call. Send your full call, once.</string>
     <string name="op_ex_partial_full_call">They\'re missing one character, but send your whole call — a lone character means nothing on its own.</string>
     <string name="op_ex_me_other">They came back to %1$s. Stay quiet until that contact ends.</string>
-    <string name="op_ex_me_mine">That\'s you, with a report and their state. Send your exchange: %1$s.</string>
-    <string name="op_ex_me_close">%1$s isn\'t your call, and there may be a real %1$s. Stay quiet and listen.</string>
-    <string name="op_ex_me_close_asked">Nobody answered and they\'re asking. Send your full call once so they can correct it.</string>
-    <string name="op_ex_exchange_reply">Report, state, 73 — short and complete. Save the ragchew for another time.</string>
-    <string name="op_ex_exchange_agn">AGN? asks for your exchange again: send it again, the same way.</string>
-    <string name="op_ex_exchange_dits">Send the dits back. That\'s the friendly close — and then you\'re done.</string>
+    <string name="op_ex_me_mine">That\'s you, with a report and their state. Send your exchange: %1$s, or %2$s in WB0RLJ\'s order.</string>
+    <string name="op_ex_me_close">No question mark: they\'re working %1$s, not you. Stay silent.</string>
+    <string name="op_ex_me_close_asked">%1$s? is a question about a call close to yours. Send your call once, then listen for whether they come back with yours.</string>
+    <string name="op_ex_exchange_reply">Report, state, 73 — or report, state, BK in WB0RLJ\'s order. Short and complete either way; save the ragchew for another time.</string>
+    <string name="op_ex_exchange_agn">AGN? asks for your exchange again: send it again.</string>
+    <string name="op_ex_exchange_dits">Send the dits back (E E, or 73 E E). That\'s the friendly close — and then you\'re done.</string>
     <string name="op_ex_exchange_stop">You\'re in the log. The next QRZ? is for someone else — stop and let them in.</string>
-    <string name="op_ex_mistake_call">A string of dits says “error”, then your whole call, correctly. SRI isn\'t used for this.</string>
-    <string name="op_ex_mistake_last">After the dits, send the whole call again — never just the fixed character.</string>
-    <string name="op_ex_mistake_state">Dits, then resend from the word with the mistake: your state and 73.</string>
+    <string name="op_ex_mistake_call">Send an error, then your whole call, correctly. SRI isn\'t used for this.</string>
+    <string name="op_ex_mistake_last">After the error, send the whole call again — never just the fixed character.</string>
+    <string name="op_ex_mistake_state">An error, then resend from the word with the mistake: your state and 73.</string>
+    <string name="op_ex_mistake_hear">That burst of dits — however many, however fast — was an error: forget %1$s and copy what follows. They have you, so send your exchange.</string>
     <string name="op_ex_offset_pileup">A small offset, 20–100 Hz, puts you on your own pitch and still inside their filter. 2 kHz up is off their frequency entirely.</string>
     <string name="op_ex_offset_rit">RIT shifts what you hear without moving your transmit frequency.</string>
     <string name="op_ex_offset_xit">XIT shifts where you transmit without moving what you hear.</string>
