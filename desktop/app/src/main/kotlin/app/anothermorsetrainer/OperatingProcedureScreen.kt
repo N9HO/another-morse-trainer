@@ -106,11 +106,10 @@ import kotlin.random.Random
  * graded answer counts as practice for the day ([Stats.recordPracticeDay],
  * as Daily Dit does).
  *
- * Desktop: there is no First Four on desktop yet, so the section's First Four
- * row is not shown. #280 (First Four on desktop) should add it here.
+ * First Four (#280 on desktop) is linked from the lesson list, not moved in.
  */
 @Composable
-fun OperatingProcedureScreen(onBack: () -> Unit) {
+fun OperatingProcedureScreen(onBack: () -> Unit, onOpenFirstFour: () -> Unit) {
     val scope = rememberCoroutineScope()
     val audio = remember { OpAudio(scope) }
     DisposableEffect(Unit) {
@@ -217,7 +216,11 @@ fun OperatingProcedureScreen(onBack: () -> Unit) {
                             editingStation = true
                         },
                         onOpen = { open(it) },
-                        onStartOver = { confirmingReset = true }
+                        onStartOver = { confirmingReset = true },
+                        onOpenFirstFour = {
+                            audio.stop()
+                            onOpenFirstFour()
+                        }
                     )
                     is OpPage.Lesson -> key(p.lesson) {
                         OpLessonPage(
@@ -499,7 +502,8 @@ private fun OpHome(
     wide: Boolean,
     onChange: () -> Unit,
     onOpen: (OpPage) -> Unit,
-    onStartOver: () -> Unit
+    onStartOver: () -> Unit,
+    onOpenFirstFour: () -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text(stringResource(R.string.op_home_lead), fontSize = 14.sp, color = Brand.textSecondary)
@@ -522,9 +526,8 @@ private fun OpHome(
             TextButton(onClick = onChange) { Text(stringResource(R.string.op_change), color = Brand.teal) }
         }
 
-        // First Four row: iOS and Android link First Four from here
-        // ("New to CW on the air? Start with First Four" / "First Four ✓").
-        // Desktop has no First Four yet; #280 should add the row when it lands.
+        // First Four is the on-ramp: linked from here, not moved in (design note).
+        OpFirstFourRow(onOpenFirstFour)
 
         val next = progress.nextLesson
         if (next != null) {
@@ -619,6 +622,41 @@ private fun OpHome(
                 Text(stringResource(R.string.op_start_over), color = OP_WRONG)
             }
         }
+    }
+}
+
+@Composable
+private fun OpFirstFourRow(onClick: () -> Unit) {
+    // Read so a First Four save recomposes the row.
+    @Suppress("UNUSED_VARIABLE")
+    val version = FirstFourStore.version
+    val done = FirstFourStore.progress.isComplete
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(Brand.navyElevated)
+            .border(1.dp, Brand.teal.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            if (done) Icons.Filled.CheckCircle else Icons.Filled.CellTower,
+            contentDescription = null,
+            tint = if (done) Brand.tealBright else Brand.teal
+        )
+        Spacer(Modifier.width(10.dp))
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(
+                stringResource(if (done) R.string.op_first_four_done else R.string.op_first_four_new),
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = Brand.textPrimary
+            )
+            Text(stringResource(R.string.op_first_four_sub), fontSize = 12.sp, color = Brand.textSecondary)
+        }
+        OpChevron()
     }
 }
 
