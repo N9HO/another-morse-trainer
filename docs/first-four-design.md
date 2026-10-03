@@ -209,7 +209,9 @@ this weekend is exactly who the issue is about, and the first run is the
 only screen they are guaranteed to see.
 
 **Screens.** iOS: `FirstFourView`, presented as a sheet from Home, like Daily
-Dit. Android: `FirstFourScreen`, a route like `Route.DailyDit`. Neither goes
+Dit. Android and desktop: `FirstFourScreen`, a route like `Route.DailyDit`
+(desktop since #280, keyboard-first: Enter submits a typed answer and takes
+Continue / Wait / Next; Space and `[` `]` key). None goes
 through the session setup sheet or `TrainingMode`: there is no session
 length, answer style or run to set up, and it has no place in the
 mid-session mode switcher.
@@ -253,6 +255,8 @@ two-ports rule:
 
 - `ios/Sources/MorseKit/FirstFour.swift`
 - `android/app/src/main/java/app/anothermorsetrainer/morsekit/FirstFour.kt`
+- `desktop/app/src/main/kotlin/app/anothermorsetrainer/morsekit/FirstFour.kt`
+  (#280; a third independent tree, per CLAUDE.md)
 
 Each holds: the stage list and pass constants; call and state
 normalisation and validation; copy and send matching; the partials; the
@@ -275,7 +279,9 @@ panel on the `SendingKeyer` both ports already have.
 
 Both apps in one pull request: the same stages, constants, scripts,
 entry points (home card and onboarding button), settings field, grading and
-finale. Nothing is platform-limited. Both READMEs gain the same feature
+finale. Nothing is platform-limited. The desktop app followed in #280 with
+the same behaviour; it has no buddy streak, so a graded answer marks only
+the local streak there. Every README gains the same feature
 line, and the user guide gains a First Four section in the same release
 (site PR linked from the app PR).
 

@@ -515,6 +515,18 @@ internal fun PileupOptions() {
         modifier = Modifier.fillMaxWidth()
     )
 
+    // Optional; First Four teaches it as your exchange (#265, #280).
+    PuSectionLabel(stringResource(R.string.pileup_your_state))
+    OutlinedTextField(
+        value = PileupSettings.myState,
+        onValueChange = { PileupSettings.updateMyState(it) },
+        singleLine = true,
+        placeholder = { Text(stringResource(R.string.pileup_your_name_placeholder)) },
+        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters, imeAction = ImeAction.Done),
+        keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
+        modifier = Modifier.fillMaxWidth()
+    )
+
     PuSectionLabel(stringResource(R.string.pileup_exchange))
     PuPills(QSOContestMode.allCases.map { it to it.label }, PileupSettings.mode) {
         PileupSettings.updateMode(it)
