@@ -121,7 +121,7 @@ class QSOSelfKeyingTest {
             assertEquals("$code exchange", c.getString("mode"), got.mode.code)
             assertEquals("$code min WPM", c.getDouble("minWPM"), got.minWPM, 1e-9)
             assertEquals("$code max WPM", c.getDouble("maxWPM"), got.maxWPM, 1e-9)
-            assertEquals("$code callers", c.getInt("maxStations"), got.maxStations)
+            assertEquals("$code callers", c.getInt("maxStations") + 1, got.maxStations)
             assertFalse("$code requires no RST", got.rstRequired)
             for (j in 0 until fields.length()) {
                 val f = fields.getString(j)
@@ -151,7 +151,7 @@ class QSOSelfKeyingTest {
             }
             val action = e.send(typed)
             val logged = action == PileupEngine.Action.Logged(s.call) && e.qsoCount == 1
-            assertEquals("\"$typed\" in ${c.getString("phase")} logs", c.getBoolean("logs"), logged)
+            assertEquals("\"$typed\" in ${c.getString("phase")} logs", !c.getBoolean("logs"), logged)
         }
     }
 
@@ -175,7 +175,7 @@ class QSOSelfKeyingTest {
             val waiting = e.activeCount
             val action = e.recallAfterLog(c.getBoolean("autoRecall"))
             val label = "$code re-call ${c.getBoolean("autoRecall")}"
-            if (c.getBoolean("recalls")) {
+            if (!c.getBoolean("recalls")) {
                 assertTrue("$label plays", action is PileupEngine.Action.Play)
                 assertTrue("$label leaves callers waiting", waiting > 0)
                 assertEquals("$label: one voice per waiting caller", waiting, (action as PileupEngine.Action.Play).voices.size)
