@@ -141,8 +141,8 @@ rather than re-teaching:
 | Topic | First Four | CW Operating Procedure |
 |---|---|---|
 | `?`, `73` | Hear and key them | Signals (lesson 2) lists them with the other signals and moves on |
-| Busted call (`N9?`) | Keyed scene: resend your call | Partial calls (lesson 5) adds the rule First Four leaves out: stay silent when the partial is *not* yours (`N1?`), First Four's open question 4 |
-| No reply / someone else answered | Keyed scenes | Is it me? (lesson 6) adds the close-but-wrong call (`N9BO`, and `N9BO?`) |
+| Busted call (`K9?`) | Keyed scene: resend your call | Partial calls (lesson 5) adds the rule First Four leaves out: stay silent when the partial is *not* yours (`K1?`), First Four's open question 4 |
+| No reply / someone else answered | Keyed scenes | Is it me? (lesson 6) adds the close-but-wrong call (`K9KRO`, and `K9KRO?`) |
 | The exchange | `5NN WI 73`, keyed | The exchange (lesson 7) keeps that reply as the primary form, accepts WB0RLJ's `5NN WI BK` … `73 E E` too, and adds the activator's `E E`, yours back, and stopping |
 
 The exchange lesson keeps First Four's reply (`5NN <state> 73`) as the primary
@@ -150,7 +150,7 @@ right answer so the two never contradict each other, and accepts WB0RLJ's
 order as a second form (decision 4).
 
 One small tension is called out rather than hidden: First Four's *grading*
-accepts your call sent twice (`N9HO N9HO`), because the decoder is lenient and
+accepts your call sent twice (`K9QRO K9QRO`), because the decoder is lenient and
 it is common on the air; the send-your-call-once lesson *teaches* once, as WB0RLJ, the POTA CW Guide
 and ON4UN/ON4WW all do. First Four's grading is not changed.
 
@@ -166,7 +166,7 @@ after First Four (decision 2). Each has:
 - **three to five scenarios**, run in order. A scenario plays a clip (what the
   activator just sent; some have no clip, only a situation), then offers two
   or three **choices**. A choice is one of:
-  - **send** *text* — "Send `N9HO`";
+  - **send** *text* — "Send `K9QRO`";
   - **silent** — "Stay silent and listen";
   - **option** *key* — a named answer, for questions that are not "send or
     not" (what a signal means, which control to use).
@@ -200,7 +200,11 @@ call is one of those, when the next row of First Four's tables is used. The
 scenarios are generated in MorseKit from (call, state), and the fixture pins
 every scenario for two profiles.
 
-With call `N9HO`, state `WI` (the fixture's first profile), the lessons are:
+(`K9QRO` is a stand-in that cannot be a real station: the FCC does not issue
+a suffix in the Q-signal block QRA–QUZ. The examples do not use `W1AW`,
+because that is the settings placeholder, which counts as no callsign.)
+
+With call `K9QRO`, state `WI` (the fixture's first profile), the lessons are:
 
 ### 1. Offsetting: zero beat, RIT, XIT (#294)
 
@@ -350,10 +354,10 @@ Demo: wrong — calling over `W8KDP 5NN NC NC BK`; right — calling after
 
 | id | Clip | Choices (right first) |
 |---|---|---|
-| `when.dits` | `W8KDP TU 73 E E` | send `N9HO` · silent (wait for a CQ) |
-| `when.inProgress` | `W8KDP 5NN NC NC BK` | silent · send `N9HO` |
-| `when.as` | `<AS>` | silent · send `N9HO` |
-| `when.sriQrz` | `SRI SRI QRZ?` | send `N9HO` · silent |
+| `when.dits` | `W8KDP TU 73 E E` | send `K9QRO` · silent (wait for a CQ) |
+| `when.inProgress` | `W8KDP 5NN NC NC BK` | silent · send `K9QRO` |
+| `when.as` | `<AS>` | silent · send `K9QRO` |
+| `when.sriQrz` | `SRI SRI QRZ?` | send `K9QRO` · silent |
 
 ### 4. Send your call once
 
@@ -361,13 +365,13 @@ The activator knows their own call, and you are on their frequency, so they
 know who you're calling. Send just your call, once: no `DE`, no `K`, no
 activator's call, no repeats. Then listen.
 
-Demo: wrong — `K4RTZ DE N9HO N9HO K`; right — `N9HO`.
+Demo: wrong — `K4RTZ DE K9QRO K9QRO K`; right — `K9QRO`.
 
 | id | Clip | Choices (right first) |
 |---|---|---|
-| `once.cq` | `CQ POTA DE K4RTZ K` | send `N9HO` · send `K4RTZ DE N9HO K` · send `N9HO N9HO N9HO` |
-| `once.qrz` | `QRZ?` | send `N9HO` · send `DE N9HO K` · send `N9HO N9HO` |
-| `once.dits` | `W8KDP TU 73 E E` | send `N9HO` · send `K4RTZ N9HO` · silent |
+| `once.cq` | `CQ POTA DE K4RTZ K` | send `K9QRO` · send `K4RTZ DE K9QRO K` · send `K9QRO K9QRO K9QRO` |
+| `once.qrz` | `QRZ?` | send `K9QRO` · send `DE K9QRO K` · send `K9QRO K9QRO` |
+| `once.dits` | `W8KDP TU 73 E E` | send `K9QRO` · send `K4RTZ K9QRO` · silent |
 
 ### 5. Partial calls
 
@@ -378,33 +382,33 @@ send again.
 
 The match rule, pinned: strip the trailing `?`; if what is left is empty (a
 bare `?`), it is everyone's; otherwise it is yours when it appears, as one
-unbroken run of characters, anywhere in your call (prefix `N9`, middle `9H`,
-suffix `HO`).
+unbroken run of characters, anywhere in your call (prefix `K9`, middle `9Q`,
+suffix `RO`).
 
 The "not yours" partial for a call is generated, so it is never accidentally
 yours: take the call up to and including its first digit, and replace that
 digit with (digit + 2) mod 10; if the result happens to be in the call, keep
-adding 1 (mod 10) until it is not. For `N9HO` that is `N1?` — #295's own
-example. A call with no digit (not valid here) is not given one.
+adding 1 (mod 10) until it is not. For `K9QRO` that is `K1?`. A call with no
+digit (not valid here) is not given one.
 
 | id | Clip | Choices (right first) |
 |---|---|---|
-| `partial.prefix` | `N9?` | send `N9HO` · silent |
-| `partial.notMine` | `N1?` | silent · send `N9HO` |
-| `partial.suffix` | `HO?` (last two characters) | send `N9HO` · silent |
-| `partial.fullCall` | `N9H?` (all but the last character) | send `N9HO` · send `O` (just the missing part) · silent |
+| `partial.prefix` | `K9?` | send `K9QRO` · silent |
+| `partial.notMine` | `K1?` | silent · send `K9QRO` |
+| `partial.suffix` | `RO?` (last two characters) | send `K9QRO` · silent |
+| `partial.fullCall` | `K9QR?` (all but the last character) | send `K9QRO` · send `O` (just the missing part) · silent |
 
 ### 6. Is it me?
 
 Listen to *who* the activator comes back to. Your call: it's you. Another
 call: that contact is in progress, so stay quiet until it ends with dit-dit.
 
-A call one character away from yours (`N9BO` for `N9HO`) depends on whether it
+A call one character away from yours (`K9KRO` for `K9QRO`) depends on whether it
 ends in a question mark (maintainer, 2026-10-03):
 
-- **Without a question mark** (`N9BO 5NN NC NC BK`): they are working `N9BO`.
+- **Without a question mark** (`K9KRO 5NN NC NC BK`): they are working `K9KRO`.
   Stay silent.
-- **With a question mark** (`N9BO?`): they aren't sure what they heard. Send
+- **With a question mark** (`K9KRO?`): they aren't sure what they heard. Send
   your call once, then listen for whether they come back with yours.
 
 That answers #295's open design question ("decide and document the rule for
@@ -415,20 +419,20 @@ you are logged correctly when the activator is asking).
 
 The near-miss call is generated, so the fixture can pin it for any call: take
 the first letter after the call's first digit and move it **back six letters**,
-wrapping `A` round to `U` (`N9HO` → `N9BO`, #295's own example; `KB3MZL` →
+wrapping `A` round to `U` (`K9QRO` → `K9KRO`, the same rule as #295's example; `KB3MZL` →
 `KB3GZL`). Back, so the result is never the input; one letter, so it is
 genuinely close. A call with no letter after its first digit moves its last
 letter instead.
 
-Demo: wrong — answering `N9BO 5NN NC NC BK` with `N9HO`; right — `N9BO?`, you
-send `N9HO`, and they come back `N9HO 5NN NC NC BK`.
+Demo: wrong — answering `K9KRO 5NN NC NC BK` with `K9QRO`; right — `K9KRO?`, you
+send `K9QRO`, and they come back `K9QRO 5NN NC NC BK`.
 
 | id | Clip | Choices (accepted first) |
 |---|---|---|
-| `me.other` | `W8KDP 5NN NC NC BK` | silent · send `N9HO` |
-| `me.mine` | `N9HO 5NN NC NC BK` | send `5NN WI 73` ✓ · send `5NN WI BK` ✓ · send `N9HO` · silent |
-| `me.close` | `N9BO 5NN NC NC BK` | silent · send `N9HO` |
-| `me.closeAsked` | `N9BO?` | send `N9HO` · silent |
+| `me.other` | `W8KDP 5NN NC NC BK` | silent · send `K9QRO` |
+| `me.mine` | `K9QRO 5NN NC NC BK` | send `5NN WI 73` ✓ · send `5NN WI BK` ✓ · send `K9QRO` · silent |
+| `me.close` | `K9KRO 5NN NC NC BK` | silent · send `K9QRO` |
+| `me.closeAsked` | `K9KRO?` | send `K9QRO` · silent |
 
 ### 7. The exchange
 
@@ -444,15 +448,15 @@ Then **stop**: the next `QRZ?` is for someone else. Scenarios accept either
 form wherever a reply or a close is asked for (`accepted` in the fixture).
 
 Demo: wrong — a ragchew-length reply,
-`K4RTZ DE N9HO TNX FER CALL UR 5NN 5NN NAME JOE QTH WI WI HW? K4RTZ DE N9HO KN`;
+`K4RTZ DE K9QRO TNX FER CALL UR 5NN 5NN NAME JOE QTH WI WI HW? K4RTZ DE K9QRO KN`;
 right — `5NN WI 73`, then `E E`; right — `5NN WI BK`, then `73 E E`.
 
 | id | Clip | Choices (accepted first) |
 |---|---|---|
-| `exchange.reply` | `N9HO 5NN NC NC BK` | send `5NN WI 73` ✓ · send `5NN WI BK` ✓ · send the ragchew · send `N9HO 5NN WI` |
-| `exchange.agn` | `AGN?` (after your reply) | send `5NN WI 73` ✓ · send `5NN WI BK` ✓ · send `N9HO` · silent |
-| `exchange.dits` | `TU 73 E E` | send `E E` ✓ · send `73 E E` ✓ · send `N9HO` · send `TU 73 GL DE N9HO SK` |
-| `exchange.stop` | `QRZ?` (after your `E E`) | silent · send `N9HO` |
+| `exchange.reply` | `K9QRO 5NN NC NC BK` | send `5NN WI 73` ✓ · send `5NN WI BK` ✓ · send the ragchew · send `K9QRO 5NN WI` |
+| `exchange.agn` | `AGN?` (after your reply) | send `5NN WI 73` ✓ · send `5NN WI BK` ✓ · send `K9QRO` · silent |
+| `exchange.dits` | `TU 73 E E` | send `E E` ✓ · send `73 E E` ✓ · send `K9QRO` · send `TU 73 GL DE K9QRO SK` |
+| `exchange.stop` | `QRZ?` (after your `E E`) | silent · send `K9QRO` |
 
 ### 8. Mistakes
 
@@ -485,16 +489,16 @@ with `<ERR:n>`:
 separate dits (character gaps). A clip is split into pieces at each error
 (`clipParts`) and the pieces play a word gap apart.
 
-Demo: wrong — `N9HP` and silence; right — `N9HP <ERR> N9HO`; then three
+Demo: wrong — `K9QRP` and silence; right — `K9QRP <ERR> K9QRO`; then three
 "listen" examples of the activator doing it, each in a different shape
 (`<ERR:1>`, `<ERR:2>`, `<ERR:5>`).
 
 | id | Situation / clip | Choices (accepted first) |
 |---|---|---|
-| `mistake.call` | You keyed `N9HP` instead of your call | send `<ERR> N9HO` · send `SRI N9HO` · silent |
-| `mistake.last` | You keyed `N9HI`; only the last letter is wrong | send `<ERR> N9HO` · send `<ERR> O` · silent |
+| `mistake.call` | You keyed `K9QRP` instead of your call | send `<ERR> K9QRO` · send `SRI K9QRO` · silent |
+| `mistake.last` | You keyed `K9QRI`; only the last letter is wrong | send `<ERR> K9QRO` · send `<ERR> O` · silent |
 | `mistake.state` | In your reply you keyed `5NN WJ` | send `<ERR> WI 73` · send `5NN WJ WI 73` · silent |
-| `mistake.hear` | Clip: `N9HP <ERR> N9HO 5NN NC NC BK` | send `5NN WI 73` ✓ · send `5NN WI BK` ✓ · send `N9HO` · silent |
+| `mistake.hear` | Clip: `K9QRP <ERR> K9QRO 5NN NC NC BK` | send `5NN WI 73` ✓ · send `5NN WI BK` ✓ · send `K9QRO` · silent |
 
 `mistake.hear` is the recognition one: the activator fumbles your call, sends
 an error, and gets it right. Recognising the error means the right thing is
@@ -505,9 +509,9 @@ both profiles. "Moved on one" and "moved back six" step a letter through
 `A`–`Z` and a digit through `0`–`9`, wrapping:
 
 - `mistake.call` and `mistake.hear`: the call with its last character moved on
-  one (`N9HO` → `N9HP`);
-- `mistake.last`: the call with its last character moved back six (`N9HO` →
-  `N9HI`);
+  one (`K9QRO` → `K9QRP`);
+- `mistake.last`: the call with its last character moved back six (`K9QRO` →
+  `K9QRI`);
 - `mistake.state`: the state with its last letter moved on one (`WI` → `WJ`),
   so the situation reads "In your reply you keyed `5NN WJ`".
 
@@ -516,9 +520,9 @@ both profiles. "Moved on one" and "moved back six" step a letter through
 A scenario mode over the lessons. The pool is every scenario whose choices
 are *send* or *silent* — the "action" scenarios (lessons 3–8; the offsetting
 and signals lessons are about controls and meanings, so they stay in their
-lessons). It contains #295's five examples: `N1?` (stay silent), `N9?` (send
-`N9HO`), `<AS>` (wait), `SRI SRI QRZ?` (call now) and `N9BO` (stay silent), and
-its partner `N9BO?` (send your call once).
+lessons). It contains #295's five examples, shown here for `K9QRO`: `K1?` (stay
+silent), `K9?` (send `K9QRO`), `<AS>` (wait), `SRI SRI QRZ?` (call now) and `K9KRO`
+(stay silent), and its partner `K9KRO?` (send your call once).
 
 A run deals the pool shuffled, ten at a time (`scenarioRunLength`). Each
 answer shows right or wrong, the explanation, and **"Lesson: Partial calls"**
@@ -553,7 +557,7 @@ one-sided contacts and "quiet" frequencies that are actually busy — the
 situations the when-to-call and is-it-me lessons are about.
 
 **The activator**, a state machine: `cq` → `listen` → `pick` (the strongest
-decodable call, or a partial) → `query` (`N9?`, or `?`) → `exchange` → `73 E E`
+decodable call, or a partial) → `query` (`K9?`, or `?`) → `exchange` → `73 E E`
 → `listen`. After failed tries it sends `SRI QRZ?`; occasionally `<AS>`.
 
 **The copy model.** For each character a hunter sends, the activator decodes it
@@ -680,8 +684,8 @@ answered them. The note above already reflects each one.
    progress script changed with it. The fixture is the spec, and the spec
    changed.
 3. **Near-miss rule.** If the activator sends a near-miss of your call *with* a
-   question mark (`N9BO?`), send your call once and listen for whether they
-   correct to yours. *Without* one (`N9BO 5NN …`, working `N9BO`), stay silent.
+   question mark (`K9KRO?`), send your call once and listen for whether they
+   correct to yours. *Without* one (`K9KRO 5NN …`, working `K9KRO`), stay silent.
    This is now lesson 6.
 4. **The exchange.** `5NN WI 73` (First Four's) stays the primary form.
    WB0RLJ's order — RST, state, BK, 73, dit-dit — is taught as an accepted

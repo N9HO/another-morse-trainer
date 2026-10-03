@@ -92,10 +92,10 @@
   "validation": {
     "calls": [
       {
-        "raw": "n9ho",
-        "normalized": "N9HO",
+        "raw": "k9qro",
+        "normalized": "K9QRO",
         "valid": true,
-        "prefill": "N9HO"
+        "prefill": "K9QRO"
       },
       {
         "raw": " W1AW ",
@@ -110,10 +110,10 @@
         "prefill": "KB3/P"
       },
       {
-        "raw": "N9",
-        "normalized": "N9",
+        "raw": "K9",
+        "normalized": "K9",
         "valid": false,
-        "prefill": "N9"
+        "prefill": "K9"
       },
       {
         "raw": "ABCD",
@@ -122,10 +122,10 @@
         "prefill": "ABCD"
       },
       {
-        "raw": "N9-HO",
-        "normalized": "N9-HO",
+        "raw": "K9-QRO",
+        "normalized": "K9-QRO",
         "valid": false,
-        "prefill": "N9-HO"
+        "prefill": "K9-QRO"
       }
     ],
     "states": [
@@ -190,70 +190,70 @@
   ],
   "partialMatches": [
     {
-      "partial": "N9?",
-      "call": "N9HO",
+      "partial": "K9?",
+      "call": "K9QRO",
       "matches": true
     },
     {
-      "partial": "N1?",
-      "call": "N9HO",
+      "partial": "K1?",
+      "call": "K9QRO",
       "matches": false
     },
     {
-      "partial": "HO?",
-      "call": "N9HO",
+      "partial": "RO?",
+      "call": "K9QRO",
       "matches": true
     },
     {
-      "partial": "9H?",
-      "call": "N9HO",
+      "partial": "9Q?",
+      "call": "K9QRO",
       "matches": true
     },
     {
       "partial": "?",
-      "call": "N9HO",
+      "call": "K9QRO",
       "matches": true
     },
     {
       "partial": " ? ",
-      "call": "N9HO",
+      "call": "K9QRO",
       "matches": true
     },
     {
-      "partial": "n9?",
-      "call": "N9HO",
+      "partial": "k9?",
+      "call": "K9QRO",
       "matches": true
     },
     {
-      "partial": "N9HO?",
-      "call": "N9HO",
+      "partial": "K9QRO?",
+      "call": "K9QRO",
       "matches": true
     },
     {
-      "partial": "N9HOX?",
-      "call": "N9HO",
+      "partial": "K9QROX?",
+      "call": "K9QRO",
       "matches": false
     },
     {
-      "partial": "NH?",
-      "call": "N9HO",
+      "partial": "KQ?",
+      "call": "K9QRO",
       "matches": false
     },
     {
-      "partial": "H?",
-      "call": "N9HO",
+      "partial": "Q?",
+      "call": "K9QRO",
       "matches": true
     },
     {
-      "partial": "N9??",
-      "call": "n9ho",
+      "partial": "K9??",
+      "call": "k9qro",
       "matches": true
     }
   ],
   "notMinePartial": [
     {
-      "call": "N9HO",
-      "partial": "N1?"
+      "call": "K9QRO",
+      "partial": "K1?"
     },
     {
       "call": "K4RTZ",
@@ -274,8 +274,8 @@
   ],
   "nearMiss": [
     {
-      "call": "N9HO",
-      "nearMiss": "N9BO"
+      "call": "K9QRO",
+      "nearMiss": "K9KRO"
     },
     {
       "call": "KB3MZL",
@@ -296,8 +296,8 @@
   ],
   "display": [
     {
-      "text": "N9HP <ERR> N9HO",
-      "display": "N9HP [error] N9HO"
+      "text": "K9QRP <ERR> K9QRO",
+      "display": "K9QRP [error] K9QRO"
     },
     {
       "text": "<ERR:4> WI 73",
@@ -308,13 +308,13 @@
       "display": "E E"
     },
     {
-      "text": "EEEEEEEE N9HO",
-      "display": "EEEEEEEE N9HO"
+      "text": "EEEEEEEE K9QRO",
+      "display": "EEEEEEEE K9QRO"
     }
   ],
   "profiles": [
     {
-      "call": "N9HO",
+      "call": "K9QRO",
       "state": "WI",
       "activator": {
         "call": "K4RTZ",
@@ -482,7 +482,7 @@
           "detail": "",
           "choices": [
             {
-              "send": "N9HO"
+              "send": "K9QRO"
             },
             {
               "silent": true
@@ -499,7 +499,7 @@
               "silent": true
             },
             {
-              "send": "N9HO"
+              "send": "K9QRO"
             }
           ]
         },
@@ -513,7 +513,7 @@
               "silent": true
             },
             {
-              "send": "N9HO"
+              "send": "K9QRO"
             }
           ]
         },
@@ -524,7 +524,7 @@
           "detail": "",
           "choices": [
             {
-              "send": "N9HO"
+              "send": "K9QRO"
             },
             {
               "silent": true
@@ -538,13 +538,13 @@
           "detail": "",
           "choices": [
             {
-              "send": "N9HO"
+              "send": "K9QRO"
             },
             {
-              "send": "K4RTZ DE N9HO K"
+              "send": "K4RTZ DE K9QRO K"
             },
             {
-              "send": "N9HO N9HO N9HO"
+              "send": "K9QRO K9QRO K9QRO"
             }
           ]
         },
@@ -555,13 +555,13 @@
           "detail": "",
           "choices": [
             {
-              "send": "N9HO"
+              "send": "K9QRO"
             },
             {
-              "send": "DE N9HO K"
+              "send": "DE K9QRO K"
             },
             {
-              "send": "N9HO N9HO"
+              "send": "K9QRO K9QRO"
             }
           ]
         },
@@ -572,10 +572,10 @@
           "detail": "",
           "choices": [
             {
-              "send": "N9HO"
+              "send": "K9QRO"
             },
             {
-              "send": "K4RTZ N9HO"
+              "send": "K4RTZ K9QRO"
             },
             {
               "silent": true
@@ -585,11 +585,11 @@
         {
           "id": "partial.prefix",
           "lesson": "partial",
-          "clip": "N9?",
+          "clip": "K9?",
           "detail": "",
           "choices": [
             {
-              "send": "N9HO"
+              "send": "K9QRO"
             },
             {
               "silent": true
@@ -599,25 +599,25 @@
         {
           "id": "partial.notMine",
           "lesson": "partial",
-          "clip": "N1?",
+          "clip": "K1?",
           "detail": "",
           "choices": [
             {
               "silent": true
             },
             {
-              "send": "N9HO"
+              "send": "K9QRO"
             }
           ]
         },
         {
           "id": "partial.suffix",
           "lesson": "partial",
-          "clip": "HO?",
+          "clip": "RO?",
           "detail": "",
           "choices": [
             {
-              "send": "N9HO"
+              "send": "K9QRO"
             },
             {
               "silent": true
@@ -627,11 +627,11 @@
         {
           "id": "partial.fullCall",
           "lesson": "partial",
-          "clip": "N9H?",
+          "clip": "K9QR?",
           "detail": "",
           "choices": [
             {
-              "send": "N9HO"
+              "send": "K9QRO"
             },
             {
               "send": "O"
@@ -651,14 +651,14 @@
               "silent": true
             },
             {
-              "send": "N9HO"
+              "send": "K9QRO"
             }
           ]
         },
         {
           "id": "me.mine",
           "lesson": "me",
-          "clip": "N9HO 5NN NC NC BK",
+          "clip": "K9QRO 5NN NC NC BK",
           "detail": "",
           "choices": [
             {
@@ -668,7 +668,7 @@
               "send": "5NN WI BK"
             },
             {
-              "send": "N9HO"
+              "send": "K9QRO"
             },
             {
               "silent": true
@@ -682,25 +682,25 @@
         {
           "id": "me.close",
           "lesson": "me",
-          "clip": "N9BO 5NN NC NC BK",
-          "detail": "N9BO",
+          "clip": "K9KRO 5NN NC NC BK",
+          "detail": "K9KRO",
           "choices": [
             {
               "silent": true
             },
             {
-              "send": "N9HO"
+              "send": "K9QRO"
             }
           ]
         },
         {
           "id": "me.closeAsked",
           "lesson": "me",
-          "clip": "N9BO?",
-          "detail": "N9BO",
+          "clip": "K9KRO?",
+          "detail": "K9KRO",
           "choices": [
             {
-              "send": "N9HO"
+              "send": "K9QRO"
             },
             {
               "silent": true
@@ -710,7 +710,7 @@
         {
           "id": "exchange.reply",
           "lesson": "exchange",
-          "clip": "N9HO 5NN NC NC BK",
+          "clip": "K9QRO 5NN NC NC BK",
           "detail": "",
           "choices": [
             {
@@ -720,10 +720,10 @@
               "send": "5NN WI BK"
             },
             {
-              "send": "K4RTZ DE N9HO TNX FER CALL UR 5NN 5NN NAME JOE QTH WI WI HW? K4RTZ DE N9HO KN"
+              "send": "K4RTZ DE K9QRO TNX FER CALL UR 5NN 5NN NAME JOE QTH WI WI HW? K4RTZ DE K9QRO KN"
             },
             {
-              "send": "N9HO 5NN WI"
+              "send": "K9QRO 5NN WI"
             }
           ],
           "accepted": [
@@ -744,7 +744,7 @@
               "send": "5NN WI BK"
             },
             {
-              "send": "N9HO"
+              "send": "K9QRO"
             },
             {
               "silent": true
@@ -768,10 +768,10 @@
               "send": "73 E E"
             },
             {
-              "send": "N9HO"
+              "send": "K9QRO"
             },
             {
-              "send": "TU 73 GL DE N9HO SK"
+              "send": "TU 73 GL DE K9QRO SK"
             }
           ],
           "accepted": [
@@ -789,7 +789,7 @@
               "silent": true
             },
             {
-              "send": "N9HO"
+              "send": "K9QRO"
             }
           ]
         },
@@ -797,13 +797,13 @@
           "id": "mistake.call",
           "lesson": "mistake",
           "clip": "",
-          "detail": "N9HP",
+          "detail": "K9QRP",
           "choices": [
             {
-              "send": "<ERR> N9HO"
+              "send": "<ERR> K9QRO"
             },
             {
-              "send": "SRI N9HO"
+              "send": "SRI K9QRO"
             },
             {
               "silent": true
@@ -814,10 +814,10 @@
           "id": "mistake.last",
           "lesson": "mistake",
           "clip": "",
-          "detail": "N9HI",
+          "detail": "K9QRI",
           "choices": [
             {
-              "send": "<ERR> N9HO"
+              "send": "<ERR> K9QRO"
             },
             {
               "send": "<ERR> O"
@@ -847,8 +847,8 @@
         {
           "id": "mistake.hear",
           "lesson": "mistake",
-          "clip": "N9HP <ERR> N9HO 5NN NC NC BK",
-          "detail": "N9HP",
+          "clip": "K9QRP <ERR> K9QRO 5NN NC NC BK",
+          "detail": "K9QRP",
           "choices": [
             {
               "send": "5NN WI 73"
@@ -857,7 +857,7 @@
               "send": "5NN WI BK"
             },
             {
-              "send": "N9HO"
+              "send": "K9QRO"
             },
             {
               "silent": true
@@ -971,7 +971,7 @@
               },
               {
                 "who": "you",
-                "text": "N9HO"
+                "text": "K9QRO"
               }
             ]
           },
@@ -984,7 +984,7 @@
               },
               {
                 "who": "you",
-                "text": "N9HO"
+                "text": "K9QRO"
               }
             ]
           }
@@ -999,7 +999,7 @@
               },
               {
                 "who": "you",
-                "text": "K4RTZ DE N9HO N9HO K"
+                "text": "K4RTZ DE K9QRO K9QRO K"
               }
             ]
           },
@@ -1012,7 +1012,7 @@
               },
               {
                 "who": "you",
-                "text": "N9HO"
+                "text": "K9QRO"
               }
             ]
           }
@@ -1023,11 +1023,11 @@
             "lines": [
               {
                 "who": "activator",
-                "text": "N1?"
+                "text": "K1?"
               },
               {
                 "who": "you",
-                "text": "N9HO"
+                "text": "K9QRO"
               }
             ]
           },
@@ -1036,11 +1036,11 @@
             "lines": [
               {
                 "who": "activator",
-                "text": "N9?"
+                "text": "K9?"
               },
               {
                 "who": "you",
-                "text": "N9HO"
+                "text": "K9QRO"
               }
             ]
           }
@@ -1051,11 +1051,11 @@
             "lines": [
               {
                 "who": "activator",
-                "text": "N9BO 5NN NC NC BK"
+                "text": "K9KRO 5NN NC NC BK"
               },
               {
                 "who": "you",
-                "text": "N9HO"
+                "text": "K9QRO"
               }
             ]
           },
@@ -1064,15 +1064,15 @@
             "lines": [
               {
                 "who": "activator",
-                "text": "N9BO?"
+                "text": "K9KRO?"
               },
               {
                 "who": "you",
-                "text": "N9HO"
+                "text": "K9QRO"
               },
               {
                 "who": "activator",
-                "text": "N9HO 5NN NC NC BK"
+                "text": "K9QRO 5NN NC NC BK"
               }
             ]
           }
@@ -1083,11 +1083,11 @@
             "lines": [
               {
                 "who": "activator",
-                "text": "N9HO 5NN NC NC BK"
+                "text": "K9QRO 5NN NC NC BK"
               },
               {
                 "who": "you",
-                "text": "K4RTZ DE N9HO TNX FER CALL UR 5NN 5NN NAME JOE QTH WI WI HW? K4RTZ DE N9HO KN"
+                "text": "K4RTZ DE K9QRO TNX FER CALL UR 5NN 5NN NAME JOE QTH WI WI HW? K4RTZ DE K9QRO KN"
               }
             ]
           },
@@ -1096,7 +1096,7 @@
             "lines": [
               {
                 "who": "activator",
-                "text": "N9HO 5NN NC NC BK"
+                "text": "K9QRO 5NN NC NC BK"
               },
               {
                 "who": "you",
@@ -1117,7 +1117,7 @@
             "lines": [
               {
                 "who": "activator",
-                "text": "N9HO 5NN NC NC BK"
+                "text": "K9QRO 5NN NC NC BK"
               },
               {
                 "who": "you",
@@ -1140,7 +1140,7 @@
             "lines": [
               {
                 "who": "you",
-                "text": "N9HP"
+                "text": "K9QRP"
               }
             ]
           },
@@ -1149,7 +1149,7 @@
             "lines": [
               {
                 "who": "you",
-                "text": "N9HP <ERR> N9HO"
+                "text": "K9QRP <ERR> K9QRO"
               }
             ]
           },
@@ -1158,7 +1158,7 @@
             "lines": [
               {
                 "who": "activator",
-                "text": "N9HP <ERR:1> N9HO"
+                "text": "K9QRP <ERR:1> K9QRO"
               }
             ]
           },
@@ -1167,7 +1167,7 @@
             "lines": [
               {
                 "who": "activator",
-                "text": "N9HP <ERR:2> N9HO"
+                "text": "K9QRP <ERR:2> K9QRO"
               }
             ]
           },
@@ -1176,7 +1176,7 @@
             "lines": [
               {
                 "who": "activator",
-                "text": "N9HP <ERR:5> N9HO"
+                "text": "K9QRP <ERR:5> K9QRO"
               }
             ]
           }
@@ -1749,7 +1749,7 @@
     ],
     "cases": [
       {
-        "call": "N9HO",
+        "call": "K9QRO",
         "tone": 600,
         "wpm": 20,
         "voices": {
@@ -1771,7 +1771,7 @@
               "isYou": false
             },
             {
-              "text": "N9HO",
+              "text": "K9QRO",
               "pitch": 600,
               "wpm": 20,
               "gain": 1.0,
@@ -1813,7 +1813,7 @@
               "isYou": false
             },
             {
-              "text": "N9HO",
+              "text": "K9QRO",
               "pitch": 680,
               "wpm": 20,
               "gain": 1.0,
@@ -1855,7 +1855,7 @@
               "isYou": false
             },
             {
-              "text": "N9HO",
+              "text": "K9QRO",
               "pitch": 680,
               "wpm": 20,
               "gain": 1.0,
@@ -2316,30 +2316,30 @@
   ],
   "clipParts": [
     {
-      "text": "N9HP <ERR> N9HO",
+      "text": "K9QRP <ERR> K9QRO",
       "parts": [
         {
-          "text": "N9HP"
+          "text": "K9QRP"
         },
         {
           "error": null
         },
         {
-          "text": "N9HO"
+          "text": "K9QRO"
         }
       ]
     },
     {
-      "text": "N9HP <ERR:2> N9HO 5NN NC NC BK",
+      "text": "K9QRP <ERR:2> K9QRO 5NN NC NC BK",
       "parts": [
         {
-          "text": "N9HP"
+          "text": "K9QRP"
         },
         {
           "error": 2
         },
         {
-          "text": "N9HO 5NN NC NC BK"
+          "text": "K9QRO 5NN NC NC BK"
         }
       ]
     },
