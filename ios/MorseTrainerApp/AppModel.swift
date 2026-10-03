@@ -657,6 +657,7 @@ final class AppModel: ObservableObject {
         if on, settings.voiceResponse {
             settings.voiceResponse = false
             resetVoiceRound()
+            voiceRecognizer.endSession()   // close the mic; playback-only route
         }
     }
     /// Whether the learner answers by voice this session (all six choice quizzes).
@@ -725,6 +726,8 @@ final class AppModel: ObservableObject {
         guard audioActive != active else { return }
         audioActive = active
         applyBackgroundNoise()
+        // The mic is not left open off screen; it reopens on return.
+        voiceRecognizer.setForeground(active)
     }
 
     /// Push the configured noise floor to the player, silencing it whenever the
@@ -761,6 +764,16 @@ final class AppModel: ObservableObject {
         // Take the audio session now, ahead of the first tone: other audio
         // pauses at this point, and the engine's cold start is paid here rather
         // than on the first character. endSession() hands it back.
+        //
+        // Voice answers take their record-capable session first, for the whole
+        // session, so the route is configured once here rather than flipped
+        // around every answer — which cut out the Morse after each answer and
+        // could leave the recogniser deaf (#300, #301).
+        if usesVoiceResponse {
+            voiceRecognizer.beginSession()
+        } else {
+            voiceRecognizer.endSession()
+        }
         player.activate()
         resetVoiceRound()
         storyGeneration += 1   // cancel any in-flight story playback
@@ -2142,6 +2155,7 @@ final class AppModel: ObservableObject {
         }
         // Hand the route back: whatever was playing before the session may
         // resume now. Nothing above this line makes a sound after it.
+        voiceRecognizer.endSession()
         player.releaseSession()
         sessionEnded = true
     }

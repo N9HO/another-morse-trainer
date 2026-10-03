@@ -57,13 +57,30 @@ final class AudioSession: @unchecked Sendable {
         /// The Vail repeater: playback that *mixes* rather than taking the route,
         /// so it can run alongside a radio app.
         case repeaterMix = 1
-        /// Microphone up — voice answers and the live CW decoder.
-        case recording = 2
+        /// Voice answers: the microphone for a whole quiz session, with the
+        /// Morse still playing at full quality between answers (#300, #301).
+        ///
+        /// Claimed once per session, not per answer. Flipping between this and
+        /// `.playback` around every answer reconfigured the route twice a
+        /// character — on AirPods a switch between A2DP and the hands-free
+        /// profile each time — and the switches cut the next characters out
+        /// and could stop the recogniser's engine before it heard anything.
+        ///
+        /// No `.allowBluetooth`, so Bluetooth earbuds stay on A2DP for the tone
+        /// and the phone's own microphone hears the answer. The `.default`
+        /// mode, not `.measurement`, keeps the mic's automatic gain for speech
+        /// and leaves the speaker at its normal level.
+        case voiceAnswers = 2
+        /// Microphone up for the live CW decoder: unprocessed input.
+        case recording = 3
 
         static func < (a: Profile, b: Profile) -> Bool { a.rawValue < b.rawValue }
 
         var category: AVAudioSession.Category {
-            self == .recording ? .playAndRecord : .playback
+            switch self {
+            case .playback, .repeaterMix:   return .playback
+            case .voiceAnswers, .recording: return .playAndRecord
+            }
         }
 
         var mode: AVAudioSession.Mode {
@@ -72,17 +89,19 @@ final class AudioSession: @unchecked Sendable {
 
         var options: AVAudioSession.CategoryOptions {
             switch self {
-            case .playback:    return []
-            case .repeaterMix: return [.mixWithOthers, .duckOthers]
-            case .recording:   return [.defaultToSpeaker, .allowBluetooth]
+            case .playback:     return []
+            case .repeaterMix:  return [.mixWithOthers, .duckOthers]
+            case .voiceAnswers: return [.defaultToSpeaker, .allowBluetoothA2DP]
+            case .recording:    return [.defaultToSpeaker, .allowBluetooth]
             }
         }
 
         var description: String {
             switch self {
-            case .playback:    return "playback"
-            case .repeaterMix: return "repeaterMix"
-            case .recording:   return "recording"
+            case .playback:     return "playback"
+            case .repeaterMix:  return "repeaterMix"
+            case .voiceAnswers: return "voiceAnswers"
+            case .recording:    return "recording"
             }
         }
     }
@@ -337,4 +356,28 @@ final class AudioSession: @unchecked Sendable {
         lock.unlock()
         broadcast(.mediaServicesWereReset)
     }
+}
+
+// MARK: - Engine configuration changes
+
+/// Calls `handler` with the engine an `AVAudioEngineConfigurationChange` was
+/// posted for, for as long as this object lives. A route or hardware-format
+/// change stops an AVAudioEngine without a word; MorsePlayer and
+/// VoiceRecognizer each own one of these to restart their own engine (#300,
+/// #301). Owning it as a `let` and letting its `deinit` remove the observer
+/// keeps the owners' deinits from touching a non-Sendable token.
+final class EngineConfigurationObserver: @unchecked Sendable {
+    // Immutable after init; NotificationCenter tokens may be removed from any thread.
+    private let token: NSObjectProtocol
+
+    init(_ handler: @escaping @Sendable (ObjectIdentifier?) -> Void) {
+        token = NotificationCenter.default.addObserver(
+            forName: .AVAudioEngineConfigurationChange, object: nil, queue: nil
+        ) { note in
+            // Only the identity crosses: the Notification is not Sendable.
+            handler((note.object as AnyObject?).map(ObjectIdentifier.init))
+        }
+    }
+
+    deinit { NotificationCenter.default.removeObserver(token) }
 }

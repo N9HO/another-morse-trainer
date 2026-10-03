@@ -33,7 +33,7 @@ public enum VoicePhonetics {
         "el": "L", "ell": "L",
         "em": "M",
         "en": "N",
-        "owe": "O",
+        "oh": "O", "owe": "O",
         "pee": "P", "pea": "P",
         "cue": "Q", "queue": "Q", "kew": "Q",
         "ar": "R", "are": "R", "arr": "R",
@@ -67,6 +67,14 @@ public enum VoicePhonetics {
         "slash": "/", "stroke": "/",
         "question mark": "?", "question": "?",
         "equals": "=", "equal": "=", "plus": "+"
+    ]
+
+    /// What a recogniser writes for a spoken symbol name — it formats "slash"
+    /// as "/" just as it formats "five" as "5" — mapped back to the name, so a
+    /// transcript that is only the symbol still matches (#300).
+    public static let symbolNames: [Character: String] = [
+        "/": "slash", "?": "question mark", ".": "period", ",": "comma",
+        "=": "equals", "+": "plus"
     ]
 
     /// One canonical letter-name pronunciation per letter (for spelling words).
@@ -229,12 +237,20 @@ public struct VoiceMatcher {
     // MARK: - Helpers
 
     /// Lowercase, strip punctuation to spaces, and collapse whitespace.
+    ///
+    /// Punctuation beside words is the recogniser's sentence formatting
+    /// ("Kilo.", "Mike?") and is dropped. A transcript that is *nothing but*
+    /// symbols is the learner saying a symbol's name, which the recogniser
+    /// wrote as the symbol ("/"), so it reads back as the name ("slash").
+    /// Dropping those as well left a spoken "slash" with no transcript at all.
     public static func normalize(_ s: String) -> String {
         var out = ""
         for ch in s.lowercased() {
             out.append((ch.isLetter || ch.isNumber) ? ch : " ")
         }
-        return out.split(separator: " ").joined(separator: " ")
+        let words = out.split(separator: " ").joined(separator: " ")
+        guard words.isEmpty else { return words }
+        return s.compactMap { VoicePhonetics.symbolNames[$0] }.joined(separator: " ")
     }
 
     /// Levenshtein distance normalized to 0…1 by the longer string's length.
