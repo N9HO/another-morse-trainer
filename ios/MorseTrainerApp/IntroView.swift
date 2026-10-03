@@ -1607,6 +1607,8 @@ private struct SessionSetupSheet: View {
         // options a letterbox to scroll through, so there it opens at the
         // full height of the iPad's form sheet (a short list: not page-sized).
         .presentationDetents(wide ? [.large] : [.medium, .large])
+        // Pileup Runner keys your callsign: ask for it once (#297).
+        .stationPrompt(active: model.learningMode == .qso)
     }
 
     /// A labelled container holding one control, in the brand card style.

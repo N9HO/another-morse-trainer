@@ -436,6 +436,8 @@ fun PileupScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) 
 @Composable
 private fun PileupSetup(onStart: () -> Unit, onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit) {
     val focusManager = LocalFocusManager.current
+    // Pileup Runner keys your callsign: ask for it once while it is unset (#297).
+    StationPromptHost()
     Column(modifier = Modifier.fillMaxSize()) {
         Row(modifier = Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
             TextButton(onClick = onBack) { Text(stringResource(R.string.common_back), color = Brand.teal) }
