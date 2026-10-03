@@ -1,0 +1,44 @@
+{
+  "$comment": "What you key on your side of a Contest run (#320): your CQ, your sign-off and each smart-box send. Shared fixture, consumed by ios MorseKitCheck, android QSOSelfKeyingTest and desktop QSOSelfKeyingTest. Data, not code; see CLAUDE.md's separate-ports rule.",
+  "derivation": {
+    "cq": "per exchange: singleCaller 'CQ CQ DE {call} {call} K'; pota 'CQ POTA DE {call} {call} K'; basicContest 'CQ TEST {call} {call}'; cwt 'CQ CWT {call}'; sst 'CQ SST {call}'; mst 'CQ MST {call}'; sprint 'CQ NS {call}'; fieldDay 'CQ FD {call} {call}'",
+    "signOff": "'TU {call}' after logging a contact",
+    "send": "trim and upper-case the typed text, then the first rule that applies: a QRS request -> 'QRS PSE'; QRQ -> 'QRQ'; empty or a repeat request (?, AGN, AGN?, QRZ) -> 'AGN?'; the send moved the run into working from a phase that was neither working nor readyToLog -> '{working call} 5NN' (the typed fragment when no station is being worked); working before and after (a miss) -> 'AGN?'; readyToLog after -> 'R'; otherwise the typed text as a query, with '?' added when it does not already end in one",
+    "phases": "idle, pileup, working, readyToLog: PileupEngine.Phase before and after the send, without the station id",
+    "note": "The spec is the iOS AppModel behaviour Pileup Runner and Contest have keyed since before this fixture (selfCQText, the TU, selfSendText), written out by hand from the rules above."
+  },
+  "cq": [
+    {"mode": "singleCaller", "call": "N9HO", "text": "CQ CQ DE N9HO N9HO K"},
+    {"mode": "pota",         "call": "N9HO", "text": "CQ POTA DE N9HO N9HO K"},
+    {"mode": "basicContest", "call": "N9HO", "text": "CQ TEST N9HO N9HO"},
+    {"mode": "cwt",          "call": "N9HO", "text": "CQ CWT N9HO"},
+    {"mode": "sst",          "call": "N9HO", "text": "CQ SST N9HO"},
+    {"mode": "mst",          "call": "N9HO", "text": "CQ MST N9HO"},
+    {"mode": "sprint",       "call": "N9HO", "text": "CQ NS N9HO"},
+    {"mode": "fieldDay",     "call": "N9HO", "text": "CQ FD N9HO N9HO"},
+    {"mode": "sst",          "call": "W1AW", "text": "CQ SST W1AW"}
+  ],
+  "signOff": [
+    {"call": "N9HO", "text": "TU N9HO"},
+    {"call": "W1AW", "text": "TU W1AW"}
+  ],
+  "send": [
+    {"typed": "qrs",     "pre": "pileup",     "post": "pileup",     "working": null,    "text": "QRS PSE"},
+    {"typed": "PSE QRS", "pre": "working",    "post": "working",    "working": "K1ABC", "text": "QRS PSE"},
+    {"typed": "qrq",     "pre": "pileup",     "post": "pileup",     "working": null,    "text": "QRQ"},
+    {"typed": "  ",      "pre": "pileup",     "post": "pileup",     "working": null,    "text": "AGN?"},
+    {"typed": "?",       "pre": "pileup",     "post": "pileup",     "working": null,    "text": "AGN?"},
+    {"typed": "agn",     "pre": "working",    "post": "working",    "working": "K1ABC", "text": "AGN?"},
+    {"typed": "QRZ",     "pre": "idle",       "post": "idle",       "working": null,    "text": "AGN?"},
+    {"typed": "k1abc",   "pre": "pileup",     "post": "working",    "working": "K1ABC", "text": "K1ABC 5NN"},
+    {"typed": "K1ABD",   "pre": "pileup",     "post": "working",    "working": "K1ABC", "text": "K1ABC 5NN"},
+    {"typed": "k1 abc",  "pre": "idle",       "post": "working",    "working": null,    "text": "K1ABC 5NN"},
+    {"typed": "TOM MA",  "pre": "working",    "post": "working",    "working": "K1ABC", "text": "AGN?"},
+    {"typed": "TOM MA",  "pre": "working",    "post": "readyToLog", "working": "K1ABC", "text": "R"},
+    {"typed": "TOM MA",  "pre": "readyToLog", "post": "readyToLog", "working": "K1ABC", "text": "R"},
+    {"typed": "k1a",     "pre": "pileup",     "post": "pileup",     "working": null,    "text": "K1A?"},
+    {"typed": "K1A?",    "pre": "pileup",     "post": "pileup",     "working": null,    "text": "K1A?"},
+    {"typed": "W?U",     "pre": "pileup",     "post": "pileup",     "working": null,    "text": "W?U?"},
+    {"typed": "N9HS",    "pre": "readyToLog", "post": "working",    "working": "N9HO",  "text": "N9HS?"}
+  ]
+}

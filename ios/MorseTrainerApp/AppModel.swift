@@ -1424,7 +1424,8 @@ final class AppModel: ObservableObject {
         guard usesPileup else { return true }
         if qsoReadyToLog {
             let action = pileup.logCurrent()
-            perform(selfText: keyed ? nil : "TU \(settings.qso.myCall)", action: action)
+            perform(selfText: keyed ? nil : PileupEngine.signOffText(myCall: settings.qso.myCall),
+                    action: action)
             return true
         }
         let pre = pileup.phase
@@ -1554,18 +1555,10 @@ final class AppModel: ObservableObject {
             qsbRate: nil)
     }
 
+    // Your side's words live in MorseKit, pinned by fixtures/qso-self-keying.json
+    // so the Android and desktop Contest key the same ones (#320).
     private func selfCQText() -> String {
-        let me = settings.qso.myCall
-        switch activePileupMode {
-        case .pota:         return "CQ POTA DE \(me) \(me) K"
-        case .basicContest: return "CQ TEST \(me) \(me)"
-        case .cwt:          return "CQ CWT \(me)"
-        case .sst:          return "CQ SST \(me)"
-        case .mst:          return "CQ MST \(me)"
-        case .sprint:       return "CQ NS \(me)"
-        case .fieldDay:     return "CQ FD \(me) \(me)"
-        case .singleCaller: return "CQ CQ DE \(me) \(me) K"
-        }
+        PileupEngine.cqText(mode: activePileupMode, myCall: settings.qso.myCall)
     }
 
     /// What you put on the air for a given smart-box send.
@@ -1573,26 +1566,8 @@ final class AppModel: ObservableObject {
                               pre: PileupEngine.Phase,
                               post: PileupEngine.Phase,
                               action: PileupEngine.Action) -> String? {
-        let t = input.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-        if PileupEngine.isQRS(t) { return "QRS PSE" }
-        if PileupEngine.isQRQ(t) { return "QRQ" }
-        if t.isEmpty || PileupEngine.isRepeat(t) { return "AGN?" }
-        // You just nailed a full call -> you call them and send your report.
-        if case .working = post, !Self.isWorking(pre) {
-            return "\(pileup.workingStation?.call ?? PileupEngine.fragment(t)) 5NN"
-        }
-        // Still working (a miss) -> ask again.
-        if case .working = pre, case .working = post { return "AGN?" }
-        // Copied it -> a quick roger, no real on-air needed.
-        if case .readyToLog = post { return "R" }
-        // A partial query into the pileup -> send it with a query mark.
-        return t.hasSuffix("?") ? t : t + "?"
-    }
-
-    private static func isWorking(_ p: PileupEngine.Phase) -> Bool {
-        if case .working = p { return true }
-        if case .readyToLog = p { return true }
-        return false
+        PileupEngine.selfSendText(input: input, pre: pre, post: post,
+                                  workingCall: pileup.workingStation?.call)
     }
 
     /// Acknowledge the walk-off banner so it shows once and gets out of the way.
