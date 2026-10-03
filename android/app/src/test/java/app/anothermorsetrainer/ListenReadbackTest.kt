@@ -50,9 +50,9 @@ class ListenReadbackTest {
         assertEquals(70, plain.size)
         assertEquals("<BT> — separator / new section", plain.first { it.display.startsWith("<BT> — ") }.display)
         assertEquals("h w ?. how do you copy?", plain.first { it.display.startsWith("HW? — ") }.spoken)
-        val mine = MorseData.cw77Personal("n9ho", "Justin")
+        val mine = MorseData.cw77Personal("k9qro", "Justin")
         val withMe = listenPool(ListenContent.CW_77, ListenReadback.MEANING_ONLY, cw77Personal = mine)
-        assertEquals(listOf("N9HO — your call sign", "JUSTIN — your name"), withMe.takeLast(2).map { it.display })
+        assertEquals(listOf("K9QRO — your call sign", "JUSTIN — your name"), withMe.takeLast(2).map { it.display })
         assertEquals(listOf("your call sign", "your name"), withMe.takeLast(2).map { it.spoken })
     }
 

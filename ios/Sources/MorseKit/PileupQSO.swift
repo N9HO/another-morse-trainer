@@ -454,7 +454,7 @@ public final class PileupEngine {
             return .play(stations.map { callVoice(for: $0) })
         }
         // A send is either a bare call or a call with your exchange behind it
-        // ("N9HS 5NN AL"). Try the whole thing first, so a stray space inside
+        // ("W1AQ 5NN AL"). Try the whole thing first, so a stray space inside
         // a call still copies, then fall back to just the leading token.
         let lead = Self.callToken(text)
         for frag in (lead.isEmpty || lead == whole) ? [whole] : [whole, lead] {
@@ -495,7 +495,7 @@ public final class PileupEngine {
         if !matched.isEmpty {
             return .play(matched.map { callVoice(for: stations[$0]) })
         }
-        // A near miss: a call you have all but copied, like "N9HS" for N9HO.
+        // A near miss: a call you have all but copied, like "W1AQ" for W1AW.
         // On the air the station answers that by sending their own call again,
         // and keeps doing it until you get it right — they do not open the
         // exchange on a call that isn't theirs, and they do not go quiet. It is
@@ -578,7 +578,7 @@ public final class PileupEngine {
     /// A partial is whatever fragment you managed to copy, and it is not always
     /// the front of the call. Two stations landing on top of each other often
     /// leave you one letter from the end, and querying the middle is ordinary
-    /// contest practice — "9H?" is how you ask N9HO to come back. Matching only
+    /// contest practice — "1A?" is how you ask W1AW to come back. Matching only
     /// a prefix left every one of those unanswered (#85): the fragment fell
     /// through to the busted-call path, which on the default silence setting
     /// meant the pileup simply ignored you.
@@ -600,7 +600,7 @@ public final class PileupEngine {
     }
 
     /// A tight partial: the fragment is a run of consecutive characters of the
-    /// call — "9H?" for N9HO. Pinned by fixtures/pileup-partials.json.
+    /// call — "1A?" for W1AW. Pinned by fixtures/pileup-partials.json.
     public static func isTightPartial(_ frag: String, of call: String) -> Bool {
         call.contains(frag)
     }
@@ -815,7 +815,7 @@ public final class PileupEngine {
     }
 
     /// The call an operator's send is aimed at: everything up to the first
-    /// space, so "N9HS 5NN AL" reads as a call with an exchange behind it
+    /// space, so "W1AQ 5NN AL" reads as a call with an exchange behind it
     /// rather than one unbroken token.
     static func callToken(_ text: String) -> String {
         let head = text.split(separator: " ", maxSplits: 1,

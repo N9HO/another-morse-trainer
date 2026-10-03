@@ -53,7 +53,7 @@ requires an account, an email or a name.
    later of the two has had their whole day. Both apps read the same
    number and the buddy's today status from one `GET`.
 5. **The nudge.** In-app only: the home screen's streak card shows the
-   buddy line ("N9HO practised today · 12-day buddy streak", or "N9HO hasn't
+   buddy line ("W1AW practised today · 12-day buddy streak", or "W1AW hasn't
    practised yet today"), and the existing daily reminder notification's
    text gains a buddy sentence when the app last saw the buddy had not
    practised. That is a local notification built from the last fetch; it

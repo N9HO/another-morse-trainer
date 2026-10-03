@@ -174,11 +174,11 @@ class MorseDataCW77Test {
 
     @Test
     fun personalItemsFollowTheSeventyWithTheirOwnMeanings() {
-        val mine = MorseData.cw77Personal("n9ho", "Justin")
+        val mine = MorseData.cw77Personal("k9qro", "Justin")
         assertEquals(listOf(MorseData.CW77_CALLSIGN_MEANING, MorseData.CW77_NAME_MEANING), mine.map { it.meaning })
         val items = MorseData.cw77Items(mine)
         assertEquals(72, items.size)
-        assertEquals(listOf("N9HO", "JUSTIN"), items.takeLast(2).map { it.display })
+        assertEquals(listOf("K9QRO", "JUSTIN"), items.takeLast(2).map { it.display })
         assertEquals(72, items.map { it.id }.toSet().size)
     }
 }

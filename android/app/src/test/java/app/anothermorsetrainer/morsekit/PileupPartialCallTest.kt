@@ -13,7 +13,7 @@ import kotlin.random.Random
  *
  * A partial is whatever fragment you managed to copy, and it is not always the
  * front of the call: two stations landing on top of each other leave you a
- * trailing letter, and "9H?" for N9HO queries the middle. Matching only a
+ * trailing letter, and "1A?" for W1AW queries the middle. Matching only a
  * prefix sent those to the busted-call path — on the silence setting, no reply
  * at all.
  *

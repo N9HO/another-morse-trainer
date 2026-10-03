@@ -116,7 +116,7 @@ struct FirstFourView: View {
                 .fixedSize(horizontal: false, vertical: true)
             VStack(alignment: .leading, spacing: 6) {
                 Text("Your callsign").font(.caption.weight(.semibold)).foregroundStyle(Theme.textSecondary)
-                TextField("N9HO", text: $callField)
+                TextField("W1AW", text: $callField)
                     .textInputAutocapitalization(.characters)
                     .autocorrectionDisabled()
                     .font(.system(.title3, design: .monospaced))

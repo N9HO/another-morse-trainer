@@ -980,7 +980,7 @@ struct ContentView: View {
         .animation(.easeOut(duration: 0.2), value: missed.id)
     }
 
-    /// "you had them as N9HS" when you got close, otherwise just the count —
+    /// "you had them as W1AQ" when you got close, otherwise just the count —
     /// there is nothing to compare against if you never got near the call.
     private func missedCallerDetail(_ missed: PileupEngine.MissedCaller) -> String {
         if let had = missed.miscopiedAs {
@@ -1165,8 +1165,8 @@ struct ContentView: View {
         } else if model.qsoPrimaryAction(qsoText, keyed: keyed) || keyed {
             // Cleared unless "keep partial call" kept a still-being-copied call
             // in the box (issue #29). A keyed send always empties it: a keyer
-            // cannot edit the box, so a kept partial ("N9" after "N9?") would
-            // have the next keyed call appended to it — "N9N9HO", a bust
+            // cannot edit the box, so a kept partial ("W1" after "W1?") would
+            // have the next keyed call appended to it — "W1W1AW", a bust
             // every time (#251).
             qsoText = ""
         } else {

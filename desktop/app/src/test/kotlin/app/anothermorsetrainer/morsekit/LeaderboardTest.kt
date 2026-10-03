@@ -48,16 +48,16 @@ class LeaderboardTest {
 
     @Test
     fun `display names follow the server rule`() {
-        assertEquals("N9HO", Leaderboard.normalizeDisplayName(" n9ho "))
+        assertEquals("W1AW", Leaderboard.normalizeDisplayName(" w1aw "))
         assertEquals("K1ABC/P", Leaderboard.normalizeDisplayName("k1abc/p"))
         assertEquals("OP JIM-2", Leaderboard.normalizeDisplayName("op   jim-2"))
         assertEquals("AB", Leaderboard.normalizeDisplayName("ab"))
         assertEquals("ABCDEFGHIJKL", Leaderboard.normalizeDisplayName("abcdefghijkl"))
         assertNull("too short", Leaderboard.normalizeDisplayName("A"))
         assertNull("too long", Leaderboard.normalizeDisplayName("ABCDEFGHIJKLM"))
-        assertNull("leading space", Leaderboard.normalizeDisplayName("  /N9HO"))
-        assertNull("leading dash", Leaderboard.normalizeDisplayName("-N9HO"))
-        assertNull("bad character", Leaderboard.normalizeDisplayName("N9HO!"))
+        assertNull("leading space", Leaderboard.normalizeDisplayName("  /W1AW"))
+        assertNull("leading dash", Leaderboard.normalizeDisplayName("-W1AW"))
+        assertNull("bad character", Leaderboard.normalizeDisplayName("W1AW!"))
         assertNull("empty", Leaderboard.normalizeDisplayName(""))
         assertNull("blank", Leaderboard.normalizeDisplayName("   "))
         assertTrue(Leaderboard.isValidDisplayName("w1aw"))

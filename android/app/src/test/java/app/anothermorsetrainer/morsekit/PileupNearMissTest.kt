@@ -12,7 +12,7 @@ import kotlin.random.Random
  * Near-miss calls in the pileup. Twin of the near-miss checks in the iOS repo's
  * MorseKitCheck/main.swift.
  *
- * A call you have all but copied — "N9HS" for N9HO — is answered by the one
+ * A call you have all but copied — "W1AQ" for W1AW — is answered by the one
  * station it names, over and over, until you get it right. On the air that is
  * what a station does: they send their own call again. They do not open the
  * exchange on a call that isn't theirs, and they do not go quiet.

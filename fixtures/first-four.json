@@ -51,28 +51,28 @@
   ],
   "otherHunters": ["W8KDP", "KE0RJ"],
   "activatorPicks": [
-    { "index": 0, "excluding": "N9HO", "call": "K4RTZ" },
-    { "index": 9, "excluding": "N9HO", "call": "W0PQA" },
+    { "index": 0, "excluding": "K9QRO", "call": "K4RTZ" },
+    { "index": 9, "excluding": "K9QRO", "call": "W0PQA" },
     { "index": 0, "excluding": "K4RTZ", "call": "W0PQA" },
     { "index": 6, "excluding": "k4rtz", "call": "N6GUZ" },
     { "index": 7, "excluding": "K4RTZ", "call": "W0PQA" }
   ],
   "otherHunterPicks": [
-    { "index": 0, "excluding": "N9HO", "call": "W8KDP" },
-    { "index": 1, "excluding": "N9HO", "call": "KE0RJ" },
+    { "index": 0, "excluding": "K9QRO", "call": "W8KDP" },
+    { "index": 1, "excluding": "K9QRO", "call": "KE0RJ" },
     { "index": 0, "excluding": "W8KDP", "call": "KE0RJ" },
     { "index": 3, "excluding": "W8KDP", "call": "KE0RJ" }
   ],
   "callCases": [
-    { "input": "n9ho", "normalized": "N9HO", "valid": true },
+    { "input": "k9qro", "normalized": "K9QRO", "valid": true },
     { "input": " kd9 abc ", "normalized": "KD9ABC", "valid": true },
     { "input": "W1AW/4", "normalized": "W1AW/4", "valid": true },
-    { "input": "VE3/N9HO", "normalized": "VE3/N9HO", "valid": true },
+    { "input": "VE3/K9QRO", "normalized": "VE3/K9QRO", "valid": true },
     { "input": "K4X", "normalized": "K4X", "valid": true },
     { "input": "AB", "normalized": "AB", "valid": false },
     { "input": "ABCD", "normalized": "ABCD", "valid": false },
     { "input": "1234", "normalized": "1234", "valid": false },
-    { "input": "N9HO!", "normalized": "N9HO!", "valid": false },
+    { "input": "K9QRO!", "normalized": "K9QRO!", "valid": false },
     { "input": "", "normalized": "", "valid": false },
     { "input": "KD9ABCDEFGH", "normalized": "KD9ABCDEFGH", "valid": false }
   ],
@@ -89,22 +89,22 @@
     { "saved": "W1AW", "prefill": "" },
     { "saved": "w1aw", "prefill": "" },
     { "saved": "", "prefill": "" },
-    { "saved": "n9ho", "prefill": "N9HO" },
+    { "saved": "k9qro", "prefill": "K9QRO" },
     { "saved": "W1AW/4", "prefill": "W1AW/4" }
   ],
   "elements": [
-    { "call": "N9HO", "state": "WI", "stage": "call", "text": "N9HO" },
-    { "call": "N9HO", "state": "WI", "stage": "state", "text": "WI" },
-    { "call": "N9HO", "state": "WI", "stage": "question", "text": "?" },
-    { "call": "N9HO", "state": "WI", "stage": "seventyThree", "text": "73" },
-    { "call": "N9HO", "state": "WI", "stage": "bustedCall", "text": null },
-    { "call": "N9HO", "state": "WI", "stage": "walkthrough", "text": null }
+    { "call": "K9QRO", "state": "WI", "stage": "call", "text": "K9QRO" },
+    { "call": "K9QRO", "state": "WI", "stage": "state", "text": "WI" },
+    { "call": "K9QRO", "state": "WI", "stage": "question", "text": "?" },
+    { "call": "K9QRO", "state": "WI", "stage": "seventyThree", "text": "73" },
+    { "call": "K9QRO", "state": "WI", "stage": "bustedCall", "text": null },
+    { "call": "K9QRO", "state": "WI", "stage": "walkthrough", "text": null }
   ],
   "copyCases": [
-    { "typed": "n9ho", "expected": "N9HO", "match": true },
-    { "typed": "N 9 H O", "expected": "N9HO", "match": true },
-    { "typed": "N9H0", "expected": "N9HO", "match": false },
-    { "typed": "N9HON9HO", "expected": "N9HO", "match": false },
+    { "typed": "k9qro", "expected": "K9QRO", "match": true },
+    { "typed": "K 9 Q R O", "expected": "K9QRO", "match": true },
+    { "typed": "K9QR0", "expected": "K9QRO", "match": false },
+    { "typed": "K9QROK9QRO", "expected": "K9QRO", "match": false },
     { "typed": "?", "expected": "?", "match": true },
     { "typed": " 73 ", "expected": "73", "match": true },
     { "typed": "37", "expected": "73", "match": false },
@@ -112,42 +112,43 @@
     { "typed": "wi", "expected": "WI", "match": true }
   ],
   "sendCases": [
-    { "sent": "N9HO", "expected": "N9HO", "match": true },
-    { "sent": "n9ho", "expected": "N9HO", "match": true },
-    { "sent": "N9HO N9HO", "expected": "N9HO", "match": true },
-    { "sent": "N9HON9HO", "expected": "N9HO", "match": true },
-    { "sent": "N9HO N9HO N9HO", "expected": "N9HO", "match": false },
-    { "sent": "N9H", "expected": "N9HO", "match": false },
+    { "sent": "K9QRO", "expected": "K9QRO", "match": true },
+    { "sent": "k9qro", "expected": "K9QRO", "match": true },
+    { "sent": "K9QRO K9QRO", "expected": "K9QRO", "match": true },
+    { "sent": "K9QROK9QRO", "expected": "K9QRO", "match": true },
+    { "sent": "K9QRO K9QRO K9QRO", "expected": "K9QRO", "match": false },
+    { "sent": "K9QR", "expected": "K9QRO", "match": false },
     { "sent": "5NN WI 73", "expected": "5NN WI 73", "match": true },
     { "sent": "5NNWI73", "expected": "5NN WI 73", "match": true },
     { "sent": "5NN WI", "expected": "5NN WI 73", "match": false },
     { "sent": "?", "expected": "?", "match": true },
-    { "sent": "", "expected": "N9HO", "match": false }
+    { "sent": "", "expected": "K9QRO", "match": false }
   ],
   "partialCases": [
-    { "call": "N9HO", "partials": ["?", "N9?", "N9H?"] },
+    { "call": "K9QRO", "partials": ["?", "K9?", "K9Q?", "K9QR?"] },
     { "call": "KD9ABC", "partials": ["?", "KD?", "KD9?", "KD9A?", "KD9AB?"] },
     { "call": "K4X", "partials": ["?", "K4?"] },
     { "call": "W1AW/4", "partials": ["?", "W1?", "W1A?", "W1AW?"] }
   ],
   "partialRounds": [
-    { "call": "N9HO", "round": 0, "partial": "?" },
-    { "call": "N9HO", "round": 1, "partial": "N9?" },
-    { "call": "N9HO", "round": 2, "partial": "N9H?" },
-    { "call": "N9HO", "round": 3, "partial": "?" },
+    { "call": "K9QRO", "round": 0, "partial": "?" },
+    { "call": "K9QRO", "round": 1, "partial": "K9?" },
+    { "call": "K9QRO", "round": 2, "partial": "K9Q?" },
+    { "call": "K9QRO", "round": 3, "partial": "K9QR?" },
+    { "call": "K9QRO", "round": 4, "partial": "?" },
     { "call": "K4X", "round": 5, "partial": "K4?" }
   ],
   "scenes": [
     {
-      "name": "busted call, N9HO / N9?",
+      "name": "busted call, K9QRO / K9?",
       "scene": "bustedCall",
-      "call": "N9HO", "state": "WI", "activator": "K4RTZ", "activatorState": "NC", "partial": "N9?",
+      "call": "K9QRO", "state": "WI", "activator": "K4RTZ", "activatorState": "NC", "partial": "K9?",
       "beats": [
         { "kind": "hear", "text": "CQ POTA DE K4RTZ K", "cue": "cq" },
-        { "kind": "send", "text": "N9HO", "cue": "callThem" },
-        { "kind": "hear", "text": "N9?", "cue": "partial" },
-        { "kind": "send", "text": "N9HO", "cue": "resend" },
-        { "kind": "hear", "text": "N9HO 5NN NC NC BK", "cue": "ack" }
+        { "kind": "send", "text": "K9QRO", "cue": "callThem" },
+        { "kind": "hear", "text": "K9?", "cue": "partial" },
+        { "kind": "send", "text": "K9QRO", "cue": "resend" },
+        { "kind": "hear", "text": "K9QRO 5NN NC NC BK", "cue": "ack" }
       ]
     },
     {
@@ -165,37 +166,37 @@
     {
       "name": "no reply, scene A",
       "scene": "noReplyA",
-      "call": "N9HO", "state": "WI", "activator": "K4RTZ", "activatorState": "NC",
+      "call": "K9QRO", "state": "WI", "activator": "K4RTZ", "activatorState": "NC",
       "beats": [
         { "kind": "hear", "text": "CQ POTA DE K4RTZ K", "cue": "cq" },
-        { "kind": "send", "text": "N9HO", "cue": "callThem" },
+        { "kind": "send", "text": "K9QRO", "cue": "callThem" },
         { "kind": "silence", "text": "", "cue": "noReply" },
-        { "kind": "send", "text": "N9HO", "cue": "callAgain" },
-        { "kind": "hear", "text": "N9HO 5NN NC NC BK", "cue": "ack" }
+        { "kind": "send", "text": "K9QRO", "cue": "callAgain" },
+        { "kind": "hear", "text": "K9QRO 5NN NC NC BK", "cue": "ack" }
       ]
     },
     {
       "name": "no reply, scene B",
       "scene": "noReplyB",
-      "call": "N9HO", "state": "WI", "activator": "K4RTZ", "activatorState": "NC", "otherHunter": "W8KDP",
+      "call": "K9QRO", "state": "WI", "activator": "K4RTZ", "activatorState": "NC", "otherHunter": "W8KDP",
       "beats": [
         { "kind": "hear", "text": "CQ POTA DE K4RTZ K", "cue": "cq" },
-        { "kind": "send", "text": "N9HO", "cue": "callThem" },
+        { "kind": "send", "text": "K9QRO", "cue": "callThem" },
         { "kind": "hear", "text": "W8KDP 5NN NC NC BK", "cue": "otherStation" },
         { "kind": "wait", "text": "", "cue": "stayQuiet" },
         { "kind": "hear", "text": "TU 73 QRZ", "cue": "qrz" },
-        { "kind": "send", "text": "N9HO", "cue": "callAgain" },
-        { "kind": "hear", "text": "N9HO 5NN NC NC BK", "cue": "ack" }
+        { "kind": "send", "text": "K9QRO", "cue": "callAgain" },
+        { "kind": "hear", "text": "K9QRO 5NN NC NC BK", "cue": "ack" }
       ]
     },
     {
-      "name": "walkthrough, N9HO in WI",
+      "name": "walkthrough, K9QRO in WI",
       "scene": "walkthrough",
-      "call": "N9HO", "state": "WI", "activator": "K4RTZ", "activatorState": "NC",
+      "call": "K9QRO", "state": "WI", "activator": "K4RTZ", "activatorState": "NC",
       "beats": [
         { "kind": "hear", "text": "CQ POTA DE K4RTZ K4RTZ K", "cue": "cq" },
-        { "kind": "send", "text": "N9HO", "cue": "callThem" },
-        { "kind": "copy", "text": "N9HO 5NN NC NC BK", "answer": "NC", "cue": "theirExchange" },
+        { "kind": "send", "text": "K9QRO", "cue": "callThem" },
+        { "kind": "copy", "text": "K9QRO 5NN NC NC BK", "answer": "NC", "cue": "theirExchange" },
         { "kind": "send", "text": "5NN WI 73", "cue": "yourExchange" },
         { "kind": "hear", "text": "TU 73 E E", "cue": "signOff" }
       ]
@@ -216,14 +217,14 @@
   "sceneRuns": [
     {
       "name": "busted call with two mistakes",
-      "scene": "busted call, N9HO / N9?",
+      "scene": "busted call, K9QRO / K9?",
       "steps": [
         { "response": "continued", "verdict": "advance" },
-        { "response": "sent", "text": "N9H", "verdict": "sentWrong" },
-        { "response": "sent", "text": "N9HO", "verdict": "advance" },
+        { "response": "sent", "text": "K9QR", "verdict": "sentWrong" },
+        { "response": "sent", "text": "K9QRO", "verdict": "advance" },
         { "response": "continued", "verdict": "advance" },
         { "response": "waited", "verdict": "yourTurn" },
-        { "response": "sent", "text": "N9HO N9HO", "verdict": "advance" },
+        { "response": "sent", "text": "K9QRO K9QRO", "verdict": "advance" },
         { "response": "continued", "verdict": "advance" },
         { "response": "continued", "verdict": "finished" }
       ],
@@ -234,23 +235,23 @@
       "scene": "no reply, scene B",
       "steps": [
         { "response": "continued", "verdict": "advance" },
-        { "response": "sent", "text": "N9HO", "verdict": "advance" },
-        { "response": "sent", "text": "N9HO", "verdict": "notYourTurn" },
+        { "response": "sent", "text": "K9QRO", "verdict": "advance" },
+        { "response": "sent", "text": "K9QRO", "verdict": "notYourTurn" },
         { "response": "continued", "verdict": "advance" },
-        { "response": "sent", "text": "N9HO", "verdict": "stayQuiet" },
+        { "response": "sent", "text": "K9QRO", "verdict": "stayQuiet" },
         { "response": "waited", "verdict": "advance" },
         { "response": "continued", "verdict": "advance" },
-        { "response": "sent", "text": "N9HO", "verdict": "advance" },
+        { "response": "sent", "text": "K9QRO", "verdict": "advance" },
         { "response": "continued", "verdict": "advance" }
       ],
       "finished": true, "mistakes": 2, "clean": false
     },
     {
       "name": "walkthrough, clean",
-      "scene": "walkthrough, N9HO in WI",
+      "scene": "walkthrough, K9QRO in WI",
       "steps": [
         { "response": "continued", "verdict": "advance" },
-        { "response": "sent", "text": "N9HO", "verdict": "advance" },
+        { "response": "sent", "text": "K9QRO", "verdict": "advance" },
         { "response": "copied", "text": "nc", "verdict": "advance" },
         { "response": "sent", "text": "5NNWI73", "verdict": "advance" },
         { "response": "continued", "verdict": "advance" }
@@ -259,10 +260,10 @@
     },
     {
       "name": "walkthrough, wrong copy then unfinished",
-      "scene": "walkthrough, N9HO in WI",
+      "scene": "walkthrough, K9QRO in WI",
       "steps": [
         { "response": "continued", "verdict": "advance" },
-        { "response": "sent", "text": "N9HO", "verdict": "advance" },
+        { "response": "sent", "text": "K9QRO", "verdict": "advance" },
         { "response": "copied", "text": "NY", "verdict": "copyWrong" },
         { "response": "continued", "verdict": "copyWrong" },
         { "response": "copied", "text": "NC", "verdict": "advance" }

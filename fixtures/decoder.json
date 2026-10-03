@@ -19,7 +19,7 @@
   "cases": [
     {
       "name": "clean 25 WPM at 700 Hz (8 kHz PCM)",
-      "message": "CQ CQ DE N9HO N9HO K",
+      "message": "CQ CQ DE W1AW W1AW K",
       "wpm": 25.0,
       "toneHz": 700.0,
       "sampleRate": 8000.0,
@@ -33,13 +33,13 @@
         30.0
       ],
       "renderedSamples": 92928,
-      "absSum": 212864337,
-      "expectedText": "CQ CQ DE N9HO N9HO K",
+      "absSum": 216790203,
+      "expectedText": "CQ CQ DE W1AW W1AW K",
       "note": "the baseline: hard-keyed CW at the core's default pitch, decoded at its native rate"
     },
     {
       "name": "pitch search recovers a 620 Hz signal against the 700 Hz default",
-      "message": "CQ CQ DE N9HO N9HO K",
+      "message": "CQ CQ DE W1AW W1AW K",
       "wpm": 25.0,
       "toneHz": 620.0,
       "sampleRate": 8000.0,
@@ -51,13 +51,13 @@
       "expectedToneHz": 620.0,
       "toneToleranceHz": 25.0,
       "renderedSamples": 92928,
-      "absSum": 212991190,
-      "expectedText": "CQ CQ DE N9HO N9HO K",
+      "absSum": 216909650,
+      "expectedText": "CQ CQ DE W1AW W1AW K",
       "note": "80 Hz off the seed pitch, inside the 500-900 Hz search window"
     },
     {
       "name": "stays solid through seeded noise (~20 dB SNR)",
-      "message": "CQ CQ DE N9HO N9HO K",
+      "message": "CQ CQ DE W1AW W1AW K",
       "wpm": 25.0,
       "toneHz": 700.0,
       "sampleRate": 8000.0,
@@ -67,8 +67,8 @@
       "inputRate": 8000,
       "passes": 1,
       "renderedSamples": 92928,
-      "absSum": 239224387,
-      "expectedText": "CQ CQ DE N9HO N9HO K",
+      "absSum": 242681913,
+      "expectedText": "CQ CQ DE W1AW W1AW K",
       "note": "uniform noise at 1/8 of the tone amplitude is ~20 dB SNR by power, far inside the ~11 dB limit measured for this core, so the case stays deterministic across toolchains and math libraries"
     },
     {
@@ -104,7 +104,7 @@
       "note": "the same PCM twice with a reset between; both passes must copy cleanly"
     },
     {
-      "message": "CQ CQ DE N9HO N9HO K",
+      "message": "CQ CQ DE W1AW W1AW K",
       "wpm": 25.0,
       "toneHz": 700.0,
       "sampleRate": 8000.0,
@@ -120,12 +120,12 @@
       ],
       "name": "pre-filter is transparent on clean CW",
       "renderedSamples": 92928,
-      "absSum": 212864337,
-      "expectedText": "CQ CQ DE N9HO N9HO K",
+      "absSum": 216790203,
+      "expectedText": "CQ CQ DE W1AW W1AW K",
       "note": "the baseline again, through the noise blanker: same copy and the speed estimate still lands"
     },
     {
-      "message": "CQ CQ DE N9HO N9HO K",
+      "message": "CQ CQ DE W1AW W1AW K",
       "wpm": 25.0,
       "toneHz": 700.0,
       "sampleRate": 8000.0,
@@ -137,12 +137,12 @@
       "prefilter": true,
       "name": "pre-filter leaves 8 dB hiss to the core",
       "renderedSamples": 92928,
-      "absSum": 321762005,
-      "expectedText": "CQ CQ DE N9HO N9HO K",
+      "absSum": 323886938,
+      "expectedText": "CQ CQ DE W1AW W1AW K",
       "note": "uniform noise at ~8 dB SNR by power; the bare core copies this on its own, and the blanker must not take that away"
     },
     {
-      "message": "CQ CQ DE N9HO N9HO K",
+      "message": "CQ CQ DE W1AW W1AW K",
       "wpm": 25.0,
       "toneHz": 700.0,
       "sampleRate": 8000.0,
@@ -160,12 +160,12 @@
       "crashMaxMs": 40.0,
       "crashSeed": 7,
       "renderedSamples": 92928,
-      "absSum": 215336553,
-      "expectedText": "CQ CQ DE N9HO N9HO K",
+      "absSum": 219107836,
+      "expectedText": "CQ CQ DE W1AW W1AW K",
       "note": "QRN: one 5-40 ms broadband burst per second at the tone's own amplitude splits characters in the bare core; blanked, it copies"
     },
     {
-      "message": "CQ CQ DE N9HO N9HO K",
+      "message": "CQ CQ DE W1AW W1AW K",
       "wpm": 25.0,
       "toneHz": 700.0,
       "sampleRate": 8000.0,
@@ -183,12 +183,12 @@
       "crashMaxMs": 40.0,
       "crashSeed": 7,
       "renderedSamples": 92928,
-      "absSum": 242618063,
-      "expectedText": "CQ CQ DE N9HO N9HO K",
+      "absSum": 249125074,
+      "expectedText": "CQ CQ DE W1AW W1AW K",
       "note": "heavier QRN: the bare core sprays stray E's and merges words"
     },
     {
-      "message": "CQ CQ DE N9HO N9HO K",
+      "message": "CQ CQ DE W1AW W1AW K",
       "wpm": 25.0,
       "toneHz": 700.0,
       "sampleRate": 8000.0,
@@ -206,12 +206,12 @@
       "crashMaxMs": 40.0,
       "crashSeed": 7,
       "renderedSamples": 92928,
-      "absSum": 263872784,
-      "expectedText": "CQ CQ DE N9HO N9HO K",
+      "absSum": 267706330,
+      "expectedText": "CQ CQ DE W1AW W1AW K",
       "note": "near the blanker's limit: about a tenth of the time is crash"
     },
     {
-      "message": "CQ CQ DE N9HO N9HO K",
+      "message": "CQ CQ DE W1AW W1AW K",
       "wpm": 25.0,
       "toneHz": 700.0,
       "sampleRate": 8000.0,
@@ -229,12 +229,12 @@
       "crashMaxMs": 40.0,
       "crashSeed": 7,
       "renderedSamples": 92928,
-      "absSum": 291902053,
-      "expectedText": "CQ CQ DE N9HO N9HO K",
+      "absSum": 296789585,
+      "expectedText": "CQ CQ DE W1AW W1AW K",
       "note": "both kinds of QRN at once"
     },
     {
-      "message": "CQ CQ DE N9HO N9HO K",
+      "message": "CQ CQ DE W1AW W1AW K",
       "wpm": 25.0,
       "toneHz": 700.0,
       "sampleRate": 48000.0,
@@ -252,12 +252,12 @@
       "crashMaxMs": 40.0,
       "crashSeed": 7,
       "renderedSamples": 557568,
-      "absSum": 1436123732,
-      "expectedText": "CQ CQ DE N9HO N9HO K",
+      "absSum": 1472123329,
+      "expectedText": "CQ CQ DE W1AW W1AW K",
       "note": "the phone's own rate; the blanker runs at the input rate ahead of the core's decimator"
     },
     {
-      "message": "CQ CQ DE N9HO N9HO K",
+      "message": "CQ CQ DE W1AW W1AW K",
       "wpm": 15.0,
       "toneHz": 620.0,
       "sampleRate": 8000.0,
@@ -276,8 +276,8 @@
       "crashMaxMs": 40.0,
       "crashSeed": 7,
       "renderedSamples": 148480,
-      "absSum": 357566964,
-      "expectedText": "CQ CQ DE N9HO N9HO K",
+      "absSum": 363999238,
+      "expectedText": "CQ CQ DE W1AW W1AW K",
       "note": "the blanker follows the core's pitch lock; the continuation must be at the real pitch, not the 700 Hz default"
     }
   ]
