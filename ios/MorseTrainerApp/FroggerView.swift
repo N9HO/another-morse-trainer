@@ -122,8 +122,9 @@ struct FroggerView: View {
                     .font(.footnote)
                     .foregroundStyle(Theme.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
-                Text("Labels show for the first two crossings, hide once a lane is cued from the third, "
-                     + "and from the fifth the traffic announces itself in Morse instead.")
+                Text("Labels show for the first two crossings. From the third, a lane's labels show for "
+                     + "three seconds after its cue and then hide, so keep your eye on the one you heard. "
+                     + "From the fifth, the traffic announces itself in Morse instead.")
                     .font(.footnote)
                     .foregroundStyle(Theme.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -170,12 +171,22 @@ struct FroggerView: View {
                 }
             }
             .frame(maxHeight: .infinity)
-            Text(hud.stage == .hidden ? "Tap the board to hear the next lane's cue again; the traffic announces itself"
-                 : "Tap the board to hear the next lane's cue again")
+            Text(replayHint)
                 .font(.caption)
                 .foregroundStyle(Theme.textSecondary)
                 .multilineTextAlignment(.center)
             directionPad
+        }
+    }
+
+    /// What the line under the board says, by label stage (#296: the memory
+    /// stage says the labels will go, and what to do about it).
+    private var replayHint: String {
+        switch hud.stage {
+        case .visible: return "Tap the board to hear the next lane's cue again"
+        case .memory:  return "Labels hide three seconds after the cue: keep your eye on the one you heard. "
+                            + "Tap the board to hear the cue again"
+        case .hidden:  return "Tap the board to hear the next lane's cue again; the traffic announces itself"
         }
     }
 
@@ -437,7 +448,12 @@ struct FroggerView: View {
                 cueToneEnd = [:]
             case .crossed(let points):
                 Haptics.success()
-                flash("Across! +\(points) — wave \(game.wave)", for: 1.2)
+                // The first wave of each harder label stage says what changed (#296).
+                switch game.wave {
+                case FroggerGame.memoryFromWave: flash("Wave \(game.wave): labels hide after the cue", for: 2.5)
+                case FroggerGame.hiddenFromWave: flash("Wave \(game.wave): no labels, listen to the traffic", for: 2.5)
+                default: flash("Across! +\(points) — wave \(game.wave)", for: 1.2)
+                }
                 cueToneEnd = [:]
             case .entered(let object):
                 // From wave 5 the traffic in the lane ahead announces itself.

@@ -25,7 +25,8 @@ public enum FroggerLaneKind: String, Sendable {
 }
 
 /// How much the labels help, by wave: every label shown; a lane's labels
-/// hidden once it has been cued (cross from memory); no labels at all, the
+/// shown for `FroggerGame.memoryLookSeconds` after its cue and then hidden
+/// (watch the one you heard and cross from memory); no labels at all, the
 /// objects announcing themselves in Morse as they enter.
 public enum FroggerLabelStage: String, Sendable {
     case visible, memory, hidden
@@ -160,10 +161,18 @@ public final class FroggerGame {
     public static let pointsPerDecision = 50
     public static let pointsPerCrossing = 200
 
-    /// The difficulty ladder: labels shown through wave 2, hidden once cued
-    /// from wave 3, gone (objects announce themselves) from wave 5.
+    /// The difficulty ladder: labels shown through wave 2, hidden a moment
+    /// after the lane is cued from wave 3, gone (objects announce
+    /// themselves) from wave 5.
     public static let memoryFromWave = 3
     public static let hiddenFromWave = 5
+    /// In the memory stage, how long a cued lane keeps its labels, in game
+    /// seconds from the cue: long enough to hear the cue and spot the object
+    /// carrying it, then the labels go and the player tracks it by eye
+    /// (#296). Before this the labels went the instant the lane was cued, so
+    /// the lane you had to choose in was always blank, and a fresh wave's
+    /// first lane was never labelled at all.
+    public static let memoryLookSeconds = 3.0
 
     // Speed ramp, the game's own constants (Invaders has its own): open 8 WPM
     // under the character speed, never under the app-wide floor, step up 2
@@ -190,6 +199,17 @@ public final class FroggerGame {
         return .visible
     }
 
+    /// Whether a lane's labels are drawn: always at `.visible`, never at
+    /// `.hidden`, and at `.memory` until `memoryLookSeconds` after its cue.
+    /// `secondsSinceCue` is nil for a lane not cued this crossing.
+    public static func labelsVisible(stage: FroggerLabelStage, secondsSinceCue: Double?) -> Bool {
+        switch stage {
+        case .visible: return true
+        case .memory:  return secondsSinceCue.map { $0 < memoryLookSeconds } ?? true
+        case .hidden:  return false
+        }
+    }
+
     public static func rampStart(characterWpm: Double) -> Double {
         max(minWpm, characterWpm - rampStartOffset)
     }
@@ -214,6 +234,8 @@ public final class FroggerGame {
     public private(set) var ridingId: Int?
     /// The cue for each cued lane this crossing, by row.
     public private(set) var cues: [Int: Character] = [:]
+    /// When each cued lane got its cue, in game seconds (`elapsed`), by row.
+    private var cuedAt: [Int: Double] = [:]
     public private(set) var score = 0
     public private(set) var wave = 1
     public private(set) var lives: Int
@@ -254,13 +276,9 @@ public final class FroggerGame {
 
     public var labelStage: FroggerLabelStage { Self.labelStage(wave: wave) }
 
-    /// Whether `row`'s labels are drawn at this wave.
+    /// Whether `row`'s labels are drawn now.
     public func isLabelVisible(row: Int) -> Bool {
-        switch labelStage {
-        case .visible: return true
-        case .memory:  return cues[row] == nil
-        case .hidden:  return false
-        }
+        Self.labelsVisible(stage: labelStage, secondsSinceCue: cuedAt[row].map { elapsed - $0 })
     }
 
     /// The cue for the lane above the frog, if that is a lane.
@@ -437,6 +455,7 @@ public final class FroggerGame {
         passingIds = []
         maxRowThisCrossing = 0
         cues = [:]
+        cuedAt = [:]
     }
 
     /// Give `row` its cue if it is a lane without one: one of the characters
@@ -453,6 +472,7 @@ public final class FroggerGame {
         guard !labels.isEmpty else { return nil }
         let character = labels[Int.random(in: 0..<labels.count, using: &rng)]
         cues[row] = character
+        cuedAt[row] = elapsed
         return character
     }
 

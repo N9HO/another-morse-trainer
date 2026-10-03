@@ -59,6 +59,7 @@ class FroggerTest {
         assertEquals(d.getInt("pointsPerCrossing"), FroggerGame.pointsPerCrossing)
         assertEquals(d.getInt("memoryFromWave"), FroggerGame.memoryFromWave)
         assertEquals(d.getInt("hiddenFromWave"), FroggerGame.hiddenFromWave)
+        assertEquals(d.getDouble("memoryLookSeconds"), FroggerGame.memoryLookSeconds, 0.0)
     }
 
     @Test
@@ -191,6 +192,47 @@ class FroggerTest {
         assertEquals(totals.getInt("decisions").toDouble() / (totals.getInt("decisions") + totals.getInt("misses")), g.accuracy, 1e-9)
     }
 
+    @Test
+    fun labelVisibilityFollowsTheFixtureTable() {
+        // #296: a memory-stage lane keeps its labels for a look after its cue.
+        val cases = fixture.getJSONObject("labelVisibility").getJSONArray("cases")
+        assertTrue(cases.length() > 0)
+        for (i in 0 until cases.length()) {
+            val c = cases.getJSONObject(i)
+            val stage = FroggerLabelStage.valueOf(c.getString("stage").uppercase())
+            val since = if (c.isNull("secondsSinceCue")) null else c.getDouble("secondsSinceCue")
+            assertEquals("$stage at ${since ?: "uncued"}", c.getBoolean("visible"), FroggerGame.labelsVisible(stage, since))
+        }
+    }
+
+    @Test
+    fun memoryStageShowsACuedLaneForALookThenHidesIt() {
+        val ms = fixture.getJSONObject("memoryScenario")
+        val g = FroggerGame(
+            FroggerGame.Config(
+                characters = ms.getString("pool").toList(), difficulty = difficulty(ms.getString("difficulty")),
+                characterWpm = ms.getDouble("characterWpm")
+            ),
+            rng = Random(296)
+        )
+        repeat(ms.getInt("openingHops")) { g.move(FroggerDirection.UP) }
+        val steps = ms.getJSONArray("steps")
+        assertTrue(steps.length() > 0)
+        for (i in 0 until steps.length()) {
+            val step = steps.getJSONObject(i)
+            if (step.has("advance")) g.advance(step.getDouble("advance"))
+            else if (step.has("move")) g.move(FroggerDirection.valueOf(step.getString("move").uppercase()))
+            val tag = "memory step $i"
+            assertEquals("$tag: wave", step.getInt("wave"), g.wave)
+            assertEquals("$tag: stage", FroggerLabelStage.valueOf(step.getString("stage").uppercase()), g.labelStage)
+            assertEquals("$tag: row", step.getInt("row"), g.frog.row)
+            val shown = step.getJSONArray("shown")
+            for (j in 0 until shown.length()) assertTrue("$tag: row ${shown.getInt(j)} labelled", g.isLabelVisible(shown.getInt(j)))
+            val blank = step.getJSONArray("blank")
+            for (j in 0 until blank.length()) assertFalse("$tag: row ${blank.getInt(j)} blank", g.isLabelVisible(blank.getInt(j)))
+        }
+    }
+
     // Rules the fixture leaves to the random generator.
 
     private fun middle(g: FroggerGame, row: Int): FroggerObject? =
@@ -315,12 +357,19 @@ class FroggerTest {
         repeat(2) { repeat(8) { g.move(FroggerDirection.UP) } }
         assertEquals(3, g.wave)
         assertEquals(FroggerLabelStage.MEMORY, g.labelStage)
-        assertFalse("lane 1 is cued, so hidden", g.isLabelVisible(1))
+        assertTrue("lane 1 has just been cued: still labelled for a look (#296)", g.isLabelVisible(1))
         assertTrue("lane 2 is not cued yet", g.isLabelVisible(2))
         repeat(2) { repeat(8) { g.move(FroggerDirection.UP) } }
         assertEquals(5, g.wave)
         assertEquals(FroggerLabelStage.HIDDEN, g.labelStage)
         assertTrue((1..7).none { g.isLabelVisible(it) })
+
+        // After the look, a cued lane is blank and an uncued one is not.
+        val look = FroggerGame(FroggerGame.Config(characters = listOf('K')), rng = Random(6))
+        repeat(2) { repeat(8) { look.move(FroggerDirection.UP) } }
+        look.advance(FroggerGame.memoryLookSeconds + 0.1)
+        assertFalse("lane 1's look is over", look.isLabelVisible(1))
+        assertTrue("lane 2 is not cued yet", look.isLabelVisible(2))
     }
 
     @Test

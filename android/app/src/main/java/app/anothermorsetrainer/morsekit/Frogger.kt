@@ -31,7 +31,8 @@ enum class FroggerLaneKind { ROAD, RIVER }
 
 /**
  * How much the labels help, by wave: every label shown; a lane's labels
- * hidden once it has been cued (cross from memory); no labels at all, the
+ * shown for [FroggerGame.memoryLookSeconds] after its cue and then hidden
+ * (watch the one you heard and cross from memory); no labels at all, the
  * objects announcing themselves in Morse as they enter.
  */
 enum class FroggerLabelStage { VISIBLE, MEMORY, HIDDEN }
@@ -118,6 +119,8 @@ class FroggerGame(
     /** The cue for each cued lane this crossing, by row. */
     var cues: Map<Int, Char> = emptyMap()
         private set
+    /** When each cued lane got its cue, in game seconds ([elapsed]), by row. */
+    private var cuedAt: Map<Int, Double> = emptyMap()
     var score = 0
         private set
     var wave = 1
@@ -159,12 +162,9 @@ class FroggerGame(
 
     val labelStage: FroggerLabelStage get() = labelStage(wave)
 
-    /** Whether [row]'s labels are drawn at this wave. */
-    fun isLabelVisible(row: Int): Boolean = when (labelStage) {
-        FroggerLabelStage.VISIBLE -> true
-        FroggerLabelStage.MEMORY -> cues[row] == null
-        FroggerLabelStage.HIDDEN -> false
-    }
+    /** Whether [row]'s labels are drawn now. */
+    fun isLabelVisible(row: Int): Boolean =
+        labelsVisible(labelStage, cuedAt[row]?.let { elapsed - it })
 
     /** The cue for the lane above the frog, if that is a lane. */
     val nextCue: Char? get() = cues[frog.row + 1]
@@ -340,6 +340,7 @@ class FroggerGame(
         passingIds = emptySet()
         maxRowThisCrossing = 0
         cues = emptyMap()
+        cuedAt = emptyMap()
     }
 
     /**
@@ -357,6 +358,7 @@ class FroggerGame(
         if (labels.isEmpty()) return null
         val character = labels[rng.nextInt(labels.size)]
         cues = cues + (row to character)
+        cuedAt = cuedAt + (row to elapsed)
         return character
     }
 
@@ -404,11 +406,21 @@ class FroggerGame(
         const val pointsPerCrossing = 200
 
         /**
-         * The difficulty ladder: labels shown through wave 2, hidden once cued
-         * from wave 3, gone (objects announce themselves) from wave 5.
+         * The difficulty ladder: labels shown through wave 2, hidden a moment
+         * after the lane is cued from wave 3, gone (objects announce
+         * themselves) from wave 5.
          */
         const val memoryFromWave = 3
         const val hiddenFromWave = 5
+        /**
+         * In the memory stage, how long a cued lane keeps its labels, in game
+         * seconds from the cue: long enough to hear the cue and spot the
+         * object carrying it, then the labels go and the player tracks it by
+         * eye (#296). Before this the labels went the instant the lane was
+         * cued, so the lane you had to choose in was always blank, and a
+         * fresh wave's first lane was never labelled at all.
+         */
+        const val memoryLookSeconds = 3.0
 
         // Speed ramp, the game's own constants (Invaders has its own): open 8
         // WPM under the character speed, never under the app-wide floor, step
@@ -430,6 +442,17 @@ class FroggerGame(
             wave >= hiddenFromWave -> FroggerLabelStage.HIDDEN
             wave >= memoryFromWave -> FroggerLabelStage.MEMORY
             else -> FroggerLabelStage.VISIBLE
+        }
+
+        /**
+         * Whether a lane's labels are drawn: always at VISIBLE, never at
+         * HIDDEN, and at MEMORY until [memoryLookSeconds] after its cue.
+         * [secondsSinceCue] is null for a lane not cued this crossing.
+         */
+        fun labelsVisible(stage: FroggerLabelStage, secondsSinceCue: Double?): Boolean = when (stage) {
+            FroggerLabelStage.VISIBLE -> true
+            FroggerLabelStage.MEMORY -> secondsSinceCue?.let { it < memoryLookSeconds } ?: true
+            FroggerLabelStage.HIDDEN -> false
         }
 
         fun rampStart(characterWpm: Double): Double = max(minWpm, characterWpm - rampStartOffset)
