@@ -93,14 +93,6 @@ private fun PileupEngine.Voice.toMix() = MorsePlayer.PileupVoice(
     qsbRate = if (qsb) 0.3 else null
 )
 
-/** What you'd key to start a run in this flavour (self-keying uses it verbatim). */
-private fun cqText(mode: QSOContestMode, call: String): String = when (mode) {
-    QSOContestMode.SingleCaller -> "CQ CQ DE $call K"
-    QSOContestMode.Pota -> "CQ POTA $call"
-    QSOContestMode.FieldDay -> "CQ FD $call"
-    else -> "CQ TEST $call"
-}
-
 /**
  * Work a CW pileup: pick the exchange flavour and realism, call CQ, hear
  * several stations answer at once, copy one call and send it, then copy that
@@ -298,16 +290,14 @@ fun PileupScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) 
             }
             is PileupEngine.Action.Logged -> {
                 if (Settings.hapticsEnabled) haptics.success()
-                playSelfThen(if (keyed) null else "TU") {
-                    // Back to the run without another button press (iOS #35): the
-                    // rest of the pileup calls again, or a fresh CQ tops it up.
-                    if (PileupSettings.autoRecall) {
-                        val next = if (e.stations.isEmpty()) e.callCQ() else e.repeatRequest()
-                        if (next is PileupEngine.Action.Play) {
-                            player.playPileup(next.voices.map { it.toMix() }, qrn = PileupSettings.qrn.level) {}
-                        }
-                        rev++
-                        syncRun()
+                // Back to the run without another button press (iOS #35): with
+                // re-call on, the callers still waiting call again right after
+                // your TU; off, or with nobody left, the run waits for you
+                // (#323, the iOS rule, pinned by fixtures/qso-self-keying.json).
+                val recall = e.recallAfterLog(PileupSettings.autoRecall)
+                playSelfThen(if (keyed) null else PileupEngine.signOffText(PileupSettings.effectiveCall)) {
+                    if (recall is PileupEngine.Action.Play) {
+                        player.playPileup(recall.voices.map { it.toMix() }, qrn = PileupSettings.qrn.level) {}
                     }
                 }
             }
@@ -318,9 +308,14 @@ fun PileupScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) 
 
     fun submit(keyed: Boolean = false) {
         val e = engine ?: return
-        if (input.isBlank()) return
+        // Once the exchange is copied, any send logs it, an empty one too (#323).
+        if (input.isBlank() && e.phase !is PileupEngine.Phase.ReadyToLog) return
         val raw = input.trim()
+        val pre = e.phase
         val action = tracked(raw) { e.send(raw) }
+        // What goes on the air for it: "K1ABC 5NN", "R", "AGN?", "K1A?"... the
+        // words the iOS Pileup Runner keys (#323), never the raw typed text.
+        val said = PileupEngine.selfSendText(raw, pre, e.phase, e.workingStation?.call)
         // A typed repeat request ("W1?") while still hunting keeps the partial
         // call in the box — minus the "?" — so the user builds on it instead of
         // retyping (the iOS #49 fix). "Still hunting" includes the idle phase
@@ -329,7 +324,7 @@ fun PileupScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) 
         val frag = PileupEngine.fragment(raw)
         val stillHunting = e.phase is PileupEngine.Phase.Pileup || e.phase is PileupEngine.Phase.Idle
         input = if (PileupSettings.keepPartialCall && raw.endsWith("?") && frag.isNotEmpty() && stillHunting) frag else ""
-        perform(action, selfText = if (keyed) null else raw, keyed = keyed)
+        perform(action, selfText = if (keyed) null else said, keyed = keyed)
     }
 
     /**
@@ -402,8 +397,8 @@ fun PileupScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) 
                 onSend = { submit() },
                 reveal = reveal,
                 onToggleReveal = { reveal = !reveal },
-                onCQ = { perform(e.callCQ(), selfText = cqText(PileupSettings.mode, PileupSettings.effectiveCall)) },
-                onRepeat = { perform(e.repeatRequest()) },
+                onCQ = { perform(e.callCQ(), selfText = PileupEngine.cqText(PileupSettings.mode, PileupSettings.effectiveCall)) },
+                onRepeat = { perform(e.repeatRequest(), selfText = "AGN?") },
                 onLog = { perform(tracked(null) { e.logCurrent() }) },
                 onSettings = { showSettings = true },
                 onSwitchMode = ::switchTo,

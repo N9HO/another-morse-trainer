@@ -17,6 +17,22 @@ enum class MultiplierKind {
 }
 
 /**
+ * The Contest engine's config, built from the Pileup Runner's realism config
+ * (signals, callsign shapes, cut numbers, bust and give-up behaviour all carry
+ * over) with the contest's own exchange and its authentic speed band pinned,
+ * the caller cap read straight from the Max callers setting, and RST never
+ * required (SST/CWT carry none): the iOS `contestConfig()`. Pinned by
+ * `contestConfig` in fixtures/qso-self-keying.json (#323).
+ */
+fun PileupConfig.forContest(contest: ContestType, maxStations: Int): PileupConfig = copy(
+    mode = contest.qsoMode,
+    minWPM = contest.minWPM,
+    maxWPM = contest.maxWPM,
+    maxStations = maxOf(1, maxStations),
+    rstRequired = false
+)
+
+/**
  * A practice emulation of a real on-air CW contest. Each maps onto the
  * pileup/QSO engine's exchange ([QSOContestMode]) but pins the authentic
  * on-air speed band, a contest-length clock, and a scoring rule — so a session

@@ -141,3 +141,22 @@ public enum ContestType: String, Codable, CaseIterable, Identifiable, Sendable {
         }
     }
 }
+
+extension PileupConfig {
+    /// The Contest engine's config, built from the Pileup Runner's realism
+    /// config (signals, callsign shapes, cut numbers, bust and give-up
+    /// behaviour all carry over) with the contest's own exchange and its
+    /// authentic speed band pinned, the caller cap read straight from the
+    /// Max callers setting, and RST never required (SST/CWT carry none).
+    /// Pinned by `contestConfig` in fixtures/qso-self-keying.json, which the
+    /// Android and desktop Contest read too (#323).
+    public func forContest(_ contest: ContestType, maxStations: Int) -> PileupConfig {
+        var c = self
+        c.mode = contest.qsoMode
+        c.minWPM = contest.minWPM
+        c.maxWPM = contest.maxWPM
+        c.maxStations = max(1, maxStations)
+        c.rstRequired = false
+        return c
+    }
+}
