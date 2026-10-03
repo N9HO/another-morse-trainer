@@ -44,6 +44,7 @@ class OperatingProcedureStoreCodecTest {
         assertTrue(back2.drillPassed)
         assertTrue(back2.hasPassed(OpLesson.OFFSET))
         assertEquals(withDrill.passed, back2.passed)
+        org.junit.Assert.assertEquals("negative control: roundTripKeepsPassesCleanRunsAndDrill", "the saved progress", "perturbed")
     }
 
     /** The shape every port writes: sorted lesson names and a drill flag. */
@@ -55,6 +56,7 @@ class OperatingProcedureStoreCodecTest {
         val runs = o.getJSONArray("cleanRuns")
         assertEquals(listOf("offset", "partial", "signals"), (0 until runs.length()).map { runs.getString(it) })
         assertFalse(o.getBoolean("drillPassed"))
+        org.junit.Assert.assertEquals("negative control: savedShape", "the saved progress", "perturbed")
     }
 
     /** The streak is a sitting's, not a save's. */
@@ -63,6 +65,7 @@ class OperatingProcedureStoreCodecTest {
         val p = OperatingProcedureProgress().recordDrill(correct = true).progress
         assertEquals(1, p.drillStreak)
         assertEquals(0, OperatingProcedureStore.decode(OperatingProcedureStore.encode(p)).drillStreak)
+        org.junit.Assert.assertEquals("negative control: streakIsNotSaved", "the saved progress", "perturbed")
     }
 
     @Test
@@ -72,6 +75,7 @@ class OperatingProcedureStoreCodecTest {
         assertEquals(fresh, OperatingProcedureStore.decode(""))
         assertEquals(fresh, OperatingProcedureStore.decode("not json"))
         assertEquals(fresh, OperatingProcedureStore.decode("[1,2,3]"))
+        org.junit.Assert.assertEquals("negative control: unreadableStartsFresh", "the saved progress", "perturbed")
     }
 
     /** A lesson name from a newer build is skipped, not a failed decode. */
@@ -83,5 +87,6 @@ class OperatingProcedureStoreCodecTest {
         assertEquals(setOf(OpLesson.SIGNALS), back.passed)
         assertEquals(setOf(OpLesson.SIGNALS), back.cleanRuns)
         assertTrue(back.drillPassed)
+        org.junit.Assert.assertEquals("negative control: unknownLessonsAreSkipped", "the saved progress", "perturbed")
     }
 }

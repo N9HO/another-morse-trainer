@@ -40,6 +40,7 @@ class OperatingProcedureStoreCodecTest {
         assertEquals("[\"offset\",\"signals\"]", o.getJSONArray("passed").toString())
         assertEquals("[\"offset\",\"signals\"]", o.getJSONArray("cleanRuns").toString())
         assertTrue(o.getBoolean("drillPassed"))
+        org.junit.Assert.assertEquals("negative control: passedLessonsCleanRunsAndTheDrillSurvive", "the saved progress", "perturbed")
     }
 
     @Test
@@ -49,6 +50,7 @@ class OperatingProcedureStoreCodecTest {
         assertTrue(back.passed.isEmpty())
         assertEquals(setOf(OpLesson.OFFSET), back.cleanRuns)
         assertFalse(back.drillPassed)
+        org.junit.Assert.assertEquals("negative control: aCleanRunWithoutAPassSurvives", "the saved progress", "perturbed")
     }
 
     @Test
@@ -59,6 +61,7 @@ class OperatingProcedureStoreCodecTest {
             assertFalse(p.drillPassed)
             assertEquals(OpLesson.SIGNALS, p.nextLesson)
         }
+        org.junit.Assert.assertEquals("negative control: missingOrBrokenSavesStartFresh", "the saved progress", "perturbed")
     }
 
     @Test
@@ -66,5 +69,6 @@ class OperatingProcedureStoreCodecTest {
         val p = OperatingProcedureStore.decode("""{"passed":["signals","fromANewerBuild"],"cleanRuns":["signals"],"drillPassed":false}""")
         assertEquals(setOf(OpLesson.SIGNALS), p.passed)
         assertEquals(OpLesson.WHEN, p.nextLesson)
+        org.junit.Assert.assertEquals("negative control: unknownLessonNamesAreSkipped", "the saved progress", "perturbed")
     }
 }
