@@ -289,8 +289,7 @@ different result):
 
 Copy and labels (same feature, different words; pick one per row):
 reminder notification title and no-streak body; buddy footer, invite share
-text and the "New invite code" relabel; delete-scores dialog; the CW 77
-"no callsign set" hint; setting names (Side tone / Sidetone pitch, Speed /
+text and the "New invite code" relabel; delete-scores dialog; setting names (Side tone / Sidetone pitch, Speed /
 Character speed, Recognize within / Recognition target, Reveal the letter /
 Reveal answer, and the Pileup Runner rows); Android session rows showing
 record keys ("Pileup", "Stories") where iOS shows mode titles; fastest copy

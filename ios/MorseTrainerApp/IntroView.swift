@@ -1078,8 +1078,11 @@ private struct ModeOptionsCard: View {
     /// picker while CW 77 is chosen, and up front on the CW 77 mode's own
     /// sheet (Android parity): Bob Carter WR7Q's
     /// playback as a one-tap preset — an explicit tap that sets the global
-    /// speed, never a silent override — and the switch that adds your own
-    /// callsign and name, offered only when there is one to add.
+    /// speed, never a silent override — your callsign and name, and the
+    /// switch that adds them, offered only when there is one to add. The two
+    /// fields are Your Station's (Settings › QSO & Pileups) edited in place
+    /// (#293): the switch promised your name, and nobody drilling CW 77 could
+    /// find where to type it.
     @ViewBuilder
     private var cw77Options: some View {
         if model.settings.atCW77RecommendedSpeed {
@@ -1104,13 +1107,19 @@ private struct ModeOptionsCard: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
-        let personal = model.settings.cw77PersonalTokens
-        if personal.isEmpty {
-            Text("Add your callsign or name under Settings \u{203A} QSO & Pileups \u{203A} Your Station to drill them with CW 77.")
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Your callsign and name").font(.subheadline)
+            HStack(spacing: 8) {
+                cw77StationField("Callsign", prompt: "W1AW", text: $model.settings.qso.myCall)
+                cw77StationField("Name", prompt: "Optional", text: $model.settings.qso.myName)
+            }
+            Text("Once either is filled in, a switch below can add them to the CW 77 set. They're your station everywhere in the app, the same fields as Settings \u{203A} QSO & Pileups \u{203A} Your Station.")
                 .font(.footnote)
                 .foregroundStyle(Theme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
-        } else {
+        }
+        let personal = model.settings.cw77PersonalTokens
+        if !personal.isEmpty {
             Toggle(isOn: cw77IncludeMeBinding) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Include my callsign and name").font(.subheadline)
@@ -1122,6 +1131,25 @@ private struct ModeOptionsCard: View {
             }
             .tint(Theme.teal)
         }
+    }
+
+    /// One of CW 77's Your Station fields: a caption over a monospaced,
+    /// all-caps entry, as First Four asks for your callsign.
+    private func cw77StationField(_ title: String, prompt: String, text: Binding<String>) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(Theme.textSecondary)
+            TextField(prompt, text: text)
+                .textInputAutocapitalization(.characters)
+                .autocorrectionDisabled()
+                .font(.system(.body, design: .monospaced))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+                .background(Theme.navyRaised, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .accessibilityLabel("Your \(title.lowercased())")
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     // MARK: - Custom words (issue #32)
