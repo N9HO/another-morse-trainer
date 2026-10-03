@@ -9,8 +9,8 @@
 // Asked once. "Save" and "Not now" both answer it for good; Settings ›
 // QSO & Pileups › Your Station is where to change the station later, and
 // the prompt says so. An install whose callsign is already set is never
-// asked. The Android and desktop twins are `StationPrompt.kt`; their
-// Contest does not send your callsign, so there it is Pileup Runner only.
+// asked. The Android and desktop twins are `StationPrompt.kt`, opened by
+// the same two modes (#320).
 
 import SwiftUI
 

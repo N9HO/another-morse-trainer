@@ -21,11 +21,11 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 
 /**
- * Set up Your Station on first entry to Pileup Runner (#297). Pileup Runner
- * keys your callsign when you call CQ and sign off, and until it is set that
- * callsign is the W1AW placeholder: a first-time user found themselves on
- * the air as W1AW with no idea why. So the first time Pileup Runner's setup
- * opens while the callsign is still blank or W1AW, it asks for the station:
+ * Set up Your Station on first entry to Pileup Runner or Contest (#297,
+ * #320). Both key your callsign when you call CQ and sign off, and until it
+ * is set that callsign is the W1AW placeholder: a first-time user found
+ * themselves on the air as W1AW with no idea why. So the first time either
+ * mode's setup opens while the callsign is still blank or W1AW, it asks for the station:
  * callsign, and optionally name and state (CW 77 and First Four use those).
  *
  * Asked once. "Save" and "Not now" both answer it for good; Settings ›
