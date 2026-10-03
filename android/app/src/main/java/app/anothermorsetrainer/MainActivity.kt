@@ -31,6 +31,7 @@ class MainActivity : ComponentActivity() {
         Stats.init(this)
         DailyDitStore.init(this)
         FirstFourStore.init(this)
+        OperatingProcedureStore.init(this)
         JourneyStore.init(this)
         EngineStore.init(this)
         VoiceProfileStore.init(this)
@@ -174,6 +175,8 @@ private sealed interface Route {
     data object DailyDit : Route
     /** First Four (#265): the guided path to a first POTA contact. */
     data object FirstFour : Route
+    /** CW Operating Procedure (#294, #295): lessons, the zero-beat drill, "What should you do?". */
+    data object OperatingProcedure : Route
     data object Settings : Route
     data object Stats : Route
     /** The shared leaderboard, opened from Stats (docs/high-scores-design.md, step 2). */
@@ -227,6 +230,7 @@ private fun routeTag(route: Route): String = when (route) {
     Route.StartHere -> "startHere"
     Route.DailyDit -> "dailyDit"
     Route.FirstFour -> "firstFour"
+    Route.OperatingProcedure -> "operatingProcedure"
     Route.Settings -> "settings"
     Route.Stats -> "stats"
     Route.Leaderboard -> "leaderboard"
@@ -263,6 +267,7 @@ private fun routeFrom(tag: String): Route? = when (tag) {
     "startHere" -> Route.StartHere
     "dailyDit" -> Route.DailyDit
     "firstFour" -> Route.FirstFour
+    "operatingProcedure" -> Route.OperatingProcedure
     "settings" -> Route.Settings
     "stats" -> Route.Stats
     "leaderboard" -> Route.Leaderboard
@@ -396,6 +401,7 @@ private fun AppRoot() {
             onPickQrq = { launch(qrqTarget()) },
             onPickRapidFire = { route = Route.RapidFire },
             onPickGames = { route = Route.Games },
+            onPickOperating = { route = Route.OperatingProcedure },
             onPickStory = { launch(storyTarget()) },
             onPickSending = { launch(sendingTarget()) },
             onPickSendingDrills = { route = Route.SendingDrills },
@@ -479,6 +485,10 @@ private fun AppRoot() {
         Route.StartHere -> StartHereScreen(onBack = { route = Route.Home })
         Route.DailyDit -> DailyDitScreen(onBack = { route = Route.Home })
         Route.FirstFour -> FirstFourScreen(onBack = { route = Route.Home })
+        Route.OperatingProcedure -> OperatingProcedureScreen(
+            onBack = { route = Route.Home },
+            onOpenFirstFour = { route = Route.FirstFour }
+        )
         Route.Settings -> SettingsScreen(
             onBack = { route = Route.Home },
             // Developer Preview Stage: the track has been jumped and saved;
