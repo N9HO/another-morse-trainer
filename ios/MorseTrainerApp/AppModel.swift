@@ -342,6 +342,8 @@ final class AppModel: ObservableObject {
     /// CW Operating Procedure's playback token (`AppModel+OperatingProcedure.swift`):
     /// a newer clip or a stop cancels a demo's remaining lines.
     var operatingGeneration = 0
+    /// …and for the pieces of one clip (an error plays as its own piece).
+    var operatingClipGeneration = 0
     private let speech = SpeechPlayer()
     private var toneEndDate: Date?
     private var advanceGeneration = 0

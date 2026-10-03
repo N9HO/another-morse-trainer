@@ -233,10 +233,19 @@ struct OperatingProcedureView: View {
                 .foregroundStyle(Theme.textSecondary)
                 .multilineTextAlignment(.center)
 
-            Text("Procedure after WB0RLJ's “Advice for CW POTA Hunters”, with thanks, and the Parks on the Air CW Guide.")
-                .font(.caption)
-                .foregroundStyle(Theme.textSecondary)
-                .multilineTextAlignment(.center)
+            // The credit (maintainer, 2026-10-03): WB0RLJ's advice, linked,
+            // and his channel of daily activation recordings.
+            VStack(spacing: 6) {
+                Text("Procedure after WB0RLJ's “Advice for CW POTA Hunters”, with thanks, and the Parks on the Air CW Guide.")
+                    .font(.caption)
+                    .foregroundStyle(Theme.textSecondary)
+                    .multilineTextAlignment(.center)
+                Link("Advice for CW POTA Hunters (QRZ.com)", destination: OpCopy.adviceURL)
+                    .font(.caption.weight(.semibold))
+                Link("Jim Vaughan (WB0RLJ) on YouTube — his daily activations", destination: OpCopy.youTubeURL)
+                    .font(.caption.weight(.semibold))
+            }
+            .tint(Theme.teal)
 
             if progress.passedCount > 0 || progress.drillPassed || !progress.cleanRuns.isEmpty {
                 Button("Start over", role: .destructive) { confirmingReset = true }
@@ -395,7 +404,7 @@ private struct OpLessonScreen: View {
 }
 
 /// The idea: a few short paragraphs (and, for lesson 1, the signal table;
-/// for lesson 8, the rig table).
+/// for the offsetting lesson, the rig table).
 private struct OpConceptCard: View {
     @EnvironmentObject var model: AppModel
     let lesson: OpLesson
@@ -511,7 +520,7 @@ private struct OpDemoCard: View {
     }
 }
 
-// MARK: - Lesson 8's demos and drill (#294)
+// MARK: - The offsetting lesson's demos and drill (#294)
 
 /// The same pileup three times: everyone zero beat, only you offset,
 /// everyone offset — as the activator hears it.
@@ -778,7 +787,7 @@ private struct OpScenarioCard: View {
                             .multilineTextAlignment(.leading)
                             .fixedSize(horizontal: false, vertical: true)
                         Spacer(minLength: 0)
-                        if picked != nil, choice == scenario.correct {
+                        if picked != nil, scenario.accepts(choice) {
                             Image(systemName: "checkmark.circle.fill").foregroundStyle(Theme.tealBright)
                         } else if picked == choice {
                             Image(systemName: "xmark.circle.fill").foregroundStyle(.orange)
@@ -793,7 +802,7 @@ private struct OpScenarioCard: View {
                 .disabled(picked != nil)
             }
             if let picked {
-                let right = picked == scenario.correct
+                let right = scenario.accepts(picked)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(right ? "Right" : "Not this time")
                         .font(.subheadline.weight(.bold))
@@ -811,7 +820,7 @@ private struct OpScenarioCard: View {
 
     private func background(_ choice: OpChoice) -> Color {
         guard let picked else { return Theme.navyRaised }
-        if choice == scenario.correct { return Theme.teal.opacity(0.35) }
+        if scenario.accepts(choice) { return Theme.teal.opacity(0.35) }
         if choice == picked { return Color.orange.opacity(0.3) }
         return Theme.navyRaised.opacity(0.6)
     }
@@ -857,7 +866,7 @@ private struct OpLessonRun: View {
                 OpScenarioCard(scenario: scenario, call: call, state: state, picked: picked) { choice in
                     picked = choice
                     model.noteOperatingPractice()
-                    if choice == scenario.correct { Haptics.success() } else { Haptics.error() }
+                    if scenario.accepts(choice) { Haptics.success() } else { Haptics.error() }
                 }
                 if picked != nil {
                     Button { advance() } label: {
@@ -971,7 +980,7 @@ private struct OpScenarioMode: View {
                     OpScenarioCard(scenario: scenario, call: call, state: state, picked: picked) { choice in
                         picked = choice
                         model.noteOperatingPractice()
-                        if choice == scenario.correct { right += 1; Haptics.success() } else { Haptics.error() }
+                        if scenario.accepts(choice) { right += 1; Haptics.success() } else { Haptics.error() }
                     }
                     if picked != nil {
                         Button {
@@ -1037,6 +1046,17 @@ private struct OpScenarioMode: View {
 /// The section's words. The MorseKit rules pin ids and keys; the words are
 /// this platform's own, kept in step with Android's and desktop's strings.
 enum OpCopy {
+    // swiftlint:disable force_unwrapping
+    static let adviceURL = URL(string: "https://www.qrz.com/db/WB0RLJ#Advice")!
+    static let youTubeURL = URL(string: "https://www.youtube.com/@WB0RLJ")!
+    // swiftlint:enable force_unwrapping
+
+    /// The home card's subtitle, for the progress so far.
+    static func homeSubtitle(_ p: OperatingProcedureProgress) -> String {
+        if p.isComplete { return "Every lesson passed · pileups, partials, zero beat" }
+        if p.passedCount > 0 { return "\(p.passedCount) of \(OpLesson.allCases.count) lessons · the next step after First Four" }
+        return "The next step after First Four · pileups, partials, zero beat"
+    }
     static func title(_ l: OpLesson) -> String {
         switch l {
         case .signals: return "Signals"
@@ -1058,7 +1078,7 @@ enum OpCopy {
         case .partial: return "Answer only if it's in your call"
         case .me: return "Who did they come back to?"
         case .exchange: return "Report, state, 73, dit-dit — then stop"
-        case .mistake: return "A string of dits, then send it again"
+        case .mistake: return "Send an error, then send it again"
         case .offset: return "Zero beat, RIT, XIT and the pileup"
         }
     }
@@ -1110,19 +1130,21 @@ enum OpCopy {
             return [
                 "After you call, listen to who the activator comes back to. Your call: it's you — send your exchange.",
                 "Another call: that contact is in progress. Stay quiet until it ends with the dit-dit.",
-                "A call one letter from yours (like \(near) for \(call)): treat it as someone else's — there may well be a \(near) you can't hear. If nobody answers and the activator asks again as a question (\(near)?), send your full call once so they can sort it out.",
+                "A call one letter from yours, like \(near) for \(call), sent without a question mark: they're working \(near). Stay silent.",
+                "The same call with a question mark (\(near)?): they're not sure what they heard. Send your call once, then listen for whether they come back with yours.",
             ]
         case .exchange:
             return [
-                "When they come back with your call, a report and their state, reply with your report, your state and 73: \(OperatingProcedure.reply(state: state)).",
-                "5NN is 599, the report nearly every POTA contact carries. Sending your state twice, or ending with BK, is just as common.",
-                "They finish with TU 73 and the dit-dit. Send E E back — then stop. The next QRZ? is for someone else.",
+                "When they come back with your call, a report and their state, reply with your report, your state and 73: \(OperatingProcedure.reply(state: state)). That's the form First Four teaches.",
+                "WB0RLJ's order works too: report, state and BK (\(OperatingProcedure.replyBK(state: state))), then, after their TU 73 and dit-dit, \(OperatingProcedure.closeBK). Either form is right here.",
+                "5NN is 599, the report nearly every POTA contact carries.",
+                "They finish with TU 73 and the dit-dit. Send E E (or 73 E E) back — then stop. The next QRZ? is for someone else.",
             ]
         case .mistake:
             return [
-                "Everyone fumbles a character. When you do, send a string of dits — the error signal, eight dits — and then send the word again, correctly, from the start.",
-                "In your call, that means your whole call, not just the letter you fixed. Don't go quiet and hope: the activator may log what you sent.",
-                "Here the error signal is shown as \(OperatingProcedure.errorSignalDisplay).",
+                "Everyone fumbles a character. When you do, send an error, then send the word again, correctly, from the start: your whole call, not just the letter you fixed. Don't go quiet and hope; the activator may log what you sent.",
+                "An error isn't one fixed signal. It can be a quick run of dits, five to eight of them, or someone slapping the key: fast or slow, run together or ragged. Don't copy its shape. Recognise it, forget what came just before it, and copy what follows.",
+                "Here an error is shown as \(OperatingProcedure.errorDisplay). Play the examples: no two sound alike.",
             ]
         case .offset:
             return [
@@ -1159,8 +1181,6 @@ enum OpCopy {
             return "You're waiting to call \(act). You hear:"
         case "once.cq", "once.qrz", "once.dits":
             return "Time to call \(act). You hear:"
-        case "me.closeAsked":
-            return "Nobody answered \(s.detail). Then the activator sends:"
         case "exchange.agn":
             return "You've sent your exchange. The activator sends:"
         case "exchange.stop":
@@ -1249,16 +1269,17 @@ enum OpCopy {
         case "partial.suffix": return "\(s.clip) matches the end of your call. Send your full call, once."
         case "partial.fullCall": return "They're missing one character, but send your whole call — a lone character means nothing on its own."
         case "me.other": return "They came back to \(other). Stay quiet until that contact ends."
-        case "me.mine": return "That's you, with a report and their state. Send your exchange: \(OperatingProcedure.reply(state: state))."
-        case "me.close": return "\(s.detail) isn't your call, and there may be a real \(s.detail). Stay quiet and listen."
-        case "me.closeAsked": return "Nobody answered and they're asking. Send your full call once so they can correct it."
-        case "exchange.reply": return "Report, state, 73 — short and complete. Save the ragchew for another time."
-        case "exchange.agn": return "AGN? asks for your exchange again: send it again, the same way."
-        case "exchange.dits": return "Send the dits back. That's the friendly close — and then you're done."
+        case "me.mine": return "That's you, with a report and their state. Send your exchange: \(OperatingProcedure.reply(state: state)), or \(OperatingProcedure.replyBK(state: state)) in WB0RLJ's order."
+        case "me.close": return "No question mark: they're working \(s.detail), not you. Stay silent."
+        case "me.closeAsked": return "\(s.detail)? is a question about a call close to yours. Send your call once, then listen for whether they come back with yours."
+        case "exchange.reply": return "Report, state, 73 — or report, state, BK in WB0RLJ's order. Short and complete either way; save the ragchew for another time."
+        case "exchange.agn": return "AGN? asks for your exchange again: send it again."
+        case "exchange.dits": return "Send the dits back (E E, or 73 E E). That's the friendly close — and then you're done."
         case "exchange.stop": return "You're in the log. The next QRZ? is for someone else — stop and let them in."
-        case "mistake.call": return "A string of dits says “error”, then your whole call, correctly. SRI isn't used for this."
-        case "mistake.last": return "After the dits, send the whole call again — never just the fixed character."
-        case "mistake.state": return "Dits, then resend from the word with the mistake: your state and 73."
+        case "mistake.call": return "Send an error, then your whole call, correctly. SRI isn't used for this."
+        case "mistake.last": return "After the error, send the whole call again — never just the fixed character."
+        case "mistake.state": return "An error, then resend from the word with the mistake: your state and 73."
+        case "mistake.hear": return "That burst of dits — however many, however fast — was an error: forget \(s.detail) and copy what follows. They have you, so send your exchange."
         case "offset.pileup": return "A small offset, 20–100 Hz, puts you on your own pitch and still inside their filter. 2 kHz up is off their frequency entirely."
         case "offset.rit": return "RIT shifts what you hear without moving your transmit frequency."
         case "offset.xit": return "XIT shifts where you transmit without moving what you hear."

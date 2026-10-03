@@ -38,8 +38,45 @@ extension AppModel {
     /// length in seconds.
     @discardableResult
     func playOperating(_ text: String) -> TimeInterval {
-        guard !text.isEmpty else { return 0 }
-        return player.replaySound(playable: .text(text), frequency: settings.toneFrequency, timing: timing)
+        let parts = OperatingProcedure.clipParts(text)
+        guard !parts.isEmpty else { return 0 }
+        // An error (`<ERR>`) is sounded in its own shape — a run of 5–8 dits,
+        // run together or slapped, at its own speed — so the clip plays as a
+        // chain of pieces a word gap apart. A newer clip cancels the rest.
+        operatingClipGeneration += 1
+        let gen = operatingClipGeneration
+        let tone = settings.toneFrequency
+        let gap = timing.wordGap
+        var at: TimeInterval = 0
+        for part in parts {
+            let (playable, t) = operatingPlayable(part)
+            let synth = MorseSynth(playable: playable, timing: t, sampleRate: 44_100, frequency: tone)
+            let length = Double(synth.totalSamples) / 44_100
+            if at == 0 {
+                player.replaySound(playable: playable, frequency: tone, timing: t)
+            } else {
+                DispatchQueue.main.asyncAfter(deadline: .now() + at) { [weak self] in
+                    guard let self, self.operatingClipGeneration == gen else { return }
+                    self.player.replaySound(playable: playable, frequency: tone, timing: t)
+                }
+            }
+            at += length + gap
+        }
+        return max(0, at - gap)
+    }
+
+    /// One piece of a clip: text at the learner's timing, or an error in the
+    /// shape it names (a random one when it names none).
+    private func operatingPlayable(_ part: OperatingProcedure.ClipPart) -> (MorseItem.Playable, MorseTiming) {
+        switch part {
+        case .text(let text):
+            return (.text(text), timing)
+        case .error(let row):
+            let v = row.map(OperatingProcedure.errorVariant)
+                ?? OperatingProcedure.errorVariant(Int.random(in: 0..<OperatingProcedure.errorVariants.count))
+            let t = MorseTiming(wpm: max(OperatingProcedure.minimumWpm, settings.wpm * v.speed))
+            return v.runTogether ? (.pattern(v.pattern), t) : (.text(v.spacedText), t)
+        }
     }
 
     /// A demo's transcript, line after line, each at the learner's speed and
@@ -62,6 +99,7 @@ extension AppModel {
     /// One pass of the pileup demo, through the Pileup Runner's own mixer.
     func playOperatingPileup(_ voices: [OpPileupVoice], onFinished: @escaping @MainActor () -> Void) {
         operatingGeneration += 1
+        operatingClipGeneration += 1
         player.playPileup(voices.map { v in
             MorsePlayer.PileupVoice(text: v.text, frequency: v.pitch, timing: MorseTiming(wpm: v.wpm),
                                     gain: Float(v.gain), startDelay: v.delay, qsbRate: nil)
@@ -72,6 +110,7 @@ extension AppModel {
     /// own sidetone sounding with it, so the beat between them can be heard.
     func playOperatingTone(text: String, pitch: Double, sidetone: Double? = nil) {
         operatingGeneration += 1
+        operatingClipGeneration += 1
         let t = timing
         var voices = [MorsePlayer.PileupVoice(text: text, frequency: OperatingProcedure.audible(pitch), timing: t,
                                               gain: 0.8, startDelay: 0, qsbRate: nil)]
@@ -84,6 +123,7 @@ extension AppModel {
 
     func stopOperating() {
         operatingGeneration += 1
+        operatingClipGeneration += 1
         player.stop()
     }
 
