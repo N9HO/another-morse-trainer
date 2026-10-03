@@ -254,6 +254,13 @@
     <string name="contest_acc">Acc</string>
 
     <!-- PileupScreen -->
+    <string name="station_prompt_title">Set up your station?</string>
+    <string name="station_prompt_body">Pileup Runner sends your callsign when you call CQ and sign off. Until you set it, it sends W1AW. Your name and state are optional; CW 77 and First Four use them. You can change all three later in Settings › QSO &amp; Pileups.</string>
+    <string name="station_prompt_call">Your callsign</string>
+    <string name="station_prompt_name">Your name (optional)</string>
+    <string name="station_prompt_state">Your state (optional)</string>
+    <string name="station_prompt_save">Save</string>
+    <string name="station_prompt_not_now">Not now</string>
     <string name="pileup_your_call">YOUR CALL</string>
     <string name="pileup_your_name">YOUR NAME</string>
     <string name="pileup_your_name_placeholder">Optional</string>
