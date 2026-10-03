@@ -286,6 +286,7 @@ different result):
 | 23 | Sending Analyzer, two keys at once | Merged into one logical key | Recorded separately |
 | 24 | Sending Analyzer, microphone | Stops on interruption or route loss; own denied-permission message | No interruption handling; reuses the decoder's message ("…to decode audio") |
 | 25 | Home Daily Dit card, solved with no WPM recorded | Drops the speed | Shows "copied at  WPM" (a bug) |
+| 26 | Contest keys your callsign (#320) | CQ and TU carry your call; the #297 station prompt also opens on first entry to Contest | Not sent (desktop the same), so the prompt is Pileup Runner only |
 
 Copy and labels (same feature, different words; pick one per row):
 reminder notification title and no-streak body; buddy footer, invite share
