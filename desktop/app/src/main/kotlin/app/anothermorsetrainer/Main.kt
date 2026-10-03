@@ -57,6 +57,7 @@ fun main() {
     Stats.init()
     DailyDitStore.init()
     FirstFourStore.init()
+    OperatingProcedureStore.init()
     JourneyStore.init()
     EngineStore.init()
     VoiceProfileStore.init()
@@ -193,6 +194,8 @@ private sealed interface Route {
     data object Dungeon : Route
     data object Frogger : Route
     data object Asteroids : Route
+    /** CW Operating Procedure (#294, #295): POTA etiquette lessons, behind one home tile. */
+    data object OperatingProcedure : Route
     data object Story : Route
     data object Sending : Route
     data object SendingDrills : Route
@@ -247,6 +250,7 @@ private fun routeTag(route: Route): String = when (route) {
     Route.Dungeon -> "dungeon"
     Route.Frogger -> "frogger"
     Route.Asteroids -> "asteroids"
+    Route.OperatingProcedure -> "operatingProcedure"
     Route.Story -> "story"
     Route.Sending -> "sending"
     Route.SendingDrills -> "sendingDrills"
@@ -283,6 +287,7 @@ private fun routeFrom(tag: String): Route? = when (tag) {
     "dungeon" -> Route.Dungeon
     "frogger" -> Route.Frogger
     "asteroids" -> Route.Asteroids
+    "operatingProcedure" -> Route.OperatingProcedure
     "story" -> Route.Story
     "sending" -> Route.Sending
     "sendingDrills" -> Route.SendingDrills
@@ -431,6 +436,7 @@ private fun AppRoot() {
             onPickQrq = { launch(qrqTarget()) },
             onPickRapidFire = { route = Route.RapidFire },
             onPickGames = { route = Route.Games },
+            onPickOperating = { route = Route.OperatingProcedure },
             onPickStory = { launch(storyTarget()) },
             onPickSending = { launch(sendingTarget()) },
             onPickSendingDrills = { route = Route.SendingDrills },
@@ -504,6 +510,7 @@ private fun AppRoot() {
         Route.Dungeon -> DungeonScreen(onBack = { route = Route.Games }, onSwitchMode = { switchTo(it) })
         Route.Frogger -> FroggerScreen(onBack = { route = Route.Games }, onSwitchMode = { switchTo(it) })
         Route.Asteroids -> AsteroidsScreen(onBack = { route = Route.Games }, onSwitchMode = { switchTo(it) })
+        Route.OperatingProcedure -> OperatingProcedureScreen(onBack = { route = Route.Home })
         Route.Story -> StoryScreen(onBack = { route = Route.Home }, onSwitchMode = { switchTo(it) })
         Route.Sending -> SendingPracticeScreen(onBack = { route = Route.Home }, onSwitchMode = { switchTo(it) })
         Route.SendingDrills -> SendingDrillScreen(onBack = { route = Route.Home })
