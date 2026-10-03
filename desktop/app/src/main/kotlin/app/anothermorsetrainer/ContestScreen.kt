@@ -52,8 +52,8 @@ import app.anothermorsetrainer.morsekit.ContestType
 import app.anothermorsetrainer.morsekit.LeaderboardItem
 import app.anothermorsetrainer.morsekit.MorseItem
 import app.anothermorsetrainer.morsekit.MorseTiming
-import app.anothermorsetrainer.morsekit.PileupConfig
 import app.anothermorsetrainer.morsekit.PileupEngine
+import app.anothermorsetrainer.morsekit.forContest
 import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
 
@@ -61,12 +61,18 @@ private enum class CtPhase { SETUP, RUNNING, SUMMARY }
 
 /**
  * Map an engine [PileupEngine.Voice] to a renderable [MorsePlayer.PileupVoice].
- * The contest band sits around your sidetone pitch, like the Pileup Runner.
+ * The contest band sits around your sidetone pitch, like the Pileup Runner,
+ * and follows its Farnsworth-for-callers switch, as the iOS Contest does
+ * (AppModel.mapVoice serves both; #323).
  */
 private fun PileupEngine.Voice.toMix() = MorsePlayer.PileupVoice(
     text = text,
     frequency = Settings.sidetoneHz + toneOffset,
-    timing = MorseTiming(wpm),
+    timing = if (PileupSettings.callerFarnsworth) {
+        MorseTiming.farnsworth(characterWpm = wpm, effectiveWpm = minOf(wpm, Settings.effectiveWpm))
+    } else {
+        MorseTiming(wpm)
+    },
     gain = volume,
     startDelay = delay,
     qsbRate = if (qsb) 0.3 else null
@@ -214,13 +220,9 @@ fun ContestScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
     }
 
     fun startRun() {
-        engine = PileupEngine(
-            PileupConfig(
-                mode = contest.qsoMode,
-                minWPM = contest.minWPM,
-                maxWPM = contest.maxWPM
-            )
-        )
+        // The Pileup realism settings carry over, with the contest's own
+        // exchange and speed band pinned: the iOS contestConfig() (#323).
+        engine = PileupEngine(PileupSettings.config().forContest(contest, PileupSettings.maxStations))
         input = ""
         reveal = false
         startedAtMs = System.currentTimeMillis()
@@ -296,7 +298,7 @@ fun ContestScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
         val mine = if (keyed) null else selfText
         when (action) {
             is PileupEngine.Action.Play -> playSelfThen(mine) {
-                player.playPileup(action.voices.map { it.toMix() }) {}
+                player.playPileup(action.voices.map { it.toMix() }, qrn = PileupSettings.qrn.level) {}
             }
             PileupEngine.Action.Silence -> {
                 player.stop()
@@ -304,7 +306,14 @@ fun ContestScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
             }
             is PileupEngine.Action.Logged -> {
                 if (Settings.hapticsEnabled) haptics.success()
-                playSelfThen(if (keyed) null else PileupEngine.signOffText(PileupSettings.effectiveCall)) {}
+                // With "Pileup re-calls after TU" on, the callers still waiting
+                // call again right after your TU, as on iOS (#323).
+                val recall = engine?.recallAfterLog(PileupSettings.autoRecall)
+                playSelfThen(if (keyed) null else PileupEngine.signOffText(PileupSettings.effectiveCall)) {
+                    if (recall is PileupEngine.Action.Play) {
+                        player.playPileup(recall.voices.map { it.toMix() }, qrn = PileupSettings.qrn.level) {}
+                    }
+                }
             }
         }
         rev++
@@ -313,7 +322,8 @@ fun ContestScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
 
     fun submit(keyed: Boolean = false) {
         val e = engine ?: return
-        if (input.isBlank()) return
+        // Once the exchange is copied, any send logs it, an empty one too (#323).
+        if (input.isBlank() && e.phase !is PileupEngine.Phase.ReadyToLog) return
         val raw = input.trim()
         val pre = e.phase
         val action = tracked(raw) { e.send(raw) }

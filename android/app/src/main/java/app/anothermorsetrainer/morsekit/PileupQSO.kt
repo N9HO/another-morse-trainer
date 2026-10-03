@@ -452,7 +452,15 @@ class PileupEngine(
 
     // MARK: Sending
 
+    /**
+     * One smart-box send. Once the exchange is copied, any send logs the
+     * contact, whatever was typed — a QRS or a call included — as the iOS
+     * single action button does (#323). Pinned by `logOnSend` in
+     * fixtures/qso-self-keying.json.
+     */
     fun send(raw: String): Action {
+        val ready = phase
+        if (ready is Phase.ReadyToLog) return doLog(ready.id)
         val text = raw.trim().uppercase()
         // Operating commands act in any phase and don't count as misses.
         if (isQRS(text)) return adjustSpeed(-6.0)
@@ -461,11 +469,19 @@ class PileupEngine(
             is Phase.Idle -> callCQ()
             is Phase.Pileup -> handlePileupSend(text)
             is Phase.Working -> handleExchangeSend(text, p.id)
-            is Phase.ReadyToLog -> {
-                if (text.isEmpty() || isSignOff(text)) doLog(p.id)
-                else handlePileupSend(text)
-            }
+            is Phase.ReadyToLog -> doLog(p.id)
         }
+    }
+
+    /**
+     * Right after a contact is logged: with "Pileup re-calls after TU" on,
+     * the stations still waiting call again on their own (iOS #35); off, or
+     * with nobody left, the run waits for you (#323). Pinned by
+     * `recallAfterLog` in fixtures/qso-self-keying.json.
+     */
+    fun recallAfterLog(enabled: Boolean): Action {
+        if (!enabled || stations.isEmpty()) return Action.Silence
+        return repeatRequest()
     }
 
     /** The "?" / "AGN" button: ask for a repeat appropriate to the phase. */
@@ -927,11 +943,6 @@ class PileupEngine(
          */
         fun callToken(text: String): String =
             fragment(text.split(" ").firstOrNull { it.isNotEmpty() } ?: text)
-
-        fun isSignOff(s: String): Boolean {
-            val t = s.uppercase()
-            return t == "TU" || t == "TU GL" || t == "73" || t == "TU 73" || t == "R TU"
-        }
 
         // Your side of the QSO: what Contest keys for your CQ, your sign-off
         // and each smart-box send — the words the iOS Pileup Runner and

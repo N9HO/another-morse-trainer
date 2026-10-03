@@ -1,11 +1,15 @@
 {
-  "$comment": "What you key on your side of a Contest run (#320): your CQ, your sign-off and each smart-box send. Shared fixture, consumed by ios MorseKitCheck, android QSOSelfKeyingTest and desktop QSOSelfKeyingTest. Data, not code; see CLAUDE.md's separate-ports rule.",
+  "$comment": "What you key on your side of a Contest run (#320): your CQ, your sign-off and each smart-box send; plus how a Pileup Runner or Contest run builds its engine and answers a send around logging (#323). Shared fixture, consumed by ios MorseKitCheck, android QSOSelfKeyingTest and desktop QSOSelfKeyingTest. Data, not code; see CLAUDE.md's separate-ports rule.",
   "derivation": {
     "cq": "per exchange: singleCaller 'CQ CQ DE {call} {call} K'; pota 'CQ POTA DE {call} {call} K'; basicContest 'CQ TEST {call} {call}'; cwt 'CQ CWT {call}'; sst 'CQ SST {call}'; mst 'CQ MST {call}'; sprint 'CQ NS {call}'; fieldDay 'CQ FD {call} {call}'",
     "signOff": "'TU {call}' after logging a contact",
     "send": "trim and upper-case the typed text, then the first rule that applies: a QRS request -> 'QRS PSE'; QRQ -> 'QRQ'; empty or a repeat request (?, AGN, AGN?, QRZ) -> 'AGN?'; the send moved the run into working from a phase that was neither working nor readyToLog -> '{working call} 5NN' (the typed fragment when no station is being worked); working before and after (a miss) -> 'AGN?'; readyToLog after -> 'R'; otherwise the typed text as a query, with '?' added when it does not already end in one",
     "phases": "idle, pileup, working, readyToLog: PileupEngine.Phase before and after the send, without the station id",
-    "note": "The spec is the iOS AppModel behaviour Pileup Runner and Contest have keyed since before this fixture (selfCQText, the TU, selfSendText), written out by hand from the rules above."
+    "note": "The spec is the iOS AppModel behaviour Pileup Runner and Contest have keyed since before this fixture (selfCQText, the TU, selfSendText), written out by hand from the rules above.",
+    "contestConfig": "#323, the iOS contestConfig(): start from the Pileup Runner realism config, then mode = the contest's exchange (sst->sst, mst->mst, cwt->cwt, nsSprint->sprint, fieldDay->fieldDay); minWPM/maxWPM = the contest's band (sst 15-20, mst 20-25, cwt 25-32, nsSprint 28-38, fieldDay 18-32); maxStations = max(1, the Max callers setting), read from the setting rather than the realism config, which clamps it to 1 for Single Caller; rstRequired = false. Every field listed in 'carried' keeps the realism value.",
+    "logOnSend": "#323: once the exchange is copied (readyToLog), any smart-box send logs the contact, whatever was typed, QRS and a call included. While still working, a send is never a log. Driven on a single-caller engine taken to the phase by sending the station's own call and then its expected copy.",
+    "recallAfterLog": "#323, iOS #35: right after a contact is logged, with 'Pileup re-calls after TU' on and at least one caller still waiting, every waiting station calls again (one voice per station). Off, or with nobody left, nothing plays and the run waits for you (no automatic CQ). basicContest with Max callers 4 always leaves at least one caller after the first log (a CQ brings 2 to 4); singleCaller leaves none.",
+    "consumers": "contestConfig, logOnSend and recallAfterLog are checked by the same three readers as the rest of this file."
   },
   "cq": [
     {"mode": "singleCaller", "call": "N9HO", "text": "CQ CQ DE N9HO N9HO K"},
@@ -40,5 +44,37 @@
     {"typed": "K1A?",    "pre": "pileup",     "post": "pileup",     "working": null,    "text": "K1A?"},
     {"typed": "W?U",     "pre": "pileup",     "post": "pileup",     "working": null,    "text": "W?U?"},
     {"typed": "N9HS",    "pre": "readyToLog", "post": "working",    "working": "N9HO",  "text": "N9HS?"}
+  ],
+  "contestConfig": {
+    "realism": {
+      "mode": "singleCaller", "maxStations": 1, "minWPM": 12, "maxWPM": 40,
+      "toneSpread": 400, "minVolume": 0.3, "maxVolume": 0.9, "minDelay": 0.3, "maxDelay": 2.0,
+      "qsbEnabled": true, "qrnLevel": 0.5, "cutNumbersEnabled": true, "cutDigits": "019",
+      "rstRequired": true, "bustBehavior": "nearest", "giveUpEnabled": true, "usOnly": false
+    },
+    "carried": ["toneSpread", "minVolume", "maxVolume", "minDelay", "maxDelay", "qsbEnabled", "qrnLevel",
+                "cutNumbersEnabled", "cutDigits", "bustBehavior", "giveUpEnabled", "usOnly"],
+    "cases": [
+      {"contest": "sst",      "maxCallers": 6, "mode": "sst",      "minWPM": 15, "maxWPM": 20, "maxStations": 6},
+      {"contest": "mst",      "maxCallers": 8, "mode": "mst",      "minWPM": 20, "maxWPM": 25, "maxStations": 8},
+      {"contest": "cwt",      "maxCallers": 3, "mode": "cwt",      "minWPM": 25, "maxWPM": 32, "maxStations": 3},
+      {"contest": "nsSprint", "maxCallers": 1, "mode": "sprint",   "minWPM": 28, "maxWPM": 38, "maxStations": 1},
+      {"contest": "fieldDay", "maxCallers": 0, "mode": "fieldDay", "minWPM": 18, "maxWPM": 32, "maxStations": 1}
+    ]
+  },
+  "logOnSend": [
+    {"phase": "readyToLog", "typed": "TU",     "logs": true},
+    {"phase": "readyToLog", "typed": "",       "logs": true},
+    {"phase": "readyToLog", "typed": "tu 73",  "logs": true},
+    {"phase": "readyToLog", "typed": "K1ABC",  "logs": true},
+    {"phase": "readyToLog", "typed": "?",      "logs": true},
+    {"phase": "readyToLog", "typed": "QRS",    "logs": true},
+    {"phase": "working",    "typed": "TU",     "logs": false},
+    {"phase": "working",    "typed": "QRS",    "logs": false}
+  ],
+  "recallAfterLog": [
+    {"mode": "basicContest", "maxStations": 4, "autoRecall": true,  "recalls": true},
+    {"mode": "basicContest", "maxStations": 4, "autoRecall": false, "recalls": false},
+    {"mode": "singleCaller", "maxStations": 1, "autoRecall": true,  "recalls": false}
   ]
 }

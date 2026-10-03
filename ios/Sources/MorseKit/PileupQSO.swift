@@ -386,7 +386,12 @@ public final class PileupEngine {
 
     // MARK: Sending
 
+    /// One smart-box send. Once the exchange is copied, any send logs the
+    /// contact, whatever was typed — a QRS or a call included — the way the
+    /// single action button has always worked as TU then (#323). Pinned by
+    /// `logOnSend` in fixtures/qso-self-keying.json.
     public func send(_ raw: String) -> Action {
+        if case .readyToLog(let id) = phase { return doLog(id) }
         let text = raw.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
         // Operating commands act in any phase and don't count as misses.
         if Self.isQRS(text) { return adjustSpeed(by: -6) }
@@ -399,9 +404,17 @@ public final class PileupEngine {
         case .working(let id):
             return handleExchangeSend(text, id: id)
         case .readyToLog(let id):
-            if text.isEmpty || Self.isSignOff(text) { return doLog(id) }
-            return handlePileupSend(text)
+            return doLog(id)
         }
+    }
+
+    /// Right after a contact is logged: with "Pileup re-calls after TU" on,
+    /// the stations still waiting call again on their own (issue #35);
+    /// off, or with nobody left, the run waits for you. Pinned by
+    /// `recallAfterLog` in fixtures/qso-self-keying.json.
+    public func recallAfterLog(enabled: Bool) -> Action {
+        guard enabled, !stations.isEmpty else { return .silence }
+        return repeatRequest()
     }
 
     /// The "?" / "AGN" button: ask for a repeat appropriate to the phase.
@@ -808,11 +821,6 @@ public final class PileupEngine {
         let head = text.split(separator: " ", maxSplits: 1,
                               omittingEmptySubsequences: true).first
         return fragment(head.map(String.init) ?? text)
-    }
-
-    static func isSignOff(_ s: String) -> Bool {
-        let t = s.uppercased()
-        return t == "TU" || t == "TU GL" || t == "73" || t == "TU 73" || t == "R TU"
     }
 
     // MARK: Station factory & helpers
