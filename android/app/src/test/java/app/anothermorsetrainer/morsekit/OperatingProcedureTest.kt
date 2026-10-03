@@ -128,6 +128,7 @@ class OperatingProcedureTest {
             }
             assertEquals("clip parts of '$text'", parts, OperatingProcedure.clipParts(text))
         }
+        assertEquals("negative control: errorsComeInManyShapes", 5, OperatingProcedure.errorVariants.size)
     }
 
     @Test
