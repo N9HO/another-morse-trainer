@@ -211,7 +211,7 @@ jobs:
                      headCopy typeIt qrq rapidFire listen story exam pileup contest \
                      games invaders galaga defender dungeon frogger asteroids \
                      sending sendingDrills sendingAnalyzer repeater cwDecoder \
-                     reference startHere dailyDit firstFour settings stats leaderboard; do
+                     reference startHere dailyDit firstFour operatingProcedure settings stats leaderboard; do
             file="$(echo "$tag" | tr ': ' '__')"
             AMT_CONFIG_DIR="$RUNNER_TEMP/amt-seeded" AMT_START_ROUTE="$tag" \
               "$LAUNCHER" > "shots/screens/$file.log" 2>&1 &

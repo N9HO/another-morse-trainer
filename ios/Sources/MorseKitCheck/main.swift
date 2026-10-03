@@ -6893,6 +6893,250 @@ if let fx = loadSendingFixture() {
     check("fixtures/sending-analysis.json loads and decodes", false)
 }
 
+// MARK: - CW Operating Procedure (#294, #295)
+
+// fixtures/operating-procedure.json, read by this harness AND by the Kotlin
+// OperatingProcedureTest in android/ and desktop/: the lessons and constants,
+// validation, the generated partials / near-misses / mistakes, every scenario
+// and demo for two profiles, the pileup demo's voices, the offset maths, a
+// graded scenario run and one learner's progress step by step.
+print("\nCW Operating Procedure (fixtures/operating-procedure.json):")
+func loadOpFixture() -> [String: Any]? {
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent()
+        .deletingLastPathComponent().deletingLastPathComponent()
+    guard let data = try? Data(contentsOf: root.appendingPathComponent("fixtures/operating-procedure.json")) else { return nil }
+    return (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+}
+func opChoice(_ o: [String: Any]) -> OpChoice? {
+    if let s = o["send"] as? String { return .send(s) }
+    if o["silent"] as? Bool == true { return .silent }
+    if let k = o["option"] as? String { return .option(k) }
+    return nil
+}
+func opNum(_ v: Any?) -> Double { (v as? NSNumber)?.doubleValue ?? .nan }
+if let fx = loadOpFixture(),
+   let lessons = fx["lessons"] as? [String],
+   let constants = fx["constants"] as? [String: Any],
+   let profiles = fx["profiles"] as? [[String: Any]],
+   let pileup = fx["pileupDemo"] as? [String: Any],
+   let maths = fx["offsetMaths"] as? [String: Any],
+   let runs = fx["runs"] as? [[String: Any]],
+   let script = fx["progressScript"] as? [[String: Any]] {
+    check("op: lesson order", OpLesson.allCases.map(\.rawValue) == lessons)
+    check("op: constants",
+          opNum(constants["scenarioRunLength"]) == Double(OperatingProcedure.scenarioRunLength)
+          && opNum(constants["zeroBeatStreakToPass"]) == Double(OperatingProcedure.zeroBeatStreakToPass)
+          && opNum(constants["zeroBeatToleranceHz"]) == OperatingProcedure.zeroBeatToleranceHz
+          && opNum(constants["minimumPitchHz"]) == OperatingProcedure.minimumPitchHz
+          && opNum(constants["minimumWpm"]) == OperatingProcedure.minimumWpm
+          && opNum(constants["demoYourOffsetHz"]) == OperatingProcedure.demoYourOffsetHz
+          && opNum(constants["ritDemoStationOffsetHz"]) == OperatingProcedure.ritDemoStationOffsetHz
+          && opNum(constants["ritRangeHz"]) == OperatingProcedure.ritRangeHz
+          && opNum(constants["ritStepHz"]) == OperatingProcedure.ritStepHz
+          && constants["errorToken"] as? String == OperatingProcedure.errorToken
+          && constants["errorDisplay"] as? String == OperatingProcedure.errorDisplay
+          && constants["replacementCaller"] as? String == OperatingProcedure.replacementCaller)
+    check("op: default call", (fx["derivation"] as? [String: Any])?["defaultCall"] as? String == OperatingProcedure.defaultCall)
+    let actRows = (fx["activators"] as? [[String: String]]) ?? []
+    check("op: activator table",
+          actRows.map { OperatingProcedure.Station(call: $0["call"] ?? "", state: $0["state"] ?? "") } == OperatingProcedure.activators)
+    check("op: other hunters", (fx["otherHunters"] as? [String]) == OperatingProcedure.otherHunters)
+    check("op: drill starts", ((fx["drillStarts"] as? [NSNumber]) ?? []).map(\.doubleValue) == OperatingProcedure.drillStarts)
+    check("op: knob steps", ((fx["knobSteps"] as? [NSNumber]) ?? []).map(\.doubleValue) == OperatingProcedure.knobSteps)
+    let variantRows = (fx["errorVariants"] as? [[String: Any]]) ?? []
+    check("op: error variants", !variantRows.isEmpty && variantRows.map {
+        OperatingProcedure.ErrorVariant(count: $0["count"] as? Int ?? 0, runTogether: $0["runTogether"] as? Bool ?? false,
+                                        speed: opNum($0["speed"]))
+    } == OperatingProcedure.errorVariants)
+    check("op: every error is 5–8 dits", OperatingProcedure.errorVariants.allSatisfy { (5...8).contains($0.count) })
+    for p in (fx["errorVariantPicks"] as? [[String: Any]]) ?? [] {
+        let i = p["index"] as? Int ?? 0
+        let v = OperatingProcedure.errorVariant(i)
+        check("op: error variant \(i)", v.count == p["count"] as? Int && v.pattern == p["pattern"] as? String
+              && v.spacedText == p["spacedText"] as? String)
+    }
+    for c in (fx["clipParts"] as? [[String: Any]]) ?? [] {
+        let text = c["text"] as? String ?? ""
+        let want: [OperatingProcedure.ClipPart] = ((c["parts"] as? [[String: Any]]) ?? []).map { part in
+            if let t = part["text"] as? String { return .text(t) }
+            return .error(part["error"] as? Int)
+        }
+        check("op: clip parts of '\(text)'", OperatingProcedure.clipParts(text) == want)
+    }
+
+    let validation = fx["validation"] as? [String: Any] ?? [:]
+    for c in validation["calls"] as? [[String: Any]] ?? [] {
+        let raw = c["raw"] as? String ?? ""
+        check("op: call '\(raw)'",
+              OperatingProcedure.normalizeCall(raw) == c["normalized"] as? String
+              && OperatingProcedure.isValidCall(raw) == c["valid"] as? Bool
+              && OperatingProcedure.prefillCall(saved: raw) == c["prefill"] as? String)
+    }
+    for s in validation["states"] as? [[String: Any]] ?? [] {
+        let raw = s["raw"] as? String ?? ""
+        check("op: state '\(raw)'",
+              OperatingProcedure.normalizeState(raw) == s["normalized"] as? String
+              && OperatingProcedure.isValidState(raw) == s["valid"] as? Bool)
+    }
+    for s in fx["shift"] as? [[String: Any]] ?? [] {
+        let c = Character(s["char"] as? String ?? "?")
+        let by = s["by"] as? Int ?? 0
+        check("op: shift \(c) by \(by)", String(OperatingProcedure.shift(c, by: by)) == s["result"] as? String)
+    }
+    for p in fx["partialMatches"] as? [[String: Any]] ?? [] {
+        let partial = p["partial"] as? String ?? ""
+        let call = p["call"] as? String ?? ""
+        check("op: partial '\(partial)' vs \(call)",
+              OperatingProcedure.partialMatches(partial, call: call) == p["matches"] as? Bool)
+    }
+    for p in fx["notMinePartial"] as? [[String: String]] ?? [] {
+        check("op: not-mine partial for \(p["call"] ?? "")",
+              OperatingProcedure.notMinePartial(call: p["call"] ?? "") == p["partial"])
+    }
+    for p in fx["nearMiss"] as? [[String: String]] ?? [] {
+        check("op: near miss for \(p["call"] ?? "")", OperatingProcedure.nearMiss(call: p["call"] ?? "") == p["nearMiss"])
+    }
+    for d in fx["display"] as? [[String: String]] ?? [] {
+        check("op: display '\(d["text"] ?? "")'", OperatingProcedure.display(d["text"] ?? "") == d["display"])
+    }
+
+    for profile in profiles {
+        let call = profile["call"] as? String ?? ""
+        let state = profile["state"] as? String ?? ""
+        let act = profile["activator"] as? [String: String] ?? [:]
+        check("op: \(call) activator", OperatingProcedure.activator(for: call)
+              == OperatingProcedure.Station(call: act["call"] ?? "", state: act["state"] ?? ""))
+        check("op: \(call) other hunter", OperatingProcedure.otherHunter(for: call) == profile["otherHunter"] as? String)
+        let want = (profile["scenarios"] as? [[String: Any]] ?? []).map { s in
+            OpScenario(id: s["id"] as? String ?? "",
+                       lesson: OpLesson(rawValue: s["lesson"] as? String ?? "") ?? .signals,
+                       clip: s["clip"] as? String ?? "",
+                       detail: s["detail"] as? String ?? "",
+                       choices: (s["choices"] as? [[String: Any]] ?? []).compactMap(opChoice),
+                       accepted: (s["accepted"] as? [Int]) ?? [0])
+        }
+        let got = OperatingProcedure.scenarios(call: call, state: state)
+        check("op: \(call) has \(want.count) scenarios", got.count == want.count && !want.isEmpty)
+        for (i, w) in want.enumerated() {
+            let g = i < got.count ? got[i] : nil
+            check("op: \(call) scenario \(w.id)", g == w)
+            if g != w { print("      ↳ got \(String(describing: g))") }
+        }
+        for lesson in OpLesson.allCases {
+            let n = OperatingProcedure.scenarios(lesson, call: call, state: state).count
+            check("op: \(call) \(lesson.rawValue) has 3–5 scenarios", (3...5).contains(n))
+        }
+        if let pool = profile["actionPool"] as? [String] {
+            check("op: \(call) action pool", OperatingProcedure.actionPool(call: call, state: state).map(\.id) == pool)
+        }
+        if let demos = profile["demos"] as? [String: [[String: Any]]] {
+            for lesson in OpLesson.allCases {
+                let want = (demos[lesson.rawValue] ?? []).map { d in
+                    OpDemo(OpDemo.Kind(rawValue: d["kind"] as? String ?? "") ?? .listen,
+                           (d["lines"] as? [[String: String]] ?? []).map {
+                               OpDemo.Line(OpDemo.Who(rawValue: $0["who"] ?? "") ?? .you, $0["text"] ?? "")
+                           })
+                }
+                check("op: \(call) \(lesson.rawValue) demos",
+                      OperatingProcedure.demos(lesson, call: call, state: state) == want)
+            }
+        }
+    }
+
+    check("op: pileup passes",
+          (pileup["passes"] as? [String]) == OperatingProcedure.PileupPass.allCases.map(\.rawValue))
+    for c in pileup["cases"] as? [[String: Any]] ?? [] {
+        let call = c["call"] as? String ?? ""
+        for (passName, voices) in c["voices"] as? [String: [[String: Any]]] ?? [:] {
+            guard let pass = OperatingProcedure.PileupPass(rawValue: passName) else {
+                check("op: pileup pass \(passName) exists", false); continue
+            }
+            let want = voices.map {
+                OpPileupVoice(text: $0["text"] as? String ?? "", pitch: opNum($0["pitch"]), wpm: opNum($0["wpm"]),
+                              gain: opNum($0["gain"]), delay: opNum($0["delay"]), isYou: $0["isYou"] as? Bool ?? false)
+            }
+            let got = OperatingProcedure.pileupVoices(pass, call: call, tone: opNum(c["tone"]), wpm: opNum(c["wpm"]))
+            check("op: pileup \(passName) for \(call)", got == want)
+        }
+    }
+
+    for h in maths["heardPitch"] as? [[String: Any]] ?? [] {
+        check("op: heard pitch \(h)", OperatingProcedure.heardPitch(tone: opNum(h["tone"]), station: opNum(h["station"]),
+                                                                 vfo: opNum(h["vfo"]), rit: opNum(h["rit"])) == opNum(h["pitch"]))
+    }
+    for t in maths["transmitOffset"] as? [[String: Any]] ?? [] {
+        check("op: transmit offset \(t)", OperatingProcedure.transmitOffset(station: opNum(t["station"]), vfo: opNum(t["vfo"]),
+                                                                         xit: opNum(t["xit"])) == opNum(t["offset"]))
+    }
+    for z in maths["isZeroBeat"] as? [[String: Any]] ?? [] {
+        check("op: zero beat at \(opNum(z["offset"]))", OperatingProcedure.isZeroBeat(opNum(z["offset"])) == z["zeroBeat"] as? Bool)
+    }
+    for a in maths["audible"] as? [[String: Any]] ?? [] {
+        check("op: audible \(opNum(a["pitch"]))", OperatingProcedure.audible(opNum(a["pitch"])) == opNum(a["audible"]))
+    }
+    for d in maths["drillStart"] as? [[String: Any]] ?? [] {
+        let round = d["round"] as? Int ?? 0
+        check("op: drill start round \(round)", OperatingProcedure.drillStart(round: round) == opNum(d["start"]))
+    }
+
+    let firstScenarios = OperatingProcedure.scenarios(call: profiles.first?["call"] as? String ?? "",
+                                                      state: profiles.first?["state"] as? String ?? "")
+    for (i, r) in runs.enumerated() {
+        let ids = r["lessonScenarios"] as? [String] ?? []
+        var run = OpScenarioRun(scenarios: ids.compactMap { id in firstScenarios.first { $0.id == id } })
+        let results = (r["answers"] as? [Int] ?? []).map { run.answer($0) }
+        check("op: scenario run \(i)", results == (r["results"] as? [Bool]) && run.isClean == r["clean"] as? Bool
+              && run.scenarios.count == ids.count)
+    }
+
+    var progress = OperatingProcedureProgress()
+    var scriptOK = true
+    for (i, step) in script.enumerated() {
+        var passedNow: Bool?
+        switch step["do"] as? String {
+        case "run":
+            passedNow = progress.recordRun(OpLesson(rawValue: step["lesson"] as? String ?? "") ?? .signals,
+                                           clean: step["clean"] as? Bool ?? false)
+        case "drill":
+            passedNow = progress.recordDrill(correct: step["correct"] as? Bool ?? false)
+            if progress.drillStreak != step["streak"] as? Int || progress.drillPassed != step["drillPassed"] as? Bool {
+                scriptOK = false
+            }
+        case "encode":
+            let json = step["json"] as? [String: Any] ?? [:]
+            let data = (try? JSONEncoder().encode(progress)) ?? Data()
+            let got = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
+            if got["passed"] as? [String] != json["passed"] as? [String]
+                || got["cleanRuns"] as? [String] != json["cleanRuns"] as? [String]
+                || got["drillPassed"] as? Bool != json["drillPassed"] as? Bool {
+                scriptOK = false
+                print("      ↳ encode step \(i) differs: \(got)")
+            }
+            let back = try? JSONDecoder().decode(OperatingProcedureProgress.self, from: data)
+            if back?.passed != progress.passed || back?.cleanRuns != progress.cleanRuns || back?.drillPassed != progress.drillPassed {
+                scriptOK = false
+            }
+            continue
+        default:
+            scriptOK = false
+        }
+        if let want = step["passedNow"] as? Bool, want != passedNow { scriptOK = false }
+        let passed = Set((step["passed"] as? [String] ?? []).compactMap(OpLesson.init(rawValue:)))
+        if passed != progress.passed { scriptOK = false }
+        if step.keys.contains("next"), progress.nextLesson?.rawValue != step["next"] as? String { scriptOK = false }
+        if !scriptOK { print("      ↳ progress step \(i) differs"); break }
+    }
+    check("op: progress script, step by step", scriptOK && !script.isEmpty)
+    check("op: an empty or older save decodes as a fresh start",
+          (try? JSONDecoder().decode(OperatingProcedureProgress.self, from: Data("{}".utf8))) == OperatingProcedureProgress())
+    check("op: a save naming an unknown lesson still decodes",
+          (try? JSONDecoder().decode(OperatingProcedureProgress.self,
+                                     from: Data(#"{"passed":["signals","later"],"cleanRuns":[],"drillPassed":false}"#.utf8)))?.passed == [.signals])
+} else {
+    check("fixtures/operating-procedure.json loads and decodes", false)
+}
+
 // MARK: - First Four (#265)
 
 // fixtures/first-four.json, read by this harness AND by the Kotlin

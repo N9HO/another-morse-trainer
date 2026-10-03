@@ -283,6 +283,11 @@ struct FirstFourFinale: View {
                 .font(.subheadline)
                 .foregroundStyle(Theme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
+            // The forward link to the next step (docs/operating-procedure-design.md).
+            Text("Ready for more? Operating Procedure, the card just below First Four on the home screen, is the next step: zero beat, pileups and partial calls.")
+                .font(.subheadline)
+                .foregroundStyle(Theme.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(16)

@@ -27,6 +27,10 @@ struct IntroView: View {
     /// First Four (#265): the guided path to a first POTA contact.
     @State private var showingFirstFour = false
     @State private var firstFourProgress = FirstFourStore.load()
+    /// CW Operating Procedure (#294, #295): the card under First Four, its
+    /// next step (maintainer, 2026-10-03).
+    @State private var showingOperating = false
+    @State private var operatingProgress = OperatingProcedureStore.load()
     @State private var showingSendingDrill = false
     @State private var showingSendingAnalyzer = false
     @State private var showingCWDecoder = false
@@ -58,6 +62,7 @@ struct IntroView: View {
                             VStack(spacing: 14) {
                                 startHereButton
                                 firstFourCard
+                                operatingCard
                             }
                         }
                         .fixedSize(horizontal: false, vertical: true)
@@ -67,6 +72,8 @@ struct IntroView: View {
                         startHereButton
 
                         firstFourCard
+
+                        operatingCard
                     }
 
                     modePicker
@@ -113,8 +120,15 @@ struct IntroView: View {
         }
         .sheet(isPresented: $showingFirstFour, onDismiss: {
             firstFourProgress = FirstFourStore.load()
+            operatingProgress = OperatingProcedureStore.load()
         }) {
             FirstFourView().environmentObject(model).pageSizedSheet()
+        }
+        .sheet(isPresented: $showingOperating, onDismiss: {
+            firstFourProgress = FirstFourStore.load()
+            operatingProgress = OperatingProcedureStore.load()
+        }) {
+            OperatingProcedureView().environmentObject(model).pageSizedSheet()
         }
         .sheet(isPresented: $showingSendingDrill) {
             SendingDrillView().environmentObject(model).pageSizedSheet()
@@ -137,6 +151,7 @@ struct IntroView: View {
         .onAppear {
             model.refreshDailyDit()
             firstFourProgress = FirstFourStore.load()
+            operatingProgress = OperatingProcedureStore.load()
             // Onboarding's "first POTA contact" button (#265) lands here.
             if UserDefaults.standard.bool(forKey: FirstFourStore.openOnHomeKey) {
                 UserDefaults.standard.removeObject(forKey: FirstFourStore.openOnHomeKey)
@@ -444,6 +459,39 @@ struct IntroView: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel("First Four. \(subtitle)")
+    }
+
+    /// CW Operating Procedure (#294, #295): directly under First Four, as its
+    /// next step — the same card, in the same place on a wide iPad.
+    private var operatingCard: some View {
+        let done = operatingProgress.isComplete
+        let subtitle = OpCopy.homeSubtitle(operatingProgress)
+        return Button { showingOperating = true } label: {
+            HStack(spacing: 10) {
+                Image(systemName: done ? "checkmark.seal.fill" : "checklist")
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(done ? Theme.tealBright : Theme.teal)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Operating Procedure")
+                        .font(.subheadline.weight(.semibold))
+                    Text(subtitle)
+                        .font(.caption)
+                        .foregroundStyle(Theme.textSecondary)
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Theme.textSecondary)
+            }
+            .frame(maxHeight: .infinity)
+            .foregroundStyle(.white)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(Theme.navyElevated, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Theme.teal.opacity(0.6), lineWidth: 1.5))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Operating Procedure. \(subtitle)")
     }
 
     // MARK: - Mode picker (tiles)

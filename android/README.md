@@ -97,6 +97,22 @@ the iOS app's navy/teal look.
   a call nobody answers, and a whole hunter-side contact. Offered from the
   first-run screen and the top of Home, a tutorial rather than a scored mode,
   and it ends with a nudge to thank your first CW contact
+- **Operating Procedure**: the next step after First Four, on a card just
+  below it on Home: CW etiquette for hunting POTA activators, one rule at a
+  time, with your own callsign and state in every example. Eight short
+  lessons: offsetting first, then signals, when to call, sending your call
+  once, partial calls, "is it me?" (a near-miss of your call with a ? gets
+  your call once; without one, silence), the exchange (5NN, state, 73, or
+  WB0RLJ's RST, state, BK, 73, dit-dit), and fixing mistakes (an error can
+  sound like anything, so the examples vary). Each has a concept card,
+  right-and-wrong audio examples and a few quick scenarios. The offsetting
+  lesson explains zero beat, RIT, XIT and CW pitch (with what Icom, Yaesu,
+  Kenwood, Elecraft and FlexRadio call them), plays the same pileup three
+  ways (everyone zero beat, only you offset, everyone offset), lets you move
+  an RIT and hear what it does, and drills tuning to zero beat by ear. "What
+  should you do?" deals ten situations from the lessons. Not a scored mode.
+  After WB0RLJ's "Advice for CW POTA Hunters" (linked, with his YouTube
+  channel of daily activations) and the POTA CW Guide
 - **Pileup Runner**: a full QSO simulator: your callsign, eight exchange
   flavors (single caller → POTA → contests), realism controls (caller count,
   speed band, tone spread, QSB, QRN, cut numbers, bust behavior, callsign
