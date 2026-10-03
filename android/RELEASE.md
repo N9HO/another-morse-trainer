@@ -35,7 +35,8 @@ cd <your clone of another-morse-trainer>/android
 
 Everything Gradle-related runs from `android/`, which is the Gradle root
 (`settings.gradle.kts` lives there). The iOS app is its sibling at `ios/`; the
-two have independent version numbers and release cadences.
+apps share one version number (`versionName` matches iOS `MARKETING_VERSION`
+and desktop `desktopVersionName`); `versionCode` is Android's own counter.
 
 For each update **bump `versionCode`** (2, 3, …) — Play rejects a re-used code —
 and usually `versionName` ("1.0.1", "1.1", …).

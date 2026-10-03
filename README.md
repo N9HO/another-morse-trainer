@@ -123,11 +123,13 @@ cd desktop
 
 ## Versions and releases
 
-**The two apps have independent version numbers and release cadences and are not
-coupled.** The live numbers are `CURRENT_PROJECT_VERSION` / `MARKETING_VERSION`
-in `ios/MorseTrainer.xcodeproj/project.pbxproj` and `versionCode` /
-`versionName` in `android/app/build.gradle.kts` — they are deliberately not
-copied here, because a copy is a copy that goes stale.
+**Every app carries the same version number** (from 2.0.0): iPhone/iPad/Mac,
+Android and desktop ship the same features, so they share one version string.
+Build numbers stay per platform. The live numbers are `MARKETING_VERSION` /
+`CURRENT_PROJECT_VERSION` in `ios/MorseTrainer.xcodeproj/project.pbxproj`,
+`versionName` / `versionCode` in `android/app/build.gradle.kts`, and
+`desktopVersionName` / `desktopVersionCode` in `desktop/app/build.gradle.kts`;
+they are deliberately not copied here, because a copy goes stale.
 
 Release tags are namespaced per platform, because a single repository now feeds
 both release workflows:
