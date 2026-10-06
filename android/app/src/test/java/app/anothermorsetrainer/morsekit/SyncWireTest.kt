@@ -109,7 +109,7 @@ class SyncWireTest {
         val table = ids.getJSONObject("kotlin")
         val canonical = strings(ids.getJSONArray("canonical"))
         assertEquals(25, table.length())
-        assertEquals(table.keyNames(), SyncModes.wireIds.keys)
+        assertEquals(table.keyNames() + "control", SyncModes.wireIds.keys)
         for (local in table.keyNames()) {
             val wire = table.getString(local)
             assertEquals(local, wire, SyncModes.wireId(local))
