@@ -349,14 +349,20 @@ class SyncEngine(
         return Outcome.DONE
     }
 
-    /** The queued keys' current values and stamps; each winner strictly newer than local is applied. */
+    /**
+     * One `PUT /v1/sync/state` per sync, after sessions and days: every SAVED
+     * key with its current stamp (0 when never stamped), not only the queued
+     * ones, and each winner strictly newer than local is applied. State comes
+     * back only in a state reply or the snapshot, so without this a device
+     * that changes nothing would never learn another device's newer Journey
+     * or ladder position. Keys never saved here are omitted.
+     */
     private suspend fun drainState(): Outcome {
         val s = current
-        if (s.stateOutbox.isEmpty()) return Outcome.DONE
         val entries = LinkedHashMap<String, SyncWire.StateEntry>()
-        for (key in s.stateOutbox) {
+        for (key in SyncStateCodec.keys) {
             val value = local.stateValue(key) ?: continue
-            entries[key] = SyncWire.StateEntry(value, s.stateStamps[key] ?: now())
+            entries[key] = SyncWire.StateEntry(value, s.stateStamps[key] ?: UNSTAMPED)
         }
         val empty = s.stateOutbox.filter { it !in entries }
         if (empty.isNotEmpty()) mutate { it.copy(stateOutbox = it.stateOutbox - empty.toSet()) }
@@ -466,7 +472,8 @@ class SyncEngine(
         val winners = LinkedHashMap<String, SyncWire.StateEntry>()
         for ((key, theirs) in reply) {
             if (key !in SyncStateCodec.keys) continue
-            val mine = localStamps[key]
+            // A saved but never-stamped value counts as 0: a tie at 0 keeps it.
+            val mine = localStamps[key] ?: (if (local.stateValue(key) != null) UNSTAMPED else null)
             if (mine == null || theirs.updatedAt > mine) winners[key] = theirs
         }
         if (winners.isEmpty()) return

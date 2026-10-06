@@ -337,6 +337,29 @@ class SyncEngineTest {
         assertTrue(rig.engine.state.value.stateOutbox.isEmpty())
     }
 
+    @Test
+    fun `a sync with no local changes still puts the saved keys and applies a newer server value`() = runBlocking<Unit> {
+        val rig = Rig(SyncAccountState(accountId = "acct", cursor = 3, stateStamps = mapOf("journey" to 100L)))
+        rig.local.values["journey"] = JSONObject().put("unlockedThrough", 2).put("currentLevel", 2).put("completed", JSONArray().put(1))
+        rig.local.values["characters"] = JSONObject().put("activeCharacters", JSONArray().put("K").put("M")).put("exposedCharacters", JSONArray()).put("stage", "singles").put("pinnedStage", JSONObject.NULL)
+        val newer = JSONObject().put("unlockedThrough", 7).put("currentLevel", 7).put("completed", JSONArray().put(1).put(2))
+        rig.transport.routes["PUT /v1/sync/state"] = { r ->
+            val sent = JSONObject(r.body!!).getJSONObject("entries")
+            assertEquals(setOf("journey", "characters"), sent.keys().asSequence().toSet())
+            assertEquals(100L, sent.getJSONObject("journey").getLong("updatedAt"))
+            assertEquals("never stamped goes at 0", 0L, sent.getJSONObject("characters").getLong("updatedAt"))
+            ok(JSONObject().put("entries", JSONObject(sent.toString()).put("journey", JSONObject().put("value", newer).put("updatedAt", 500L))))
+        }
+        rig.transport.routes["GET /v1/sync/sessions"] = { page(emptyList(), 3, false) }
+        assertTrue(rig.engine.state.value.stateOutbox.isEmpty())
+        assertEquals(SyncEngine.Outcome.DONE, rig.engine.sync())
+        assertEquals(1, rig.transport.calls().count { it == "PUT /v1/sync/state" })
+        assertEquals(listOf("PUT /v1/sync/state", "GET /v1/sync/sessions"), rig.transport.calls().take(2))
+        assertTrue(newer.similar(rig.local.applied["journey"]))
+        assertEquals(setOf("journey"), rig.local.applied.keys)
+        assertEquals(500L, rig.engine.state.value.stateStamps["journey"])
+    }
+
     // ---- Sign-out ----
 
     @Test
