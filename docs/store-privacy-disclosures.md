@@ -108,10 +108,11 @@ describes both, and "Delete account" covers the account.
 **Account creation**: the app lets users create an account (optional), by a
 passwordless emailed link. Play requires two deletion paths for apps with
 accounts: in the app (Settings › Account & Sync › Delete account) **and a web
-link** where a user can ask for deletion without the app. That web page does
-not exist yet: it needs a page on anothermorsetrainer.app (for example
-`/delete-account/`) saying how to delete in the app and giving the email to
-ask for deletion, and its URL entered in Play Console before release.
+link** where a user can ask for deletion without the app. That link is
+`https://anothermorsetrainer.app/privacy/#delete-account`, the privacy
+policy's "Deleting your account" section (site PR, same release): it says
+how to delete in the app and gives the email to ask for deletion. Enter it
+in Play Console's Data deletion field before release.
 
 Declare four data types, each **Collected**, **not shared**, **Optional**
 (users choose whether it is collected: each feature is opt-in), not
