@@ -181,13 +181,34 @@ class SyncWireTest {
         // Apply onto a different local position: the position moves, the stats and confusions stay.
         val other = JSONObject(json).put("active", "KM").put("exposed", "").put("stage", "Triples").put("pin", "Singles")
         val applied = JSONObject(SyncStateCodec.applyCharacters(other.toString(), wireValue("characters")))
-        assertEquals(stored.getString("active"), applied.getString("active"))
-        assertEquals(stored.getString("exposed"), applied.getString("exposed"))
+        // The stored form's opt-in punctuation never travelled, and the other track had none.
+        val punctuation = MorseCode.pickablePunctuation.toSet()
+        assertEquals(stored.getString("active").filter { it !in punctuation }, applied.getString("active"))
+        assertEquals(stored.getString("exposed").filter { it !in punctuation }, applied.getString("exposed"))
         assertEquals(stored.getString("stage"), applied.getString("stage"))
         assertTrue("a null pinnedStage removes the pin", stored.isNull("pin") && !applied.has("pin"))
         assertSimilar("stats kept", JSONObject(json).getJSONArray("stats"), applied.getJSONArray("stats"))
         assertSimilar("confusions kept", JSONObject(json).getJSONObject("conf"), applied.getJSONObject("conf"))
         assertSimilar("re-encoded", wireValue("characters"), SyncStateCodec.charactersToWire(applied.toString()))
+    }
+
+    @Test
+    fun `characters keep this device's opt-in punctuation and never send it`() {
+        val f = fixture.getJSONObject("charactersPunctuation")
+        fun joined(key: String) = strings(f.getJSONArray(key)).joinToString("")
+        val local = JSONObject().put("active", joined("localActive")).put("exposed", joined("localExposed"))
+            .put("stats", JSONArray()).put("conf", JSONObject()).put("stage", "Singles")
+        val wire = JSONObject()
+            .put("activeCharacters", f.getJSONArray("wireActive"))
+            .put("exposedCharacters", f.getJSONArray("wireExposed"))
+            .put("stage", "singles").put("pinnedStage", JSONObject.NULL)
+        val applied = JSONObject(SyncStateCodec.applyCharacters(local.toString(), wire))
+        assertEquals(joined("expectedActive"), applied.getString("active"))
+        assertEquals(joined("expectedExposed"), applied.getString("exposed"))
+        // Sending it back carries no punctuation, so a launch-time punctuation change syncs nothing.
+        val back = SyncStateCodec.charactersToWire(applied.toString())
+        assertEquals(strings(f.getJSONArray("wireActive")), strings(back.getJSONArray("activeCharacters")))
+        assertEquals(strings(f.getJSONArray("wireExposed")), strings(back.getJSONArray("exposedCharacters")))
     }
 
     @Test

@@ -545,13 +545,17 @@ public enum AccountSync {
 
     /// `characters`: the ladder's position only — active set (in ladder
     /// order), exposed set, stage and pinned stage. Per-character stats and
-    /// confusions stay on the device.
+    /// confusions stay on the device, and so does the opt-in punctuation
+    /// (`MorseCode.pickablePunctuation`), which each device's own setting
+    /// decides (fixtures/sync-wire.json `charactersPunctuation`).
     public static func charactersValue(_ s: ProgressiveCharacters.Snapshot) -> JSONValue {
-        let active = s.engine.activeCharacters
+        let local = Set(MorseCode.pickablePunctuation)
+        let active = s.engine.activeCharacters.filter { !local.contains($0) }
+        let exposedSet = s.engine.exposedCharacters.subtracting(local)
         // The exposed set has no order of its own: ladder order, then any
         // stragglers sorted, so the same set always reads the same.
-        let inLadder = active.filter { s.engine.exposedCharacters.contains($0) }
-        let rest = s.engine.exposedCharacters.subtracting(active).sorted()
+        let inLadder = active.filter { exposedSet.contains($0) }
+        let rest = exposedSet.subtracting(active).sorted()
         return .object([
             "activeCharacters": .array(active.map { .string(String($0)) }),
             "exposedCharacters": .array((inLadder + rest).map { .string(String($0)) }),
@@ -579,11 +583,18 @@ public enum AccountSync {
             guard let s = ProgressiveCharacters.Stage(rawValue: p) else { return nil }
             pinned = s
         }
+        // The received Koch characters, then this device's own opt-in
+        // punctuation, which never travels.
+        let punctuation = Set(MorseCode.pickablePunctuation)
+        let active = w.activeCharacters.compactMap(\.first).filter { !punctuation.contains($0) }
+            + local.engine.activeCharacters.filter { punctuation.contains($0) }
+        let exposed = Set(w.exposedCharacters.compactMap(\.first)).subtracting(punctuation)
+            .union(local.engine.exposedCharacters.intersection(punctuation))
         let engine = TrainerEngine.Snapshot(
-            activeCharacters: w.activeCharacters.compactMap(\.first),
+            activeCharacters: active,
             stats: local.engine.stats,
             confusions: local.engine.confusions,
-            exposedCharacters: Set(w.exposedCharacters.compactMap(\.first)))
+            exposedCharacters: exposed)
         return ProgressiveCharacters.Snapshot(engine: engine, stage: stage, pinnedStage: pinned)
     }
 

@@ -179,7 +179,7 @@
   },
 
   "state": {
-    "_comment": "PUT /v1/sync/state. The five keys that exist in all three trees, each with ONE wire shape. `kotlin` gives the Android/desktop stored form each key is translated from; iOS stores Codable blobs whose fields already match the wire names except where noted. `characters.stage` is lowercase on the wire (iOS raw values); the Kotlin enum names are capitalised. `journey.completed` is ascending.",
+    "_comment": "PUT /v1/sync/state. The five keys that exist in all three trees, each with ONE wire shape. `kotlin` gives the Android/desktop stored form each key is translated from; iOS stores Codable blobs whose fields already match the wire names except where noted. `characters.stage` is lowercase on the wire (iOS raw values); the Kotlin enum names are capitalised. `journey.completed` is ascending. `characters` never carries the opt-in punctuation (MorseCode.pickablePunctuation: . , /): each device's own punctuation setting decides those, so they are dropped from activeCharacters and exposedCharacters when encoding, and a received ladder keeps the device's own punctuation entries (see `charactersPunctuation`). Otherwise two devices with different punctuation settings would rewrite each other's ladder on every launch.",
     "keys": ["journey", "characters", "firstFour", "operatingProcedure", "storyBookmarks"],
     "wire": { "entries": {
       "journey": {
@@ -205,9 +205,19 @@
     } },
     "kotlin": {
       "journey": { "unlockedThrough": 5, "currentLevel": 4, "completed": ["3", "1", "2"] },
-      "characters": { "active": "KMRS", "exposed": "KMR", "stage": "Pairs", "pin": null },
+      "characters": { "active": "KMRS.", "exposed": "KMR.", "stage": "Pairs", "pin": null },
       "storyBookmarks": "fables=3|speckled-band=1"
     }
+  },
+
+  "charactersPunctuation": {
+    "_comment": "Applying a received ladder: the received Koch characters, in the order received, then the device's own opt-in punctuation that was in its active (exposed) set, in its local order. Stage and pin come from the wire as usual.",
+    "localActive": ["K", "M", ",", "/"],
+    "localExposed": ["K", "M", ","],
+    "wireActive": ["K", "M", "R", "S"],
+    "wireExposed": ["K", "M", "R"],
+    "expectedActive": ["K", "M", "R", "S", ",", "/"],
+    "expectedExposed": ["K", "M", "R", ","]
   },
 
   "merge": {

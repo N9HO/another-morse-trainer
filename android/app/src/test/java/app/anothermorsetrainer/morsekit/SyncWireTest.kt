@@ -191,9 +191,38 @@ class SyncWireTest {
             stage = ProgressiveCharacters.Stage.Singles
         )
         val applied = SyncState.applyCharacters(local, wireValue("characters"))
-        assertEquals(stored, applied)
+        // The stored form's opt-in punctuation never travelled, and the local track had none.
+        val punctuation = MorseCode.pickablePunctuation.toSet()
+        assertEquals(
+            stored.copy(engine = stored.engine.copy(
+                activeCharacters = stored.engine.activeCharacters.filter { it !in punctuation },
+                exposedCharacters = stored.engine.exposedCharacters?.minus(punctuation)
+            )),
+            applied
+        )
         assertEquals(stats, applied.engine.stats)
         assertEquals(confusions, applied.engine.confusions)
+    }
+
+    @Test
+    fun `characters keep this device's opt-in punctuation and never send it`() {
+        val f = fixture.getJSONObject("charactersPunctuation")
+        fun chars(key: String) = strings(f.getJSONArray(key)).map { it.single() }
+        val local = ProgressiveCharacters.Snapshot(
+            engine = TrainerEngine.Snapshot(chars("localActive"), emptyList(), emptyMap(), chars("localExposed").toSet()),
+            stage = ProgressiveCharacters.Stage.Singles
+        )
+        val wire = JSONObject()
+            .put("activeCharacters", JSONArray(strings(f.getJSONArray("wireActive"))))
+            .put("exposedCharacters", JSONArray(strings(f.getJSONArray("wireExposed"))))
+            .put("stage", "singles").put("pinnedStage", JSONObject.NULL)
+        val applied = SyncState.applyCharacters(local, wire)
+        assertEquals(chars("expectedActive"), applied.engine.activeCharacters)
+        assertEquals(chars("expectedExposed").toSet(), applied.engine.exposedCharacters)
+        // Sending it back carries no punctuation, so a launch-time punctuation change syncs nothing.
+        val back = SyncState.charactersToWire(applied)
+        assertEquals(strings(f.getJSONArray("wireActive")), strings(back.getJSONArray("activeCharacters")))
+        assertEquals(strings(f.getJSONArray("wireExposed")), strings(back.getJSONArray("exposedCharacters")))
     }
 
     @Test

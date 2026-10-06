@@ -220,8 +220,11 @@ object SyncState {
      * set as exposed, which is what restoring it would make of it.
      */
     fun charactersToWire(s: ProgressiveCharacters.Snapshot): JSONObject {
-        val active = s.engine.activeCharacters
-        val exposedSet = s.engine.exposedCharacters ?: active.toSet()
+        // The opt-in punctuation never travels: each device's own setting
+        // decides it (fixtures/sync-wire.json `charactersPunctuation`).
+        val punctuation = MorseCode.pickablePunctuation.toSet()
+        val active = s.engine.activeCharacters.filter { it !in punctuation }
+        val exposedSet = (s.engine.exposedCharacters ?: s.engine.activeCharacters.toSet()) - punctuation
         // Active order first, then anything exposed but no longer active.
         val exposed = active.filter { it in exposedSet } + exposedSet.filter { it !in active }.sorted()
         return JSONObject()
@@ -242,8 +245,14 @@ object SyncState {
             return (0 until arr.length()).mapNotNull { arr.optString(it).firstOrNull() }
         }
         val engine = local?.engine ?: TrainerEngine.Snapshot(activeCharacters = emptyList(), stats = emptyList())
-        val active = chars("activeCharacters") ?: engine.activeCharacters
-        val exposed = chars("exposedCharacters")?.toSet() ?: engine.exposedCharacters
+        // The received Koch characters, then this device's own opt-in
+        // punctuation, which never travels.
+        val punctuation = MorseCode.pickablePunctuation.toSet()
+        val active = (chars("activeCharacters") ?: engine.activeCharacters).filter { it !in punctuation } +
+            engine.activeCharacters.filter { it in punctuation }
+        val exposed = chars("exposedCharacters")?.let { wire ->
+            (wire.toSet() - punctuation) + (engine.exposedCharacters ?: emptySet()).filter { it in punctuation }
+        } ?: engine.exposedCharacters
         val stage = stageLocal(o.optString("stage", "")) ?: local?.stage ?: ProgressiveCharacters.Stage.Singles
         val pin = if (o.isNull("pinnedStage")) null else stageLocal(o.optString("pinnedStage", ""))
         return ProgressiveCharacters.Snapshot(

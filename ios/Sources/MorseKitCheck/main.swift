@@ -7647,6 +7647,26 @@ if let fx = loadSyncWireFixture() {
           applied?.engine.stats == [kStats] && applied?.engine.confusions == confusions)
     check("characters encodes to the wire shape, lowercase stage",
           applied.map(AccountSync.charactersValue) == wireState["characters"]["value"])
+    // The opt-in punctuation never travels: a received ladder keeps this
+    // device's own, and encoding leaves it out.
+    let pf = fx["charactersPunctuation"]
+    func punctChars(_ key: String) -> [Character] { pf[key].arrayValue.compactMap(\.stringValue).compactMap(\.first) }
+    let punctLocal = ProgressiveCharacters.Snapshot(
+        engine: TrainerEngine.Snapshot(activeCharacters: punctChars("localActive"), stats: [], confusions: ConfusionMatrix(),
+                                       exposedCharacters: Set(punctChars("localExposed"))),
+        stage: .singles, pinnedStage: nil)
+    let punctWire: JSONValue = .object([
+        "activeCharacters": pf["wireActive"], "exposedCharacters": pf["wireExposed"],
+        "stage": .string("singles"), "pinnedStage": .null,
+    ])
+    let punctApplied = AccountSync.applyingCharacters(punctWire, to: punctLocal)
+    let punctActive: [Character]? = punctApplied?.engine.activeCharacters
+    let punctExposed: Set<Character>? = punctApplied?.engine.exposedCharacters
+    check("characters: a received ladder keeps this device's opt-in punctuation",
+          punctActive == punctChars("expectedActive") && punctExposed == Set(punctChars("expectedExposed")))
+    let punctBack = punctApplied.map(AccountSync.charactersValue)
+    check("characters: the opt-in punctuation is never sent",
+          punctBack?["activeCharacters"] == pf["wireActive"] && punctBack?["exposedCharacters"] == pf["wireExposed"])
     var badStage = wireState["characters"]["value"].objectValue
     badStage["stage"] = .string("Pairs")
     check("characters with an unknown stage is refused, so local stands",

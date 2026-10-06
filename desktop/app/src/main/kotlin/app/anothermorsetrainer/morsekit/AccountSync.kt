@@ -239,8 +239,12 @@ object SyncStateCodec {
      */
     fun charactersToWire(engineJson: String): JSONObject {
         val o = JSONObject(engineJson)
-        val active = o.optString("active", "")
-        val exposed = if (o.has("exposed")) o.getString("exposed") else active
+        // The opt-in punctuation never travels: each device's own setting
+        // decides it (fixtures/sync-wire.json `charactersPunctuation`).
+        val punctuation = MorseCode.pickablePunctuation.toSet()
+        val savedActive = o.optString("active", "")
+        val active = savedActive.filter { it !in punctuation }
+        val exposed = (if (o.has("exposed")) o.getString("exposed") else savedActive).filter { it !in punctuation }
         val pin = o.optString("pin", "").takeIf { it.isNotEmpty() }
         return JSONObject()
             .put("activeCharacters", JSONArray(active.map { it.toString() }))
@@ -264,8 +268,13 @@ object SyncStateCodec {
             val arr = wire.optJSONArray(key) ?: return ""
             return (0 until arr.length()).map { arr.optString(it) }.filter { it.length == 1 }.joinToString("")
         }
-        o.put("active", chars("activeCharacters"))
-        o.put("exposed", chars("exposedCharacters"))
+        // The received Koch characters, then this device's own opt-in
+        // punctuation, which never travels.
+        val punctuation = MorseCode.pickablePunctuation.toSet()
+        val localActive = o.optString("active", "")
+        val localExposed = if (o.has("exposed")) o.getString("exposed") else localActive
+        o.put("active", chars("activeCharacters").filter { it !in punctuation } + localActive.filter { it in punctuation })
+        o.put("exposed", chars("exposedCharacters").filter { it !in punctuation } + localExposed.filter { it in punctuation })
         stageName(wire.optString("stage", ""))?.let { o.put("stage", it) }
         val pin = if (wire.isNull("pinnedStage")) null else stageName(wire.getString("pinnedStage"))
         if (pin != null) o.put("pin", pin) else o.remove("pin")
