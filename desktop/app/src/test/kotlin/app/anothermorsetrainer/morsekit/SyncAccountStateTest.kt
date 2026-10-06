@@ -36,7 +36,6 @@ class SyncAccountStateTest {
 
     @Test
     fun `the own record is seeded from the ledger`() {
-        org.junit.Assert.fail("negative control")
         assertEquals(days("ownBefore"), SyncOwnDays.seed(days("seedFromLedgerOnFirstSignIn")))
     }
 
