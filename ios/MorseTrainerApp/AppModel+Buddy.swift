@@ -36,13 +36,22 @@ extension AppModel {
     var buddyToday: String { BuddyDay.label(for: Date()) }
 
     /// Why the buddy actions are unavailable right now, or nil. The name is
-    /// the leaderboard's; a device that cannot attest (the simulator) can
-    /// never pair, and says so in the leaderboard's own words.
+    /// the leaderboard's; a device that cannot attest (the simulator, a Mac)
+    /// can never pair. Settings shows it under the section and again, as an
+    /// alert, when Invite or Join is tapped (#335): those buttons stay
+    /// tappable so a tap always answers, rather than being disabled with a
+    /// label that looks no different.
     var buddyUnavailableReason: String? {
         guard LeaderboardDisplayName.isValid(settings.leaderboard.displayName) else {
-            return "Pick a display name in Settings › Leaderboard & Buddy"
+            return "Set a display name in the Leaderboard section above first. It is the name your buddies see, and Share scores can stay off."
         }
-        guard leaderboard.canAttest else { return LeaderboardError.unsupported.message }
+        guard leaderboard.canAttest else {
+            #if targetEnvironment(macCatalyst)
+            return "This Mac cannot attest, so it cannot pair with a buddy. Pair from an iPhone or iPad instead."
+            #else
+            return "This device cannot attest, so it cannot pair with a buddy. The simulator never can; on an iPhone or iPad, check that the app came from the App Store or TestFlight."
+            #endif
+        }
         return nil
     }
 

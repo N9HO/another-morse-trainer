@@ -1234,7 +1234,11 @@
     <string name="settings_buddy_row">%1$s · %2$s</string>
     <string name="settings_buddy_row_practised">practiced today</string>
     <string name="settings_buddy_row_not_yet">hasn\'t practiced yet today</string>
-    <string name="settings_buddy_no_name">Pick a display name in Settings › Leaderboard &amp; Buddy</string>
+    <string name="settings_buddy_no_name">Turn on Share scores above and set a display name first. It is the name your buddies see; you can turn Share scores off again afterward and the name stays.</string>
+    <!-- Dialog titles when Invite or Join is tapped but pairing cannot start (#335); the body is settings_buddy_no_name or settings_leaderboard_unconfigured. -->
+    <string name="settings_buddy_cant_invite">Can\'t invite a buddy yet</string>
+    <string name="settings_buddy_cant_join">Can\'t join a buddy yet</string>
+    <string name="settings_buddy_blocked_ok">OK</string>
     <string name="settings_buddy_invite">Invite a buddy</string>
     <string name="settings_buddy_invite_another">Invite another buddy</string>
     <string name="settings_buddy_inviting">Asking for a code…</string>

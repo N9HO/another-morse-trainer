@@ -21,6 +21,13 @@ struct BuddySettingsSection: View {
     @State private var problem: String?
     @State private var leaving: BuddyEntry?
     @State private var copiedInvite = false
+    /// Why a tapped Invite or Join cannot go ahead, shown as an alert.
+    @State private var blocked: Blocked?
+
+    private struct Blocked {
+        let title: String
+        let reason: String
+    }
 
     private var cache: BuddyStatusCache { model.settings.buddy }
 
@@ -31,6 +38,21 @@ struct BuddySettingsSection: View {
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .onAppear { model.refreshBuddyStatus() }
+                    // On this one row, not the Section (#335): a modifier on a
+                    // Form Section lands on every row in it, and a row carrying
+                    // a confirmationDialog swallows its ShareLink's share sheet
+                    // (the invite card's Share did nothing). This row exists
+                    // exactly while there is a buddy to leave.
+                    .confirmationDialog("Leave \(leaving?.displayName ?? "buddy")?",
+                                        isPresented: Binding(get: { leaving != nil }, set: { if !$0 { leaving = nil } }),
+                                        titleVisibility: .visible,
+                                        presenting: leaving) { buddy in
+                        Button("Leave \(buddy.displayName)", role: .destructive) {
+                            run { await model.buddyLeave(buddy) }
+                        }
+                    } message: { _ in
+                        Text("Ends your buddy streak with them, for both of you. Your other buddies are not affected, and either of you can pair again with a new code.")
+                    }
                 ForEach(Array(cache.buddies.enumerated()), id: \.offset) { _, buddy in
                     buddyRow(buddy)
                 }
@@ -53,6 +75,7 @@ struct BuddySettingsSection: View {
                     inviteCard(code: invite.code, expiresAt: invite.expiresAt)
                 }
                 Button {
+                    guard explainIfUnavailable(action: "invite a buddy") else { return }
                     run {
                         if case .failure(let p) = await model.buddyInvite() { return p.message }
                         return nil
@@ -65,7 +88,18 @@ struct BuddySettingsSection: View {
                         if busy { Spacer(); ProgressView() }
                     }
                 }
-                .disabled(busy || model.buddyUnavailableReason != nil)
+                // Not disabled when the buddy actions are unavailable (#335):
+                // in this Form a disabled Label row looks exactly like an
+                // enabled one, so the tap did nothing and said nothing. The
+                // tap explains instead (`explainIfUnavailable`).
+                .disabled(busy)
+                .alert(blocked?.title ?? "",
+                       isPresented: Binding(get: { blocked != nil }, set: { if !$0 { blocked = nil } }),
+                       presenting: blocked) { _ in
+                    Button("OK", role: .cancel) {}
+                } message: { b in
+                    Text(b.reason)
+                }
                 HStack {
                     Text("Join with a code")
                     Spacer()
@@ -83,6 +117,7 @@ struct BuddySettingsSection: View {
                             if kept != raw { joinCode = kept }
                         }
                     Button("Join") {
+                        guard explainIfUnavailable(action: "join a buddy") else { return }
                         let code = joinCode
                         run {
                             let problem = await model.buddyJoin(code: code)
@@ -91,8 +126,7 @@ struct BuddySettingsSection: View {
                         }
                     }
                     .buttonStyle(.borderedProminent)
-                    .disabled(busy || model.buddyUnavailableReason != nil
-                              || BuddyInviteCode.normalize(joinCode) == nil)
+                    .disabled(busy || BuddyInviteCode.normalize(joinCode) == nil)
                 }
             }
             if let problem {
@@ -106,16 +140,6 @@ struct BuddySettingsSection: View {
             Text("Pair with up to ten people and keep a separate streak with each: the days you both practiced. Any practice day counts, the same as your own streak, and one practice counts for every buddy. Your buddies see your leaderboard display name and whether you practiced each day, nothing else; pairing needs the same device attestation as posting a score but not the Share scores switch. Leaving a buddy ends that streak for both of you and keeps the others, and Delete my scores above removes every pairing.")
         }
         .listRowBackground(rowBackground)
-        .confirmationDialog("Leave \(leaving?.displayName ?? "buddy")?",
-                            isPresented: Binding(get: { leaving != nil }, set: { if !$0 { leaving = nil } }),
-                            titleVisibility: .visible,
-                            presenting: leaving) { buddy in
-            Button("Leave \(buddy.displayName)", role: .destructive) {
-                run { await model.buddyLeave(buddy) }
-            }
-        } message: { _ in
-            Text("Ends your buddy streak with them, for both of you. Your other buddies are not affected, and either of you can pair again with a new code.")
-        }
     }
 
     /// One buddy: the name, the pairing's streak and whether they practised
@@ -140,6 +164,16 @@ struct BuddySettingsSection: View {
                 .disabled(busy || model.buddyUnavailableReason != nil)
                 .accessibilityLabel("Leave \(buddy.displayName)")
         }
+    }
+
+    /// True when the buddy actions can run. Otherwise puts up an alert
+    /// saying why (no display name, or a device that cannot attest) and what
+    /// to do, so the tap is never silent (#335), and returns false.
+    private func explainIfUnavailable(action: String) -> Bool {
+        guard let reason = model.buddyUnavailableReason else { return true }
+        Haptics.error()
+        blocked = Blocked(title: "Can't \(action) yet", reason: reason)
+        return false
     }
 
     /// Run one buddy action (invite, join, leave) with the busy spinner up
