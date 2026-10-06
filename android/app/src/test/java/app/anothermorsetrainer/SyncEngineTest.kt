@@ -178,6 +178,7 @@ class SyncEngineTest {
 
     @Test
     fun `days are pushed from the device's own record and adopted only into the displayed ledger`() = runBlocking {
+        org.junit.Assert.fail("negative control")
         val f = fixture.getJSONObject("merge").getJSONObject("deviceDays")
         val rig = Rig(signedIn = true)
         rig.kv.put(SyncEngine.K_OWN_DAYS, f.getJSONObject("ownBefore").toString())

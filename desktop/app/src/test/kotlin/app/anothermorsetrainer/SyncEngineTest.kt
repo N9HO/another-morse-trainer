@@ -179,6 +179,7 @@ class SyncEngineTest {
 
     @Test
     fun `at first sign-in an unstamped key goes at 0 and a stamped one keeps its stamp`() = runBlocking<Unit> {
+        org.junit.Assert.fail("negative control")
         val rig = Rig(SyncAccountState(stateStamps = mapOf(SyncStateCodec.FIRST_FOUR to 1_791_000_000_000L)))
         rig.local.values[SyncStateCodec.JOURNEY] = JSONObject().put("unlockedThrough", 1).put("currentLevel", 1).put("completed", JSONArray())
         rig.local.values[SyncStateCodec.FIRST_FOUR] = JSONObject().put("passed", JSONArray()).put("copyPassed", JSONArray()).put("cleanRuns", JSONObject())
