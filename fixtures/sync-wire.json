@@ -280,7 +280,7 @@
     },
 
     "state": {
-      "_comment": "Per key, a reply entry replaces the local one only when its updatedAt is strictly newer; equal or older keeps local. Keys the reply omits keep local.",
+      "_comment": "Per key, a reply entry replaces the local one only when its updatedAt is strictly newer; equal or older keeps local. Keys the reply omits keep local. Stamping: a key gets updatedAt = now (epoch ms) when a save changes its wire value WHILE SIGNED IN; resets never stamp. At first sign-in a key that has never been stamped goes out with updatedAt 0, so any value the account already has wins and the device's value only fills an empty account (a fresh install's onboarding defaults never overwrite real progress); a key never saved on the device is not sent at all.",
       "local": {
         "journey": { "value": { "unlockedThrough": 3, "currentLevel": 3, "completed": [1, 2] }, "updatedAt": 2000 },
         "characters": { "value": { "activeCharacters": ["K", "M"], "exposedCharacters": [], "stage": "singles", "pinnedStage": null }, "updatedAt": 5000 },
