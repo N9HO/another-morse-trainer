@@ -35,7 +35,7 @@ class QuizAnswersTest {
             for (s in all) {
                 val n = s.choices.size
                 val where = "$call ${s.id}"
-                if (n < 3) problems += "$where: fewer than two choices"
+                if (n < 2) problems += "$where: fewer than two choices"
                 if (s.choices.toSet().size != n) problems += "$where: a choice appears twice"
                 if (s.accepted.isEmpty() || 0 !in s.accepted) problems += "$where: the primary answer (choice 0) is not accepted"
                 if (s.accepted.any { it < 0 || it >= n }) problems += "$where: an accepted index is out of range"
@@ -62,7 +62,7 @@ class QuizAnswersTest {
         for (round in 0 until rounds) {
             val d = source.nextDrill()
             if (d.options.isEmpty()) return "$name round $round: no options"
-            if (d.correct in d.options) return "$name round $round: ${d.correct} not among ${d.options}"
+            if (d.correct !in d.options) return "$name round $round: ${d.correct} not among ${d.options}"
             if (d.options.toSet().size != d.options.size) return "$name round $round: duplicate option in ${d.options}"
             val wrong = d.options.firstOrNull { it != d.correct }
             source.record(if (round % 4 == 3) (wrong ?: d.correct) else d.correct, 0.4)
