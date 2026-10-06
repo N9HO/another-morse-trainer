@@ -8439,6 +8439,185 @@ do {
           state.stateUpdatedAt["firstFour"] == 123 && state.stateOutbox.last == "firstFour")
 }
 
+// fixtures/sync-wire.json `merge.refreshRetry`: one request answered 401,
+// each scenario a refresh status and a status for the retried request. The
+// one that matters: a 401 on the retry, straight after a good refresh, signs
+// the device out — the Kotlin AccountApiTest / AccountClientTest read the
+// same scenarios.
+print("\nAccount refresh and retry (fixtures/sync-wire.json merge.refreshRetry, fake transport):")
+if let fx = loadSyncWireFixture()?["merge"]["refreshRetry"], !fx["scenarios"].arrayValue.isEmpty {
+    let old = AccountTokens(access: fx["access"].stringValue ?? "", refresh: fx["refreshToken"].stringValue ?? "", expiresIn: 900)
+    let rotated = AccountTokens(access: fx["rotatedAccess"].stringValue ?? "", refresh: fx["rotatedRefresh"].stringValue ?? "",
+                                expiresIn: 900)
+    for scenario in fx["scenarios"].arrayValue {
+        let name = scenario["name"].stringValue ?? "?"
+        let refreshStatus = scenario["refresh"].intValue ?? 0
+        let retryStatus = scenario["retry"].intValue
+        let rotatedJSON = jsonData(#"{"access":"\#(rotated.access)","refresh":"\#(rotated.refresh)","expiresIn":900}"#)
+        let first = old.access
+        let transport = FakeAccountTransport { request in
+            if request.path == "v1/auth/token/refresh" {
+                return refreshStatus == 200 ? AccountResponse(status: 200, body: rotatedJSON)
+                    : AccountResponse(status: refreshStatus, body: jsonData(#"{"error":"x","message":"x"}"#))
+            }
+            if request.bearer == first { return AccountResponse(status: 401, body: jsonData(#"{"error":"unauthorized"}"#)) }
+            let status = retryStatus ?? 599
+            return AccountResponse(status: status, body: status == 200 ? jsonData(#"{"devices":[]}"#)
+                                                                       : jsonData(#"{"error":"x","message":"x"}"#))
+        }
+        let store = MemoryTokenStore(old)
+        let client = AccountClient(transport: transport, tokenStore: store)
+        let result: String = runBlocking {
+            do {
+                _ = try await client.devices()
+                return "ok"
+            } catch let error as AccountError {
+                if error == .signedOut { return "signedOut" }
+                return error.retryAction == .backoff ? "backoff" : "other(\(error))"
+            } catch {
+                return "other"
+            }
+        }
+        let tokens: String
+        switch store.load() {
+        case nil: tokens = "cleared"
+        case rotated?: tokens = "rotated"
+        case old?: tokens = "kept"
+        default: tokens = "other"
+        }
+        let sent = transport.requests
+        let requests = sent.filter { $0.path == "v1/auth/devices" }.count
+        let refreshes = sent.filter { $0.path == "v1/auth/token/refresh" }.count
+        let ok = result == scenario["result"].stringValue && tokens == scenario["tokens"].stringValue
+            && requests == scenario["requests"].intValue && refreshes == scenario["refreshes"].intValue
+        if !ok { print("      ↳ \(name): \(result), tokens \(tokens), \(requests) requests, \(refreshes) refreshes") }
+        check("refresh/retry: \(name) → \(scenario["result"].stringValue ?? "?"), tokens \(scenario["tokens"].stringValue ?? "?")", ok)
+    }
+} else {
+    check("fixtures/sync-wire.json loads (refreshRetry)", false)
+}
+
+do {
+    // The same rule through the engine: revoked after a good refresh, the
+    // device signs itself out and raises the banner instead of backing off.
+    let store = AccountSyncStore(state: syncSignedInState(cursor: 3)) { _ in }
+    let tokens = MemoryTokenStore(AccountTokens(access: "a1", refresh: "r1", expiresIn: 900))
+    let transport = FakeAccountTransport { request in
+        if request.path == "v1/auth/token/refresh" {
+            return AccountResponse(status: 200, body: jsonData(#"{"access":"a2","refresh":"r2","expiresIn":900}"#))
+        }
+        return AccountResponse(status: 401, body: jsonData(#"{"error":"unauthorized"}"#))
+    }
+    let engine = AccountSyncEngine(client: AccountClient(transport: transport, tokenStore: tokens), store: store,
+                                   host: FakeSyncHost(store: store), autoRetry: false, now: { syncTestNow() })
+    let outcome = runBlocking { await engine.sync() }
+    check("revoked after a good refresh: the engine signs out with the banner, no backoff",
+          outcome == .signedOut && store.state.signedOutByServer && store.state.account == nil
+            && tokens.load() == nil && runBlocking { await engine.failures } == 0)
+}
+
+// fixtures/sync-wire.json `merge.foregroundThrottle`: foreground syncs at
+// least five minutes apart; Sync now, the post-change push, the sign-in sync
+// and retries never held back. The Kotlin SyncWireTests run the same sequence.
+print("\nForeground sync throttle (fixtures/sync-wire.json merge.foregroundThrottle):")
+if let fx = loadSyncWireFixture()?["merge"]["foregroundThrottle"], !fx["sequence"].arrayValue.isEmpty {
+    check("throttle: the interval is the fixture's five minutes",
+          AccountSync.foregroundSyncIntervalSeconds == fx["minIntervalSeconds"].intValue)
+    let named = (fx["throttled"].arrayValue + fx["unthrottled"].arrayValue).compactMap(\.stringValue)
+    check("throttle: the fixture names every trigger this port has, and no other",
+          Set(named) == Set(SyncTrigger.allCases.map(\.rawValue)) && named.count == SyncTrigger.allCases.count)
+    var throttle = SyncThrottle()
+    var sequenceOK = true
+    for (i, step) in fx["sequence"].arrayValue.enumerated() {
+        guard let trigger = step["trigger"].stringValue.flatMap(SyncTrigger.init(rawValue:)),
+              let at = step["atSeconds"].intValue else { sequenceOK = false; continue }
+        let syncs = throttle.admit(trigger, nowMs: at * 1000)
+        if syncs != (step["syncs"] == .bool(true)) {
+            sequenceOK = false
+            print("      ↳ step \(i + 1): \(trigger.rawValue) at \(at) s → \(syncs)")
+        }
+    }
+    check("throttle: the fixture's trigger sequence syncs exactly where it says", sequenceOK)
+    // Each trigger the fixture calls unthrottled runs straight after a foreground sync.
+    var unthrottledOK = true
+    for name in fx["unthrottled"].arrayValue.compactMap(\.stringValue) {
+        var t = SyncThrottle()
+        guard let trigger = SyncTrigger(rawValue: name) else { unthrottledOK = false; continue }
+        unthrottledOK = unthrottledOK && t.admit(.foreground, nowMs: 0) && t.admit(trigger, nowMs: 1)
+            && t.admit(trigger, nowMs: 2)
+    }
+    var throttledOK = true
+    for name in fx["throttled"].arrayValue.compactMap(\.stringValue) {
+        var t = SyncThrottle()
+        guard let trigger = SyncTrigger(rawValue: name) else { throttledOK = false; continue }
+        throttledOK = throttledOK && t.admit(trigger, nowMs: 0) && !t.admit(trigger, nowMs: 1)
+    }
+    check("throttle: unthrottled triggers always run; throttled ones are held inside the interval",
+          unthrottledOK && throttledOK)
+} else {
+    check("fixtures/sync-wire.json loads (foregroundThrottle)", false)
+}
+
+do {
+    // Signed out and into another account while a sync for the first is
+    // still out: the new account's first sync (which `signedIn` is told is
+    // busy) runs as soon as the old one stops, not at the next trigger.
+    final class Gate: @unchecked Sendable {
+        let entered = DispatchSemaphore(value: 0)
+        let release = DispatchSemaphore(value: 0)
+        let lock = NSLock()
+        var held = false
+        /// True for the first call only.
+        func first() -> Bool { lock.withLock { defer { held = true }; return !held } }
+    }
+    let gate = Gate()
+    let store = AccountSyncStore(state: syncSignedInState(cursor: 1)) { _ in }
+    let tokens = MemoryTokenStore(AccountTokens(access: "a2", refresh: "r2", expiresIn: 900))
+    let transport = FakeAccountTransport { request in
+        switch (request.method, request.path) {
+        case ("GET", "v1/sync/sessions"):
+            if gate.first() {
+                gate.entered.signal()
+                gate.release.wait()
+            }
+            return syncJSONResponse(.object(["sessions": .array([]), "nextSince": .int(1), "hasMore": .bool(false)]))
+        case ("GET", "v1/sync/snapshot"):
+            return syncJSONResponse(.object(["stats": syncStatsJSON(sessions: 0), "sessions": .array([]),
+                                             "days": .object([:]), "state": .object([:]), "seq": .int(42)]))
+        case ("POST", "v1/auth/logout"):
+            return AccountResponse(status: 204)
+        default:
+            return syncJSONResponse(.object(["accepted": .array([]), "skipped": .array([]), "rejected": .array([]),
+                                             "days": .object([:]), "entries": .object([:])]))
+        }
+    }
+    let engine = AccountSyncEngine(client: AccountClient(transport: transport, tokenStore: tokens), store: store,
+                                   host: FakeSyncHost(store: store), autoRetry: false,
+                                   calendar: syncUTCCalendar(), now: { syncTestNow() })
+    let oldRun = BlockingBox<AccountSyncOutcome>()
+    let oldDone = DispatchSemaphore(value: 0)
+    Task.detached {
+        oldRun.value = await engine.sync()
+        oldDone.signal()
+    }
+    gate.entered.wait()   // account 1's pull is out
+    runBlocking { await engine.signOut() }
+    var other = syncTestAccount().objectValue
+    other["id"] = .string("acc-2")
+    let profile = try? JSONValue.object(other).decode(as: AccountProfile.self)
+    try? tokens.save(AccountTokens(access: "b1", refresh: "s1", expiresIn: 900))
+    let signedIn = runBlocking { () -> AccountSyncOutcome? in
+        guard let profile else { return nil }
+        return await engine.signedIn(profile)
+    }
+    gate.release.signal()
+    oldDone.wait()
+    let snapshots = transport.requests.filter { $0.path == "v1/sync/snapshot" }
+    check("account switch mid-sync: the new account's first sync runs when the old one stops",
+          signedIn == .busy && oldRun.value == .done && snapshots.count == 1 && snapshots.first?.bearer == "b1"
+            && store.state.account?.id == "acc-2" && !store.state.firstSyncPending && store.state.cursor == 42)
+}
+
 print("\nStreak adoption:")
 do {
     let calendar = syncUTCCalendar()

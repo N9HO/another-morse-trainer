@@ -486,7 +486,12 @@ public actor AccountSyncEngine {
             outcome = await runOnce(refreshState: refresh)
             refresh = rerunRefreshesState
             rerunRefreshesState = false
-        } while rerun && outcome == .done
+            // `.notSignedIn` here means the account changed under this run
+            // (signed out, maybe into another account): a sync asked for in
+            // the meantime — the new account's first sync, which `signedIn`
+            // was told is `.busy` — goes round now rather than waiting for
+            // the next trigger. Signed out, that round returns at once.
+        } while rerun && (outcome == .done || outcome == .notSignedIn)
         running = false
         switch outcome {
         case .done:

@@ -10,8 +10,8 @@
 // Sync is invisible. Every hook records locally first and only queues; the
 // engine runs off the main actor, never blocks a screen and never shows a
 // transient failure. A session finished offline is pushed at the next sync:
-// on launch, on each return to the foreground, a few seconds after a local
-// change, and on Sync now.
+// on launch and on a return to the foreground (at most once every five
+// minutes), a few seconds after a local change, and on Sync now.
 
 import Foundation
 import UIKit
@@ -55,6 +55,8 @@ final class SyncCoordinator: ObservableObject {
     private var attached = false
     private var pollTask: Task<Void, Never>?
     private var soonTask: Task<Void, Never>?
+    /// Holds foreground syncs at least five minutes apart.
+    private var throttle = SyncThrottle()
     /// The last value seen for each synced key, so a save that leaves the
     /// synced part unchanged (a per-character stat) stamps nothing.
     private var noted: [SyncStateKey: JSONValue] = [:]
@@ -93,17 +95,22 @@ final class SyncCoordinator: ObservableObject {
     // MARK: - Lifecycle
 
     /// Called once at the end of `AppModel.init`: the host can read the
-    /// model from now on, and a signed-in device pulls.
+    /// model from now on, and a signed-in device pulls. Launch is the first
+    /// foreground, so the `.active` that follows it is held back.
     func attach(_ model: AppModel) {
         host.model = model
         for key in SyncStateKey.allCases { noted[key] = model.syncStateValue(key) }
         attached = true
-        syncInBackground()
+        appBecameActive()
     }
 
-    /// The scene came to the foreground: back off from scratch and pull.
+    /// The scene came to the foreground: back off from scratch and pull — at
+    /// most once every five minutes (`SyncThrottle`, fixture
+    /// `merge.foregroundThrottle`). A held-back return does nothing, not even
+    /// reset the backoff, which would cancel a scheduled retry.
     func appBecameActive() {
-        guard isSignedIn else { return }
+        guard isSignedIn,
+              throttle.admit(.foreground, nowMs: AccountSync.epochMilliseconds(Date())) else { return }
         let engine = engine
         Task {
             await engine.resetBackoff()
@@ -111,14 +118,14 @@ final class SyncCoordinator: ObservableObject {
         }
     }
 
-    private func syncInBackground() {
-        guard isSignedIn else { return }
-        let engine = engine
-        Task { await engine.sync() }
-    }
-
     /// A local change was queued: push it shortly, folding a burst of
     /// changes (a session end saves several things) into one sync.
+    ///
+    /// Only the three-second wait is cancellable. The sync runs in a task of
+    /// its own, so a change landing mid-sync never cancels the requests in
+    /// flight (which would count a failure and schedule a needless retry);
+    /// the engine leaves a running sync alone and goes round once more,
+    /// as Android's and desktop's `requestSync` do with their `again` flag.
     private func syncSoon() {
         guard isSignedIn else { return }
         soonTask?.cancel()
@@ -126,7 +133,7 @@ final class SyncCoordinator: ObservableObject {
         soonTask = Task {
             try? await Task.sleep(nanoseconds: 3_000_000_000)
             guard !Task.isCancelled else { return }
-            await engine.sync(refreshState: false)
+            Task { await engine.sync(refreshState: false) }
         }
     }
 

@@ -96,7 +96,8 @@ fun main() {
         ) {
             remember { window.minimumSize = Dimension(360, 560); Unit }
             // Coming back to the window is the desktop's "foreground": account
-            // sync pulls (and its backoff starts over) when it regains focus.
+            // sync pulls (and its backoff starts over) when it regains focus,
+            // at most once every five minutes (SyncCoordinator.onForeground).
             val focused = LocalWindowInfo.current.isWindowFocused
             LaunchedEffect(focused) { if (focused) SyncCoordinator.onForeground() }
             AmtTheme {

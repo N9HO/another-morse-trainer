@@ -361,6 +361,38 @@ class SyncWireTest {
         }
     }
 
+    // ---- Foreground throttle ----
+
+    @Test
+    fun `foreground syncs are held five minutes apart, other triggers never`() {
+        val f = mergeFixture("foregroundThrottle")
+        assertEquals(f.getLong("minIntervalSeconds"), SyncThrottle.MIN_INTERVAL_SECONDS)
+        val throttled = strings(f.getJSONArray("throttled"))
+        val unthrottled = strings(f.getJSONArray("unthrottled"))
+        assertEquals("the fixture names every trigger", SyncTrigger.values().map { it.raw }.toSet(), (throttled + unthrottled).toSet())
+        assertEquals(SyncTrigger.values().size, throttled.size + unthrottled.size)
+        fun trigger(raw: String) = SyncTrigger.values().single { it.raw == raw }
+
+        val throttle = SyncThrottle()
+        val steps = f.getJSONArray("sequence")
+        for (i in 0 until steps.length()) {
+            val s = steps.getJSONObject(i)
+            val at = s.getLong("atSeconds")
+            assertEquals("step ${i + 1}: ${s.getString("trigger")} at $at s", s.getBoolean("syncs"),
+                throttle.admit(trigger(s.getString("trigger")), at * 1000))
+        }
+        for (raw in unthrottled) {
+            val t = SyncThrottle()
+            assertTrue(t.admit(SyncTrigger.FOREGROUND, 0))
+            assertTrue("$raw right after a foreground sync", t.admit(trigger(raw), 1) && t.admit(trigger(raw), 2))
+        }
+        for (raw in throttled) {
+            val t = SyncThrottle()
+            assertTrue(t.admit(trigger(raw), 0))
+            assertTrue("$raw inside the interval", !t.admit(trigger(raw), 1))
+        }
+    }
+
     // ---- PKCE ----
 
     @Test

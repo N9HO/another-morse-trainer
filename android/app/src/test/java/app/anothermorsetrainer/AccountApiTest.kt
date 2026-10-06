@@ -1,7 +1,9 @@
 package app.anothermorsetrainer
 
 import app.anothermorsetrainer.morsekit.Pkce
+import app.anothermorsetrainer.morsekit.SyncAction
 import app.anothermorsetrainer.morsekit.SyncOutbox
+import app.anothermorsetrainer.morsekit.SyncRetry
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.runBlocking
@@ -9,6 +11,7 @@ import kotlinx.coroutines.yield
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -116,6 +119,56 @@ class AccountApiTest {
         assertEquals(AccountResult.SignedOut, api.devices())
         assertEquals(2, t.count("/v1/auth/devices"))
         assertEquals(1, t.count("/v1/auth/token/refresh"))
+    }
+
+    /**
+     * `fixtures/sync-wire.json` `merge.refreshRetry`, the scenarios the Swift
+     * harness and the desktop suite run too: one request answered 401, a
+     * refresh status and a status for the retried request.
+     */
+    @Test
+    fun `401 then refresh then retry follows the fixture's scenarios`() = runBlocking {
+        val stream = javaClass.classLoader?.getResourceAsStream("sync-wire.json")
+        assertNotNull("fixtures/sync-wire.json is not on the test classpath", stream)
+        val f = JSONObject(stream!!.bufferedReader().readText()).getJSONObject("merge").getJSONObject("refreshRetry")
+        val scenarios = f.getJSONArray("scenarios")
+        assertTrue(scenarios.length() > 0)
+        val oldAccess = f.getString("access")
+        val oldRefresh = f.getString("refreshToken")
+        val newAccess = f.getString("rotatedAccess")
+        val newRefresh = f.getString("rotatedRefresh")
+        for (i in 0 until scenarios.length()) {
+            val s = scenarios.getJSONObject(i)
+            val name = s.getString("name")
+            val t = FakeTransport()
+            val store = MemoryTokens(oldAccess, oldRefresh)
+            t.on("/v1/auth/devices", 401)
+            val refresh = s.getInt("refresh")
+            t.on("/v1/auth/token/refresh", refresh, if (refresh == 200) tokens(newAccess, newRefresh) else null)
+            if (!s.isNull("retry")) {
+                val retry = s.getInt("retry")
+                t.on("/v1/auth/devices", retry, if (retry == 200) JSONObject().put("devices", JSONArray()) else null)
+            }
+            val result = when (val r = AccountApi(t, store, "amt-android").devices()) {
+                is AccountResult.SignedOut -> "signedOut"
+                is AccountResult.Offline -> "backoff"
+                is AccountResult.Reply -> when {
+                    r.code in 200..299 -> "ok"
+                    SyncRetry.action(r.code) == SyncAction.BACKOFF -> "backoff"
+                    else -> "HTTP ${r.code}"
+                }
+            }
+            val held = when {
+                store.access == null && store.refresh == null -> "cleared"
+                store.access == newAccess && store.refresh == newRefresh -> "rotated"
+                store.access == oldAccess && store.refresh == oldRefresh -> "kept"
+                else -> "${store.access}/${store.refresh}"
+            }
+            assertEquals("$name: result", s.getString("result"), result)
+            assertEquals("$name: tokens", s.getString("tokens"), held)
+            assertEquals("$name: requests", s.getInt("requests"), t.count("/v1/auth/devices"))
+            assertEquals("$name: refreshes", s.getInt("refreshes"), t.count("/v1/auth/token/refresh"))
+        }
     }
 
     @Test

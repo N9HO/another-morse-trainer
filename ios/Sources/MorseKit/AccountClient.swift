@@ -360,7 +360,8 @@ public actor AccountClient {
     /// Send with the stored access token. On a 401, refresh once and retry
     /// once — unless another call already refreshed while this one was in
     /// flight, in which case the retry just uses the newer token. A refused
-    /// refresh surfaces as `.signedOut`, with the tokens already cleared.
+    /// refresh, or a 401 on the retry, surfaces as `.signedOut` with the
+    /// tokens already cleared.
     private func authorized(_ request: AccountRequest) async throws -> AccountResponse {
         guard let tokens = tokenStore.load() else { throw AccountError.signedOut }
         var request = request
@@ -375,6 +376,15 @@ public actor AccountClient {
             }
             request.bearer = fresh.access
             response = try await send(request)
+            // A 401 again, with a token just refreshed: this device's
+            // sign-in itself was revoked. Sign out, as Android and desktop
+            // do (fixture `merge.refreshRetry`); passed on as an ordinary
+            // server error it would back off forever and never raise the
+            // signed-out banner.
+            if response.status == 401 {
+                tokenStore.clear()
+                throw AccountError.signedOut
+            }
         }
         guard (200..<300).contains(response.status) else { throw serverError(response) }
         return response

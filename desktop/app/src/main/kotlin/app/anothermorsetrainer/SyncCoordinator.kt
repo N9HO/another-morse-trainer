@@ -3,6 +3,8 @@ package app.anothermorsetrainer
 import app.anothermorsetrainer.morsekit.AccountProfile
 import app.anothermorsetrainer.morsekit.SessionRecord
 import app.anothermorsetrainer.morsekit.SyncAccountState
+import app.anothermorsetrainer.morsekit.SyncThrottle
+import app.anothermorsetrainer.morsekit.SyncTrigger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -28,10 +30,10 @@ import java.time.LocalDate
  * Signing in is optional. Until someone does, the hooks only grow the
  * device's own per-day record and nothing touches the network.
  *
- * Pull: at launch ([init]), when the window regains focus ([onForeground]),
- * after sign-in and on Sync now. A session finished offline sits in the
- * outbox and goes with the next sync; a failure retries on the fixture's
- * backoff, reset on success and on focus.
+ * Pull: at launch ([init]), when the window regains focus ([onForeground], at
+ * most once every five minutes), after sign-in and on Sync now. A session
+ * finished offline sits in the outbox and goes with the next sync; a failure
+ * retries on the fixture's backoff, reset on success and on a focus that syncs.
  */
 object SyncCoordinator {
 
@@ -66,17 +68,29 @@ object SyncCoordinator {
     private var retryJob: Job? = null
     private var pollJob: Job? = null
     @Volatile private var again = false
+    private val throttle = SyncThrottle()
 
-    /** In `main()`, after the stores. Pulls at once when signed in. */
+    /**
+     * In `main()`, after the stores. Pulls at once when signed in. Launch is
+     * the first foreground, so the window focus that follows is held back.
+     */
     fun init() {
         if (engine != null) return
         engine = SyncEngine(AccountClient.shared, PrefsSyncStore(Prefs.open("amt_account")), AppSyncLocal)
-        requestSync()
+        onForeground()
     }
 
-    /** The window regained focus: the backoff starts over and a sync runs now. */
+    /**
+     * The window regained focus: the backoff starts over and a sync runs now
+     * — at most once every five minutes ([SyncThrottle], fixture
+     * `merge.foregroundThrottle`), since focus can change many times a
+     * minute and each sync is several requests. A held-back focus does
+     * nothing, so a scheduled retry stands. Signed out, nothing moves the clock.
+     */
     fun onForeground() {
         val e = engine ?: return
+        if (!e.state.value.isSignedIn) return
+        if (!throttle.admit(SyncTrigger.FOREGROUND, System.currentTimeMillis())) return
         e.resetBackoff()
         retryJob?.cancel()
         requestSync()
@@ -123,7 +137,10 @@ object SyncCoordinator {
             do {
                 again = false
                 outcome = e.sync()
-            } while (again && outcome == SyncEngine.Outcome.DONE)
+                // IDLE: signed out under this sync, perhaps into another
+                // account. A sync asked for meanwhile (that account's first,
+                // from the sign-in) runs now, not at the next trigger.
+            } while (again && (outcome == SyncEngine.Outcome.DONE || outcome == SyncEngine.Outcome.IDLE))
             _syncing.value = false
             if (outcome == SyncEngine.Outcome.BACKOFF) scheduleRetry(e)
         }
