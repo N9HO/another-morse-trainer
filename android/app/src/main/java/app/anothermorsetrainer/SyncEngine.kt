@@ -478,18 +478,21 @@ class SyncEngine(
         return SyncOutcome.OK
     }
 
+    /**
+     * One `PUT /v1/sync/state` per sync with EVERY key saved on this device at
+     * its current stamp, changed or not (a never-stamped key at 0; a
+     * never-saved key is left out). State comes back only in a state reply or
+     * the snapshot, so this is how a device that changed nothing learns
+     * another device's newer Journey or ladder position: each strictly newer
+     * winner in the reply is applied.
+     */
     private suspend fun pushState(): SyncOutcome {
         val queued = pendingState.filter { it in SyncState.KEYS }
-        if (queued.isEmpty()) {
-            setPendingState(emptyList())
-            return SyncOutcome.OK
-        }
-        val now = host.now()
         val sentStamps = LinkedHashMap(stamps)
         val entries = LinkedHashMap<String, StateEntry>()
-        for (key in queued) {
+        for (key in SyncState.KEYS) {
             val value = host.stateValue(key) ?: continue
-            val stamp = sentStamps[key] ?: Stamp(now, value.toString()).also { sentStamps[key] = it }
+            val stamp = sentStamps[key] ?: Stamp(0L, value.toString()).also { sentStamps[key] = it }
             entries[key] = StateEntry(value, stamp.updatedAt)
         }
         setStamps(sentStamps)

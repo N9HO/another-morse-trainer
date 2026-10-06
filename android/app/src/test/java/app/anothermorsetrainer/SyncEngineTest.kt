@@ -627,4 +627,35 @@ class SyncEngineTest {
         assertEquals(8, h.state[SyncState.JOURNEY]!!.getInt("currentLevel"))
         assertEquals(1_500L, rig.engine.stamps[SyncState.JOURNEY]!!.updatedAt)
     }
+
+    @Test
+    fun `a sync with no local changes still puts every saved key and applies a newer winner`() = runBlocking {
+        val rig = Rig(signedIn = true)
+        val h = rig.host
+        h.state[SyncState.JOURNEY] = JSONObject().put("currentLevel", 3)
+        h.state[SyncState.STORY_BOOKMARKS] = JSONObject().put("fables", 2)
+        // Journey stamped at the last sync; the bookmarks were never stamped; Characters never saved.
+        rig.kv.put(
+            SyncEngine.K_STAMPS,
+            JSONObject().put(SyncState.JOURNEY, JSONObject().put("updatedAt", 4_000).put("sig", h.state[SyncState.JOURNEY].toString())).toString()
+        )
+        assertTrue("nothing queued", rig.engine.pendingState.isEmpty())
+        val otherDevice = JSONObject().put("currentLevel", 7)
+        rig.t.on("PUT", "/v1/sync/state", 200,
+            JSONObject().put("entries", JSONObject()
+                .put(SyncState.JOURNEY, JSONObject().put("value", otherDevice).put("updatedAt", 9_000))
+                .put(SyncState.STORY_BOOKMARKS, JSONObject().put("value", h.state[SyncState.STORY_BOOKMARKS]).put("updatedAt", 0))))
+        rig.emptyPull()
+
+        assertEquals(SyncOutcome.OK, rig.engine.sync())
+
+        assertEquals(1, rig.t.calls.count { it == "PUT /v1/sync/state" })
+        val sent = rig.t.bodyOf("PUT /v1/sync/state").getJSONObject("entries")
+        assertEquals(setOf(SyncState.JOURNEY, SyncState.STORY_BOOKMARKS), sent.keys().asSequence().toSet())
+        assertEquals(4_000L, sent.getJSONObject(SyncState.JOURNEY).getLong("updatedAt"))
+        assertEquals(0L, sent.getJSONObject(SyncState.STORY_BOOKMARKS).getLong("updatedAt"))
+        assertEquals("the other device's newer Journey applied", 7, h.state[SyncState.JOURNEY]!!.getInt("currentLevel"))
+        assertEquals(9_000L, rig.engine.stamps[SyncState.JOURNEY]!!.updatedAt)
+        assertTrue(rig.engine.pendingState.isEmpty())
+    }
 }
