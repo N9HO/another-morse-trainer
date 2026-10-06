@@ -2,6 +2,8 @@ package app.anothermorsetrainer
 
 import app.anothermorsetrainer.morsekit.JourneyCurriculum
 import app.anothermorsetrainer.morsekit.JourneyProgress
+import app.anothermorsetrainer.morsekit.SyncStateCodec
+import org.json.JSONObject
 
 /**
  * Persists [JourneyProgress] (unlock/completion state) in [Prefs] (`amt_journey`).
@@ -25,12 +27,25 @@ object JourneyStore {
     }
 
     fun save(progress: JourneyProgress) {
+        val before = syncValue()
+        write(progress)
+        SyncCoordinator.stateSaved(SyncStateCodec.JOURNEY, before, syncValue())
+    }
+
+    private fun write(progress: JourneyProgress) {
         prefs.edit {
             putInt("unlockedThrough", progress.unlockedThrough)
             putInt("currentLevel", progress.currentLevel)
             putStringSet("completed", progress.completed.map { it.toString() }.toSet())
         }
     }
+
+    /** The synced `journey` value, or null when nothing has been saved on this device. */
+    fun syncValue(): JSONObject? =
+        if (!prefs.contains("unlockedThrough")) null else SyncStateCodec.journeyToWire(load())
+
+    /** A newer `journey` from another device, saved as is (not stamped or sent back). */
+    fun applySynced(wire: JSONObject) = write(SyncStateCodec.journeyFromWire(wire))
 
     /**
      * Unlock the Journey as far as the declared starting level reaches, so a

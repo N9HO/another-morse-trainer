@@ -9,6 +9,8 @@ import app.anothermorsetrainer.morsekit.PracticeStreak
 import app.anothermorsetrainer.morsekit.SessionHistory
 import app.anothermorsetrainer.morsekit.ModeBests
 import app.anothermorsetrainer.morsekit.SessionRecord
+import app.anothermorsetrainer.morsekit.SyncMerge
+import app.anothermorsetrainer.morsekit.SyncStreak
 import org.json.JSONArray
 import org.json.JSONObject
 import java.time.Instant
@@ -229,6 +231,10 @@ object Stats {
             )
         ) + recent).take(50)
         persist()
+        // Account sync: the device's own day record grows, and while signed
+        // in the record and the day are queued. After the local write, never
+        // gating it.
+        SyncCoordinator.sessionRecorded(record, today, durationSeconds)
         return if (firstToday && PracticeStreak.isMilestone(streak.current)) streak.current else null
     }
 
@@ -272,6 +278,71 @@ object Stats {
         refreshStreak()
         persist()
         BuddyClient.reportPracticeDay(today)   // the buddy streak's day, same as record()
+        SyncCoordinator.practiceDayMarked(today)   // the own day record gains the day at +0
+    }
+
+    // ---- Account sync: what the server sends back (SyncEngine via AppSyncLocal) ----
+
+    /**
+     * Pulled or snapshot rows merged into [history] by id (`merge.sessions`:
+     * a local row is never replaced; newest first, capped), and a summary row
+     * added to [recent] for each one that was new. Totals are not touched
+     * here: they come from the server's stats ([adoptServerTotals]). Returns
+     * false when the save failed, so the caller does not advance its cursor.
+     */
+    fun mergeSyncedSessions(pulled: List<SessionRecord>, zone: ZoneId = ZoneId.systemDefault()): Boolean {
+        if (pulled.isEmpty()) return true
+        val merged = SyncMerge.mergeSessions(history, pulled)
+        val had = history.mapTo(HashSet()) { it.id }
+        val added = merged.filter { it.id !in had }
+        if (added.isEmpty()) return true
+        history = merged
+        val summaries = added.map { r ->
+            SessionSummary(
+                mode = r.mode,
+                epochDay = r.date.atZone(zone).toLocalDate().toEpochDay(),
+                attempts = r.attempts,
+                correct = r.correct,
+                bestTtrMs = r.fastestTTR?.let { (it * 1000).roundToInt() },
+                characterWpm = r.characterWPM,
+                medianTtrMs = r.medianTTR?.let { (it * 1000).roundToInt() },
+                recordId = r.id.toString(),
+                score = r.score
+            )
+        }
+        // Newest day first; the sort is stable, so same-day rows keep their order.
+        recent = (summaries + recent).sortedByDescending { it.epochDay }.take(50)
+        return persist()
+    }
+
+    /**
+     * The server's lifetime counters in place of the local ones
+     * (`merge.aggregates`). Units at the boundary: practice seconds are held
+     * whole here, so the server's millisecond-precise figure is rounded to
+     * the nearest second; `bestTtrMs` is already whole milliseconds.
+     */
+    fun adoptServerTotals(a: SyncMerge.Aggregates) {
+        totalSessions = a.totalSessions
+        totalAttempts = a.totalAnswered
+        totalCorrect = a.totalCorrect
+        totalPracticeSeconds = a.totalPracticeSeconds.roundToInt()
+        bestTtrMs = a.bestTtrMs
+        bestScores = a.bestScores
+        persist()
+    }
+
+    /** The account's streak (after its days), never lowering the local longest ([SyncStreak.adopt]). */
+    fun adoptServerStreak(server: SyncStreak.Server) {
+        streak = SyncStreak.adopt(streak, server)
+        refreshStreak()
+        persist()
+    }
+
+    /** The server's summed per-day figures into the displayed ledger (`merge.ledger`). Never pushed back. */
+    fun adoptServerDays(server: Map<LocalDate, Int>) {
+        if (server.isEmpty()) return
+        activity = SyncMerge.mergeLedger(activity.days, server)
+        persist()
     }
 
     /** True when the personal streak already counts today; the buddy client reports a day a pairing missed. */
@@ -282,8 +353,9 @@ object Stats {
         longestStreak = streak.longest
     }
 
-    private fun persist() {
-        prefs.edit {
+    /** Writes everything; false when the file could not be written. */
+    private fun persist(): Boolean =
+        with(prefs.edit()) {
             putInt("sessions", totalSessions)
             putInt("attempts", totalAttempts)
             putInt("correct", totalCorrect)
@@ -296,8 +368,8 @@ object Stats {
             putString("history", encodeHistory(history))
             putString("activity", encodeActivity(activity))
             putString("bestScores", encodeBestScores(bestScores))
+            commit()
         }
-    }
 
     /** Mode string → best score, a flat JSON object. */
     internal fun encodeBestScores(bests: Map<String, Int>): String {

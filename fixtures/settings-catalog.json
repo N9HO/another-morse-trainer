@@ -1,5 +1,5 @@
 {
-  "about": "The Settings screen's map (#236), read by ios MorseKitCheck and android SettingsCatalogTest. Pins the category names and their order on the root, the category of every setting both apps carry, and what the search field finds. A setting only one app has (iOS Track stage; Android Word pool, My words, Session length, Voice answers) is in that app's catalog and not here. Add a shared setting's id here when it is added to both catalogs.",
+  "about": "The Settings screen's map (#236), read by ios MorseKitCheck, android SettingsCatalogTest and desktop SettingsCatalogTest. Pins the category names and their order on the root, the category of every setting both apps carry, and what the search field finds. A setting only one app has (iOS Track stage; Android Word pool, My words, Session length, Voice answers) is in that app's catalog and not here. Add a shared setting's id here when it is added to both catalogs. Account & Sync (the optional account, accounts Worker) sits after Leaderboard & Buddy so the delete query keeps Delete my scores first; its entries are titled Account, Devices and Delete account, and Account carries the keywords sign in, sign out, email, sync and callsign on every port.",
   "derivation": "Search rule: fold the query and each entry to lowercase without accents and split into words at every character that is not a letter or digit. An entry matches when every query word is a prefix of some word of its title, its keywords or its category's title. Entries whose title alone covers every query word are listed first, then the rest; within each group, catalog order (category order, then section order). A query with no words matches nothing. Expectations below were worked from this rule and the intent of each query, not by running either port; 'includes' is a subset check so a later setting that also matches does not break it, 'excludes' names entries that must not appear, 'first' is the top result.",
   "categories": [
     { "id": "sound", "title": "Sound" },
@@ -11,6 +11,7 @@
     { "id": "reminders", "title": "Reminders" },
     { "id": "display", "title": "Display" },
     { "id": "leaderboard", "title": "Leaderboard & Buddy" },
+    { "id": "account", "title": "Account & Sync" },
     { "id": "about", "title": "Help & About" }
   ],
   "entries": [
@@ -69,6 +70,9 @@
     { "id": "displayName", "category": "leaderboard" },
     { "id": "deleteScores", "category": "leaderboard" },
     { "id": "buddyStreak", "category": "leaderboard" },
+    { "id": "account", "category": "account" },
+    { "id": "devices", "category": "account" },
+    { "id": "deleteAccount", "category": "account" },
     { "id": "copyDiagnostics", "category": "about" },
     { "id": "supportProject", "category": "about" },
     { "id": "discord", "category": "about" },
@@ -99,6 +103,11 @@
     { "name": "home screen finds the buddy line switch", "query": "home screen", "includes": ["buddyStreak"] },
     { "name": "rst", "query": "rst", "includes": ["rstRequired"], "first": "rstRequired" },
     { "name": "call prefix", "query": "call", "includes": ["myCall", "usOnly", "callsignFormats", "maxCallers"] },
-    { "name": "province finds your state (#265)", "query": "province", "includes": ["myState"], "first": "myState" }
+    { "name": "province finds your state (#265)", "query": "province", "includes": ["myState"], "first": "myState" },
+    { "name": "sync finds the account (category title)", "query": "sync", "includes": ["account", "devices", "deleteAccount"] },
+    { "name": "sign in finds the account by keyword", "query": "sign in", "includes": ["account"] },
+    { "name": "email finds the account by keyword", "query": "email", "includes": ["account"] },
+    { "name": "delete account by title", "query": "delete account", "includes": ["deleteAccount"], "first": "deleteAccount" },
+    { "name": "devices by title", "query": "devices", "includes": ["devices"], "first": "devices" }
   ]
 }

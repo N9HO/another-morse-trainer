@@ -7478,6 +7478,997 @@ if let fx = loadFirstFourFixture(),
     check("fixtures/first-four.json loads and decodes", false)
 }
 
+// MARK: - Account sync wire format and merge rules
+
+// fixtures/sync-wire.json — read by this harness AND by the Android and
+// desktop SyncWireTest. It pins the session wire codec, the day batch, the
+// five progress-state shapes, every client merge rule, the retry policy and
+// PKCE, all derived from the accounts Worker's README rather than captured
+// from either port. The fake-transport checks after it drive AccountClient
+// with canned replies; nothing here touches the network.
+print("\nAccount sync (fixtures/sync-wire.json):")
+extension JSONValue {
+    subscript(_ key: String) -> JSONValue {
+        if case .object(let o) = self { return o[key] ?? .null }
+        return .null
+    }
+    var intValue: Int? {
+        switch self {
+        case .int(let i): return i
+        case .double(let d) where d == d.rounded(): return Int(d)
+        default: return nil
+        }
+    }
+    var doubleValue: Double? {
+        switch self {
+        case .int(let i): return Double(i)
+        case .double(let d): return d
+        default: return nil
+        }
+    }
+    var stringValue: String? {
+        if case .string(let s) = self { return s }
+        return nil
+    }
+    var arrayValue: [JSONValue] {
+        if case .array(let a) = self { return a }
+        return []
+    }
+    var objectValue: [String: JSONValue] {
+        if case .object(let o) = self { return o }
+        return [:]
+    }
+}
+func loadSyncWireFixture() -> JSONValue? {
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent()
+        .deletingLastPathComponent().deletingLastPathComponent()
+    guard let data = try? Data(contentsOf: root.appendingPathComponent("fixtures/sync-wire.json")) else { return nil }
+    return try? JSONDecoder().decode(JSONValue.self, from: data)
+}
+/// The fixture's `local` record as this port keeps it.
+func syncLocalRecord(_ l: JSONValue) -> SessionRecord {
+    SessionRecord(
+        id: UUID(uuidString: l["id"].stringValue ?? "") ?? UUID(),
+        date: AccountSync.date(epochMilliseconds: l["dateEpochMs"].intValue ?? 0),
+        mode: l["localMode"]["ios"].stringValue ?? "",
+        characterWPM: l["characterWpm"].intValue ?? -1, effectiveWPM: l["effectiveWpm"].intValue ?? -1,
+        attempts: l["attempts"].intValue ?? -1, correct: l["correct"].intValue ?? -1,
+        fastestTTR: l["fastestTtrSeconds"].doubleValue, medianTTR: l["medianTtrSeconds"].doubleValue,
+        durationSeconds: l["durationSeconds"].doubleValue,
+        characters: l["characters"].arrayValue.map {
+            SessionRecord.CharResult(character: $0["character"].stringValue ?? "", attempts: $0["attempts"].intValue ?? -1,
+                                     correct: $0["correct"].intValue ?? -1, medianTTR: $0["medianTtrSeconds"].doubleValue)
+        },
+        activeCharacters: l["activeCharacters"].arrayValue.compactMap(\.stringValue),
+        score: l["score"].intValue)
+}
+/// A merge-scenario row: only id, date (ms) and attempts matter.
+func syncMergeRecord(_ row: JSONValue) -> SessionRecord {
+    SessionRecord(id: UUID(uuidString: row["id"].stringValue ?? "") ?? UUID(),
+                  date: AccountSync.date(epochMilliseconds: row["date"].intValue ?? 0), mode: "characters",
+                  characterWPM: 20, effectiveWPM: 20, attempts: row["attempts"].intValue ?? 0, correct: 0,
+                  fastestTTR: nil, medianTTR: nil, durationSeconds: nil,
+                  characters: [], activeCharacters: [])
+}
+if let fx = loadSyncWireFixture() {
+    // Session records, both ways.
+    for name in ["session", "legacySession"] {
+        let local = fx[name]["local"], wire = fx[name]["wire"]
+        let record = syncLocalRecord(local)
+        let encoded = try? JSONValue(encoding: SyncSession(record: record))
+        check("\(name): the local record encodes to exactly the fixture's wire object", encoded == wire)
+        if encoded != wire { print("      ↳ got \(String(describing: encoded))") }
+        let decoded = try? wire.decode(as: SyncSession.self)
+        let back = decoded?.record
+        let ttrs = { (v: JSONValue) in v.intValue.map { Double($0) / 1000 } }
+        let charsOK = back.map { b in
+            b.characters.count == wire["characters"].arrayValue.count
+                && zip(b.characters, wire["characters"].arrayValue).allSatisfy { c, w in
+                    c.character == w["character"].stringValue && c.attempts == w["attempts"].intValue
+                        && c.correct == w["correct"].intValue && c.medianTTR == ttrs(w["medianTtrMs"])
+                }
+        } ?? false
+        // One comparison per line keeps the type checker fast.
+        var fieldsOK = charsOK
+        fieldsOK = fieldsOK && back?.id.uuidString.lowercased() == wire["id"].stringValue
+        fieldsOK = fieldsOK && back.map { AccountSync.epochMilliseconds($0.date) } == local["dateEpochMs"].intValue
+        fieldsOK = fieldsOK && back?.mode == local["localMode"]["ios"].stringValue
+        fieldsOK = fieldsOK && back?.characterWPM == local["characterWpm"].intValue
+        fieldsOK = fieldsOK && back?.effectiveWPM == local["effectiveWpm"].intValue
+        fieldsOK = fieldsOK && back?.attempts == local["attempts"].intValue
+        fieldsOK = fieldsOK && back?.correct == local["correct"].intValue
+        fieldsOK = fieldsOK && back?.fastestTTR == ttrs(wire["fastestTtrMs"])
+        fieldsOK = fieldsOK && back?.medianTTR == ttrs(wire["medianTtrMs"])
+        fieldsOK = fieldsOK && back?.durationSeconds == local["durationSeconds"].doubleValue
+        fieldsOK = fieldsOK && back?.score == local["score"].intValue
+        fieldsOK = fieldsOK && back?.activeCharacters == local["activeCharacters"].arrayValue.compactMap(\.stringValue)
+        check("\(name): the wire object decodes back to the local record (TTRs at ms precision)", fieldsOK)
+        check("\(name): decoding then encoding gives the wire object again",
+              decoded.flatMap { try? JSONValue(encoding: $0) } == wire)
+    }
+    check("the wire id is lowercase; decoding compares it case-blind",
+          SyncSession(record: syncLocalRecord(fx["session"]["local"])).id == fx["session"]["wire"]["id"].stringValue
+            && syncLocalRecord(fx["session"]["local"]).id == (try? fx["session"]["wire"].decode(as: SyncSession.self))?.record?.id)
+    var withSeq = fx["session"]["wire"].objectValue
+    withSeq["seq"] = .int(7)
+    withSeq["schemaVersion"] = nil
+    let pulled = try? JSONValue.object(withSeq).decode(as: SyncSession.self)
+    check("a pulled record keeps its seq, and a missing schemaVersion reads as 1",
+          pulled?.seq == 7 && pulled?.schemaVersion == 1)
+
+    // Mode ids: iOS sends its TrainingMode raw value unchanged.
+    let canonical = fx["modeIds"]["canonical"].arrayValue.compactMap(\.stringValue)
+    check("the fixture's canonical ids are the 25 Kotlin titles' targets",
+          canonical.count == 25 && Set(fx["modeIds"]["kotlin"].objectValue.values.compactMap(\.stringValue)) == Set(canonical))
+    check("the session modes go on the wire as recorded",
+          ["session", "legacySession"].allSatisfy { fx[$0]["wire"]["mode"].stringValue == fx[$0]["local"]["localMode"]["ios"].stringValue })
+    check("the passive modes are the fixture's",
+          SessionRecord.passiveModes == Set(fx["modeIds"]["passiveCanonical"].arrayValue.compactMap(\.stringValue)))
+    check("every leaderboard mode's TrainingMode id is canonical",
+          LeaderboardMode.allCases.allSatisfy { canonical.contains($0.trainingModeRawValue) })
+    var future = fx["session"]["wire"].objectValue
+    future["mode"] = fx["modeIds"]["unknownWireId"]
+    check("an unknown wire mode id decodes to itself",
+          (try? JSONValue.object(future).decode(as: SyncSession.self))?.record?.mode == fx["modeIds"]["unknownWireId"].stringValue)
+
+    // Day batch.
+    var ledger = ActivityLedger()
+    for d in fx["days"]["local"].arrayValue.reversed() { ledger.record(day: d["day"].stringValue ?? "", seconds: d["seconds"].intValue ?? -1) }
+    check("the ledger encodes to the fixture's day batch, oldest first",
+          (try? JSONValue(encoding: SyncDayBatch(ledger: ledger.days))) == fx["days"]["wire"])
+
+    // Progress state, the five keys both ways.
+    let wireState = fx["state"]["wire"]["entries"]
+    check("the synced state keys are the fixture's",
+          SyncStateKey.allCases.map(\.rawValue) == fx["state"]["keys"].arrayValue.compactMap(\.stringValue))
+    let journey = AccountSync.journeyProgress(from: wireState["journey"]["value"])
+    check("journey decodes", journey == JourneyProgress(unlockedThrough: 5, currentLevel: 4, completed: [1, 2, 3]))
+    check("journey encodes with completed ascending",
+          AccountSync.journeyValue(JourneyProgress(unlockedThrough: 5, currentLevel: 4, completed: [3, 1, 2]))
+            == wireState["journey"]["value"])
+    // A local ladder with stats and confusions that must survive.
+    var confusions = ConfusionMatrix()
+    confusions.record(target: "K", chosen: "R")
+    let kStats = CharacterStats(character: "K", attempts: [.init(correct: true, ttr: 0.4)])
+    let localChars = ProgressiveCharacters.Snapshot(
+        engine: TrainerEngine.Snapshot(activeCharacters: ["K", "M"], stats: [kStats], confusions: confusions,
+                                       exposedCharacters: ["K"]),
+        stage: .singles, pinnedStage: .singles)
+    let applied = AccountSync.applyingCharacters(wireState["characters"]["value"], to: localChars)
+    let appliedActive: [Character]? = applied?.engine.activeCharacters
+    let appliedExposed: Set<Character>? = applied?.engine.exposedCharacters
+    let wantActive: [Character] = ["K", "M", "R", "S"]
+    let wantExposed: Set<Character> = ["K", "M", "R"]
+    check("characters: the received position applies",
+          appliedActive == wantActive && appliedExposed == wantExposed
+            && applied?.stage == .pairs && applied != nil && applied?.pinnedStage == nil)
+    check("characters: local per-character stats and confusions are kept",
+          applied?.engine.stats == [kStats] && applied?.engine.confusions == confusions)
+    check("characters encodes to the wire shape, lowercase stage",
+          applied.map(AccountSync.charactersValue) == wireState["characters"]["value"])
+    // The opt-in punctuation never travels: a received ladder keeps this
+    // device's own, and encoding leaves it out.
+    let pf = fx["charactersPunctuation"]
+    func punctChars(_ key: String) -> [Character] { pf[key].arrayValue.compactMap(\.stringValue).compactMap(\.first) }
+    let punctLocal = ProgressiveCharacters.Snapshot(
+        engine: TrainerEngine.Snapshot(activeCharacters: punctChars("localActive"), stats: [], confusions: ConfusionMatrix(),
+                                       exposedCharacters: Set(punctChars("localExposed"))),
+        stage: .singles, pinnedStage: nil)
+    let punctWire: JSONValue = .object([
+        "activeCharacters": pf["wireActive"], "exposedCharacters": pf["wireExposed"],
+        "stage": .string("singles"), "pinnedStage": .null,
+    ])
+    let punctApplied = AccountSync.applyingCharacters(punctWire, to: punctLocal)
+    let punctActive: [Character]? = punctApplied?.engine.activeCharacters
+    let punctExposed: Set<Character>? = punctApplied?.engine.exposedCharacters
+    check("characters: a received ladder keeps this device's opt-in punctuation",
+          punctActive == punctChars("expectedActive") && punctExposed == Set(punctChars("expectedExposed")))
+    let punctBack = punctApplied.map(AccountSync.charactersValue)
+    check("characters: the opt-in punctuation is never sent",
+          punctBack?["activeCharacters"] == pf["wireActive"] && punctBack?["exposedCharacters"] == pf["wireExposed"])
+    var badStage = wireState["characters"]["value"].objectValue
+    badStage["stage"] = .string("Pairs")
+    check("characters with an unknown stage is refused, so local stands",
+          AccountSync.applyingCharacters(.object(badStage), to: localChars) == nil)
+    let firstFour = AccountSync.firstFourProgress(from: wireState["firstFour"]["value"])
+    check("firstFour decodes",
+          firstFour?.passed == [.call, .state] && firstFour?.copyPassed == [.call] && firstFour?.cleanRuns(.question) == 1)
+    check("firstFour encodes to the wire shape",
+          firstFour.map(AccountSync.firstFourValue) == wireState["firstFour"]["value"])
+    let opProc = AccountSync.operatingProcedureProgress(from: wireState["operatingProcedure"]["value"])
+    check("operatingProcedure decodes",
+          opProc?.passed == [.offset, .signals] && opProc?.cleanRuns == [.when]
+            && opProc.map { JSONValue.bool($0.drillPassed) } == wireState["operatingProcedure"]["value"]["drillPassed"])
+    check("operatingProcedure encodes to the wire shape",
+          opProc.map(AccountSync.operatingProcedureValue) == wireState["operatingProcedure"]["value"])
+    let bookmarks = AccountSync.storyBookmarks(from: wireState["storyBookmarks"]["value"])
+    check("storyBookmarks decodes", bookmarks == ["fables": 3, "speckled-band": 1])
+    check("storyBookmarks encodes to the wire shape",
+          bookmarks.map(AccountSync.storyBookmarksValue) == wireState["storyBookmarks"]["value"])
+    check("a state entry round-trips with its updatedAt",
+          (try? wireState["journey"].decode(as: SyncStateEntry.self)).flatMap { try? JSONValue(encoding: $0) }
+            == wireState["journey"])
+
+    // Merge: sessions.
+    let mergeFx = fx["merge"]
+    let ms = mergeFx["sessions"]
+    let merged = AccountSync.mergeSessions(local: ms["local"].arrayValue.map(syncMergeRecord),
+                                           pulled: ms["pulled"].arrayValue.map(syncMergeRecord),
+                                           limit: ms["limit"].intValue ?? 0)
+    check("merged sessions: new ids in, newest first, capped",
+          merged.map(\.id) == ms["expectedIds"].arrayValue.compactMap { $0.stringValue.flatMap(UUID.init(uuidString:)) })
+    check("merged sessions: an existing local record is never replaced",
+          merged.first { $0.id.uuidString.hasSuffix("000000000003") }?.attempts == ms["expectedAttemptsOfId3"].intValue)
+    var tieA = syncMergeRecord(ms["local"].arrayValue[0]), tieB = syncMergeRecord(ms["local"].arrayValue[1])
+    tieB.date = tieA.date
+    tieA.id = UUID(uuidString: "00000000-0000-4000-8000-00000000000B")!
+    check("merged sessions: equal dates sort by id ascending",
+          AccountSync.mergeSessions(local: [tieA], pulled: [tieB], limit: 4).map(\.id) == [tieB.id, tieA.id])
+    var history = SessionHistory(sessions: ms["local"].arrayValue.map(syncMergeRecord))
+    history.mergeSynced(ms["pulled"].arrayValue.map(syncMergeRecord))
+    check("SessionHistory.mergeSynced merges rows but leaves the lifetime counters",
+          history.sessions.count == 6 && history.totalSessions == 2)
+
+    // Merge: aggregates.
+    let agg = mergeFx["aggregates"]
+    let aggLocal = agg["local"]
+    let localDoc: JSONValue = .object([
+        "sessions": .array([]),
+        "totalSessions": aggLocal["totalSessions"], "totalAnswered": aggLocal["totalAnswered"],
+        "totalCorrect": aggLocal["totalCorrect"], "totalPracticeSeconds": aggLocal["totalPracticeSeconds"],
+        "bestTTR": aggLocal["bestTtrSeconds"], "bestScores": aggLocal["bestScores"],
+    ])
+    if var counters = try? localDoc.decode(as: SessionHistory.self),
+       var stats = try? agg["serverStats"].decode(as: SyncServerStats.self) {
+        let expected = agg["expected"]
+        check("aggregates: the local counters start as the fixture's", counters.totalSessions == aggLocal["totalSessions"].intValue)
+        counters.adoptServerTotals(SyncLifetimeTotals(stats: stats))
+        var adoptedOK = counters.totalSessions == expected["totalSessions"].intValue
+        adoptedOK = adoptedOK && counters.totalAnswered == expected["totalAnswered"].intValue
+        adoptedOK = adoptedOK && counters.totalCorrect == expected["totalCorrect"].intValue
+        adoptedOK = adoptedOK && counters.totalPracticeSeconds == expected["totalPracticeSeconds"].doubleValue
+        let expectedBest = expected["bestTtrSeconds"].doubleValue ?? -1
+        adoptedOK = adoptedOK && counters.bestTTR.map { approxEqual($0, expectedBest, 1e-9) } == true
+        adoptedOK = adoptedOK && counters.bestScores == (try? expected["bestScores"].decode(as: [String: Int].self))
+        check("aggregates: the server's lifetime counters replace the local ones", adoptedOK)
+        stats.bestTtrMs = agg["serverWithNoBestTtr"]["bestTtrMs"].intValue
+        counters.adoptServerTotals(SyncLifetimeTotals(stats: stats))
+        check("aggregates: a null server bestTtrMs clears the local best",
+              agg["expectedBestTtrWhenServerNull"] == .null && counters.bestTTR == nil)
+    } else {
+        check("aggregates fixture decodes", false)
+    }
+
+    // Merge: ledger.
+    let led = mergeFx["ledger"]
+    let ledLocal = (try? led["local"].decode(as: [String: Int].self)) ?? [:]
+    let ledServer = (try? led["server"].decode(as: [String: Int].self)) ?? [:]
+    let ledExpected = try? led["expected"].decode(as: [String: Int].self)
+    check("ledger: server days adopted, unmentioned local days kept",
+          AccountSync.mergeLedger(local: ledLocal, server: ledServer) == ledExpected)
+    var adoptedLedger = ActivityLedger(days: ledLocal)
+    adoptedLedger.adoptServerDays(ledServer)
+    check("ActivityLedger.adoptServerDays does the same", adoptedLedger.days == ledExpected)
+
+    // Merge: state.
+    let st = mergeFx["state"]
+    if let stLocal = try? st["local"].decode(as: [String: SyncStateEntry].self),
+       let stReply = try? st["reply"].decode(as: [String: SyncStateEntry].self) {
+        let mergedState = AccountSync.mergeState(local: stLocal, reply: stReply)
+        check("state: strictly newer wins, a tie keeps local, omitted keys stay",
+              mergedState.mapValues(\.updatedAt) == (try? st["expectedUpdatedAt"].decode(as: [String: Int].self)))
+        check("state: the newer journey was adopted",
+              mergedState["journey"].flatMap { AccountSync.journeyProgress(from: $0.value) }?.currentLevel
+                == st["expectedJourneyCurrentLevel"].intValue)
+        check("state: the tied characters entry kept local",
+              mergedState["characters"]?.value["activeCharacters"].arrayValue.compactMap(\.stringValue)
+                == st["expectedCharactersActive"].arrayValue.compactMap(\.stringValue))
+    } else {
+        check("state merge fixture decodes", false)
+    }
+
+    // Merge: outbox.
+    struct OutboxItem: Codable, Sendable, Equatable, Identifiable { var id: String }
+    let ob = mergeFx["outbox"]
+    var outbox = SyncOutbox<OutboxItem>(entries: ob["pending"].arrayValue.compactMap { $0.stringValue.map { OutboxItem(id: $0) } })
+    if let reply = try? ob["reply"].decode(as: SyncPushReply.self) {
+        outbox.apply(reply)
+        check("outbox: accepted, skipped and rejected ids leave; the rest stay in order",
+              outbox.entries.map(\.id) == ob["expectedRemaining"].arrayValue.compactMap(\.stringValue))
+    } else {
+        check("outbox reply decodes", false)
+    }
+    check("outbox: the push batch size is the server's", SyncOutbox<OutboxItem>.batchSize == ob["batchSize"].intValue)
+    var capped = SyncOutbox<OutboxItem>(max: ob["cap"]["max"].intValue ?? 0)
+    for id in ob["cap"]["enqueue"].arrayValue.compactMap(\.stringValue) { capped.enqueue(OutboxItem(id: id)) }
+    check("outbox: past the cap the oldest is dropped",
+          capped.entries.map(\.id) == ob["cap"]["expected"].arrayValue.compactMap(\.stringValue))
+    check("outbox: the app cap is the fixture's", SyncOutbox<OutboxItem>.appMax == ob["cap"]["appMax"].intValue)
+    capped.enqueue(OutboxItem(id: "E"))
+    check("outbox: an id already waiting is not queued twice", capped.entries.map(\.id) == ["c", "d", "e"])
+
+    // Backoff and retry.
+    let delays = mergeFx["backoff"]["delaysSeconds"].arrayValue.compactMap(\.intValue)
+    check("backoff: 2^n seconds, capped at ten minutes",
+          !delays.isEmpty && delays.enumerated().allSatisfy { AccountSync.backoffSeconds($0.offset + 1) == $0.element }
+            && AccountSync.backoffCapSeconds == mergeFx["backoff"]["capSeconds"].intValue
+            && AccountSync.backoffSeconds(10_000) == AccountSync.backoffCapSeconds)
+    var retryOK = !mergeFx["retry"]["outcomes"].arrayValue.isEmpty
+    for o in mergeFx["retry"]["outcomes"].arrayValue {
+        let got = AccountSync.retryAction(status: o["status"].intValue)   // "network" is no status at all
+        if got.rawValue != o["action"].stringValue {
+            retryOK = false
+            print("      ↳ status \(o["status"]): got \(got.rawValue), fixture says \(o["action"].stringValue ?? "?")")
+        }
+    }
+    check("retry: every outcome maps to the fixture's action", retryOK)
+
+    // PKCE and client id.
+    check("PKCE: the RFC 7636 verifier gives its challenge",
+          AccountSync.pkceChallenge(verifier: fx["pkce"]["verifier"].stringValue ?? "") == fx["pkce"]["challenge"].stringValue)
+    let verifier = AccountSync.newPKCEVerifier()
+    let verifierBytes = Data(base64Encoded: verifier.replacingOccurrences(of: "-", with: "+")
+        .replacingOccurrences(of: "_", with: "/") + "=")
+    check("PKCE: a fresh verifier is 32 random bytes, base64url, no padding",
+          verifier.count == fx["pkce"]["verifierLength"].intValue && verifierBytes?.count == fx["pkce"]["verifierBytes"].intValue
+            && !verifier.contains("=") && verifier != AccountSync.newPKCEVerifier())
+    check("the client id is the fixture's", AccountSync.clientId == fx["client"]["ios"].stringValue)
+} else {
+    check("fixtures/sync-wire.json loads and decodes", false)
+}
+
+// AccountClient against a fake transport: the 401 → refresh → retry path,
+// a refused refresh signing out, one refresh for concurrent callers, the
+// sign-in poll, and an outbox drained by a canned push reply.
+print("\nAccount client (fake transport):")
+final class FakeAccountTransport: AccountTransport, @unchecked Sendable {
+    private let lock = NSLock()
+    private var log: [AccountRequest] = []
+    private let reply: @Sendable (AccountRequest) -> AccountResponse
+    init(_ reply: @escaping @Sendable (AccountRequest) -> AccountResponse) { self.reply = reply }
+    var requests: [AccountRequest] { lock.withLock { log } }
+    func send(_ request: AccountRequest) async throws -> AccountResponse {
+        lock.withLock { log.append(request) }
+        // Yield so concurrent callers really do interleave.
+        await Task.yield()
+        return reply(request)
+    }
+}
+final class MemoryTokenStore: AccountTokenStore, @unchecked Sendable {
+    private let lock = NSLock()
+    private var tokens: AccountTokens?
+    init(_ tokens: AccountTokens?) { self.tokens = tokens }
+    func load() -> AccountTokens? { lock.withLock { tokens } }
+    func save(_ tokens: AccountTokens) throws { lock.withLock { self.tokens = tokens } }
+    func clear() { lock.withLock { tokens = nil } }
+}
+/// The harness is synchronous top to bottom; this waits out one async check
+/// on the cooperative pool (the client is an actor, not on the main thread).
+final class BlockingBox<T>: @unchecked Sendable { var value: T? }
+func runBlocking<T>(_ body: @escaping @Sendable () async -> T) -> T {
+    let box = BlockingBox<T>()
+    let done = DispatchSemaphore(value: 0)
+    Task.detached {
+        box.value = await body()
+        done.signal()
+    }
+    done.wait()
+    return box.value!
+}
+func jsonData(_ text: String) -> Data { Data(text.utf8) }
+/// Answers by route: the access token `a2` is good, anything else is a 401.
+func cannedAccountReply(refreshStatus: Int) -> @Sendable (AccountRequest) -> AccountResponse {
+    let refreshedJSON = jsonData(#"{"access":"a2","refresh":"r2","expiresIn":900}"#)
+    let snapshotJSON = jsonData(#"""
+{"stats":{"totals":{"sessions":1,"answered":40,"correct":37,"accuracy":0.925,"practiceSeconds":300.5},
+"bestTtrMs":212,"personalBests":{"rapidFire":37},"streak":{"current":1,"longest":1,"lastPractisedDay":"2026-10-05"}},
+"sessions":[],"days":{"2026-10-05":300},"state":{},"seq":7}
+"""#)
+    return { request in
+        if request.path == "v1/auth/token/refresh" {
+            return refreshStatus == 200 ? AccountResponse(status: 200, body: refreshedJSON)
+                : AccountResponse(status: refreshStatus, body: jsonData(#"{"error":"unauthorized","message":"x"}"#))
+        }
+        guard request.bearer == "a2" else {
+            return AccountResponse(status: 401, body: jsonData(#"{"error":"unauthorized","message":"x"}"#))
+        }
+        return AccountResponse(status: 200, body: snapshotJSON)
+    }
+}
+do {
+    let oldTokens = AccountTokens(access: "a1", refresh: "r1", expiresIn: 900)
+    let transport = FakeAccountTransport(cannedAccountReply(refreshStatus: 200))
+    let store = MemoryTokenStore(oldTokens)
+    let client = AccountClient(transport: transport, tokenStore: store)
+    let snap = runBlocking { try? await client.snapshot(today: "2026-10-05") }
+    let sent = transport.requests
+    let wantPaths = ["v1/sync/snapshot", "v1/auth/token/refresh", "v1/sync/snapshot"]
+    let wantBearers: [String?] = ["a1", nil, "a2"]
+    let wantQuery = ["today": "2026-10-05"]
+    check("a 401 refreshes once and retries once with the new access token",
+          snap?.seq == 7 && sent.map(\.path) == wantPaths && sent.map(\.bearer) == wantBearers && sent.first?.query == wantQuery)
+    let refreshBody = sent.count > 1 ? sent[1].body.flatMap { try? JSONDecoder().decode([String: String].self, from: $0) } : nil
+    check("the refresh presents the stored refresh token, and the rotated pair is stored",
+          refreshBody == ["refresh": "r1"] && store.load() == AccountTokens(access: "a2", refresh: "r2", expiresIn: 900))
+    check("the snapshot's stats adopt as lifetime totals",
+          snap.flatMap { SyncLifetimeTotals(stats: $0.stats).bestTTR } == 0.212 && snap?.days == ["2026-10-05": 300])
+}
+do {
+    let transport = FakeAccountTransport(cannedAccountReply(refreshStatus: 401))
+    let store = MemoryTokenStore(AccountTokens(access: "a1", refresh: "r1", expiresIn: 900))
+    let client = AccountClient(transport: transport, tokenStore: store)
+    let outcome: AccountError? = runBlocking {
+        do { _ = try await client.snapshot(today: nil); return nil } catch { return error as? AccountError }
+    }
+    check("a refused refresh clears the tokens and reports signed out",
+          outcome == .signedOut && store.load() == nil && transport.requests.count == 2)
+    let after: AccountError? = runBlocking {
+        do { _ = try await client.devices(); return nil } catch { return error as? AccountError }
+    }
+    check("once signed out, calls fail without touching the network",
+          after == .signedOut && transport.requests.count == 2)
+}
+do {
+    // A refresh that gets a 5xx did not spend the token: keep it, back off.
+    let transport = FakeAccountTransport(cannedAccountReply(refreshStatus: 503))
+    let tokens = AccountTokens(access: "a1", refresh: "r1", expiresIn: 900)
+    let store = MemoryTokenStore(tokens)
+    let client = AccountClient(transport: transport, tokenStore: store)
+    let outcome: AccountError? = runBlocking {
+        do { _ = try await client.snapshot(today: nil); return nil } catch { return error as? AccountError }
+    }
+    check("a refresh answered 5xx keeps the tokens and backs off",
+          outcome?.retryAction == .backoff && store.load() == tokens && transport.requests.count == 2)
+}
+do {
+    let transport = FakeAccountTransport(cannedAccountReply(refreshStatus: 200))
+    let store = MemoryTokenStore(AccountTokens(access: "a1", refresh: "r1", expiresIn: 900))
+    let client = AccountClient(transport: transport, tokenStore: store)
+    let both = runBlocking { () -> Int in
+        async let a = try? client.snapshot(today: nil)
+        async let b = try? client.snapshot(today: nil)
+        async let c = try? client.snapshot(today: nil)
+        let results = await [a, b, c]
+        return results.compactMap { $0 }.count
+    }
+    check("concurrent 401s share one refresh (a second would spend a rotated token)",
+          both == 3 && transport.requests.filter { $0.path == "v1/auth/token/refresh" }.count == 1)
+}
+do {
+    // Sign-in: start, a pending poll, the confirming poll, then nothing to poll.
+    final class PollScript: @unchecked Sendable {
+        let lock = NSLock()
+        var polls = 0
+        func next() -> Int { lock.withLock { polls += 1; return polls } }
+    }
+    let script = PollScript()
+    let signedInJSON = jsonData(#"""
+    {"access":"a1","refresh":"r1","expiresIn":900,
+     "account":{"id":"acc-1","email":"learner@example.org","callsign":null,"displayName":null}}
+    """#)
+    let transport = FakeAccountTransport { request in
+        switch request.path {
+        case "v1/auth/verify/start": return AccountResponse(status: 202, body: jsonData(#"{"pollToken":"pt"}"#))
+        case "v1/auth/verify/poll":
+            return script.next() == 1 ? AccountResponse(status: 202) : AccountResponse(status: 201, body: signedInJSON)
+        default: return AccountResponse(status: 404)
+        }
+    }
+    let store = MemoryTokenStore(nil)
+    let client = AccountClient(transport: transport, tokenStore: store)
+    let results = runBlocking { () -> [AccountPollResult] in
+        do { try await client.startSignIn(email: "learner@example.org", deviceName: "Test iPhone", platform: "ios") }
+        catch { return [] }
+        return [await client.poll(), await client.poll(), await client.poll()]
+    }
+    let sent = transport.requests
+    let start = sent.first?.body.flatMap { try? JSONDecoder().decode([String: String].self, from: $0) }
+    let poll = sent.count > 1 ? sent[1].body.flatMap { try? JSONDecoder().decode([String: String].self, from: $0) } : nil
+    var startOK = start?["client"] == "amt-ios" && start?["platform"] == "ios"
+    startOK = startOK && start?["scopes"] == nil && start?["email"] == "learner@example.org"
+    check("sign-in: start sends the client id and no scopes (all three)", startOK && sent.first?.bearer == nil)
+    check("sign-in: the poll's verifier hashes to the challenge start sent",
+          poll?["pollToken"] == "pt"
+            && poll?["pkceVerifier"].map { AccountSync.pkceChallenge(verifier: $0) } == start?["pkceChallenge"])
+    let expectedTokens = AccountTokens(access: "a1", refresh: "r1", expiresIn: 900)
+    if results.count == 3, case .signedIn(let tokens, let account) = results[1] {
+        check("sign-in: 202 is pending, 201 signs in and stores the tokens, then nothing is left to poll",
+              results[0] == .pending && tokens == expectedTokens && account.id == "acc-1"
+                && store.load() == expectedTokens && results[2] == .expired)
+    } else {
+        check("sign-in: 202 is pending, 201 signs in and stores the tokens, then nothing is left to poll", false)
+    }
+}
+if let fx = loadSyncWireFixture(),
+   let reply = try? fx["merge"]["outbox"]["reply"].decode(as: SyncPushReply.self) {
+    // An outbox of four records drained against the fixture's push reply.
+    let ids = fx["merge"]["outbox"]["pending"].arrayValue.compactMap(\.stringValue)
+    let records: [SyncSession] = ids.compactMap { id in
+        var wire = fx["session"]["wire"].objectValue
+        wire["id"] = .string(id)
+        return try? JSONValue.object(wire).decode(as: SyncSession.self)
+    }
+    var outbox = SyncOutbox<SyncSession>(entries: records)
+    let replyBody = jsonData(#"{"accepted":["s1"],"skipped":["s2"],"rejected":[{"id":"s3","reason":"need attempts >= correct >= 0"}],"#
+                   + #""stats":{"totals":{"sessions":2,"answered":80,"correct":74,"accuracy":0.925,"practiceSeconds":601},"#
+                   + #""bestTtrMs":212,"personalBests":{"rapidFire":37}}}"#)
+    let transport = FakeAccountTransport { _ in AccountResponse(status: 200, body: replyBody) }
+    let client = AccountClient(transport: transport, tokenStore: MemoryTokenStore(AccountTokens(access: "a2", refresh: "r2", expiresIn: 900)))
+    let batch = outbox.nextBatch()
+    let pushed = runBlocking { try? await client.pushSessions(batch) }
+    let body = transport.requests.first?.body.flatMap { try? JSONDecoder().decode(JSONValue.self, from: $0) }
+    let sentIds = body?["sessions"].arrayValue.compactMap { $0["id"].stringValue }
+    let sentDate = body?["sessions"].arrayValue.first?["date"]
+    check("drain: the batch goes out oldest first in one POST, as wire records",
+          transport.requests.map(\.path) == ["v1/sync/sessions"] && transport.requests.first?.method == "POST"
+            && sentIds == ids && sentDate == fx["session"]["wire"]["date"])
+    check("drain: the canned reply decodes like the fixture's",
+          pushed.map { SyncPushReply(accepted: $0.accepted, skipped: $0.skipped, rejected: $0.rejected) } == reply)
+    if let pushed { outbox.apply(pushed) }
+    check("drain: accepted, skipped and rejected leave; the unanswered record stays",
+          outbox.entries.map(\.id) == fx["merge"]["outbox"]["expectedRemaining"].arrayValue.compactMap(\.stringValue))
+    check("drain: the reply's stats are there to adopt",
+          pushed?.stats.map { SyncLifetimeTotals(stats: $0).totalSessions } == 2)
+} else {
+    check("outbox drain fixture loads", false)
+}
+
+// MARK: - Account sync engine (device days, first sign-in, pull, sign-out)
+
+// fixtures/sync-wire.json's `merge.deviceDays`, then AccountSyncEngine driven
+// against the fake transport above and an in-memory host: the first sign-in's
+// order, a pull that saves before it moves the cursor, sign-out and a forced
+// sign-out, and the backoff. No network.
+print("\nAccount sync engine (fixtures/sync-wire.json merge.deviceDays, fake transport):")
+/// UTC, so a day key never depends on the machine running the harness.
+func syncUTCCalendar() -> Calendar {
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = TimeZone(identifier: "UTC")!
+    return calendar
+}
+/// A finished session of `seconds` at noon on `day`.
+func syncDayRecord(day: String, seconds: Int, calendar: Calendar) -> SessionRecord {
+    let start = ActivityLedger.date(forKey: day, calendar: calendar) ?? Date(timeIntervalSince1970: 0)
+    return SessionRecord(id: UUID(), date: start.addingTimeInterval(12 * 3600), mode: "characters",
+                         characterWPM: 20, effectiveWPM: 20, attempts: 10, correct: 9,
+                         fastestTTR: 0.4, medianTTR: 0.6, durationSeconds: Double(seconds),
+                         characters: [], activeCharacters: [])
+}
+func syncJSONResponse(_ value: JSONValue, status: Int = 200) -> AccountResponse {
+    AccountResponse(status: status, body: (try? JSONEncoder().encode(value)) ?? Data())
+}
+func syncRequestBody(_ request: AccountRequest) -> JSONValue {
+    request.body.flatMap { try? JSONDecoder().decode(JSONValue.self, from: $0) } ?? .null
+}
+func syncTestAccount() -> JSONValue {
+    .object(["id": .string("acc-1"), "email": .string("learner@example.org"), "callsign": .null, "displayName": .null])
+}
+/// One page of `GET /v1/sync/sessions`: a single row whose seq is `next`.
+func syncPullPage(_ id: String, next: Int, more: Bool) -> JSONValue {
+    .object(["sessions": .array([.object(["id": .string(id), "seq": .int(next), "date": .int(1_791_230_000_000),
+                                         "mode": .string("characters"), "attempts": .int(3), "correct": .int(2)])]),
+             "nextSince": .int(next), "hasMore": .bool(more)])
+}
+/// The stats row every canned reply carries.
+func syncStatsJSON(sessions: Int) -> JSONValue {
+    .object([
+        "totals": .object(["sessions": .int(sessions), "answered": .int(900), "correct": .int(800),
+                           "accuracy": .double(0.9), "practiceSeconds": .double(5000.5)]),
+        "bestTtrMs": .int(150),
+        "personalBests": .object(["rapidFire": .int(40)]),
+        "activity": .object(["days": .object(["2026-10-01": .int(999)])]),
+        "streak": .object(["current": .int(3), "longest": .int(7), "lastPractisedDay": .string("2026-10-05")]),
+    ])
+}
+/// The app's side, in memory: history, displayed ledger, state values, and
+/// a record of what the engine did to them.
+actor FakeSyncHost: AccountSyncHost {
+    var sessions: [SessionRecord]
+    var ledger: [String: Int]
+    var values: [SyncStateKey: JSONValue]
+    var totals: SyncLifetimeTotals?
+    var streak: SyncServerStats.Streak?
+    var applied: [SyncStateKey] = []
+    var failMerge = false
+    /// The stored cursor at each merge: it must not have moved yet.
+    var cursorsAtMerge: [Int?] = []
+    let store: AccountSyncStore
+
+    init(store: AccountSyncStore, sessions: [SessionRecord] = [], ledger: [String: Int] = [:],
+         values: [SyncStateKey: JSONValue] = [:]) {
+        self.store = store
+        self.sessions = sessions
+        self.ledger = ledger
+        self.values = values
+    }
+
+    func setFailMerge(_ fail: Bool) { failMerge = fail }
+    func localSessions() -> [SessionRecord] { sessions }
+    func localLedger() -> [String: Int] { ledger }
+    /// Nil for a key whose store was never saved: nothing to push.
+    func stateValue(_ key: SyncStateKey) -> JSONValue? { values[key] }
+    func adoptStreak(_ streak: SyncServerStats.Streak) { self.streak = streak }
+    func mergeSessions(_ records: [SessionRecord]) -> Bool {
+        cursorsAtMerge.append(store.state.cursor)
+        guard !failMerge else { return false }
+        sessions = AccountSync.mergeSessions(local: sessions, pulled: records, limit: 1000)
+        return true
+    }
+    func adoptTotals(_ totals: SyncLifetimeTotals) { self.totals = totals }
+    func adoptLedger(_ days: [String: Int]) { ledger = AccountSync.mergeLedger(local: ledger, server: days) }
+    func applyState(_ key: SyncStateKey, value: JSONValue) -> Bool {
+        values[key] = value
+        applied.append(key)
+        return true
+    }
+}
+func syncSignedInState(cursor: Int?) -> AccountSyncState {
+    var state = AccountSyncState()
+    state.account = .init(id: "acc-1", email: "learner@example.org", callsign: nil, displayName: nil)
+    state.cursor = cursor
+    return state
+}
+/// 2026-10-05 19:53:20 UTC. A function, not a top-level constant: those are
+/// main-actor state, and the engine's clock is called off the main actor.
+func syncTestNow() -> Date { Date(timeIntervalSince1970: 1_791_230_000) }
+
+if let fx = loadSyncWireFixture() {
+    let dd = fx["merge"]["deviceDays"]
+    let calendar = syncUTCCalendar()
+    let seed = (try? dd["seedFromLedgerOnFirstSignIn"].decode(as: [String: Int].self)) ?? [:]
+    var state = AccountSyncState()
+    state.seedOwnDays(fromLedger: seed)
+    check("deviceDays: the own record is seeded from the local ledger on the first sign-in",
+          !seed.isEmpty && state.ownDays == (try? dd["ownBefore"].decode(as: [String: Int].self)) && state.ownDaysSeeded)
+    state.seedOwnDays(fromLedger: ["2026-10-01": 5000])
+    check("deviceDays: … once only: a later ledger (adopted figures) never seeds it again",
+          state.ownDays == (try? dd["ownBefore"].decode(as: [String: Int].self)))
+    state.account = .init(id: "acc-1", email: nil, callsign: nil, displayName: nil)
+    var displayed = ActivityLedger(days: seed)
+    for s in dd["localSessions"].arrayValue {
+        let record = syncDayRecord(day: s["day"].stringValue ?? "", seconds: s["seconds"].intValue ?? -1, calendar: calendar)
+        state.noteSession(record, calendar: calendar)
+        displayed.record(date: record.date, seconds: Int((record.durationSeconds ?? 0).rounded()), calendar: calendar)
+    }
+    check("deviceDays: each local session grows the own record by the seconds the ledger records",
+          state.ownDays == (try? dd["ownAfter"].decode(as: [String: Int].self)))
+    check("deviceDays: … and queues its record and its day",
+          state.sessionOutbox.entries.count == dd["localSessions"].arrayValue.count
+            && state.dayOutbox == ["2026-10-02", "2026-10-04"])
+    check("deviceDays: the days push carries the own figure for each changed day, never the displayed one",
+          (try? JSONValue(encoding: state.dayBatch(for: state.dayOutbox))) == dd["expectedPushBody"])
+    let serverReply = (try? dd["serverReply"].decode(as: [String: Int].self)) ?? [:]
+    displayed.adoptServerDays(serverReply)
+    check("deviceDays: adoption changes the displayed ledger",
+          displayed.days == (try? dd["expectedDisplayedAfterAdoption"].decode(as: [String: Int].self)))
+    check("deviceDays: … and leaves the own record alone",
+          state.ownDays == (try? dd["expectedOwnAfterAdoption"].decode(as: [String: Int].self)))
+    var marked = state
+    marked.notePracticeDay("2026-10-05")
+    marked.notePracticeDay("2026-10-04")
+    check("deviceDays: a practice-day mark adds its day at +0 and queues it; a known day is left alone",
+          marked.ownDays["2026-10-05"] == 0 && marked.ownDays["2026-10-04"] == 120
+            && marked.dayOutbox == ["2026-10-02", "2026-10-04", "2026-10-05"])
+    var signedOut = marked
+    signedOut.signOut(byServer: false)
+    check("sign-out drops the account, cursor and queues but keeps the own record and its seeded flag",
+          signedOut.account == nil && signedOut.cursor == nil && signedOut.sessionOutbox.isEmpty
+            && signedOut.dayOutbox.isEmpty && signedOut.stateOutbox.isEmpty
+            && signedOut.ownDays == marked.ownDays && signedOut.ownDaysSeeded && !signedOut.signedOutByServer)
+    signedOut.noteSession(syncDayRecord(day: "2026-10-06", seconds: 30, calendar: calendar), calendar: calendar)
+    signedOut.noteStateChange(.journey, now: 77)
+    check("signed out, a session still grows the own record; a state change is neither stamped nor queued",
+          signedOut.ownDays["2026-10-06"] == 30 && signedOut.stateUpdatedAt["journey"] == nil
+            && signedOut.sessionOutbox.isEmpty && signedOut.dayOutbox.isEmpty && signedOut.stateOutbox.isEmpty)
+    let trip = (try? JSONEncoder().encode(marked)).flatMap { try? JSONDecoder().decode(AccountSyncState.self, from: $0) }
+    check("the persisted state round-trips", trip == marked)
+    check("a stored state from an older build decodes with what it has",
+          (try? JSONDecoder().decode(AccountSyncState.self, from: Data(#"{"cursor":12,"ownDays":{"2026-10-01":5}}"#.utf8)))
+            .map { $0.cursor == 12 && $0.ownDays == ["2026-10-01": 5] && !$0.isSignedIn } == true)
+} else {
+    check("fixtures/sync-wire.json loads (deviceDays)", false)
+}
+
+do {
+    // The first sign-in on a device with 250 sessions, a ledger, and two
+    // state stores ever saved (Journey and the ladder); the other three never
+    // were, so they have nothing to push and the snapshot fills them.
+    let calendar = syncUTCCalendar()
+    let store = AccountSyncStore(state: AccountSyncState()) { _ in }
+    let local = (0..<250).map { i in
+        SessionRecord(id: UUID(), date: syncTestNow().addingTimeInterval(-Double(250 - i) * 600), mode: "characters",
+                      characterWPM: 20, effectiveWPM: 20, attempts: 5, correct: 5,
+                      fastestTTR: nil, medianTTR: nil, durationSeconds: 60,
+                      characters: [], activeCharacters: [])
+    }
+    let realJourney = AccountSync.journeyValue(JourneyProgress(unlockedThrough: 4, currentLevel: 4, completed: [1, 2, 3]))
+    let savedCharacters = AccountSync.charactersValue(ProgressiveCharacters.Snapshot(
+        engine: TrainerEngine.Snapshot(activeCharacters: Array(MorseCode.kochOrder.prefix(2)), stats: []), stage: .singles))
+    let host = FakeSyncHost(store: store, sessions: local, ledger: ["2026-10-04": 600, "2026-10-05": 300],
+                            values: [.journey: realJourney, .characters: savedCharacters])
+    let remoteId = "aaaaaaaa-0000-4000-8000-000000000001"
+    var remoteFields = loadSyncWireFixture()?["session"]["wire"].objectValue ?? [:]
+    remoteFields["id"] = .string(remoteId)
+    remoteFields["seq"] = .int(300)
+    let remote = remoteFields
+    let newerCharacters = AccountSync.charactersValue(ProgressiveCharacters.Snapshot(
+        engine: TrainerEngine.Snapshot(activeCharacters: Array(MorseCode.kochOrder.prefix(6)), stats: []), stage: .singles))
+    let farFuture = AccountSync.epochMilliseconds(syncTestNow()) + 1000
+    let transport = FakeAccountTransport { request in
+        let body = syncRequestBody(request)
+        switch (request.method, request.path) {
+        case ("POST", "v1/sync/sessions"):
+            let ids = body["sessions"].arrayValue.map { $0["id"] }
+            return syncJSONResponse(.object(["accepted": .array(ids), "skipped": .array([]), "rejected": .array([]),
+                                             "stats": syncStatsJSON(sessions: 250)]))
+        case ("POST", "v1/sync/days"):
+            var summed: [String: JSONValue] = [:]
+            for d in body["days"].arrayValue {
+                summed[d["day"].stringValue ?? ""] = .int((d["seconds"].intValue ?? 0) + 1000)
+            }
+            return syncJSONResponse(.object(["days": .object(summed), "rejected": .array([])]))
+        case ("PUT", "v1/sync/state"):
+            return syncJSONResponse(.object(["entries": body["entries"], "rejected": .array([])]))
+        case ("GET", "v1/sync/snapshot"):
+            var stats = syncStatsJSON(sessions: 251).objectValue
+            stats["streak"] = .object(["current": .int(2), "longest": .int(9), "lastPractisedDay": .string("2026-10-05")])
+            return syncJSONResponse(.object([
+                "stats": .object(stats),
+                "sessions": .array([.object(remote)]),
+                "days": .object(["2026-09-30": .int(1200)]),
+                "state": .object(["characters": .object(["value": newerCharacters, "updatedAt": .int(farFuture)])]),
+                "seq": .int(300),
+            ]))
+        default:
+            return AccountResponse(status: 404)
+        }
+    }
+    let client = AccountClient(transport: transport, tokenStore: MemoryTokenStore(AccountTokens(access: "a2", refresh: "r2", expiresIn: 900)))
+    let engine = AccountSyncEngine(client: client, store: store, host: host, autoRetry: false,
+                                   calendar: calendar, now: { syncTestNow() })
+    let profile = try? syncTestAccount().decode(as: AccountProfile.self)
+    let outcome = runBlocking { () -> AccountSyncOutcome? in
+        guard let profile else { return nil }
+        return await engine.signedIn(profile)
+    }
+    let sent = transport.requests
+    let routes = sent.map { "\($0.method) \($0.path)" }
+    check("first sign-in: history, then days, then state, then the snapshot",
+          outcome == .done && routes == ["POST v1/sync/sessions", "POST v1/sync/sessions", "POST v1/sync/days",
+                                         "PUT v1/sync/state", "GET v1/sync/snapshot"])
+    let firstBatch = sent.first.map(syncRequestBody)?["sessions"].arrayValue ?? []
+    let secondBatch = sent.count > 1 ? syncRequestBody(sent[1])["sessions"].arrayValue : []
+    check("first sign-in: the whole history goes out oldest first, 200 to a batch",
+          firstBatch.count == 200 && secondBatch.count == 50
+            && firstBatch.first?["id"].stringValue == local[0].id.uuidString.lowercased()
+            && secondBatch.last?["id"].stringValue == local[249].id.uuidString.lowercased())
+    check("first sign-in: the days pushed are the own record, seeded from the ledger",
+          sent.count > 2 && syncRequestBody(sent[2]) == .object(["days": .array([
+              .object(["day": .string("2026-10-04"), "seconds": .int(600)]),
+              .object(["day": .string("2026-10-05"), "seconds": .int(300)])])]))
+    let entries = sent.count > 3 ? syncRequestBody(sent[3])["entries"] : .null
+    check("first sign-in: only the state stores ever saved here go out; a never-saved store has no entry",
+          entries.objectValue.keys.sorted() == ["characters", "journey"])
+    check("first sign-in: a saved key never stamped goes out at 0, so the account's value wins; never-saved ones get no stamp",
+          entries["journey"]["updatedAt"].intValue == 0 && entries["characters"]["updatedAt"].intValue == 0
+            && store.state.stateUpdatedAt["firstFour"] == nil && store.state.stateUpdatedAt["storyBookmarks"] == nil)
+    check("first sign-in: the snapshot's day is today, local", sent.last?.query["today"] == "2026-10-05")
+    let after = store.state
+    check("first sign-in: the cursor is the snapshot's seq, the queues are empty, and it is done",
+          after.cursor == 300 && after.sessionOutbox.isEmpty && after.dayOutbox.isEmpty && after.stateOutbox.isEmpty
+            && !after.firstSyncPending && after.lastSyncedAt == AccountSync.epochMilliseconds(syncTestNow()))
+    let hostSessions = runBlocking { await host.sessions }
+    let hostLedger = runBlocking { await host.ledger }
+    let hostTotals = runBlocking { await host.totals }
+    let hostApplied = runBlocking { await host.applied }
+    check("first sign-in: the snapshot's sessions merge into local history, nothing local lost",
+          hostSessions.count == 251 && hostSessions.contains { $0.id.uuidString.lowercased() == remoteId })
+    check("first sign-in: the server's totals and summed days are adopted into the displayed ledger",
+          hostTotals?.totalSessions == 251 && hostTotals?.bestTTR == 0.15
+            && hostLedger == ["2026-09-30": 1200, "2026-10-04": 1600, "2026-10-05": 1300])
+    let hostStreak = runBlocking { await host.streak }
+    check("first sign-in: the snapshot's streak is adopted",
+          hostStreak == SyncServerStats.Streak(current: 2, longest: 9, lastPractisedDay: "2026-10-05"))
+    check("first sign-in: the own record is untouched by adoption",
+          after.ownDays == ["2026-10-04": 600, "2026-10-05": 300] && after.ownDaysSeeded)
+    check("first sign-in: only the strictly newer state is applied, and its stamp taken",
+          hostApplied == [.characters] && after.stateUpdatedAt["characters"] == farFuture)
+    check("a sync that succeeded leaves no backoff", runBlocking { await engine.failures } == 0)
+}
+
+do {
+    // A pull: two pages, each merged and saved BEFORE the cursor moves, then
+    // the stats row for the other devices' totals and days.
+    let store = AccountSyncStore(state: syncSignedInState(cursor: 5)) { _ in }
+    let host = FakeSyncHost(store: store, ledger: ["2026-10-05": 60])
+    final class Switch: @unchecked Sendable {
+        let lock = NSLock()
+        var status = 200
+        func get() -> Int { lock.withLock { status } }
+        func set(_ value: Int) { lock.withLock { status = value } }
+    }
+    let pullStatus = Switch()
+    let transport = FakeAccountTransport { request in
+        switch request.path {
+        case "v1/sync/sessions":
+            let status = pullStatus.get()
+            guard status == 200 else { return AccountResponse(status: status) }
+            return request.query["since"] == "5"
+                ? syncJSONResponse(syncPullPage("bbbbbbbb-0000-4000-8000-000000000006", next: 6, more: true))
+                : syncJSONResponse(syncPullPage("bbbbbbbb-0000-4000-8000-000000000007", next: 7, more: false))
+        case "v1/me/stats":
+            return syncJSONResponse(syncStatsJSON(sessions: 9))
+        default:
+            return AccountResponse(status: 404)
+        }
+    }
+    let client = AccountClient(transport: transport, tokenStore: MemoryTokenStore(AccountTokens(access: "a2", refresh: "r2", expiresIn: 900)))
+    let engine = AccountSyncEngine(client: client, store: store, host: host, autoRetry: false,
+                                   calendar: syncUTCCalendar(), now: { syncTestNow() })
+
+    // Saving fails: nothing moves, and the engine backs off.
+    runBlocking { await host.setFailMerge(true) }
+    let failed = runBlocking { await engine.sync() }
+    check("pull: when local history cannot be saved the cursor stays put and the engine backs off",
+          failed == .backoff && store.state.cursor == 5 && runBlocking { await engine.failures } == 1)
+    pullStatus.set(503)
+    let unavailable = runBlocking { await engine.sync() }
+    check("backoff: a 5xx backs off again, the wait doubling",
+          unavailable == .backoff && runBlocking { await engine.failures } == 2
+            && runBlocking { await engine.nextRetrySeconds } == AccountSync.backoffSeconds(2))
+    pullStatus.set(200)
+    runBlocking { await host.setFailMerge(false) }
+    let pulled = runBlocking { await engine.sync() }
+    let cursors = runBlocking { await host.cursorsAtMerge }
+    check("pull: each page is merged while the cursor still points before it, then the cursor advances",
+          pulled == .done && cursors == [5, 5, 6] && store.state.cursor == 7)
+    check("pull: the rows are in local history", runBlocking { await host.sessions.count } == 2)
+    check("pull: the stats row's totals and summed days are adopted after rows came in",
+          runBlocking { await host.totals?.totalSessions } == 9
+            && runBlocking { await host.ledger } == ["2026-10-01": 999, "2026-10-05": 60])
+    check("backoff: a success resets it", runBlocking { await engine.failures } == 0
+            && runBlocking { await engine.nextRetrySeconds } == nil)
+    let routes = transport.requests.map(\.path)
+    check("pull: a sync with nothing queued and no saved state pushes nothing",
+          !routes.contains("v1/sync/days") && !routes.contains("v1/sync/state"))
+    check("pull: the stats body is read after the pull, and its streak adopted",
+          routes.last == "v1/me/stats" && transport.requests.last?.query["today"] == "2026-10-05"
+            && runBlocking { await host.streak?.longest } == 7)
+}
+
+do {
+    // Sign-out by the user: the server is told, then the tokens, cursor and
+    // queues go and every local record stays.
+    var state = syncSignedInState(cursor: 9)
+    state.ownDaysSeeded = true
+    state.noteSession(syncDayRecord(day: "2026-10-05", seconds: 90, calendar: syncUTCCalendar()), calendar: syncUTCCalendar())
+    state.noteStateChange(.journey, now: 1234)
+    let store = AccountSyncStore(state: state) { _ in }
+    let tokens = MemoryTokenStore(AccountTokens(access: "a2", refresh: "r2", expiresIn: 900))
+    let transport = FakeAccountTransport { _ in AccountResponse(status: 204) }
+    let host = FakeSyncHost(store: store, sessions: [syncDayRecord(day: "2026-10-05", seconds: 90, calendar: syncUTCCalendar())])
+    let engine = AccountSyncEngine(client: AccountClient(transport: transport, tokenStore: tokens), store: store, host: host,
+                                   autoRetry: false, now: { syncTestNow() })
+    runBlocking { await engine.signOut() }
+    let after = store.state
+    check("sign-out: POST /v1/auth/logout, then the tokens are gone",
+          transport.requests.map(\.path) == ["v1/auth/logout"] && tokens.load() == nil)
+    check("sign-out: cursor and queues cleared; own record, seeded flag and stamps kept; no banner",
+          after.account == nil && after.cursor == nil && after.sessionOutbox.isEmpty && after.dayOutbox.isEmpty
+            && after.stateOutbox.isEmpty && after.ownDays == ["2026-10-05": 90] && after.ownDaysSeeded
+            && after.stateUpdatedAt["journey"] == 1234 && !after.signedOutByServer)
+    check("sign-out: local history is untouched", runBlocking { await host.sessions.count } == 1)
+    check("signed out, a sync does nothing", runBlocking { await engine.sync() } == .notSignedIn
+            && transport.requests.count == 1)
+}
+
+do {
+    // Signed out by the server: the access token is refused and so is the
+    // refresh. The device signs itself out and the banner flag is set.
+    var state = syncSignedInState(cursor: 3)
+    state.ownDays = ["2026-10-05": 45]
+    let store = AccountSyncStore(state: state) { _ in }
+    let tokens = MemoryTokenStore(AccountTokens(access: "a1", refresh: "r1", expiresIn: 900))
+    let transport = FakeAccountTransport(cannedAccountReply(refreshStatus: 401))
+    let engine = AccountSyncEngine(client: AccountClient(transport: transport, tokenStore: tokens), store: store,
+                                   host: FakeSyncHost(store: store), autoRetry: false, now: { syncTestNow() })
+    let outcome = runBlocking { await engine.sync() }
+    let after = store.state
+    check("forced sign-out: a refused refresh signs the device out and raises the banner",
+          outcome == .signedOut && after.signedOutByServer && after.account == nil && tokens.load() == nil)
+    check("forced sign-out: the own record stays, the cursor goes, and it is not counted as a backoff",
+          after.ownDays == ["2026-10-05": 45] && after.cursor == nil && runBlocking { await engine.failures } == 0)
+}
+
+do {
+    // A batch the server refuses outright (400) leaves the outbox instead of
+    // being resent forever; the rest of the drain goes on.
+    var state = syncSignedInState(cursor: 1)
+    state.noteSession(syncDayRecord(day: "2026-10-05", seconds: 10, calendar: syncUTCCalendar()), calendar: syncUTCCalendar())
+    let store = AccountSyncStore(state: state) { _ in }
+    let transport = FakeAccountTransport { request in
+        switch (request.method, request.path) {
+        case ("POST", "v1/sync/sessions"): return AccountResponse(status: 400, body: jsonData(#"{"error":"invalid_request","message":"bad"}"#))
+        case ("POST", "v1/sync/days"): return syncJSONResponse(.object(["days": .object(["2026-10-05": .int(10)])]))
+        case ("GET", "v1/sync/sessions"): return syncJSONResponse(.object(["sessions": .array([]), "nextSince": .int(1), "hasMore": .bool(false)]))
+        case ("GET", "v1/me/stats"): return syncJSONResponse(syncStatsJSON(sessions: 1))
+        default: return AccountResponse(status: 404)
+        }
+    }
+    let engine = AccountSyncEngine(client: AccountClient(transport: transport, tokenStore: MemoryTokenStore(AccountTokens(access: "a2", refresh: "r2", expiresIn: 900))),
+                                   store: store, host: FakeSyncHost(store: store), autoRetry: false,
+                                   calendar: syncUTCCalendar(), now: { syncTestNow() })
+    let outcome = runBlocking { await engine.sync() }
+    check("drain: a 400 drops that batch, the days still go, and nothing backs off",
+          outcome == .done && store.state.sessionOutbox.isEmpty && store.state.dayOutbox.isEmpty
+            && transport.requests.map(\.path) == ["v1/sync/sessions", "v1/sync/days", "v1/sync/sessions", "v1/me/stats"])
+}
+
+do {
+    // In flight: a day that grew, or a key restamped, while its push was out
+    // stays queued; the rest leave.
+    var state = syncSignedInState(cursor: 1)
+    state.ownDays = ["2026-10-04": 100, "2026-10-05": 200]
+    state.dayOutbox = ["2026-10-04", "2026-10-05"]
+    state.stateUpdatedAt = ["journey": 10, "characters": 20]
+    state.stateOutbox = ["journey", "characters"]
+    let sentDays = ["2026-10-04": 100, "2026-10-05": 150]
+    state.dropSentDays(sentDays)
+    state.dropSentState(["journey": 10, "characters": 15])
+    check("in flight: a day whose own figure grew while it was out stays queued", state.dayOutbox == ["2026-10-05"])
+    check("in flight: a key restamped while it was out stays queued", state.stateOutbox == ["characters"])
+}
+
+do {
+    // First sign-in stamps (fixture merge.state's _comment): a key never
+    // stamped is queued at 0, one stamped earlier keeps its stamp, a key
+    // never saved is neither queued nor stamped.
+    var state = AccountSyncState()
+    state.stateUpdatedAt = ["characters": 4321]
+    state.beginFirstSync(account: .init(id: "acc-1", email: nil, callsign: nil, displayName: nil), ledger: [:],
+                         history: [], savedKeys: [.journey, .characters])
+    check("first sign-in: an unstamped key is queued with updatedAt 0",
+          state.stateUpdatedAt["journey"] == 0 && state.stateOutbox.contains("journey"))
+    check("first sign-in: a key stamped earlier keeps its stamp",
+          state.stateUpdatedAt["characters"] == 4321 && state.stateOutbox.contains("characters"))
+    check("first sign-in: a never-saved key is neither queued nor stamped",
+          state.stateOutbox.count == 2 && state.stateUpdatedAt["firstFour"] == nil)
+    state.noteStateChange(.firstFour, now: 123)
+    check("signed in, a save that changes a key stamps it now and queues it",
+          state.stateUpdatedAt["firstFour"] == 123 && state.stateOutbox.last == "firstFour")
+}
+
+print("\nStreak adoption:")
+do {
+    let calendar = syncUTCCalendar()
+    let local = PracticeStreak(current: 1, longest: 12, lastPracticeDay: ActivityLedger.date(forKey: "2026-10-01", calendar: calendar))
+    let adopted = AccountSync.adoptStreak(local, server: .init(current: 4, longest: 6, lastPractisedDay: "2026-10-05"), calendar: calendar)
+    check("the account's current run and last day are adopted",
+          adopted.current == 4 && adopted.lastPracticeDay == ActivityLedger.date(forKey: "2026-10-05", calendar: calendar))
+    check("a local longest is never lowered", adopted.longest == 12)
+    check("a longer server longest is taken",
+          AccountSync.adoptStreak(PracticeStreak(), server: .init(current: 2, longest: 40, lastPractisedDay: "2026-10-05"),
+                                  calendar: calendar).longest == 40)
+    check("a server with no practice day leaves the local streak alone",
+          AccountSync.adoptStreak(local, server: .init(current: 0, longest: 0, lastPractisedDay: nil), calendar: calendar) == local)
+}
+
+print("\nAccount profile rules:")
+check("a callsign is trimmed and uppercased", AccountSync.profileCallsign("  w1aw/p ") == .valid("W1AW/P"))
+check("an empty callsign clears it", AccountSync.profileCallsign("  ") == .valid(nil))
+check("a callsign of 2, or with a hyphen, is refused",
+      AccountSync.profileCallsign("W1") != .valid("W1") && AccountSync.profileCallsign("W1-AW") != .valid("W1-AW"))
+check("a 16-character callsign is fine, 17 is not",
+      AccountSync.profileCallsign(String(repeating: "A", count: 16)) == .valid(String(repeating: "A", count: 16))
+        && AccountSync.profileCallsign(String(repeating: "A", count: 17)) != .valid(String(repeating: "A", count: 17)))
+check("a name is trimmed; 2–24 printable characters", AccountSync.profileDisplayName(" Hiram ") == .valid("Hiram")
+        && AccountSync.profileDisplayName("H") != .valid("H")
+        && AccountSync.profileDisplayName("Bad\u{7}Name") != .valid("Bad\u{7}Name"))
+check("an email needs one @ and a dotted domain",
+      AccountSync.isPlausibleEmail(" learner@example.org ") && !AccountSync.isPlausibleEmail("learner@example")
+        && !AccountSync.isPlausibleEmail("learner example.org") && !AccountSync.isPlausibleEmail("a@b@c.org"))
+
 print("\n────────────────────────────")
 if failures == 0 {
     print("✅ All \(checks) checks passed.\n")

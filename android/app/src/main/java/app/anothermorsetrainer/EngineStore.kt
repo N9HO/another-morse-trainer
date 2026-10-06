@@ -5,6 +5,7 @@ import android.content.SharedPreferences
 import androidx.core.content.edit
 import app.anothermorsetrainer.morsekit.CharacterStats
 import app.anothermorsetrainer.morsekit.ProgressiveCharacters
+import app.anothermorsetrainer.morsekit.SyncState
 import app.anothermorsetrainer.morsekit.TrainerEngine
 import org.json.JSONArray
 import org.json.JSONObject
@@ -89,6 +90,22 @@ object EngineStore {
     fun save() {
         val chars = tracked ?: return
         prefs.edit { putString("engine", encode(chars.snapshot)) }
+        // Saved after every answer; the sync engine stamps the key only when
+        // the ladder itself (active, exposed, stage, pin) changed.
+        SyncCoordinator.stateChanged(SyncState.CHARACTERS)
+    }
+
+    /** False until the track has been saved once: an untouched ladder is not pushed over an account's real one. */
+    val hasSaved: Boolean get() = prefs.contains("engine")
+
+    /**
+     * A ladder received from another device (account sync), already merged
+     * with this device's own stats and confusions: saved, and restored into
+     * the live track when one is out so the next answer does not overwrite it.
+     */
+    fun applySynced(snapshot: ProgressiveCharacters.Snapshot) {
+        tracked?.restore(snapshot)
+        prefs.edit { putString("engine", encode(snapshot)) }
     }
 
     /**

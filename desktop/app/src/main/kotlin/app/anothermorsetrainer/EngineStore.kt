@@ -2,6 +2,7 @@ package app.anothermorsetrainer
 
 import app.anothermorsetrainer.morsekit.CharacterStats
 import app.anothermorsetrainer.morsekit.ProgressiveCharacters
+import app.anothermorsetrainer.morsekit.SyncStateCodec
 import app.anothermorsetrainer.morsekit.TrainerEngine
 import org.json.JSONArray
 import org.json.JSONObject
@@ -85,7 +86,27 @@ object EngineStore {
     /** Persist the tracked track's current snapshot (no-op when none is live). */
     fun save() {
         val chars = tracked ?: return
+        val before = syncValue()
         prefs.edit { putString("engine", encode(chars.snapshot)) }
+        // Stamped only when the ladder's position moved, not on every answer.
+        SyncCoordinator.stateSaved(SyncStateCodec.CHARACTERS, before, syncValue())
+    }
+
+    /** The synced `characters` value (the ladder's position only), or null when nothing is saved. */
+    fun syncValue(): JSONObject? =
+        prefs.getString("engine", null)?.let { runCatching { SyncStateCodec.charactersToWire(it) }.getOrNull() }
+
+    /**
+     * A newer ladder position from another device: active and exposed sets,
+     * stage and pin replaced, the per-character stats and confusions kept.
+     * Saved as is (not stamped or sent back), and the live track, if one is
+     * out, moved to it so its next save does not put the old position back.
+     */
+    fun applySynced(wire: JSONObject) {
+        val json = SyncStateCodec.applyCharacters(prefs.getString("engine", null), wire)
+        val snap = runCatching { decode(json) }.getOrNull() ?: return
+        prefs.edit { putString("engine", json) }
+        tracked?.restore(snap)
     }
 
     /**

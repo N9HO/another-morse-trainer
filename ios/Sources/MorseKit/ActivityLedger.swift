@@ -58,6 +58,17 @@ public struct ActivityLedger: Codable, Sendable, Equatable {
         }
     }
 
+    /// Adopt the account's summed per-day figures from a sync reply
+    /// (`AccountSync.mergeLedger`): each day the server names takes its
+    /// figure, the rest are kept, and the cap applies as it does in `record`.
+    public mutating func adoptServerDays(_ server: [String: Int]) {
+        days = AccountSync.mergeLedger(local: days, server: server)
+        if days.count > Self.capDays {
+            let excess = days.keys.sorted().prefix(days.count - Self.capDays)
+            for key in excess { days.removeValue(forKey: key) }
+        }
+    }
+
     /// Add `seconds` of practice to the local day containing `date`.
     public mutating func record(date: Date, seconds: Int, calendar: Calendar = .current) {
         record(day: Self.dayKey(for: date, calendar: calendar), seconds: seconds)

@@ -8,6 +8,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.content.edit
 import app.anothermorsetrainer.morsekit.OperatingProcedureProgress
+import app.anothermorsetrainer.morsekit.SyncState
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -42,7 +43,11 @@ object OperatingProcedureStore {
         progress = p
         prefs.edit { putString(KEY, encode(p)) }
         version++
+        SyncCoordinator.stateChanged(SyncState.OPERATING_PROCEDURE)
     }
+
+    /** False until the first save: untouched progress is not pushed over an account's real one. */
+    val hasSaved: Boolean get() = prefs.contains(KEY)
 
     fun reset() {
         progress = OperatingProcedureProgress()

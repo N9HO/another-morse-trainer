@@ -5,6 +5,7 @@ import android.content.SharedPreferences
 import androidx.core.content.edit
 import app.anothermorsetrainer.morsekit.JourneyCurriculum
 import app.anothermorsetrainer.morsekit.JourneyProgress
+import app.anothermorsetrainer.morsekit.SyncState
 
 /**
  * Persists [JourneyProgress] (unlock/completion state) in SharedPreferences.
@@ -33,7 +34,11 @@ object JourneyStore {
             putInt("currentLevel", progress.currentLevel)
             putStringSet("completed", progress.completed.map { it.toString() }.toSet())
         }
+        SyncCoordinator.stateChanged(SyncState.JOURNEY)
     }
+
+    /** False until the first [save]: an untouched Journey is not pushed over an account's real one. */
+    val hasSaved: Boolean get() = prefs.contains("unlockedThrough")
 
     /**
      * Unlock the Journey as far as the declared starting level reaches, so a

@@ -268,6 +268,12 @@ public final class ProgressiveCharacters: QuizSource {
         public var stage: Stage
         /// Optional so snapshots saved before pinning existed decode as "auto".
         public var pinnedStage: Stage? = nil
+
+        public init(engine: TrainerEngine.Snapshot, stage: Stage, pinnedStage: Stage? = nil) {
+            self.engine = engine
+            self.stage = stage
+            self.pinnedStage = pinnedStage
+        }
     }
 
     public var snapshot: Snapshot {

@@ -1,0 +1,348 @@
+{
+  "_comment": [
+    "Account sync wire format and merge rules (Phase 2 of the accounts work),",
+    "consumed by ALL THREE ports: the Swift harness (MorseKitCheck), android",
+    "SyncWireTest and desktop SyncWireTest. Data, not code: see CLAUDE.md's",
+    "two-ports rule.",
+    "",
+    "Source of truth: the API contract in the N9HO/another-morse-trainer-accounts",
+    "README (sections 7 and 9). Expected values are derived from that contract",
+    "and the rules below, not captured from any port's encoder. Change this file",
+    "only together with that README, and say so in the commit.",
+    "",
+    "Wire rules:",
+    "- `date` is epoch MILLISECONDS as an integer. iOS JSONEncoder's default Date",
+    "  strategy (seconds since 2001) must never reach the wire.",
+    "- The apps keep TTRs in seconds; on the wire `fastestTtrMs`, `medianTtrMs`",
+    "  and per-character `medianTtrMs` are whole milliseconds, round(seconds *",
+    "  1000). Decoding divides by 1000. No value here sits on a .5 boundary in",
+    "  binary floating point (0.3895 would: 0.3895 * 1000 is exactly 389.5).",
+    "- `durationSeconds` is a number, unchanged.",
+    "- `id` is the record's UUID, lowercase on the wire.",
+    "- An absent value is JSON null, never the -1 sentinel the Kotlin ports use",
+    "  in their own storage.",
+    "- `schemaVersion` is 1.",
+    "- `mode` on the wire is the canonical mode id: the iOS TrainingMode raw",
+    "  value. `modeIds.kotlin` maps every string Android and desktop record to",
+    "  it (all 25, both ways). iOS sends its raw value unchanged. Decoding a wire",
+    "  id that a Kotlin port does not know keeps the wire id as the local mode.",
+    "",
+    "Merge rules are under `merge`; each scenario names its inputs and the",
+    "expected result."
+  ],
+
+  "pkce": {
+    "_comment": "RFC 7636 Appendix B. challenge = base64url(SHA-256(ASCII(verifier))), no padding.",
+    "verifier": "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk",
+    "challenge": "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM",
+    "verifierBytes": 32,
+    "verifierLength": 43
+  },
+
+  "client": {
+    "_comment": "verify/start `client` per port; `platform` is one of these by device.",
+    "ios": "amt-ios",
+    "android": "amt-android",
+    "desktop": "amt-desktop",
+    "platforms": ["ios", "ipados", "macos", "android", "windows", "linux"],
+    "scopes": "sync stats:read account"
+  },
+
+  "modeIds": {
+    "canonical": [
+      "journey", "characters", "words", "cw77", "cw77Listen", "abbreviations",
+      "qCodes", "prosigns", "headCopy", "typed", "sending", "confusion", "listen",
+      "qso", "contest", "story", "exam", "qrq", "rapidFire", "invaders", "galaga",
+      "defender", "dungeon", "frogger", "asteroids"
+    ],
+    "kotlin": {
+      "Journey": "journey",
+      "Characters": "characters",
+      "Common Words": "words",
+      "CW 77": "cw77",
+      "CW 77 Listen": "cw77Listen",
+      "Abbreviations": "abbreviations",
+      "Q-Codes": "qCodes",
+      "Prosigns": "prosigns",
+      "Head Copy": "headCopy",
+      "Type It": "typed",
+      "Sending": "sending",
+      "Confusion Drill": "confusion",
+      "Listen": "listen",
+      "Pileup": "qso",
+      "Contest": "contest",
+      "Stories": "story",
+      "Code Exam": "exam",
+      "QRQ Speed": "qrq",
+      "Rapid Fire": "rapidFire",
+      "Morse Invaders": "invaders",
+      "CW Galaga": "galaga",
+      "Morse Defender": "defender",
+      "CW Dungeon": "dungeon",
+      "CW Frogger": "frogger",
+      "CW Asteroids": "asteroids"
+    },
+    "passiveCanonical": ["listen", "story", "cw77Listen"],
+    "unknownWireId": "futureMode"
+  },
+
+  "session": {
+    "_comment": "One record with every field populated. `local` is the port's own record in seconds; `localMode` per port. Encoding `local` must give exactly `wire` (key order free). Decoding `wire` gives back `local` with the id lowercased and each TTR at millisecond precision (0.2124 s comes back as 0.212 s): the ms rounding is the only loss.",
+    "local": {
+      "id": "3F2C1A9E-8B7D-4C6E-9F10-2A3B4C5D6E7F",
+      "dateEpochMs": 1791230000123,
+      "localMode": { "ios": "rapidFire", "kotlin": "Rapid Fire" },
+      "characterWpm": 20,
+      "effectiveWpm": 15,
+      "attempts": 40,
+      "correct": 37,
+      "fastestTtrSeconds": 0.2124,
+      "medianTtrSeconds": 0.4556,
+      "durationSeconds": 300.5,
+      "score": 37,
+      "characters": [
+        { "character": "K", "attempts": 6, "correct": 6, "medianTtrSeconds": 0.3893 },
+        { "character": "M", "attempts": 5, "correct": 4, "medianTtrSeconds": 0.5 },
+        { "character": "R", "attempts": 3, "correct": 0, "medianTtrSeconds": null }
+      ],
+      "activeCharacters": ["K", "M", "R", "S"]
+    },
+    "wire": {
+      "id": "3f2c1a9e-8b7d-4c6e-9f10-2a3b4c5d6e7f",
+      "date": 1791230000123,
+      "mode": "rapidFire",
+      "characterWpm": 20,
+      "effectiveWpm": 15,
+      "attempts": 40,
+      "correct": 37,
+      "fastestTtrMs": 212,
+      "medianTtrMs": 456,
+      "durationSeconds": 300.5,
+      "score": 37,
+      "characters": [
+        { "character": "K", "attempts": 6, "correct": 6, "medianTtrMs": 389 },
+        { "character": "M", "attempts": 5, "correct": 4, "medianTtrMs": 500 },
+        { "character": "R", "attempts": 3, "correct": 0, "medianTtrMs": null }
+      ],
+      "activeCharacters": ["K", "M", "R", "S"],
+      "schemaVersion": 1
+    }
+  },
+
+  "legacySession": {
+    "_comment": "A record from before speeds, TTRs, duration and score were kept: every optional value absent, both speeds 0, a passive mode. Its wire form carries explicit nulls and empty lists.",
+    "local": {
+      "id": "22222222-2222-4222-8222-222222222222",
+      "dateEpochMs": 1735689600000,
+      "localMode": { "ios": "listen", "kotlin": "Listen" },
+      "characterWpm": 0,
+      "effectiveWpm": 0,
+      "attempts": 12,
+      "correct": 0,
+      "fastestTtrSeconds": null,
+      "medianTtrSeconds": null,
+      "durationSeconds": null,
+      "score": null,
+      "characters": [],
+      "activeCharacters": []
+    },
+    "wire": {
+      "id": "22222222-2222-4222-8222-222222222222",
+      "date": 1735689600000,
+      "mode": "listen",
+      "characterWpm": 0,
+      "effectiveWpm": 0,
+      "attempts": 12,
+      "correct": 0,
+      "fastestTtrMs": null,
+      "medianTtrMs": null,
+      "durationSeconds": null,
+      "score": null,
+      "characters": [],
+      "activeCharacters": [],
+      "schemaVersion": 1
+    }
+  },
+
+  "days": {
+    "_comment": "POST /v1/sync/days body: THIS DEVICE'S OWN per-day seconds (see merge.deviceDays), local calendar days as the ledger keys them, whole seconds. Never the adopted, account-wide ledger. A day with 0 seconds is a practice day with no timed session (a Daily Dit guess).",
+    "local": [
+      { "day": "2026-10-03", "seconds": 0 },
+      { "day": "2026-10-04", "seconds": 600 },
+      { "day": "2026-10-05", "seconds": 1900 }
+    ],
+    "wire": { "days": [
+      { "day": "2026-10-03", "seconds": 0 },
+      { "day": "2026-10-04", "seconds": 600 },
+      { "day": "2026-10-05", "seconds": 1900 }
+    ] }
+  },
+
+  "state": {
+    "_comment": "PUT /v1/sync/state. The five keys that exist in all three trees, each with ONE wire shape. `kotlin` gives the Android/desktop stored form each key is translated from; iOS stores Codable blobs whose fields already match the wire names except where noted. `characters.stage` is lowercase on the wire (iOS raw values); the Kotlin enum names are capitalised. `journey.completed` is ascending. `characters` never carries the opt-in punctuation (MorseCode.pickablePunctuation: . , /): each device's own punctuation setting decides those, so they are dropped from activeCharacters and exposedCharacters when encoding, and a received ladder keeps the device's own punctuation entries (see `charactersPunctuation`). Otherwise two devices with different punctuation settings would rewrite each other's ladder on every launch.",
+    "keys": ["journey", "characters", "firstFour", "operatingProcedure", "storyBookmarks"],
+    "wire": { "entries": {
+      "journey": {
+        "value": { "unlockedThrough": 5, "currentLevel": 4, "completed": [1, 2, 3] },
+        "updatedAt": 1791230000000
+      },
+      "characters": {
+        "value": { "activeCharacters": ["K", "M", "R", "S"], "exposedCharacters": ["K", "M", "R"], "stage": "pairs", "pinnedStage": null },
+        "updatedAt": 1791230000000
+      },
+      "firstFour": {
+        "value": { "passed": ["call", "state"], "copyPassed": ["call"], "cleanRuns": { "question": 1 } },
+        "updatedAt": 1791230000000
+      },
+      "operatingProcedure": {
+        "value": { "passed": ["offset", "signals"], "cleanRuns": ["when"], "drillPassed": true },
+        "updatedAt": 1791230000000
+      },
+      "storyBookmarks": {
+        "value": { "fables": 3, "speckled-band": 1 },
+        "updatedAt": 1791230000000
+      }
+    } },
+    "kotlin": {
+      "journey": { "unlockedThrough": 5, "currentLevel": 4, "completed": ["3", "1", "2"] },
+      "characters": { "active": "KMRS.", "exposed": "KMR.", "stage": "Pairs", "pin": null },
+      "storyBookmarks": "fables=3|speckled-band=1"
+    }
+  },
+
+  "charactersPunctuation": {
+    "_comment": "Applying a received ladder: the received Koch characters, in the order received, then the device's own opt-in punctuation that was in its active (exposed) set, in its local order. Stage and pin come from the wire as usual.",
+    "localActive": ["K", "M", ",", "/"],
+    "localExposed": ["K", "M", ","],
+    "wireActive": ["K", "M", "R", "S"],
+    "wireExposed": ["K", "M", "R"],
+    "expectedActive": ["K", "M", "R", "S", ",", "/"],
+    "expectedExposed": ["K", "M", "R", ","]
+  },
+
+  "merge": {
+    "sessions": {
+      "_comment": "Pulled or snapshot records are inserted when their id (compared lowercase) is not already local; an existing local record is never replaced. Then sort newest date first (equal dates: id ascending) and keep the newest `limit`. `limit` is the app's SessionHistory limit (100); 4 here to show the cap.",
+      "limit": 4,
+      "local": [
+        { "id": "00000000-0000-4000-8000-000000000003", "date": 3000, "attempts": 3 },
+        { "id": "00000000-0000-4000-8000-000000000001", "date": 1000, "attempts": 1 }
+      ],
+      "pulled": [
+        { "id": "00000000-0000-4000-8000-000000000003", "date": 3000, "attempts": 99 },
+        { "id": "00000000-0000-4000-8000-000000000005", "date": 5000, "attempts": 5 },
+        { "id": "00000000-0000-4000-8000-000000000002", "date": 2000, "attempts": 2 },
+        { "id": "00000000-0000-4000-8000-000000000004", "date": 4000, "attempts": 4 },
+        { "id": "00000000-0000-4000-8000-00000000000A", "date": 500, "attempts": 10 }
+      ],
+      "expectedIds": [
+        "00000000-0000-4000-8000-000000000005",
+        "00000000-0000-4000-8000-000000000004",
+        "00000000-0000-4000-8000-000000000003",
+        "00000000-0000-4000-8000-000000000002"
+      ],
+      "expectedAttemptsOfId3": 3
+    },
+
+    "aggregates": {
+      "_comment": "After every successful push or pull reply that carries `stats`, these local lifetime counters are REPLACED by the server's, so a fresh install shows totals beyond the 100 rows it holds. bestTTR goes from ms to seconds; personalBests replaces the whole bests map. Mode keys here are canonical ids, as on the wire: a port that keys its bests by its own mode string (the Kotlin titles) maps them through `modeIds` on the way in.",
+      "local": {
+        "totalSessions": 3, "totalAnswered": 30, "totalCorrect": 20,
+        "totalPracticeSeconds": 120.0, "bestTtrSeconds": 0.5,
+        "bestScores": { "rapidFire": 10, "contest": 900 }
+      },
+      "serverStats": {
+        "totals": { "sessions": 412, "answered": 9180, "correct": 8433, "accuracy": 0.9186, "practiceSeconds": 61234.5 },
+        "bestTtrMs": 182,
+        "personalBests": { "rapidFire": 44, "invaders": 8810 },
+        "perMode": {}, "perCharacter": {}, "lastPractisedDay": "2026-10-05", "updatedAt": 1791240000000
+      },
+      "expected": {
+        "totalSessions": 412, "totalAnswered": 9180, "totalCorrect": 8433,
+        "totalPracticeSeconds": 61234.5, "bestTtrSeconds": 0.182,
+        "bestScores": { "rapidFire": 44, "invaders": 8810 }
+      },
+      "serverWithNoBestTtr": { "bestTtrMs": null },
+      "expectedBestTtrWhenServerNull": null
+    },
+
+    "ledger": {
+      "_comment": "The server's summed per-day figures are adopted into the DISPLAYED ledger day by day; local days the reply does not mention are kept. The app's 400-day cap then applies as it already does. The displayed ledger is never pushed (see deviceDays).",
+      "local": { "2026-10-01": 300, "2026-10-02": 60, "2026-10-03": 0 },
+      "server": { "2026-10-02": 260, "2026-10-03": 0, "2026-10-04": 900 },
+      "expected": { "2026-10-01": 300, "2026-10-02": 260, "2026-10-03": 0, "2026-10-04": 900 }
+    },
+
+    "deviceDays": {
+      "_comment": "Each device keeps its OWN per-day seconds apart from the displayed ledger, and pushes only those. The server keeps the larger figure per device-day and sums devices, so pushing an adopted (already summed) figure would count the other devices twice. The own record grows with every local session (same day key and seconds the ledger records), is seeded once from the local ledger the first time the device ever signs in (before any adoption), survives sign-out, and is never touched by adoption.",
+      "seedFromLedgerOnFirstSignIn": { "2026-10-01": 300, "2026-10-02": 60 },
+      "ownBefore": { "2026-10-01": 300, "2026-10-02": 60 },
+      "localSessions": [ { "day": "2026-10-02", "seconds": 45 }, { "day": "2026-10-04", "seconds": 120 } ],
+      "ownAfter": { "2026-10-01": 300, "2026-10-02": 105, "2026-10-04": 120 },
+      "serverReply": { "2026-10-02": 405, "2026-10-04": 120 },
+      "expectedPushBody": { "days": [
+        { "day": "2026-10-02", "seconds": 105 },
+        { "day": "2026-10-04", "seconds": 120 }
+      ] },
+      "pushBodyNote": "Only days changed since the last successful push go out (the outbox's day entries); each carries the device's own figure for that day.",
+      "expectedOwnAfterAdoption": { "2026-10-01": 300, "2026-10-02": 105, "2026-10-04": 120 },
+      "expectedDisplayedAfterAdoption": { "2026-10-01": 300, "2026-10-02": 405, "2026-10-04": 120 }
+    },
+
+    "state": {
+      "_comment": "Per key, a reply entry replaces the local one only when its updatedAt is strictly newer; equal or older keeps local. Keys the reply omits keep local. Stamping: a key gets updatedAt = now (epoch ms) when a save changes its wire value WHILE SIGNED IN; resets never stamp. At first sign-in a key that has never been stamped goes out with updatedAt 0, so any value the account already has wins and the device's value only fills an empty account (a fresh install's onboarding defaults never overwrite real progress); a key never saved on the device is not sent at all.",
+      "local": {
+        "journey": { "value": { "unlockedThrough": 3, "currentLevel": 3, "completed": [1, 2] }, "updatedAt": 2000 },
+        "characters": { "value": { "activeCharacters": ["K", "M"], "exposedCharacters": [], "stage": "singles", "pinnedStage": null }, "updatedAt": 5000 },
+        "firstFour": { "value": { "passed": [], "copyPassed": [], "cleanRuns": {} }, "updatedAt": 1000 }
+      },
+      "reply": {
+        "journey": { "value": { "unlockedThrough": 6, "currentLevel": 6, "completed": [1, 2, 3, 4, 5] }, "updatedAt": 3000 },
+        "characters": { "value": { "activeCharacters": ["K"], "exposedCharacters": [], "stage": "singles", "pinnedStage": null }, "updatedAt": 5000 }
+      },
+      "expectedUpdatedAt": { "journey": 3000, "characters": 5000, "firstFour": 1000 },
+      "expectedJourneyCurrentLevel": 6,
+      "expectedCharactersActive": ["K", "M"]
+    },
+
+    "outbox": {
+      "_comment": "An outbox entry leaves only on a 2xx whose reply lists its id as accepted or skipped; a rejected id also leaves (it stays in local history). Ids not in the reply stay, in order. Order of drain: sessions oldest first in batches of up to 200, then days, then state.",
+      "pending": ["s1", "s2", "s3", "s4"],
+      "reply": { "accepted": ["s1"], "skipped": ["s2"], "rejected": [{ "id": "s3", "reason": "need attempts >= correct >= 0" }] },
+      "expectedRemaining": ["s4"],
+      "batchSize": 200,
+      "cap": {
+        "_comment": "At most `max` entries; enqueuing past it drops the oldest. 3 here to show it; the apps use 1000.",
+        "max": 3,
+        "enqueue": ["a", "b", "c", "d", "e"],
+        "expected": ["c", "d", "e"],
+        "appMax": 1000
+      }
+    },
+
+    "backoff": {
+      "_comment": "Seconds before retry n (1-based): 2^n, capped at 600 (10 min). Reset to retry 1 on success or foreground.",
+      "delaysSeconds": [2, 4, 8, 16, 32, 64, 128, 256, 512, 600, 600],
+      "capSeconds": 600
+    },
+
+    "retry": {
+      "_comment": "What the engine does with an HTTP outcome. `refresh` = refresh the token once, then retry once. If the refresh itself is refused (a 4xx), sign out; if the refresh gets no reply, a 429 or a 5xx, keep the tokens and back off, since the refresh token was not spent. `network` = no HTTP reply at all.",
+      "outcomes": [
+        { "status": 200, "action": "done" },
+        { "status": 201, "action": "done" },
+        { "status": 202, "action": "done" },
+        { "status": 204, "action": "done" },
+        { "status": 400, "action": "drop" },
+        { "status": 401, "action": "refresh" },
+        { "status": 403, "action": "drop" },
+        { "status": 404, "action": "drop" },
+        { "status": 410, "action": "drop" },
+        { "status": 429, "action": "backoff" },
+        { "status": 500, "action": "backoff" },
+        { "status": 503, "action": "backoff" },
+        { "status": "network", "action": "backoff" }
+      ]
+    }
+  }
+}

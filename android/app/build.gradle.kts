@@ -130,6 +130,14 @@ dependencies {
     // Index flags 1.1.0 as outdated. Declaring it here lets Gradle resolve the
     // current stable instead. Drop this once basement's POM moves past 1.2.1.
     implementation("androidx.fragment:fragment:1.9.1")
+    // EncryptedSharedPreferences for the accounts sign-in's access and refresh
+    // tokens (AccountClient): encrypted at rest under an Android Keystore key.
+    // Pulls Google Tink. Apache-2.0; its notice is on Settings › Help & About ›
+    // Licenses, as the Licensing section of CLAUDE.md requires. 1.1.0 is the
+    // stable line; it marks the API deprecated in favour of using Keystore
+    // directly, with no replacement library, and it still works on every
+    // supported API level.
+    implementation("androidx.security:security-crypto:1.1.0")
     // JVM unit tests: the ported CW decoder core is held to the firmware
     // bench's synthetic-audio checks.
     testImplementation("junit:junit:4.13.2")

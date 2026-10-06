@@ -8,6 +8,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
+import android.text.format.DateUtils
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
@@ -27,6 +28,7 @@ import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SettingsInputAntenna
 import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material.icons.filled.TrackChanges
 import androidx.compose.runtime.key
@@ -36,6 +38,10 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import app.anothermorsetrainer.morsekit.AccountRules
 import app.anothermorsetrainer.morsekit.AnswerEntryMode
 import app.anothermorsetrainer.morsekit.SettingsCatalog
 import app.anothermorsetrainer.morsekit.SettingsCategory
@@ -62,6 +68,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ContentCopy
@@ -365,6 +372,8 @@ fun SettingsScreen(
         // The on-screen key needs no MIDI, so it stays on every device (#233).
         SettingsSection.ON_SCREEN_KEY -> shown(KEY_MODES)
         SettingsSection.PILEUP -> scope == null
+        // The account is not a session setting: the root's only.
+        SettingsSection.ACCOUNT -> scope == null
     }
     val visibleCategories = SettingsCategory.entries.filter { c -> c.sections.any { isShown(it) } }
 
@@ -1044,6 +1053,10 @@ fun SettingsScreen(
                             }
                             SectionFooter(stringResource(R.string.settings_buddy_on_home_footer))
                         }
+                        SettingsSection.ACCOUNT -> {
+                            // Account & Sync: the optional account; its own composable.
+                            AccountSection()
+                        }
                         SettingsSection.BUG_REPORTS -> {
                             // Bug reports (iOS issue #31): build, OS, device and the
                             // settings most likely to matter, onto the clipboard.
@@ -1194,6 +1207,16 @@ fun SettingsScreen(
                         stringResource(R.string.licenses_play_integrity_link),
                         color = Brand.teal, fontWeight = FontWeight.Medium,
                         modifier = Modifier.clickable { uriHandler.openUri(PLAY_INTEGRITY_TERMS_URL) }
+                    )
+                    // The account token store's encryption (AccountClient):
+                    // AndroidX Security and the Tink library it pulls in, both
+                    // Apache-2.0, whose notice is linked rather than reproduced.
+                    Text(stringResource(R.string.licenses_security_crypto_title), color = Brand.textPrimary, fontWeight = FontWeight.SemiBold)
+                    Text(stringResource(R.string.licenses_security_crypto_footer), color = Brand.textSecondary, fontSize = 13.sp)
+                    Text(
+                        stringResource(R.string.licenses_security_crypto_link),
+                        color = Brand.teal, fontWeight = FontWeight.Medium,
+                        modifier = Modifier.clickable { uriHandler.openUri(APACHE_2_URL) }
                     )
                 }
             },
@@ -1497,6 +1520,372 @@ private fun BuddySection() {
     }
 }
 
+/**
+ * Settings › Account & Sync › Account: the optional account (accounts
+ * Worker). Signed out, an email field and Send link, then a spinner while the
+ * link waits to be confirmed (Cancel or Back stops it). Signed in, the email,
+ * an editable callsign and display name, Last synced and Sync now, the
+ * device list with a sign-out per device, Sign out, and Delete account behind
+ * a confirmation. The work runs in [SyncCoordinator]'s scope, so leaving the
+ * screen does not cut a call off. The iOS twin is `AccountSettingsSection`.
+ */
+@Composable
+private fun AccountSection() {
+    val uiScope = rememberCoroutineScope()
+    val account = SyncCoordinator.account
+    val phase = SyncCoordinator.signIn
+
+    SectionHeader(stringResource(R.string.settings_account))
+    if (SyncCoordinator.signedOutBanner && account == null) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(start = 8.dp, end = 0.dp, bottom = 6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(Icons.Filled.Warning, contentDescription = null, tint = Brand.warning, modifier = Modifier.size(16.dp))
+            Spacer(Modifier.width(8.dp))
+            Text(
+                stringResource(R.string.settings_account_banner),
+                color = Brand.warning, fontSize = 12.sp,
+                modifier = Modifier.weight(1f)
+            )
+            TextButton(onClick = { SyncCoordinator.dismissBanner() }) {
+                Text(stringResource(R.string.settings_account_banner_dismiss), color = Brand.teal)
+            }
+        }
+    }
+
+    if (account == null) {
+        // Back while the link is out cancels the sign-in, not the screen.
+        BackHandler(enabled = phase is SyncCoordinator.SignIn.Waiting || phase is SyncCoordinator.SignIn.Sending) {
+            SyncCoordinator.cancelSignIn()
+        }
+        var email by rememberSaveable { mutableStateOf("") }
+        var showInvalid by remember { mutableStateOf(false) }
+        SettingsGroup {
+            Text(
+                stringResource(R.string.settings_account_intro),
+                color = Brand.textPrimary,
+                modifier = Modifier.padding(16.dp)
+            )
+            GroupDivider()
+            when (phase) {
+                is SyncCoordinator.SignIn.Waiting, SyncCoordinator.SignIn.Sending -> {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        CircularProgressIndicator(color = Brand.teal, strokeWidth = 2.dp, modifier = Modifier.size(20.dp))
+                        Spacer(Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            if (phase is SyncCoordinator.SignIn.Waiting) {
+                                Text(stringResource(R.string.settings_account_check_email), color = Brand.textPrimary, fontWeight = FontWeight.Medium)
+                                Text(stringResource(R.string.settings_account_sent_to, phase.email), color = Brand.textSecondary, fontSize = 12.sp)
+                            } else {
+                                Text(stringResource(R.string.settings_account_sending), color = Brand.textPrimary, fontWeight = FontWeight.Medium)
+                            }
+                        }
+                        TextButton(onClick = { SyncCoordinator.cancelSignIn() }) {
+                            Text(stringResource(R.string.common_cancel), color = Brand.teal, fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+                }
+                else -> {
+                    OutlinedTextField(
+                        value = email,
+                        onValueChange = {
+                            email = it.take(254)
+                            showInvalid = false
+                        },
+                        label = { Text(stringResource(R.string.settings_account_email)) },
+                        placeholder = { Text(stringResource(R.string.settings_account_email_hint)) },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Send),
+                        keyboardActions = KeyboardActions(onSend = {
+                            if (AccountRules.isValidEmail(email)) SyncCoordinator.startSignIn(email) else showInvalid = true
+                        }),
+                        isError = showInvalid,
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)
+                    )
+                    val line = when {
+                        showInvalid -> stringResource(R.string.settings_account_email_invalid)
+                        phase is SyncCoordinator.SignIn.Expired -> stringResource(R.string.settings_account_expired)
+                        phase is SyncCoordinator.SignIn.Failed -> stringResource(R.string.settings_account_failed, phase.reason)
+                        else -> null
+                    }
+                    line?.let {
+                        Text(
+                            it, color = Brand.warning, fontSize = 12.sp,
+                            modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 4.dp)
+                        )
+                    }
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                if (AccountRules.isValidEmail(email)) SyncCoordinator.startSignIn(email) else showInvalid = true
+                            }
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(stringResource(R.string.settings_account_send_link), color = Brand.teal, fontWeight = FontWeight.Medium)
+                    }
+                }
+            }
+        }
+        SectionFooter(stringResource(R.string.settings_account_footer))
+        return
+    }
+
+    // ---- Signed in ----
+    var callsign by rememberSaveable(account.id) { mutableStateOf(account.callsign.orEmpty()) }
+    var displayName by rememberSaveable(account.id) { mutableStateOf(account.displayName.orEmpty()) }
+    var savingProfile by remember { mutableStateOf(false) }
+    var profileNote by remember { mutableStateOf<String?>(null) }
+    var busy by remember { mutableStateOf<AccountAction?>(null) }
+    var note by remember { mutableStateOf<String?>(null) }
+    var confirmDelete by remember { mutableStateOf(false) }
+    var devicesFailed by remember { mutableStateOf(false) }
+    LaunchedEffect(account.id) {
+        SyncCoordinator.refreshDevices()
+        devicesFailed = SyncCoordinator.devices == null
+    }
+    // Resource strings read at composition (lint: LocalContextGetResources).
+    val profileErrorTemplate = stringResource(R.string.settings_account_profile_error)
+    val savedLine = stringResource(R.string.settings_account_saved)
+    val deleteErrorTemplate = stringResource(R.string.settings_account_delete_error)
+    val deviceError = stringResource(R.string.settings_account_device_error)
+
+    val callsignOk = callsign.isBlank() || AccountRules.normalizeCallsign(callsign) != null
+    val nameOk = displayName.isBlank() || AccountRules.normalizeDisplayName(displayName) != null
+    val profileChanged = callsign.trim().uppercase() != account.callsign.orEmpty() || displayName.trim() != account.displayName.orEmpty()
+
+    SettingsGroup {
+        Text(
+            account.email?.let { stringResource(R.string.settings_account_signed_in_as, it) }
+                ?: stringResource(R.string.settings_account_signed_in),
+            color = Brand.textPrimary, fontWeight = FontWeight.Medium,
+            modifier = Modifier.padding(16.dp)
+        )
+        GroupDivider()
+        OutlinedTextField(
+            value = callsign,
+            onValueChange = {
+                callsign = it.uppercase().take(16)
+                profileNote = null
+            },
+            label = { Text(stringResource(R.string.settings_account_callsign)) },
+            placeholder = { Text(stringResource(R.string.settings_account_callsign_hint)) },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters),
+            isError = !callsignOk,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)
+        )
+        if (!callsignOk) {
+            Text(
+                stringResource(R.string.settings_account_callsign_invalid),
+                color = Brand.warning, fontSize = 12.sp,
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp)
+            )
+        }
+        OutlinedTextField(
+            value = displayName,
+            onValueChange = {
+                displayName = it.take(24)
+                profileNote = null
+            },
+            label = { Text(stringResource(R.string.settings_account_display_name)) },
+            singleLine = true,
+            isError = !nameOk,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)
+        )
+        if (!nameOk) {
+            Text(
+                stringResource(R.string.settings_account_display_name_invalid),
+                color = Brand.warning, fontSize = 12.sp,
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp)
+            )
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            profileNote?.let {
+                Text(it, color = Brand.textSecondary, fontSize = 12.sp, modifier = Modifier.weight(1f).padding(start = 4.dp))
+            } ?: Spacer(Modifier.weight(1f))
+            TextButton(
+                enabled = callsignOk && nameOk && profileChanged && !savingProfile,
+                onClick = {
+                    savingProfile = true
+                    profileNote = null
+                    uiScope.launch {
+                        val failure = SyncCoordinator.updateProfile(
+                            AccountRules.normalizeCallsign(callsign),
+                            AccountRules.normalizeDisplayName(displayName)
+                        )
+                        profileNote = if (failure == null) savedLine else profileErrorTemplate.format(failure)
+                        savingProfile = false
+                    }
+                }
+            ) {
+                Text(
+                    stringResource(if (savingProfile) R.string.settings_account_saving else R.string.settings_account_save_profile),
+                    color = Brand.teal, fontWeight = FontWeight.SemiBold
+                )
+            }
+        }
+        GroupDivider()
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(start = 16.dp, top = 8.dp, bottom = 8.dp, end = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(stringResource(R.string.settings_account_last_synced), color = Brand.textPrimary, fontWeight = FontWeight.Medium)
+                val last = SyncCoordinator.lastSynced
+                Text(
+                    if (last == null) stringResource(R.string.settings_account_not_yet) else relativeTime(last),
+                    color = Brand.textSecondary, fontSize = 12.sp
+                )
+            }
+            val syncing = SyncCoordinator.syncing
+            TextButton(enabled = !syncing, onClick = { SyncCoordinator.syncNow() }) {
+                Text(
+                    stringResource(if (syncing) R.string.settings_account_syncing else R.string.settings_account_sync_now),
+                    color = if (syncing) Brand.textSecondary else Brand.teal, fontWeight = FontWeight.SemiBold
+                )
+            }
+        }
+    }
+
+    SectionHeader(stringResource(R.string.settings_account_devices))
+    SettingsGroup {
+        val devices = SyncCoordinator.devices
+        if (devices == null) {
+            Text(
+                stringResource(if (devicesFailed) R.string.settings_account_devices_error else R.string.settings_account_devices_loading),
+                color = Brand.textSecondary, fontSize = 12.sp,
+                modifier = Modifier.padding(16.dp)
+            )
+        } else {
+            devices.forEachIndexed { i, device ->
+                if (i > 0) GroupDivider()
+                val name = device.deviceName ?: stringResource(R.string.settings_account_unnamed_device)
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(start = 16.dp, top = 8.dp, bottom = 8.dp, end = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(name, color = Brand.textPrimary, fontWeight = FontWeight.SemiBold)
+                        val where = if (device.current) stringResource(R.string.settings_account_this_device) else device.platform.orEmpty()
+                        Text(
+                            stringResource(R.string.settings_account_device_row, where, relativeTime(device.lastSeenAt)),
+                            color = Brand.textSecondary, fontSize = 12.sp
+                        )
+                    }
+                    // This device signs out with the main Sign out below.
+                    if (!device.current) {
+                        val revokeLabel = stringResource(R.string.settings_account_device_sign_out_named, name)
+                        TextButton(
+                            enabled = busy == null,
+                            onClick = {
+                                busy = AccountAction.REVOKE
+                                note = null
+                                uiScope.launch {
+                                    if (!SyncCoordinator.revokeDevice(device)) note = deviceError
+                                    busy = null
+                                }
+                            },
+                            modifier = Modifier.semantics { contentDescription = revokeLabel }
+                        ) {
+                            Text(
+                                stringResource(R.string.settings_account_device_sign_out),
+                                color = if (busy == null) Color(0xFFF2788F) else Brand.textSecondary,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Spacer(Modifier.height(16.dp))
+    SettingsGroup {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(enabled = busy == null) {
+                    busy = AccountAction.SIGN_OUT
+                    note = null
+                    uiScope.launch {
+                        SyncCoordinator.signOut()
+                        busy = null
+                    }
+                }
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                stringResource(if (busy == AccountAction.SIGN_OUT) R.string.settings_account_signing_out else R.string.settings_account_sign_out),
+                color = if (busy == null) Brand.teal else Brand.textSecondary,
+                fontWeight = FontWeight.Medium
+            )
+        }
+        GroupDivider()
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(enabled = busy == null) { confirmDelete = true }
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                stringResource(if (busy == AccountAction.DELETE) R.string.settings_account_deleting else R.string.settings_account_delete),
+                color = if (busy == null) Color(0xFFF2788F) else Brand.textSecondary,
+                fontWeight = FontWeight.Medium
+            )
+        }
+        note?.let { n ->
+            Text(
+                n, color = Brand.warning, fontSize = 12.sp,
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp)
+            )
+        }
+    }
+    SectionFooter(stringResource(R.string.settings_account_footer))
+
+    if (confirmDelete) {
+        AlertDialog(
+            onDismissRequest = { confirmDelete = false },
+            containerColor = Brand.navyElevated,
+            title = { Text(stringResource(R.string.settings_account_delete_confirm_title), color = Brand.textPrimary) },
+            text = { Text(stringResource(R.string.settings_account_delete_confirm_body), color = Brand.textSecondary) },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmDelete = false
+                    busy = AccountAction.DELETE
+                    note = null
+                    uiScope.launch {
+                        val failure = SyncCoordinator.deleteAccount()
+                        if (failure != null) note = deleteErrorTemplate.format(failure)
+                        busy = null
+                    }
+                }) {
+                    Text(stringResource(R.string.settings_account_delete), color = Color(0xFFF2788F), fontWeight = FontWeight.SemiBold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmDelete = false }) { Text(stringResource(R.string.common_cancel), color = Brand.teal) }
+            }
+        )
+    }
+}
+
+private enum class AccountAction { REVOKE, SIGN_OUT, DELETE }
+
+/** "5 minutes ago", in the device's language. */
+private fun relativeTime(epochMs: Long): String =
+    DateUtils.getRelativeTimeSpanString(epochMs, System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS).toString()
+
 /** The Settings root's search field (#236): filters [SettingsCatalog] as you type. */
 @Composable
 private fun SettingsSearchField(query: String, onChange: (String) -> Unit) {
@@ -1532,6 +1921,7 @@ private val SettingsCategory.icon: ImageVector
         SettingsCategory.REMINDERS -> Icons.Filled.Notifications
         SettingsCategory.DISPLAY -> Icons.Filled.TextFields
         SettingsCategory.LEADERBOARD -> Icons.Filled.EmojiEvents
+        SettingsCategory.ACCOUNT -> Icons.Filled.Sync
         SettingsCategory.ABOUT -> Icons.Filled.Info
     }
 
@@ -2006,6 +2396,8 @@ private const val GITHUB_URL = "https://github.com/N9HO/another-morse-trainer"
 private const val LICENSE_URL = "https://github.com/N9HO/another-morse-trainer/blob/main/LICENSE"
 /** The licence the Play Integrity artifact's POM names (integrity-1.6.0.pom). */
 private const val PLAY_INTEGRITY_TERMS_URL = "https://developer.android.com/google/play/integrity/overview#tos"
+/** The licence androidx.security:security-crypto and tink-android ship under. */
+private const val APACHE_2_URL = "https://www.apache.org/licenses/LICENSE-2.0"
 
 /** A tappable row that opens something outside the app; teal like the
  *  diagnostics row, so it reads as an action rather than a toggle. */

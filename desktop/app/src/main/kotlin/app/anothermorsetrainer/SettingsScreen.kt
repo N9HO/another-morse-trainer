@@ -8,6 +8,7 @@ import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.GraphicEq
@@ -20,6 +21,7 @@ import androidx.compose.material.icons.filled.SettingsInputAntenna
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material.icons.filled.TrackChanges
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.key
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.geometry.Rect
@@ -280,6 +282,9 @@ fun SettingsScreen(
         categoryId = null
         focusName = null
     }
+    // The optional account (Settings › Account & Sync): signed in or not decides its sections.
+    val account by SyncCoordinator.state.collectAsState()
+
     // Back from a category returns to the root; from the root it leaves.
     BackHandler { if (categoryId != null) closeCategory() else onBack() }
 
@@ -290,8 +295,10 @@ fun SettingsScreen(
     /** Whether a section belongs on this surface — every gate the flat list had before #236. */
     fun isShown(section: SettingsSection): Boolean = when (section) {
         SettingsSection.SOUND, SettingsSection.REMINDERS, SettingsSection.DISPLAY,
-        SettingsSection.LEADERBOARD, SettingsSection.BUDDY,
+        SettingsSection.LEADERBOARD, SettingsSection.BUDDY, SettingsSection.ACCOUNT,
         SettingsSection.BUG_REPORTS, SettingsSection.ABOUT -> true
+        // Devices and Delete account exist only while signed in.
+        SettingsSection.DEVICES, SettingsSection.DELETE_ACCOUNT -> account.isSignedIn
         SettingsSection.SPEED -> scope == null || scope !in OWN_SPEED_MODES
         SettingsSection.PROFICIENCY, SettingsSection.PUNCTUATION -> shown(LADDER_MODES)
         SettingsSection.NEW_CHARACTERS -> shown(LADDER_MODES) && shown(setOf(SettingsMode.CHARACTERS))
@@ -883,6 +890,13 @@ fun SettingsScreen(
                             // not available; the section explains that.
                             BuddySection()
                         }
+                        SettingsSection.ACCOUNT -> {
+                            // The optional account (accounts Worker): sign in with an
+                            // e-mailed link, then the profile, Sync now and Sign out.
+                            AccountSection()
+                        }
+                        SettingsSection.DEVICES -> AccountDevicesSection()
+                        SettingsSection.DELETE_ACCOUNT -> AccountDeleteSection()
                         SettingsSection.BUG_REPORTS -> {
                             // Bug reports (iOS issue #31): build, OS, device and the
                             // settings most likely to matter, onto the clipboard.
@@ -1079,6 +1093,7 @@ private val SettingsCategory.icon: ImageVector
         SettingsCategory.REMINDERS -> Icons.Filled.Notifications
         SettingsCategory.DISPLAY -> Icons.Filled.TextFields
         SettingsCategory.LEADERBOARD -> Icons.Filled.EmojiEvents
+        SettingsCategory.ACCOUNT -> Icons.Filled.AccountCircle
         SettingsCategory.ABOUT -> Icons.Filled.Info
     }
 
@@ -1504,7 +1519,7 @@ private fun punctuationLabel(ch: Char): String = when (ch) {
 }
 
 @Composable
-private fun SectionHeader(title: String) {
+internal fun SectionHeader(title: String) {
     Text(
         title.uppercase(),
         color = Brand.textSecondary,
@@ -1538,7 +1553,7 @@ private fun SpeedWarning(text: String) {
 }
 
 @Composable
-private fun SectionFooter(text: String) {
+internal fun SectionFooter(text: String) {
     Text(
         text,
         color = Brand.textSecondary,
@@ -1571,7 +1586,7 @@ private const val BUDDY_UNAVAILABLE =
 /** A tappable row that opens something outside the app; teal like the
  *  diagnostics row, so it reads as an action rather than a toggle. */
 @Composable
-private fun LinkRow(label: String, onClick: () -> Unit) {
+internal fun LinkRow(label: String, onClick: () -> Unit) {
     Row(
         modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(16.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -1581,12 +1596,12 @@ private fun LinkRow(label: String, onClick: () -> Unit) {
 }
 
 @Composable
-private fun SettingsGroup(content: @Composable () -> Unit) {
+internal fun SettingsGroup(content: @Composable () -> Unit) {
     Column(modifier = Modifier.fillMaxWidth().brandCard()) { content() }
 }
 
 @Composable
-private fun GroupDivider() {
+internal fun GroupDivider() {
     Box(
         modifier = Modifier
             .fillMaxWidth()

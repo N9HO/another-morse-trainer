@@ -25,14 +25,22 @@ enum FirstFourStore {
         return progress
     }
 
-    static func save(_ progress: FirstFourProgress) {
+    /// `noteSync` false is for a value the account just handed us: saved,
+    /// but not stamped as a change of ours (SyncCoordinator.swift).
+    @MainActor
+    static func save(_ progress: FirstFourProgress, noteSync: Bool = true) {
         if let data = try? JSONEncoder().encode(progress) {
             UserDefaults.standard.set(data, forKey: key)
         }
+        if noteSync { SyncCoordinator.shared.noteState(.firstFour, value: AccountSync.firstFourValue(progress)) }
     }
 
+    /// "Start over" is local: it never stamps or pushes (the next ordinary
+    /// save does).
+    @MainActor
     static func reset() {
         UserDefaults.standard.removeObject(forKey: key)
+        SyncCoordinator.shared.noteReset(.firstFour, value: AccountSync.firstFourValue(FirstFourProgress()))
     }
 }
 

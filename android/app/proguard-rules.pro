@@ -16,3 +16,10 @@
 # file (build/outputs/mapping/release/mapping.txt) with each release.
 -keepattributes SourceFile,LineNumberTable
 -renamesourcefileattribute SourceFile
+
+# Tink (pulled by androidx.security:security-crypto for AccountClient's token
+# store) references compile-only annotation classes that are not on the
+# runtime classpath; R8 fails the release build on them as missing classes.
+# They are annotations only, so nothing at runtime needs them.
+-dontwarn com.google.errorprone.annotations.**
+-dontwarn javax.annotation.**

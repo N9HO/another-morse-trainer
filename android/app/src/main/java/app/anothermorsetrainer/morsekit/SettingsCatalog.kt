@@ -35,6 +35,7 @@ enum class SettingsCategory(val id: String, val title: String) {
     REMINDERS("reminders", "Reminders"),
     DISPLAY("display", "Display"),
     LEADERBOARD("leaderboard", "Leaderboard & Buddy"),
+    ACCOUNT("account", "Account & Sync"),
     ABOUT("about", "Help & About");
 
     /** This category's sections, in screen order. */
@@ -69,6 +70,7 @@ enum class SettingsSection(val category: SettingsCategory) {
     DISPLAY(SettingsCategory.DISPLAY),
     LEADERBOARD(SettingsCategory.LEADERBOARD),
     BUDDY(SettingsCategory.LEADERBOARD),
+    ACCOUNT(SettingsCategory.ACCOUNT),
     BUG_REPORTS(SettingsCategory.ABOUT),
     ABOUT(SettingsCategory.ABOUT)
 }
@@ -176,6 +178,12 @@ object SettingsCatalog {
         e("displayName", "Display name", listOf("name", "callsign", "nickname", "handle"), SettingsSection.LEADERBOARD),
         e("deleteScores", "Delete my scores", listOf("remove", "erase", "privacy", "data"), SettingsSection.LEADERBOARD),
         e("buddyStreak", "Buddy streak", listOf("buddy", "buddies", "friend", "partner", "pair", "invite", "join", "code", "streak", "leave", "home screen", "hide"), SettingsSection.BUDDY),
+
+        // Account & Sync (the optional account: sign-in, devices, delete)
+        e("account", "Account",
+            listOf("sign in", "sign out", "email", "sync", "callsign"), SettingsSection.ACCOUNT),
+        e("devices", "Devices", listOf("signed in", "sign out", "phone", "computer"), SettingsSection.ACCOUNT),
+        e("deleteAccount", "Delete account", listOf("remove", "erase", "privacy", "data"), SettingsSection.ACCOUNT),
 
         // Help & About
         e("copyDiagnostics", "Copy diagnostic info",

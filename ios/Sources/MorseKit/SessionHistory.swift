@@ -244,6 +244,27 @@ public struct SessionHistory: Codable, Sendable, Equatable {
         Self.foldBest(&bestScores, mode: record.mode, score: record.score)
     }
 
+    /// Merge records from another device (a sync pull or the restore
+    /// snapshot) into the list per `AccountSync.mergeSessions`. The lifetime
+    /// counters are left alone: they come from the server whole, through
+    /// `adoptServerTotals`, never by re-counting synced rows.
+    public mutating func mergeSynced(_ records: [SessionRecord]) {
+        sessions = AccountSync.mergeSessions(local: sessions, pulled: records, limit: Self.limit)
+    }
+
+    /// Replace the lifetime counters with the account's, after a sync reply
+    /// that carries server stats (README merge rule 3): a fresh install then
+    /// shows totals beyond the rows it holds. The one way to set them other
+    /// than `add`.
+    public mutating func adoptServerTotals(_ totals: SyncLifetimeTotals) {
+        totalSessions = totals.totalSessions
+        totalAnswered = totals.totalAnswered
+        totalCorrect = totals.totalCorrect
+        totalPracticeSeconds = totals.totalPracticeSeconds
+        bestTTR = totals.bestTTR
+        bestScores = totals.bestScores
+    }
+
     /// Lifetime accuracy, 0…1 over every drill ever answered.
     public var lifetimeAccuracy: Double {
         totalAnswered == 0 ? 0 : Double(totalCorrect) / Double(totalAnswered)

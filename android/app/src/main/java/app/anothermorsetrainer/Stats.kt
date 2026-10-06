@@ -12,6 +12,7 @@ import app.anothermorsetrainer.morsekit.PracticeStreak
 import app.anothermorsetrainer.morsekit.SessionHistory
 import app.anothermorsetrainer.morsekit.ModeBests
 import app.anothermorsetrainer.morsekit.SessionRecord
+import app.anothermorsetrainer.morsekit.SyncMerge
 import org.json.JSONArray
 import org.json.JSONObject
 import java.time.Instant
@@ -232,6 +233,10 @@ object Stats {
             )
         ) + recent).take(50)
         persist()
+        // Account sync: the device's own day record grows by what the ledger
+        // just recorded, and while signed in the record is queued to push.
+        // Local first; the network never gates this.
+        SyncCoordinator.sessionRecorded(record, today, durationSeconds)
         return if (firstToday && PracticeStreak.isMilestone(streak.current)) streak.current else null
     }
 
@@ -271,10 +276,87 @@ object Stats {
      * guess.
      */
     fun recordPracticeDay(today: LocalDate = LocalDate.now()) {
+        // Account sync: the day joins the device's own day record with +0 and,
+        // while signed in, is queued. Idempotent, like the rest of this.
+        SyncCoordinator.practiceDay(today)
         if (!streak.record(today)) return   // already counted today
         refreshStreak()
         persist()
         BuddyClient.reportPracticeDay(today)   // the buddy streak's day, same as record()
+    }
+
+    // ---- Account sync (SyncCoordinator's host) ----
+
+    /** The lifetime counters in the sync merge's units: seconds, not milliseconds. */
+    fun lifetimeTotals(): SyncMerge.LifetimeTotals = SyncMerge.LifetimeTotals(
+        totalSessions = totalSessions,
+        totalAnswered = totalAttempts,
+        totalCorrect = totalCorrect,
+        totalPracticeSeconds = totalPracticeSeconds.toDouble(),
+        bestTtrSeconds = bestTtrMs?.let { it / 1000.0 },
+        bestScores = bestScores
+    )
+
+    /**
+     * The server's aggregates in place of the local lifetime counters
+     * (accounts README §7 rule 3), converted at this boundary: practice time
+     * to whole seconds and best TTR to whole milliseconds, rounded to nearest.
+     */
+    fun adoptServerTotals(t: SyncMerge.LifetimeTotals) {
+        totalSessions = t.totalSessions
+        totalAttempts = t.totalAnswered
+        totalCorrect = t.totalCorrect
+        totalPracticeSeconds = t.totalPracticeSeconds.roundToInt()
+        bestTtrMs = t.bestTtrSeconds?.let { (it * 1000).roundToInt() }
+        bestScores = t.bestScores
+        persist()
+    }
+
+    /** A copy of the practice streak, for the sync merge. */
+    fun streakState(): PracticeStreak = PracticeStreak(streak.current, streak.longest, streak.lastPracticeDay)
+
+    /** The streak with the account's adopted (SyncMerge.adoptStreak, which never lowers the longest). */
+    fun adoptServerStreak(s: PracticeStreak) {
+        streak = s
+        refreshStreak()
+        persist()
+    }
+
+    /** The displayed ledger replaced by the sync merge's result (the server's summed days adopted). */
+    fun adoptServerDays(days: Map<LocalDate, Int>) {
+        activity = ActivityLedger(days)
+        persist()
+    }
+
+    /**
+     * [merged] (local history plus pulled rows, newest first, capped) as the
+     * history, and the pulled rows joined into the session list too. Saved
+     * with `commit`, and throws when that fails: the pull cursor only moves
+     * once the rows are on disk.
+     */
+    fun adoptSyncedHistory(merged: List<SessionRecord>, zone: ZoneId = ZoneId.systemDefault()) {
+        val known = recent.mapNotNull { it.recordId }.toHashSet()
+        val added = merged.filter { it.id.toString() !in known && history.none { h -> h.id == it.id } }.map { r ->
+            SessionSummary(
+                mode = r.mode,
+                epochDay = r.date.atZone(zone).toLocalDate().toEpochDay(),
+                attempts = r.attempts,
+                correct = r.correct,
+                bestTtrMs = r.fastestTTR?.let { (it * 1000).roundToInt() },
+                characterWpm = r.characterWPM,
+                medianTtrMs = r.medianTTR?.let { (it * 1000).roundToInt() },
+                recordId = r.id.toString(),
+                score = r.score
+            )
+        }
+        history = merged
+        // Newest day first; a stable sort keeps each day's rows in their order.
+        recent = (recent + added).sortedByDescending { it.epochDay }.take(50)
+        val saved = prefs.edit()
+            .putString("history", encodeHistory(history))
+            .putString("recent", encodeRecent(recent))
+            .commit()
+        check(saved) { "history not saved" }
     }
 
     /** True when the personal streak already counts today; the buddy client reports a day a pairing missed. */

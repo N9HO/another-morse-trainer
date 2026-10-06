@@ -66,6 +66,11 @@ struct FirstFourView: View {
             }
             .onDisappear { model.stopFirstFour() }
             .onChange(of: progress) { FirstFourStore.save($0) }
+            // A newer copy from the account (another device got further):
+            // show it rather than save this screen's older one over it.
+            .onReceive(NotificationCenter.default.publisher(for: SyncCoordinator.stateApplied)) { _ in
+                progress = FirstFourStore.load()
+            }
             .alert("Start First Four over?", isPresented: $confirmingReset) {
                 Button("Start over", role: .destructive) {
                     progress = FirstFourProgress()
