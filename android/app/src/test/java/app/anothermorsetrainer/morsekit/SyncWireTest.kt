@@ -18,6 +18,10 @@ import java.util.UUID
  * section and the desktop suite read too, so every port pins the same wire
  * format and merge rules.
  */
+
+/** Android's platform org.json (first on the unit-test compile classpath) has no keySet(). */
+private fun JSONObject.keyNames(): Set<String> = keys().asSequence().toSet()
+
 class SyncWireTest {
 
     private val fixture: JSONObject by lazy {
@@ -57,8 +61,8 @@ class SyncWireTest {
     private fun assertJsonEquals(message: String, expected: Any?, actual: Any?) {
         when {
             expected is JSONObject && actual is JSONObject -> {
-                assertEquals("$message: keys", expected.keySet(), actual.keySet())
-                for (k in expected.keySet()) assertJsonEquals("$message.$k", expected.get(k), actual.get(k))
+                assertEquals("$message: keys", expected.keyNames(), actual.keyNames())
+                for (k in expected.keyNames()) assertJsonEquals("$message.$k", expected.get(k), actual.get(k))
             }
             expected is JSONArray && actual is JSONArray -> {
                 assertEquals("$message: length", expected.length(), actual.length())
@@ -105,8 +109,8 @@ class SyncWireTest {
         val table = ids.getJSONObject("kotlin")
         val canonical = strings(ids.getJSONArray("canonical"))
         assertEquals(25, table.length())
-        assertEquals(table.keySet(), SyncModes.wireIds.keys)
-        for (local in table.keySet()) {
+        assertEquals(table.keyNames(), SyncModes.wireIds.keys)
+        for (local in table.keyNames()) {
             val wire = table.getString(local)
             assertEquals(local, wire, SyncModes.wireId(local))
             assertEquals(wire, local, SyncModes.localMode(wire))
@@ -243,7 +247,7 @@ class SyncWireTest {
             totalPracticeSeconds = o.getDouble("totalPracticeSeconds"),
             bestTtrSeconds = nullableDouble(o, "bestTtrSeconds"),
             // The fixture keys bests by canonical id; this port keys them by its own mode string.
-            bestScores = bests.keySet().associate { SyncModes.localMode(it) to bests.getInt(it) }
+            bestScores = bests.keyNames().associate { SyncModes.localMode(it) to bests.getInt(it) }
         )
     }
 
@@ -261,7 +265,7 @@ class SyncWireTest {
     fun `a null server best TTR clears the local one`() {
         val f = mergeFixture("aggregates")
         val server = JSONObject(f.getJSONObject("serverStats").toString())
-        for (k in f.getJSONObject("serverWithNoBestTtr").keySet()) server.put(k, f.getJSONObject("serverWithNoBestTtr").get(k))
+        for (k in f.getJSONObject("serverWithNoBestTtr").keyNames()) server.put(k, f.getJSONObject("serverWithNoBestTtr").get(k))
         val adopted = SyncMerge.adoptAggregates(totals(f.getJSONObject("local")), server)
         assertTrue(f.isNull("expectedBestTtrWhenServerNull"))
         assertNull(adopted.bestTtrSeconds)
@@ -282,8 +286,8 @@ class SyncWireTest {
             SyncMerge.decodeStateEntries(f.getJSONObject("reply"))
         )
         val expected = f.getJSONObject("expectedUpdatedAt")
-        assertEquals(expected.keySet(), merged.keys)
-        for (k in expected.keySet()) assertEquals(k, expected.getLong(k), merged.getValue(k).updatedAt)
+        assertEquals(expected.keyNames(), merged.keys)
+        for (k in expected.keyNames()) assertEquals(k, expected.getLong(k), merged.getValue(k).updatedAt)
         val journey = SyncState.journeyFromWire(merged.getValue("journey").value as JSONObject)
         assertEquals(f.getInt("expectedJourneyCurrentLevel"), journey.currentLevel)
         val chars = (merged.getValue("characters").value as JSONObject).getJSONArray("activeCharacters")
