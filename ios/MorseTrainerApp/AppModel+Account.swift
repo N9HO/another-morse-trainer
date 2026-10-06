@@ -10,14 +10,17 @@
 // from the account (the service forgets its tokens) and empties the queue.
 //
 // What goes up: one `AccountSessionUpload` per finished session through
-// `POST /v1/sync/sessions`, and the practice ledger's figure for each day a
-// session touched through `POST /v1/sync/days` — both from the outbox in
-// `accountQueue`, sent at the end of a session, on the app coming to the
+// `POST /v1/sync/sessions`, and the practice ledger's figure for each day
+// practised through `POST /v1/sync/days` — both from the outbox in
+// `accountQueue`. Every sync begins by reconciling the outbox with the
+// local history, ledger and streak (`AccountSyncQueue.reconcile`), so what
+// is on the device reaches the account whether or not the outbox saw it
+// happen: practice from before sign-in or before this build, a day whose
+// figure grew, a session the outbox lost. Syncs run at the end of a
+// session, when a day is marked practised, on the app coming to the
 // foreground (at most every five minutes), from the Settings button, and
-// once at sign-in with the history and ledger the device already holds
-// (the README's merge rule 1: push everything local before anything else).
-// A session finished offline waits in the outbox; both routes are
-// idempotent, so a lost reply is sent again without harm.
+// at sign-in (the README's merge rule 1: push everything local first).
+// Both routes are idempotent, so a lost reply is sent again without harm.
 //
 // Not yet here (README §7, rules 2–5): pulling other devices' sessions,
 // adopting the server's aggregates in place of the local lifetime counters,
@@ -132,10 +135,8 @@ extension AppModel {
         settings.account.email = identity.email ?? email
         accountSignIn = .idle
         accountSyncStatus = .idle
-        // The account starts with what the device already has: the history
-        // and the ledger (merge rule 1).
-        accountQueue.enqueue(history: history)
-        accountQueue.enqueue(ledger: activity)
+        // The account starts with what the device already has (merge rule
+        // 1); the sync's reconcile queues it.
         accountSyncNow()
     }
 
@@ -172,12 +173,20 @@ extension AppModel {
         accountSyncNow()
     }
 
-    /// The app came to the foreground: send what is queued, if it has been
-    /// a while since the last attempt.
+    /// The app came to the foreground: send what the device holds, if it
+    /// has been a while since the last attempt.
     func accountSyncIfDue() {
-        guard settings.account.signedIn, settings.account.syncSessions, !accountQueue.isEmpty else { return }
+        guard settings.account.signedIn, settings.account.syncSessions else { return }
         if let last = accountLastAttempt, Date().timeIntervalSince(last) < Self.accountSyncInterval { return }
         accountSyncNow()
+    }
+
+    /// Queue whatever the local state holds that the account has not been
+    /// given: the history, the ledger, and the streak's last practice day
+    /// (which can be a day with no session and no ledger entry).
+    func accountReconcile() {
+        let practised: Set<String> = streak.lastPracticeDay.map { [ActivityLedger.dayKey(for: $0)] } ?? []
+        accountQueue.reconcile(history: history, ledger: activity, practisedDays: practised)
     }
 
     /// Send the outbox — sessions first, oldest first, a batch at a time,
@@ -187,6 +196,7 @@ extension AppModel {
     func accountSyncNow() {
         guard settings.account.signedIn, settings.account.syncSessions else { return }
         guard accountSyncTask == nil else { return }
+        accountReconcile()
         guard !accountQueue.isEmpty else {
             if case .uploading = accountSyncStatus { accountSyncStatus = .idle }
             return
@@ -223,7 +233,7 @@ extension AppModel {
                     let reply = try await client.pushDays(days)
                     // A day the service refused (malformed, or too far
                     // ahead) will not improve by resending.
-                    self.accountQueue.acknowledge(days: days.map(\.day))
+                    self.accountQueue.acknowledge(days: days)
                     sent += days.count - reply.rejected.count
                 }
             } catch let error as AccountError where error.isSignedOut {

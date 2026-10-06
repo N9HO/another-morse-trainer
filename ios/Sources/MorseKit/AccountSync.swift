@@ -293,10 +293,25 @@ public struct AccountDaysResponse: Codable, Sendable, Equatable {
 /// past `limit` the oldest sessions fall off, the same policy as
 /// `SessionHistory` (the service is a copy of the history, not a longer
 /// one); days are capped by the ledger itself.
+///
+/// Filled two ways: an event (`enqueue`) as a session ends or a day is
+/// practised, and `reconcile`, which compares the local history, ledger and
+/// streak with what has been settled and queues whatever the events missed
+/// — practice recorded before sign-in or before this code existed, a day
+/// whose figure grew, a session the outbox lost. Every sync starts with a
+/// reconcile, so what is on the device is what reaches the account, not
+/// only what happened while it was listening.
 public struct AccountSyncQueue: Codable, Sendable, Equatable {
     public private(set) var pending: [AccountSessionUpload]
     /// Days (`yyyy-mm-dd`) to send with their current ledger figure.
     public private(set) var pendingDays: Set<String>
+    /// Session ids the service has dealt with (accepted, skipped or
+    /// rejected), so `reconcile` does not queue them again. Pruned to the
+    /// ids the history still holds.
+    public private(set) var settledIds: Set<String>
+    /// The seconds last acknowledged per day, so `reconcile` queues a day
+    /// only when the ledger's figure has grown. Pruned to the ledger's days.
+    public private(set) var sentDays: [String: Int]
 
     public static let limit = 500
     /// How many sessions go in one request: the service's maximum (README
@@ -305,12 +320,15 @@ public struct AccountSyncQueue: Codable, Sendable, Equatable {
     /// The most days one request takes — the ledger's own cap.
     public static let daysBatchSize = ActivityLedger.capDays
 
-    public init(pending: [AccountSessionUpload] = [], pendingDays: Set<String> = []) {
+    public init(pending: [AccountSessionUpload] = [], pendingDays: Set<String> = [],
+                settledIds: Set<String> = [], sentDays: [String: Int] = [:]) {
         self.pending = pending
         self.pendingDays = pendingDays
+        self.settledIds = settledIds
+        self.sentDays = sentDays
     }
 
-    enum CodingKeys: String, CodingKey { case pending, pendingDays }
+    enum CodingKeys: String, CodingKey { case pending, pendingDays, settledIds, sentDays }
 
     /// Row-tolerant, like `SessionHistory`: a session that no longer
     /// decodes is dropped rather than losing the outbox; an outbox saved
@@ -320,6 +338,8 @@ public struct AccountSyncQueue: Codable, Sendable, Equatable {
         let rows = try c.decodeIfPresent([FailableDecodable<AccountSessionUpload>].self, forKey: .pending) ?? []
         pending = rows.compactMap(\.value)
         pendingDays = try c.decodeIfPresent(Set<String>.self, forKey: .pendingDays) ?? []
+        settledIds = try c.decodeIfPresent(Set<String>.self, forKey: .settledIds) ?? []
+        sentDays = try c.decodeIfPresent([String: Int].self, forKey: .sentDays) ?? [:]
     }
 
     /// Nothing to send: no sessions and no days.
@@ -340,23 +360,36 @@ public struct AccountSyncQueue: Codable, Sendable, Equatable {
         }
     }
 
-    /// Queue every session of `history` not already pending — what signing
-    /// in does, so the account starts with the history the device has.
-    /// Oldest first, so the server's sequence follows the calendar.
-    public mutating func enqueue(history: SessionHistory) {
-        for record in history.sessions.reversed() {
-            enqueue(AccountSessionUpload(record))
-        }
-    }
-
-    /// A day whose ledger figure changed (a session ended on it).
+    /// A day whose ledger figure changed (a session ended on it), or that
+    /// was practised without a session.
     public mutating func enqueue(day: String) {
         pendingDays.insert(day)
     }
 
-    /// Every day the ledger holds — what signing in does.
-    public mutating func enqueue(ledger: ActivityLedger) {
-        pendingDays.formUnion(ledger.days.keys)
+    /// Queue whatever the local state holds that the service has not been
+    /// given: every session of `history` neither pending nor settled
+    /// (oldest first, so the server's sequence follows the calendar), every
+    /// ledger day whose figure is larger than what was last acknowledged,
+    /// and every day in `practisedDays` (the streak's, which can hold a day
+    /// the ledger does not — a Daily Dit guess) never sent at all. Also
+    /// forgets settled ids and sent days the history and ledger no longer
+    /// hold, so the bookkeeping stays the size of the data.
+    public mutating func reconcile(history: SessionHistory, ledger: ActivityLedger, practisedDays: Set<String> = []) {
+        let historyIds = Set(history.sessions.map { $0.id.uuidString.lowercased() })
+        settledIds.formIntersection(historyIds)
+        for record in history.sessions.reversed() {
+            let upload = AccountSessionUpload(record)
+            if settledIds.contains(upload.id) || pending.contains(where: { $0.id == upload.id }) { continue }
+            enqueue(upload)
+        }
+        for (day, seconds) in ledger.days where (sentDays[day] ?? -1) < min(max(0, seconds), 86_400) {
+            pendingDays.insert(day)
+        }
+        for day in practisedDays where sentDays[day] == nil {
+            pendingDays.insert(day)
+        }
+        let keep = Set(ledger.days.keys).union(practisedDays).union(pendingDays)
+        sentDays = sentDays.filter { keep.contains($0.key) }
     }
 
     /// The pending days with their current figure from `ledger`, oldest
@@ -368,9 +401,13 @@ public struct AccountSyncQueue: Codable, Sendable, Equatable {
         }
     }
 
-    /// The service took these days.
-    public mutating func acknowledge(days: [String]) {
-        pendingDays.subtract(days)
+    /// The service took these days: drop them, and remember the figure
+    /// each was sent with so a reconcile queues a day only when it grows.
+    public mutating func acknowledge(days: [AccountDayUpload]) {
+        for d in days {
+            pendingDays.remove(d.day)
+            sentDays[d.day] = max(sentDays[d.day] ?? 0, d.seconds)
+        }
     }
 
     /// The next batch to send: the oldest `batchSize`, or fewer.
@@ -378,14 +415,20 @@ public struct AccountSyncQueue: Codable, Sendable, Equatable {
         Array(pending.prefix(Self.batchSize))
     }
 
-    /// The service acknowledged these ids: drop them.
+    /// The service settled these ids: drop them, and remember them so a
+    /// reconcile does not queue them again.
     public mutating func acknowledge(_ ids: [String]) {
         let done = Set(ids)
         pending.removeAll { done.contains($0.id) }
+        settledIds.formUnion(done)
     }
 
+    /// Signing out: nothing pending, and nothing remembered as sent — the
+    /// next account starts from the whole local state.
     public mutating func removeAll() {
         pending.removeAll()
         pendingDays.removeAll()
+        settledIds.removeAll()
+        sentDays.removeAll()
     }
 }

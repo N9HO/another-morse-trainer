@@ -111,7 +111,7 @@ struct AccountSettingsSection: View {
                 if model.accountSyncStatus == .uploading { Spacer(); ProgressView() }
             }
         }
-        .disabled(!account.syncSessions || model.accountQueue.isEmpty || model.accountSyncStatus == .uploading)
+        .disabled(!account.syncSessions || model.accountSyncStatus == .uploading)
         Button(role: .destructive) {
             confirmSignOut = true
         } label: {
@@ -155,7 +155,7 @@ struct AccountSettingsSection: View {
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             } else {
-                Text("Nothing to send yet.")
+                Text("Nothing sent yet. Sync now sends what this device holds.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }

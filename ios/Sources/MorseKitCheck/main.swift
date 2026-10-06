@@ -7570,16 +7570,30 @@ do {
         r.date = Date(timeIntervalSince1970: 1_700_000_000 + Double(i) * 86_400)
         history.add(r)
     }
-    queue.enqueue(history: history)
-    check("signing in queues the history, oldest first, after what was pending",
+    queue.reconcile(history: history, ledger: ActivityLedger())
+    check("a reconcile queues the history, oldest first, after what was pending",
           queue.count == 4 && queue.pending.map(\.date) == [1_700_000_000_457, 1_700_000_000_000, 1_700_086_400_000, 1_700_172_800_000])
-    queue.enqueue(history: history)
-    check("queueing the history again adds nothing", queue.count == 4)
+    queue.reconcile(history: history, ledger: ActivityLedger())
+    check("reconciling again adds nothing", queue.count == 4)
     let batch = queue.nextBatch()
     check("a batch is the oldest first, at most \(AccountSyncQueue.batchSize) (the service's maximum)",
           batch.count == 4 && batch.first?.id == up.id && AccountSyncQueue.batchSize == 200)
     queue.acknowledge([up.id, "not-queued"])
     check("acknowledging drops those ids and ignores unknown ones", queue.count == 3 && !queue.pending.contains { $0.id == up.id })
+    let settledHistory = history
+    queue.acknowledge(history.sessions.map { $0.id.uuidString.lowercased() })
+    queue.reconcile(history: settledHistory, ledger: ActivityLedger())
+    check("a reconcile does not queue a settled session again", queue.count == 0 && queue.settledIds.count == 3)
+    var later = settledHistory
+    var extra = record
+    extra.id = UUID()
+    extra.date = Date(timeIntervalSince1970: 1_700_300_000)
+    later.add(extra)
+    queue.reconcile(history: later, ledger: ActivityLedger())
+    check("…but queues a session the history gained since", queue.count == 1 && queue.pending.first?.id == extra.id.uuidString.lowercased())
+    queue.acknowledge([extra.id.uuidString.lowercased()])
+    queue.reconcile(history: SessionHistory(), ledger: ActivityLedger())
+    check("settled ids are forgotten once the history drops them", queue.settledIds.isEmpty)
     var full = AccountSyncQueue()
     for i in 0..<(AccountSyncQueue.limit + 5) {
         var r = record
@@ -7598,7 +7612,7 @@ do {
     queue.enqueue(day: "2026-10-05")
     check("a day queued twice is pending once, and the outbox is no longer empty for it",
           queue.pendingDays == ["2026-10-05"] && !AccountSyncQueue(pendingDays: ["2026-10-05"]).isEmpty)
-    queue.enqueue(ledger: ledger)
+    queue.reconcile(history: SessionHistory(), ledger: ledger)
     queue.enqueue(day: "2026-09-01")   // pending but no longer in the ledger
     check("the days batch is oldest first with the ledger's seconds, 0 for a day the ledger lost",
           queue.nextDays(from: ledger) == [.init(day: "2026-09-01", seconds: 0), .init(day: "2026-10-04", seconds: 600), .init(day: "2026-10-05", seconds: 1900)])
@@ -7608,16 +7622,33 @@ do {
           !ditOnly.isEmpty && ditOnly.count == 0 && ditOnly.nextDays(from: ledger) == [.init(day: "2026-10-06", seconds: 0)])
     check("at most \(AccountSyncQueue.daysBatchSize) days go in one request (the service's maximum)",
           AccountSyncQueue.daysBatchSize == 400)
-    queue.acknowledge(days: ["2026-10-04", "2026-10-05"])
+    queue.acknowledge(days: [.init(day: "2026-10-04", seconds: 600), .init(day: "2026-10-05", seconds: 1900)])
     check("acknowledged days leave the outbox", queue.pendingDays == ["2026-09-01"])
+    queue.reconcile(history: SessionHistory(), ledger: ledger)
+    check("a reconcile leaves an acknowledged day alone while its figure is unchanged", queue.pendingDays == ["2026-09-01"])
+    ledger.record(day: "2026-10-05", seconds: 300)
+    queue.reconcile(history: SessionHistory(), ledger: ledger)
+    check("…and queues it again once the ledger's figure grows", queue.pendingDays == ["2026-09-01", "2026-10-05"])
+    queue.acknowledge(days: queue.nextDays(from: ledger))
+    queue.reconcile(history: SessionHistory(), ledger: ledger, practisedDays: ["2026-10-06"])
+    check("the streak's practice day with no ledger entry is queued, once",
+          queue.pendingDays == ["2026-10-06"] && queue.nextDays(from: ledger) == [.init(day: "2026-10-06", seconds: 0)])
+    queue.acknowledge(days: queue.nextDays(from: ledger))
+    queue.reconcile(history: SessionHistory(), ledger: ledger, practisedDays: ["2026-10-06"])
+    check("…and not again once sent", queue.pendingDays.isEmpty)
+    queue.reconcile(history: SessionHistory(), ledger: ActivityLedger())
+    check("sent days are forgotten once the ledger and streak drop them", queue.sentDays.isEmpty)
+    queue.reconcile(history: SessionHistory(), ledger: ledger)
+    queue.acknowledge(days: queue.nextDays(from: ledger))
     let queueRoundTrip = (try? JSONEncoder().encode(queue)).flatMap { try? JSONDecoder().decode(AccountSyncQueue.self, from: $0) }
     check("the outbox round-trips through JSON, days included", queueRoundTrip == queue)
     let old = try? JSONDecoder().decode(AccountSyncQueue.self, from: Data(#"{"pending":[]}"#.utf8))
-    check("an outbox saved before days were queued decodes with none pending", old?.isEmpty == true)
+    check("an outbox saved before days were queued decodes with none pending", old?.isEmpty == true && old?.settledIds.isEmpty == true && old?.sentDays.isEmpty == true)
     let torn = try? JSONDecoder().decode(AccountSyncQueue.self, from: Data(#"{"pending":[{"id":"x"},\#((try? String(data: JSONEncoder().encode(up), encoding: .utf8)) ?? "{}")]}"#.utf8))
     check("a session that no longer decodes is dropped, the rest of the outbox survives", torn?.count == 1 && torn?.pending.first == up)
     queue.removeAll()
-    check("signing out empties it, days too", queue.isEmpty && queue.pendingDays.isEmpty)
+    check("signing out empties it, days and bookkeeping too",
+          queue.isEmpty && queue.pendingDays.isEmpty && queue.settledIds.isEmpty && queue.sentDays.isEmpty)
 }
 
 print("\n────────────────────────────")
