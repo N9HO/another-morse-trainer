@@ -7275,6 +7275,96 @@ if let fx = loadOpFixture(),
     check("fixtures/operating-procedure.json loads and decodes", false)
 }
 
+// MARK: - Every multiple-choice question offers its answer (#332)
+
+// The audit #332 asked for: every multiple-choice question the app asks has
+// its right answer among its choices, a right-answer index in range, and no
+// choice twice. Operating Procedure's authored scenarios, for a spread of
+// stations; then every drill source the quiz modes run (characters at each
+// stage, confusion, each phrase table, every Journey level, each Rapid Fire
+// content), answered for a few hundred rounds so their pools grow. Twin of
+// QuizAnswersTest.kt in android/ and desktop/. (#332 itself was a view bug —
+// the card shuffled the previous scenario's choices — which no data check can
+// see; the data were right on every port.)
+print("\nEvery multiple-choice question offers its answer (#332):")
+do {
+    var opProblems: [String] = []
+    let stations = [("K9QRO", "WI"), ("K4RTZ", "VA"), ("W1AW", "CT"), ("KB3/P", "PA"),
+                    ("AA1", "NY"), ("N3N5", "MD"), ("VE3ABC/QRP", "ON"), ("W0PQA", "CO")]
+    for (call, state) in stations {
+        let all = OperatingProcedure.scenarios(call: call, state: state)
+        if Set(all.map(\.id)).count != all.count { opProblems.append("\(call): duplicate scenario ids") }
+        for s in all {
+            let n = s.choices.count
+            if n < 2 { opProblems.append("\(call) \(s.id): fewer than two choices") }
+            if Set(s.choices).count != n { opProblems.append("\(call) \(s.id): a choice appears twice") }
+            if s.accepted.isEmpty || !s.accepted.contains(0) {
+                opProblems.append("\(call) \(s.id): the primary answer (choice 0) is not accepted")
+            }
+            if s.accepted.contains(where: { $0 < 0 || $0 >= n }) {
+                opProblems.append("\(call) \(s.id): an accepted index is out of range")
+            }
+            if Set(s.accepted).count != s.accepted.count { opProblems.append("\(call) \(s.id): an accepted index twice") }
+            if s.accepted.count >= n { opProblems.append("\(call) \(s.id): no wrong choice to pick") }
+            if !s.accepts(s.correct) { opProblems.append("\(call) \(s.id): its correct choice is not accepted") }
+            for c in s.choices {
+                if case .send(let t) = c, t.trimmingCharacters(in: .whitespaces).isEmpty {
+                    opProblems.append("\(call) \(s.id): an empty send choice")
+                }
+                if case .option(let k) = c, k.isEmpty { opProblems.append("\(call) \(s.id): an empty option key") }
+            }
+        }
+        for s in OperatingProcedure.actionPool(call: call, state: state) where !s.isAction {
+            opProblems.append("\(call) \(s.id): in the action pool without being an action")
+        }
+    }
+    check("op: every scenario offers its answer, in range, no choice twice\(opProblems.isEmpty ? "" : " — " + opProblems.prefix(5).joined(separator: "; "))",
+          opProblems.isEmpty)
+
+    /// Draw `rounds` drills from `source`, answering most right (so pools grow
+    /// and stages advance) and every fourth wrong; report the first bad one.
+    func sweep(_ name: String, _ source: QuizSource, rounds: Int = 300) -> String? {
+        for round in 0..<rounds {
+            let d = source.nextDrill()
+            if d.options.isEmpty { return "\(name) round \(round): no options" }
+            if !d.options.contains(d.correct) {
+                return "\(name) round \(round): \(d.correct) not among \(d.options)"
+            }
+            if Set(d.options).count != d.options.count { return "\(name) round \(round): duplicate option in \(d.options)" }
+            let wrong = d.options.first { $0 != d.correct }
+            _ = source.record(choice: round % 4 == 3 ? (wrong ?? d.correct) : d.correct, ttr: 0.4)
+        }
+        return nil
+    }
+    var drillProblems: [String] = []
+    func note(_ r: String?) { if let r { drillProblems.append(r) } }
+    note(sweep("characters", TrainerEngine(rng: SeededRNG(seed: 332))))
+    for stage in ProgressiveCharacters.Stage.allCases {
+        let p = ProgressiveCharacters(engine: TrainerEngine(seedCount: 12, rng: SeededRNG(seed: 21)), rng: SeededRNG(seed: 22))
+        p.pin(stage)
+        note(sweep("character ladder, \(stage.rawValue)", p))
+    }
+    note(sweep("confusion", ConfusionQuiz(engine: TrainerEngine(seedCount: 12, rng: SeededRNG(seed: 31)), rng: SeededRNG(seed: 32))))
+    let tables: [(String, [MorseItem])] = [
+        ("words", MorseData.wordItems), ("CW 77", MorseData.cw77Items()),
+        ("abbreviations", MorseData.abbreviationItems), ("Q-codes", MorseData.qCodeItems),
+        ("prosigns", MorseData.prosignItems), ("words & calls", MorseData.wordAndCallSignItems),
+    ]
+    for (name, items) in tables {
+        note(sweep(name, PhraseQuiz(name: name, items: items, rng: SeededRNG(seed: 41)), rounds: 600))
+    }
+    for i in JourneyCurriculum.levels.indices {
+        note(sweep("Journey level \(JourneyCurriculum.levels[i].number)",
+                   JourneyQuiz(startIndex: i, rng: SeededRNG(seed: UInt64(51 + i))), rounds: 80))
+    }
+    for content in RapidFireContent.allCases {
+        note(sweep("Rapid Fire \(content.rawValue)",
+                   RapidFireQuiz(config: .init(content: content), rng: SeededRNG(seed: 61)), rounds: 100))
+    }
+    check("every drill source: its answer is among its options, none twice\(drillProblems.isEmpty ? "" : " — " + drillProblems.prefix(5).joined(separator: "; "))",
+          drillProblems.isEmpty)
+}
+
 // MARK: - First Four (#265)
 
 // fixtures/first-four.json, read by this harness AND by the Kotlin
