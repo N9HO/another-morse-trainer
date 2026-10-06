@@ -201,6 +201,13 @@ testers, bug reports and feature chat live on
   has practiced today (a switch under Buddy streak hides that line), and the daily reminder adds one nudge naming whoever
   hasn't (as of the app's last look). Uses the leaderboard display name and
   attestation; pairing itself is the opt-in.
+- **Account sync**: sign in to your Another Morse Trainer account with an
+  emailed link (no password) under Settings › Leaderboard & Buddy › Account,
+  and every finished session is sent to it — at the end of the session, or
+  when you are next online — so your stats follow you between devices and
+  apps you allow (Carrier Wave, for one) can read them. Off until you sign
+  in; a switch pauses sending, and Sign out removes this device from the
+  account. iOS/Mac only for now; Android and desktop are tracked separately
 - **Progress**: daily streak with milestone celebrations, a GitHub-style
   activity grid of daily practice time, session history with per-session
   recognition charts, per-character stats, most-confused pairs, performance

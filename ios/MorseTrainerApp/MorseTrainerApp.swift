@@ -27,7 +27,12 @@ struct MorseTrainerApp: App {
             // cached status; each return to the foreground is the moment to
             // bring it up to date (at most every 15 minutes, and only while
             // paired or an invite is open — AppModel+Buddy.swift).
-            if phase == .active { model.refreshBuddyStatus() }
+            if phase == .active {
+                model.refreshBuddyStatus()
+                // Sessions finished offline go up now (at most every five
+                // minutes while something is queued — AppModel+Account.swift).
+                model.accountSyncIfDue()
+            }
         }
     }
 }

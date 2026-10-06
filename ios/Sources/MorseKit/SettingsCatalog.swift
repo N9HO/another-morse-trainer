@@ -52,7 +52,7 @@ public enum SettingsSection: String, CaseIterable, Sendable, Hashable {
     case yourStation, pileupRunner, qsoSignals, qsoRealism, qsoCallsigns
     case reminders
     case display
-    case leaderboard, buddy
+    case leaderboard, buddy, account
     case bugReports, about
 
     public var category: SettingsCategory {
@@ -65,7 +65,7 @@ public enum SettingsSection: String, CaseIterable, Sendable, Hashable {
         case .yourStation, .pileupRunner, .qsoSignals, .qsoRealism, .qsoCallsigns: return .qso
         case .reminders: return .reminders
         case .display: return .display
-        case .leaderboard, .buddy: return .leaderboard
+        case .leaderboard, .buddy, .account: return .leaderboard
         case .bugReports, .about: return .about
         }
     }
@@ -183,6 +183,11 @@ public enum SettingsCatalog {
         .init("displayName", "Display name", ["name", "callsign", "nickname", "handle"], .leaderboard),
         .init("deleteScores", "Delete my scores", ["remove", "erase", "privacy", "data"], .leaderboard),
         .init("buddyStreak", "Buddy streak", ["buddy", "buddies", "friend", "partner", "pair", "invite", "join", "code", "streak", "leave", "home screen", "hide"], .buddy),
+        .init("accountSignIn", "Sign in to your account",
+              ["account", "email", "sign in", "log in", "login", "link", "cloud", "carrier wave"], .account),
+        .init("accountSync", "Sync sessions to my account",
+              ["account", "sync", "upload", "send", "backup", "history", "sessions", "cloud"], .account),
+        .init("accountSignOut", "Sign out", ["account", "log out", "logout", "remove device", "disconnect"], .account),
 
         // Help & About
         .init("copyDiagnostics", "Copy diagnostic info",

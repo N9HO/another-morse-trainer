@@ -491,6 +491,7 @@ final class AppModel: ObservableObject {
         restoreAnswerEntryLadders()
         streak = AppModel.loadStreak()    // assigning in init doesn't fire didSet
         history = AppModel.loadHistory()
+        accountQueue = AppModel.loadAccountQueue()   // ditto; didSet is silent in init
         if let saved = AppModel.loadActivity() {
             activity = saved
         } else {
@@ -2130,6 +2131,8 @@ final class AppModel: ObservableObject {
             // seconds, on the local day it ended.
             activity.record(date: record.date,
                             seconds: Int((record.durationSeconds ?? 0).rounded()))
+            // And to the account, when signed in (a background task).
+            accountEnqueue(record)
         }
         // Hand the route back: whatever was playing before the session may
         // resume now. Nothing above this line makes a sound after it.
@@ -2209,6 +2212,25 @@ final class AppModel: ObservableObject {
     var leaderboardGeneration = 0
     /// What the summary says about this run's submission.
     @Published var leaderboardStatus: LeaderboardStatus = .notSubmitted
+
+    // MARK: - Account sync (MorseKit/AccountSync.swift, AppModel+Account.swift)
+
+    /// The account service's client and this device's tokens; one per app.
+    let account = AccountClient()
+    /// Where a sign-in stands, for Settings › Leaderboard & Buddy › Account.
+    @Published var accountSignIn: AccountSignInState = .idle
+    /// The last upload's outcome, for the same section.
+    @Published var accountSyncStatus: AccountSyncStatus = .idle
+    /// Finished sessions the service has not acknowledged, oldest first.
+    /// Persisted on every change so a session finished offline still goes up.
+    @Published var accountQueue = AccountSyncQueue() { didSet { saveAccountQueue() } }
+    /// The upload in flight, if any — one at a time, because the refresh
+    /// token rotates and two refreshes at once would sign the device out.
+    var accountSyncTask: Task<Void, Never>?
+    /// The poll for a sign-in link, so Cancel and Sign out can stop it.
+    var accountPollTask: Task<Void, Never>?
+    /// When an upload was last attempted, for the foreground throttle.
+    var accountLastAttempt: Date?
 
     // MARK: - Buddy streak (docs/buddy-streak-design.md, #219)
 

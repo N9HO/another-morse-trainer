@@ -147,7 +147,7 @@ struct SettingsView: View {
     /// had before #236, one line per section.
     private func isShown(_ section: SettingsSection) -> Bool {
         switch section {
-        case .sound, .reminders, .display, .leaderboard, .buddy, .bugReports, .about: return true
+        case .sound, .reminders, .display, .leaderboard, .buddy, .account, .bugReports, .about: return true
         case .speed: return showsGlobalSpeed
         case .farnsworth: return showsFarnsworth
         case .proficiency: return shown(for: Self.proficiencyModes)
@@ -405,6 +405,7 @@ struct SettingsView: View {
         case .display: displaySection
         case .leaderboard: leaderboardSection
         case .buddy: buddySection
+        case .account: accountSection
         case .bugReports: bugReportsSection
         case .about: aboutSection
         }
@@ -984,6 +985,12 @@ struct SettingsView: View {
             Text("Ranked runs — Rapid Fire, Contest, Pileup Runner and the six games — are posted when they end. The board ranks a server-graded copy of the run (speed summed over the items you got right), so a game's board number is not its on-screen score. Names are 2–12 characters: letters, digits, space, / and -. Only a real device can post; the simulator cannot attest.")
         }
         .listRowBackground(rowBackground(.leaderboard))
+    }
+
+    // Account sync (MorseKit/AccountSync.swift, AppModel+Account.swift): its
+    // own view, like Buddy streak, tinted the same way.
+    private var accountSection: some View {
+        AccountSettingsSection(rowBackground: rowBackground(.account))
     }
 
     // Buddy streak (docs/buddy-streak-design.md, #219, #237): its own view,

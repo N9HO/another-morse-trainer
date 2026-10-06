@@ -571,6 +571,50 @@ struct LeaderboardSettings: Codable, Equatable {
     }
 }
 
+/// Account sync (MorseKit/AccountSync.swift, AppModel+Account.swift): who is
+/// signed in on this device, and whether finished sessions go up. Signed out
+/// by default; nothing leaves the device until the user signs in. The tokens
+/// themselves are in the Keychain (`AccountKeychain`), not here.
+struct AccountSettings: Codable, Equatable {
+    /// The account's id; empty while signed out.
+    var accountId: String = ""
+    var callsign: String = ""
+    var displayName: String = ""
+    /// The address the user signed in with, shown beside the account.
+    var email: String = ""
+    /// Send finished sessions to the account. On by default once signed in
+    /// — the sign-in is the consent — and kept across a sign-out, so the
+    /// next sign-in honours a learner who turned it off.
+    var syncSessions: Bool = true
+    /// When the last batch went up (nil until one has).
+    var lastSyncAt: Date? = nil
+
+    var signedIn: Bool { !accountId.isEmpty }
+
+    /// The callsign, else the display name, else nothing (the email is
+    /// shown regardless).
+    var label: String {
+        if !callsign.isEmpty { return callsign }
+        return displayName
+    }
+
+    init() {}
+
+    enum CodingKeys: String, CodingKey { case accountId, callsign, displayName, email, syncSessions, lastSyncAt }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        var s = AccountSettings()
+        s.accountId = try c.decodeIfPresent(String.self, forKey: .accountId) ?? s.accountId
+        s.callsign = try c.decodeIfPresent(String.self, forKey: .callsign) ?? s.callsign
+        s.displayName = try c.decodeIfPresent(String.self, forKey: .displayName) ?? s.displayName
+        s.email = try c.decodeIfPresent(String.self, forKey: .email) ?? s.email
+        s.syncSessions = try c.decodeIfPresent(Bool.self, forKey: .syncSessions) ?? s.syncSessions
+        s.lastSyncAt = try c.decodeIfPresent(Date.self, forKey: .lastSyncAt) ?? s.lastSyncAt
+        self = s
+    }
+}
+
 /// All user-adjustable preferences. Persisted as JSON in UserDefaults.
 struct AppSettings: Codable, Equatable {
     // Audio
@@ -734,6 +778,8 @@ struct AppSettings: Codable, Equatable {
     /// Whether the home screen shows the buddy line while paired (#253).
     /// A preference, unlike `buddy`; on by default so an upgrade sees no change.
     var buddyOnHome: Bool = true
+    /// Account sync: who is signed in here and whether sessions go up.
+    var account = AccountSettings()
 
     /// Short Stories mode settings (fables vs. fetched news headlines).
     var story = StorySettings()
@@ -872,6 +918,7 @@ extension AppSettings {
         case leaderboard
         case buddy
         case buddyOnHome
+        case account
         case story
         case showCorrectness, reveal, allowReplay, hapticsEnabled, slashedZero
         case onScreenKey, paddleMode, paddleSwap
@@ -956,6 +1003,7 @@ extension AppSettings {
         s.contest = try c.decodeIfPresent(ContestSettings.self, forKey: .contest) ?? s.contest
         s.rapidFire = try c.decodeIfPresent(RapidFireSettings.self, forKey: .rapidFire) ?? s.rapidFire
         s.leaderboard = try c.decodeIfPresent(LeaderboardSettings.self, forKey: .leaderboard) ?? s.leaderboard
+        s.account = try c.decodeIfPresent(AccountSettings.self, forKey: .account) ?? s.account
         s.buddy = try c.decodeIfPresent(BuddyStatusCache.self, forKey: .buddy) ?? s.buddy
         s.buddyOnHome = try c.decodeIfPresent(Bool.self, forKey: .buddyOnHome) ?? s.buddyOnHome
         s.story = try c.decodeIfPresent(StorySettings.self, forKey: .story) ?? s.story

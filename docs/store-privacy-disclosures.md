@@ -37,6 +37,26 @@ the same three data types declared below (identifier, display name, app
 interactions); several buddies adds rows, not kinds of data, so neither
 store's answers change for #237.
 
+### Account sync (iOS/Mac first; Android and desktop to follow)
+
+Its own opt-in: signing in under **Settings › Leaderboard & Buddy ›
+Account** (nothing is sent before). To `amt-accounts.n9ho-amt.workers.dev`
+(Cloudflare), the same operator as the leaderboard:
+
+| Data | Details | Kept |
+|---|---|---|
+| Email address | typed by the user to receive the sign-in link; the app keeps it only to show who is signed in | By the account service, as the account's address |
+| Device name, platform | the device's name (as iOS reports it) and "ios"/"macos", shown in the sign-in email and the account's devices list | While the device is signed in |
+| Session records | per finished session: mode, speeds, attempts, correct, reaction times, duration, the mode's score, per-character results, the local day — the same record Your Stats shows | Until the user deletes the account (from the account service) |
+
+Unlike the leaderboard, this IS linked to an account the user created, so
+the App Store answers below change for the release that ships it: **Email
+Address** (Contact Info, App Functionality, linked: Yes) is added, and
+**Product Interaction** becomes linked: Yes. "Used for tracking" stays No
+throughout. Sign out removes the device from the account; the account
+itself, and everything it holds, is deleted from the account service (its
+own screens and by email), which the privacy policy must say.
+
 ## App Store Connect › App Privacy
 
 Answer **Yes, we collect data from this app**, then declare three data types.
