@@ -8288,7 +8288,7 @@ do {
                                    calendar: syncUTCCalendar(), now: { syncTestNow() })
 
     // Saving fails: nothing moves, and the engine backs off.
-    _ = runBlocking { await host.setFailMerge(true) }
+    runBlocking { await host.setFailMerge(true) }
     let failed = runBlocking { await engine.sync() }
     check("pull: when local history cannot be saved the cursor stays put and the engine backs off",
           failed == .backoff && store.state.cursor == 5 && runBlocking { await engine.failures } == 1)
@@ -8298,7 +8298,7 @@ do {
           unavailable == .backoff && runBlocking { await engine.failures } == 2
             && runBlocking { await engine.nextRetrySeconds } == AccountSync.backoffSeconds(2))
     pullStatus.set(200)
-    _ = runBlocking { await host.setFailMerge(false) }
+    runBlocking { await host.setFailMerge(false) }
     let pulled = runBlocking { await engine.sync() }
     let cursors = runBlocking { await host.cursorsAtMerge }
     check("pull: each page is merged while the cursor still points before it, then the cursor advances",
