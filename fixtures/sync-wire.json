@@ -165,7 +165,7 @@
   },
 
   "days": {
-    "_comment": "POST /v1/sync/days body: the device's own ledger, local calendar days as the ledger keys them, whole seconds. A day with 0 seconds is a practice day with no timed session (a Daily Dit guess).",
+    "_comment": "POST /v1/sync/days body: THIS DEVICE'S OWN per-day seconds (see merge.deviceDays), local calendar days as the ledger keys them, whole seconds. Never the adopted, account-wide ledger. A day with 0 seconds is a practice day with no timed session (a Daily Dit guess).",
     "local": [
       { "day": "2026-10-03", "seconds": 0 },
       { "day": "2026-10-04", "seconds": 600 },
@@ -257,10 +257,26 @@
     },
 
     "ledger": {
-      "_comment": "The server's summed per-day figures are adopted day by day; local days the reply does not mention are kept. The app's 400-day cap then applies as it already does.",
+      "_comment": "The server's summed per-day figures are adopted into the DISPLAYED ledger day by day; local days the reply does not mention are kept. The app's 400-day cap then applies as it already does. The displayed ledger is never pushed (see deviceDays).",
       "local": { "2026-10-01": 300, "2026-10-02": 60, "2026-10-03": 0 },
       "server": { "2026-10-02": 260, "2026-10-03": 0, "2026-10-04": 900 },
       "expected": { "2026-10-01": 300, "2026-10-02": 260, "2026-10-03": 0, "2026-10-04": 900 }
+    },
+
+    "deviceDays": {
+      "_comment": "Each device keeps its OWN per-day seconds apart from the displayed ledger, and pushes only those. The server keeps the larger figure per device-day and sums devices, so pushing an adopted (already summed) figure would count the other devices twice. The own record grows with every local session (same day key and seconds the ledger records), is seeded once from the local ledger the first time the device ever signs in (before any adoption), survives sign-out, and is never touched by adoption.",
+      "seedFromLedgerOnFirstSignIn": { "2026-10-01": 300, "2026-10-02": 60 },
+      "ownBefore": { "2026-10-01": 300, "2026-10-02": 60 },
+      "localSessions": [ { "day": "2026-10-02", "seconds": 45 }, { "day": "2026-10-04", "seconds": 120 } ],
+      "ownAfter": { "2026-10-01": 300, "2026-10-02": 105, "2026-10-04": 120 },
+      "serverReply": { "2026-10-02": 405, "2026-10-04": 120 },
+      "expectedPushBody": { "days": [
+        { "day": "2026-10-02", "seconds": 105 },
+        { "day": "2026-10-04", "seconds": 120 }
+      ] },
+      "pushBodyNote": "Only days changed since the last successful push go out (the outbox's day entries); each carries the device's own figure for that day.",
+      "expectedOwnAfterAdoption": { "2026-10-01": 300, "2026-10-02": 105, "2026-10-04": 120 },
+      "expectedDisplayedAfterAdoption": { "2026-10-01": 300, "2026-10-02": 405, "2026-10-04": 120 }
     },
 
     "state": {
