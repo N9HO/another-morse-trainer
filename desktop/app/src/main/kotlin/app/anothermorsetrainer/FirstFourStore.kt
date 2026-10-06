@@ -6,6 +6,7 @@ import androidx.compose.runtime.setValue
 import app.anothermorsetrainer.morsekit.FirstFour
 import app.anothermorsetrainer.morsekit.FirstFourProgress
 import app.anothermorsetrainer.morsekit.FirstFourStage
+import app.anothermorsetrainer.morsekit.SyncStateCodec
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -35,12 +36,25 @@ object FirstFourStore {
     }
 
     fun save(p: FirstFourProgress) {
+        val before = syncValue()
+        write(p)
+        SyncCoordinator.stateSaved(SyncStateCodec.FIRST_FOUR, before, syncValue())
+    }
+
+    private fun write(p: FirstFourProgress) {
         progress = p
         prefs.edit { putString(KEY, encode(p)) }
         version++
     }
 
-    fun reset() = save(FirstFourProgress())
+    /** The synced `firstFour` value, or null when nothing has been saved on this device. */
+    fun syncValue(): JSONObject? = if (!prefs.contains(KEY)) null else SyncStateCodec.firstFourToWire(progress)
+
+    /** Newer progress from another device, saved as is (not stamped or sent back). */
+    fun applySynced(wire: JSONObject) = write(SyncStateCodec.firstFourFromWire(wire))
+
+    /** "Start over". A reset is local: it is not stamped or synced (the next real change is). */
+    fun reset() = write(FirstFourProgress())
 
     /** The saved form: passed and copyPassed as sorted names, clean runs by name. */
     internal fun encode(p: FirstFourProgress): String = JSONObject().apply {

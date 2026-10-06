@@ -395,6 +395,38 @@ object SyncMerge {
         return out
     }
 
+    /**
+     * The `POST /v1/sync/days` figures for the [queued] days: this device's
+     * OWN seconds for each (fixture `merge.deviceDays`), never the displayed
+     * ledger, which after adoption holds every device's sum. A queued day the
+     * own record no longer has (past its cap) is left out.
+     */
+    fun ownDaysToPush(own: Map<LocalDate, Int>, queued: Collection<LocalDate>): Map<LocalDate, Int> {
+        val out = TreeMap<LocalDate, Int>()
+        for (day in queued) own[day]?.let { out[day] = it }
+        return out
+    }
+
+    /**
+     * The local practice streak with the server's `streak` object (from
+     * `GET /v1/me/stats` or the snapshot's `stats`) adopted, so a restored
+     * install shows the account's streak. The local longest is never
+     * lowered. A local last day newer than the server's (practice not yet
+     * pushed) keeps the local current run; no server streak keeps [local].
+     */
+    fun adoptStreak(local: PracticeStreak, stats: JSONObject): PracticeStreak {
+        val s = stats.optJSONObject("streak") ?: return local
+        val serverLast = if (s.isNull("lastPractisedDay")) null
+            else runCatching { LocalDate.parse(s.getString("lastPractisedDay")) }.getOrNull()
+        val longest = maxOf(local.longest, s.optInt("longest", 0))
+        val localLast = local.lastPracticeDay
+        if (serverLast == null || (localLast != null && localLast > serverLast)) {
+            return PracticeStreak(local.current, maxOf(longest, local.current), localLast)
+        }
+        val current = s.optInt("current", 0)
+        return PracticeStreak(current, maxOf(longest, current), serverLast)
+    }
+
     /** Per key, a reply entry wins only when strictly newer; keys it omits keep local. */
     fun mergeState(local: Map<String, StateEntry>, reply: Map<String, StateEntry>): Map<String, StateEntry> {
         val out = LinkedHashMap(local)
@@ -525,4 +557,41 @@ object Pkce {
 
     fun challenge(verifier: String): String =
         Leaderboard.base64Url(MessageDigest.getInstance("SHA-256").digest(verifier.toByteArray(Charsets.US_ASCII)))
+}
+
+/**
+ * The account fields the Settings screen checks before `PATCH /v1/me`, by the
+ * server's own rules (accounts README §8): a callsign is trimmed and
+ * uppercased, then 3–16 of `A–Z 0–9 /`; a display name is trimmed, then 2–24
+ * printable characters. The email check is only a sanity check before
+ * `verify/start`; the server trims and lowercases, nothing more.
+ */
+object AccountRules {
+    private val CALLSIGN = Regex("^[A-Z0-9/]{3,16}$")
+    private val EMAIL = Regex("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$")
+
+    fun isValidEmail(raw: String): Boolean {
+        val e = raw.trim()
+        return e.length <= 254 && EMAIL.matches(e)
+    }
+
+    /** The callsign as the server will store it, or null when it breaks the rule. */
+    fun normalizeCallsign(raw: String): String? = raw.trim().uppercase().takeIf { CALLSIGN.matches(it) }
+
+    /** The display name as the server will store it, or null when it breaks the rule. */
+    fun normalizeDisplayName(raw: String): String? {
+        val n = raw.trim()
+        val count = n.codePointCount(0, n.length)
+        if (count !in 2..24) return null
+        var i = 0
+        while (i < n.length) {
+            val cp = n.codePointAt(i)
+            when (Character.getType(cp).toByte()) {
+                Character.CONTROL, Character.FORMAT, Character.SURROGATE, Character.UNASSIGNED,
+                Character.PRIVATE_USE, Character.LINE_SEPARATOR, Character.PARAGRAPH_SEPARATOR -> return null
+            }
+            i += Character.charCount(cp)
+        }
+        return n
+    }
 }

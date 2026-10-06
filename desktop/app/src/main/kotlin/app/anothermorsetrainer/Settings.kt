@@ -23,9 +23,11 @@ import app.anothermorsetrainer.morsekit.PhraseQuiz
 import app.anothermorsetrainer.morsekit.RapidFireContent
 import app.anothermorsetrainer.morsekit.RapidFirePace
 import app.anothermorsetrainer.morsekit.RapidFireResponse
+import app.anothermorsetrainer.morsekit.SyncStateCodec
 import app.anothermorsetrainer.morsekit.TokenMeaning
 import app.anothermorsetrainer.morsekit.TrainerEngine
 import org.json.JSONArray
+import org.json.JSONObject
 
 /**
  * What the on-screen key is (#233): the single hold-to-key pad every keying
@@ -824,7 +826,19 @@ object Settings {
     /** Remember how far the listener got on a shelf/serial. */
     fun setStoryBookmark(key: String, index: Int) {
         if (storyBookmarks[key] == index) return
+        val before = storyBookmarksSyncValue()
         storyBookmarks = storyBookmarks + (key to index)
+        persist()
+        SyncCoordinator.stateSaved(SyncStateCodec.STORY_BOOKMARKS, before, storyBookmarksSyncValue())
+    }
+
+    /** The synced `storyBookmarks` value, or null when no story has been bookmarked here. */
+    fun storyBookmarksSyncValue(): JSONObject? =
+        if (storyBookmarks.isEmpty()) null else SyncStateCodec.storyBookmarksToWire(encodeBookmarks(storyBookmarks))
+
+    /** Newer bookmarks from another device, saved as is (not stamped or sent back). */
+    fun applySyncedStoryBookmarks(wire: JSONObject) {
+        storyBookmarks = decodeBookmarks(SyncStateCodec.storyBookmarksFromWire(wire))
         persist()
     }
 

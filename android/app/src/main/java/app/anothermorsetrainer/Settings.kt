@@ -26,6 +26,7 @@ import app.anothermorsetrainer.morsekit.PhraseQuiz
 import app.anothermorsetrainer.morsekit.RapidFireContent
 import app.anothermorsetrainer.morsekit.RapidFirePace
 import app.anothermorsetrainer.morsekit.RapidFireResponse
+import app.anothermorsetrainer.morsekit.SyncState
 import app.anothermorsetrainer.morsekit.TokenMeaning
 import app.anothermorsetrainer.morsekit.TrainerEngine
 import org.json.JSONArray
@@ -835,6 +836,16 @@ object Settings {
     fun setStoryBookmark(key: String, index: Int) {
         if (storyBookmarks[key] == index) return
         storyBookmarks = storyBookmarks + (key to index)
+        persist()
+        SyncCoordinator.stateChanged(SyncState.STORY_BOOKMARKS)
+    }
+
+    /** The bookmarks in their stored `key=index|…` form, for account sync. */
+    fun storyBookmarksRaw(): String = encodeBookmarks(storyBookmarks)
+
+    /** Bookmarks received from another device (account sync), replacing these. */
+    fun replaceStoryBookmarks(raw: String) {
+        storyBookmarks = decodeBookmarks(raw)
         persist()
     }
 

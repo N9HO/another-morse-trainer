@@ -50,6 +50,29 @@ data class AccountInfo(val id: String, val email: String?, val callsign: String?
     }
 }
 
+/** One row of `GET /v1/auth/devices`. [current] marks the device making the call. */
+data class AccountDevice(
+    val id: String,
+    val deviceName: String?,
+    val platform: String?,
+    val client: String?,
+    val lastSeenAt: Long,
+    val current: Boolean
+) {
+    companion object {
+        /** The reply's `devices`, oldest first as sent; a row without an id is skipped. */
+        fun parseList(body: JSONObject?): List<AccountDevice> {
+            val arr = body?.optJSONArray("devices") ?: return emptyList()
+            return (0 until arr.length()).mapNotNull { i ->
+                val o = arr.optJSONObject(i) ?: return@mapNotNull null
+                val id = o.optString("id", "").takeIf { it.isNotEmpty() } ?: return@mapNotNull null
+                fun str(k: String) = if (o.isNull(k)) null else o.optString(k, "").takeIf { it.isNotEmpty() }
+                AccountDevice(id, str("deviceName"), str("platform"), str("client"), o.optLong("lastSeenAt", 0L), o.optBoolean("current", false))
+            }
+        }
+    }
+}
+
 /** The outcome of an authenticated call. */
 sealed class AccountResult {
     /** The server answered; [SyncRetry.action][app.anothermorsetrainer.morsekit.SyncRetry.action] says what [code] means. */
@@ -93,6 +116,9 @@ class AccountApi(
     private var verifier: String? = null
 
     val isSignedIn: Boolean get() = tokens.refresh != null
+
+    /** True between a successful [startSignIn] and the poll that ends it. */
+    val isSigningIn: Boolean get() = pollToken != null
 
     // ---- Sign-in ----
 
@@ -227,7 +253,13 @@ class AccountApi(
         return AccountResult.Reply(retry.code, retry.body)
     }
 
-    // ---- Account (README §5, §8) ----
+    // ---- Account (README §5, §6, §8) ----
+
+    /** `GET /v1/me/stats?today=yyyy-mm-dd`: totals, bests, streak and the summed day ledger. */
+    suspend fun stats(today: LocalDate): AccountResult = authed("GET", "/v1/me/stats?today=$today")
+
+    /** `GET /v1/me`: id, email (with the `account` scope), callsign, display name. */
+    suspend fun me(): AccountResult = authed("GET", "/v1/me")
 
     /** `POST /v1/auth/logout`: this device only. The tokens go whatever the server says. */
     suspend fun logout(): AccountResult {
@@ -283,10 +315,20 @@ class AccountApi(
 
     private fun enc(s: String): String = URLEncoder.encode(s, "UTF-8").replace("+", "%20")
 
-    private fun reason(reply: AccountReply): String {
-        val b = reply.body
-        val r = b?.optString("reason", "")?.takeIf { it.isNotEmpty() }
-            ?: b?.optString("error", "")?.takeIf { it.isNotEmpty() }
-        return r ?: "HTTP ${reply.code}"
+    private fun reason(reply: AccountReply): String = reasonOf(reply.code, reply.body)
+
+    companion object {
+        /**
+         * The line to show for a refused call: the error body's `message`
+         * (README §10: `{ error, message }`), else its `reason` or `error`
+         * code, else the status.
+         */
+        fun reasonOf(code: Int, body: JSONObject?): String {
+            val b = body
+            val r = b?.optString("message", "")?.takeIf { it.isNotEmpty() }
+                ?: b?.optString("reason", "")?.takeIf { it.isNotEmpty() }
+                ?: b?.optString("error", "")?.takeIf { it.isNotEmpty() }
+            return r ?: "HTTP $code"
+        }
     }
 }

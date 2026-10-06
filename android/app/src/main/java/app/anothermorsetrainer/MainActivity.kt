@@ -37,6 +37,9 @@ class MainActivity : ComponentActivity() {
         VoiceProfileStore.init(this)
         AnswerEntryStore.init(this)
         LeaderboardClient.init(this)
+        // Account sync: optional, off until the user signs in (Settings ›
+        // Account & Sync). After the stores above, which its hooks read.
+        SyncCoordinator.init(this)
         setContent {
             AmtTheme {
                 AppBackground {
@@ -61,6 +64,9 @@ class MainActivity : ComponentActivity() {
         // (at most every 15 minutes, and only for an install that is paired
         // or has an invite out).
         BuddyClient.refreshIfStale()
+        // Account sync pushes what is queued and pulls what other devices
+        // did, on launch and on every return. Signed out, it does nothing.
+        SyncCoordinator.onForeground()
     }
 
     override fun onStop() {

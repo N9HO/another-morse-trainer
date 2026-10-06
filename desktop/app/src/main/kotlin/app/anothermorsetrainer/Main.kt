@@ -1,6 +1,7 @@
 package app.anothermorsetrainer
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -9,6 +10,7 @@ import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
@@ -63,6 +65,8 @@ fun main() {
     VoiceProfileStore.init()
     AnswerEntryStore.init()
     LeaderboardClient.init()
+    // Account sync, after every store it reads and writes; pulls now when signed in.
+    SyncCoordinator.init()
 
     BackgroundNoise.onForeground()
     DailyDitStore.refresh()
@@ -91,6 +95,10 @@ fun main() {
             onPreviewKeyEvent = { BackDispatcher.handle(it) }
         ) {
             remember { window.minimumSize = Dimension(360, 560); Unit }
+            // Coming back to the window is the desktop's "foreground": account
+            // sync pulls (and its backoff starts over) when it regains focus.
+            val focused = LocalWindowInfo.current.isWindowFocused
+            LaunchedEffect(focused) { if (focused) SyncCoordinator.onForeground() }
             AmtTheme {
                 AppBackground {
                     AppRoot()

@@ -23,14 +23,13 @@ import kotlin.coroutines.resumeWithException
 
 /**
  * The accounts Worker's client on this port: [AccountApi] over OkHttp, the
- * two tokens in EncryptedSharedPreferences, and the non-secret account state
- * (id, email, the pull cursor, the outbox) in the plain `amt_account`
- * preferences file. Modelled on [LeaderboardClient]: one OkHttp client,
- * `enqueue` never `execute`, 10 s timeouts. The iOS twin is the
- * `AccountClient` actor.
+ * two tokens in EncryptedSharedPreferences, and the plain `amt_account`
+ * preferences file that [SyncCoordinator]'s engine keeps its non-secret state
+ * in (account, pull cursor, outbox, own-day record, state stamps). Modelled
+ * on [LeaderboardClient]: one OkHttp client, `enqueue` never `execute`, 10 s
+ * timeouts. The iOS twin is the `AccountClient` actor.
  *
- * Nothing calls this yet: the Settings screen and the hooks into the record
- * paths are a later stage. [init] runs before any call.
+ * [SyncCoordinator.init] calls [init] before any call.
  */
 object AccountClient {
 
@@ -52,7 +51,7 @@ object AccountClient {
         .build()
     private val json = "application/json; charset=utf-8".toMediaType()
 
-    /** Non-secret account state: account id, email, pull cursor, outbox. */
+    /** Non-secret account state, read and written by [SyncEngine] only. */
     lateinit var prefs: SharedPreferences
         private set
 
@@ -62,32 +61,47 @@ object AccountClient {
     fun init(context: Context) {
         val app = context.applicationContext
         prefs = app.getSharedPreferences("amt_account", Context.MODE_PRIVATE)
-        api = AccountApi(OkHttpTransport, EncryptedTokenStore(app), CLIENT)
+        api = AccountApi(OkHttpTransport, LazyTokenStore(app), CLIENT)
     }
 
-    /** What the sign-in shows the user on the confirm page and the device list. */
-    val deviceName: String get() = "${Build.MANUFACTURER} ${Build.MODEL}".trim().take(64)
+    /**
+     * What the sign-in shows the user on the confirm page and the device
+     * list: the name the user gave the device (Settings › About phone), else
+     * its model.
+     */
+    fun deviceName(context: Context): String {
+        val named = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N_MR1) {
+            runCatching {
+                android.provider.Settings.Global.getString(context.contentResolver, android.provider.Settings.Global.DEVICE_NAME)
+            }.getOrNull()
+        } else {
+            null
+        }
+        return (named?.takeIf { it.isNotBlank() } ?: Build.MODEL).trim().take(64)
+    }
 
-    /** The account id from the last sign-in, or null when signed out. */
-    var accountId: String?
-        get() = prefs.getString("accountId", null)
-        set(value) = prefs.edit { putString("accountId", value) }
-
-    var email: String?
-        get() = prefs.getString("email", null)
-        set(value) = prefs.edit { putString("email", value) }
-
-    /** The `since` the next `GET /v1/sync/sessions` sends. */
-    var pullCursor: Long
-        get() = prefs.getLong("pullCursor", 0L)
-        set(value) = prefs.edit { putLong("pullCursor", value) }
-
-    /** The saved [app.anothermorsetrainer.morsekit.SyncOutbox], encoded. */
-    var outbox: String?
-        get() = prefs.getString("outbox", null)
-        set(value) = prefs.edit { putString("outbox", value) }
+    /** [SyncEngine]'s key-value store over [prefs]. */
+    object PrefsKeyValues : SyncKeyValues {
+        override fun get(key: String): String? = AccountClient.prefs.getString(key, null)
+        override fun put(key: String, value: String?) {
+            AccountClient.prefs.edit { if (value == null) remove(key) else putString(key, value) }
+        }
+    }
 
     // ---- Token store ----
+
+    /**
+     * Opens the Keystore-backed store on first use, not at launch: the sync
+     * engine reads no token while signed out, so most launches never pay for it.
+     */
+    private class LazyTokenStore(context: Context) : AccountTokenStore {
+        private val inner by lazy { EncryptedTokenStore(context) }
+        override val access: String? get() = inner.access
+        override val refresh: String? get() = inner.refresh
+        override fun saveRefresh(token: String) = inner.saveRefresh(token)
+        override fun saveAccess(token: String) = inner.saveAccess(token)
+        override fun clear() = inner.clear()
+    }
 
     /**
      * The access and refresh tokens, encrypted at rest with a key in the

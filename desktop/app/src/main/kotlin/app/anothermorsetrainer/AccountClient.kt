@@ -185,14 +185,30 @@ class AccountClient(
     // ---- Sync ----
 
     /** `POST /v1/sync/sessions`, at most [SyncMerge.Outbox.BATCH_SIZE] records. */
-    suspend fun pushSessions(batch: List<SessionRecord>): AccountResult<SyncMerge.PushReply> {
+    suspend fun pushSessions(batch: List<SessionRecord>): AccountResult<SyncMerge.PushReply> =
+        pushEncodedSessions(batch.map { SyncWire.encodeSession(it) })
+
+    /**
+     * `POST /v1/sync/sessions` with records already in wire form: the sync
+     * engine's outbox holds them encoded, because a row can age out of the
+     * 100-row history before it is pushed.
+     */
+    suspend fun pushEncodedSessions(batch: List<JSONObject>): AccountResult<SyncMerge.PushReply> {
         val arr = JSONArray()
-        for (r in batch) arr.put(SyncWire.encodeSession(r))
+        for (o in batch) arr.put(o)
         val body = JSONObject().put("sessions", arr).toString()
         return authed("POST", "/v1/sync/sessions", body) { json ->
             SyncMerge.PushReply.parse(json ?: throw IOException("malformed push reply"))
         }
     }
+
+    /**
+     * `GET /v1/me/stats?today=…`: the account's aggregates and summed ledger.
+     * A pull carries no stats, so after a pull that brought other devices'
+     * sessions this is how the lifetime counters catch up.
+     */
+    suspend fun stats(today: LocalDate): AccountResult<JSONObject> =
+        authed("GET", "/v1/me/stats?today=$today", null) { json -> json ?: throw IOException("malformed stats") }
 
     /** One page of `GET /v1/sync/sessions`. Advance the cursor only after the rows are saved. */
     suspend fun pullSessions(since: Long, limit: Int = 200): AccountResult<PullPage> =

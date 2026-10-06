@@ -9,6 +9,7 @@ import androidx.core.content.edit
 import app.anothermorsetrainer.morsekit.FirstFour
 import app.anothermorsetrainer.morsekit.FirstFourProgress
 import app.anothermorsetrainer.morsekit.FirstFourStage
+import app.anothermorsetrainer.morsekit.SyncState
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -38,12 +39,21 @@ object FirstFourStore {
     }
 
     fun save(p: FirstFourProgress) {
+        write(p)
+        SyncCoordinator.stateChanged(SyncState.FIRST_FOUR)
+    }
+
+    /** The Settings reset: this device only, so it is not pushed as a change. */
+    fun reset() = write(FirstFourProgress())
+
+    private fun write(p: FirstFourProgress) {
         progress = p
         prefs.edit { putString(KEY, encode(p)) }
         version++
     }
 
-    fun reset() = save(FirstFourProgress())
+    /** False until the first save: untouched progress is not pushed over an account's real one. */
+    val hasSaved: Boolean get() = prefs.contains(KEY)
 
     /**
      * Set by onboarding's "first POTA contact" button; Home reads it once it
