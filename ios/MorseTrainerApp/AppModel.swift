@@ -3199,7 +3199,10 @@ final class AppModel: ObservableObject {
     func markPracticedToday() {
         var s = streak
         let before = s.current
-        defer { reportBuddyPracticeDay() }   // after the streak has today, so the report sees it
+        defer {
+            reportBuddyPracticeDay()         // after the streak has today, so the report sees it
+            accountEnqueueToday()            // and the account's ledger, even with no session (a Daily Dit guess)
+        }
         if s.record(on: Date()) {            // only mutate (and persist) on the day's first practice
             streak = s
             if s.current > before, PracticeStreak.isMilestone(s.current) {

@@ -7602,6 +7602,10 @@ do {
     queue.enqueue(day: "2026-09-01")   // pending but no longer in the ledger
     check("the days batch is oldest first with the ledger's seconds, 0 for a day the ledger lost",
           queue.nextDays(from: ledger) == [.init(day: "2026-09-01", seconds: 0), .init(day: "2026-10-04", seconds: 600), .init(day: "2026-10-05", seconds: 1900)])
+    var ditOnly = AccountSyncQueue()
+    ditOnly.enqueue(day: "2026-10-06")   // a Daily Dit guess: practice with no session and no ledger entry
+    check("a practice day with no session is sent as 0 seconds (README: still a practice day)",
+          !ditOnly.isEmpty && ditOnly.count == 0 && ditOnly.nextDays(from: ledger) == [.init(day: "2026-10-06", seconds: 0)])
     check("at most \(AccountSyncQueue.daysBatchSize) days go in one request (the service's maximum)",
           AccountSyncQueue.daysBatchSize == 400)
     queue.acknowledge(days: ["2026-10-04", "2026-10-05"])

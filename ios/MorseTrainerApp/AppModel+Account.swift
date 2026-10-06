@@ -161,6 +161,17 @@ extension AppModel {
         accountSyncNow()
     }
 
+    /// Today counted as practice without a session ending — a Daily Dit
+    /// guess, a passage heard — so the account's ledger should have the day
+    /// too (README §7: a day with 0 seconds is still a practice day). Sent
+    /// with the ledger's figure for today, or 0 if it has none; a session
+    /// ending later raises it, since the server keeps the larger number.
+    func accountEnqueueToday() {
+        guard settings.account.signedIn else { return }
+        accountQueue.enqueue(day: ActivityLedger.dayKey(for: Date()))
+        accountSyncNow()
+    }
+
     /// The app came to the foreground: send what is queued, if it has been
     /// a while since the last attempt.
     func accountSyncIfDue() {
