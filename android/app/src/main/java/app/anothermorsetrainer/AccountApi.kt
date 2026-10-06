@@ -246,7 +246,7 @@ class AccountApi(
         } catch (e: IOException) {
             return AccountResult.Offline(e.message)
         }
-        if (retry.code == 4010) {
+        if (retry.code == 401) {
             tokens.clear()
             return AccountResult.SignedOut
         }
