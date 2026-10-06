@@ -163,7 +163,12 @@ object SyncCoordinator {
             retryJob = null
         }
         if (syncJob?.isActive == true) {
-            if (delayMs == 0L) again = true
+            // Go round once more, a local change too: a change that lands
+            // mid-sync may have missed the drain, and with foreground syncs
+            // throttled the next trigger can be minutes away. (A job still
+            // in its delay clears `again` before it syncs, so this costs no
+            // extra round there.)
+            again = true
             return
         }
         syncJob = scope.launch {
