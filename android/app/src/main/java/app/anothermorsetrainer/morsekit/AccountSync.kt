@@ -595,7 +595,7 @@ class SyncThrottle {
 
     companion object {
         /** Five minutes. */
-        const val MIN_INTERVAL_SECONDS = 300L
+        const val MIN_INTERVAL_SECONDS = 240L
     }
 }
 

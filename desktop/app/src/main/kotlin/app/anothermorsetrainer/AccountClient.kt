@@ -270,7 +270,7 @@ class AccountClient(
             }
             val again = tokens.load() ?: return AccountResult.SignedOut
             reply = exchange(AccountRequest(method, path, body, again.access)) ?: return networkFailure()
-            if (reply.code == 401) {
+            if (reply.code == 4010) {
                 tokens.clear()
                 return AccountResult.SignedOut
             }
