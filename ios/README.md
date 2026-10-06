@@ -201,6 +201,16 @@ testers, bug reports and feature chat live on
   has practiced today (a switch under Buddy streak hides that line), and the daily reminder adds one nudge naming whoever
   hasn't (as of the app's last look). Uses the leaderboard display name and
   attestation; pairing itself is the opt-in.
+- **Account & sync** (optional; nothing changes until you sign in): sign in
+  with a link emailed to you, no password, and your sessions, practice days,
+  lifetime totals, personal bests, streak and course progress (Journey
+  position, the Characters ladder, First Four, CW Operating Procedure, story
+  bookmarks) sync between your devices on any of the apps; a new install
+  signed in to the same account restores them. Settings › Account & Sync
+  shows your callsign and display name, when it last synced, Sync now, and
+  every signed-in device, each of which you can sign out. Sign out keeps
+  everything on this device; Delete account removes the account and all
+  synced data from the server. Mode, sound and key settings are not synced
 - **Progress**: daily streak with milestone celebrations, a GitHub-style
   activity grid of daily practice time, session history with per-session
   recognition charts, per-character stats, most-confused pairs, performance
@@ -213,9 +223,9 @@ testers, bug reports and feature chat live on
 - A first-run question about how much Morse you already know, which seeds
   the Characters ladder and unlocks the Journey that far
 - Daily practice reminders (minute precision, streak-aware)
-- **Settings** grouped into ten categories (Sound, Speed & Timing,
+- **Settings** grouped into eleven categories (Sound, Speed & Timing,
   Characters & Lessons, Practice & Feedback, Keys & Sending, QSO & Pileups,
-  Reminders, Display, Leaderboard & Buddy, Help & About) with a search field
+  Reminders, Display, Leaderboard & Buddy, Account & Sync, Help & About) with a search field
   that finds any setting by name or synonym and jumps straight to it
 - **iPhone and iPad**: one universal app. On iPad it turns to any
   orientation and runs in Split View, Slide Over and resizable Stage Manager

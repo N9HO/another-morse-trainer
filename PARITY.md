@@ -152,6 +152,16 @@ missing feature.
   Drills sheet prints through the system print dialog; USB keys are found by
   polling, since Java Sound has no hot-plug callback; keyed screens also take
   Space and `[` `]`.
+- **Account sign-in tokens and device name (Account & Sync).** iOS keeps
+  the access and refresh tokens in the Keychain, this device only
+  (`AccountServices.swift`); Android in `EncryptedSharedPreferences`, backed
+  by the Android Keystore (`AccountClient.kt`); desktop, which has no
+  keystore common to Windows and Linux on the JVM, in a file in its config
+  directory readable only by the user: `rw-------` on POSIX file systems, an
+  ACL holding only the owner on Windows (desktop `AccountClient.kt`). The
+  name shown in the devices list is the device's own: `UIDevice` name on
+  iOS, the device-name setting (else the model) on Android, the hostname on
+  desktop. Same feature, same sync rules (`fixtures/sync-wire.json`).
 - **Audio-stack reset recovery.** iOS rebuilds the engine on
   `mediaServicesWereReset` (`AudioSession.swift`); Android has no such
   event and catches `IllegalStateException` instead.
