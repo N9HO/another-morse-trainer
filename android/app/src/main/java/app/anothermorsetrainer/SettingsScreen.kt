@@ -1195,6 +1195,16 @@ fun SettingsScreen(
                         color = Brand.teal, fontWeight = FontWeight.Medium,
                         modifier = Modifier.clickable { uriHandler.openUri(PLAY_INTEGRITY_TERMS_URL) }
                     )
+                    // The account token store's encryption (AccountClient):
+                    // AndroidX Security and the Tink library it pulls in, both
+                    // Apache-2.0, whose notice is linked rather than reproduced.
+                    Text(stringResource(R.string.licenses_security_crypto_title), color = Brand.textPrimary, fontWeight = FontWeight.SemiBold)
+                    Text(stringResource(R.string.licenses_security_crypto_footer), color = Brand.textSecondary, fontSize = 13.sp)
+                    Text(
+                        stringResource(R.string.licenses_security_crypto_link),
+                        color = Brand.teal, fontWeight = FontWeight.Medium,
+                        modifier = Modifier.clickable { uriHandler.openUri(APACHE_2_URL) }
+                    )
                 }
             },
             confirmButton = {
@@ -2006,6 +2016,8 @@ private const val GITHUB_URL = "https://github.com/N9HO/another-morse-trainer"
 private const val LICENSE_URL = "https://github.com/N9HO/another-morse-trainer/blob/main/LICENSE"
 /** The licence the Play Integrity artifact's POM names (integrity-1.6.0.pom). */
 private const val PLAY_INTEGRITY_TERMS_URL = "https://developer.android.com/google/play/integrity/overview#tos"
+/** The licence androidx.security:security-crypto and tink-android ship under. */
+private const val APACHE_2_URL = "https://www.apache.org/licenses/LICENSE-2.0"
 
 /** A tappable row that opens something outside the app; teal like the
  *  diagnostics row, so it reads as an action rather than a toggle. */

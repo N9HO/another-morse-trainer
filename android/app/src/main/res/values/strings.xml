@@ -1280,6 +1280,10 @@
     <string name="licenses_play_integrity_title">Google Play Integrity API</string>
     <string name="licenses_play_integrity_footer">Sharing a score proves this is a genuine Play-installed build with the Play Integrity API library (com.google.android.play:integrity) and the Google Play services it depends on, © Google LLC, used under the Android Software Development Kit License Agreement and the Play Integrity API Terms of Service.</string>
     <string name="licenses_play_integrity_link">Read the Play Integrity API terms</string>
+    <!-- Licenses: the account token store's encryption library -->
+    <string name="licenses_security_crypto_title">AndroidX Security and Google Tink</string>
+    <string name="licenses_security_crypto_footer">Account sign-in tokens are encrypted on this device with AndroidX Security (androidx.security:security-crypto) and Google Tink (com.google.crypto.tink:tink-android), © The Android Open Source Project and © Google LLC, used under the Apache License, Version 2.0.</string>
+    <string name="licenses_security_crypto_link">Read the Apache License 2.0</string>
     <!-- Sending Analyzer (#241, #234, #235) -->
     <string name="mode_sending_analyzer">Sending Analyzer</string>
     <string name="home_grade_your_fist">Grade your fist</string>
