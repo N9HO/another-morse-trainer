@@ -25,7 +25,7 @@ class BandNoiseScopeTest {
     @Test
     fun awayFromPracticeOnlyTheKeepAliveSwitchCounts() {
         // The reported bug: band noise on, sitting on a menu — it must not hiss.
-        assertEquals(HIGH, BackgroundNoiseLevel.effective(false, HIGH, bandNoiseAudible = false))
+        assertEquals(OFF, BackgroundNoiseLevel.effective(false, HIGH, bandNoiseAudible = false))
         // The inaudible keep-alive floor still keeps an earbud link awake.
         assertEquals(KEEP_ALIVE, BackgroundNoiseLevel.effective(true, HIGH, bandNoiseAudible = false))
         assertEquals(KEEP_ALIVE, BackgroundNoiseLevel.effective(true, OFF, bandNoiseAudible = false))
