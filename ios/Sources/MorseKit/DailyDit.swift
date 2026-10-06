@@ -389,10 +389,12 @@ public struct DailyDitGame: Sendable, Equatable, Codable {
 
     /// The pasteable brag sheet: a headline, the emoji grid, and where to play.
     ///
-    /// Share and Copy both lead with a themed card image, but this text stays:
-    /// it rides along as the image's caption and as the clipboard's text
-    /// fallback, so the result still survives being pasted into a text-only
-    /// chat window. The grid is every guess — a long grid is the story of a hard
+    /// Share and Copy both lead with a themed card image, and Share sends the
+    /// image alone: a caption beside it is posted as a second message by
+    /// targets like Discord (#334). This text stays as the on-screen result,
+    /// as the clipboard's text fallback beside the image (a paste takes one
+    /// or the other), and as what Share sends if the image can't be made, so
+    /// the result still survives a text-only chat window. The grid is every guess — a long grid is the story of a hard
     /// day, and trimming it would misreport the score in the headline.
     public var shareText: String {
         var lines: [String] = [headline]

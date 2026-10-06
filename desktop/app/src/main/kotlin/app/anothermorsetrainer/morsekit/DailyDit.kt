@@ -426,10 +426,12 @@ data class DailyDitGame(
     /**
      * The pasteable brag sheet: a headline, the emoji grid, and where to play.
      *
-     * Share and Copy both lead with a themed card image, but this text stays:
-     * it rides along as the image's caption and as the clipboard's text
-     * fallback, so the result still survives being pasted into a text-only
-     * chat window.
+     * Share and Copy both lead with a themed card image. Desktop has no share
+     * sheet, so both put the card on the clipboard with this text as its
+     * plain-text flavour in the same Transferable: a paste takes one or the
+     * other, never both, so nothing is posted twice (the phone apps send the
+     * image alone for that reason, #334), and the result still survives a
+     * text-only chat window.
      * The grid is every guess — a long grid is the story of a hard day, and
      * trimming it would misreport the score in the headline.
      */
