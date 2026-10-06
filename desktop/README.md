@@ -223,7 +223,9 @@ paddles.
   between drills without going home
 - **Settings**: character speed to 60 WPM, Farnsworth, sidetone pitch, a
   Bluetooth keep-alive floor (on by default, so earbuds don't sleep through
-  the first character) and a separate band-noise level to copy through,
+  the first character) and a separate band-noise level to copy through
+  (heard only while a mode, game or lesson plays, with a short sample when
+  the level is picked),
   session length, custom word lists, punctuation opt-ins, and a slashed-zero
   display option
 - **Settings** grouped into eleven categories (Sound, Speed & Timing,

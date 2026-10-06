@@ -79,7 +79,10 @@ struct OperatingProcedureView: View {
                 callField = OperatingProcedure.prefillCall(saved: model.settings.qso.myCall)
                 stateField = state
             }
-            .onDisappear { model.stopOperating() }
+            .onDisappear {
+                model.stopOperating()
+                model.releaseAudioIfIdle()   // no band noise on the menu after (#331)
+            }
             .onChange(of: progress) { OperatingProcedureStore.save($0) }
             // A newer copy from the account (another device got further):
             // show it rather than save this screen's older one over it.

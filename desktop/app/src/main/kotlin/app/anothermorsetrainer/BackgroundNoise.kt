@@ -3,7 +3,12 @@ package app.anothermorsetrainer
 import kotlin.concurrent.thread
 
 /**
- * A continuous, low-level noise floor played underneath everything (issue #29).
+ * A continuous, low-level noise floor played underneath practice (issue #29).
+ *
+ * Two levels of "on" since #331: the inaudible keep-alive floor follows the
+ * app on screen, while audible band noise sounds only while a practice screen
+ * is open ([setPractising]) or for a short [preview] after the level is
+ * changed in Settings — never on Home, Settings, Stats or the other menus.
  *
  * Two jobs in one control. The one that prompted it: Bluetooth earbuds power
  * their receiver down during digital silence and take a moment to wake, which
@@ -50,13 +55,28 @@ object BackgroundNoise {
     private var foreground = false
     /** True while another app holds audio focus — a call, or music taking over. */
     private var yielded = false
+    /**
+     * True while a practice screen is open — a mode, game or lesson that plays
+     * Morse (#331). The app root sets it from the route. Band noise is only
+     * audible while it is set (or a [preview] runs); Home, Settings, Stats and
+     * the other menus get at most the inaudible keep-alive floor.
+     */
+    private var practising = false
+    /** True for [PREVIEW_MS] after the Band noise level is changed in Settings. */
+    private var previewing = false
+    /** Bumped on every preview start and end, so a stale timer cannot end a newer one. */
+    private var previewGeneration = 0
+
+    /** How long the Settings preview sounds: long enough to judge the level. */
+    private const val PREVIEW_MS = 2_500L
 
     init {
-        // A listener, never a holder. The floor runs the whole time the app is on
-        // screen, home screen and settings list included, so taking focus for it
-        // would pause the user's music just to browse a menu. But it must still
-        // get out of the way: hissing under a phone call is exactly the "talks
-        // through calls" complaint, and the quietest bug to miss.
+        // A listener, never a holder. The keep-alive floor runs the whole time
+        // the app is on screen, home screen and settings list included, so
+        // taking focus for it would pause the user's music just to browse a
+        // menu. But it must still get out of the way: hissing under a phone
+        // call is exactly the "talks through calls" complaint, and the
+        // quietest bug to miss.
         AudioFocus.observe { event ->
             when (event) {
                 AudioFocus.Event.LOST, AudioFocus.Event.LOST_TRANSIENT ->
@@ -80,14 +100,59 @@ object BackgroundNoise {
         refresh()
     }
 
+    /** A practice screen opened (true) or closed (false); see [practising]. */
+    fun setPractising(on: Boolean) {
+        synchronized(this) { practising = on }
+        refresh()
+    }
+
+    /**
+     * The Band noise level was just picked in Settings: let it sound for
+     * [PREVIEW_MS] so the level can be judged, then fall quiet again (#331).
+     * Mid-session the noise is already audible and simply takes the new level.
+     */
+    fun preview() {
+        val (mine, on) = synchronized(this) {
+            previewGeneration += 1
+            previewing = Settings.bandNoise != BackgroundNoiseLevel.OFF
+            previewGeneration to previewing
+        }
+        refresh()
+        if (!on) return
+        thread(name = "amt-band-noise-preview", isDaemon = true) {
+            try { Thread.sleep(PREVIEW_MS) } catch (_: InterruptedException) {}
+            endPreview(mine)
+        }
+    }
+
+    /** Cut a running preview short — Settings is being left. */
+    fun endPreview() {
+        val mine = synchronized(this) { previewGeneration }
+        endPreview(mine)
+    }
+
+    private fun endPreview(mine: Int) {
+        synchronized(this) {
+            if (previewGeneration != mine || !previewing) return
+            previewGeneration += 1
+            previewing = false
+        }
+        refresh()
+    }
+
     /**
      * Re-read [Settings.backgroundNoise] — the level derived from the keep-alive
      * switch and the band-noise picker (issue #169) — call after the user
-     * changes either.
+     * changes either. Band noise itself only sounds while [practising] or
+     * [previewing]; otherwise the keep-alive switch alone decides (#331).
      */
     @Synchronized
     fun refresh() {
-        val level = if (foreground && !yielded) Settings.backgroundNoise.amplitude else 0f
+        val wanted = BackgroundNoiseLevel.effective(
+            Settings.bluetoothKeepAlive, Settings.bandNoise,
+            bandNoiseAudible = practising || previewing
+        )
+        val level = if (foreground && !yielded) wanted.amplitude else 0f
         target = level
         if (level > 0f) start() else stop()
     }

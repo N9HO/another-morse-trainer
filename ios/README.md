@@ -182,7 +182,8 @@ testers, bug reports and feature chat live on
   explains)
 - **Bluetooth keep-alive and band noise**: a near-silent floor (on by
   default) that stops Bluetooth earbuds sleeping through the first character,
-  and a separate band-noise level to copy through
+  and a separate band-noise level to copy through (heard only while a mode,
+  game or lesson plays, with a short sample when the level is picked)
 - **Leaderboard**: an opt-in shared board across both apps for Rapid Fire,
   Contest, Pileup Runner and the six games. The server grades each run's
   transcript itself and ranks on the speed summed over correct items (so a

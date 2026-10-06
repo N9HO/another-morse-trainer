@@ -128,9 +128,15 @@ missing feature.
 - **Listen & Learn with the screen locked.** Android: a foreground service
   (`ListenService.kt`). iOS: the background audio session and `.playback`
   claim (`MorsePlayer.swift`).
-- **Background noise floor.** Android runs it as a separate always-on stream
-  (`BackgroundNoise.kt`); iOS folds it into the player's render callback
-  (`MorsePlayer.swift`). Same six levels, same amplitudes.
+- **Background noise floor.** Android and desktop run it as a separate
+  stream (`BackgroundNoise.kt`); iOS folds it into the player's render
+  callback (`MorsePlayer.swift`). Same six levels, same amplitudes. Band
+  noise is scoped to practice on every app (#331): Android and desktop gate
+  it on the open screen (`Route.playsBandNoise`), iOS on the player holding
+  the audio session, which a run hands back as it ends — so the iOS
+  end-of-run summary is quiet, where the Android and desktop recap, still
+  on the mode's screen, keeps the noise until you leave it. Each plays a
+  2.5-second sample when the level is picked in Settings.
 - **Decoder microphone path.** Android asks for the `UNPROCESSED` source
   with a sample-rate fallback chain (`CwDecoderEngine.kt`); iOS sets the
   session to `.measurement` mode (`AudioSession.swift`). Both bypass the

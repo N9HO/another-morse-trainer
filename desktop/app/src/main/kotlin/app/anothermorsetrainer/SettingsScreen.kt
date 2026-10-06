@@ -221,7 +221,13 @@ fun SettingsScreen(
 ) {
     val uriHandler = LocalUriHandler.current
     val player = remember { MorsePlayer() }
-    DisposableEffect(Unit) { onDispose { player.release() } }
+    DisposableEffect(Unit) {
+        onDispose {
+            player.release()
+            // A band-noise preview stops with the screen it was started from (#331).
+            BackgroundNoise.endPreview()
+        }
+    }
 
     fun shown(modes: Set<SettingsMode>): Boolean = scope == null || scope in modes
 
@@ -1342,7 +1348,12 @@ private fun BandNoiseSetting() {
                             if (isSel) Brand.teal else Brand.navyRaised,
                             shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp)
                         )
-                        .clickable { Settings.updateBandNoise(option) }
+                        .clickable {
+                            Settings.updateBandNoise(option)
+                            // Band noise only sounds in practice (#331); a short
+                            // preview lets the new level be judged from here.
+                            BackgroundNoise.preview()
+                        }
                         .padding(horizontal = 12.dp, vertical = 6.dp)
                 ) {
                     Text(

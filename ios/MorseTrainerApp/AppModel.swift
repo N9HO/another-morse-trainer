@@ -729,6 +729,18 @@ final class AppModel: ObservableObject {
     /// foreground (issue #29) — see the scene-phase note in MorseTrainerApp.
     private var audioActive = true
 
+    /// True from `start()` to `endSession()`: a practice run owns the audio
+    /// session, and band noise sounds for all of it (#331).
+    private var runInProgress = false
+    /// Settings sheets on screen (see `settingsAppeared`).
+    private var settingsOpenCount = 0
+    /// True while the Settings band-noise preview sounds.
+    private var bandNoisePreviewing = false
+    /// Bumped on every preview start and end, so a stale timer can't end a newer one.
+    private var bandNoisePreviewGeneration = 0
+    /// How long the Settings preview sounds: long enough to judge the level.
+    static let bandNoisePreviewSeconds: TimeInterval = 2.5
+
     /// Called as the scene comes and goes.
     func setAudioActive(_ active: Bool) {
         guard audioActive != active else { return }
@@ -740,8 +752,72 @@ final class AppModel: ObservableObject {
 
     /// Push the configured noise floor to the player, silencing it whenever the
     /// app is off screen so it can't hiss on in the background.
+    ///
+    /// Band noise is scoped to practice (#331). The player only sounds while
+    /// it holds the audio session — a run, or a Daily Dit, First Four or
+    /// Operating Procedure screen — and each of those hands it back as it
+    /// closes (`endSession`, `releaseAudioIfIdle`). Settings outside a run is
+    /// the one place the session can be held for a menu (Preview tone, the
+    /// band-noise preview), so there band noise is held back to the keep-alive
+    /// floor except while its own preview runs.
     private func applyBackgroundNoise() {
-        player.setNoiseLevel(audioActive ? settings.backgroundNoise.amplitude : 0)
+        let quiet = settingsOpenCount > 0 && !runInProgress && !bandNoisePreviewing
+        let level = BackgroundNoiseLevel.effective(bluetoothKeepAlive: settings.bluetoothKeepAlive,
+                                                   bandNoise: settings.bandNoise,
+                                                   bandNoiseAudible: !quiet)
+        player.setNoiseLevel(audioActive ? level.amplitude : 0)
+    }
+
+    // MARK: - Band noise scope (#331)
+
+    /// A Settings sheet appeared. Counted rather than flagged: the sheet's
+    /// stack/split layout swap can deliver an appear before the matching
+    /// disappear.
+    func settingsAppeared() {
+        settingsOpenCount += 1
+        applyBackgroundNoise()
+    }
+
+    /// Settings closed: end any preview, and hand the audio session back if
+    /// Settings was holding it outside a run (Preview tone or the band-noise
+    /// preview), so nothing hisses on the menu behind it.
+    func settingsDisappeared() {
+        settingsOpenCount = max(0, settingsOpenCount - 1)
+        guard settingsOpenCount == 0 else { return }
+        bandNoisePreviewGeneration += 1
+        bandNoisePreviewing = false
+        applyBackgroundNoise()
+        releaseAudioIfIdle()
+    }
+
+    /// The Band noise level was just picked in Settings: let it sound for a
+    /// moment so the level can be judged, then fall quiet again. Mid-run the
+    /// noise is already audible and simply takes the new level.
+    func previewBandNoise() {
+        bandNoisePreviewGeneration += 1
+        guard settingsOpenCount > 0, !runInProgress, audioActive, settings.bandNoise != .off else {
+            bandNoisePreviewing = false
+            applyBackgroundNoise()
+            return
+        }
+        bandNoisePreviewing = true
+        player.activate()   // the noise only renders while the session is held
+        applyBackgroundNoise()
+        let gen = bandNoisePreviewGeneration
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.bandNoisePreviewSeconds) { [weak self] in
+            guard let self, self.bandNoisePreviewGeneration == gen else { return }
+            self.bandNoisePreviewing = false
+            self.applyBackgroundNoise()
+        }
+    }
+
+    /// Hand the audio session back when a screen that played Morse outside a
+    /// run closes (Daily Dit, First Four, Operating Procedure, Settings). Each
+    /// play takes the session; before #331 nothing outside `endSession` gave
+    /// it back, so band noise went on hissing over the menu afterwards.
+    func releaseAudioIfIdle() {
+        guard !runInProgress else { return }
+        player.releaseSession()
     }
 
     var timing: MorseTiming {
@@ -782,7 +858,9 @@ final class AppModel: ObservableObject {
         } else {
             voiceRecognizer.endSession()
         }
+        runInProgress = true
         player.activate()
+        applyBackgroundNoise()   // band noise sounds for the run (#331)
         resetVoiceRound()
         storyGeneration += 1   // cancel any in-flight story playback
         storyPlaying = false
@@ -2146,7 +2224,9 @@ final class AppModel: ObservableObject {
         // Hand the route back: whatever was playing before the session may
         // resume now. Nothing above this line makes a sound after it.
         voiceRecognizer.endSession()
+        runInProgress = false
         player.releaseSession()
+        applyBackgroundNoise()
         sessionEnded = true
     }
 

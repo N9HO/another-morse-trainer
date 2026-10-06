@@ -225,6 +225,27 @@ private sealed interface Route {
 }
 
 /**
+ * Whether band noise sounds on this screen (#331): a mode, game or lesson that
+ * plays Morse. Home, the menus, Settings, Stats and the tools that do not play
+ * practice Morse (Reference, the printable drills, the mic-driven Analyzer and
+ * Decoder, the Repeater) stay quiet — the same set as the Apple apps, where the
+ * noise follows the player's audio session. Exhaustive on purpose: a new route
+ * has to be placed on one side or the other.
+ */
+private val Route.playsBandNoise: Boolean
+    get() = when (this) {
+        Route.Journey, is Route.Quiz, Route.Pileup, Route.Contest, Route.Exam,
+        Route.Listen, Route.Cw77, Route.HeadCopy, Route.TypeIt, Route.Qrq,
+        Route.RapidFire, Route.Invaders, Route.Galaga, Route.Defender,
+        Route.Dungeon, Route.Frogger, Route.Asteroids, Route.Story, Route.Sending,
+        Route.DailyDit, Route.FirstFour, Route.OperatingProcedure -> true
+        Route.Onboarding, Route.Home, Route.Games, Route.SendingDrills,
+        Route.SendingAnalyzer, Route.Repeater, Route.CwDecoder, Route.Reference,
+        Route.StartHere, Route.Settings, Route.Stats, Route.Leaderboard,
+        Route.GamesLeaderboard -> false
+    }
+
+/**
  * Nav state as a string, so it can go in the saved-instance-state bundle.
  *
  * On Android these savers carry the nav stack across process death. A desktop
@@ -358,6 +379,11 @@ private fun AppRoot() {
     // The mode awaiting its pre-flight sheet. Home stays composed underneath, so
     // cancelling the sheet leaves the menu exactly as it was.
     var setup by rememberSaveable(stateSaver = SetupSaver) { mutableStateOf<SetupTarget?>(null) }
+
+    // Band noise follows the screen (#331): on while a practice screen is
+    // open, off on the menus.
+    val practising = route.playsBandNoise
+    LaunchedEffect(practising) { BackgroundNoise.setPractising(practising) }
 
     /** Ask first where there is something to ask; otherwise go straight in. */
     fun launch(target: SetupTarget) {

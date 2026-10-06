@@ -433,8 +433,14 @@ enum BackgroundNoiseLevel: String, Codable, CaseIterable, Identifiable {
     /// band noise when any is set (it keeps the link awake as a side effect),
     /// else the inaudible keep-alive floor when that switch is on, else true
     /// digital silence.
-    static func effective(bluetoothKeepAlive: Bool, bandNoise: BackgroundNoiseLevel) -> BackgroundNoiseLevel {
-        if bandNoise != .off { return bandNoise }
+    ///
+    /// `bandNoiseAudible` is false where band noise does not belong (#331):
+    /// Settings, outside a run and its short level preview. There the floor
+    /// falls back to what the keep-alive switch alone would give. Mirrors the
+    /// Kotlin `BackgroundNoiseLevel.effective`.
+    static func effective(bluetoothKeepAlive: Bool, bandNoise: BackgroundNoiseLevel,
+                          bandNoiseAudible: Bool = true) -> BackgroundNoiseLevel {
+        if bandNoise != .off, bandNoiseAudible { return bandNoise }
         return bluetoothKeepAlive ? .keepAlive : .off
     }
 }
