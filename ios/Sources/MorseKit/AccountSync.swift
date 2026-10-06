@@ -4,12 +4,14 @@
 // app target (`AccountClient.swift`). Everything in this file is data the
 // Android and desktop ports can mirror field for field.
 //
-// The service is the accounts Worker (`amt-accounts.n9ho-amt.workers.dev`).
+// The service is the accounts Worker (`amt-accounts.n9ho-amt.workers.dev`);
+// its README is the contract (repository another-morse-trainer-accounts).
 // Sign-in is an emailed link with PKCE: the app keeps a random verifier,
 // sends its SHA-256 as the challenge, and proves the tokens are its own by
 // presenting the verifier when it polls. There is no password, client secret
-// or API key. Sessions go up as the shape the service hands back to readers
-// (its `/v1/me/sessions` record), so a session reads the same on every side.
+// or API key. Sessions go up through `POST /v1/sync/sessions` as the
+// service's SessionRecord (README §9), practice days through
+// `POST /v1/sync/days` (§7); both are idempotent, so resending is safe.
 
 import CryptoKit
 import Foundation
@@ -41,17 +43,19 @@ public enum AccountPKCE {
 
 // MARK: - Wire types
 
-/// `POST /v1/auth/verify/start`.
+/// `POST /v1/auth/verify/start`. `scopes` nil is omitted from the body,
+/// which for a first-party client means the full grant (`sync stats:read
+/// account`); a third-party app names `stats:read`.
 public struct AccountStartRequest: Codable, Sendable, Equatable {
     public var email: String
     public var pkceChallenge: String
     public var client: String
     public var deviceName: String
     public var platform: String
-    public var scopes: String
+    public var scopes: String?
 
     public init(email: String, pkceChallenge: String, client: String,
-                deviceName: String, platform: String, scopes: String) {
+                deviceName: String, platform: String, scopes: String? = nil) {
         self.email = email
         self.pkceChallenge = pkceChallenge
         self.client = client
@@ -77,14 +81,17 @@ public struct AccountPollRequest: Codable, Sendable, Equatable {
     }
 }
 
-/// Who signed in: `account` on the poll's 201, and `GET /v1/me`.
+/// Who signed in: `account` on the poll's 201, and `GET /v1/me`. `email`
+/// is present only when the grant includes `account` (a first-party sign-in).
 public struct AccountIdentity: Codable, Sendable, Equatable {
     public var id: String
+    public var email: String?
     public var callsign: String?
     public var displayName: String?
 
-    public init(id: String, callsign: String? = nil, displayName: String? = nil) {
+    public init(id: String, email: String? = nil, callsign: String? = nil, displayName: String? = nil) {
         self.id = id
+        self.email = email
         self.callsign = callsign
         self.displayName = displayName
     }
@@ -133,12 +140,10 @@ public struct AccountErrorResponse: Codable, Sendable, Equatable {
 
 // MARK: - Sessions
 
-/// One session as the service stores it (`/v1/me/sessions` record,
+/// One session as the service stores it (README §9 SessionRecord,
 /// `schemaVersion` 1): the app's `SessionRecord` with times in whole
-/// milliseconds and the date as epoch milliseconds. `day` is the local
-/// calendar day the session ended on, which the server needs for the
-/// activity calendar and streak — epoch milliseconds alone cannot say which
-/// day it was where the learner sat.
+/// milliseconds and the date as epoch milliseconds. The day it counts
+/// toward is not here — practice days are their own route (`AccountDayUpload`).
 public struct AccountSessionUpload: Codable, Sendable, Equatable, Identifiable {
     public struct CharacterResult: Codable, Sendable, Equatable {
         public var character: String
@@ -161,8 +166,6 @@ public struct AccountSessionUpload: Codable, Sendable, Equatable, Identifiable {
     public var id: String
     /// Epoch milliseconds.
     public var date: Int64
-    /// Local calendar day, `yyyy-mm-dd`.
-    public var day: String
     public var mode: String
     public var characterWpm: Int
     public var effectiveWpm: Int
@@ -176,13 +179,10 @@ public struct AccountSessionUpload: Codable, Sendable, Equatable, Identifiable {
     public var characters: [CharacterResult]
     public var activeCharacters: [String]
 
-    /// `record` as the service wants it. `calendar` names the time zone the
-    /// day is taken in — the device's, normally; a parameter so the mapping
-    /// can be checked.
-    public init(_ record: SessionRecord, calendar: Calendar = .current) {
+    /// `record` as the service wants it.
+    public init(_ record: SessionRecord) {
         id = record.id.uuidString.lowercased()
         date = Int64((record.date.timeIntervalSince1970 * 1000).rounded())
-        day = BuddyDay.label(for: record.date, calendar: calendar)
         mode = record.mode
         characterWpm = record.characterWPM
         effectiveWpm = record.effectiveWPM
@@ -205,33 +205,126 @@ public struct AccountSessionUpload: Codable, Sendable, Equatable, Identifiable {
     }
 }
 
-/// `POST /v1/me/sessions`: a batch, oldest first.
+/// `POST /v1/sync/sessions`: a batch, oldest first, at most 200.
 public struct AccountSessionsUploadRequest: Codable, Sendable, Equatable {
     public var sessions: [AccountSessionUpload]
     public init(sessions: [AccountSessionUpload]) { self.sessions = sessions }
 }
 
-// MARK: - Upload queue
-
-/// The sessions finished on this device that the service has not yet
-/// acknowledged, oldest first. Persisted with the settings so a session
-/// finished offline, or while the app was killed mid-upload, still goes up.
-/// Bounded: past `limit` the oldest fall off, the same policy as
-/// `SessionHistory` (the service is a copy of the history, not a longer
-/// one).
-public struct AccountSyncQueue: Codable, Sendable, Equatable {
-    public private(set) var pending: [AccountSessionUpload]
-
-    public static let limit = 500
-    /// How many go in one request — well under any body limit, and a lost
-    /// reply re-sends at most this many (deduplicated by id on the server).
-    public static let batchSize = 50
-
-    public init(pending: [AccountSessionUpload] = []) {
-        self.pending = pending
+/// The push's reply: every id sent lands in exactly one list. `accepted`
+/// was stored, `skipped` was already on the account (never counted twice),
+/// `rejected` failed validation and will never be taken — all three leave
+/// the outbox (README §7). The `stats` the reply also carries are not
+/// decoded here yet.
+public struct AccountPushResponse: Codable, Sendable, Equatable {
+    public struct Rejected: Codable, Sendable, Equatable {
+        public var id: String?
+        public var reason: String
+        public init(id: String?, reason: String) {
+            self.id = id
+            self.reason = reason
+        }
     }
 
-    public var isEmpty: Bool { pending.isEmpty }
+    public var accepted: [String]
+    public var skipped: [String]
+    public var rejected: [Rejected]
+
+    public init(accepted: [String], skipped: [String], rejected: [Rejected]) {
+        self.accepted = accepted
+        self.skipped = skipped
+        self.rejected = rejected
+    }
+
+    /// Every id the service has dealt with, one way or another: what to
+    /// drop from the outbox.
+    public var settled: [String] {
+        accepted + skipped + rejected.compactMap(\.id)
+    }
+}
+
+/// One entry of this device's practice ledger, for `POST /v1/sync/days`:
+/// the local calendar day and whole seconds practised (0–86,400; 0 still
+/// marks the day). The server keeps the larger of what it has and what is
+/// sent, so resending is idempotent.
+public struct AccountDayUpload: Codable, Sendable, Equatable {
+    public var day: String
+    public var seconds: Int
+
+    public init(day: String, seconds: Int) {
+        self.day = day
+        self.seconds = min(max(0, seconds), 86_400)
+    }
+}
+
+/// `POST /v1/sync/days`: at most 400 entries.
+public struct AccountDaysUploadRequest: Codable, Sendable, Equatable {
+    public var days: [AccountDayUpload]
+    public init(days: [AccountDayUpload]) { self.days = days }
+}
+
+/// The days reply: the account's summed figure for each day sent, and the
+/// entries it refused.
+public struct AccountDaysResponse: Codable, Sendable, Equatable {
+    public struct Rejected: Codable, Sendable, Equatable {
+        public var day: String?
+        public var reason: String
+        public init(day: String?, reason: String) {
+            self.day = day
+            self.reason = reason
+        }
+    }
+
+    public var days: [String: Int]
+    public var rejected: [Rejected]
+
+    public init(days: [String: Int], rejected: [Rejected]) {
+        self.days = days
+        self.rejected = rejected
+    }
+}
+
+// MARK: - Upload queue
+
+/// The outbox: the sessions finished on this device that the service has
+/// not yet dealt with, oldest first, and the practice days whose figure
+/// changed since they were last sent. Persisted so a session finished
+/// offline, or while the app was killed mid-upload, still goes up. Bounded:
+/// past `limit` the oldest sessions fall off, the same policy as
+/// `SessionHistory` (the service is a copy of the history, not a longer
+/// one); days are capped by the ledger itself.
+public struct AccountSyncQueue: Codable, Sendable, Equatable {
+    public private(set) var pending: [AccountSessionUpload]
+    /// Days (`yyyy-mm-dd`) to send with their current ledger figure.
+    public private(set) var pendingDays: Set<String>
+
+    public static let limit = 500
+    /// How many sessions go in one request: the service's maximum (README
+    /// §7), and what the merge rules say a first sign-in pushes at a time.
+    public static let batchSize = 200
+    /// The most days one request takes — the ledger's own cap.
+    public static let daysBatchSize = ActivityLedger.capDays
+
+    public init(pending: [AccountSessionUpload] = [], pendingDays: Set<String> = []) {
+        self.pending = pending
+        self.pendingDays = pendingDays
+    }
+
+    enum CodingKeys: String, CodingKey { case pending, pendingDays }
+
+    /// Row-tolerant, like `SessionHistory`: a session that no longer
+    /// decodes is dropped rather than losing the outbox; an outbox saved
+    /// before days were queued has none pending.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let rows = try c.decodeIfPresent([FailableDecodable<AccountSessionUpload>].self, forKey: .pending) ?? []
+        pending = rows.compactMap(\.value)
+        pendingDays = try c.decodeIfPresent(Set<String>.self, forKey: .pendingDays) ?? []
+    }
+
+    /// Nothing to send: no sessions and no days.
+    public var isEmpty: Bool { pending.isEmpty && pendingDays.isEmpty }
+    /// Sessions waiting.
     public var count: Int { pending.count }
 
     /// Add one session. A record already queued (the same id) is replaced
@@ -250,10 +343,34 @@ public struct AccountSyncQueue: Codable, Sendable, Equatable {
     /// Queue every session of `history` not already pending — what signing
     /// in does, so the account starts with the history the device has.
     /// Oldest first, so the server's sequence follows the calendar.
-    public mutating func enqueue(history: SessionHistory, calendar: Calendar = .current) {
+    public mutating func enqueue(history: SessionHistory) {
         for record in history.sessions.reversed() {
-            enqueue(AccountSessionUpload(record, calendar: calendar))
+            enqueue(AccountSessionUpload(record))
         }
+    }
+
+    /// A day whose ledger figure changed (a session ended on it).
+    public mutating func enqueue(day: String) {
+        pendingDays.insert(day)
+    }
+
+    /// Every day the ledger holds — what signing in does.
+    public mutating func enqueue(ledger: ActivityLedger) {
+        pendingDays.formUnion(ledger.days.keys)
+    }
+
+    /// The pending days with their current figure from `ledger`, oldest
+    /// first, at most `daysBatchSize`. A pending day the ledger no longer
+    /// holds is sent as 0: it was practised, whatever the ledger forgot.
+    public func nextDays(from ledger: ActivityLedger) -> [AccountDayUpload] {
+        pendingDays.sorted().prefix(Self.daysBatchSize).map {
+            AccountDayUpload(day: $0, seconds: ledger.days[$0] ?? 0)
+        }
+    }
+
+    /// The service took these days.
+    public mutating func acknowledge(days: [String]) {
+        pendingDays.subtract(days)
     }
 
     /// The next batch to send: the oldest `batchSize`, or fewer.
@@ -269,5 +386,6 @@ public struct AccountSyncQueue: Codable, Sendable, Equatable {
 
     public mutating func removeAll() {
         pending.removeAll()
+        pendingDays.removeAll()
     }
 }

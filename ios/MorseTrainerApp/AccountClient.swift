@@ -4,7 +4,8 @@
 // and the pure rules (PKCE, the session record, the queue) live in
 // MorseKit/AccountSync.swift; this file is only the network and the Keychain.
 //
-// The service is the accounts Worker at `baseURL`. The parts that matter:
+// The service is the accounts Worker at `baseURL`; its README (repository
+// another-morse-trainer-accounts) is the contract. The parts that matter:
 //
 //   * Sign-in is an emailed link. `/v1/auth/verify/start` takes the address
 //     and a PKCE challenge and answers 202 with a poll token whether or not
@@ -22,8 +23,11 @@
 //   * A 401 that a refresh cannot cure means the user removed this device
 //     from their account, or the token leaked and was reused; either way
 //     the device is signed out locally (`AccountError.signedOut`).
-//   * Sessions go up with `POST /v1/me/sessions` as a batch of the record
-//     the service hands back to readers, deduplicated by id on the server.
+//   * Sessions go up with `POST /v1/sync/sessions`, at most 200 a call,
+//     idempotent by id; the reply says which were accepted, skipped (already
+//     there) or rejected (never will be). Practice days go up with
+//     `POST /v1/sync/days`, idempotent per day. Both need the `sync` scope,
+//     which a first-party sign-in gets by not naming any scopes.
 //
 // Nothing here blocks the UI: AppModel+Account.swift fires these as Tasks.
 
@@ -84,11 +88,9 @@ actor AccountClient {
     /// The accounts Worker.
     static let baseURL = URL(string: "https://amt-accounts.n9ho-amt.workers.dev")!
     /// How the service names this app: in the sign-in email, on the confirm
-    /// page and in the account's devices list.
+    /// page and in the account's devices list. One of the three first-party
+    /// ids the README reserves.
     static let clientID = "amt-ios"
-    /// What the sign-in asks for. Sessions go up under it; it is the only
-    /// scope this app needs.
-    static let scopes = "stats:write"
     /// The poll cadence the service allows: faster is a 429.
     static let pollInterval: TimeInterval = 2
     /// How long the emailed link works, plus a little for the clock.
@@ -125,9 +127,10 @@ actor AccountClient {
         let status = SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes)
         guard status == errSecSuccess else { throw AccountError.transport("Could not make a sign-in secret.") }
         let verifier = AccountPKCE.verifier(from: bytes)
+        // No `scopes`: a first-party client gets the full grant.
         let body = AccountStartRequest(email: email, pkceChallenge: AccountPKCE.challenge(for: verifier),
                                        client: Self.clientID, deviceName: deviceName,
-                                       platform: platform, scopes: Self.scopes)
+                                       platform: platform, scopes: nil)
         let (data, http) = try await post("v1/auth/verify/start", body: body, bearer: nil)
         guard http.statusCode == 202 else { throw Self.serverError(http, data) }
         let reply = try Self.decode(AccountStartResponse.self, from: data)
@@ -187,16 +190,28 @@ actor AccountClient {
         return try Self.decode(AccountIdentity.self, from: data)
     }
 
-    // MARK: - Sessions
+    // MARK: - Sync
 
-    /// `POST /v1/me/sessions`: a batch, oldest first. Any 2xx is the
-    /// acknowledgement; the server deduplicates by id, so a batch whose
-    /// reply was lost is safe to send again.
-    func uploadSessions(_ sessions: [AccountSessionUpload]) async throws {
-        guard !sessions.isEmpty else { return }
-        _ = try await authorized("v1/me/sessions", method: "POST",
-                                 body: AccountSessionsUploadRequest(sessions: sessions))
-        log.info("uploaded \(sessions.count) session(s)")
+    /// `POST /v1/sync/sessions`: a batch, oldest first, at most 200. The
+    /// reply settles every id one way or another; a batch whose reply was
+    /// lost is safe to send again (the repeats come back as `skipped`).
+    func pushSessions(_ sessions: [AccountSessionUpload]) async throws -> AccountPushResponse {
+        let (data, _) = try await authorized("v1/sync/sessions", method: "POST",
+                                             body: AccountSessionsUploadRequest(sessions: sessions))
+        let reply = try Self.decode(AccountPushResponse.self, from: data)
+        log.info("pushed \(sessions.count) session(s): \(reply.accepted.count) accepted, \(reply.skipped.count) skipped, \(reply.rejected.count) rejected")
+        for r in reply.rejected { log.notice("rejected \(r.id ?? "?", privacy: .public): \(r.reason, privacy: .public)") }
+        return reply
+    }
+
+    /// `POST /v1/sync/days`: this device's ledger entries, at most 400.
+    /// The server keeps the larger figure per day, so resending is harmless.
+    func pushDays(_ days: [AccountDayUpload]) async throws -> AccountDaysResponse {
+        let (data, _) = try await authorized("v1/sync/days", method: "POST",
+                                             body: AccountDaysUploadRequest(days: days))
+        let reply = try Self.decode(AccountDaysResponse.self, from: data)
+        log.info("pushed \(days.count) day(s): \(reply.rejected.count) rejected")
+        return reply
     }
 
     // MARK: - Sign-out

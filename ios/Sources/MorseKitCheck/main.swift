@@ -7481,7 +7481,8 @@ if let fx = loadFirstFourFixture(),
 
 // ---------------------------------------------------------------------------
 // Account sync (MorseKit/AccountSync.swift): PKCE as the service applies it,
-// the session record as the service stores it, and the upload queue.
+// the session record as the service stores it (accounts README §9), the
+// push and days replies (§7), and the outbox.
 print("\nAccount sync:")
 do {
     // RFC 7636 appendix B: the spec's own verifier and its S256 challenge.
@@ -7495,9 +7496,23 @@ do {
     check("base64url maps + and / to - and _",
           AccountPKCE.base64url(Data([0xFB, 0xFF])) == "-_8")
 
+    // verify/start: a first-party client omits `scopes` and gets the full grant.
+    let start = AccountStartRequest(email: "a@b.c", pkceChallenge: "x", client: "amt-ios",
+                                    deviceName: "d", platform: "ios", scopes: nil)
+    if let json = try? JSONEncoder().encode(start),
+       let obj = try? JSONSerialization.jsonObject(with: json) as? [String: Any] {
+        check("a nil scopes is left out of the start body (first-party grant)",
+              obj["scopes"] == nil && obj["client"] as? String == "amt-ios" && obj["platform"] as? String == "ios")
+    } else {
+        check("the start request encodes", false)
+    }
+    let poll = Data(#"{"access":"a","refresh":"r","expiresIn":900,"account":{"id":"u1","email":"x@y.z","callsign":null,"displayName":null}}"#.utf8)
+    let tokens = try? JSONDecoder().decode(AccountTokens.self, from: poll)
+    check("the poll's 201 decodes, email and null profile fields included",
+          tokens?.expiresIn == 900 && tokens?.account?.id == "u1" && tokens?.account?.email == "x@y.z"
+          && tokens?.account?.callsign == nil && tokens?.account?.label == "")
+
     // The record → service mapping.
-    var utc = Calendar(identifier: .gregorian)
-    utc.timeZone = TimeZone(identifier: "UTC")!
     let id = UUID(uuidString: "6BA7B810-9DAD-11D1-80B4-00C04FD430C8")!
     let record = SessionRecord(
         id: id, date: Date(timeIntervalSince1970: 1_700_000_000.4567), mode: "characters",
@@ -7506,10 +7521,9 @@ do {
         characters: [.init(character: "K", attempts: 10, correct: 9, medianTTR: 0.7495),
                      .init(character: "M", attempts: 10, correct: 10, medianTTR: nil)],
         activeCharacters: ["K", "M"], score: nil)
-    let up = AccountSessionUpload(record, calendar: utc)
+    let up = AccountSessionUpload(record)
     check("id is the UUID, lowercased", up.id == "6ba7b810-9dad-11d1-80b4-00c04fd430c8")
     check("date is epoch milliseconds, rounded", up.date == 1_700_000_000_457)
-    check("day is the local calendar day (UTC here)", up.day == "2023-11-14")
     check("times are whole milliseconds", up.fastestTtrMs == 413 && up.medianTtrMs == 800)
     check("per-character medians likewise, nil kept nil",
           up.characters.map(\.medianTtrMs) == [750, nil])
@@ -7517,34 +7531,35 @@ do {
     check("speeds, counts, duration, score and the active set carry over",
           up.characterWpm == 25 && up.effectiveWpm == 18 && up.attempts == 40 && up.correct == 36
           && up.durationSeconds == 300.5 && up.score == nil && up.activeCharacters == ["K", "M"])
-    var pacific = Calendar(identifier: .gregorian)
-    pacific.timeZone = TimeZone(identifier: "America/Los_Angeles")!
-    check("the day follows the calendar's zone (22:13 UTC is still the 14th in LA)",
-          AccountSessionUpload(record, calendar: pacific).day == "2023-11-14")
-    let lateUTC = Date(timeIntervalSince1970: 1_700_000_000 + 3 * 3600)   // 01:13 UTC on the 15th
-    var late = record
-    late.date = lateUTC
-    check("…and 01:13 UTC is the 14th in LA, the 15th in UTC",
-          AccountSessionUpload(late, calendar: pacific).day == "2023-11-14"
-          && AccountSessionUpload(late, calendar: utc).day == "2023-11-15")
     if let json = try? JSONEncoder().encode(AccountSessionsUploadRequest(sessions: [up])),
        let obj = try? JSONSerialization.jsonObject(with: json) as? [String: Any],
        let sessions = obj["sessions"] as? [[String: Any]], let first = sessions.first {
         let keys = Set(first.keys)
-        check("the wire record carries the service's field names",
-              keys.isSuperset(of: ["id", "date", "day", "mode", "characterWpm", "effectiveWpm", "attempts",
-                                   "correct", "fastestTtrMs", "medianTtrMs", "durationSeconds",
-                                   "schemaVersion", "characters", "activeCharacters"]))
+        check("the wire record carries exactly the README's SessionRecord fields",
+              keys == ["id", "date", "mode", "characterWpm", "effectiveWpm", "attempts", "correct",
+                       "fastestTtrMs", "medianTtrMs", "durationSeconds", "schemaVersion", "characters", "activeCharacters"])
         check("a nil score is omitted, not null", first["score"] == nil)
     } else {
         check("the upload request encodes", false)
     }
     let roundTrip = (try? JSONEncoder().encode(up)).flatMap { try? JSONDecoder().decode(AccountSessionUpload.self, from: $0) }
-    check("an upload round-trips through JSON (the queue persists it)", roundTrip == up)
+    check("an upload round-trips through JSON (the outbox persists it)", roundTrip == up)
 
-    // The queue.
+    // The push reply settles every id sent.
+    let pushJSON = Data(#"{"accepted":["a"],"skipped":["b"],"rejected":[{"id":"c","reason":"need attempts >= correct >= 0"},{"id":null,"reason":"not an object"}],"stats":{"totals":{"sessions":3}}}"#.utf8)
+    let push = try? JSONDecoder().decode(AccountPushResponse.self, from: pushJSON)
+    check("the push reply decodes with its unknown stats ignored",
+          push?.accepted == ["a"] && push?.skipped == ["b"] && push?.rejected.count == 2 && push?.rejected.last?.id == nil)
+    check("settled = accepted + skipped + rejected ids (a null id has none)", push?.settled == ["a", "b", "c"])
+    let daysJSON = Data(#"{"days":{"2026-10-05":2400},"rejected":[{"day":"2026-02-30","reason":"day must be yyyy-mm-dd"}]}"#.utf8)
+    let daysReply = try? JSONDecoder().decode(AccountDaysResponse.self, from: daysJSON)
+    check("the days reply decodes", daysReply?.days["2026-10-05"] == 2400 && daysReply?.rejected.first?.day == "2026-02-30")
+    check("a day upload clamps seconds to 0–86400",
+          AccountDayUpload(day: "2026-10-05", seconds: -5).seconds == 0 && AccountDayUpload(day: "2026-10-05", seconds: 90_000).seconds == 86_400)
+
+    // The outbox.
     var queue = AccountSyncQueue()
-    check("a new queue is empty", queue.isEmpty && queue.count == 0 && queue.nextBatch().isEmpty)
+    check("a new outbox is empty", queue.isEmpty && queue.count == 0 && queue.nextBatch().isEmpty)
     queue.enqueue(up)
     queue.enqueue(up)
     check("the same id queued twice is one entry", queue.count == 1)
@@ -7555,14 +7570,14 @@ do {
         r.date = Date(timeIntervalSince1970: 1_700_000_000 + Double(i) * 86_400)
         history.add(r)
     }
-    queue.enqueue(history: history, calendar: utc)
+    queue.enqueue(history: history)
     check("signing in queues the history, oldest first, after what was pending",
           queue.count == 4 && queue.pending.map(\.date) == [1_700_000_000_457, 1_700_000_000_000, 1_700_086_400_000, 1_700_172_800_000])
-    queue.enqueue(history: history, calendar: utc)
+    queue.enqueue(history: history)
     check("queueing the history again adds nothing", queue.count == 4)
     let batch = queue.nextBatch()
-    check("a batch is the oldest first, at most \(AccountSyncQueue.batchSize)",
-          batch.count == 4 && batch.first?.id == up.id)
+    check("a batch is the oldest first, at most \(AccountSyncQueue.batchSize) (the service's maximum)",
+          batch.count == 4 && batch.first?.id == up.id && AccountSyncQueue.batchSize == 200)
     queue.acknowledge([up.id, "not-queued"])
     check("acknowledging drops those ids and ignores unknown ones", queue.count == 3 && !queue.pending.contains { $0.id == up.id })
     var full = AccountSyncQueue()
@@ -7570,16 +7585,35 @@ do {
         var r = record
         r.id = UUID()
         r.date = Date(timeIntervalSince1970: Double(i))
-        full.enqueue(AccountSessionUpload(r, calendar: utc))
+        full.enqueue(AccountSessionUpload(r))
     }
-    check("the queue is capped at \(AccountSyncQueue.limit), oldest dropped",
+    check("the outbox is capped at \(AccountSyncQueue.limit) sessions, oldest dropped",
           full.count == AccountSyncQueue.limit && full.pending.first?.date == 5_000)
+
+    // Days: queued by day, sent with the ledger's figure.
+    var ledger = ActivityLedger()
+    ledger.record(day: "2026-10-04", seconds: 600)
+    ledger.record(day: "2026-10-05", seconds: 1900)
+    queue.enqueue(day: "2026-10-05")
+    queue.enqueue(day: "2026-10-05")
+    check("a day queued twice is pending once, and the outbox is no longer empty for it",
+          queue.pendingDays == ["2026-10-05"] && !AccountSyncQueue(pendingDays: ["2026-10-05"]).isEmpty)
+    queue.enqueue(ledger: ledger)
+    queue.enqueue(day: "2026-09-01")   // pending but no longer in the ledger
+    check("the days batch is oldest first with the ledger's seconds, 0 for a day the ledger lost",
+          queue.nextDays(from: ledger) == [.init(day: "2026-09-01", seconds: 0), .init(day: "2026-10-04", seconds: 600), .init(day: "2026-10-05", seconds: 1900)])
+    check("at most \(AccountSyncQueue.daysBatchSize) days go in one request (the service's maximum)",
+          AccountSyncQueue.daysBatchSize == 400)
+    queue.acknowledge(days: ["2026-10-04", "2026-10-05"])
+    check("acknowledged days leave the outbox", queue.pendingDays == ["2026-09-01"])
     let queueRoundTrip = (try? JSONEncoder().encode(queue)).flatMap { try? JSONDecoder().decode(AccountSyncQueue.self, from: $0) }
-    check("the queue round-trips through JSON", queueRoundTrip == queue)
+    check("the outbox round-trips through JSON, days included", queueRoundTrip == queue)
+    let old = try? JSONDecoder().decode(AccountSyncQueue.self, from: Data(#"{"pending":[]}"#.utf8))
+    check("an outbox saved before days were queued decodes with none pending", old?.isEmpty == true)
+    let torn = try? JSONDecoder().decode(AccountSyncQueue.self, from: Data(#"{"pending":[{"id":"x"},\#((try? String(data: JSONEncoder().encode(up), encoding: .utf8)) ?? "{}")]}"#.utf8))
+    check("a session that no longer decodes is dropped, the rest of the outbox survives", torn?.count == 1 && torn?.pending.first == up)
     queue.removeAll()
-    check("signing out empties it", queue.isEmpty)
-    _ = AccountStartRequest(email: "a@b.c", pkceChallenge: "x", client: "amt-ios",
-                            deviceName: "d", platform: "ios", scopes: "stats:write")
+    check("signing out empties it, days too", queue.isEmpty && queue.pendingDays.isEmpty)
 }
 
 print("\n────────────────────────────")

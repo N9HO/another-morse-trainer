@@ -137,6 +137,10 @@ struct AccountSettingsSection: View {
             Text(pending == 0 ? message : "\(message) \(pending == 1 ? "1 session is" : "\(pending) sessions are") waiting to be sent.")
                 .font(.footnote)
                 .foregroundStyle(.orange)
+        case .rejected(let count, let reason):
+            Text("Your account refused \(count == 1 ? "1 session" : "\(count) sessions")\(reason.isEmpty ? "" : " (\(reason))"). \(count == 1 ? "It stays" : "They stay") in your local history.")
+                .font(.footnote)
+                .foregroundStyle(.orange)
         case .idle:
             if !account.syncSessions {
                 Text(pending == 0 ? "Sync is paused." : "Sync is paused; \(pending == 1 ? "1 session is" : "\(pending) sessions are") waiting.")

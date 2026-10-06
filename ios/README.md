@@ -203,11 +203,13 @@ testers, bug reports and feature chat live on
   attestation; pairing itself is the opt-in.
 - **Account sync**: sign in to your Another Morse Trainer account with an
   emailed link (no password) under Settings › Leaderboard & Buddy › Account,
-  and every finished session is sent to it — at the end of the session, or
-  when you are next online — so your stats follow you between devices and
-  apps you allow (Carrier Wave, for one) can read them. Off until you sign
-  in; a switch pauses sending, and Sign out removes this device from the
-  account. iOS/Mac only for now; Android and desktop are tracked separately
+  and every finished session and practice day is sent to it — at the end of
+  the session, or when you are next online — so your stats build up in one
+  place and apps you allow (Carrier Wave, for one) can read them. Off until
+  you sign in; a switch pauses sending, and Sign out removes this device
+  from the account. This is the push half: pulling sessions from other
+  devices and the restore snapshot are still to come. iOS/Mac only for now;
+  Android and desktop are tracked separately
 - **Progress**: daily streak with milestone celebrations, a GitHub-style
   activity grid of daily practice time, session history with per-session
   recognition charts, per-character stats, most-confused pairs, performance

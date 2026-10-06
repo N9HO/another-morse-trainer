@@ -45,9 +45,14 @@ Account** (nothing is sent before). To `amt-accounts.n9ho-amt.workers.dev`
 
 | Data | Details | Kept |
 |---|---|---|
-| Email address | typed by the user to receive the sign-in link; the app keeps it only to show who is signed in | By the account service, as the account's address |
-| Device name, platform | the device's name (as iOS reports it) and "ios"/"macos", shown in the sign-in email and the account's devices list | While the device is signed in |
-| Session records | per finished session: mode, speeds, attempts, correct, reaction times, duration, the mode's score, per-character results, the local day — the same record Your Stats shows | Until the user deletes the account (from the account service) |
+| Email address | typed by the user to receive the sign-in link; the app keeps it only to show who is signed in | By the account service, as the account's address, until account deletion |
+| Device name, platform | the device's name (as iOS reports it) and "ios"/"ipados"/"macos", shown in the sign-in email and the account's devices list | While the device is signed in (the row is pruned 30 days after sign-out) |
+| Session records | per finished session: mode, speeds, attempts, correct, reaction times, duration, the mode's score, per-character results, active character set — the same record Your Stats shows | Until account deletion |
+| Practice days | this device's local calendar day and whole seconds practised, for the streak and the activity calendar | Newest 400 days; account deletion |
+
+The accounts service's README (§12, "Privacy: exactly what is stored")
+lists every row it keeps and the store answers it calls for; this table
+is the app's side of the same list.
 
 Unlike the leaderboard, this IS linked to an account the user created, so
 the App Store answers below change for the release that ships it: **Email
