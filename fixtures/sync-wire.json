@@ -15,7 +15,8 @@
     "  strategy (seconds since 2001) must never reach the wire.",
     "- The apps keep TTRs in seconds; on the wire `fastestTtrMs`, `medianTtrMs`",
     "  and per-character `medianTtrMs` are whole milliseconds, round(seconds *",
-    "  1000). Decoding divides by 1000. No value here sits on a .5 boundary.",
+    "  1000). Decoding divides by 1000. No value here sits on a .5 boundary in",
+    "  binary floating point (0.3895 would: 0.3895 * 1000 is exactly 389.5).",
     "- `durationSeconds` is a number, unchanged.",
     "- `id` is the record's UUID, lowercase on the wire.",
     "- An absent value is JSON null, never the -1 sentinel the Kotlin ports use",
@@ -86,7 +87,7 @@
   },
 
   "session": {
-    "_comment": "One record with every field populated. `local` is the port's own record in seconds; `localMode` per port. Encoding `local` must give exactly `wire` (key order free); decoding `wire` must give back `local` with the id lowercased.",
+    "_comment": "One record with every field populated. `local` is the port's own record in seconds; `localMode` per port. Encoding `local` must give exactly `wire` (key order free). Decoding `wire` gives back `local` with the id lowercased and each TTR at millisecond precision (0.2124 s comes back as 0.212 s): the ms rounding is the only loss.",
     "local": {
       "id": "3F2C1A9E-8B7D-4C6E-9F10-2A3B4C5D6E7F",
       "dateEpochMs": 1791230000123,
@@ -100,7 +101,7 @@
       "durationSeconds": 300.5,
       "score": 37,
       "characters": [
-        { "character": "K", "attempts": 6, "correct": 6, "medianTtrSeconds": 0.3895 },
+        { "character": "K", "attempts": 6, "correct": 6, "medianTtrSeconds": 0.3893 },
         { "character": "M", "attempts": 5, "correct": 4, "medianTtrSeconds": 0.5 },
         { "character": "R", "attempts": 3, "correct": 0, "medianTtrSeconds": null }
       ],
@@ -119,7 +120,7 @@
       "durationSeconds": 300.5,
       "score": 37,
       "characters": [
-        { "character": "K", "attempts": 6, "correct": 6, "medianTtrMs": 390 },
+        { "character": "K", "attempts": 6, "correct": 6, "medianTtrMs": 389 },
         { "character": "M", "attempts": 5, "correct": 4, "medianTtrMs": 500 },
         { "character": "R", "attempts": 3, "correct": 0, "medianTtrMs": null }
       ],
@@ -194,7 +195,7 @@
         "updatedAt": 1791230000000
       },
       "operatingProcedure": {
-        "value": { "passed": ["offset", "signals"], "cleanRuns": ["when"], "drillPassed": false },
+        "value": { "passed": ["offset", "signals"], "cleanRuns": ["when"], "drillPassed": true },
         "updatedAt": 1791230000000
       },
       "storyBookmarks": {
@@ -234,7 +235,7 @@
     },
 
     "aggregates": {
-      "_comment": "After every successful push or pull reply that carries `stats`, these local lifetime counters are REPLACED by the server's, so a fresh install shows totals beyond the 100 rows it holds. bestTTR goes from ms to seconds; personalBests replaces the whole bests map.",
+      "_comment": "After every successful push or pull reply that carries `stats`, these local lifetime counters are REPLACED by the server's, so a fresh install shows totals beyond the 100 rows it holds. bestTTR goes from ms to seconds; personalBests replaces the whole bests map. Mode keys here are canonical ids, as on the wire: a port that keys its bests by its own mode string (the Kotlin titles) maps them through `modeIds` on the way in.",
       "local": {
         "totalSessions": 3, "totalAnswered": 30, "totalCorrect": 20,
         "totalPracticeSeconds": 120.0, "bestTtrSeconds": 0.5,
@@ -300,7 +301,7 @@
     },
 
     "retry": {
-      "_comment": "What the engine does with an HTTP outcome. `refresh` = refresh the token once, then retry once; if the refresh fails, sign out. `network` = no HTTP reply at all.",
+      "_comment": "What the engine does with an HTTP outcome. `refresh` = refresh the token once, then retry once. If the refresh itself is refused (a 4xx), sign out; if the refresh gets no reply, a 429 or a 5xx, keep the tokens and back off, since the refresh token was not spent. `network` = no HTTP reply at all.",
       "outcomes": [
         { "status": 200, "action": "done" },
         { "status": 201, "action": "done" },
