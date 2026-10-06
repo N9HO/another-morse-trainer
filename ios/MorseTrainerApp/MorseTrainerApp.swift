@@ -28,6 +28,9 @@ struct MorseTrainerApp: App {
             // bring it up to date (at most every 15 minutes, and only while
             // paired or an invite is open — AppModel+Buddy.swift).
             if phase == .active { model.refreshBuddyStatus() }
+            // The optional account pulls on each return to the foreground,
+            // with its retry backoff started over (SyncCoordinator.swift).
+            if phase == .active { SyncCoordinator.shared.appBecameActive() }
         }
     }
 }

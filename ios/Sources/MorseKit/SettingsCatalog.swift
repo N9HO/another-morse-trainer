@@ -21,7 +21,7 @@ import Foundation
 /// behaviour: the guide and support answers name them, so they match the
 /// Android app word for word.
 public enum SettingsCategory: String, CaseIterable, Sendable, Identifiable, Hashable {
-    case sound, speed, characters, practice, keys, qso, reminders, display, leaderboard, about
+    case sound, speed, characters, practice, keys, qso, reminders, display, leaderboard, account, about
 
     public var id: String { rawValue }
 
@@ -36,6 +36,7 @@ public enum SettingsCategory: String, CaseIterable, Sendable, Identifiable, Hash
         case .reminders: return "Reminders"
         case .display: return "Display"
         case .leaderboard: return "Leaderboard & Buddy"
+        case .account: return "Account & Sync"
         case .about: return "Help & About"
         }
     }
@@ -53,6 +54,7 @@ public enum SettingsSection: String, CaseIterable, Sendable, Hashable {
     case reminders
     case display
     case leaderboard, buddy
+    case account, devices
     case bugReports, about
 
     public var category: SettingsCategory {
@@ -66,6 +68,7 @@ public enum SettingsSection: String, CaseIterable, Sendable, Hashable {
         case .reminders: return .reminders
         case .display: return .display
         case .leaderboard, .buddy: return .leaderboard
+        case .account, .devices: return .account
         case .bugReports, .about: return .about
         }
     }
@@ -183,6 +186,12 @@ public enum SettingsCatalog {
         .init("displayName", "Display name", ["name", "callsign", "nickname", "handle"], .leaderboard),
         .init("deleteScores", "Delete my scores", ["remove", "erase", "privacy", "data"], .leaderboard),
         .init("buddyStreak", "Buddy streak", ["buddy", "buddies", "friend", "partner", "pair", "invite", "join", "code", "streak", "leave", "home screen", "hide"], .buddy),
+
+        // Account & Sync
+        .init("account", "Account",
+              ["sign in", "sign out", "log in", "email", "sync", "callsign", "restore", "backup", "cloud"], .account),
+        .init("deleteAccount", "Delete account", ["remove", "erase", "privacy", "data"], .account),
+        .init("devices", "Devices", ["signed in", "phone", "tablet", "computer", "mac", "sign out"], .devices),
 
         // Help & About
         .init("copyDiagnostics", "Copy diagnostic info",

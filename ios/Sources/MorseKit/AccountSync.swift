@@ -291,20 +291,47 @@ public struct SyncServerStats: Decodable, Sendable, Equatable {
     public var totals: Totals
     public var bestTtrMs: Int?
     public var personalBests: [String: Int]
+    /// `activity.days`: the account's summed per-day ledger. Only the full
+    /// stats body (`GET /v1/me/stats`, the snapshot's `stats`) has it; a push
+    /// reply's stats row does not.
+    public var activityDays: [String: Int]?
+    /// `streak`: also only in the full stats body.
+    public var streak: Streak?
 
-    public init(totals: Totals, bestTtrMs: Int?, personalBests: [String: Int]) {
+    /// The account's practice streak, as the server counts it from the
+    /// summed ledger.
+    public struct Streak: Decodable, Sendable, Equatable {
+        public var current: Int
+        public var longest: Int
+        /// Newest practice day, local `yyyy-MM-dd`; nil when there is none.
+        public var lastPractisedDay: String?
+
+        public init(current: Int, longest: Int, lastPractisedDay: String?) {
+            self.current = current
+            self.longest = longest
+            self.lastPractisedDay = lastPractisedDay
+        }
+    }
+
+    public init(totals: Totals, bestTtrMs: Int?, personalBests: [String: Int],
+                activityDays: [String: Int]? = nil, streak: Streak? = nil) {
         self.totals = totals
         self.bestTtrMs = bestTtrMs
         self.personalBests = personalBests
+        self.activityDays = activityDays
+        self.streak = streak
     }
 
-    enum CodingKeys: String, CodingKey { case totals, bestTtrMs, personalBests }
+    enum CodingKeys: String, CodingKey { case totals, bestTtrMs, personalBests, activity, streak }
+    private struct Activity: Decodable { var days: [String: Int]? }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         totals = try c.decode(Totals.self, forKey: .totals)
         bestTtrMs = try c.decodeIfPresent(Int.self, forKey: .bestTtrMs)
         personalBests = try c.decodeIfPresent([String: Int].self, forKey: .personalBests) ?? [:]
+        activityDays = (try? c.decodeIfPresent(Activity.self, forKey: .activity))?.days
+        streak = try? c.decodeIfPresent(Streak.self, forKey: .streak)
     }
 }
 
@@ -337,6 +364,8 @@ public struct SyncPullReply: Decodable, Sendable, Equatable {
     public var sessions: [SyncSession]
     public var nextSince: Int
     public var hasMore: Bool
+    /// Adopted when present; the contract does not promise it on this route.
+    public var stats: SyncServerStats?
 }
 
 /// `POST /v1/sync/days`'s reply: the account's summed figure for each day sent.
@@ -446,7 +475,14 @@ where Entry.ID == String {
         var done = Set(reply.accepted.map { $0.lowercased() })
         done.formUnion(reply.skipped.map { $0.lowercased() })
         done.formUnion(reply.rejected.compactMap { $0.id?.lowercased() })
-        entries.removeAll { done.contains($0.id.lowercased()) }
+        remove(ids: done)
+    }
+
+    /// Remove the entries with these ids (compared lowercase): a batch the
+    /// server refused outright, which resending cannot fix.
+    public mutating func remove(ids: Set<String>) {
+        let gone = Set(ids.map { $0.lowercased() })
+        entries.removeAll { gone.contains($0.id.lowercased()) }
     }
 }
 
@@ -597,6 +633,19 @@ public enum AccountSync {
                 : $0.id.uuidString.lowercased() < $1.id.uuidString.lowercased()
         }
         return Array(merged.prefix(Swift.max(0, limit)))
+    }
+
+    /// The local practice streak with the account's adopted: its current
+    /// run and last day, and the longer of the two longest runs (a local
+    /// record is never lowered). A server with no practice day leaves the
+    /// local streak as it is.
+    public static func adoptStreak(_ local: PracticeStreak, server: SyncServerStats.Streak,
+                                   calendar: Calendar = .current) -> PracticeStreak {
+        guard let key = server.lastPractisedDay,
+              let day = ActivityLedger.date(forKey: key, calendar: calendar) else { return local }
+        let current = max(0, server.current)
+        return PracticeStreak(current: current, longest: max(local.longest, server.longest, current),
+                              lastPracticeDay: day)
     }
 
     /// The server's summed per-day figures replace the local ones day by day;

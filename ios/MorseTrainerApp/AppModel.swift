@@ -510,6 +510,9 @@ final class AppModel: ObservableObject {
         // (through rescheduleReminder, so it carries the buddy sentence too).
         if settings.dailyReminderEnabled { rescheduleReminder() }
         observeAudioSession()
+        // The optional account: hand it the model and pull, if signed in.
+        // Last, so everything it reads is loaded.
+        SyncCoordinator.shared.attach(self)
     }
 
     // MARK: - Audio session events
@@ -974,6 +977,11 @@ final class AppModel: ObservableObject {
     private func setBookmark(_ index: Int, for key: String) {
         guard storyBookmarks[key] != index else { return }
         storyBookmarks[key] = index
+        saveBookmarks()
+        SyncCoordinator.shared.noteState(.storyBookmarks, value: syncStateValue(.storyBookmarks))
+    }
+
+    private func saveBookmarks() {
         if let data = try? JSONEncoder().encode(storyBookmarks) {
             UserDefaults.standard.set(data, forKey: AppModel.bookmarksKey)
         }
@@ -2130,6 +2138,10 @@ final class AppModel: ObservableObject {
             // seconds, on the local day it ended.
             activity.record(date: record.date,
                             seconds: Int((record.durationSeconds ?? 0).rounded()))
+            // The optional account (SyncCoordinator.swift): the same day and
+            // seconds join this device's own day record, and, signed in, the
+            // record is queued for the next push. Local first, always.
+            SyncCoordinator.shared.noteSession(record)
         }
         // Hand the route back: whatever was playing before the session may
         // resume now. Nothing above this line makes a sound after it.
@@ -3097,13 +3109,20 @@ final class AppModel: ObservableObject {
 
     // MARK: - Persistence (characters mode progress)
 
-    private func saveProgress() {
+    /// `noteSync` false is for a value the account just handed us
+    /// (`applySyncedState`): saved, but not stamped as a change of ours.
+    private func saveProgress(noteSync: Bool = true) {
         if let data = try? JSONEncoder().encode(charLadder.snapshot) {
             UserDefaults.standard.set(data, forKey: Self.progressKey)
         }
         if let data = try? JSONEncoder().encode(journeyProgress) {
             UserDefaults.standard.set(data, forKey: Self.journeyKey)
         }
+        guard noteSync else { return }
+        // Stamped and queued only when the synced position actually moved;
+        // most saves are per-character stats, which do not sync.
+        SyncCoordinator.shared.noteState(.characters, value: syncStateValue(.characters))
+        SyncCoordinator.shared.noteState(.journey, value: syncStateValue(.journey))
     }
 
     /// Mirror the quiz's live level/bar into the published UI state.
@@ -3178,6 +3197,9 @@ final class AppModel: ObservableObject {
         var s = streak
         let before = s.current
         defer { reportBuddyPracticeDay() }   // after the streak has today, so the report sees it
+        // The account's own day record gets the day (+0 seconds), queued
+        // while signed in. A no-op once the day is there, so cheap per answer.
+        SyncCoordinator.shared.notePracticeDay()
         if s.record(on: Date()) {            // only mutate (and persist) on the day's first practice
             streak = s
             if s.current > before, PracticeStreak.isMilestone(s.current) {
@@ -3706,6 +3728,11 @@ final class AppModel: ObservableObject {
     /// profile and today's Daily Dit stay, matching Android, whose reset wipes
     /// `amt_engine` / `amt_stats` / `amt_journey` and leaves `amt_voice` alone.
     func resetProgress() {
+        // A reset is local: it never stamps or pushes the synced keys (the
+        // next ordinary save does). Same on Android and desktop.
+        let sync = SyncCoordinator.shared
+        sync.suspendStamping()
+        defer { sync.resumeStamping() }
         UserDefaults.standard.removeObject(forKey: Self.progressKey)
         UserDefaults.standard.removeObject(forKey: Self.journeyKey)
         // The Sending Analyzer's per-character record is sending progress.
@@ -3726,5 +3753,113 @@ final class AppModel: ObservableObject {
         newMilestone = nil
         // The pending reminder must not keep promising the streak just wiped.
         refreshReminderIfStreakChanged()
+    }
+}
+
+// MARK: - Account sync (SyncCoordinator's view of the model)
+
+// Here rather than in SyncCoordinator.swift because the history, the ledger
+// and the ladder are private to this file. The rules are MorseKit's
+// (AccountSync.swift, AccountSyncEngine.swift); this only reads and writes
+// the live stores.
+extension AppModel {
+    /// A synced key's current value, in its wire shape.
+    func syncStateValue(_ key: SyncStateKey) -> JSONValue {
+        switch key {
+        case .journey: return AccountSync.journeyValue(journeyProgress)
+        case .characters: return AccountSync.charactersValue(charLadder.snapshot)
+        case .firstFour: return AccountSync.firstFourValue(FirstFourStore.load())
+        case .operatingProcedure: return AccountSync.operatingProcedureValue(OperatingProcedureStore.load())
+        case .storyBookmarks: return AccountSync.storyBookmarksValue(storyBookmarks)
+        }
+    }
+
+    /// A synced key's value for the engine to push, or nil when its store
+    /// was never saved on this device (or holds nothing): a fresh install's
+    /// defaults are never pushed over the account's progress.
+    func syncSavedStateValue(_ key: SyncStateKey) -> JSONValue? {
+        let defaults = UserDefaults.standard
+        switch key {
+        case .journey:
+            // Saved together with the ladder, so an untouched Journey counts
+            // as never saved.
+            guard defaults.data(forKey: Self.journeyKey) != nil, journeyProgress != JourneyProgress() else { return nil }
+        case .characters:
+            guard defaults.data(forKey: Self.progressKey) != nil else { return nil }
+        case .firstFour:
+            guard defaults.data(forKey: FirstFourStore.key) != nil else { return nil }
+        case .operatingProcedure:
+            guard defaults.data(forKey: OperatingProcedureStore.key) != nil else { return nil }
+        case .storyBookmarks:
+            guard !storyBookmarks.isEmpty else { return nil }
+        }
+        return syncStateValue(key)
+    }
+
+    /// The account's streak (`AccountSync.adoptStreak`): a restored install
+    /// shows it rather than 0; a local longest is never lowered.
+    func adoptSyncedStreak(_ server: SyncServerStats.Streak) {
+        let adopted = AccountSync.adoptStreak(streak, server: server)
+        guard adopted != streak else { return }
+        streak = adopted
+        refreshReminderIfStreakChanged()
+    }
+
+    /// Every session row, for the first sign-in's push.
+    var syncLocalSessions: [SessionRecord] { history.sessions }
+
+    /// The displayed ledger.
+    var syncLocalLedger: [String: Int] { activity.days }
+
+    /// Pulled or snapshot rows into the history (saved by its didSet). The
+    /// lifetime counters are left for `adoptSyncedTotals`.
+    func mergeSyncedSessions(_ records: [SessionRecord]) -> Bool {
+        history.mergeSynced(records)
+        return (try? JSONEncoder().encode(history)) != nil
+    }
+
+    func adoptSyncedTotals(_ totals: SyncLifetimeTotals) {
+        history.adoptServerTotals(totals)
+    }
+
+    func adoptSyncedDays(_ days: [String: Int]) {
+        guard !days.isEmpty else { return }
+        activity.adoptServerDays(days)
+    }
+
+    /// Apply a newer value from the account to the live store, saved without
+    /// being stamped as a local change. False when the value is not a shape
+    /// this app reads, so the local one stands.
+    func applySyncedState(_ key: SyncStateKey, value: JSONValue) -> Bool {
+        switch key {
+        case .journey:
+            guard var progress = AccountSync.journeyProgress(from: value) else { return false }
+            progress.unlockedThrough = max(1, min(progress.unlockedThrough, journeyTotalLevels))
+            journeyProgress = progress
+            if let index = journeyQuiz.levels.firstIndex(where: { $0.number == progress.currentLevel }) {
+                journeyQuiz.select(levelIndex: index)
+            }
+            journeyLevelCleared = nil
+            syncJourneyState()
+            saveProgress(noteSync: false)
+        case .characters:
+            guard let snapshot = AccountSync.applyingCharacters(value, to: charLadder.snapshot),
+                  !snapshot.engine.activeCharacters.isEmpty else { return false }
+            objectWillChange.send()   // the ladder lives outside @Published state
+            charLadder.restore(from: snapshot)
+            if mode == .characters { summary = charLadder.summary }
+            saveProgress(noteSync: false)
+        case .firstFour:
+            guard let progress = AccountSync.firstFourProgress(from: value) else { return false }
+            FirstFourStore.save(progress, noteSync: false)
+        case .operatingProcedure:
+            guard let progress = AccountSync.operatingProcedureProgress(from: value) else { return false }
+            OperatingProcedureStore.save(progress, noteSync: false)
+        case .storyBookmarks:
+            guard let bookmarks = AccountSync.storyBookmarks(from: value) else { return false }
+            storyBookmarks = bookmarks
+            saveBookmarks()
+        }
+        return true
     }
 }

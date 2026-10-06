@@ -102,8 +102,10 @@ public enum AccountError: Error, Sendable, Equatable {
     case signedOut
     /// No HTTP reply at all.
     case network
-    /// The Worker answered with an error status (README §10).
-    case server(status: Int, code: String?, retryAfter: Int?)
+    /// The Worker answered with an error status (README §10). `message` is
+    /// its human text, shown as is where the user can act on it (a refused
+    /// callsign).
+    case server(status: Int, code: String?, retryAfter: Int?, message: String? = nil)
     /// A success whose body could not be read.
     case unreadable
     /// The token store could not save.
@@ -114,7 +116,7 @@ public enum AccountError: Error, Sendable, Equatable {
         switch self {
         case .signedOut, .storage: return .drop
         case .network, .unreadable: return .backoff
-        case .server(let status, _, _): return AccountSync.retryAction(status: status)
+        case .server(let status, _, _, _): return AccountSync.retryAction(status: status)
         }
     }
 }
@@ -337,6 +339,15 @@ public actor AccountClient {
         return try decode(try await authorized(AccountRequest(method: "PUT", path: "v1/sync/state", body: body)).body)
     }
 
+    /// `GET /v1/me/stats`: the account's stats, with the summed day ledger
+    /// under `activity.days`. Read after a pull brought in other devices'
+    /// sessions, whose totals no push reply has carried yet.
+    public func stats(today: String?) async throws -> SyncServerStats {
+        var query: [String: String] = [:]
+        if let today { query["today"] = today }
+        return try decode(try await authorized(AccountRequest(method: "GET", path: "v1/me/stats", query: query)).body)
+    }
+
     /// `GET /v1/sync/snapshot`. `today` is the local `yyyy-MM-dd`, for the streak.
     public func snapshot(today: String?) async throws -> SyncSnapshot {
         var query: [String: String] = [:]
@@ -378,9 +389,10 @@ public actor AccountClient {
     }
 
     private func serverError(_ response: AccountResponse) -> AccountError {
-        struct Body: Decodable { var error: String }
-        let code = (try? JSONDecoder().decode(Body.self, from: response.body))?.error
-        return .server(status: response.status, code: code, retryAfter: response.retryAfter)
+        struct Body: Decodable { var error: String; var message: String? }
+        let body = try? JSONDecoder().decode(Body.self, from: response.body)
+        return .server(status: response.status, code: body?.error, retryAfter: response.retryAfter,
+                       message: body?.message)
     }
 
     private func encode<T: Encodable>(_ value: T) throws -> Data {

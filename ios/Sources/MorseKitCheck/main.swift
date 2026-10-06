@@ -7994,6 +7994,461 @@ if let fx = loadSyncWireFixture(),
     check("outbox drain fixture loads", false)
 }
 
+// MARK: - Account sync engine (device days, first sign-in, pull, sign-out)
+
+// fixtures/sync-wire.json's `merge.deviceDays`, then AccountSyncEngine driven
+// against the fake transport above and an in-memory host: the first sign-in's
+// order, a pull that saves before it moves the cursor, sign-out and a forced
+// sign-out, and the backoff. No network.
+print("\nAccount sync engine (fixtures/sync-wire.json merge.deviceDays, fake transport):")
+/// UTC, so a day key never depends on the machine running the harness.
+func syncUTCCalendar() -> Calendar {
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = TimeZone(identifier: "UTC")!
+    return calendar
+}
+/// A finished session of `seconds` at noon on `day`.
+func syncDayRecord(day: String, seconds: Int, calendar: Calendar) -> SessionRecord {
+    let start = ActivityLedger.date(forKey: day, calendar: calendar) ?? Date(timeIntervalSince1970: 0)
+    return SessionRecord(id: UUID(), date: start.addingTimeInterval(12 * 3600), mode: "characters",
+                         characterWPM: 20, effectiveWPM: 20, attempts: 10, correct: 9,
+                         fastestTTR: 0.4, medianTTR: 0.6, durationSeconds: Double(seconds),
+                         characters: [], activeCharacters: [])
+}
+func syncJSONResponse(_ value: JSONValue, status: Int = 200) -> AccountResponse {
+    AccountResponse(status: status, body: (try? JSONEncoder().encode(value)) ?? Data())
+}
+func syncRequestBody(_ request: AccountRequest) -> JSONValue {
+    request.body.flatMap { try? JSONDecoder().decode(JSONValue.self, from: $0) } ?? .null
+}
+func syncTestAccount() -> JSONValue {
+    .object(["id": .string("acc-1"), "email": .string("learner@example.org"), "callsign": .null, "displayName": .null])
+}
+/// One page of `GET /v1/sync/sessions`: a single row whose seq is `next`.
+func syncPullPage(_ id: String, next: Int, more: Bool) -> JSONValue {
+    .object(["sessions": .array([.object(["id": .string(id), "seq": .int(next), "date": .int(1_791_230_000_000),
+                                         "mode": .string("characters"), "attempts": .int(3), "correct": .int(2)])]),
+             "nextSince": .int(next), "hasMore": .bool(more)])
+}
+/// The stats row every canned reply carries.
+func syncStatsJSON(sessions: Int) -> JSONValue {
+    .object([
+        "totals": .object(["sessions": .int(sessions), "answered": .int(900), "correct": .int(800),
+                           "accuracy": .double(0.9), "practiceSeconds": .double(5000.5)]),
+        "bestTtrMs": .int(150),
+        "personalBests": .object(["rapidFire": .int(40)]),
+        "activity": .object(["days": .object(["2026-10-01": .int(999)])]),
+        "streak": .object(["current": .int(3), "longest": .int(7), "lastPractisedDay": .string("2026-10-05")]),
+    ])
+}
+/// The app's side, in memory: history, displayed ledger, state values, and
+/// a record of what the engine did to them.
+actor FakeSyncHost: AccountSyncHost {
+    var sessions: [SessionRecord]
+    var ledger: [String: Int]
+    var values: [SyncStateKey: JSONValue]
+    var totals: SyncLifetimeTotals?
+    var streak: SyncServerStats.Streak?
+    var applied: [SyncStateKey] = []
+    var failMerge = false
+    /// The stored cursor at each merge: it must not have moved yet.
+    var cursorsAtMerge: [Int?] = []
+    let store: AccountSyncStore
+
+    init(store: AccountSyncStore, sessions: [SessionRecord] = [], ledger: [String: Int] = [:],
+         values: [SyncStateKey: JSONValue] = [:]) {
+        self.store = store
+        self.sessions = sessions
+        self.ledger = ledger
+        self.values = values
+    }
+
+    func setFailMerge(_ fail: Bool) { failMerge = fail }
+    func localSessions() -> [SessionRecord] { sessions }
+    func localLedger() -> [String: Int] { ledger }
+    /// Nil for a key whose store was never saved: nothing to push.
+    func stateValue(_ key: SyncStateKey) -> JSONValue? { values[key] }
+    func adoptStreak(_ streak: SyncServerStats.Streak) { self.streak = streak }
+    func mergeSessions(_ records: [SessionRecord]) -> Bool {
+        cursorsAtMerge.append(store.state.cursor)
+        guard !failMerge else { return false }
+        sessions = AccountSync.mergeSessions(local: sessions, pulled: records, limit: 1000)
+        return true
+    }
+    func adoptTotals(_ totals: SyncLifetimeTotals) { self.totals = totals }
+    func adoptLedger(_ days: [String: Int]) { ledger = AccountSync.mergeLedger(local: ledger, server: days) }
+    func applyState(_ key: SyncStateKey, value: JSONValue) -> Bool {
+        values[key] = value
+        applied.append(key)
+        return true
+    }
+}
+func syncSignedInState(cursor: Int?) -> AccountSyncState {
+    var state = AccountSyncState()
+    state.account = .init(id: "acc-1", email: "learner@example.org", callsign: nil, displayName: nil)
+    state.cursor = cursor
+    return state
+}
+/// 2026-10-05 19:53:20 UTC. A function, not a top-level constant: those are
+/// main-actor state, and the engine's clock is called off the main actor.
+func syncTestNow() -> Date { Date(timeIntervalSince1970: 1_791_230_000) }
+
+if let fx = loadSyncWireFixture() {
+    let dd = fx["merge"]["deviceDays"]
+    let calendar = syncUTCCalendar()
+    let seed = (try? dd["seedFromLedgerOnFirstSignIn"].decode(as: [String: Int].self)) ?? [:]
+    var state = AccountSyncState()
+    state.seedOwnDays(fromLedger: seed)
+    check("deviceDays: the own record is seeded from the local ledger on the first sign-in",
+          !seed.isEmpty && state.ownDays == (try? dd["ownBefore"].decode(as: [String: Int].self)) && state.ownDaysSeeded)
+    state.seedOwnDays(fromLedger: ["2026-10-01": 5000])
+    check("deviceDays: … once only: a later ledger (adopted figures) never seeds it again",
+          state.ownDays == (try? dd["ownBefore"].decode(as: [String: Int].self)))
+    state.account = .init(id: "acc-1", email: nil, callsign: nil, displayName: nil)
+    var displayed = ActivityLedger(days: seed)
+    for s in dd["localSessions"].arrayValue {
+        let record = syncDayRecord(day: s["day"].stringValue ?? "", seconds: s["seconds"].intValue ?? -1, calendar: calendar)
+        state.noteSession(record, calendar: calendar)
+        displayed.record(date: record.date, seconds: Int((record.durationSeconds ?? 0).rounded()), calendar: calendar)
+    }
+    check("deviceDays: each local session grows the own record by the seconds the ledger records",
+          state.ownDays == (try? dd["ownAfter"].decode(as: [String: Int].self)))
+    check("deviceDays: … and queues its record and its day",
+          state.sessionOutbox.entries.count == dd["localSessions"].arrayValue.count
+            && state.dayOutbox == ["2026-10-02", "2026-10-04"])
+    check("deviceDays: the days push carries the own figure for each changed day, never the displayed one",
+          (try? JSONValue(encoding: state.dayBatch(for: state.dayOutbox))) == dd["expectedPushBody"])
+    let serverReply = (try? dd["serverReply"].decode(as: [String: Int].self)) ?? [:]
+    displayed.adoptServerDays(serverReply)
+    check("deviceDays: adoption changes the displayed ledger",
+          displayed.days == (try? dd["expectedDisplayedAfterAdoption"].decode(as: [String: Int].self)))
+    check("deviceDays: … and leaves the own record alone",
+          state.ownDays == (try? dd["expectedOwnAfterAdoption"].decode(as: [String: Int].self)))
+    var marked = state
+    marked.notePracticeDay("2026-10-05")
+    marked.notePracticeDay("2026-10-04")
+    check("deviceDays: a practice-day mark adds its day at +0 and queues it; a known day is left alone",
+          marked.ownDays["2026-10-05"] == 0 && marked.ownDays["2026-10-04"] == 120
+            && marked.dayOutbox == ["2026-10-02", "2026-10-04", "2026-10-05"])
+    var signedOut = marked
+    signedOut.signOut(byServer: false)
+    check("sign-out drops the account, cursor and queues but keeps the own record and its seeded flag",
+          signedOut.account == nil && signedOut.cursor == nil && signedOut.sessionOutbox.isEmpty
+            && signedOut.dayOutbox.isEmpty && signedOut.stateOutbox.isEmpty
+            && signedOut.ownDays == marked.ownDays && signedOut.ownDaysSeeded && !signedOut.signedOutByServer)
+    signedOut.noteSession(syncDayRecord(day: "2026-10-06", seconds: 30, calendar: calendar), calendar: calendar)
+    signedOut.noteStateChange(.journey, now: 77)
+    check("signed out, a session still grows the own record; a state change is neither stamped nor queued",
+          signedOut.ownDays["2026-10-06"] == 30 && signedOut.stateUpdatedAt["journey"] == nil
+            && signedOut.sessionOutbox.isEmpty && signedOut.dayOutbox.isEmpty && signedOut.stateOutbox.isEmpty)
+    let trip = (try? JSONEncoder().encode(marked)).flatMap { try? JSONDecoder().decode(AccountSyncState.self, from: $0) }
+    check("the persisted state round-trips", trip == marked)
+    check("a stored state from an older build decodes with what it has",
+          (try? JSONDecoder().decode(AccountSyncState.self, from: Data(#"{"cursor":12,"ownDays":{"2026-10-01":5}}"#.utf8)))
+            .map { $0.cursor == 12 && $0.ownDays == ["2026-10-01": 5] && !$0.isSignedIn } == true)
+} else {
+    check("fixtures/sync-wire.json loads (deviceDays)", false)
+}
+
+do {
+    // The first sign-in on a device with 250 sessions, a ledger, and two
+    // state stores ever saved (Journey and the ladder); the other three never
+    // were, so they have nothing to push and the snapshot fills them.
+    let calendar = syncUTCCalendar()
+    let store = AccountSyncStore(state: AccountSyncState()) { _ in }
+    let local = (0..<250).map { i in
+        SessionRecord(id: UUID(), date: syncTestNow().addingTimeInterval(-Double(250 - i) * 600), mode: "characters",
+                      characterWPM: 20, effectiveWPM: 20, attempts: 5, correct: 5,
+                      fastestTTR: nil, medianTTR: nil, durationSeconds: 60,
+                      characters: [], activeCharacters: [])
+    }
+    let realJourney = AccountSync.journeyValue(JourneyProgress(unlockedThrough: 4, currentLevel: 4, completed: [1, 2, 3]))
+    let savedCharacters = AccountSync.charactersValue(ProgressiveCharacters.Snapshot(
+        engine: TrainerEngine.Snapshot(activeCharacters: Array(MorseCode.kochOrder.prefix(2)), stats: []), stage: .singles))
+    let host = FakeSyncHost(store: store, sessions: local, ledger: ["2026-10-04": 600, "2026-10-05": 300],
+                            values: [.journey: realJourney, .characters: savedCharacters])
+    let remoteId = "aaaaaaaa-0000-4000-8000-000000000001"
+    var remoteFields = loadSyncWireFixture()?["session"]["wire"].objectValue ?? [:]
+    remoteFields["id"] = .string(remoteId)
+    remoteFields["seq"] = .int(300)
+    let remote = remoteFields
+    let newerCharacters = AccountSync.charactersValue(ProgressiveCharacters.Snapshot(
+        engine: TrainerEngine.Snapshot(activeCharacters: Array(MorseCode.kochOrder.prefix(6)), stats: []), stage: .singles))
+    let farFuture = AccountSync.epochMilliseconds(syncTestNow()) + 1000
+    let transport = FakeAccountTransport { request in
+        let body = syncRequestBody(request)
+        switch (request.method, request.path) {
+        case ("POST", "v1/sync/sessions"):
+            let ids = body["sessions"].arrayValue.map { $0["id"] }
+            return syncJSONResponse(.object(["accepted": .array(ids), "skipped": .array([]), "rejected": .array([]),
+                                             "stats": syncStatsJSON(sessions: 250)]))
+        case ("POST", "v1/sync/days"):
+            var summed: [String: JSONValue] = [:]
+            for d in body["days"].arrayValue {
+                summed[d["day"].stringValue ?? ""] = .int((d["seconds"].intValue ?? 0) + 1000)
+            }
+            return syncJSONResponse(.object(["days": .object(summed), "rejected": .array([])]))
+        case ("PUT", "v1/sync/state"):
+            return syncJSONResponse(.object(["entries": body["entries"], "rejected": .array([])]))
+        case ("GET", "v1/sync/snapshot"):
+            var stats = syncStatsJSON(sessions: 251).objectValue
+            stats["streak"] = .object(["current": .int(2), "longest": .int(9), "lastPractisedDay": .string("2026-10-05")])
+            return syncJSONResponse(.object([
+                "stats": .object(stats),
+                "sessions": .array([.object(remote)]),
+                "days": .object(["2026-09-30": .int(1200)]),
+                "state": .object(["characters": .object(["value": newerCharacters, "updatedAt": .int(farFuture)])]),
+                "seq": .int(300),
+            ]))
+        default:
+            return AccountResponse(status: 404)
+        }
+    }
+    let client = AccountClient(transport: transport, tokenStore: MemoryTokenStore(AccountTokens(access: "a2", refresh: "r2", expiresIn: 900)))
+    let engine = AccountSyncEngine(client: client, store: store, host: host, autoRetry: false,
+                                   calendar: calendar, now: { syncTestNow() })
+    let profile = try? syncTestAccount().decode(as: AccountProfile.self)
+    let outcome = runBlocking { () -> AccountSyncOutcome? in
+        guard let profile else { return nil }
+        return await engine.signedIn(profile)
+    }
+    let sent = transport.requests
+    let routes = sent.map { "\($0.method) \($0.path)" }
+    check("first sign-in: history, then days, then state, then the snapshot",
+          outcome == .done && routes == ["POST v1/sync/sessions", "POST v1/sync/sessions", "POST v1/sync/days",
+                                         "PUT v1/sync/state", "GET v1/sync/snapshot"])
+    let firstBatch = sent.first.map(syncRequestBody)?["sessions"].arrayValue ?? []
+    let secondBatch = sent.count > 1 ? syncRequestBody(sent[1])["sessions"].arrayValue : []
+    check("first sign-in: the whole history goes out oldest first, 200 to a batch",
+          firstBatch.count == 200 && secondBatch.count == 50
+            && firstBatch.first?["id"].stringValue == local[0].id.uuidString.lowercased()
+            && secondBatch.last?["id"].stringValue == local[249].id.uuidString.lowercased())
+    check("first sign-in: the days pushed are the own record, seeded from the ledger",
+          sent.count > 2 && syncRequestBody(sent[2]) == .object(["days": .array([
+              .object(["day": .string("2026-10-04"), "seconds": .int(600)]),
+              .object(["day": .string("2026-10-05"), "seconds": .int(300)])])]))
+    let entries = sent.count > 3 ? syncRequestBody(sent[3])["entries"] : .null
+    check("first sign-in: only the state stores ever saved here go out; a never-saved store has no entry",
+          entries.objectValue.keys.sorted() == ["characters", "journey"])
+    check("first sign-in: a saved key never stamped goes out at 0, so the account's value wins; never-saved ones get no stamp",
+          entries["journey"]["updatedAt"].intValue == 0 && entries["characters"]["updatedAt"].intValue == 0
+            && store.state.stateUpdatedAt["firstFour"] == nil && store.state.stateUpdatedAt["storyBookmarks"] == nil)
+    check("first sign-in: the snapshot's day is today, local", sent.last?.query["today"] == "2026-10-05")
+    let after = store.state
+    check("first sign-in: the cursor is the snapshot's seq, the queues are empty, and it is done",
+          after.cursor == 300 && after.sessionOutbox.isEmpty && after.dayOutbox.isEmpty && after.stateOutbox.isEmpty
+            && !after.firstSyncPending && after.lastSyncedAt == AccountSync.epochMilliseconds(syncTestNow()))
+    let hostSessions = runBlocking { await host.sessions }
+    let hostLedger = runBlocking { await host.ledger }
+    let hostTotals = runBlocking { await host.totals }
+    let hostApplied = runBlocking { await host.applied }
+    check("first sign-in: the snapshot's sessions merge into local history, nothing local lost",
+          hostSessions.count == 251 && hostSessions.contains { $0.id.uuidString.lowercased() == remoteId })
+    check("first sign-in: the server's totals and summed days are adopted into the displayed ledger",
+          hostTotals?.totalSessions == 251 && hostTotals?.bestTTR == 0.15
+            && hostLedger == ["2026-09-30": 1200, "2026-10-04": 1600, "2026-10-05": 1300])
+    let hostStreak = runBlocking { await host.streak }
+    check("first sign-in: the snapshot's streak is adopted",
+          hostStreak == SyncServerStats.Streak(current: 2, longest: 9, lastPractisedDay: "2026-10-05"))
+    check("first sign-in: the own record is untouched by adoption",
+          after.ownDays == ["2026-10-04": 600, "2026-10-05": 300] && after.ownDaysSeeded)
+    check("first sign-in: only the strictly newer state is applied, and its stamp taken",
+          hostApplied == [.characters] && after.stateUpdatedAt["characters"] == farFuture)
+    check("a sync that succeeded leaves no backoff", runBlocking { await engine.failures } == 0)
+}
+
+do {
+    // A pull: two pages, each merged and saved BEFORE the cursor moves, then
+    // the stats row for the other devices' totals and days.
+    let store = AccountSyncStore(state: syncSignedInState(cursor: 5)) { _ in }
+    let host = FakeSyncHost(store: store, ledger: ["2026-10-05": 60])
+    final class Switch: @unchecked Sendable {
+        let lock = NSLock()
+        var status = 200
+        func get() -> Int { lock.withLock { status } }
+        func set(_ value: Int) { lock.withLock { status = value } }
+    }
+    let pullStatus = Switch()
+    let transport = FakeAccountTransport { request in
+        switch request.path {
+        case "v1/sync/sessions":
+            let status = pullStatus.get()
+            guard status == 200 else { return AccountResponse(status: status) }
+            return request.query["since"] == "5"
+                ? syncJSONResponse(syncPullPage("bbbbbbbb-0000-4000-8000-000000000006", next: 6, more: true))
+                : syncJSONResponse(syncPullPage("bbbbbbbb-0000-4000-8000-000000000007", next: 7, more: false))
+        case "v1/me/stats":
+            return syncJSONResponse(syncStatsJSON(sessions: 9))
+        default:
+            return AccountResponse(status: 404)
+        }
+    }
+    let client = AccountClient(transport: transport, tokenStore: MemoryTokenStore(AccountTokens(access: "a2", refresh: "r2", expiresIn: 900)))
+    let engine = AccountSyncEngine(client: client, store: store, host: host, autoRetry: false,
+                                   calendar: syncUTCCalendar(), now: { syncTestNow() })
+
+    // Saving fails: nothing moves, and the engine backs off.
+    _ = runBlocking { await host.setFailMerge(true) }
+    let failed = runBlocking { await engine.sync() }
+    check("pull: when local history cannot be saved the cursor stays put and the engine backs off",
+          failed == .backoff && store.state.cursor == 5 && runBlocking { await engine.failures } == 1)
+    pullStatus.set(503)
+    let unavailable = runBlocking { await engine.sync() }
+    check("backoff: a 5xx backs off again, the wait doubling",
+          unavailable == .backoff && runBlocking { await engine.failures } == 2
+            && runBlocking { await engine.nextRetrySeconds } == AccountSync.backoffSeconds(2))
+    pullStatus.set(200)
+    _ = runBlocking { await host.setFailMerge(false) }
+    let pulled = runBlocking { await engine.sync() }
+    let cursors = runBlocking { await host.cursorsAtMerge }
+    check("pull: each page is merged while the cursor still points before it, then the cursor advances",
+          pulled == .done && cursors == [5, 5, 6] && store.state.cursor == 7)
+    check("pull: the rows are in local history", runBlocking { await host.sessions.count } == 2)
+    check("pull: the stats row's totals and summed days are adopted after rows came in",
+          runBlocking { await host.totals?.totalSessions } == 9
+            && runBlocking { await host.ledger } == ["2026-10-01": 999, "2026-10-05": 60])
+    check("backoff: a success resets it", runBlocking { await engine.failures } == 0
+            && runBlocking { await engine.nextRetrySeconds } == nil)
+    let routes = transport.requests.map(\.path)
+    check("pull: a sync with nothing queued and no saved state pushes nothing",
+          !routes.contains("v1/sync/days") && !routes.contains("v1/sync/state"))
+    check("pull: the stats body is read after the pull, and its streak adopted",
+          routes.last == "v1/me/stats" && transport.requests.last?.query["today"] == "2026-10-05"
+            && runBlocking { await host.streak?.longest } == 7)
+}
+
+do {
+    // Sign-out by the user: the server is told, then the tokens, cursor and
+    // queues go and every local record stays.
+    var state = syncSignedInState(cursor: 9)
+    state.ownDaysSeeded = true
+    state.noteSession(syncDayRecord(day: "2026-10-05", seconds: 90, calendar: syncUTCCalendar()), calendar: syncUTCCalendar())
+    state.noteStateChange(.journey, now: 1234)
+    let store = AccountSyncStore(state: state) { _ in }
+    let tokens = MemoryTokenStore(AccountTokens(access: "a2", refresh: "r2", expiresIn: 900))
+    let transport = FakeAccountTransport { _ in AccountResponse(status: 204) }
+    let host = FakeSyncHost(store: store, sessions: [syncDayRecord(day: "2026-10-05", seconds: 90, calendar: syncUTCCalendar())])
+    let engine = AccountSyncEngine(client: AccountClient(transport: transport, tokenStore: tokens), store: store, host: host,
+                                   autoRetry: false, now: { syncTestNow() })
+    runBlocking { await engine.signOut() }
+    let after = store.state
+    check("sign-out: POST /v1/auth/logout, then the tokens are gone",
+          transport.requests.map(\.path) == ["v1/auth/logout"] && tokens.load() == nil)
+    check("sign-out: cursor and queues cleared; own record, seeded flag and stamps kept; no banner",
+          after.account == nil && after.cursor == nil && after.sessionOutbox.isEmpty && after.dayOutbox.isEmpty
+            && after.stateOutbox.isEmpty && after.ownDays == ["2026-10-05": 90] && after.ownDaysSeeded
+            && after.stateUpdatedAt["journey"] == 1234 && !after.signedOutByServer)
+    check("sign-out: local history is untouched", runBlocking { await host.sessions.count } == 1)
+    check("signed out, a sync does nothing", runBlocking { await engine.sync() } == .notSignedIn
+            && transport.requests.count == 1)
+}
+
+do {
+    // Signed out by the server: the access token is refused and so is the
+    // refresh. The device signs itself out and the banner flag is set.
+    var state = syncSignedInState(cursor: 3)
+    state.ownDays = ["2026-10-05": 45]
+    let store = AccountSyncStore(state: state) { _ in }
+    let tokens = MemoryTokenStore(AccountTokens(access: "a1", refresh: "r1", expiresIn: 900))
+    let transport = FakeAccountTransport(cannedAccountReply(refreshStatus: 401))
+    let engine = AccountSyncEngine(client: AccountClient(transport: transport, tokenStore: tokens), store: store,
+                                   host: FakeSyncHost(store: store), autoRetry: false, now: { syncTestNow() })
+    let outcome = runBlocking { await engine.sync() }
+    let after = store.state
+    check("forced sign-out: a refused refresh signs the device out and raises the banner",
+          outcome == .signedOut && after.signedOutByServer && after.account == nil && tokens.load() == nil)
+    check("forced sign-out: the own record stays, the cursor goes, and it is not counted as a backoff",
+          after.ownDays == ["2026-10-05": 45] && after.cursor == nil && runBlocking { await engine.failures } == 0)
+}
+
+do {
+    // A batch the server refuses outright (400) leaves the outbox instead of
+    // being resent forever; the rest of the drain goes on.
+    var state = syncSignedInState(cursor: 1)
+    state.noteSession(syncDayRecord(day: "2026-10-05", seconds: 10, calendar: syncUTCCalendar()), calendar: syncUTCCalendar())
+    let store = AccountSyncStore(state: state) { _ in }
+    let transport = FakeAccountTransport { request in
+        switch (request.method, request.path) {
+        case ("POST", "v1/sync/sessions"): return AccountResponse(status: 400, body: jsonData(#"{"error":"invalid_request","message":"bad"}"#))
+        case ("POST", "v1/sync/days"): return syncJSONResponse(.object(["days": .object(["2026-10-05": .int(10)])]))
+        case ("GET", "v1/sync/sessions"): return syncJSONResponse(.object(["sessions": .array([]), "nextSince": .int(1), "hasMore": .bool(false)]))
+        case ("GET", "v1/me/stats"): return syncJSONResponse(syncStatsJSON(sessions: 1))
+        default: return AccountResponse(status: 404)
+        }
+    }
+    let engine = AccountSyncEngine(client: AccountClient(transport: transport, tokenStore: MemoryTokenStore(AccountTokens(access: "a2", refresh: "r2", expiresIn: 900))),
+                                   store: store, host: FakeSyncHost(store: store), autoRetry: false,
+                                   calendar: syncUTCCalendar(), now: { syncTestNow() })
+    let outcome = runBlocking { await engine.sync() }
+    check("drain: a 400 drops that batch, the days still go, and nothing backs off",
+          outcome == .done && store.state.sessionOutbox.isEmpty && store.state.dayOutbox.isEmpty
+            && transport.requests.map(\.path) == ["v1/sync/sessions", "v1/sync/days", "v1/sync/sessions", "v1/me/stats"])
+}
+
+do {
+    // In flight: a day that grew, or a key restamped, while its push was out
+    // stays queued; the rest leave.
+    var state = syncSignedInState(cursor: 1)
+    state.ownDays = ["2026-10-04": 100, "2026-10-05": 200]
+    state.dayOutbox = ["2026-10-04", "2026-10-05"]
+    state.stateUpdatedAt = ["journey": 10, "characters": 20]
+    state.stateOutbox = ["journey", "characters"]
+    let sentDays = ["2026-10-04": 100, "2026-10-05": 150]
+    state.dropSentDays(sentDays)
+    state.dropSentState(["journey": 10, "characters": 15])
+    check("in flight: a day whose own figure grew while it was out stays queued", state.dayOutbox == ["2026-10-05"])
+    check("in flight: a key restamped while it was out stays queued", state.stateOutbox == ["characters"])
+}
+
+do {
+    // First sign-in stamps (fixture merge.state's _comment): a key never
+    // stamped is queued at 0, one stamped earlier keeps its stamp, a key
+    // never saved is neither queued nor stamped.
+    var state = AccountSyncState()
+    state.stateUpdatedAt = ["characters": 4321]
+    state.beginFirstSync(account: .init(id: "acc-1", email: nil, callsign: nil, displayName: nil), ledger: [:],
+                         history: [], savedKeys: [.journey, .characters])
+    check("first sign-in: an unstamped key is queued with updatedAt 0",
+          state.stateUpdatedAt["journey"] == 0 && state.stateOutbox.contains("journey"))
+    check("first sign-in: a key stamped earlier keeps its stamp",
+          state.stateUpdatedAt["characters"] == 4321 && state.stateOutbox.contains("characters"))
+    check("first sign-in: a never-saved key is neither queued nor stamped",
+          state.stateOutbox.count == 2 && state.stateUpdatedAt["firstFour"] == nil)
+    state.noteStateChange(.firstFour, now: 123)
+    check("signed in, a save that changes a key stamps it now and queues it",
+          state.stateUpdatedAt["firstFour"] == 123 && state.stateOutbox.last == "firstFour")
+}
+
+print("\nStreak adoption:")
+do {
+    let calendar = syncUTCCalendar()
+    let local = PracticeStreak(current: 1, longest: 12, lastPracticeDay: ActivityLedger.date(forKey: "2026-10-01", calendar: calendar))
+    let adopted = AccountSync.adoptStreak(local, server: .init(current: 4, longest: 6, lastPractisedDay: "2026-10-05"), calendar: calendar)
+    check("the account's current run and last day are adopted",
+          adopted.current == 4 && adopted.lastPracticeDay == ActivityLedger.date(forKey: "2026-10-05", calendar: calendar))
+    check("a local longest is never lowered", adopted.longest == 12)
+    check("a longer server longest is taken",
+          AccountSync.adoptStreak(PracticeStreak(), server: .init(current: 2, longest: 40, lastPractisedDay: "2026-10-05"),
+                                  calendar: calendar).longest == 40)
+    check("a server with no practice day leaves the local streak alone",
+          AccountSync.adoptStreak(local, server: .init(current: 0, longest: 0, lastPractisedDay: nil), calendar: calendar) == local)
+}
+
+print("\nAccount profile rules:")
+check("a callsign is trimmed and uppercased", AccountSync.profileCallsign("  w1aw/p ") == .valid("W1AW/P"))
+check("an empty callsign clears it", AccountSync.profileCallsign("  ") == .valid(nil))
+check("a callsign of 2, or with a hyphen, is refused",
+      AccountSync.profileCallsign("W1") != .valid("W1") && AccountSync.profileCallsign("W1-AW") != .valid("W1-AW"))
+check("a 16-character callsign is fine, 17 is not",
+      AccountSync.profileCallsign(String(repeating: "A", count: 16)) == .valid(String(repeating: "A", count: 16))
+        && AccountSync.profileCallsign(String(repeating: "A", count: 17)) != .valid(String(repeating: "A", count: 17)))
+check("a name is trimmed; 2–24 printable characters", AccountSync.profileDisplayName(" Hiram ") == .valid("Hiram")
+        && AccountSync.profileDisplayName("H") != .valid("H")
+        && AccountSync.profileDisplayName("Bad\u{7}Name") != .valid("Bad\u{7}Name"))
+check("an email needs one @ and a dotted domain",
+      AccountSync.isPlausibleEmail(" learner@example.org ") && !AccountSync.isPlausibleEmail("learner@example")
+        && !AccountSync.isPlausibleEmail("learner example.org") && !AccountSync.isPlausibleEmail("a@b@c.org"))
+
 print("\n────────────────────────────")
 if failures == 0 {
     print("✅ All \(checks) checks passed.\n")

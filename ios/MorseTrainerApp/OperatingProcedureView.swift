@@ -81,6 +81,11 @@ struct OperatingProcedureView: View {
             }
             .onDisappear { model.stopOperating() }
             .onChange(of: progress) { OperatingProcedureStore.save($0) }
+            // A newer copy from the account (another device got further):
+            // show it rather than save this screen's older one over it.
+            .onReceive(NotificationCenter.default.publisher(for: SyncCoordinator.stateApplied)) { _ in
+                progress = OperatingProcedureStore.load()
+            }
             .sheet(isPresented: $showingFirstFour, onDismiss: {
                 firstFourDone = FirstFourStore.load().isComplete
             }) {
