@@ -58,7 +58,7 @@ class AccountClientTest {
         }
         val result = AccountClient(transport, store).devices()
         assertEquals(AccountResult.Ok(emptyList<AccountDevice>()), result)
-        assertEquals(AccountTokens("A2", "R9"), store.tokens)
+        assertEquals(AccountTokens("A2", "R2"), store.tokens)
         assertEquals(listOf("/v1/auth/devices", "/v1/auth/token/refresh", "/v1/auth/devices"), transport.sent.map { it.path })
         assertEquals(listOf("A1", null, "A2"), transport.sent.map { it.bearer })
         assertEquals("R1", JSONObject(transport.sent[1].body!!).getString("refresh"))

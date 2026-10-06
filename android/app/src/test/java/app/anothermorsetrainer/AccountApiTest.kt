@@ -71,7 +71,7 @@ class AccountApiTest {
 
         val result = api.devices()
 
-        assertEquals(299, (result as AccountResult.Reply).code)
+        assertEquals(200, (result as AccountResult.Reply).code)
         assertEquals(listOf("a1", null, "a2"), t.calls.map { it.third })
         assertEquals("r1", t.bodies[1]!!.getString("refresh"))
         // The rotated refresh token is on disk before the new access token is used.
