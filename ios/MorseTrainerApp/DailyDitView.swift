@@ -65,7 +65,10 @@ struct DailyDitView: View {
             // Re-render on every finish transition: solving mid-screen, and the
             // midnight rollover (refreshDailyDit) both change what the card says.
             .task(id: game.isFinished) { renderShareImage() }
-            .onDisappear { model.stopDailyDit() }
+            .onDisappear {
+                model.stopDailyDit()
+                model.releaseAudioIfIdle()   // no band noise on the menu after (#331)
+            }
             .alert("Your device appears to be muted", isPresented: $confirmingQuietPlay) {
                 Button("Play anyway") {
                     quietPlayAccepted = true

@@ -763,7 +763,7 @@
     <string name="settings_keep_bluetooth_awake">Keep Bluetooth audio awake</string>
     <string name="settings_keep_bluetooth_awake_footer">Keep Bluetooth audio awake plays a floor deliberately just above silence — too quiet to hear — so Bluetooth earbuds never idle between transmissions: truly silent audio lets some headsets sleep, and they wake a moment late and clip the first character.</string>
     <string name="settings_band_noise">Band noise</string>
-    <string name="settings_band_noise_footer">Band noise adds audible band noise (QRN) under everything so practicing is more like copying off the air; any level also keeps Bluetooth audio awake.</string>
+    <string name="settings_band_noise_footer">Band noise adds audible band noise (QRN) while a mode, game or lesson is playing, so practicing is more like copying off the air; it stays quiet on the menus, and picking a level plays a short sample. Any level also keeps Bluetooth audio awake.</string>
     <string name="rapidfire_include_sections">Include ARRL/RAC Field Day sections</string>
     <string name="rapidfire_cut_numbers">Cut numbers</string>
     <!-- Daily Dit counts (#168): the share text carries both, so the screen says them the same way. -->

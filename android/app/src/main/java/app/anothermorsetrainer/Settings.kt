@@ -122,9 +122,19 @@ enum class BackgroundNoiseLevel(val amplitude: Float, val label: String) {
          * noise when any is set (it keeps the link awake as a side effect), else
          * the inaudible keep-alive floor when that switch is on, else true
          * digital silence. Mirrors iOS `BackgroundNoiseLevel.effective`.
+         *
+         * [bandNoiseAudible] is false away from practice (#331): band noise
+         * belongs to a running mode, game or lesson — and to the short preview
+         * when the level is changed in Settings — not to Home, Settings or
+         * Stats. There the floor falls back to what the keep-alive switch
+         * alone would give, so an earbud link is still kept awake if asked.
          */
-        fun effective(bluetoothKeepAlive: Boolean, bandNoise: BackgroundNoiseLevel): BackgroundNoiseLevel =
-            if (bandNoise != OFF) bandNoise else if (bluetoothKeepAlive) KEEP_ALIVE else OFF
+        fun effective(
+            bluetoothKeepAlive: Boolean,
+            bandNoise: BackgroundNoiseLevel,
+            bandNoiseAudible: Boolean = true
+        ): BackgroundNoiseLevel =
+            if (bandNoise != OFF && bandNoiseAudible) bandNoise else if (bluetoothKeepAlive) KEEP_ALIVE else OFF
     }
 }
 

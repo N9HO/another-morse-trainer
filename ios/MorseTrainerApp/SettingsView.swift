@@ -203,6 +203,11 @@ struct SettingsView: View {
         .onChange(of: adapterKeyerMode) { _ in syncAdapterIfKeyed() }
         .onChange(of: model.settings.wpm) { _ in syncAdapterIfKeyed() }
         .onChange(of: model.settings.toneFrequency) { _ in syncAdapterIfKeyed() }
+        // Band noise is scoped to practice (#331): quiet here, except a short
+        // preview when its level is picked; leaving ends the preview.
+        .onChange(of: model.settings.bandNoise) { _ in model.previewBandNoise() }
+        .onAppear { model.settingsAppeared() }
+        .onDisappear { model.settingsDisappeared() }
     }
 
     /// The phone layout: categories, and each one pushed over them.
@@ -438,7 +443,7 @@ struct SettingsView: View {
                 ForEach(BackgroundNoiseLevel.bandLevels) { Text($0.label).tag($0) }
             }
             Label {
-                Text("Adds audible band noise (QRN) under everything so practicing is more like copying off the air; any level also keeps Bluetooth audio awake.")
+                Text("Adds audible band noise (QRN) while a mode, game or lesson is playing, so practicing is more like copying off the air; it stays quiet on the menus, and picking a level plays a short sample. Any level also keeps Bluetooth audio awake.")
             } icon: {
                 Image(systemName: "waveform")
             }
