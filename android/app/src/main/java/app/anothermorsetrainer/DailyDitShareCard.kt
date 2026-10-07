@@ -25,9 +25,10 @@ import java.io.FileOutputStream
 /**
  * Renders the finished Daily Dit to a shareable PNG — brand navy/teal, the
  * puzzle headline, and the guess grid as coloured tiles with each row's
- * sending speed beside it — then fires a share sheet with
- * [DailyDitGame.shareText] attached as [Intent.EXTRA_TEXT], so the pasteable
- * text still travels with the image. Drawn with a plain [Canvas] like
+ * sending speed beside it — then fires a share sheet with the image alone.
+ * No [Intent.EXTRA_TEXT] rides along: Discord and similar targets post a
+ * caption as a message of its own, so the result arrived twice (#334). The
+ * card already says everything the text does. Drawn with a plain [Canvas] like
  * [ShareCard], and mirrors the iOS `DailyDitShareCard`. No letters appear:
  * the image spoils nothing the emoji grid didn't.
  *
@@ -52,7 +53,7 @@ object DailyDitShareCard {
         val intent = Intent(Intent.ACTION_SEND).apply {
             type = "image/png"
             putExtra(Intent.EXTRA_STREAM, uri)
-            putExtra(Intent.EXTRA_TEXT, game.shareText)
+            // No EXTRA_TEXT: see the class comment (#334).
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
         context.startActivity(Intent.createChooser(intent, chooserTitle))

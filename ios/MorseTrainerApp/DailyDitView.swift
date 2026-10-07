@@ -517,15 +517,17 @@ struct DailyDitView: View {
 
     // MARK: - Share image
 
-    /// The share button leads with the themed card image; `shareText` travels
-    /// with it as the caption (Android attaches the same `EXTRA_TEXT`). Until
-    /// the render lands — or if it fails — fall back to sharing the text alone,
+    /// The share button sends the themed card image alone. No `message:`
+    /// caption: the share sheet hands it to the target as a second item, and
+    /// Discord and similar targets post it as a message of its own, so the
+    /// result arrived twice (#334); the card already says everything the text
+    /// does. Android sends no `EXTRA_TEXT` for the same reason. Until the
+    /// render lands — or if it fails — fall back to sharing the text alone,
     /// so the button never shares nothing.
     @ViewBuilder
     private func shareLink<L: View>(@ViewBuilder label: () -> L) -> some View {
         if let url = shareURL {
             ShareLink(item: url,
-                      message: Text(game.shareText),
                       preview: SharePreview("Daily Dit #\(game.puzzleNumber)",
                                             image: Image(systemName: "square.grid.3x3.fill"))) {
                 label()

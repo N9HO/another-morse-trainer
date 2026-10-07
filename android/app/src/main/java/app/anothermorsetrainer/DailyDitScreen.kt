@@ -82,7 +82,8 @@ private val TILE_PRESENT = Color(0xFFCAA033)
  *
  * Ported from MorseTrainerApp/DailyDitView.swift. The iOS `ShareLink` becomes
  * an ACTION_SEND chooser and the pasteboard write becomes a `ClipboardManager`
- * clip, both carrying the image [DailyDitShareCard] draws;
+ * clip, both carrying the image [DailyDitShareCard] draws (Share sends the
+ * image alone, #334; the clip keeps the text as a paste fallback);
  * game state lives in [DailyDitStore] rather than on an `AppModel`.
  */
 @Composable
