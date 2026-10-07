@@ -488,6 +488,45 @@ where Entry.ID == String {
 
 // MARK: - Rules
 
+/// What asked for a sync (fixture `merge.foregroundThrottle`).
+public enum SyncTrigger: String, Sendable, CaseIterable {
+    /// A return to the foreground; launch is the first one.
+    case foreground
+    /// The Sync now button.
+    case syncNow
+    /// The push a few seconds after a local change.
+    case localChange
+    /// The first sync after signing in.
+    case signIn
+    /// A backoff retry.
+    case retry
+}
+
+/// Keeps foreground syncs at least `AccountSync.foregroundSyncIntervalSeconds`
+/// apart (fixture `merge.foregroundThrottle`). A full sync is several
+/// requests, and the app can come forward many times a minute; this keeps
+/// the Worker's rate limit out of reach. Only `.foreground` is gated and only
+/// a foreground that runs moves the clock; every other trigger always runs.
+/// Held in memory, so a cold launch always syncs.
+public struct SyncThrottle: Sendable {
+    private var lastForegroundMs: Int?
+
+    public init() {}
+
+    /// Whether a sync for `trigger` at `nowMs` should run. A held-back
+    /// foreground must do nothing at all — not even reset the backoff, which
+    /// would cancel a scheduled retry.
+    public mutating func admit(_ trigger: SyncTrigger, nowMs: Int) -> Bool {
+        guard trigger == .foreground else { return true }
+        if let last = lastForegroundMs, nowMs >= last,
+           nowMs - last < AccountSync.foregroundSyncIntervalSeconds * 1000 {
+            return false
+        }
+        lastForegroundMs = nowMs
+        return true
+    }
+}
+
 /// What to do with an HTTP outcome (fixture `merge.retry`).
 public enum SyncRetryAction: String, Sendable {
     /// It landed.
@@ -686,6 +725,10 @@ public enum AccountSync {
         let n = Swift.max(1, n)
         return n >= 10 ? backoffCapSeconds : Swift.min(backoffCapSeconds, 1 << n)
     }
+
+    /// The least time between two foreground syncs: five minutes
+    /// (`SyncThrottle`).
+    public static let foregroundSyncIntervalSeconds = 300
 
     /// The action for an HTTP status, or for no reply at all (`nil`). README
     /// §10: never retry a 4xx other than 401 (refresh first) and 429.

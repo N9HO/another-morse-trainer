@@ -555,6 +555,50 @@ object SyncRetry {
     }
 }
 
+/** What asked for a sync (fixture `merge.foregroundThrottle`); [raw] is the fixture's name. */
+enum class SyncTrigger(val raw: String) {
+    /** `onStart`: launch and every return to the app. */
+    FOREGROUND("foreground"),
+    /** The Sync now button. */
+    SYNC_NOW("syncNow"),
+    /** The push a few seconds after a local change. */
+    LOCAL_CHANGE("localChange"),
+    /** The first sync after signing in. */
+    SIGN_IN("signIn"),
+    /** A backoff retry. */
+    RETRY("retry")
+}
+
+/**
+ * Keeps foreground syncs at least [MIN_INTERVAL_SECONDS] apart (fixture
+ * `merge.foregroundThrottle`). A full sync is several requests and `onStart`
+ * can fire many times a minute; this keeps the Worker's rate limit out of
+ * reach. Only [SyncTrigger.FOREGROUND] is gated and only a foreground that
+ * runs moves the clock; every other trigger always runs. Held in memory, so
+ * a cold start always syncs.
+ */
+class SyncThrottle {
+    private var lastForegroundMs: Long? = null
+
+    /**
+     * Whether a sync for [trigger] at [nowMs] should run. A held-back
+     * foreground must do nothing at all, not even reset the backoff, which
+     * would cancel a scheduled retry.
+     */
+    fun admit(trigger: SyncTrigger, nowMs: Long): Boolean {
+        if (trigger != SyncTrigger.FOREGROUND) return true
+        val last = lastForegroundMs
+        if (last != null && nowMs >= last && nowMs - last < MIN_INTERVAL_SECONDS * 1000) return false
+        lastForegroundMs = nowMs
+        return true
+    }
+
+    companion object {
+        /** Five minutes. */
+        const val MIN_INTERVAL_SECONDS = 300L
+    }
+}
+
 /**
  * PKCE (RFC 7636, S256) for the sign-in: the verifier is 32 random bytes as
  * base64url without padding (43 characters), the challenge base64url of

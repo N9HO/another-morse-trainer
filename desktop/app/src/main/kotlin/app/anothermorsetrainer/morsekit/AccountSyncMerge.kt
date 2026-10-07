@@ -205,3 +205,48 @@ object SyncMerge {
         else -> Action.DROP
     }
 }
+
+/** What asked for a sync (fixture `merge.foregroundThrottle`); [raw] is the fixture's name. */
+enum class SyncTrigger(val raw: String) {
+    /** Launch, and the window regaining focus. */
+    FOREGROUND("foreground"),
+    /** The Sync now row. */
+    SYNC_NOW("syncNow"),
+    /** The push after a local change. */
+    LOCAL_CHANGE("localChange"),
+    /** The first sync after signing in. */
+    SIGN_IN("signIn"),
+    /** A backoff retry. */
+    RETRY("retry")
+}
+
+/**
+ * Keeps foreground syncs at least [MIN_INTERVAL_SECONDS] apart (fixture
+ * `merge.foregroundThrottle`). A full sync is several requests and window
+ * focus can change many times a minute; this keeps the Worker's rate limit
+ * out of reach. Only [SyncTrigger.FOREGROUND] is gated and only a foreground
+ * that runs moves the clock; every other trigger always runs. Held in
+ * memory, so a cold launch always syncs.
+ */
+class SyncThrottle {
+    private var lastForegroundMs: Long? = null
+
+    /**
+     * Whether a sync for [trigger] at [nowMs] should run. A held-back
+     * foreground must do nothing at all, not even reset the backoff, which
+     * would cancel a scheduled retry.
+     */
+    @Synchronized
+    fun admit(trigger: SyncTrigger, nowMs: Long): Boolean {
+        if (trigger != SyncTrigger.FOREGROUND) return true
+        val last = lastForegroundMs
+        if (last != null && nowMs >= last && nowMs - last < MIN_INTERVAL_SECONDS * 1000) return false
+        lastForegroundMs = nowMs
+        return true
+    }
+
+    companion object {
+        /** Five minutes. */
+        const val MIN_INTERVAL_SECONDS = 300L
+    }
+}

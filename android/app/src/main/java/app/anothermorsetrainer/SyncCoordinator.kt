@@ -10,6 +10,8 @@ import app.anothermorsetrainer.morsekit.SessionRecord
 import app.anothermorsetrainer.morsekit.SyncMerge
 import app.anothermorsetrainer.morsekit.SyncRetry
 import app.anothermorsetrainer.morsekit.SyncState
+import app.anothermorsetrainer.morsekit.SyncThrottle
+import app.anothermorsetrainer.morsekit.SyncTrigger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -32,8 +34,9 @@ import java.time.LocalDate
  * Signing in is optional and off until the user does it. While signed out the
  * hooks only grow the device's own day record. While signed in a finished
  * session, a practice day or a changed progress key is queued and pushed a
- * few seconds later; [onForeground] (every `onStart`, so launch too) pushes
- * and pulls. A failure is silent and retried after [SyncRetry.backoffSeconds].
+ * few seconds later; [onForeground] (every `onStart`, so launch too, at most
+ * once every five minutes) pushes and pulls. A failure is silent and
+ * retried after [SyncRetry.backoffSeconds].
  *
  * The Compose state below mirrors the engine's for the Settings screen.
  */
@@ -96,6 +99,7 @@ object SyncCoordinator {
     private var retryJob: Job? = null
     private var signInJob: Job? = null
     private var again = false
+    private val throttle = SyncThrottle()
 
     fun init(context: Context) {
         if (isInitialized) return
@@ -136,9 +140,15 @@ object SyncCoordinator {
         if (!wasPending && key in engine.pendingState) requestSync(delayMs = PUSH_DELAY_MS)
     }
 
-    /** `MainActivity.onStart`: launch and every return to the app. Resets the backoff. */
+    /**
+     * `MainActivity.onStart`: launch and every return to the app. Resets the
+     * backoff and syncs, at most once every five minutes ([SyncThrottle],
+     * fixture `merge.foregroundThrottle`): a held-back return does nothing,
+     * so a scheduled retry stands. Signed out, nothing moves the clock.
+     */
     fun onForeground() {
-        if (!isInitialized) return
+        if (!isInitialized || !engine.isSignedIn) return
+        if (!throttle.admit(SyncTrigger.FOREGROUND, SystemClock.elapsedRealtime())) return
         requestSync(resetBackoff = true)
     }
 
@@ -153,7 +163,12 @@ object SyncCoordinator {
             retryJob = null
         }
         if (syncJob?.isActive == true) {
-            if (delayMs == 0L) again = true
+            // Go round once more, a local change too: a change that lands
+            // mid-sync may have missed the drain, and with foreground syncs
+            // throttled the next trigger can be minutes away. (A job still
+            // in its delay clears `again` before it syncs, so this costs no
+            // extra round there.)
+            again = true
             return
         }
         syncJob = scope.launch {

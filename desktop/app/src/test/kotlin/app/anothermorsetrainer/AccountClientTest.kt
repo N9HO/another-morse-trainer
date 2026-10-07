@@ -8,6 +8,7 @@ import kotlinx.coroutines.yield
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -108,6 +109,53 @@ class AccountClientTest {
         assertTrue(b.await() is AccountResult.Ok)
         assertEquals(1, refreshes)
         assertEquals(AccountTokens("A2", "R2"), store.tokens)
+    }
+
+    /**
+     * `fixtures/sync-wire.json` `merge.refreshRetry`, the scenarios the Swift
+     * harness and the Android suite run too: one request answered 401, a
+     * refresh status and a status for the retried request.
+     */
+    @Test
+    fun `401 then refresh then retry follows the fixture's scenarios`() = runBlocking<Unit> {
+        val stream = javaClass.classLoader?.getResourceAsStream("sync-wire.json")
+        assertNotNull("fixtures/sync-wire.json is not on the test classpath", stream)
+        val f = JSONObject(stream!!.bufferedReader().readText()).getJSONObject("merge").getJSONObject("refreshRetry")
+        val scenarios = f.getJSONArray("scenarios")
+        assertTrue(scenarios.length() > 0)
+        val old = AccountTokens(f.getString("access"), f.getString("refreshToken"))
+        val rotated = AccountTokens(f.getString("rotatedAccess"), f.getString("rotatedRefresh"))
+        for (i in 0 until scenarios.length()) {
+            val s = scenarios.getJSONObject(i)
+            val name = s.getString("name")
+            val refresh = s.getInt("refresh")
+            val retry: Int? = if (s.isNull("retry")) null else s.getInt("retry")
+            val store = MemoryTokens(old)
+            val transport = FakeTransport { r ->
+                when {
+                    r.path == "/v1/auth/token/refresh" ->
+                        if (refresh == 200) tokensReply(rotated.access, rotated.refresh) else AccountReply(refresh, """{"error":"x"}""")
+                    r.bearer == old.access -> unauthorized
+                    retry == 200 -> noDevices
+                    else -> AccountReply(retry ?: 599, """{"error":"x"}""")
+                }
+            }
+            val result = when (val r = AccountClient(transport, store).devices()) {
+                is AccountResult.Ok -> "ok"
+                AccountResult.SignedOut -> "signedOut"
+                is AccountResult.Failed -> if (r.action == SyncMerge.Action.BACKOFF) "backoff" else "failed ${r.status}"
+            }
+            val held = when (store.tokens) {
+                null -> "cleared"
+                rotated -> "rotated"
+                old -> "kept"
+                else -> store.tokens.toString()
+            }
+            assertEquals("$name: result", s.getString("result"), result)
+            assertEquals("$name: tokens", s.getString("tokens"), held)
+            assertEquals("$name: requests", s.getInt("requests"), transport.sent.count { it.path == "/v1/auth/devices" })
+            assertEquals("$name: refreshes", s.getInt("refreshes"), transport.sent.count { it.path == "/v1/auth/token/refresh" })
+        }
     }
 
     @Test

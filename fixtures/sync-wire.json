@@ -321,7 +321,7 @@
     },
 
     "backoff": {
-      "_comment": "Seconds before retry n (1-based): 2^n, capped at 600 (10 min). Reset to retry 1 on success or foreground.",
+      "_comment": "Seconds before retry n (1-based): 2^n, capped at 600 (10 min). Reset to retry 1 on success, or on a foreground that syncs (a foreground held back by foregroundThrottle changes nothing, so a scheduled retry stands).",
       "delaysSeconds": [2, 4, 8, 16, 32, 64, 128, 256, 512, 600, 600],
       "capSeconds": 600
     },
@@ -342,6 +342,47 @@
         { "status": 500, "action": "backoff" },
         { "status": 503, "action": "backoff" },
         { "status": "network", "action": "backoff" }
+      ]
+    },
+
+    "refreshRetry": {
+      "_comment": [
+        "One authenticated request answered 401: refresh the token once, then send the request once more. Per scenario: `refresh` is the refresh's status; `retry` the second answer to the request (null: it is not sent again). `result`: ok (the 2xx reply comes back), signedOut (the tokens are cleared and the device is signed out, banner and all), backoff (the tokens are kept; try later). `tokens` after: rotated (the refresh's new pair), kept (the old pair), cleared. `requests` counts the request itself, `refreshes` the refresh calls.",
+        "The rule this pins: a 401 on the retry, straight after a refresh that worked, means this device's sign-in was revoked. It signs out; it is never an ordinary error to back off on, and it never refreshes a second time. README sections 5 and 10."
+      ],
+      "access": "a1", "refreshToken": "r1",
+      "rotatedAccess": "a2", "rotatedRefresh": "r2",
+      "scenarios": [
+        { "name": "refreshed", "refresh": 200, "retry": 200, "result": "ok", "tokens": "rotated", "requests": 2, "refreshes": 1 },
+        { "name": "revoked after a good refresh", "refresh": 200, "retry": 401, "result": "signedOut", "tokens": "cleared", "requests": 2, "refreshes": 1 },
+        { "name": "refresh refused", "refresh": 401, "retry": null, "result": "signedOut", "tokens": "cleared", "requests": 1, "refreshes": 1 },
+        { "name": "refresh rate-limited", "refresh": 429, "retry": null, "result": "backoff", "tokens": "kept", "requests": 1, "refreshes": 1 },
+        { "name": "refresh 5xx", "refresh": 503, "retry": null, "result": "backoff", "tokens": "kept", "requests": 1, "refreshes": 1 },
+        { "name": "retry 5xx", "refresh": 200, "retry": 503, "result": "backoff", "tokens": "rotated", "requests": 2, "refreshes": 1 }
+      ]
+    },
+
+    "foregroundThrottle": {
+      "_comment": [
+        "A return to the foreground (desktop: the window regaining focus; on every app launch is the first foreground) syncs only when at least `minIntervalSeconds` have passed since the last foreground sync that ran. A full sync is several requests and focus can change many times a minute; this keeps the Worker's rate limit (429) out of reach. A held-back foreground does NOTHING: no sync, no backoff reset, and the clock does not move.",
+        "Only `throttled` triggers are gated, and only they move the clock. Sync now, the push after a local change, the sign-in's first sync and a backoff retry always run and never move it. The clock is kept in memory, so a cold launch always syncs. A clock that reads earlier than the last foreground sync (the wall clock was set back) syncs.",
+        "`sequence` runs in order against one fresh throttle: `atSeconds` is when each trigger fires, `syncs` whether it runs. Idea from PR #336."
+      ],
+      "minIntervalSeconds": 300,
+      "throttled": ["foreground"],
+      "unthrottled": ["syncNow", "localChange", "signIn", "retry"],
+      "sequence": [
+        { "trigger": "foreground", "atSeconds": 1000, "syncs": true },
+        { "trigger": "foreground", "atSeconds": 1060, "syncs": false },
+        { "trigger": "syncNow", "atSeconds": 1061, "syncs": true },
+        { "trigger": "localChange", "atSeconds": 1062, "syncs": true },
+        { "trigger": "signIn", "atSeconds": 1063, "syncs": true },
+        { "trigger": "retry", "atSeconds": 1064, "syncs": true },
+        { "trigger": "foreground", "atSeconds": 1299, "syncs": false },
+        { "trigger": "foreground", "atSeconds": 1300, "syncs": true },
+        { "trigger": "foreground", "atSeconds": 1599, "syncs": false },
+        { "trigger": "foreground", "atSeconds": 900, "syncs": true },
+        { "trigger": "foreground", "atSeconds": 901, "syncs": false }
       ]
     }
   }

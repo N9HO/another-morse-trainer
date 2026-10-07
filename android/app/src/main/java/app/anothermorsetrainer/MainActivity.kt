@@ -65,7 +65,8 @@ class MainActivity : ComponentActivity() {
         // or has an invite out).
         BuddyClient.refreshIfStale()
         // Account sync pushes what is queued and pulls what other devices
-        // did, on launch and on every return. Signed out, it does nothing.
+        // did, on launch and on a return (at most every five minutes).
+        // Signed out, it does nothing.
         SyncCoordinator.onForeground()
     }
 
