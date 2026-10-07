@@ -751,7 +751,8 @@ private struct OpZeroBeatDrill: View {
 
 /// One scenario on screen: the situation, the clip, the shuffled choices,
 /// and after an answer the explanation. Used by a lesson's run and by "What
-/// should you do?".
+/// should you do?". Callers give it `.id(scenario.id)`, so a new scenario is
+/// a new card: a fresh shuffle and its own clip (#332).
 private struct OpScenarioCard: View {
     @EnvironmentObject var model: AppModel
     let scenario: OpScenario
@@ -760,7 +761,17 @@ private struct OpScenarioCard: View {
     /// Set once answered: the choice picked.
     let picked: OpChoice?
     let onPick: (OpChoice) -> Void
-    @State private var order: [OpChoice] = []
+    /// The shuffled choices, and the scenario they were shuffled for.
+    @State private var shuffled: (id: String, choices: [OpChoice]) = ("", [])
+
+    /// This scenario's choices, shuffled — never another scenario's. #332
+    /// showed the RIT question with the pileup question's answers: the card
+    /// reshuffled in iOS 16's `onChange(of:)`, whose closure is the one from
+    /// the *previous* render, so it shuffled (and replayed) the old scenario.
+    /// Until this scenario's shuffle lands, its choices show in data order.
+    private var order: [OpChoice] {
+        shuffled.id == scenario.id ? shuffled.choices : scenario.choices
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -820,7 +831,6 @@ private struct OpScenarioCard: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .onAppear(perform: setUp)
-        .onChange(of: scenario.id) { _ in setUp() }
     }
 
     private func background(_ choice: OpChoice) -> Color {
@@ -831,7 +841,7 @@ private struct OpScenarioCard: View {
     }
 
     private func setUp() {
-        order = scenario.choices.shuffled()
+        shuffled = (scenario.id, scenario.choices.shuffled())
         if !scenario.clip.isEmpty { model.playOperating(scenario.clip) }
     }
 }
@@ -873,6 +883,7 @@ private struct OpLessonRun: View {
                     model.noteOperatingPractice()
                     if scenario.accepts(choice) { Haptics.success() } else { Haptics.error() }
                 }
+                .id(scenario.id)
                 if picked != nil {
                     Button { advance() } label: {
                         Text(run.index + 1 >= run.scenarios.count ? "Finish" : "Next")
@@ -987,6 +998,7 @@ private struct OpScenarioMode: View {
                         model.noteOperatingPractice()
                         if scenario.accepts(choice) { right += 1; Haptics.success() } else { Haptics.error() }
                     }
+                    .id(scenario.id)
                     if picked != nil {
                         Button {
                             onOpenLesson(scenario.lesson)
