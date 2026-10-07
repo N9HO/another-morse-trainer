@@ -1254,6 +1254,9 @@ private fun BuddySection() {
     var joinCode by remember { mutableStateOf("") }
     var leaving by remember { mutableStateOf<BuddyEntry?>(null) }
     var copiedCode by remember { mutableStateOf(false) }
+    // Why a tapped Invite or Join cannot go ahead (#335): title and reason,
+    // shown as a dialog so the tap always answers.
+    var blocked by remember { mutableStateOf<Pair<String, String>?>(null) }
     LaunchedEffect(copiedCode) {
         if (copiedCode) {
             delay(2000)
@@ -1273,6 +1276,16 @@ private fun BuddySection() {
     val ready = hasName && LeaderboardClient.isConfigured && busy == null
     // Resource strings read at composition (lint: LocalContextGetResources).
     val errorTemplate = stringResource(R.string.settings_buddy_error)
+    // Why pairing cannot start on this install, or null. Invite and Join stay
+    // tappable while it is set (#335): their rows looked the same enabled or
+    // not, so a tap that did nothing said nothing. The tap explains instead.
+    val unavailableReason = when {
+        !LeaderboardClient.isConfigured -> stringResource(R.string.settings_leaderboard_unconfigured)
+        !hasName -> stringResource(R.string.settings_buddy_no_name)
+        else -> null
+    }
+    val cantInviteTitle = stringResource(R.string.settings_buddy_cant_invite)
+    val cantJoinTitle = stringResource(R.string.settings_buddy_cant_join)
     val shareTitle = stringResource(R.string.settings_buddy_share_title)
     val shareTemplate = stringResource(R.string.settings_buddy_share_text)
     val words = BuddyWords.current()
@@ -1343,7 +1356,11 @@ private fun BuddySection() {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable(enabled = ready) {
+                    .clickable(enabled = busy == null) {
+                        if (unavailableReason != null) {
+                            blocked = cantInviteTitle to unavailableReason
+                            return@clickable
+                        }
                         busy = BuddyAction.INVITE
                         note = null
                         uiScope.launch {
@@ -1421,7 +1438,10 @@ private fun BuddySection() {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable(enabled = ready) { showJoin = !showJoin }
+                    .clickable(enabled = busy == null) {
+                        if (unavailableReason != null) blocked = cantJoinTitle to unavailableReason
+                        else showJoin = !showJoin
+                    }
                     .padding(16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -1488,6 +1508,20 @@ private fun BuddySection() {
         }
     }
     SectionFooter(stringResource(R.string.settings_buddy_footer))
+
+    blocked?.let { (title, reason) ->
+        AlertDialog(
+            onDismissRequest = { blocked = null },
+            containerColor = Brand.navyElevated,
+            title = { Text(title, color = Brand.textPrimary) },
+            text = { Text(reason, color = Brand.textSecondary) },
+            confirmButton = {
+                TextButton(onClick = { blocked = null }) {
+                    Text(stringResource(R.string.settings_buddy_blocked_ok), color = Brand.teal, fontWeight = FontWeight.SemiBold)
+                }
+            }
+        )
+    }
 
     leaving?.let { buddy ->
         if (busy == BuddyAction.LEAVE) return@let
