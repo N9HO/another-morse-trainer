@@ -3,6 +3,7 @@ package app.anothermorsetrainer
 import app.anothermorsetrainer.morsekit.SessionRecord
 import app.anothermorsetrainer.morsekit.SyncAccountState
 import app.anothermorsetrainer.morsekit.SyncMerge
+import app.anothermorsetrainer.morsekit.SyncSettings
 import app.anothermorsetrainer.morsekit.SyncStateCodec
 import app.anothermorsetrainer.morsekit.SyncStreak
 import app.anothermorsetrainer.morsekit.SyncWire
@@ -53,8 +54,9 @@ class SyncEngineTest {
     private class FakeLocal : SyncLocal {
         var history = ArrayList<SessionRecord>()
         var ledger = sortedMapOf<LocalDate, Int>()
-        val values = LinkedHashMap<String, JSONObject>()
-        val applied = LinkedHashMap<String, JSONObject>()
+        /** Progress keys as JSONObjects; training settings as any JSON value. */
+        val values = LinkedHashMap<String, Any>()
+        val applied = LinkedHashMap<String, Any>()
         var aggregates: SyncMerge.Aggregates? = null
         var streak: SyncStreak.Server? = null
         var failSaves = false
@@ -73,8 +75,8 @@ class SyncEngineTest {
             ledger = sortedMapOf<LocalDate, Int>().apply { putAll(SyncMerge.mergeLedger(ledger, server).days) }
         }
         override fun adoptStreak(server: SyncStreak.Server) { streak = server; events.add("streak") }
-        override fun stateValue(key: String): JSONObject? = values[key]
-        override fun applyState(key: String, value: JSONObject) {
+        override fun stateValue(key: String): Any? = values[key]
+        override fun applyState(key: String, value: Any) {
             applied[key] = value
             values[key] = value
         }
@@ -438,5 +440,120 @@ class SyncEngineTest {
         rig.transport.routes["GET /v1/sync/sessions"] = { page(emptyList(), 0, false) }
         assertEquals(SyncEngine.Outcome.DONE, rig.engine.sync())
         assertTrue(rig.engine.state.value.sessionOutbox.isEmpty)
+    }
+
+    // ---- fixtures/sync-wire.json settings.stamping ----
+
+    private val settingsStamping: JSONObject by lazy {
+        val stream = javaClass.classLoader?.getResourceAsStream("sync-wire.json")
+        JSONObject(stream!!.bufferedReader().readText()).getJSONObject("settings").getJSONObject("stamping")
+    }
+
+    private fun longs(o: JSONObject): Map<String, Long> = o.keySet().associateWith { o.getLong(it) }
+
+    @Test
+    fun `settings at first sign-in - a changed one goes at 0, a default one stays home and takes the account's`() = runBlocking<Unit> {
+        val first = settingsStamping.getJSONObject("firstSignIn")
+        val rig = Rig(SyncAccountState(stateStamps = longs(first.getJSONObject("stampsBefore"))))
+        val local = first.getJSONObject("local")
+        for (k in local.keySet()) rig.local.values[k] = local.get(k)
+        // The Worker, in memory: per key the stored entry wins a tie.
+        val stored = LinkedHashMap<String, JSONObject>()
+        val snap = first.getJSONObject("snapshot")
+        for (k in snap.keySet()) stored[k] = snap.getJSONObject(k)
+        var sent = JSONObject()
+        rig.transport.routes["PUT /v1/sync/state"] = { r ->
+            sent = JSONObject(r.body!!).getJSONObject("entries")
+            val winners = JSONObject()
+            for (k in sent.keySet()) {
+                val mine = stored[k]
+                val theirs = sent.getJSONObject(k)
+                if (mine != null && mine.getLong("updatedAt") >= theirs.getLong("updatedAt")) winners.put(k, mine)
+                else { stored[k] = theirs; winners.put(k, theirs) }
+            }
+            ok(JSONObject().put("entries", winners).put("rejected", JSONArray()))
+        }
+        rig.transport.routes["GET /v1/sync/snapshot"] = {
+            val state = JSONObject()
+            for ((k, v) in stored) state.put(k, v)
+            ok(JSONObject().put("state", state).put("seq", 1))
+        }
+
+        rig.engine.signedIn(account)
+        assertEquals(SyncEngine.Outcome.DONE, rig.engine.sync())
+
+        assertEquals(longs(first.getJSONObject("expectedSent")), sent.keySet().associateWith { sent.getJSONObject(it).getLong("updatedAt") })
+        val notSent = first.getJSONArray("expectedNotSent")
+        for (i in 0 until notSent.length()) assertFalse(sent.has(notSent.getString(i)))
+        for (k in sent.keySet()) {
+            val v = sent.getJSONObject(k).get("value")
+            assertTrue("$k goes normalised", SyncSettings.jsonEquals(SyncSettings.normalize(k, v), v))
+        }
+        val after = first.getJSONObject("expectedAfter")
+        for (k in after.keySet()) assertTrue("$k: ${rig.local.values[k]}", SyncSettings.jsonEquals(after.get(k), rig.local.values[k]))
+        val expectedStamps = longs(first.getJSONObject("expectedStamps"))
+        assertEquals(expectedStamps, rig.engine.state.value.stateStamps.filterKeys { it in expectedStamps })
+
+        // A change of ours restamps only its setting.
+        val change = settingsStamping.getJSONObject("userChange")
+        rig.clock = change.getLong("now")
+        val changed = change.getJSONObject("change")
+        for (k in changed.keySet()) {
+            rig.local.values[k] = changed.get(k)
+            rig.engine.stateChanged(k)
+        }
+        val restamped = longs(change.getJSONObject("expectedStamps"))
+        assertEquals(restamped, rig.engine.state.value.stateStamps.filterKeys { it in restamped })
+    }
+
+    /** A signed-in sync where each setting in [scenario]'s `local` is stamped and queued, against a canned state reply. */
+    private fun settingsRig(scenario: JSONObject, reply: JSONObject): Rig {
+        val local = scenario.getJSONObject("local")
+        val stamps = local.keySet().associateWith { local.getJSONObject(it).getLong("updatedAt") }
+        val rig = Rig(SyncAccountState(accountId = "acct", stateStamps = stamps, stateOutbox = LinkedHashSet(stamps.keys)))
+        for (k in local.keySet()) rig.local.values[k] = local.getJSONObject(k).get("value")
+        rig.transport.routes["PUT /v1/sync/state"] = { ok(reply) }
+        rig.transport.routes["GET /v1/sync/sessions"] = { page(emptyList(), 0, false) }
+        return rig
+    }
+
+    @Test
+    fun `a newer setting out of range is clamped and applied, one this app cannot read is ignored`() = runBlocking<Unit> {
+        for (name in listOf("outOfRangeReceived", "unusableReceived")) {
+            val s = settingsStamping.getJSONObject(name)
+            val rig = settingsRig(s, JSONObject().put("entries", s.getJSONObject("reply")).put("rejected", JSONArray()))
+            assertEquals(SyncEngine.Outcome.DONE, rig.engine.sync())
+            val key = s.getJSONObject("local").keySet().first()
+            assertTrue("$name: ${rig.local.values[key]}", SyncSettings.jsonEquals(s.get("expectedValue"), rig.local.values[key]))
+            assertEquals(name, s.getLong("expectedUpdatedAt"), rig.engine.state.value.stateStamps[key])
+        }
+    }
+
+    @Test
+    fun `a setting the Worker does not know yet leaves the queue and keeps its value and stamp`() = runBlocking<Unit> {
+        val r = settingsStamping.getJSONObject("rejectedUntilDeployed")
+        val scenario = JSONObject().put("local", JSONObject().put("setting.tonePitch",
+            JSONObject().put("value", r.get("expectedValue")).put("updatedAt", r.getLong("expectedUpdatedAt"))))
+        val rig = settingsRig(scenario, r.getJSONObject("reply"))
+        assertEquals(SyncEngine.Outcome.DONE, rig.engine.sync())
+        assertEquals(0, rig.engine.failures)
+        assertTrue(rig.engine.state.value.stateOutbox.isEmpty())
+        assertEquals(r.getLong("expectedUpdatedAt"), rig.engine.state.value.stateStamps["setting.tonePitch"])
+        assertTrue(SyncSettings.jsonEquals(r.get("expectedValue"), rig.local.values["setting.tonePitch"]))
+    }
+
+    @Test
+    fun `an unstamped setting is never sent, whatever its value`() = runBlocking<Unit> {
+        val rig = Rig(SyncAccountState(accountId = "acct", stateStamps = mapOf("journey" to 100L)))
+        rig.local.values["setting.tonePitch"] = 750
+        rig.local.values["journey"] = JSONObject().put("unlockedThrough", 2).put("currentLevel", 2).put("completed", JSONArray().put(1))
+        var sent = JSONObject()
+        rig.transport.routes["PUT /v1/sync/state"] = { r ->
+            sent = JSONObject(r.body!!).getJSONObject("entries")
+            ok(JSONObject().put("entries", JSONObject()))
+        }
+        rig.transport.routes["GET /v1/sync/sessions"] = { page(emptyList(), 0, false) }
+        assertEquals(SyncEngine.Outcome.DONE, rig.engine.sync())
+        assertEquals(setOf("journey"), sent.keySet())
     }
 }

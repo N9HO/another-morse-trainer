@@ -1256,7 +1256,7 @@
     <string name="settings_buddy_footer">Pair with up to ten people and keep a separate streak with each: each day you both practice counts, and a day either of you misses resets it. One practice counts for every buddy. Your buddies see your leaderboard display name and whether you practiced each day, nothing else. Leaving a buddy ends that streak for both of you and keeps the others. Pairing works on its own; the leaderboard switch above stays yours. Only builds installed from Google Play can pair.</string>
     <!-- Settings › Account & Sync (the optional account, accounts Worker). -->
     <string name="account_header">Account</string>
-    <string name="account_intro">An account is optional. Signed in, your progress syncs across your devices and comes back on a new install. Everything works without one.</string>
+    <string name="account_intro">An account is optional. Signed in, your progress and your training settings sync across your devices and come back on a new install. Everything works without one.</string>
     <string name="account_email">Email</string>
     <string name="account_email_hint">you@example.com</string>
     <string name="account_send_link">Send link</string>
@@ -1301,7 +1301,7 @@
     <string name="account_syncing">Syncing…</string>
     <string name="account_sign_out">Sign out</string>
     <string name="account_signing_out">Signing out…</string>
-    <string name="account_footer">Sessions, practice days and lesson progress sync; settings stay on each device. Signing out keeps everything on this device.</string>
+    <string name="account_footer">Sessions, practice days, lesson progress and training settings (speed, tone, session length, each mode\'s options) sync; sound output, keys, reminders and the leaderboard opt-in stay on each device. Signing out keeps everything on this device.</string>
     <string name="account_devices">Devices</string>
     <string name="account_this_device">This device</string>
     <string name="account_last_seen">Last seen %1$s</string>
