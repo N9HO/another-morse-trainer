@@ -3810,6 +3810,25 @@ struct DailyDitFixture: Decodable {
     let headlines: [Headline]
     let solvedSpeeds: [SolvedSpeed]
     let quietWarnings: [QuietWarning]
+    struct History: Decodable {
+        struct Window: Decodable {
+            let year, month, day, todayPuzzle, count, newest, oldest: Int
+            let firstOutside: Int?
+        }
+        struct Day: Decodable { let year, month, day: Int }
+        struct PastDay: Decodable {
+            let daysBack, year, month, day, puzzleNumber, answerIndex: Int
+            let answer: String
+            let inHistory: Bool
+        }
+        struct PuzzleDate: Decodable { let puzzleNumber, year, month, day: Int }
+        let days: Int
+        let windows: [Window]
+        let pastDaysFrom: Day
+        let pastDays: [PastDay]
+        let dates: [PuzzleDate]
+    }
+    let history: History
 }
 
 func loadDailyDitFixture() -> DailyDitFixture? {
@@ -3987,6 +4006,66 @@ if let fx = loadDailyDitFixture() {
         }
     }
     check("headlines match the fixture across \(fx.headlines.count) outcomes (singulars and a 101-guess day included)", headlineOK)
+
+    // History (#333): which days are listed, and which word each one is.
+    let h = fx.history
+    check("the history lists \(h.days) days", DailyDit.historyDays == h.days)
+    var windowOK = true
+    for w in h.windows {
+        let today = DailyDit.puzzleNumber(year: w.year, month: w.month, day: w.day)
+        let list = DailyDit.historyPuzzles(today: today)
+        let consecutive = zip(list, list.dropFirst()).allSatisfy { $0 - 1 == $1 }
+        var ok = today == w.todayPuzzle && list.count == w.count
+            && list.first == w.newest && list.last == w.oldest && consecutive
+            && list.allSatisfy { DailyDit.isInHistory($0, today: today) }
+        if let outside = w.firstOutside {
+            ok = ok && !list.contains(outside) && !DailyDit.isInHistory(outside, today: today)
+        }
+        // Tomorrow's puzzle is never in the list.
+        ok = ok && !DailyDit.isInHistory(today + 1, today: today)
+        if !ok {
+            windowOK = false
+            print("      ↳ \(w.year)-\(w.month)-\(w.day): today #\(today), \(list.count) days #\(list.first ?? 0)…#\(list.last ?? 0)")
+        }
+    }
+    check("the history window matches the fixture across \(h.windows.count) todays (epoch edge included)", windowOK)
+
+    let from = DailyDit.daysFromCivil(year: h.pastDaysFrom.year, month: h.pastDaysFrom.month,
+                                      day: h.pastDaysFrom.day)
+    let fromPuzzle = DailyDit.puzzleNumber(year: h.pastDaysFrom.year, month: h.pastDaysFrom.month,
+                                           day: h.pastDaysFrom.day)
+    var pastOK = true
+    for p in h.pastDays {
+        let date = DailyDit.civilFromDays(from - p.daysBack)
+        let number = DailyDit.puzzleNumber(year: date.year, month: date.month, day: date.day)
+        let game = DailyDitGame.forPuzzle(number, startingWpm: 40)
+        if date != (p.year, p.month, p.day) || number != p.puzzleNumber
+            || game.answer != p.answer || game.answer != MorseData.dailyDitAnswers[p.answerIndex]
+            || DailyDit.isInHistory(number, today: fromPuzzle) != p.inHistory
+            || DailyDit.historyPuzzles(today: fromPuzzle).contains(number) != p.inHistory {
+            pastOK = false
+            print("      ↳ \(p.daysBack) days back: \(date) #\(number) \(game.answer), fixture \(p.year)-\(p.month)-\(p.day) #\(p.puzzleNumber) \(p.answer)")
+        }
+    }
+    check("a past day is the puzzle and word its own date got, across \(h.pastDays.count) days back", pastOK)
+
+    var datesOK = true
+    for d in h.dates {
+        let date = DailyDit.civilDate(forPuzzle: d.puzzleNumber)
+        if date != (d.year, d.month, d.day)
+            || DailyDit.puzzleNumber(year: date.year, month: date.month, day: date.day) != d.puzzleNumber {
+            datesOK = false
+            print("      ↳ puzzle #\(d.puzzleNumber) dated \(date), fixture \(d.year)-\(d.month)-\(d.day)")
+        }
+    }
+    check("each puzzle is labelled with its own date across \(h.dates.count) puzzles (leap days included)", datesOK)
+    var roundTrip = true
+    for days in stride(from: -800_000, through: 800_000, by: 997) {
+        let c = DailyDit.civilFromDays(days)
+        if DailyDit.daysFromCivil(year: c.year, month: c.month, day: c.day) != days { roundTrip = false; break }
+    }
+    check("civil_from_days inverts days_from_civil", roundTrip)
+    check("a fresh past game has nothing started", !DailyDitGame.forPuzzle(252, startingWpm: 40).hasStarted)
 
     // The reported speed is the slowest the word was *heard* at, not the speed
     // at the winning guess. The dial can be raised before the first guess, so
