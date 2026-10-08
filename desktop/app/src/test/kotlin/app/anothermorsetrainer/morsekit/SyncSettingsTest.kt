@@ -45,9 +45,9 @@ class SyncSettingsTest {
         assertEquals(keyNames(table), SyncSettings.KEYS.toSet())
         assertEquals(table.length(), SyncSettings.KEYS.size)
         assertEquals(fixture.getString("keyPrefix"), SyncSettings.PREFIX)
-        assertTrue(SyncSettings.KEYS.all { SyncSettings.isSetting(it) && it in SyncState.ALL_KEYS })
-        assertTrue(SyncState.KEYS.none { SyncSettings.isSetting(it) })
-        assertEquals(SyncState.KEYS + SyncSettings.KEYS, SyncState.ALL_KEYS)
+        assertTrue(SyncSettings.KEYS.all { SyncSettings.isSetting(it) && it in SyncStateCodec.allKeys })
+        assertTrue(SyncStateCodec.keys.none { SyncSettings.isSetting(it) })
+        assertEquals(SyncStateCodec.keys + SyncSettings.KEYS, SyncStateCodec.allKeys)
     }
 
     @Test
