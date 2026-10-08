@@ -195,6 +195,9 @@ object SyncState {
     const val STORY_BOOKMARKS = "storyBookmarks"
     val KEYS = listOf(JOURNEY, CHARACTERS, FIRST_FOUR, OPERATING_PROCEDURE, STORY_BOOKMARKS)
 
+    /** Every state key this app syncs: the five progress keys, then each training setting ([SyncSettings]). */
+    val ALL_KEYS: List<String> = KEYS + SyncSettings.KEYS
+
     // ---- journey ----
 
     fun journeyToWire(p: JourneyProgress): JSONObject = JSONObject()

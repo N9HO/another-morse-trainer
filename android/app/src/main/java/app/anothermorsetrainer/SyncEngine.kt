@@ -8,6 +8,7 @@ import app.anothermorsetrainer.morsekit.SyncMerge
 import app.anothermorsetrainer.morsekit.SyncOutbox
 import app.anothermorsetrainer.morsekit.SyncRetry
 import app.anothermorsetrainer.morsekit.SyncAction
+import app.anothermorsetrainer.morsekit.SyncSettings
 import app.anothermorsetrainer.morsekit.SyncState
 import app.anothermorsetrainer.morsekit.SyncWire
 import kotlinx.coroutines.sync.Mutex
@@ -28,7 +29,9 @@ interface SyncKeyValues {
 /**
  * The app's live data as the sync engine reads and writes it: `Stats` and
  * the five progress stores in the app ([SyncCoordinator]), fakes in the tests.
- * State values are in their wire shape ([SyncState]).
+ * State values are in their wire shape: a [JSONObject] for a progress key
+ * ([SyncState]); for a training setting ([SyncSettings]) any JSON value
+ * (Boolean, Int, Double, String, JSONArray, JSONObject).
  */
 interface SyncHost {
     fun history(): List<SessionRecord>
@@ -41,9 +44,13 @@ interface SyncHost {
     fun saveTotals(totals: SyncMerge.LifetimeTotals)
     fun streak(): PracticeStreak
     fun saveStreak(streak: PracticeStreak)
-    fun stateValue(key: String): JSONObject?
-    /** Apply a received value to the live store. The store's own save hook must not re-stamp it. */
-    fun applyState(key: String, value: JSONObject)
+    /** A key's wire value; null for a progress store never saved here. A setting always has one. */
+    fun stateValue(key: String): Any?
+    /**
+     * Apply a received value to the live store. The store's own save hook
+     * must not re-stamp it. A setting arrives normalised ([SyncSettings]).
+     */
+    fun applyState(key: String, value: Any)
     fun today(): LocalDate
     fun now(): Long
 }
@@ -208,7 +215,7 @@ class SyncEngine(
      * again (the Characters track saves after every answer) changes nothing.
      */
     fun stateChanged(key: String) {
-        if (applying || !isSignedIn || key !in SyncState.KEYS) return
+        if (applying || !isSignedIn || key !in SyncState.ALL_KEYS) return
         val sig = host.stateValue(key)?.toString() ?: return
         val all = stamps
         if (all[key]?.signature == sig) return
@@ -251,15 +258,18 @@ class SyncEngine(
             // A key never stamped goes out with updatedAt 0 (fixture `merge.state`):
             // any value the account already has wins, and this device's value
             // only fills a key the account lacks, so onboarding defaults never
-            // overwrite real progress. A key never saved here is not sent.
+            // overwrite real progress. A key never saved here is not sent, and
+            // nor is a setting still at its default (fixture
+            // `settings.stamping.firstSignIn`): the account's value fills it.
             val next = LinkedHashMap(stamps)
-            for (key in SyncState.KEYS) {
-                val sig = host.stateValue(key)?.toString() ?: continue
+            for (key in SyncState.ALL_KEYS) {
+                val value = host.stateValue(key) ?: continue
+                if (SyncSettings.isSetting(key) && next[key] == null && SyncSettings.isDefault(key, value)) continue
                 val prior = next[key]
-                next[key] = Stamp(prior?.updatedAt ?: 0L, sig)
+                next[key] = Stamp(prior?.updatedAt ?: 0L, value.toString())
             }
             setStamps(next)
-            setPendingState(SyncState.KEYS)
+            setPendingState(SyncState.ALL_KEYS)
             setCursor(0L)
             kv.put(K_SNAPSHOT_PENDING, "1")
             onChange()
@@ -487,11 +497,17 @@ class SyncEngine(
      * winner in the reply is applied.
      */
     private suspend fun pushState(): SyncOutcome {
-        val queued = pendingState.filter { it in SyncState.KEYS }
+        val queued = pendingState.filter { it in SyncState.ALL_KEYS }
         val sentStamps = LinkedHashMap(stamps)
         val entries = LinkedHashMap<String, StateEntry>()
-        for (key in SyncState.KEYS) {
-            val value = host.stateValue(key) ?: continue
+        for (key in SyncState.ALL_KEYS) {
+            val raw = host.stateValue(key) ?: continue
+            // A setting goes only once stamped (a change made here, or a first
+            // sign-in's non-default value), and always normalised.
+            val value = if (SyncSettings.isSetting(key)) {
+                if (sentStamps[key] == null) continue
+                SyncSettings.normalize(key, raw) ?: continue
+            } else raw
             val stamp = sentStamps[key] ?: Stamp(0L, value.toString()).also { sentStamps[key] = it }
             entries[key] = StateEntry(value, stamp.updatedAt)
         }
@@ -519,8 +535,14 @@ class SyncEngine(
         val merged = SyncMerge.mergeState(local, reply)
         val next = LinkedHashMap(stamps)
         for ((key, entry) in reply) {
-            if (key !in SyncState.KEYS || merged[key] !== entry) continue
-            val value = entry.value as? JSONObject ?: continue
+            if (key !in SyncState.ALL_KEYS || merged[key] !== entry) continue
+            // A setting from another platform is clamped into this app's
+            // range; one it cannot read leaves the local value and stamp.
+            val value: Any = if (SyncSettings.isSetting(key)) {
+                SyncSettings.normalize(key, entry.value) ?: continue
+            } else {
+                entry.value as? JSONObject ?: continue
+            }
             applying = true
             try {
                 host.applyState(key, value)

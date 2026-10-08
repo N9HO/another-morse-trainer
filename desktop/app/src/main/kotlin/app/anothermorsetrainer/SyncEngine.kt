@@ -4,6 +4,7 @@ import app.anothermorsetrainer.morsekit.SessionRecord
 import app.anothermorsetrainer.morsekit.SyncAccountState
 import app.anothermorsetrainer.morsekit.SyncMerge
 import app.anothermorsetrainer.morsekit.SyncOwnDays
+import app.anothermorsetrainer.morsekit.SyncSettings
 import app.anothermorsetrainer.morsekit.SyncStateCodec
 import app.anothermorsetrainer.morsekit.SyncStreak
 import app.anothermorsetrainer.morsekit.SyncWire
@@ -40,11 +41,15 @@ interface SyncLocal {
     /** Adopt the account's streak (after its days), per [SyncStreak.adopt]. */
     fun adoptStreak(server: SyncStreak.Server)
 
-    /** The wire value of a synced state key, or null when nothing was ever saved for it here. */
-    fun stateValue(key: String): JSONObject?
+    /**
+     * The wire value of a synced state key: a [JSONObject] for a progress key,
+     * or null when nothing was ever saved for it here; any JSON value for a
+     * training setting ([SyncSettings]), which always has one.
+     */
+    fun stateValue(key: String): Any?
 
-    /** Write a winning wire value into the live store (no stamp, no enqueue). */
-    fun applyState(key: String, value: JSONObject)
+    /** Write a winning wire value into the live store (no stamp, no enqueue). A setting arrives normalised. */
+    fun applyState(key: String, value: Any)
 }
 
 /** Where [SyncEngine] keeps [SyncAccountState]. */
@@ -162,7 +167,7 @@ class SyncEngine(
 
     /** A synced state key's value changed locally: stamped now and queued, while signed in. */
     fun stateChanged(key: String) {
-        if (key !in SyncStateCodec.keys) return
+        if (key !in SyncStateCodec.allKeys) return
         mutate { s ->
             if (!s.isSignedIn) s
             else s.copy(stateStamps = s.stateStamps + (key to now()), stateOutbox = s.stateOutbox + key)
@@ -192,7 +197,13 @@ class SyncEngine(
     fun signedIn(account: AccountInfo) {
         val history = local.historyRecords().sortedBy { it.date }
         val encoded = history.map { it.id.toString() to SyncWire.encodeSession(it).toString() }
-        val values = SyncStateCodec.keys.filter { local.stateValue(it) != null }
+        // A setting still at its default and never stamped stays home: the
+        // account's value fills it (fixture `settings.stamping.firstSignIn`).
+        val stamped = current.stateStamps
+        val values = SyncStateCodec.allKeys.filter { key ->
+            val v = local.stateValue(key) ?: return@filter false
+            !(SyncSettings.isSetting(key) && key !in stamped && SyncSettings.isDefault(key, v))
+        }
         val ledger = local.ledgerDays()
         mutate { before ->
             var s = before.copy(
@@ -360,8 +371,14 @@ class SyncEngine(
     private suspend fun drainState(): Outcome {
         val s = current
         val entries = LinkedHashMap<String, SyncWire.StateEntry>()
-        for (key in SyncStateCodec.keys) {
-            val value = local.stateValue(key) ?: continue
+        for (key in SyncStateCodec.allKeys) {
+            val raw = local.stateValue(key) ?: continue
+            // A setting goes only once stamped (a change made here, or a first
+            // sign-in's non-default value), and always normalised.
+            val value = if (SyncSettings.isSetting(key)) {
+                if (key !in s.stateStamps) continue
+                SyncSettings.normalize(key, raw) ?: continue
+            } else raw
             entries[key] = SyncWire.StateEntry(value, s.stateStamps[key] ?: UNSTAMPED)
         }
         val empty = s.stateOutbox.filter { it !in entries }
@@ -471,14 +488,24 @@ class SyncEngine(
         val localStamps = current.stateStamps
         val winners = LinkedHashMap<String, SyncWire.StateEntry>()
         for ((key, theirs) in reply) {
-            if (key !in SyncStateCodec.keys) continue
+            if (key !in SyncStateCodec.allKeys) continue
+            if (SyncSettings.isSetting(key)) {
+                // An unstamped setting takes the account's value; a newer one
+                // is clamped into this app's range, and one this app cannot
+                // read is ignored, local value and stamp kept.
+                val mine = localStamps[key]
+                if (mine != null && theirs.updatedAt <= mine) continue
+                val normal = SyncSettings.normalize(key, theirs.value) ?: continue
+                winners[key] = SyncWire.StateEntry(normal, theirs.updatedAt)
+                continue
+            }
             // A saved but never-stamped value counts as 0: a tie at 0 keeps it.
             val mine = localStamps[key] ?: (if (local.stateValue(key) != null) UNSTAMPED else null)
             if (mine == null || theirs.updatedAt > mine) winners[key] = theirs
         }
         if (winners.isEmpty()) return
         for ((key, e) in winners) {
-            val value = e.value as? JSONObject ?: continue
+            val value = if (SyncSettings.isSetting(key)) e.value else e.value as? JSONObject ?: continue
             runCatching { local.applyState(key, value) }
         }
         mutate { s ->

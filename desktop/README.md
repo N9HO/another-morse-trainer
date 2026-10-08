@@ -215,7 +215,14 @@ paddles.
   shows your callsign and display name, when it last synced, Sync now, and
   every signed-in device, each of which you can sign out. Sign out keeps
   everything on this device; Delete account removes the account and all
-  synced data from the server. Mode, sound and key settings are not synced.
+  synced data from the server. Your training settings sync too, each one on
+  its own so a change on one device never undoes a different change on
+  another: speeds and Farnsworth, tone, band noise, session length, answer
+  and feedback options, opt-in punctuation, word pool and your own words,
+  and each mode's set-up (Listen & Learn, Head Copy, QRQ, Code Exam,
+  Stories, Contest, Rapid Fire, Pileup) with your station callsign, name and
+  state. Sound output, keys and paddles, haptics, reminders and the
+  leaderboard opt-in stay on each device.
   Unlike the leaderboard, sync needs no device attestation, so it works the
   same on Windows and Linux
 - Timed practice sessions (1-30 min or open-ended) with mid-session timer
