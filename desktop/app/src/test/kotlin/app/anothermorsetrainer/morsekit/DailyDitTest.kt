@@ -444,7 +444,7 @@ class DailyDitTest {
 
     @Test
     fun historyListsTheFixturesNumberOfDays() {
-        assertEquals(history.getInt("days") + 1, DailyDit.HISTORY_DAYS)
+        assertEquals(history.getInt("days"), DailyDit.HISTORY_DAYS)
     }
 
     @Test
@@ -454,7 +454,7 @@ class DailyDitTest {
             val w = windows.getJSONObject(i)
             val label = "${w.getInt("year")}-${w.getInt("month")}-${w.getInt("day")}"
             val today = DailyDit.puzzleNumber(LocalDate.of(w.getInt("year"), w.getInt("month"), w.getInt("day")))
-            assertEquals("today's puzzle on $label", w.getInt("todayPuzzle") + 1, today)
+            assertEquals("today's puzzle on $label", w.getInt("todayPuzzle"), today)
             val list = DailyDit.historyPuzzles(today)
             assertEquals("days listed on $label", w.getInt("count"), list.size)
             assertEquals("newest on $label", w.getInt("newest"), list.first())
@@ -484,7 +484,7 @@ class DailyDitTest {
             val number = DailyDit.puzzleNumber(date)
             assertEquals("puzzle $back days back", d.getInt("puzzleNumber"), number)
             val game = DailyDitGame.forPuzzle(number, 40.0)
-            assertEquals("word $back days back", d.getString("answer") + "X", game.answer)
+            assertEquals("word $back days back", d.getString("answer"), game.answer)
             assertEquals("answer index $back days back", MorseData.dailyDitAnswers[d.getInt("answerIndex")], game.answer)
             assertEquals("listed $back days back", d.getBoolean("inHistory"), DailyDit.isInHistory(number, todayPuzzle))
             assertEquals("listed $back days back", d.getBoolean("inHistory"), number in DailyDit.historyPuzzles(todayPuzzle))
@@ -498,7 +498,7 @@ class DailyDitTest {
             val d = dates.getJSONObject(i)
             val n = d.getInt("puzzleNumber")
             val expected = LocalDate.of(d.getInt("year"), d.getInt("month"), d.getInt("day"))
-            assertEquals("date of puzzle #$n", expected.plusDays(1), DailyDit.date(n))
+            assertEquals("date of puzzle #$n", expected, DailyDit.date(n))
             assertEquals("puzzle number of $expected", n, DailyDit.puzzleNumber(DailyDit.date(n)))
         }
     }
@@ -506,7 +506,7 @@ class DailyDitTest {
     @Test
     fun aFreshPastGameHasNothingStarted() {
         val game = DailyDitGame.forPuzzle(252, 40.0)
-        assertTrue(game.hasStarted)
+        assertTrue(!game.hasStarted)
         assertTrue(game.listen().game.hasStarted)
     }
 }
