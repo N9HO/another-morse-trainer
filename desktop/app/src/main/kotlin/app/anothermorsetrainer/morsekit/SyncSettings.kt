@@ -54,7 +54,7 @@ object SyncSettings {
     /** Every settings key, in the fixture's order. */
     val specs: List<Spec> = listOf(
         spec("speed", Kind.Speed, JSONObject().put("characterWpm", 33).put("farnsworth", false).put("effectiveWpm", 18)),
-        spec("tonePitch", Kind.IntRange(300, 1000), 600),
+        spec("tonePitch", Kind.IntRange(300, 1000), 601),
         spec("bandNoise", Kind.Enum(listOf("off", "whisper", "low", "medium", "high")), "off"),
         spec("practiceDuration", Kind.Enum(listOf("oneMin", "fiveMin", "tenMin", "fifteenMin", "thirtyMin", "untilStop")), "fiveMin"),
         spec("recognitionTarget", Kind.Tenths(0.5, 3.0), 1.0),

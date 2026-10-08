@@ -505,8 +505,7 @@ class SyncEngine(
             // A setting goes only once stamped (a change made here, or a first
             // sign-in's non-default value), and always normalised.
             val value = if (SyncSettings.isSetting(key)) {
-                if (sentStamps[key] == null) continue
-                SyncSettings.normalize(key, raw) ?: continue
+                                SyncSettings.normalize(key, raw) ?: continue
             } else raw
             val stamp = sentStamps[key] ?: Stamp(0L, value.toString()).also { sentStamps[key] = it }
             entries[key] = StateEntry(value, stamp.updatedAt)
@@ -539,7 +538,7 @@ class SyncEngine(
             // A setting from another platform is clamped into this app's
             // range; one it cannot read leaves the local value and stamp.
             val value: Any = if (SyncSettings.isSetting(key)) {
-                SyncSettings.normalize(key, entry.value) ?: continue
+                entry.value
             } else {
                 entry.value as? JSONObject ?: continue
             }

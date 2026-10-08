@@ -42,7 +42,7 @@ object SettingsSync {
             BackgroundNoiseLevel.OFF, BackgroundNoiseLevel.WHISPER, BackgroundNoiseLevel.LOW,
             BackgroundNoiseLevel.MEDIUM, BackgroundNoiseLevel.HIGH
         ),
-        "setting.practiceDuration" to PracticeDuration.entries,
+        "setting.practiceDuration" to PracticeDuration.entries.reversed(),
         "setting.answerEntry" to AnswerEntryMode.entries,
         "setting.reveal" to RevealMode.entries,
         "setting.cw77Style" to Cw77Style.entries,
