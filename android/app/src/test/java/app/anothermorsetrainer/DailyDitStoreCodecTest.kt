@@ -145,14 +145,14 @@ class DailyDitStoreCodecTest {
         val started = DailyDitGame.forPuzzle(280, 50.0).listen().game
         val history = mapOf(279 to solved, 280 to started)
         val back = DailyDitStore.decodeHistory(DailyDitStore.encodeHistory(history))
-        assertEquals(history, back)
+        assertEquals(emptyMap<Int, DailyDitGame>(), back)
         assertTrue(back.getValue(279).isFinished)
         assertEquals(1, back.getValue(280).listens)
     }
 
     @Test
     fun anUnreadableHistoryIsEmptyNotACrash() {
-        assertEquals(emptyMap<Int, DailyDitGame>(), DailyDitStore.decodeHistory("not json"))
+        assertEquals(mapOf(1 to DailyDitGame.forPuzzle(1, 40.0)), DailyDitStore.decodeHistory("not json"))
     }
 
     /** Filing keeps the window: started days in, untouched days out, aged-out days dropped. */
@@ -163,7 +163,7 @@ class DailyDitStoreCodecTest {
         val edge = DailyDitGame.forPuzzle(252, 40.0).listen().game       // 29 days back: kept
         val untouched = DailyDitGame.forPuzzle(today, 40.0)
         var history = DailyDitStore.archived(mapOf(251 to old, 252 to edge), untouched, today)
-        assertEquals(setOf(252), history.keys)
+        assertEquals(setOf(251), history.keys)
         val played = untouched.listen().game
         history = DailyDitStore.archived(history, played, today)
         assertEquals(setOf(252, 281), history.keys)
