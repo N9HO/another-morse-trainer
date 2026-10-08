@@ -684,6 +684,23 @@
     <string name="daily_dit_tile_present">%1$s, in the word, wrong place</string>
     <string name="daily_dit_tile_absent">%1$s, not in the word</string>
     <string name="daily_dit_tile_pending">%1$s, not guessed yet</string>
+    <!-- Daily Dit history and practice (#333) -->
+    <string name="daily_dit_practice_title">Practice</string>
+    <string name="daily_dit_practice_banner">The word everyone got on %1$s. Practice only: it doesn\'t count toward your streak, change that day\'s result, or share.</string>
+    <string name="daily_dit_practice_again">Play it again</string>
+    <string name="daily_dit_practice_note">Practice only — not counted and not shared.</string>
+    <string name="daily_dit_hide_chart_sub_practice">No dit-dah reference.</string>
+    <string name="daily_dit_history_link">Past puzzles</string>
+    <string name="daily_dit_history_link_sub">The last %1$d days. Catch up on one you missed, or replay one, as practice.</string>
+    <string name="daily_dit_history_title">Past puzzles</string>
+    <string name="daily_dit_history_intro">Every Daily Dit from the last %1$d days. Open a day you missed, or replay one you copied — as practice: it doesn\'t count toward your streak or change that day\'s result.</string>
+    <string name="daily_dit_history_row">#%1$d · %2$s</string>
+    <string name="daily_dit_history_unsolved">Not solved · %1$s · %2$s</string>
+    <string name="daily_dit_history_missed">Missed</string>
+    <string name="daily_dit_history_not_played">Not played yet</string>
+    <string name="daily_dit_history_today">Today</string>
+    <string name="daily_dit_history_replay">Replay</string>
+    <string name="daily_dit_history_play">Play</string>
     <!-- CW Operating Procedure (#294, #295, docs/operating-procedure-design.md). Words kept in step with iOS OpCopy and Android. -->
     <string name="op_title">Operating Procedure</string>
     <string name="op_home_tagline">The next step after First Four · pileups, partials, zero beat</string>
