@@ -35,6 +35,7 @@ object DailyDitStore {
     private const val GAME_KEY = "game"
     private const val START_WPM_KEY = "startingWpm"
     private const val HIDE_REFERENCE_KEY = "hideReference"
+    private const val HISTORY_KEY = "history"
 
     /**
      * The speed a puzzle starts at, before the ladder steps it down. 40 WPM by
@@ -55,8 +56,21 @@ object DailyDitStore {
     var game by mutableStateOf(DailyDitGame(0, "", 40.0))
         private set
 
+    /**
+     * The days the history remembers (#333): every Daily Dit started in the
+     * last [DailyDit.HISTORY_DAYS] days, by puzzle number, exactly as it was
+     * left — today's included. Written only from [game] (in [save]); a past day
+     * played from the history is practice, held by the screen and never
+     * handed to this store, so practising a day can't change its result.
+     * Pruned to the window on every write. Kept by a progress reset, like
+     * today's game.
+     */
+    var history by mutableStateOf<Map<Int, DailyDitGame>>(emptyMap())
+        private set
+
     fun init(context: Context) {
         prefs = context.applicationContext.getSharedPreferences("amt_dailydit", Context.MODE_PRIVATE)
+        history = prefs.getString(HISTORY_KEY, null)?.let { decodeHistory(it) } ?: emptyMap()
         startingWpm = prefs.getFloat(START_WPM_KEY, 40f).toDouble()
         hideReference = prefs.getBoolean(HIDE_REFERENCE_KEY, false)
         refresh()
@@ -69,8 +83,8 @@ object DailyDitStore {
      * Called on launch *and* whenever the home screen or the puzzle screen
      * appears, because the app can sit open across midnight — coming back to
      * yesterday's finished grid at breakfast is the bug this prevents.
-     * Yesterday's game is not migrated: the day's word is gone, and a share
-     * text belongs to the day it was won.
+     * Yesterday's game is not carried forward: it stays yesterday's, in
+     * [history] (#333), where it can only be replayed as practice.
      */
     fun refresh(today: LocalDate = LocalDate.now()) {
         val number = DailyDit.puzzleNumber(today)
@@ -79,6 +93,10 @@ object DailyDitStore {
         if (saved != null && saved.puzzleNumber == number) {
             game = saved
         } else {
+            // A game left from an earlier day (the app wasn't opened since, or
+            // was last saved by a version without the history) joins the
+            // history before today's replaces it.
+            if (saved != null) archive(saved, number)
             game = DailyDitGame.today(startingWpm, hideReference, today)
             save()
         }
@@ -142,6 +160,47 @@ object DailyDitStore {
 
     private fun save() {
         prefs.edit { putString(GAME_KEY, encode(game)) }
+        archive(game, DailyDit.puzzleNumber())
+    }
+
+    /** File a game in [history] as it stands, and persist it if that changed anything. */
+    private fun archive(game: DailyDitGame, todayPuzzle: Int) {
+        val next = archived(history, game, todayPuzzle)
+        if (next == history) return
+        history = next
+        prefs.edit { putString(HISTORY_KEY, encodeHistory(next)) }
+    }
+
+    /**
+     * [history] with [game] filed under its puzzle number and anything that
+     * has aged out of the window dropped. A game never started is not a
+     * result and is left out, so the history reads that day as missed.
+     * Pure, so `DailyDitStoreCodecTest` can pin it without a store.
+     */
+    internal fun archived(
+        history: Map<Int, DailyDitGame>,
+        game: DailyDitGame,
+        todayPuzzle: Int
+    ): Map<Int, DailyDitGame> {
+        val kept = history.filterKeys { DailyDit.isInHistory(it, todayPuzzle) }
+        return if (game.hasStarted && DailyDit.isInHistory(game.puzzleNumber, todayPuzzle)) {
+            kept + (game.puzzleNumber to game)
+        } else {
+            kept
+        }
+    }
+
+    /** The history as a JSON array of [encode]d games, newest first. */
+    internal fun encodeHistory(history: Map<Int, DailyDitGame>): String =
+        JSONArray(history.values.sortedByDescending { it.puzzleNumber }.map { JSONObject(encode(it)) })
+            .toString()
+
+    /** One unreadable day is dropped, not the whole history. */
+    internal fun decodeHistory(raw: String): Map<Int, DailyDitGame> {
+        val array = runCatching { JSONArray(raw) }.getOrNull() ?: return emptyMap()
+        return (0 until array.length())
+            .mapNotNull { i -> runCatching { decode(array.getJSONObject(i).toString()) }.getOrNull() }
+            .associateBy { it.puzzleNumber }
     }
 
     private fun load(): DailyDitGame? {

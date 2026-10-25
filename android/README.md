@@ -90,6 +90,14 @@ the iOS app's navy/teal look.
   short words and callsigns that split into their characters when hit.
   Waves, lives, combos, three difficulties, a gentle speed ramp in hear-it
   mode, and every hit and miss feeds your stats
+- **Daily Dit**: one five-letter word a day, the same for everyone, sent in
+  Morse at a speed you pick (up to 75 WPM) and walked down 5 WPM for every
+  three listens and every three wrong guesses. Each guess is scored
+  letter by letter, and the result shares as a card with the slowest speed
+  you heard it at. **Past puzzles** lists the last 30 days — copied, not
+  solved or missed — and opens any past day as practice, to catch up on one
+  you missed or replay one you copied; practice counts toward no streak and
+  never changes that day's result
 - **First Four**: just enough CW for a brand-new operator to hunt one POTA
   activator — enter your callsign and state, then hear and send your call,
   your state, ? and 73, and work through three short scenes: a busted call

@@ -321,7 +321,7 @@ highlight (iOS only); the setup sheet's long blurb vs short tagline; iOS's
 finer Settings sections. If these are accepted as idiom they move to *Same
 feature, platform mechanism*.
 
-Documentation: neither README mentions the Daily Dit; the Android README
+Documentation: the Android README
 lacks the first-run proficiency question and describes Sending Practice and
 the Repeater more briefly than iOS's.
 

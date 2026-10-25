@@ -106,6 +106,53 @@ public enum DailyDit {
         answer(forPuzzle: puzzleNumber(for: date, timeZone: timeZone))
     }
 
+    // MARK: - History (#333)
+
+    /// How many days the history lists: today and the 29 before it. Pinned by
+    /// `fixtures/daily-dit.json` (`history.days`), so every app lists the same
+    /// days.
+    public static let historyDays = 30
+
+    /// The puzzles the history lists, newest first: today's and the
+    /// `historyDays - 1` before it. Never below #1 — near the epoch the list is
+    /// shorter rather than repeating puzzle #1.
+    public static func historyPuzzles(today: Int) -> [Int] {
+        let oldest = max(1, today - historyDays + 1)
+        guard today >= oldest else { return [] }
+        return Array((oldest...today).reversed())
+    }
+
+    /// Whether a puzzle is one the history still lists today. The saved
+    /// results are pruned by this, so they never outgrow the window.
+    public static func isInHistory(_ number: Int, today: Int) -> Bool {
+        number <= today && number >= max(1, today - historyDays + 1)
+    }
+
+    /// The proleptic-Gregorian civil date `days` days after 1970-01-01:
+    /// Howard Hinnant's `civil_from_days`, the inverse of `daysFromCivil`, for
+    /// the same reason — exact integer arithmetic with no calendar library in
+    /// the way.
+    public static func civilFromDays(_ days: Int) -> (year: Int, month: Int, day: Int) {
+        let z = days + 719468
+        let era = (z >= 0 ? z : z - 146096) / 146097
+        let doe = z - era * 146097                                          // [0, 146096]
+        let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365     // [0, 399]
+        let doy = doe - (365 * yoe + yoe / 4 - yoe / 100)                   // [0, 365]
+        let mp = (5 * doy + 2) / 153                                        // [0, 11]
+        let day = doy - (153 * mp + 2) / 5 + 1                              // [1, 31]
+        let month = mp < 10 ? mp + 3 : mp - 9                               // [1, 12]
+        return (yoe + era * 400 + (month <= 2 ? 1 : 0), month, day)
+    }
+
+    /// The civil date a puzzle number belongs to: `epoch` plus `number - 1`
+    /// days. The inverse of `puzzleNumber(year:month:day:)` for every number
+    /// from 1 up, which is what lets the history label a past puzzle with the
+    /// day everyone played it.
+    public static func civilDate(forPuzzle number: Int) -> (year: Int, month: Int, day: Int) {
+        civilFromDays(daysFromCivil(year: epoch.year, month: epoch.month, day: epoch.day)
+                      + max(1, number) - 1)
+    }
+
     // MARK: - Guess validation
 
     private static let allowedSet: Set<String> = Set(MorseData.dailyDitAllowed)
@@ -305,14 +352,28 @@ public struct DailyDitGame: Sendable, Equatable, Codable {
                              hideReference: Bool = false,
                              date: Date = Date(),
                              timeZone: TimeZone = .current) -> DailyDitGame {
-        let number = DailyDit.puzzleNumber(for: date, timeZone: timeZone)
-        return DailyDitGame(puzzleNumber: number,
-                            answer: DailyDit.answer(forPuzzle: number),
-                            startingWpm: startingWpm,
-                            hideReference: hideReference)
+        forPuzzle(DailyDit.puzzleNumber(for: date, timeZone: timeZone),
+                  startingWpm: startingWpm,
+                  hideReference: hideReference)
+    }
+
+    /// A fresh game of any puzzle — today's, or a past day's from the history
+    /// (#333). The word comes from the puzzle number exactly as today's does,
+    /// so a missed day is the word everyone got that day.
+    public static func forPuzzle(_ number: Int,
+                                 startingWpm: Double,
+                                 hideReference: Bool = false) -> DailyDitGame {
+        DailyDitGame(puzzleNumber: number,
+                     answer: DailyDit.answer(forPuzzle: number),
+                     startingWpm: startingWpm,
+                     hideReference: hideReference)
     }
 
     public var guessesUsed: Int { rounds.count }
+
+    /// Anything done yet — a listen or a guess. The history tells a day that
+    /// was started and left apart from one never opened.
+    public var hasStarted: Bool { !rounds.isEmpty || !heard.isEmpty }
 
     /// Guesses that weren't the word. While the day is open, that is all of them.
     public var wrongGuesses: Int { rounds.filter { !$0.solved }.count }

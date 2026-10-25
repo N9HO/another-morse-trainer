@@ -130,6 +130,41 @@ object DailyDit {
     /** The answer for a date. */
     fun answer(today: LocalDate = LocalDate.now()): String = answer(puzzleNumber(today))
 
+    // MARK: History (#333)
+
+    /**
+     * How many days the history lists: today and the 29 before it. Pinned by
+     * `fixtures/daily-dit.json` (`history.days`), so every app lists the same
+     * days.
+     */
+    const val HISTORY_DAYS = 30
+
+    /**
+     * The puzzles the history lists, newest first: today's and the
+     * [HISTORY_DAYS] - 1 before it. Never below #1 — near the epoch the list
+     * is shorter rather than repeating puzzle #1.
+     */
+    fun historyPuzzles(todayPuzzle: Int): List<Int> {
+        val oldest = maxOf(1, todayPuzzle - HISTORY_DAYS + 1)
+        return if (todayPuzzle < oldest) emptyList() else (todayPuzzle downTo oldest).toList()
+    }
+
+    /**
+     * Whether a puzzle is one the history still lists today. The saved results
+     * are pruned by this, so they never outgrow the window.
+     */
+    fun isInHistory(puzzleNumber: Int, todayPuzzle: Int): Boolean =
+        puzzleNumber <= todayPuzzle && puzzleNumber >= maxOf(1, todayPuzzle - HISTORY_DAYS + 1)
+
+    /**
+     * The date a puzzle number belongs to: [epoch] plus `puzzleNumber - 1`
+     * days — the inverse of [puzzleNumber] from #1 up, which is what lets the
+     * history label a past puzzle with the day everyone played it. (The Swift
+     * twin writes out Hinnant's `civil_from_days`; [LocalDate] is the same
+     * proleptic Gregorian calendar, and the fixture pins both.)
+     */
+    fun date(puzzleNumber: Int): LocalDate = epoch.plusDays((maxOf(1, puzzleNumber) - 1).toLong())
+
     // MARK: Guess validation
 
     /**
@@ -327,6 +362,12 @@ data class DailyDitGame(
 ) {
     val guessesUsed: Int get() = rounds.size
 
+    /**
+     * Anything done yet — a listen or a guess. The history tells a day that
+     * was started and left apart from one never opened.
+     */
+    val hasStarted: Boolean get() = rounds.isNotEmpty() || heard.isNotEmpty()
+
     /** Guesses that weren't the word. While the day is open, that is all of them. */
     val wrongGuesses: Int get() = rounds.count { !it.solved }
 
@@ -447,14 +488,23 @@ data class DailyDitGame(
             startingWpm: Double,
             hideReference: Boolean = false,
             today: LocalDate = LocalDate.now()
-        ): DailyDitGame {
-            val number = DailyDit.puzzleNumber(today)
-            return DailyDitGame(
-                puzzleNumber = number,
-                answer = DailyDit.answer(number),
-                startingWpm = startingWpm,
-                hideReference = hideReference
-            )
-        }
+        ): DailyDitGame =
+            forPuzzle(DailyDit.puzzleNumber(today), startingWpm, hideReference)
+
+        /**
+         * A fresh game of any puzzle — today's, or a past day's from the
+         * history (#333). The word comes from the puzzle number exactly as
+         * today's does, so a missed day is the word everyone got that day.
+         */
+        fun forPuzzle(
+            puzzleNumber: Int,
+            startingWpm: Double,
+            hideReference: Boolean = false
+        ): DailyDitGame = DailyDitGame(
+            puzzleNumber = puzzleNumber,
+            answer = DailyDit.answer(puzzleNumber),
+            startingWpm = startingWpm,
+            hideReference = hideReference
+        )
     }
 }

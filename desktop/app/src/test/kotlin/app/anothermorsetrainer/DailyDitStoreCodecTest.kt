@@ -135,4 +135,41 @@ class DailyDitStoreCodecTest {
         val back = DailyDitStore.decode(DailyDitStore.encode(game))
         assertEquals(listOf(75.0, 70.0, 65.0), back.rounds.map { it.wpm })
     }
+
+    // ---- History (#333) ----
+
+    /** The whole history survives a save, every day as it was left. */
+    @Test
+    fun historyRoundTrips() {
+        val solved = (DailyDitGame.forPuzzle(279, 40.0).submit("TRADE") as DailyDitSubmission.Scored).game
+        val started = DailyDitGame.forPuzzle(280, 50.0).listen().game
+        val history = mapOf(279 to solved, 280 to started)
+        val back = DailyDitStore.decodeHistory(DailyDitStore.encodeHistory(history))
+        assertEquals(history, back)
+        assertTrue(back.getValue(279).isFinished)
+        assertEquals(1, back.getValue(280).listens)
+    }
+
+    @Test
+    fun anUnreadableHistoryIsEmptyNotACrash() {
+        assertEquals(emptyMap<Int, DailyDitGame>(), DailyDitStore.decodeHistory("not json"))
+    }
+
+    /** Filing keeps the window: started days in, untouched days out, aged-out days dropped. */
+    @Test
+    fun archivingKeepsOnlyStartedDaysInTheWindow() {
+        val today = 281
+        val old = DailyDitGame.forPuzzle(251, 40.0).listen().game        // 30 days back: aged out
+        val edge = DailyDitGame.forPuzzle(252, 40.0).listen().game       // 29 days back: kept
+        val untouched = DailyDitGame.forPuzzle(today, 40.0)
+        var history = DailyDitStore.archived(mapOf(251 to old, 252 to edge), untouched, today)
+        assertEquals(setOf(252), history.keys)
+        val played = untouched.listen().game
+        history = DailyDitStore.archived(history, played, today)
+        assertEquals(setOf(252, 281), history.keys)
+        assertEquals(played, history[281])
+        // Tomorrow's puzzle (a clock set back, say) is never filed.
+        val future = DailyDitGame.forPuzzle(today + 1, 40.0).listen().game
+        assertEquals(history, DailyDitStore.archived(history, future, today))
+    }
 }
