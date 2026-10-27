@@ -92,7 +92,7 @@ testers, bug reports and feature chat live on
   short words and callsigns that split into their characters when hit.
   Waves, lives, combos, three difficulties, a gentle speed ramp in hear-it
   mode, and every hit and miss feeds your stats
-- **The Daily Didaaaahdit**: a card on Home under Daily Dit. One short
+- **The Daily DiDaaaaahDit**: a card on Home under Daily Dit. One short
   sentence a day (about five words, the same for everyone on a date) is sent
   in Morse at your own speed, then you answer a four-option question about it
   (A-D) instead of copying it letter for letter. Replay as often as you like,

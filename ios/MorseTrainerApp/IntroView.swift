@@ -397,7 +397,7 @@ struct IntroView: View {
                     .font(.title3.weight(.semibold))
                     .foregroundStyle(done ? Theme.tealBright : Theme.teal)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("The Daily Didaaaahdit")
+                    Text("The Daily DiDaaaaahDit")
                         .font(.subheadline.weight(.semibold))
                     Text(subtitle)
                         .font(.caption)
@@ -417,7 +417,7 @@ struct IntroView: View {
                 .strokeBorder(Theme.tealBright.opacity(done ? 0.35 : 0.7), lineWidth: 1.5))
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("The Daily Didaaaahdit. \(subtitle)")
+        .accessibilityLabel("The Daily DiDaaaaahDit. \(subtitle)")
     }
 
     private var dailyDitSubtitle: String {

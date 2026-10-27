@@ -1,4 +1,4 @@
-# The Daily Didaaaahdit (#353, the daily comprehension mode)
+# The Daily DiDaaaaahDit (#353, the daily comprehension mode)
 
 A daily mode beside Daily Dit, Head Copy and Short Stories. A short sentence
 (about five words, e.g. `ALFRED ATE TOAST AT BREAKFAST`) is played in Morse; the
@@ -82,6 +82,6 @@ three trees stay independent (`CLAUDE.md`).
 
 ## Guide
 
-The user guide (source outside this repository) needs The Daily Didaaaahdit
+The user guide (source outside this repository) needs The Daily DiDaaaaahDit
 section next to Daily Dit: what it is, one answer a day, A-D options, hardware
 key answering, "counts toward your streak, not ranked".

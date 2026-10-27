@@ -653,7 +653,7 @@
     <string name="start_here_know_body">Open Settings › Characters &amp; Lessons › Proficiency and tell it what you already know. That sets your starting character set instead of making you re-earn A and N. Comfortable with the whole alphabet? Skip Journey and go straight to Common Words, Rapid Fire, or Pileup Runner.</string>
     <!-- Daily Dit: the shared daily puzzle (#155) -->
     <!-- Daily Comprehension (#353) -->
-    <string name="daily_comprehension_title">The Daily Didaaaahdit</string>
+    <string name="daily_comprehension_title">The Daily DiDaaaaahDit</string>
     <string name="daily_comprehension_home_sub_new">Today\'s sentence in Morse, then a question about it</string>
     <string name="daily_comprehension_home_sub_correct">#%1$d answered correctly · %2$s</string>
     <string name="daily_comprehension_home_sub_answered">#%1$d answered · %2$s</string>
