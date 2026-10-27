@@ -55,8 +55,11 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.anothermorsetrainer.morsekit.PaddleKeyer
+import app.anothermorsetrainer.morsekit.SessionClock
 import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
+
+private enum class SpPhase { RUNNING, SUMMARY }
 
 private val OK_GREEN = Color(0xFF2E7D32)
 private val ERR_RED = Color(0xFFC62828)
@@ -111,7 +114,16 @@ fun SendingPracticeScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Un
 
     // Saved with the instance state, so a process reclaimed mid-session still
     // records what it had on the way out; the ladder itself is in EngineStore.
-    val tally = rememberSaveable(saver = TallySaver) { Tally() }
+    var tally by rememberSaveable(stateSaver = TallySaver) { mutableStateOf(Tally()) }
+
+    // Session length (iOS usesSessionLength): the countdown the Session Length
+    // picker set and the timer menu adjusts; expiry shows the summary.
+    var phase by rememberSaveable { mutableStateOf(SpPhase.RUNNING) }
+    var remaining by rememberSaveable(stateSaver = OptionalIntSaver) {
+        mutableStateOf<Int?>(Settings.practiceDuration.seconds)
+    }
+    var recorded by rememberSaveable { mutableStateOf(false) }
+    var milestone by remember { mutableStateOf<Int?>(null) }
 
     DisposableEffect(Unit) {
         keyer.scope = scope
@@ -135,7 +147,7 @@ fun SendingPracticeScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Un
     }
 
     fun grade(answer: String) {
-        if (revealed || answer.isEmpty()) return
+        if (revealed || phase != SpPhase.RUNNING || answer.isEmpty()) return
         val ttr = if (toneFinishedAt == 0L) 0.0 else (System.nanoTime() - toneFinishedAt) / 1_000_000_000.0
         sentAnswer = answer
         val outcome = source.record(choice = answer, ttr = ttr)
@@ -185,16 +197,19 @@ fun SendingPracticeScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Un
         if (revealed) {
             if (!lastCorrect) {
                 delay(450)
-                player.replaySound(drill.playable, Settings.sidetoneHz, Settings.timing())
+                if (phase == SpPhase.RUNNING) player.replaySound(drill.playable, Settings.sidetoneHz, Settings.timing())
                 return@LaunchedEffect
             }
             delay(1200)
-            advanceNow()
+            if (phase == SpPhase.RUNNING) advanceNow()
         }
     }
 
-    fun recordRun() {
-        Stats.record(
+    /** Persist the session once (the summary's entry or an early Back, whichever first). */
+    fun recordRun(): Int? {
+        if (recorded) return null
+        recorded = true
+        return Stats.record(
             mode = "Sending", attempts = tally.attempts, correct = tally.correct,
             bestTtrMs = null, durationSeconds = tally.elapsedSeconds(),
             characterWpm = Settings.characterWpm.roundToInt(),
@@ -202,11 +217,47 @@ fun SendingPracticeScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Un
         )
     }
 
+    /** The timer ran out or End was tapped: record the session and show the summary. */
+    fun endSession() {
+        if (phase == SpPhase.SUMMARY) return
+        player.stop()
+        keyer.clear()
+        milestone = recordRun()
+        phase = SpPhase.SUMMARY
+    }
+
     fun finish() {
         recordRun()
         onBack()
     }
-    BackHandler { finish() }
+
+    /** Start a fresh session from the summary screen. */
+    fun practiceAgain() {
+        tally = Tally()
+        recorded = false
+        milestone = null
+        remaining = Settings.practiceDuration.seconds
+        phase = SpPhase.RUNNING
+        advanceNow()
+    }
+    BackHandler { if (phase == SpPhase.SUMMARY) onBack() else finish() }
+
+    // Session countdown; also keyed on whether a limit exists, so the timer
+    // menu starting a countdown on an open-ended run (or dropping one)
+    // restarts the loop. Reaching zero (or subtracting the last minute) ends it.
+    LaunchedEffect(phase, remaining == null) {
+        if (phase != SpPhase.RUNNING) return@LaunchedEffect
+        while (true) {
+            val r = remaining ?: return@LaunchedEffect
+            if (r <= 0) return@LaunchedEffect
+            delay(1000)
+            remaining = remaining?.minus(1)
+        }
+    }
+    LaunchedEffect(phase, remaining) {
+        val r = remaining
+        if (phase == SpPhase.RUNNING && r != null && r <= 0) endSession()
+    }
 
     // Mid-session Settings, drawn over the session so its state lives on.
     var showSettings by remember { mutableStateOf(false) }
@@ -236,15 +287,37 @@ fun SendingPracticeScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Un
         ) {
             TextButton(onClick = { finish() }) { Text(stringResource(R.string.common_back)) }
             Row(verticalAlignment = Alignment.CenterVertically) {
+                if (phase == SpPhase.RUNNING) {
+                    SessionTimerMenu(
+                        remaining = remaining,
+                        onAddSeconds = { remaining = (remaining ?: 0) + it },
+                        onSubtractSeconds = { remaining = SessionClock.reduced(remaining, it) },
+                        onRemoveLimit = { remaining = null }
+                    )
+                }
                 // Switching records the run the way Back does, then lands on
                 // the picked mode's setup (iOS #42).
                 SwitchModeButton(TrainingMode.SENDING) { mode ->
+                    player.stop()
                     recordRun()
                     onSwitchMode(mode)
                 }
-                SessionSettingsButton { showSettings = true }
+                if (phase == SpPhase.RUNNING) {
+                    SessionSettingsButton { showSettings = true }
+                    TextButton(onClick = { endSession() }) { Text(stringResource(R.string.common_end)) }
+                }
             }
         }
+
+        if (phase == SpPhase.SUMMARY) {
+            SessionSummaryContent(
+                title = stringResource(R.string.mode_sending_practice),
+                tally = tally,
+                milestone = milestone,
+                onPracticeAgain = { practiceAgain() },
+                onDone = onBack
+            )
+        } else {
 
         Column(
             modifier = Modifier.fillMaxSize().widthIn(max = CONTENT_MAX_WIDTH).padding(24.dp),
@@ -429,6 +502,7 @@ fun SendingPracticeScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Un
                     modifier = Modifier.weight(1f).heightIn(min = 48.dp)
                 ) { Text(stringResource(R.string.common_submit), fontWeight = FontWeight.SemiBold) }
             }
+        }
         }
 
         if (showSettings) {

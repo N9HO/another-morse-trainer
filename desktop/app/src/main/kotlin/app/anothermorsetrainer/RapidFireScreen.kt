@@ -78,6 +78,7 @@ import app.anothermorsetrainer.morsekit.RapidFireContent
 import app.anothermorsetrainer.morsekit.RapidFirePace
 import app.anothermorsetrainer.morsekit.RapidFireQuiz
 import app.anothermorsetrainer.morsekit.RapidFireResponse
+import app.anothermorsetrainer.morsekit.SessionClock
 import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
 
@@ -109,6 +110,13 @@ fun RapidFireScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {
     val haptics = remember { Haptics() }
 
     var phase by rememberSaveable { mutableStateOf(RfPhase.SETUP) }
+
+    // Session length (iOS usesSessionLength): the countdown the Session Length
+    // picker on the setup screen set and the timer menu adjusts. Rapid Fire is
+    // ranked, and iOS ranks it with no length adjustment - the board's number is
+    // the server-graded run however long it ran, and the personal best is the
+    // correct count - so a run of any length is posted and recorded the same way.
+    var remaining by rememberSaveable(stateSaver = OptionalIntSaver) { mutableStateOf<Int?>(null) }
 
     // Setup selections persist across launches in Settings, field for field
     // with the iOS RapidFireSettings — so a reclaimed process and the next
@@ -199,6 +207,7 @@ fun RapidFireScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {
         toneEndedStep = -1
         revealBox = response == RapidFireResponse.TYPE
         startedAtMs = System.currentTimeMillis()
+        remaining = Settings.practiceDuration.seconds
         runAttempts = 0
         runCorrect = 0
         lastSeenMs = startedAtMs
@@ -335,6 +344,24 @@ fun RapidFireScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {
         if (sent.isNotEmpty() && sent.length >= d.correct.length) advance()
     }
 
+    // Session countdown; also keyed on whether a limit exists, so the timer
+    // menu starting a countdown on an open-ended run (or dropping one)
+    // restarts the loop. Reaching zero (or subtracting the last minute) ends
+    // the run as Done does.
+    LaunchedEffect(phase, remaining == null) {
+        if (phase != RfPhase.RUNNING) return@LaunchedEffect
+        while (true) {
+            val r = remaining ?: return@LaunchedEffect
+            if (r <= 0) return@LaunchedEffect
+            delay(1000)
+            remaining = remaining?.minus(1)
+        }
+    }
+    LaunchedEffect(phase, remaining) {
+        val r = remaining
+        if (phase == RfPhase.RUNNING && r != null && r <= 0) finishRun()
+    }
+
     // Mid-session Settings, drawn over the run so the stream lives on.
     var showSettings by remember { mutableStateOf(false) }
 
@@ -386,6 +413,14 @@ fun RapidFireScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {
                 count = transcript.size,
                 onSettings = { showSettings = true },
                 onSwitchMode = ::switchTo,
+                timerBar = {
+                    SessionTimerBar(
+                        remaining = remaining,
+                        onAddSeconds = { remaining = (remaining ?: 0) + it },
+                        onSubtractSeconds = { remaining = SessionClock.reduced(remaining, it) },
+                        onRemoveLimit = { remaining = null }
+                    )
+                },
                 response = response,
                 revealBox = revealBox,
                 typed = typed,
@@ -523,6 +558,11 @@ private fun RapidFireSetup(
             SectionLabel(stringResource(R.string.rapidfire_pace))
             Pills(RapidFirePace.entries.map { it to it.label }, pace, onPace)
 
+            // How long the run lasts (iOS's "How long do you want to practice?"
+            // card); the timer menu adjusts it mid-run.
+            SectionLabel(stringResource(R.string.setup_duration_question))
+            Pills(PracticeDuration.entries.map { it to it.label }, Settings.practiceDuration) { Settings.updatePracticeDuration(it) }
+
             Spacer(Modifier.height(8.dp))
             Button(
                 onClick = onStart,
@@ -551,6 +591,7 @@ private fun RapidFireRun(
     onNext: () -> Unit,
     onSettings: () -> Unit,
     onSwitchMode: (TrainingMode) -> Unit,
+    timerBar: @Composable () -> Unit,
     onDone: () -> Unit
 ) {
     // Desktop: imePadding is inert (no soft keyboard). On Android:
@@ -567,6 +608,7 @@ private fun RapidFireRun(
                 SwitchModeButton(TrainingMode.RAPID_FIRE, onSwitchMode)
             }
         }
+        timerBar()
         if (response == RapidFireResponse.KEY) {
             if (midiDevice != null) {
                 Text("🎹 $midiDevice", style = MaterialTheme.typography.labelSmall, color = Brand.teal)

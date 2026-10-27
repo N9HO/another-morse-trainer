@@ -704,6 +704,7 @@
     <!-- Mid-session timer menu and mode switcher (SessionMenus.kt) -->
     <string name="session_add_5_minutes">Add 5 minutes</string>
     <string name="session_add_1_minute">Add 1 minute</string>
+    <string name="session_subtract_1_minute">Subtract 1 minute</string>
     <string name="session_remove_time_limit">Remove time limit</string>
     <string name="session_timer_adjust">Adjust the session timer</string>
     <string name="session_switch_mode">Switch mode</string>

@@ -1,5 +1,6 @@
 package app.anothermorsetrainer
 
+import app.anothermorsetrainer.morsekit.SessionClock
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
@@ -241,6 +242,7 @@ fun TypedQuizScreen(
                     SessionTimerMenu(
                         remaining = remaining,
                         onAddSeconds = { remaining = (remaining ?: 0) + it },
+                        onSubtractSeconds = { remaining = SessionClock.reduced(remaining, it) },
                         onRemoveLimit = { remaining = null }
                     )
                     SessionSettingsButton { showSettings = true }

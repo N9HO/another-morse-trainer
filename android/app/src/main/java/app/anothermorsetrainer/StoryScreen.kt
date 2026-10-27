@@ -1,5 +1,6 @@
 package app.anothermorsetrainer
 
+import app.anothermorsetrainer.morsekit.SessionClock
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -363,6 +364,7 @@ fun StoryScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) {
                         SessionTimerMenu(
                             remaining = remaining,
                             onAddSeconds = { remaining = (remaining ?: 0) + it },
+                            onSubtractSeconds = { remaining = SessionClock.reduced(remaining, it) },
                             onRemoveLimit = { remaining = null }
                         )
                         SessionSettingsButton { showSettings = true }
