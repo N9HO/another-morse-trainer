@@ -437,7 +437,8 @@
     <!-- StatsScreen -->
     <string name="stats_share_your_brag_sheet">Share your brag sheet</string>
     <string name="stats_brag_sheet">Brag Sheet</string>
-    <string name="stats_empty">No sessions yet.\nFinish a practice round and your stats will show up here.</string>
+    <string name="stats_empty">No sessions yet. Finish a practice round and it will show up here.</string>
+    <string name="stats_recent_sessions_blurb">Tap a session to see its per-character recognition-time chart.</string>
     <string name="stats_lifetime">Lifetime</string>
     <string name="stats_sessions">Sessions</string>
     <string name="stats_practice_time">Practice time</string>
