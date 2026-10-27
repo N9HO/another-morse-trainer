@@ -481,11 +481,27 @@ private fun PileupSetup(onStart: () -> Unit, onBack: () -> Unit, onSwitchMode: (
  * The Pileup Runner's options — your call, the exchange, the pileup, the
  * callsigns and the operating knobs — as a run of items emitted into the
  * caller's column. The setup screen shows them above Start; Settings ›
- * QSO & Pileups shows the same composable (#236), so the two can never
- * disagree. Every write goes straight to [PileupSettings].
+ * QSO & Pileups shows the same composables (#236), one per section (Your
+ * Station, Pileup Runner, QSO · Signals, QSO · Realism, QSO · Callsigns, as on
+ * iOS), so the two can never disagree. Every write goes straight to
+ * [PileupSettings].
  */
 @Composable
 internal fun PileupOptions() {
+    PileupYourStationOptions()
+    PileupExchangeOptions()
+    PuSectionLabel(stringResource(R.string.pileup_the_pileup))
+    PileupRunnerSpeedOptions()
+    PileupSignalsOptions()
+    PuSectionLabel(stringResource(R.string.pileup_callsigns))
+    PileupCallsignOptions()
+    PuSectionLabel(stringResource(R.string.pileup_operating))
+    PileupRealismOptions()
+}
+
+/** Settings › QSO & Pileups › Your Station: call, name and state. */
+@Composable
+internal fun PileupYourStationOptions() {
     val focusManager = LocalFocusManager.current
     PuSectionLabel(stringResource(R.string.pileup_your_call))
     OutlinedTextField(
@@ -523,7 +539,17 @@ internal fun PileupOptions() {
         keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
         modifier = Modifier.fillMaxWidth()
     )
+}
 
+/** Settings › QSO & Pileups › Pileup Runner: the mode, then the callers' number, speeds, spacing and tone spread. */
+@Composable
+internal fun PileupRunnerOptions() {
+    PileupExchangeOptions()
+    PileupRunnerSpeedOptions()
+}
+
+@Composable
+private fun PileupExchangeOptions() {
     PuSectionLabel(stringResource(R.string.pileup_exchange))
     PuPills(QSOContestMode.allCases.map { it to it.label }, PileupSettings.mode) {
         PileupSettings.updateMode(it)
@@ -533,8 +559,10 @@ internal fun PileupOptions() {
         style = MaterialTheme.typography.bodySmall,
         color = Brand.textSecondary
     )
+}
 
-    PuSectionLabel(stringResource(R.string.pileup_the_pileup))
+@Composable
+private fun PileupRunnerSpeedOptions() {
     PuSlider(
         label = stringResource(R.string.pileup_callers),
         value = stringResource(R.string.pileup_callers_value, PileupSettings.maxStations),
@@ -572,6 +600,11 @@ internal fun PileupOptions() {
         range = 0f..PileupSettings.MAX_TONE_SPREAD.toFloat(), steps = 0,
         onChange = { PileupSettings.updateToneSpread(it.toDouble()) }
     )
+}
+
+/** Settings › QSO & Pileups › QSO · Signals: fading, noise and how long callers wait. */
+@Composable
+internal fun PileupSignalsOptions() {
     PuToggle(stringResource(R.string.pileup_qsb_fading), PileupSettings.qsbEnabled) { PileupSettings.updateQsbEnabled(it) }
     Column {
         PuSectionLabel(stringResource(R.string.pileup_qrn_static))
@@ -597,8 +630,11 @@ internal fun PileupOptions() {
         steps = (PileupSettings.MAX_MAX_DELAY * 10).roundToInt() - 1,
         onChange = { PileupSettings.updateMaxDelay((it * 10).roundToInt() / 10.0) }
     )
+}
 
-    PuSectionLabel(stringResource(R.string.pileup_callsigns))
+/** Settings › QSO & Pileups › QSO · Callsigns: which shapes appear, and US only. */
+@Composable
+internal fun PileupCallsignOptions() {
     Row(
         modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -621,8 +657,46 @@ internal fun PileupOptions() {
         }
     }
     PuToggle(stringResource(R.string.common_us_calls_only), PileupSettings.usOnly) { PileupSettings.updateUsOnly(it) }
+}
 
-    PuSectionLabel(stringResource(R.string.pileup_operating))
+/**
+ * Settings › QSO & Pileups › QSO · Realism, in the iOS order: the RST, the
+ * partial call, keying your side, re-calls, a busted call, giving up, cut numbers.
+ */
+@Composable
+internal fun PileupRealismOptions() {
+    if (PileupSettings.mode.includesRST) {
+        PuToggle(stringResource(R.string.pileup_require_the_rst_copied), PileupSettings.rstRequired) {
+            PileupSettings.updateRstRequired(it)
+        }
+    }
+    PuToggle(stringResource(R.string.pileup_keep_my_partial_call_after), PileupSettings.keepPartialCall) {
+        PileupSettings.updateKeepPartialCall(it)
+    }
+    PuToggle(stringResource(R.string.pileup_key_my_side_in_morse), PileupSettings.keyMySide) {
+        PileupSettings.updateKeyMySide(it)
+    }
+    PuToggle(stringResource(R.string.pileup_recall_after_tu), PileupSettings.autoRecall) {
+        PileupSettings.updateAutoRecall(it)
+    }
+Column {
+        PuSectionLabel(stringResource(R.string.pileup_on_a_busted_call))
+        PuPills(BustBehavior.allCases.map { it to it.label }, PileupSettings.bustBehavior) {
+            PileupSettings.updateBustBehavior(it)
+        }
+    }
+    PuToggle(stringResource(R.string.pileup_impatient_callers_give_up), PileupSettings.giveUpEnabled) {
+        PileupSettings.updateGiveUpEnabled(it)
+    }
+    if (PileupSettings.giveUpEnabled) {
+        Column {
+            PuSectionLabel(stringResource(R.string.pileup_tell_me_who_got_away))
+            PuPills(
+                MissedCallerFeedback.allCases.map { it to it.label },
+                PileupSettings.missedCallerFeedback
+            ) { PileupSettings.updateMissedCallerFeedback(it) }
+        }
+    }
     PuToggle(stringResource(R.string.pileup_cut_numbers), PileupSettings.cutNumbersEnabled) {
         PileupSettings.updateCutNumbersEnabled(it)
     }
@@ -653,38 +727,6 @@ internal fun PileupOptions() {
                 }
             }
         }
-    }
-    if (PileupSettings.mode.includesRST) {
-        PuToggle(stringResource(R.string.pileup_require_the_rst_copied), PileupSettings.rstRequired) {
-            PileupSettings.updateRstRequired(it)
-        }
-    }
-    Column {
-        PuSectionLabel(stringResource(R.string.pileup_on_a_busted_call))
-        PuPills(BustBehavior.allCases.map { it to it.label }, PileupSettings.bustBehavior) {
-            PileupSettings.updateBustBehavior(it)
-        }
-    }
-    PuToggle(stringResource(R.string.pileup_impatient_callers_give_up), PileupSettings.giveUpEnabled) {
-        PileupSettings.updateGiveUpEnabled(it)
-    }
-    if (PileupSettings.giveUpEnabled) {
-        Column {
-            PuSectionLabel(stringResource(R.string.pileup_tell_me_who_got_away))
-            PuPills(
-                MissedCallerFeedback.allCases.map { it to it.label },
-                PileupSettings.missedCallerFeedback
-            ) { PileupSettings.updateMissedCallerFeedback(it) }
-        }
-    }
-    PuToggle(stringResource(R.string.pileup_keep_my_partial_call_after), PileupSettings.keepPartialCall) {
-        PileupSettings.updateKeepPartialCall(it)
-    }
-    PuToggle(stringResource(R.string.pileup_key_my_side_in_morse), PileupSettings.keyMySide) {
-        PileupSettings.updateKeyMySide(it)
-    }
-    PuToggle(stringResource(R.string.pileup_recall_after_tu), PileupSettings.autoRecall) {
-        PileupSettings.updateAutoRecall(it)
     }
 }
 

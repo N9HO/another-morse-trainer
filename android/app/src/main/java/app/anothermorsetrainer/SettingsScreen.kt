@@ -91,6 +91,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -364,22 +365,24 @@ fun SettingsScreen(
         SettingsSection.SOUND, SettingsSection.REMINDERS, SettingsSection.DISPLAY,
         SettingsSection.LEADERBOARD, SettingsSection.BUDDY,
         SettingsSection.BUG_REPORTS, SettingsSection.ABOUT -> true
-        SettingsSection.SPEED -> scope == null || scope !in OWN_SPEED_MODES
+        SettingsSection.SPEED, SettingsSection.FARNSWORTH -> scope == null || scope !in OWN_SPEED_MODES
         SettingsSection.PROFICIENCY, SettingsSection.PUNCTUATION -> shown(LADDER_MODES)
         SettingsSection.NEW_CHARACTERS -> shown(LADDER_MODES) && shown(setOf(SettingsMode.CHARACTERS))
-        SettingsSection.PREVIEW_STAGE -> shown(STAGE_PIN_MODES)
+        SettingsSection.TRACK_STAGE, SettingsSection.PREVIEW_STAGE -> shown(STAGE_PIN_MODES)
         SettingsSection.RESET -> scope == null
-        SettingsSection.PRACTICE -> showChoiceRows || showWordPool || showDuration
+        SettingsSection.LEARNING -> showChoiceRows || showWordPool || showDuration
         SettingsSection.ANSWER_ENTRY -> shown(ANSWER_ENTRY_MODES)
-        SettingsSection.MY_WORDS -> showWordPool
         SettingsSection.FEEDBACK -> scope == null || scope !in NO_FEEDBACK_MODES
         SettingsSection.HEAD_COPY -> shown(setOf(SettingsMode.HEAD_COPY))
         SettingsSection.HARDWARE_KEY -> shown(KEY_MODES) && midiSupported
         // The on-screen key needs no MIDI, so it stays on every device (#233).
         SettingsSection.ON_SCREEN_KEY -> shown(KEY_MODES)
-        SettingsSection.PILEUP -> scope == null
+        SettingsSection.YOUR_STATION, SettingsSection.PILEUP_RUNNER, SettingsSection.QSO_SIGNALS,
+        SettingsSection.QSO_REALISM, SettingsSection.QSO_CALLSIGNS -> scope == null
         // The account is not a session setting: the root's only.
         SettingsSection.ACCOUNT -> scope == null
+        // Devices and Delete account exist only while signed in.
+        SettingsSection.DEVICES, SettingsSection.DELETE_ACCOUNT -> scope == null && SyncCoordinator.account != null
     }
     val visibleCategories = SettingsCategory.entries.filter { c -> c.sections.any { isShown(it) } }
 
@@ -494,7 +497,25 @@ fun SettingsScreen(
                                     range = minWpm..maxWpm, steps = wholeWpmSteps(minWpm, maxWpm),
                                     onChange = { Settings.updateCharacterWpm(it.toDouble()) }
                                 )
-                                GroupDivider()
+                            }
+                            val qrqNote = if (Settings.characterWpm >= 40) {
+                                stringResource(R.string.settings_qrq_note, Settings.characterWpm.roundToInt())
+                            } else ""
+                            SectionFooter(
+                                stringResource(R.string.settings_speed_footer) + qrqNote
+                            )
+                            // Twin of the iOS warning: slowing the characters is the one
+                            // adjustment that works against the method, so say so rather
+                            // than letting it pass silently.
+                            if (Settings.characterWpm < KOCH_MIN_WPM) {
+                                SpeedWarning(
+                                    stringResource(R.string.settings_speed_warning, KOCH_MIN_WPM.toInt(), KOCH_MIN_WPM.toInt())
+                                )
+                            }
+                        }
+                        SettingsSection.FARNSWORTH -> {
+                            SectionHeader(stringResource(R.string.settings_farnsworth_header))
+                            SettingsGroup {
                                 // Farnsworth is a switch with its own effective speed
                                 // (iOS parity): the slider only appears while it is on.
                                 Row(
@@ -526,20 +547,7 @@ fun SettingsScreen(
                                     )
                                 }
                             }
-                            val qrqNote = if (Settings.characterWpm >= 40) {
-                                stringResource(R.string.settings_qrq_note, Settings.characterWpm.roundToInt())
-                            } else ""
-                            SectionFooter(
-                                stringResource(R.string.settings_speed_footer) + qrqNote
-                            )
-                            // Twin of the iOS warning: slowing the characters is the one
-                            // adjustment that works against the method, so say so rather
-                            // than letting it pass silently.
-                            if (Settings.characterWpm < KOCH_MIN_WPM) {
-                                SpeedWarning(
-                                    stringResource(R.string.settings_speed_warning, KOCH_MIN_WPM.toInt(), KOCH_MIN_WPM.toInt())
-                                )
-                            }
+                            SectionFooter(stringResource(R.string.settings_farnsworth_footer))
                         }
                         SettingsSection.PROFICIENCY -> {
                             SectionHeader(stringResource(R.string.settings_starting_level))
@@ -580,6 +588,28 @@ fun SettingsScreen(
                                 }
                             }
                             SectionFooter(stringResource(R.string.settings_introduce_new_footer))
+                        }
+                        SettingsSection.TRACK_STAGE -> {
+                            // The way back from words to characters (#95): hold the shared
+                            // Characters track at a stage, or leave it on Auto. The same pin
+                            // the setup sheet and the drill offer (iOS `trackStageSection`).
+                            SectionHeader(stringResource(R.string.setup_track_stage))
+                            val track = remember { EngineStore.current() }
+                            var stageRev by remember { mutableIntStateOf(0) }
+                            SettingsGroup {
+                                key(stageRev) {
+                                    Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+                                        StagePinRow(pinned = track.pinnedStage) { pick ->
+                                            if (pick == null) track.unpin() else track.pin(pick)
+                                            EngineStore.save()
+                                            stageRev++
+                                        }
+                                    }
+                                }
+                            }
+                            key(stageRev) {
+                                SectionFooter(stageNote(track) + " " + stringResource(R.string.settings_track_stage_footer_tail))
+                            }
                         }
                         SettingsSection.PUNCTUATION -> {
                             SectionHeader(stringResource(R.string.settings_punctuation))
@@ -655,18 +685,11 @@ fun SettingsScreen(
                                 stringResource(R.string.settings_reset_footer)
                             )
                         }
-                        SettingsSection.PRACTICE -> {
-                            SectionHeader(stringResource(R.string.settings_practice))
+                        SettingsSection.LEARNING -> {
+                            SectionHeader(stringResource(R.string.settings_learning))
                             SettingsGroup {
                                 var needDivider = false
                                 if (showChoiceRows) {
-                                    SegmentedSetting(
-                                        label = stringResource(R.string.settings_answer_choices),
-                                        options = listOf("4" to 4, "5" to 5, "6" to 6),
-                                        selected = Settings.answerChoices,
-                                        onSelect = { Settings.updateAnswerChoices(it) }
-                                    )
-                                    GroupDivider()
                                     SliderSetting(
                                         label = stringResource(R.string.settings_recognition_target),
                                         value = stringResource(R.string.settings_seconds_1dp, Settings.recognitionTargetSec),
@@ -674,6 +697,13 @@ fun SettingsScreen(
                                         // 0.5–3.0 s in tenths, the iOS range and step.
                                         range = 0.5f..3.0f, steps = 24,
                                         onChange = { Settings.updateRecognitionTargetSec(it.toDouble()) }
+                                    )
+                                    GroupDivider()
+                                    SegmentedSetting(
+                                        label = stringResource(R.string.settings_answer_choices),
+                                        options = listOf("4" to 4, "5" to 5, "6" to 6),
+                                        selected = Settings.answerChoices,
+                                        onSelect = { Settings.updateAnswerChoices(it) }
                                     )
                                     needDivider = true
                                 }
@@ -706,16 +736,30 @@ fun SettingsScreen(
                                         Cw77Options(modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp))
                                     }
                                     needDivider = true
-                                }
-                                if (showChoiceRows) {
-                                    if (needDivider) GroupDivider()
-                                    SegmentedSetting(
-                                        label = stringResource(R.string.settings_reveal_answer),
-                                        options = RevealMode.entries.map { it.shortLabel to it },
-                                        selected = Settings.revealMode,
-                                        onSelect = { Settings.updateRevealMode(it) }
-                                    )
-                                    needDivider = true
+                                    GroupDivider()
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth().padding(16.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text(stringResource(R.string.settings_use_my_word_list), color = Brand.textPrimary, fontWeight = FontWeight.Medium)
+                                        Switch(
+                                            checked = Settings.useCustomWords,
+                                            onCheckedChange = { Settings.updateUseCustomWords(it) },
+                                            colors = switchColors()
+                                        )
+                                    }
+                                    if (Settings.useCustomWords) {
+                                        GroupDivider()
+                                        OutlinedTextField(
+                                            value = Settings.customWordsText,
+                                            onValueChange = { Settings.updateCustomWordsText(it) },
+                                            placeholder = { Text(stringResource(R.string.settings_custom_words_placeholder)) },
+                                            minLines = 3,
+                                            maxLines = 8,
+                                            modifier = Modifier.fillMaxWidth().padding(12.dp)
+                                        )
+                                    }
                                 }
                                 if (showDuration) {
                                     if (needDivider) GroupDivider()
@@ -723,7 +767,18 @@ fun SettingsScreen(
                                 }
                             }
                             SectionFooter(
-                                practiceFooter(showChoiceRows, showWordPool, showDuration)
+                                practiceFooter(showChoiceRows, showWordPool, showDuration) +
+                                    if (showWordPool) "\n\n" + (
+                                        if (Settings.useCustomWords) {
+                                            val n = Settings.customWords.size
+                                            stringResource(R.string.settings_custom_words_footer_lead) + when {
+                                                n >= 2 -> stringResource(R.string.settings_words_ready, n)
+                                                else -> stringResource(R.string.settings_custom_words_need_two)
+                                            }
+                                        } else {
+                                            stringResource(R.string.settings_custom_words_footer_off)
+                                        }
+                                    ) else ""
                             )
                         }
                         // Keyboard-entry answers (#232), in the choice
@@ -737,50 +792,28 @@ fun SettingsScreen(
                                     selected = Settings.answerEntry,
                                     onSelect = { Settings.updateAnswerEntry(it) }
                                 )
-                            }
-                            SectionFooter(stringResource(R.string.settings_answer_entry_footer))
-                        }
-                        SettingsSection.MY_WORDS -> {
-                            SectionHeader(stringResource(R.string.settings_my_words))
-                            SettingsGroup {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth().padding(16.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Text(stringResource(R.string.settings_use_my_word_list), color = Brand.textPrimary, fontWeight = FontWeight.Medium)
-                                    Switch(
-                                        checked = Settings.useCustomWords,
-                                        onCheckedChange = { Settings.updateUseCustomWords(it) },
-                                        colors = switchColors()
-                                    )
-                                }
-                                if (Settings.useCustomWords) {
+                                if (shown(VOICE_ANSWER_MODES)) {
                                     GroupDivider()
-                                    OutlinedTextField(
-                                        value = Settings.customWordsText,
-                                        onValueChange = { Settings.updateCustomWordsText(it) },
-                                        placeholder = { Text(stringResource(R.string.settings_custom_words_placeholder)) },
-                                        minLines = 3,
-                                        maxLines = 8,
-                                        modifier = Modifier.fillMaxWidth().padding(12.dp)
-                                    )
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth().padding(16.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text(stringResource(R.string.settings_voice_answers), color = Brand.textPrimary, fontWeight = FontWeight.Medium)
+                                        Switch(
+                                            checked = Settings.voiceAnswersEnabled,
+                                            onCheckedChange = { Settings.updateVoiceAnswersEnabled(it) },
+                                            colors = switchColors()
+                                        )
+                                    }
                                 }
                             }
                             SectionFooter(
-                                if (Settings.useCustomWords) {
-                                    val n = Settings.customWords.size
-                                    stringResource(R.string.settings_custom_words_footer_lead) + when {
-                                        n >= 2 -> stringResource(R.string.settings_words_ready, n)
-                                        else -> stringResource(R.string.settings_custom_words_need_two)
-                                    }
-                                } else {
-                                    stringResource(R.string.settings_custom_words_footer_off)
-                                }
+                                stringResource(R.string.settings_answer_entry_footer) +
+                                    if (shown(VOICE_ANSWER_MODES)) " " + stringResource(R.string.settings_voice_answers_footer) else ""
                             )
                         }
                         SettingsSection.FEEDBACK -> {
-                            val showVoiceRow = shown(VOICE_ANSWER_MODES)
                             SectionHeader(stringResource(R.string.settings_feedback))
                             SettingsGroup {
                                 // The iOS Feedback section's two toggles: right/wrong
@@ -795,6 +828,15 @@ fun SettingsScreen(
                                         checked = Settings.showCorrectness,
                                         onCheckedChange = { Settings.updateShowCorrectness(it) },
                                         colors = switchColors()
+                                    )
+                                }
+                                if (showChoiceRows) {
+                                    GroupDivider()
+                                    SegmentedSetting(
+                                        label = stringResource(R.string.settings_reveal_answer),
+                                        options = RevealMode.entries.map { it.shortLabel to it },
+                                        selected = Settings.revealMode,
+                                        onSelect = { Settings.updateRevealMode(it) }
                                     )
                                 }
                                 GroupDivider()
@@ -823,27 +865,10 @@ fun SettingsScreen(
                                         colors = switchColors()
                                     )
                                 }
-                                if (showVoiceRow) {
-                                    GroupDivider()
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth().padding(16.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.SpaceBetween
-                                    ) {
-                                        Text(stringResource(R.string.settings_voice_answers), color = Brand.textPrimary, fontWeight = FontWeight.Medium)
-                                        Switch(
-                                            checked = Settings.voiceAnswersEnabled,
-                                            onCheckedChange = { Settings.updateVoiceAnswersEnabled(it) },
-                                            colors = switchColors()
-                                        )
-                                    }
-                                }
                             }
                             SectionFooter(
-                                if (showVoiceRow)
-                                    stringResource(R.string.settings_feedback_footer)
-                                else
-                                    stringResource(R.string.settings_feedback_footer_haptics_only)
+                                stringResource(R.string.settings_feedback_footer) +
+                                    if (showChoiceRows) " " + stringResource(R.string.settings_feedback_footer_reveal) else ""
                             )
                         }
                         SettingsSection.HEAD_COPY -> {
@@ -894,16 +919,47 @@ fun SettingsScreen(
                                     stringResource(R.string.settings_on_screen_key_footer_straight)
                             )
                         }
-                        SettingsSection.PILEUP -> {
-                            // The Pileup Runner's own options (#236), the same composable its
-                            // setup screen shows, so iOS and Android both keep them under
-                            // QSO & Pileups. Home only: mid-run the engine already holds its config.
+                        SettingsSection.YOUR_STATION -> {
+                            // The Pileup Runner's options (#236) are the composables its setup
+                            // screen shows, so the two can never disagree; iOS keeps them in the
+                            // same five sections. Home only: mid-run the engine holds its config.
+                            SectionHeader(stringResource(R.string.settings_your_station))
+                            Column(
+                                modifier = Modifier.fillMaxWidth().brandCard().padding(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(14.dp)
+                            ) { PileupYourStationOptions() }
+                            SectionFooter(stringResource(R.string.settings_your_station_footer))
+                        }
+                        SettingsSection.PILEUP_RUNNER -> {
                             SectionHeader(stringResource(R.string.mode_pileup_runner))
                             Column(
                                 modifier = Modifier.fillMaxWidth().brandCard().padding(16.dp),
                                 verticalArrangement = Arrangement.spacedBy(14.dp)
-                            ) { PileupOptions() }
-                            SectionFooter(stringResource(R.string.settings_pileup_footer))
+                            ) { PileupRunnerOptions() }
+                            SectionFooter(stringResource(R.string.settings_pileup_runner_footer))
+                        }
+                        SettingsSection.QSO_SIGNALS -> {
+                            SectionHeader(stringResource(R.string.settings_qso_signals))
+                            Column(
+                                modifier = Modifier.fillMaxWidth().brandCard().padding(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(14.dp)
+                            ) { PileupSignalsOptions() }
+                        }
+                        SettingsSection.QSO_REALISM -> {
+                            SectionHeader(stringResource(R.string.settings_qso_realism))
+                            Column(
+                                modifier = Modifier.fillMaxWidth().brandCard().padding(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(14.dp)
+                            ) { PileupRealismOptions() }
+                            SectionFooter(stringResource(R.string.settings_qso_realism_footer))
+                        }
+                        SettingsSection.QSO_CALLSIGNS -> {
+                            SectionHeader(stringResource(R.string.settings_qso_callsigns))
+                            Column(
+                                modifier = Modifier.fillMaxWidth().brandCard().padding(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(14.dp)
+                            ) { PileupCallsignOptions() }
+                            SectionFooter(stringResource(R.string.settings_qso_callsigns_footer))
                         }
                         SettingsSection.REMINDERS -> {
                             SectionHeader(stringResource(R.string.settings_reminders))
@@ -1063,6 +1119,8 @@ fun SettingsScreen(
                             // Account & Sync: the optional account; its own composable.
                             AccountSection()
                         }
+                        SettingsSection.DEVICES -> AccountDevicesSection()
+                        SettingsSection.DELETE_ACCOUNT -> AccountDeleteSection()
                         SettingsSection.BUG_REPORTS -> {
                             // Bug reports (iOS issue #31): build, OS, device and the
                             // settings most likely to matter, onto the clipboard.
@@ -1681,19 +1739,10 @@ private fun AccountSection() {
     var displayName by rememberSaveable(account.id) { mutableStateOf(account.displayName.orEmpty()) }
     var savingProfile by remember { mutableStateOf(false) }
     var profileNote by remember { mutableStateOf<String?>(null) }
-    var busy by remember { mutableStateOf<AccountAction?>(null) }
-    var note by remember { mutableStateOf<String?>(null) }
-    var confirmDelete by remember { mutableStateOf(false) }
-    var devicesFailed by remember { mutableStateOf(false) }
-    LaunchedEffect(account.id) {
-        SyncCoordinator.refreshDevices()
-        devicesFailed = SyncCoordinator.devices == null
-    }
+    var signingOut by remember { mutableStateOf(false) }
     // Resource strings read at composition (lint: LocalContextGetResources).
     val profileErrorTemplate = stringResource(R.string.settings_account_profile_error)
     val savedLine = stringResource(R.string.settings_account_saved)
-    val deleteErrorTemplate = stringResource(R.string.settings_account_delete_error)
-    val deviceError = stringResource(R.string.settings_account_device_error)
 
     val callsignOk = callsign.isBlank() || AccountRules.normalizeCallsign(callsign) != null
     val nameOk = displayName.isBlank() || AccountRules.normalizeDisplayName(displayName) != null
@@ -1796,6 +1845,49 @@ private fun AccountSection() {
         }
     }
 
+    Spacer(Modifier.height(16.dp))
+    SettingsGroup {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(enabled = !signingOut) {
+                    signingOut = true
+                    uiScope.launch {
+                        SyncCoordinator.signOut()
+                        signingOut = false
+                    }
+                }
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                stringResource(if (signingOut) R.string.settings_account_signing_out else R.string.settings_account_sign_out),
+                color = if (!signingOut) Brand.teal else Brand.textSecondary,
+                fontWeight = FontWeight.Medium
+            )
+        }
+    }
+    SectionFooter(stringResource(R.string.settings_account_footer))
+}
+
+/**
+ * Settings › Account & Sync › Devices: every device signed in to the account,
+ * this one marked, each other one with its own Sign out. Signed in only; the
+ * iOS twin is `AccountDevicesSection`.
+ */
+@Composable
+internal fun AccountDevicesSection() {
+    val uiScope = rememberCoroutineScope()
+    val account = SyncCoordinator.account ?: return
+    var devicesFailed by remember { mutableStateOf(false) }
+    var revoking by remember { mutableStateOf(false) }
+    var note by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(account.id) {
+        SyncCoordinator.refreshDevices()
+        devicesFailed = SyncCoordinator.devices == null
+    }
+    val deviceError = stringResource(R.string.settings_account_device_error)
+
     SectionHeader(stringResource(R.string.settings_account_devices))
     SettingsGroup {
         val devices = SyncCoordinator.devices
@@ -1825,20 +1917,20 @@ private fun AccountSection() {
                     if (!device.current) {
                         val revokeLabel = stringResource(R.string.settings_account_device_sign_out_named, name)
                         TextButton(
-                            enabled = busy == null,
+                            enabled = !revoking,
                             onClick = {
-                                busy = AccountAction.REVOKE
+                                revoking = true
                                 note = null
                                 uiScope.launch {
                                     if (!SyncCoordinator.revokeDevice(device)) note = deviceError
-                                    busy = null
+                                    revoking = false
                                 }
                             },
                             modifier = Modifier.semantics { contentDescription = revokeLabel }
                         ) {
                             Text(
                                 stringResource(R.string.settings_account_device_sign_out),
-                                color = if (busy == null) Color(0xFFF2788F) else Brand.textSecondary,
+                                color = if (!revoking) Color(0xFFF2788F) else Brand.textSecondary,
                                 fontWeight = FontWeight.Medium
                             )
                         }
@@ -1848,39 +1940,37 @@ private fun AccountSection() {
         }
     }
 
-    Spacer(Modifier.height(16.dp))
+    note?.let { n ->
+        Text(n, color = Brand.warning, fontSize = 12.sp, modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp))
+    }
+}
+
+/**
+ * Settings › Account & Sync › Delete account: the last section, after
+ * Devices, behind a confirmation. Signed in only; the iOS twin is
+ * `AccountDeleteSection`.
+ */
+@Composable
+internal fun AccountDeleteSection() {
+    val uiScope = rememberCoroutineScope()
+    if (SyncCoordinator.account == null) return
+    var confirmDelete by remember { mutableStateOf(false) }
+    var deleting by remember { mutableStateOf(false) }
+    var note by remember { mutableStateOf<String?>(null) }
+    val deleteErrorTemplate = stringResource(R.string.settings_account_delete_error)
+
+    SectionHeader(stringResource(R.string.settings_account_delete))
     SettingsGroup {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable(enabled = busy == null) {
-                    busy = AccountAction.SIGN_OUT
-                    note = null
-                    uiScope.launch {
-                        SyncCoordinator.signOut()
-                        busy = null
-                    }
-                }
+                .clickable(enabled = !deleting) { confirmDelete = true }
                 .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                stringResource(if (busy == AccountAction.SIGN_OUT) R.string.settings_account_signing_out else R.string.settings_account_sign_out),
-                color = if (busy == null) Brand.teal else Brand.textSecondary,
-                fontWeight = FontWeight.Medium
-            )
-        }
-        GroupDivider()
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable(enabled = busy == null) { confirmDelete = true }
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                stringResource(if (busy == AccountAction.DELETE) R.string.settings_account_deleting else R.string.settings_account_delete),
-                color = if (busy == null) Color(0xFFF2788F) else Brand.textSecondary,
+                stringResource(if (deleting) R.string.settings_account_deleting else R.string.settings_account_delete),
+                color = if (!deleting) Color(0xFFF2788F) else Brand.textSecondary,
                 fontWeight = FontWeight.Medium
             )
         }
@@ -1891,7 +1981,6 @@ private fun AccountSection() {
             )
         }
     }
-    SectionFooter(stringResource(R.string.settings_account_footer))
 
     if (confirmDelete) {
         AlertDialog(
@@ -1902,12 +1991,12 @@ private fun AccountSection() {
             confirmButton = {
                 TextButton(onClick = {
                     confirmDelete = false
-                    busy = AccountAction.DELETE
+                    deleting = true
                     note = null
                     uiScope.launch {
                         val failure = SyncCoordinator.deleteAccount()
                         if (failure != null) note = deleteErrorTemplate.format(failure)
-                        busy = null
+                        deleting = false
                     }
                 }) {
                     Text(stringResource(R.string.settings_account_delete), color = Color(0xFFF2788F), fontWeight = FontWeight.SemiBold)
@@ -1919,8 +2008,6 @@ private fun AccountSection() {
         )
     }
 }
-
-private enum class AccountAction { REVOKE, SIGN_OUT, DELETE }
 
 /** "5 minutes ago", in the device's language. */
 private fun relativeTime(epochMs: Long): String =
@@ -2044,7 +2131,6 @@ private fun practiceFooter(choices: Boolean, wordPool: Boolean, duration: Boolea
             add("how fast you must answer to count as “mastered”")
         }
         if (wordPool) add("how big the Common Words pool is")
-        if (choices) add("when to show the correct answer after you respond")
         if (duration) add("how long a session runs before it ends with a summary")
     }
     return parts.joinToString(", ").replaceFirstChar { it.uppercase() } + "."

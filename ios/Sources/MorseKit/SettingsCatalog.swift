@@ -54,7 +54,7 @@ public enum SettingsSection: String, CaseIterable, Sendable, Hashable {
     case reminders
     case display
     case leaderboard, buddy
-    case account, devices
+    case account, devices, deleteAccount
     case bugReports, about
 
     public var category: SettingsCategory {
@@ -68,7 +68,7 @@ public enum SettingsSection: String, CaseIterable, Sendable, Hashable {
         case .reminders: return .reminders
         case .display: return .display
         case .leaderboard, .buddy: return .leaderboard
-        case .account, .devices: return .account
+        case .account, .devices, .deleteAccount: return .account
         case .bugReports, .about: return .about
         }
     }
@@ -190,8 +190,8 @@ public enum SettingsCatalog {
         // Account & Sync
         .init("account", "Account",
               ["sign in", "sign out", "log in", "email", "sync", "callsign", "restore", "backup", "cloud"], .account),
-        .init("deleteAccount", "Delete account", ["remove", "erase", "privacy", "data"], .account),
         .init("devices", "Devices", ["signed in", "phone", "tablet", "computer", "mac", "sign out"], .devices),
+        .init("deleteAccount", "Delete account", ["remove", "erase", "privacy", "data"], .deleteAccount),
 
         // Help & About
         .init("copyDiagnostics", "Copy diagnostic info",

@@ -148,7 +148,7 @@ struct SettingsView: View {
     /// had before #236, one line per section.
     private func isShown(_ section: SettingsSection) -> Bool {
         switch section {
-        case .sound, .reminders, .display, .leaderboard, .buddy, .account, .devices, .bugReports, .about: return true
+        case .sound, .reminders, .display, .leaderboard, .buddy, .account, .devices, .deleteAccount, .bugReports, .about: return true
         case .speed: return showsGlobalSpeed
         case .farnsworth: return showsFarnsworth
         case .proficiency: return shown(for: Self.proficiencyModes)
@@ -413,6 +413,7 @@ struct SettingsView: View {
         case .buddy: buddySection
         case .account: AccountSettingsSection(sync: SyncCoordinator.shared, rowBackground: rowBackground(.account))
         case .devices: AccountDevicesSection(sync: SyncCoordinator.shared, rowBackground: rowBackground(.devices))
+        case .deleteAccount: AccountDeleteSection(sync: SyncCoordinator.shared, rowBackground: rowBackground(.deleteAccount))
         case .bugReports: bugReportsSection
         case .about: aboutSection
         }

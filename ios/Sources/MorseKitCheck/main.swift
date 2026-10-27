@@ -6569,7 +6569,8 @@ if let fx = loadBuddyListFixture(),
 // phone.
 struct SettingsCatalogFixture: Decodable {
     struct Category: Decodable { let id: String; let title: String }
-    struct Entry: Decodable { let id: String; let title: String; let category: String }
+    struct Entry: Decodable { let id: String; let title: String; let section: String; let category: String }
+    struct Section: Decodable { let id: String; let category: String }
     struct Query: Decodable {
         let name: String
         let query: String
@@ -6579,6 +6580,7 @@ struct SettingsCatalogFixture: Decodable {
         let first: String?
     }
     let categories: [Category]
+    let sections: [Section]
     let entries: [Entry]
     let queries: [Query]
 }
@@ -6610,6 +6612,17 @@ if let fx = loadSettingsCatalogFixture() {
         print("      ↳ \(e.id): catalog titles it \"\(byId[e.id]?.title ?? "nothing")\", fixture says \"\(e.title)\"")
     }
     check("every shared setting has the fixture's title, the same on every app (\(fx.entries.count))", titlesOK)
+    check("sections match the fixture, in order, each in its category",
+          SettingsSection.allCases.map { "\($0.rawValue)=\($0.category.rawValue)" } == fx.sections.map { "\($0.id)=\($0.category)" })
+    var sectionsOK = true
+    for e in fx.entries where byId[e.id]?.section.rawValue != e.section {
+        sectionsOK = false
+        print("      ↳ \(e.id): catalog has \(byId[e.id]?.section.rawValue ?? "nothing"), fixture says \(e.section)")
+    }
+    check("every shared setting is in the fixture's section (\(fx.entries.count))", sectionsOK)
+    let sharedIds = fx.entries.map(\.id)
+    check("shared settings are in the fixture's order (Reveal after Show right / wrong, Devices before Delete account)",
+          SettingsCatalog.entries.map(\.id).filter(sharedIds.contains) == sharedIds)
     check("catalog ids are unique", byId.count == SettingsCatalog.entries.count)
     check("every category has a section and a searchable setting",
           SettingsCategory.allCases.allSatisfy { c in
