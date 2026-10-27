@@ -19,7 +19,6 @@
 
 import CoreMIDI
 import Foundation
-import MorseKit
 import OSLog
 
 private let log = Logger(subsystem: "com.justinrogers.MorseTrainer", category: "midi.out")
