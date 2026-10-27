@@ -38,12 +38,19 @@ import androidx.core.content.ContextCompat
  *
  * Renders nothing where BLE MIDI isn't supported, so it is safe to drop into
  * any keying screen.
+ *
+ * By default the button owns its BLE link and closes it when it leaves the
+ * screen. A game whose setup and run are different composables passes the
+ * [BleMidi] its screen owns instead (and releases it itself), so a key opened
+ * on the setup page is still attached once the run starts: Invaders, Galaga,
+ * Dungeon and Asteroids do this (iOS feeds the same four from its Bluetooth
+ * key browser).
  */
 @Composable
-fun BluetoothKeyButton(modifier: Modifier = Modifier) {
+fun BluetoothKeyButton(modifier: Modifier = Modifier, ownedBleMidi: BleMidi? = null) {
     val context = LocalContext.current
     val resources = LocalResources.current
-    val bleMidi = remember { BleMidi(context) }
+    val bleMidi = ownedBleMidi ?: remember { BleMidi(context) }
     var status by remember { mutableStateOf<String?>(null) }
 
     val permissions = rememberLauncherForActivityResult(
@@ -55,7 +62,7 @@ fun BluetoothKeyButton(modifier: Modifier = Modifier) {
 
     // Releasing stops the scan and closes the BLE link, so the key is handed
     // back when the screen goes away.
-    DisposableEffect(Unit) { onDispose { bleMidi.release() } }
+    DisposableEffect(Unit) { onDispose { if (ownedBleMidi == null) bleMidi.release() } }
 
     if (bleMidi.isSupported) {
         Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {

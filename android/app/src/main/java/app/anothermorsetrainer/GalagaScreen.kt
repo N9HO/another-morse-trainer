@@ -189,6 +189,10 @@ fun GalagaScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) 
     // Send mode: the same decoder Sending Practice uses, plus a hardware key.
     val keyer = remember { SendingKeyer(wpm = Settings.characterWpm, toneHz = Settings.sidetoneHz) }
     val midi = remember { HardwareKey(context) }
+    // One BLE-MIDI link for the whole screen: a key found on the setup page
+    // must still be attached once the run starts (see BluetoothKeyButton).
+    val ble = remember { BleMidi(context) }
+    DisposableEffect(Unit) { onDispose { ble.release() } }
     AdapterConfigSync(midi)
     val scope = rememberCoroutineScope()
     var keyPressed by remember { mutableStateOf(false) }
@@ -412,6 +416,7 @@ fun GalagaScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) 
                     difficulty = difficulty, onDifficulty = { difficulty = it },
                     onStart = { if (LeaderboardOptIn.shouldOffer()) optInPending = true else startGame() },
                     onBack = onBack,
+                    ble = ble,
                     onSwitchMode = ::switchTo
                 )
             }
@@ -475,7 +480,8 @@ private fun GalagaSetup(
     pool: List<Char>,
     difficulty: InvadersDifficulty, onDifficulty: (InvadersDifficulty) -> Unit,
     onStart: () -> Unit, onBack: () -> Unit,
-    onSwitchMode: (TrainingMode) -> Unit
+    onSwitchMode: (TrainingMode) -> Unit,
+    ble: BleMidi
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         Row(modifier = Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -495,6 +501,7 @@ private fun GalagaSetup(
                 stringResource(if (input == InvadersInput.ICR) R.string.galaga_copy_blurb else R.string.galaga_send_blurb),
                 style = MaterialTheme.typography.bodySmall, color = Brand.textSecondary
             )
+            if (input == InvadersInput.KEYING) BluetoothKeyButton(ownedBleMidi = ble)
             GalLabel(stringResource(R.string.invaders_characters))
             GalPills(InvadersCharacterSet.entries.map { it to it.label }, characterSet, onCharacterSet)
             Text(pool.joinToString(" "), fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall, color = Brand.textSecondary)

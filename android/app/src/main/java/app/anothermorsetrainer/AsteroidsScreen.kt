@@ -185,6 +185,10 @@ fun AsteroidsScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {
     // Send mode: the same decoder Sending Practice uses, plus a hardware key.
     val keyer = remember { SendingKeyer(wpm = Settings.characterWpm, toneHz = Settings.sidetoneHz) }
     val midi = remember { HardwareKey(context) }
+    // One BLE-MIDI link for the whole screen: a key found on the setup page
+    // must still be attached once the run starts (see BluetoothKeyButton).
+    val ble = remember { BleMidi(context) }
+    DisposableEffect(Unit) { onDispose { ble.release() } }
     AdapterConfigSync(midi)
     val scope = rememberCoroutineScope()
     var keyPressed by remember { mutableStateOf(false) }
@@ -435,6 +439,7 @@ fun AsteroidsScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {
                     difficulty = difficulty, onDifficulty = { difficulty = it },
                     onStart = { if (LeaderboardOptIn.shouldOffer()) optInPending = true else startGame() },
                     onBack = onBack,
+                    ble = ble,
                     onSwitchMode = ::switchTo
                 )
             }
@@ -479,7 +484,8 @@ private fun AsteroidsSetup(
     pool: List<Char>,
     difficulty: InvadersDifficulty, onDifficulty: (InvadersDifficulty) -> Unit,
     onStart: () -> Unit, onBack: () -> Unit,
-    onSwitchMode: (TrainingMode) -> Unit
+    onSwitchMode: (TrainingMode) -> Unit,
+    ble: BleMidi
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         Row(modifier = Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -496,6 +502,7 @@ private fun AsteroidsSetup(
             AstLabel(stringResource(R.string.asteroids_how_you_play))
             AstPills(AsteroidsInput.entries.map { it to it.label }, input, onInput)
             Text(input.blurb, style = MaterialTheme.typography.bodySmall, color = Brand.textSecondary)
+            if (input == AsteroidsInput.SEND) BluetoothKeyButton(ownedBleMidi = ble)
             AstLabel(stringResource(R.string.asteroids_characters))
             AstPills(InvadersCharacterSet.entries.map { it to it.label }, characterSet, onCharacterSet)
             Text(pool.joinToString(" "), fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall, color = Brand.textSecondary)
