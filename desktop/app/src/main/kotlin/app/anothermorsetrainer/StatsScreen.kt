@@ -86,7 +86,6 @@ import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import kotlin.math.roundToInt
 
-private val DATE_FMT: DateTimeFormatter = DateTimeFormatter.ofPattern("MMM d")
 private val DETAIL_FMT: DateTimeFormatter = DateTimeFormatter.ofPattern("MMM d, yyyy · h:mm a")
 private val ACTIVITY_DAY_FMT: DateTimeFormatter = DateTimeFormatter.ofPattern("EEE d MMM")
 private val ACTIVITY_MONTH_FMT: DateTimeFormatter = DateTimeFormatter.ofPattern("MMM")
@@ -195,13 +194,19 @@ fun StatsScreen(onBack: () -> Unit, onOpenLeaderboard: () -> Unit = {}) {
             }
 
             if (Stats.totalSessions == 0) {
-                Spacer(Modifier.height(40.dp))
-                Text(
-                    stringResource(R.string.stats_empty),
-                    textAlign = TextAlign.Center,
-                    style = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.fillMaxWidth()
-                )
+                // Before the first session the iOS sheet still shows the
+                // Characters table (every active character, none tried yet)
+                // and a Recent sessions section holding the empty message.
+                CharactersTable(snapshot)
+                SectionLabel(stringResource(R.string.stats_recent_sessions))
+                Column(modifier = Modifier.fillMaxWidth().brandCard(14.dp).padding(14.dp)) {
+                    Text(
+                        stringResource(R.string.stats_empty),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Brand.textSecondary
+                    )
+                }
+                Spacer(Modifier.height(24.dp))
                 return@CenteredScrollColumn
             }
 
@@ -236,20 +241,7 @@ fun StatsScreen(onBack: () -> Unit, onOpenLeaderboard: () -> Unit = {}) {
             SectionLabel(stringResource(R.string.stats_personal_bests))
             PersonalBests(snapshot)
 
-            // Per-character performance over the engine's 20-attempt window,
-            // weakest first (unmastered, then slowest) — the iOS StatsView
-            // "Characters" table. Every active character gets a row, even one
-            // never drilled, so the learner sees the whole ladder.
-            val charRows = characterRows(snapshot)
-            if (charRows.isNotEmpty()) {
-                SectionLabel(stringResource(R.string.stats_characters))
-                Column(modifier = Modifier.fillMaxWidth().brandCard(14.dp)) {
-                    charRows.forEachIndexed { i, row ->
-                        CharacterRow(row)
-                        if (i < charRows.size - 1) HairlineDivider()
-                    }
-                }
-            }
+            CharactersTable(snapshot)
 
             // Every stored session, not the 50-row summary list: the iOS twin
             // summarises the whole SessionHistory. Scored sessions only — a
@@ -280,24 +272,30 @@ fun StatsScreen(onBack: () -> Unit, onOpenLeaderboard: () -> Unit = {}) {
                 }
             }
 
+            // The whole stored history, newest first, each row opening its
+            // detail record: the iOS list shows every SessionRecord it holds
+            // (SessionHistory.limit of them), not a summary prefix.
             SectionLabel(stringResource(R.string.stats_recent_sessions))
             Column(modifier = Modifier.fillMaxWidth().brandCard(14.dp)) {
-                val recent = Stats.recent.take(6)
-                recent.forEachIndexed { i, s ->
-                    // Rows with a stored detail record open it on tap; rows
-                    // saved before details existed stay plain.
-                    val record = Stats.sessionRecord(s.recordId)
+                val sessions = Stats.history
+                sessions.forEachIndexed { i, r ->
                     SessionRow(
-                        mode = s.mode,
-                        date = LocalDate.ofEpochDay(s.epochDay).format(DATE_FMT),
-                        attempts = s.attempts,
-                        accuracy = s.accuracy,
-                        scored = s.isScored,
-                        onOpen = record?.let { { selected = it } }
+                        mode = r.mode,
+                        date = ZonedDateTime.ofInstant(r.date, ZoneId.systemDefault()).format(DETAIL_FMT),
+                        attempts = r.attempts,
+                        accuracy = r.accuracy,
+                        scored = r.isScored,
+                        onOpen = { selected = r }
                     )
-                    if (i < recent.size - 1) HairlineDivider()
+                    if (i < sessions.size - 1) HairlineDivider()
                 }
             }
+            Text(
+                stringResource(R.string.stats_recent_sessions_blurb),
+                style = MaterialTheme.typography.bodySmall,
+                color = Brand.textSecondary,
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+            )
 
             // Both error directions summed, strongest first, top eight — the
             // same data the Confusion Drill trains on.
@@ -320,6 +318,27 @@ fun StatsScreen(onBack: () -> Unit, onOpenLeaderboard: () -> Unit = {}) {
                 }
             }
             Spacer(Modifier.height(24.dp))
+        }
+    }
+}
+
+// MARK: - Characters table
+
+/**
+ * Per-character performance over the engine's 20-attempt window, weakest
+ * first (unmastered, then slowest) — the iOS StatsView "Characters" table.
+ * Every active character gets a row, even one never drilled, so the learner
+ * sees the whole ladder; shown before the first session too, as on iOS.
+ */
+@Composable
+private fun CharactersTable(snapshot: ProgressiveCharacters.Snapshot) {
+    val charRows = characterRows(snapshot)
+    if (charRows.isEmpty()) return
+    SectionLabel(stringResource(R.string.stats_characters))
+    Column(modifier = Modifier.fillMaxWidth().brandCard(14.dp)) {
+        charRows.forEachIndexed { i, row ->
+            CharacterRow(row)
+            if (i < charRows.size - 1) HairlineDivider()
         }
     }
 }
@@ -700,7 +719,9 @@ private fun PersonalBests(snapshot: ProgressiveCharacters.Snapshot) {
     // Scored sessions only: a Listen & Learn session's "attempts" are items
     // heard, with no accuracy to be best at (#183) — and a best-accuracy
     // badge from a 3-question session is meaningless, so at least ten drills.
-    val scored = Stats.recent.filter { it.isScored }
+    // Over the whole stored history, as the iOS Brag Sheet does, not the
+    // 50-row summary list.
+    val scored = Stats.history.filter { it.isScored }
     val realSessions = scored.filter { it.attempts >= 10 }
     val bestAcc = realSessions.maxOfOrNull { it.accuracy }
     val biggest = scored.maxOfOrNull { it.attempts }

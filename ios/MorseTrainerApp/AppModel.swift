@@ -2795,7 +2795,7 @@ final class AppModel: ObservableObject {
 
     /// The characters the learner has studied so far (the active Koch ladder) —
     /// the pool a sending-practice sheet should draw from.
-    var studiedCharacters: [Character] { engine.activeCharacters }
+    var studiedCharacters: [Character] { SendingDrill.studiedCharacters(of: engine) }
 
     /// Per-character difficulty weights for a personalized sending drill: higher
     /// means "drill this more." Weak (low accuracy) and slow (high TTR relative to
