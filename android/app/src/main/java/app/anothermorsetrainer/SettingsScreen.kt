@@ -182,12 +182,18 @@ private val KEY_MODES = setOf(
     SettingsMode.JOURNEY, SettingsMode.RAPID_FIRE, SettingsMode.SENDING
 )
 
+/** The two surfaces that run the pileup engine, where its options are reachable mid-run (iOS `pileupModes`). */
+internal val PILEUP_MODES = setOf(SettingsMode.PILEUP, SettingsMode.CONTEST)
+
 /** The screens that read the session-length setting. */
 internal val DURATION_MODES = setOf(
     SettingsMode.CHARACTERS, SettingsMode.WORDS, SettingsMode.CW77, SettingsMode.ABBREVIATIONS,
     SettingsMode.QCODES, SettingsMode.PROSIGNS, SettingsMode.CONFUSION,
     SettingsMode.TYPE_IT, SettingsMode.QRQ, SettingsMode.HEAD_COPY,
-    SettingsMode.LISTEN, SettingsMode.STORY
+    SettingsMode.LISTEN, SettingsMode.STORY,
+    // Journey, Sending Practice, Rapid Fire and Pileup Runner run on the same
+    // session clock as the rest (iOS TrainingMode.usesSessionLength).
+    SettingsMode.JOURNEY, SettingsMode.SENDING, SettingsMode.RAPID_FIRE, SettingsMode.PILEUP
 )
 
 /** Modes that fix their own speed (QRQ's presets, the exam's 5/13/20 WPM). */
@@ -377,7 +383,9 @@ fun SettingsScreen(
         SettingsSection.HARDWARE_KEY -> shown(KEY_MODES) && midiSupported
         // The on-screen key needs no MIDI, so it stays on every device (#233).
         SettingsSection.ON_SCREEN_KEY -> shown(KEY_MODES)
-        SettingsSection.PILEUP -> scope == null
+        // Reachable mid-run in the two pileup surfaces (iOS pileupModes): the engine
+        // adopts a change on the spot (PileupEngine.update), as AppModel.applySettings does.
+        SettingsSection.PILEUP -> scope == null || scope in PILEUP_MODES
         // The account is not a session setting: the root's only.
         SettingsSection.ACCOUNT -> scope == null
     }
@@ -897,7 +905,8 @@ fun SettingsScreen(
                         SettingsSection.PILEUP -> {
                             // The Pileup Runner's own options (#236), the same composable its
                             // setup screen shows, so iOS and Android both keep them under
-                            // QSO & Pileups. Home only: mid-run the engine already holds its config.
+                            // QSO & Pileups. Also reachable mid-run from Pileup Runner and Contest,
+                            // whose engines adopt a change at once (PileupEngine.update).
                             SectionHeader(stringResource(R.string.mode_pileup_runner))
                             Column(
                                 modifier = Modifier.fillMaxWidth().brandCard().padding(16.dp),

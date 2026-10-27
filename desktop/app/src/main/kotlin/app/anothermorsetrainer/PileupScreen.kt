@@ -69,6 +69,7 @@ import app.anothermorsetrainer.morsekit.MorseTiming
 import app.anothermorsetrainer.morsekit.MissedCallerFeedback
 import app.anothermorsetrainer.morsekit.PileupEngine
 import app.anothermorsetrainer.morsekit.QSOContestMode
+import app.anothermorsetrainer.morsekit.SessionClock
 import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
 
@@ -113,6 +114,14 @@ fun PileupScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) 
     val haptics = remember { Haptics() }
 
     var phase by rememberSaveable { mutableStateOf(PuPhase.SETUP) }
+
+    // Session length (iOS usesSessionLength): the countdown the Session Length
+    // picker on the setup screen set and the timer menu adjusts. Pileup Runner
+    // is ranked, and iOS ranks it with no length adjustment - the board's
+    // number is the server-graded run however long it ran, and the personal
+    // best is the QSO count - so a run of any length is posted and recorded
+    // the same way.
+    var remaining by rememberSaveable(stateSaver = OptionalIntSaver) { mutableStateOf<Int?>(null) }
     var engine by remember { mutableStateOf<PileupEngine?>(null) }
     var input by remember { mutableStateOf("") }
     var reveal by remember { mutableStateOf(false) }
@@ -218,6 +227,7 @@ fun PileupScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) 
         input = ""
         reveal = false
         startedAtMs = System.currentTimeMillis()
+        remaining = Settings.practiceDuration.seconds
         endedAtMs = 0L
         runQsos = 0
         runBusts = 0
@@ -355,6 +365,19 @@ fun PileupScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) 
         input = ""
     }
 
+    // Options changed in the mid-run Settings sheet reach a pileup already on
+    // the air at once (iOS applySettings -> pileup.update, #143): callers on
+    // the air keep the speed and pitch they arrived with, but the caller cap
+    // applies now.
+    val liveConfig = PileupSettings.config()
+    LaunchedEffect(liveConfig) {
+        val e = engine ?: return@LaunchedEffect
+        if (phase == PuPhase.RUNNING) {
+            e.update(liveConfig)
+            rev++
+        }
+    }
+
     // The run clock: tick once a second so the rate and elapsed readouts move.
     LaunchedEffect(phase) {
         if (phase != PuPhase.RUNNING) return@LaunchedEffect
@@ -363,6 +386,24 @@ fun PileupScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) 
             rev++
             syncRun()
         }
+    }
+
+    // Session countdown; also keyed on whether a limit exists, so the timer
+    // menu starting a countdown on an open-ended run (or dropping one)
+    // restarts the loop. Reaching zero (or subtracting the last minute) ends
+    // the run as End does.
+    LaunchedEffect(phase, remaining == null) {
+        if (phase != PuPhase.RUNNING) return@LaunchedEffect
+        while (true) {
+            val r = remaining ?: return@LaunchedEffect
+            if (r <= 0) return@LaunchedEffect
+            delay(1000)
+            remaining = remaining?.minus(1)
+        }
+    }
+    LaunchedEffect(phase, remaining) {
+        val r = remaining
+        if (phase == PuPhase.RUNNING && r != null && r <= 0) endRun()
     }
 
     BackHandler {
@@ -407,6 +448,14 @@ fun PileupScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) 
                 onLog = { perform(tracked(null) { e.logCurrent() }) },
                 onSettings = { showSettings = true },
                 onSwitchMode = ::switchTo,
+                timerBar = {
+                    SessionTimerBar(
+                        remaining = remaining,
+                        onAddSeconds = { remaining = (remaining ?: 0) + it },
+                        onSubtractSeconds = { remaining = SessionClock.reduced(remaining, it) },
+                        onRemoveLimit = { remaining = null }
+                    )
+                },
                 // The engine isn't Compose-observable, so clearing it has to
                 // ride the same rev bump everything else does or the banner
                 // would sit there until the next clock tick.
@@ -466,6 +515,10 @@ private fun PileupSetup(onStart: () -> Unit, onBack: () -> Unit, onSwitchMode: (
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             PileupOptions()
+            // How long the run lasts (iOS's "How long do you want to practice?"
+            // card); the timer menu adjusts it mid-run.
+            PuSectionLabel(stringResource(R.string.setup_duration_question))
+            PuPills(PracticeDuration.entries.map { it to it.label }, Settings.practiceDuration) { Settings.updatePracticeDuration(it) }
             Spacer(Modifier.height(4.dp))
             Button(
                 onClick = onStart,
@@ -708,6 +761,7 @@ private fun PileupRun(
     onLog: () -> Unit,
     onSettings: () -> Unit,
     onSwitchMode: (TrainingMode) -> Unit,
+    timerBar: @Composable () -> Unit,
     onDismissMissed: () -> Unit,
     onEnd: () -> Unit
 ) {
@@ -731,6 +785,7 @@ private fun PileupRun(
             SessionSettingsButton(onOpen = onSettings)
             SwitchModeButton(TrainingMode.PILEUP, onSwitchMode)
         }
+        timerBar()
 
       CenteredContent {
         Column(modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp)) {
