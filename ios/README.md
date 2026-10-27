@@ -46,13 +46,13 @@ testers, bug reports and feature chat live on
   with ARRL/RAC Field Day sections) / contest serials (cut numbers optional)
   / names / power, sent back to back at your pace; type, head-copy, key each
   one back, or just listen
-- **The Daily DiDaaaaahDit**: one five-letter word a day, sent in Morse and
+- **Daily Dit**: one five-letter word a day, sent in Morse and
   the same for every player on a given date. Replay it as often as you like,
   guess as many real five-letter words as it takes, each scored per letter
   (right place, wrong place, not in the word); the code starts at the speed
   you chose (up to 75 WPM) and steps down 5 WPM for every three listens and
   every three wrong guesses, and your brag is the slowest speed you heard it
-  at before you got it. Called Daily Dit elsewhere in this README
+  at before you got it
 - **Games**: the six arcade games below sit behind one Games tile on the
   home screen (and under a Games heading in the mid-session mode switcher),
   so the main menu stays short as more games are added

@@ -459,10 +459,14 @@ def self_test():
     case("the shared keyer-mode fixture gains an entry the apps lack", "fixture:keyerModes:", m_fixture)
 
     def m_stale(man, facts, fx, pm):
-        for g in man["gaps"]:
-            if g["id"] == "row-10":
-                g["detect"]["conditions"][0]["matches"] = False
-    case("a recorded gap whose source no longer matches (closed but not removed)", "gap-stale:row-10", m_stale)
+        # A synthetic record, so the test does not depend on any real gap being open:
+        # its probe asserts 'Stats' is absent from StatsScreen.kt, which the source contradicts.
+        man["gaps"].append({"id": "selftest-closed", "kind": "behavior", "summary": "synthetic",
+                            "state": "open", "status": {"ios": "present", "android": "absent", "desktop": "absent"},
+                            "reason": "synthetic", "anchor": "PARITY.md#open-gaps",
+                            "detect": {"type": "probe", "conditions": [
+                                {"tree": "android", "file": "StatsScreen.kt", "pattern": "Stats", "matches": False}]}})
+    case("a recorded gap whose source no longer matches (closed but not removed)", "gap-stale:selftest-closed", m_stale)
 
     def m_orphan(man, facts, fx, pm):
         pm_add = pm + '\n<a id="ex-invented"></a>\n'

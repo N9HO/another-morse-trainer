@@ -426,10 +426,10 @@
      "Type It / QRQ Speed"
     ],
     "android": [
-     "Type It"
+     "Type It / QRQ Speed"
     ],
     "desktop": [
-     "Type It"
+     "Type It / QRQ Speed"
     ]
    }
   },
@@ -476,10 +476,10 @@
      "Type It / QRQ Speed"
     ],
     "android": [
-     "QRQ Speed"
+     "Type It / QRQ Speed"
     ],
     "desktop": [
-     "QRQ Speed"
+     "Type It / QRQ Speed"
     ]
    }
   },
@@ -1364,9 +1364,15 @@
     }
    },
    "readme": {
-    "ios": [],
-    "android": [],
-    "desktop": []
+    "ios": [
+     "Daily Dit"
+    ],
+    "android": [
+     "Daily Dit"
+    ],
+    "desktop": [
+     "Daily Dit"
+    ]
    }
   },
   {
@@ -1587,7 +1593,9 @@
     }
    },
    "readme": {
-    "ios": [],
+    "ios": [
+     "Sending Drills"
+    ],
     "android": [
      "Sending Drills"
     ],
@@ -1603,7 +1611,7 @@
    "status": {
     "ios": "present",
     "android": "present",
-    "desktop": "present"
+    "desktop": "limited"
    },
    "claims": {
     "ios": {
@@ -1647,6 +1655,15 @@
     ],
     "desktop": [
      "Sending Analyzer"
+    ]
+   },
+   "notes": {
+    "desktop": [
+     {
+      "state": "exception",
+      "reason": "Java Sound has no audio-session interruption, focus or input-device-change callbacks, and a denied microphone cannot be told from a missing one, so the mic stops only when the user stops it and the denied-permission message is the generic no-input one.",
+      "anchor": "PARITY.md#ex-desktop-analyzer-mic"
+     }
     ]
    }
   },
@@ -1698,10 +1715,10 @@
      "Vail repeater"
     ],
     "android": [
-     "Repeater"
+     "Vail repeater"
     ],
     "desktop": [
-     "Repeater"
+     "Vail repeater"
     ]
    }
   },
@@ -1954,8 +1971,12 @@
     "ios": [
      "Answer by keying"
     ],
-    "android": [],
-    "desktop": []
+    "android": [
+     "Answer by keying"
+    ],
+    "desktop": [
+     "Answer by keying"
+    ]
    }
   },
   {
@@ -2068,7 +2089,9 @@
     "ios": [
      "Bluetooth LE MIDI keys"
     ],
-    "android": [],
+    "android": [
+     "Bluetooth LE MIDI keys"
+    ],
     "desktop": "exempt"
    },
    "notes": {
@@ -2189,8 +2212,12 @@
     "ios": [
      "Bluetooth keep-alive and band noise"
     ],
-    "android": [],
-    "desktop": []
+    "android": [
+     "Bluetooth keep-alive and band noise"
+    ],
+    "desktop": [
+     "Bluetooth keep-alive and band noise"
+    ]
    }
   },
   {
@@ -2715,26 +2742,8 @@
   "trackStage": {
    "status": {
     "ios": "present",
-    "android": "absent",
-    "desktop": "absent"
-   },
-   "notes": {
-    "android": [
-     {
-      "state": "open",
-      "reason": "Track stage lives on the mode setup sheet / mode screen, not in the Settings catalog (layout decision).",
-      "anchor": "PARITY.md#open-gaps",
-      "ref": "audit-0927-layout"
-     }
-    ],
-    "desktop": [
-     {
-      "state": "open",
-      "reason": "Track stage lives on the mode setup sheet / mode screen, not in the Settings catalog (layout decision).",
-      "anchor": "PARITY.md#open-gaps",
-      "ref": "audit-0927-layout"
-     }
-    ]
+    "android": "present",
+    "desktop": "present"
    }
   },
   "voiceAnswers": {
@@ -2746,10 +2755,9 @@
    "notes": {
     "ios": [
      {
-      "state": "open",
+      "state": "exception",
       "reason": "Voice answers switch is on the iOS mode setup sheet, not in the Settings catalog (layout decision).",
-      "anchor": "PARITY.md#open-gaps",
-      "ref": "audit-0927-layout"
+      "anchor": "PARITY.md#idiom-setup-sheet"
      }
     ],
     "desktop": [
@@ -2770,10 +2778,9 @@
    "notes": {
     "ios": [
      {
-      "state": "open",
+      "state": "exception",
       "reason": "Lives on the iOS mode setup sheet, not in the Settings catalog (layout decision).",
-      "anchor": "PARITY.md#open-gaps",
-      "ref": "audit-0927-layout"
+      "anchor": "PARITY.md#idiom-setup-sheet"
      }
     ]
    }
@@ -2787,10 +2794,9 @@
    "notes": {
     "ios": [
      {
-      "state": "open",
+      "state": "exception",
       "reason": "Lives on the iOS mode setup sheet, not in the Settings catalog (layout decision).",
-      "anchor": "PARITY.md#open-gaps",
-      "ref": "audit-0927-layout"
+      "anchor": "PARITY.md#idiom-setup-sheet"
      }
     ]
    }
@@ -2804,679 +2810,13 @@
    "notes": {
     "ios": [
      {
-      "state": "open",
+      "state": "exception",
       "reason": "Lives on the iOS mode setup sheet, not in the Settings catalog (layout decision).",
-      "anchor": "PARITY.md#open-gaps",
-      "ref": "audit-0927-layout"
+      "anchor": "PARITY.md#idiom-setup-sheet"
      }
     ]
    }
   }
  },
- "gaps": [
-  {
-   "id": "row-01",
-   "kind": "behavior",
-   "summary": "Session length (picker, 5-minute default, countdown, timer menu) in Journey, Sending Practice, Rapid Fire and Pileup Runner; Rapid Fire and Pileup Runner are ranked so runs are not comparable",
-   "state": "open",
-   "status": {
-    "ios": "present",
-    "android": "absent",
-    "desktop": "absent"
-   },
-   "reason": "Recorded by the 2026-09-27 audit and not yet closed.",
-   "anchor": "PARITY.md#open-gaps",
-   "ref": "audit-0927-01",
-   "issue": null,
-   "detect": {
-    "type": "manual"
-   }
-  },
-  {
-   "id": "row-02",
-   "kind": "behavior",
-   "summary": "Short Stories: iOS starts the practiceDuration clock but shows no picker or timer menu, so a story may end silently (read from code, not run)",
-   "state": "open",
-   "status": {
-    "ios": "absent",
-    "android": "present",
-    "desktop": "present"
-   },
-   "reason": "Recorded by the 2026-09-27 audit and not yet closed.",
-   "anchor": "PARITY.md#open-gaps",
-   "ref": "audit-0927-02",
-   "issue": null,
-   "detect": {
-    "type": "manual"
-   }
-  },
-  {
-   "id": "row-03",
-   "kind": "behavior",
-   "summary": "Timer menu 'Subtract 1 minute'",
-   "state": "open",
-   "status": {
-    "ios": "present",
-    "android": "absent",
-    "desktop": "absent"
-   },
-   "reason": "Recorded by the 2026-09-27 audit and not yet closed.",
-   "anchor": "PARITY.md#open-gaps",
-   "ref": "audit-0927-03",
-   "issue": null,
-   "detect": {
-    "type": "probe",
-    "conditions": [
-     {
-      "tree": "ios",
-      "file": "MorseTrainerApp/ContentView.swift",
-      "pattern": "Subtract 1 minute",
-      "matches": true
-     },
-     {
-      "tree": "android",
-      "file": "SessionMenus.kt",
-      "pattern": "(?i)subtract|reduce",
-      "matches": false
-     },
-     {
-      "tree": "desktop",
-      "file": "SessionMenus.kt",
-      "pattern": "(?i)subtract|reduce",
-      "matches": false
-     }
-    ]
-   }
-  },
-  {
-   "id": "row-04",
-   "kind": "behavior",
-   "summary": "Pileup Runner / Contest options mid-session (iOS in-session Settings sheet; Android and desktop home Settings only)",
-   "state": "open",
-   "status": {
-    "ios": "present",
-    "android": "absent",
-    "desktop": "absent"
-   },
-   "reason": "Recorded by the 2026-09-27 audit and not yet closed.",
-   "anchor": "PARITY.md#open-gaps",
-   "ref": "audit-0927-04",
-   "issue": null,
-   "detect": {
-    "type": "manual"
-   }
-  },
-  {
-   "id": "row-05",
-   "kind": "behavior",
-   "summary": "Your callsign / name reachable from a CW 77, Listen or Common Words session",
-   "state": "open",
-   "status": {
-    "ios": "present",
-    "android": "absent",
-    "desktop": "absent"
-   },
-   "reason": "Recorded by the 2026-09-27 audit and not yet closed.",
-   "anchor": "PARITY.md#open-gaps",
-   "ref": "audit-0927-05",
-   "issue": null,
-   "detect": {
-    "type": "manual"
-   }
-  },
-  {
-   "id": "row-06",
-   "kind": "behavior",
-   "summary": "Display name and Delete my scores shown with Share scores off",
-   "state": "open",
-   "status": {
-    "ios": "present",
-    "android": "absent",
-    "desktop": "absent"
-   },
-   "reason": "Recorded by the 2026-09-27 audit and not yet closed.",
-   "anchor": "PARITY.md#open-gaps",
-   "ref": "audit-0927-06",
-   "issue": null,
-   "detect": {
-    "type": "manual"
-   }
-  },
-  {
-   "id": "row-07",
-   "kind": "behavior",
-   "summary": "Post-run leaderboard line: rank, metric, new personal best, 'not ranked' vs 'not posted'",
-   "state": "open",
-   "status": {
-    "ios": "present",
-    "android": "absent",
-    "desktop": "absent"
-   },
-   "reason": "Recorded by the 2026-09-27 audit and not yet closed.",
-   "anchor": "PARITY.md#open-gaps",
-   "ref": "audit-0927-07",
-   "issue": null,
-   "detect": {
-    "type": "manual"
-   }
-  },
-  {
-   "id": "row-08",
-   "kind": "behavior",
-   "summary": "Leaderboard metric display rounded (iOS) vs truncated (Android): 339.6 reads 340 vs 339",
-   "state": "open",
-   "status": {
-    "ios": "present",
-    "android": "absent",
-    "desktop": "absent"
-   },
-   "reason": "Recorded by the 2026-09-27 audit and not yet closed.",
-   "anchor": "PARITY.md#open-gaps",
-   "ref": "audit-0927-08",
-   "issue": null,
-   "detect": {
-    "type": "manual"
-   }
-  },
-  {
-   "id": "row-09",
-   "kind": "behavior",
-   "summary": "Display-name validation: server deny list and specific messages (iOS) vs one generic message",
-   "state": "open",
-   "status": {
-    "ios": "present",
-    "android": "absent",
-    "desktop": "absent"
-   },
-   "reason": "Recorded by the 2026-09-27 audit and not yet closed.",
-   "anchor": "PARITY.md#open-gaps",
-   "ref": "audit-0927-09",
-   "issue": null,
-   "detect": {
-    "type": "manual"
-   }
-  },
-  {
-   "id": "row-10",
-   "kind": "behavior",
-   "summary": "Stats > Recent sessions: whole history, each opens its detail (iOS) vs latest 6",
-   "state": "open",
-   "status": {
-    "ios": "present",
-    "android": "absent",
-    "desktop": "absent"
-   },
-   "reason": "Recorded by the 2026-09-27 audit and not yet closed.",
-   "anchor": "PARITY.md#open-gaps",
-   "ref": "audit-0927-10",
-   "issue": null,
-   "detect": {
-    "type": "probe",
-    "conditions": [
-     {
-      "tree": "android",
-      "file": "StatsScreen.kt",
-      "pattern": "Stats\\.recent\\.take\\(6\\)",
-      "matches": true
-     }
-    ]
-   }
-  },
-  {
-   "id": "row-11",
-   "kind": "behavior",
-   "summary": "Best session accuracy and biggest session over the full history (iOS) vs Stats.recent (Android)",
-   "state": "open",
-   "status": {
-    "ios": "present",
-    "android": "absent",
-    "desktop": "absent"
-   },
-   "reason": "Recorded by the 2026-09-27 audit and not yet closed.",
-   "anchor": "PARITY.md#open-gaps",
-   "ref": "audit-0927-11",
-   "issue": null,
-   "detect": {
-    "type": "manual"
-   }
-  },
-  {
-   "id": "row-12",
-   "kind": "behavior",
-   "summary": "Stats before the first session: Characters table shown (iOS) vs only the empty message",
-   "state": "open",
-   "status": {
-    "ios": "present",
-    "android": "absent",
-    "desktop": "absent"
-   },
-   "reason": "Recorded by the 2026-09-27 audit and not yet closed.",
-   "anchor": "PARITY.md#open-gaps",
-   "ref": "audit-0927-12",
-   "issue": null,
-   "detect": {
-    "type": "manual"
-   }
-  },
-  {
-   "id": "row-13",
-   "kind": "behavior",
-   "summary": "Personal bests, lifetime totals and sharing reachable from Home (Android Progress screen); iOS opens the Brag Sheet only from a session toolbar",
-   "state": "open",
-   "status": {
-    "ios": "absent",
-    "android": "present",
-    "desktop": "present"
-   },
-   "reason": "Recorded by the 2026-09-27 audit and not yet closed.",
-   "anchor": "PARITY.md#open-gaps",
-   "ref": "audit-0927-13",
-   "issue": null,
-   "detect": {
-    "type": "manual"
-   }
-  },
-  {
-   "id": "row-14",
-   "kind": "behavior",
-   "summary": "Bluetooth LE key feeds Invaders, Galaga, Dungeon and Asteroids (iOS) vs USB/Vail MIDI only",
-   "state": "open",
-   "status": {
-    "ios": "present",
-    "android": "absent",
-    "desktop": "absent"
-   },
-   "reason": "Recorded by the 2026-09-27 audit and not yet closed.",
-   "anchor": "PARITY.md#open-gaps",
-   "ref": "audit-0927-14",
-   "issue": null,
-   "detect": {
-    "type": "probe",
-    "conditions": [
-     {
-      "tree": "ios",
-      "file": "MorseTrainerApp/InvadersView.swift",
-      "pattern": "midiDeviceNames",
-      "matches": true
-     },
-     {
-      "tree": "android",
-      "file": "InvadersScreen.kt",
-      "pattern": "BluetoothKeyButton",
-      "matches": false
-     },
-     {
-      "tree": "desktop",
-      "file": "InvadersScreen.kt",
-      "pattern": "BluetoothKeyButton",
-      "matches": false
-     }
-    ]
-   }
-  },
-  {
-   "id": "row-15",
-   "kind": "behavior",
-   "summary": "'Studied characters' (Analyzer Groups, Sending Drills): Koch active set (iOS) vs seed plus every character with stats (Android); decision needed",
-   "state": "open",
-   "status": {
-    "ios": "limited",
-    "android": "limited",
-    "desktop": "limited"
-   },
-   "reason": "Recorded by the 2026-09-27 audit and not yet closed.",
-   "anchor": "PARITY.md#open-gaps",
-   "ref": "audit-0927-15",
-   "issue": null,
-   "detect": {
-    "type": "manual"
-   }
-  },
-  {
-   "id": "row-16",
-   "kind": "behavior",
-   "summary": "Hardware-keyboard shortcuts in Head Copy (R, Return, X) and R to replay on the new-character intro; desktop has the first half",
-   "state": "open",
-   "status": {
-    "ios": "present",
-    "android": "absent",
-    "desktop": "limited"
-   },
-   "reason": "Recorded by the 2026-09-27 audit and not yet closed.",
-   "anchor": "PARITY.md#open-gaps",
-   "ref": "audit-0927-16",
-   "issue": null,
-   "detect": {
-    "type": "manual"
-   }
-  },
-  {
-   "id": "row-17",
-   "kind": "behavior",
-   "summary": "On-screen key stays live after the answer is revealed (iOS) vs disabled in Sending Practice and Rapid Fire",
-   "state": "open",
-   "status": {
-    "ios": "present",
-    "android": "absent",
-    "desktop": "absent"
-   },
-   "reason": "Recorded by the 2026-09-27 audit and not yet closed.",
-   "anchor": "PARITY.md#open-gaps",
-   "ref": "audit-0927-17",
-   "issue": null,
-   "detect": {
-    "type": "manual"
-   }
-  },
-  {
-   "id": "row-18",
-   "kind": "behavior",
-   "summary": "Sidetone and tone-spread slider steps: 10 Hz and 'Zero-beat' below 10 Hz (iOS) vs continuous; stored sidetone not clamped on load",
-   "state": "open",
-   "status": {
-    "ios": "present",
-    "android": "absent",
-    "desktop": "absent"
-   },
-   "reason": "Recorded by the 2026-09-27 audit and not yet closed.",
-   "anchor": "PARITY.md#open-gaps",
-   "ref": "audit-0927-18",
-   "issue": null,
-   "detect": {
-    "type": "manual"
-   }
-  },
-  {
-   "id": "row-19",
-   "kind": "behavior",
-   "summary": "Pileup min/max speed and wait independent (iOS) vs coupled",
-   "state": "open",
-   "status": {
-    "ios": "present",
-    "android": "absent",
-    "desktop": "absent"
-   },
-   "reason": "Recorded by the 2026-09-27 audit and not yet closed.",
-   "anchor": "PARITY.md#open-gaps",
-   "ref": "audit-0927-19",
-   "issue": null,
-   "detect": {
-    "type": "manual"
-   }
-  },
-  {
-   "id": "row-20",
-   "kind": "behavior",
-   "summary": "Your callsign input: free text (iOS) vs uppercase, letters/digits//, 12 max, blank -> W1AW; decision needed",
-   "state": "open",
-   "status": {
-    "ios": "limited",
-    "android": "limited",
-    "desktop": "limited"
-   },
-   "reason": "Recorded by the 2026-09-27 audit and not yet closed.",
-   "anchor": "PARITY.md#open-gaps",
-   "ref": "audit-0927-20",
-   "issue": null,
-   "detect": {
-    "type": "manual"
-   }
-  },
-  {
-   "id": "row-21",
-   "kind": "behavior",
-   "summary": "Preview tone: replays the current drill item (iOS) vs always keys PARIS; decision needed",
-   "state": "open",
-   "status": {
-    "ios": "limited",
-    "android": "limited",
-    "desktop": "limited"
-   },
-   "reason": "Recorded by the 2026-09-27 audit and not yet closed.",
-   "anchor": "PARITY.md#open-gaps",
-   "ref": "audit-0927-21",
-   "issue": null,
-   "detect": {
-    "type": "manual"
-   }
-  },
-  {
-   "id": "row-22",
-   "kind": "behavior",
-   "summary": "Sending Analyzer microphone input: key closed (iOS) vs hardware key stays open with its sidetone",
-   "state": "open",
-   "status": {
-    "ios": "present",
-    "android": "absent",
-    "desktop": "absent"
-   },
-   "reason": "Recorded by the 2026-09-27 audit and not yet closed.",
-   "anchor": "PARITY.md#open-gaps",
-   "ref": "audit-0927-22",
-   "issue": null,
-   "detect": {
-    "type": "manual"
-   }
-  },
-  {
-   "id": "row-23",
-   "kind": "behavior",
-   "summary": "Sending Analyzer, two keys at once: merged into one logical key (iOS) vs recorded separately",
-   "state": "open",
-   "status": {
-    "ios": "present",
-    "android": "absent",
-    "desktop": "absent"
-   },
-   "reason": "Recorded by the 2026-09-27 audit and not yet closed.",
-   "anchor": "PARITY.md#open-gaps",
-   "ref": "audit-0927-23",
-   "issue": null,
-   "detect": {
-    "type": "manual"
-   }
-  },
-  {
-   "id": "row-24",
-   "kind": "behavior",
-   "summary": "Sending Analyzer microphone: stops on interruption or route loss, own denied-permission message (iOS) vs none",
-   "state": "open",
-   "status": {
-    "ios": "present",
-    "android": "absent",
-    "desktop": "absent"
-   },
-   "reason": "Recorded by the 2026-09-27 audit and not yet closed.",
-   "anchor": "PARITY.md#open-gaps",
-   "ref": "audit-0927-24",
-   "issue": null,
-   "detect": {
-    "type": "manual"
-   }
-  },
-  {
-   "id": "row-25",
-   "kind": "behavior",
-   "summary": "Home Daily Dit card with no WPM recorded: drops the speed (iOS) vs shows 'copied at  WPM' (a bug)",
-   "state": "open",
-   "status": {
-    "ios": "present",
-    "android": "absent",
-    "desktop": "absent"
-   },
-   "reason": "Recorded by the 2026-09-27 audit and not yet closed.",
-   "anchor": "PARITY.md#open-gaps",
-   "ref": "audit-0927-25",
-   "issue": null,
-   "detect": {
-    "type": "manual"
-   }
-  },
-  {
-   "id": "copy-labels",
-   "kind": "copy",
-   "summary": "Copy and labels: reminder notification text, buddy footer/invite text, delete-scores dialog, session-row mode titles, fastest-copy format, stale iOS QRQ blurb, Pileup Runner tagline",
-   "state": "open",
-   "status": {
-    "ios": "limited",
-    "android": "limited",
-    "desktop": "limited"
-   },
-   "reason": "Recorded by the 2026-09-27 audit and not yet closed.",
-   "anchor": "PARITY.md#open-gaps",
-   "ref": "audit-0927-labels",
-   "issue": null,
-   "detect": {
-    "type": "manual"
-   }
-  },
-  {
-   "id": "copy-setting-names",
-   "kind": "copy",
-   "summary": "Setting names differ between iOS and Android/desktop (every settings title the extraction sees differ)",
-   "state": "open",
-   "status": {
-    "ios": "limited",
-    "android": "limited",
-    "desktop": "limited"
-   },
-   "reason": "Recorded by the 2026-09-27 audit and not yet closed.",
-   "anchor": "PARITY.md#open-gaps",
-   "ref": "audit-0927-names",
-   "issue": null,
-   "detect": {
-    "type": "finding",
-    "keys": [
-     "settingTitle:sidetone",
-     "settingTitle:speed",
-     "settingTitle:recognizeWithin",
-     "settingTitle:reveal",
-     "settingTitle:exchange",
-     "settingTitle:maxCallers",
-     "settingTitle:callerMinSpeed",
-     "settingTitle:callerMaxSpeed",
-     "settingTitle:qsb",
-     "settingTitle:qsoQrn",
-     "settingTitle:rstRequired",
-     "settingTitle:keepPartialCall",
-     "settingTitle:giveUp",
-     "settingTitle:reminderTime"
-    ]
-   }
-  },
-  {
-   "id": "settings-order",
-   "kind": "layout",
-   "summary": "Order of settings inside a category differs: iOS lists Answer entry, Show right / wrong, Reveal; Android and desktop list Reveal, Answer entry, Show right / wrong; iOS lists Delete account before Devices, Android and desktop after",
-   "state": "open",
-   "status": {
-    "ios": "limited",
-    "android": "limited",
-    "desktop": "limited"
-   },
-   "reason": "Recorded by the 2026-09-27 audit and not yet closed.",
-   "anchor": "PARITY.md#open-gaps",
-   "ref": "audit-0927-order",
-   "issue": null,
-   "detect": {
-    "type": "finding",
-    "keys": [
-     "settingOrder:android",
-     "settingOrder:desktop"
-    ]
-   }
-  },
-  {
-   "id": "layout-decisions",
-   "kind": "layout",
-   "summary": "Layout recorded for a decision: where the voice and keyed-answer switches, word pool, 'Use my word list', track stage and QRQ speed live; toolbar icons vs tiles; tile order; last-used highlight; setup-sheet blurb vs tagline; iOS's finer Settings sections",
-   "state": "open",
-   "status": {
-    "ios": "limited",
-    "android": "limited",
-    "desktop": "limited"
-   },
-   "reason": "Recorded by the 2026-09-27 audit and not yet closed.",
-   "anchor": "PARITY.md#open-gaps",
-   "ref": "audit-0927-decisions",
-   "issue": null,
-   "detect": {
-    "type": "finding",
-    "keys": [
-     "options:settingsSections:android",
-     "options:settingsSections:desktop"
-    ]
-   }
-  },
-  {
-   "id": "docs-daily-dit",
-   "kind": "docs",
-   "summary": "No README lists the Daily Dit",
-   "state": "open",
-   "status": {
-    "ios": "absent",
-    "android": "absent",
-    "desktop": "absent"
-   },
-   "reason": "Recorded by the 2026-09-27 audit and not yet closed.",
-   "anchor": "PARITY.md#open-gaps",
-   "ref": "audit-0927-dit",
-   "issue": null,
-   "detect": {
-    "type": "finding",
-    "keys": [
-     "readme-missing:dailyDit:ios",
-     "readme-missing:dailyDit:android",
-     "readme-missing:dailyDit:desktop"
-    ]
-   }
-  },
-  {
-   "id": "docs-readme-headings",
-   "kind": "docs",
-   "summary": "READMEs do not list the same features: Answer by keying, Bluetooth keep-alive / band noise and Bluetooth LE MIDI keys are headings on iOS only; Sending Drills heading is missing on iOS; the repeater and Type It / QRQ Speed headings are named differently",
-   "state": "open",
-   "status": {
-    "ios": "limited",
-    "android": "limited",
-    "desktop": "limited"
-   },
-   "reason": "Recorded by the 2026-09-27 audit and not yet closed.",
-   "anchor": "PARITY.md#open-gaps",
-   "ref": "audit-0927-headings",
-   "issue": null,
-   "detect": {
-    "type": "finding",
-    "keys": [
-     "readme-missing:answerByKeying:android",
-     "readme-missing:answerByKeying:desktop",
-     "readme-missing:bleMidiKey:android",
-     "readme-missing:bandNoise:android",
-     "readme-missing:bandNoise:desktop",
-     "readme-missing:sendingDrills:ios",
-     "readme-name:typeit",
-     "readme-name:qrq",
-     "readme-name:repeater"
-    ]
-   }
-  },
-  {
-   "id": "docs-android-readme",
-   "kind": "docs",
-   "summary": "The Android and desktop READMEs lack the first-run proficiency question and describe Sending Practice and the Repeater more briefly than iOS's",
-   "state": "open",
-   "status": {
-    "ios": "absent",
-    "android": "present",
-    "desktop": "present"
-   },
-   "reason": "Recorded by the 2026-09-27 audit and not yet closed.",
-   "anchor": "PARITY.md#open-gaps",
-   "ref": "audit-0927-readme",
-   "issue": null,
-   "detect": {
-    "type": "manual"
-   }
-  }
- ]
+ "gaps": []
 }

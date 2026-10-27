@@ -95,11 +95,20 @@ cannot do, and why (details in `docs/desktop-design.md` §2).
 | <a id="ex-desktop-headroom"></a>−6 dB headroom on the built-in speaker (#228 iOS, #259 Android) | desktop | Java Sound exposes mixers, not output routes: a laptop's speaker and its headphone jack are usually one mixer, and nothing portable says which is playing, so the app cannot tell when to apply it. Applying it everywhere would quieten headphones and interfaces too. | Every output plays at full level (samples as `fixtures/render.json` pins them); the OS volume is the control. Revisit if desktop users report pops at high speed on laptop speakers. |
 | <a id="ex-desktop-dailydit-mute"></a>Daily Dit's "your device is muted" prompt before a listen (#252) | desktop | Java has no portable way to read the system output volume or mute state on Windows or Linux. | Every Play plays; the listen is spent as usual. |
 | <a id="ex-desktop-flatpak-speech"></a>Spoken read-back inside the Flatpak | desktop (Linux, Flatpak) | The sandbox has no speech engine; Windows (System.Speech) and a Linux install with `spd-say` or `espeak-ng` do speak. | Shows the text. Bundling espeak-ng is a follow-up. |
+| <a id="ex-desktop-analyzer-mic"></a>Sending Analyzer microphone: stopping on an audio interruption or route loss, and its own denied-permission message (audit row 24) | desktop | Java Sound exposes no audio-session interruption, focus or input-device-change callbacks, and a denied microphone looks the same as a missing one. | The microphone runs until the user stops it; a failed open shows the generic no-input message. |
 
 ### Same feature, platform mechanism (not gaps)
 
 Listed so nobody "ports" one side's plumbing to the other, or reads it as a
 missing feature.
+
+- <a id="idiom-setup-sheet"></a>**Where a mode setting lives.** The voice and
+  keyed-answer switches, word pool, "Use my word list", session length and track
+  stage sit on the mode setup sheet on iOS and in Settings or the mode screen on
+  Android and desktop; Sending Drills, Sending Analyzer, Reference and the
+  Repeater are toolbar icons on iOS and tiles elsewhere; the home tile order,
+  last-used highlight and setup blurb follow each platform's idiom. Accepted
+  2026-10-27; the user can reach every one of them on every app.
 
 - **Big-screen layout.** Both apps run on tablets in any orientation and in
   split-screen or resizable windows, and both re-flow the home grid four
@@ -270,27 +279,13 @@ fixture derived from the spec, read by both.
 
 ## Open gaps
 
-The divergences the last audit (2026-09-27) found and nobody has closed yet
-live in the `gaps` list of `parity/manifest.json`, one record each (rows 1-25,
-the copy differences, the layout decisions and the documentation gaps), with
-the platforms it affects, its state and, where the source can show it, a probe
-that makes the check fail when the gap closes so the record cannot go stale.
-`python3 parity/check.py --gaps` prints them. Audit rows had no issue numbers
-when they were written; the `ref` field is the row (`audit-0927-NN`) and
-`issue` is `null` until one is opened.
-
-The desktop app was forked from `android/` at `7bcb50a` (2026-09-30), so it
-inherits every Android-side gap as it stood then. It closes one half of row
-16: Head Copy takes R, Return and X on desktop, as on iOS.
-
-Layout, recorded for a decision rather than as gaps (gap `layout-decisions`):
-where the voice and keyed-answer switches, word pool, "Use my word list",
-track stage and QRQ speed live (setup sheet on iOS, Settings or the mode
-screen on Android); Sending Drills, Sending Analyzer, Reference and the
-Repeater as toolbar icons (iOS) vs tiles (Android); home tile order; the
-last-used tile highlight; the setup sheet's long blurb vs short tagline; iOS's
-finer Settings sections. If these are accepted as idiom they move to *Same
-feature, platform mechanism*.
+None. The 2026-09-27 audit's 25 rows, the copy differences, the layout
+decisions and the documentation gaps were closed in one change (the
+`fix/parity-gaps` branch); what the platforms cannot do is in *Documented
+exceptions* above and what is only mechanism is in *Same feature, platform
+mechanism*. The `gaps` list of `parity/manifest.json` is empty; a new
+divergence is recorded there first (see below) and `python3 parity/check.py
+--gaps` prints whatever is open.
 
 ## Closing an item
 
