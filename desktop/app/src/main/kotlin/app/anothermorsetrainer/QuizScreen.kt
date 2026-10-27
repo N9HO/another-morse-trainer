@@ -511,8 +511,14 @@ fun QuizScreen(
         if (Settings.answerByKeying && drill.isKeyable && intro == null && handleKeyboardKeying(event)) return true
         if (event.type != KeyEventType.KeyDown) return false
         val isEnter = event.key == Key.Enter || event.key == Key.NumPadEnter
-        if (intro != null) {
-            // Enter starts the introduced drill; nothing else answers during an introduction.
+        val introducing = intro
+        if (introducing != null) {
+            // R replays the new item and Enter starts the introduced drill, as on
+            // iOS (PARITY.md row 16); nothing else answers during an introduction.
+            if (event.key == Key.R) {
+                player.replaySound(introducing.playable, Settings.sidetoneHz, Settings.timing())
+                return true
+            }
             if (isEnter) {
                 startIntroducedDrill()
                 return true

@@ -3,6 +3,7 @@ package app.anothermorsetrainer
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -36,7 +37,18 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEvent
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isAltPressed
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.isMetaPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
@@ -44,9 +56,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kotlin.math.roundToInt
 import app.anothermorsetrainer.morsekit.MorseData
 import app.anothermorsetrainer.morsekit.PhraseQuiz
+import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 
 private val OK_GREEN = Color(0xFF2E7D32)
@@ -242,7 +254,42 @@ fun HeadCopyScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
         round++
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    // Hardware-keyboard shortcuts, as on iOS (issue #69; PARITY.md row 16):
+    // R repeats and Return reveals; once revealed, Return is "Got it" and X
+    // "Missed". The root holds focus so keys arrive without a click first, and
+    // takes them in the preview pass so a focused button does not also act on
+    // Return. Off while the settings overlay is open. Only a hardware
+    // keyboard sends these; on a phone with none, nothing changes.
+    val keyFocus = remember { FocusRequester() }
+    LaunchedEffect(phase, showSettings) {
+        if (phase == HcPhase.RUNNING && !showSettings) runCatching { keyFocus.requestFocus() }
+    }
+    fun handleShortcut(event: KeyEvent): Boolean {
+        if (phase != HcPhase.RUNNING || showSettings) return false
+        if (event.isCtrlPressed || event.isMetaPressed || event.isAltPressed) return false
+        val handled = when (event.key) {
+            Key.R -> !revealed
+            Key.Enter, Key.NumPadEnter -> true
+            Key.X -> revealed
+            else -> false
+        }
+        if (!handled) return false
+        if (event.type != KeyEventType.KeyDown) return true
+        when (event.key) {
+            Key.R -> repeatNow()
+            Key.X -> grade(false)
+            else -> if (revealed) grade(true) else doReveal()
+        }
+        return true
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .focusRequester(keyFocus)
+            .focusable()
+            .onPreviewKeyEvent { handleShortcut(it) }
+    ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(8.dp),
             horizontalArrangement = Arrangement.SpaceBetween,

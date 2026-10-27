@@ -531,8 +531,14 @@ fun QuizScreen(
         if (event.type != KeyEventType.KeyDown) return false
         if (showSettings) return false
         if (phase != QuizPhase.RUNNING) return false
-        if (intro != null) {
-            // Enter starts the introduced drill; nothing else answers during an introduction.
+        val introducing = intro
+        if (introducing != null) {
+            // R replays the new item and Enter starts the introduced drill, as on
+            // iOS (PARITY.md row 16); nothing else answers during an introduction.
+            if (event.key == Key.R) {
+                player.replaySound(introducing.playable, Settings.sidetoneHz, Settings.timing())
+                return true
+            }
             if (event.key == Key.Enter) {
                 startIntroducedDrill()
                 return true
