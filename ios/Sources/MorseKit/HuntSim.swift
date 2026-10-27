@@ -599,7 +599,7 @@ public final class HuntSession {
     public let myCall: String
     public let myState: String
     private var rng: HuntRandom
-    private let actor: OperatingProcedure.Station
+    private let station: OperatingProcedure.Station
     public private(set) var pool: [HuntHunter] = []
     private var nextId = 0
     private var failed = 0
@@ -617,19 +617,19 @@ public final class HuntSession {
     public private(set) var records: [HuntRecord] = []
     public private(set) var turn: HuntTurn
 
-    public var activatorCall: String { actor.call }
-    public var activatorState: String { actor.state }
+    public var activatorCall: String { station.call }
+    public var activatorState: String { station.state }
 
     public init(config: HuntConfig, seed: UInt64, myCall: String, myState: String) {
         self.config = config
         self.myCall = myCall
         self.myState = myState
         self.rng = HuntRandom(seed: seed)
-        self.actor = OperatingProcedure.activator(for: myCall)
+        self.station = OperatingProcedure.activator(for: myCall)
         // Placeholder until the pool exists; replaced below.
         self.turn = HuntTurn(round: 0, kind: .calling, text: "", query: "", voices: [], wpm: config.activatorWpm)
         for _ in 0..<config.pileupSize { addHunter() }
-        self.turn = makeTurn(.calling, "CQ POTA DE \(actor.call) K")
+        self.turn = makeTurn(.calling, "CQ POTA DE \(station.call) K")
     }
 
     private func addHunter() {
@@ -700,7 +700,7 @@ public final class HuntSession {
         pickedCall = call
         exTries = 0
         queries = 0
-        turn = makeTurn(.exchange, "\(call) 5NN \(actor.state) \(actor.state) BK")
+        turn = makeTurn(.exchange, "\(call) 5NN \(station.state) \(station.state) BK")
     }
 
     /// Stop early: the run ends as `.quit`.
@@ -747,7 +747,7 @@ public final class HuntSession {
         let pickedIsYou = pickedCall == myCall
         let ctx = HuntGradeContext(
             kind: t.kind, query: t.query, queryForYou: queryFor == HuntModel.you, pickedIsYou: pickedIsYou,
-            pileup: isPileup, myCall: myCall, myState: myState, actCall: actor.call,
+            pileup: isPileup, myCall: myCall, myState: myState, actCall: station.call,
             pickedCall: pickedCall, activatorText: t.text)
         let g = HuntModel.grade(ctx, you.map { HuntGradeSend(text: $0.text, delay: $0.delay, offsetHz: $0.offsetHz, late: late) })
         func who(_ id: Int) -> String { id == HuntModel.you ? "you" : String(id) }

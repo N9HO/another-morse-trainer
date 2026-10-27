@@ -112,7 +112,15 @@ testers, bug reports and feature chat live on
   Kenwood, Elecraft and FlexRadio call them), plays the same pileup three
   ways (everyone zero beat, only you offset, everyone offset), lets you move
   an RIT and hear what it does, and drills tuning to zero beat by ear. "What
-  should you do?" deals ten situations from the lessons. Not a scored mode.
+  should you do?" deals ten situations from the lessons. A hunt simulator
+  puts you in a simulated POTA pileup: an activator works the hunters, who
+  include repeaters, tail-enders, zero-beaters and weak QRP stations, some
+  of whom you cannot hear; you call, answer a partial and send the exchange
+  and sign-off by keying, with an XIT control for your offset. Difficulty is
+  pileup size, speed, QSB, noise, hunters you cannot hear and how often the
+  activator mis-copies; a debrief sets what you heard beside what the
+  activator heard, each point linked to its lesson. Graded on procedure, not
+  speed, and not ranked. Not a scored mode.
   After WB0RLJ's "Advice for CW POTA Hunters" (linked, with his YouTube
   channel of daily activations) and the POTA CW Guide
 - **Pileup Runner**: call CQ and work a simulated pileup, with your own side
