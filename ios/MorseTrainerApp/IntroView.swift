@@ -21,6 +21,7 @@ struct IntroView: View {
     @State private var pendingGameSetup = false
     @State private var showingSettings = false
     @State private var showingStats = false
+    @State private var showingBrag = false
     @State private var showingReference = false
     @State private var showingStartHere = false
     @State private var showingDailyDit = false
@@ -108,6 +109,12 @@ struct IntroView: View {
         }
         .sheet(isPresented: $showingStats) {
             StatsView().environmentObject(model).pageSizedSheet()
+        }
+        // Personal bests, lifetime totals and sharing from Home (gap row-13);
+        // Android's Progress screen carries the same, and the session toolbar
+        // opens this same sheet.
+        .sheet(isPresented: $showingBrag) {
+            BragSheetView().environmentObject(model)
         }
         .sheet(isPresented: $showingReference) {
             ReferenceView().environmentObject(model).pageSizedSheet()
@@ -232,6 +239,13 @@ struct IntroView: View {
                     .padding(8)
             }
             .accessibilityLabel("Sending analyzer — send a text and see your accuracy and spacing")
+            Button { showingBrag = true } label: {
+                Image(systemName: "rosette")
+                    .font(.title3)
+                    .foregroundStyle(Theme.teal)
+                    .padding(8)
+            }
+            .accessibilityLabel("Brag sheet — personal bests, lifetime totals and sharing")
             Button { showingStats = true } label: {
                 Image(systemName: "chart.bar")
                     .font(.title3)
