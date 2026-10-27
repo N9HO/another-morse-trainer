@@ -8804,6 +8804,54 @@ if let kx = loadUIContractFixture("keyer-modes.json"), let want = kx["keyerModes
     check("fixtures/keyer-modes.json loads and decodes", false)
 }
 
+// MARK: - Session clock fixture (parity audit row-03)
+//
+// fixtures/gap-timers-session-clock.json, consumed by this harness AND by the
+// android and desktop SessionClockTest. Shared *data*: the timer menu's add and
+// subtract arithmetic, derived from the documented menu rules.
+struct SessionClockFixture: Decodable {
+    struct Case: Decodable { let remaining: Int?; let seconds: Int; let expected: Int? }
+    let add: [Case]
+    let subtract: [Case]
+}
+
+func loadSessionClockFixture() -> SessionClockFixture? {
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+    let url = root.appendingPathComponent("fixtures/gap-timers-session-clock.json")
+    guard let data = try? Data(contentsOf: url) else { return nil }
+    return try? JSONDecoder().decode(SessionClockFixture.self, from: data)
+}
+
+print("\nSession clock (timer menu add / subtract), against fixtures/gap-timers-session-clock.json:")
+if let fx = loadSessionClockFixture() {
+    func intOrNil(_ v: TimeInterval?) -> Int? {
+        guard let v else { return nil }
+        return Int(v)
+    }
+    func secs(_ v: Int?) -> TimeInterval? {
+        guard let v else { return nil }
+        return TimeInterval(v)
+    }
+    var addOK = !fx.add.isEmpty
+    for c in fx.add where intOrNil(SessionClock.added(secs(c.remaining), by: TimeInterval(c.seconds))) != c.expected {
+        addOK = false
+        print("      ↳ add \(c.seconds) to \(String(describing: c.remaining)): fixture says \(String(describing: c.expected))")
+    }
+    check("adding time follows the fixture (\(fx.add.count) cases)", addOK)
+    var subOK = !fx.subtract.isEmpty
+    for c in fx.subtract where intOrNil(SessionClock.reduced(secs(c.remaining), by: TimeInterval(c.seconds))) != c.expected {
+        subOK = false
+        print("      ↳ subtract \(c.seconds) from \(String(describing: c.remaining)): fixture says \(String(describing: c.expected))")
+    }
+    check("subtracting time follows the fixture (\(fx.subtract.count) cases)", subOK)
+} else {
+    check("fixtures/gap-timers-session-clock.json loads and decodes", false)
+}
+
 print("\n────────────────────────────")
 if failures == 0 {
     print("✅ All \(checks) checks passed.\n")

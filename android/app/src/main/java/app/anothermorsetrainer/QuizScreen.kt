@@ -1,5 +1,6 @@
 package app.anothermorsetrainer
 
+import app.anothermorsetrainer.morsekit.SessionClock
 import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.compose.BackHandler
@@ -588,6 +589,7 @@ fun QuizScreen(
                     SessionTimerMenu(
                         remaining = remaining,
                         onAddSeconds = { remaining = (remaining ?: 0) + it },
+                        onSubtractSeconds = { remaining = SessionClock.reduced(remaining, it) },
                         onRemoveLimit = { remaining = null }
                     )
                     SessionSettingsButton { showSettings = true }

@@ -100,8 +100,9 @@ fun trainingModeFor(settingsMode: SettingsMode): TrainingMode? = when (settingsM
 
 /**
  * The session countdown as a menu (iOS ContentView `sessionBar`, issue #41):
- * tap the remaining time to add five minutes or one, or to drop the limit and
- * keep going open-ended. An open-ended session shows a timer glyph instead,
+ * tap the remaining time to add five minutes or one, subtract one (only while
+ * timed; reaching zero ends the run), or to drop the limit and keep going
+ * open-ended. An open-ended session shows a timer glyph instead,
  * and adding time to it starts a countdown.
  *
  * [remaining] is the screen's own countdown state — the seconds left, or null
@@ -112,6 +113,7 @@ fun trainingModeFor(settingsMode: SettingsMode): TrainingMode? = when (settingsM
 fun SessionTimerMenu(
     remaining: Int?,
     onAddSeconds: (Int) -> Unit,
+    onSubtractSeconds: (Int) -> Unit,
     onRemoveLimit: () -> Unit
 ) {
     var open by remember { mutableStateOf(false) }
@@ -153,6 +155,10 @@ fun SessionTimerMenu(
                 onClick = { open = false; onAddSeconds(60) }
             )
             if (remaining != null) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.session_subtract_1_minute)) },
+                    onClick = { open = false; onSubtractSeconds(60) }
+                )
                 DropdownMenuItem(
                     text = { Text(stringResource(R.string.session_remove_time_limit)) },
                     onClick = { open = false; onRemoveLimit() }

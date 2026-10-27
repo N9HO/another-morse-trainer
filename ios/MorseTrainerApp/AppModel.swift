@@ -2146,9 +2146,12 @@ final class AppModel: ObservableObject {
     func addSessionTime(_ seconds: TimeInterval) {
         guard !sessionEnded, seconds > 0 else { return }
         if let end = sessionEndDate {
-            let newEnd = end.addingTimeInterval(seconds)
-            sessionEndDate = newEnd
-            sessionRemaining = max(0, newEnd.timeIntervalSinceNow)
+            // The arithmetic is SessionClock's, pinned by
+            // fixtures/gap-timers-session-clock.json (Android and desktop
+            // run the same rule in their own SessionClock).
+            let remaining = SessionClock.added(end.timeIntervalSinceNow, by: seconds) ?? seconds
+            sessionEndDate = Date().addingTimeInterval(remaining)
+            sessionRemaining = remaining
         } else {
             startCountdown(seconds: seconds)
         }
@@ -2158,10 +2161,9 @@ final class AppModel: ObservableObject {
     /// Ends the session if that takes the remaining time to zero.
     func reduceSessionTime(_ seconds: TimeInterval) {
         guard !sessionEnded, seconds > 0, let end = sessionEndDate else { return }
-        let newEnd = end.addingTimeInterval(-seconds)
-        let remaining = newEnd.timeIntervalSinceNow
+        let remaining = SessionClock.reduced(end.timeIntervalSinceNow, by: seconds) ?? 0
         if remaining <= 0 { sessionRemaining = 0; endSession(); return }
-        sessionEndDate = newEnd
+        sessionEndDate = Date().addingTimeInterval(remaining)
         sessionRemaining = remaining
     }
 

@@ -1,5 +1,6 @@
 package app.anothermorsetrainer
 
+import app.anothermorsetrainer.morsekit.SessionClock
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -569,6 +570,7 @@ fun QuizScreen(
                     SessionTimerMenu(
                         remaining = remaining,
                         onAddSeconds = { remaining = (remaining ?: 0) + it },
+                        onSubtractSeconds = { remaining = SessionClock.reduced(remaining, it) },
                         onRemoveLimit = { remaining = null }
                     )
                     SessionSettingsButton { showSettings = true }
