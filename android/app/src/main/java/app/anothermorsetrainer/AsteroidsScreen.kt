@@ -60,9 +60,11 @@ import androidx.compose.ui.unit.sp
 import app.anothermorsetrainer.morsekit.Asteroid
 import app.anothermorsetrainer.morsekit.AsteroidsEvent
 import app.anothermorsetrainer.morsekit.AsteroidsGame
+import app.anothermorsetrainer.morsekit.AsteroidsHitTest
 import app.anothermorsetrainer.morsekit.AsteroidsInput
 import app.anothermorsetrainer.morsekit.AsteroidsOutcome
 import app.anothermorsetrainer.morsekit.AsteroidsShot
+import app.anothermorsetrainer.morsekit.AsteroidsTap
 import app.anothermorsetrainer.morsekit.InvadersCharacterSet
 import app.anothermorsetrainer.morsekit.InvadersDifficulty
 import app.anothermorsetrainer.morsekit.MorseCode
