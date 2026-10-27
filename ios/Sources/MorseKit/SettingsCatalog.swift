@@ -102,14 +102,14 @@ public enum SettingsCatalog {
     /// results are listed in within a ranking tier.
     public static let entries: [SettingsSearchEntry] = [
         // Sound
-        .init("sidetone", "Side tone", ["sidetone", "pitch", "frequency", "hz", "tone", "note"], .sound),
+        .init("sidetone", "Sidetone pitch", ["side tone", "pitch", "frequency", "hz", "tone", "note"], .sound),
         .init("previewTone", "Preview tone", ["play", "test", "listen", "hear", "sample", "paris"], .sound),
         .init("bluetoothKeepAlive", "Keep Bluetooth audio awake",
               ["earbuds", "headphones", "headset", "airpods", "clipping", "first character", "silence", "keep alive"], .sound),
         .init("bandNoise", "Band noise", ["qrn", "static", "background", "hiss", "noise", "realism"], .sound),
 
         // Speed & Timing
-        .init("speed", "Speed", ["wpm", "words per minute", "character speed", "qrq", "fast", "slow", "koch"], .speed),
+        .init("speed", "Character speed", ["speed", "wpm", "words per minute", "character speed", "qrq", "fast", "slow", "koch"], .speed),
         .init("farnsworth", "Farnsworth spacing", ["spacing", "gaps", "slow", "effective", "stretch"], .farnsworth),
         .init("effectiveSpeed", "Effective speed", ["farnsworth", "wpm", "spacing", "overall"], .farnsworth),
 
@@ -130,7 +130,7 @@ public enum SettingsCatalog {
               ["keyboard", "type", "typing", "typed", "progressive", "tap", "buttons", "input"], .answerEntry),
         .init("showCorrectness", "Show right / wrong",
               ["correct", "incorrect", "colour", "color", "feedback", "mistakes"], .feedback),
-        .init("reveal", "Reveal the letter", ["reveal answer", "show answer", "correct answer"], .feedback),
+        .init("reveal", "Reveal answer", ["reveal the letter", "show answer", "correct answer"], .feedback),
         .init("showReplay", "Show replay button", ["repeat", "again", "hear again"], .feedback),
         .init("haptics", "Haptic feedback", ["vibration", "vibrate", "buzz", "taptic"], .feedback),
         .init("headCopyRepeats", "Head Copy auto-repeats", ["head copy", "replay", "repeat", "again"], .headCopy),
@@ -163,7 +163,7 @@ public enum SettingsCatalog {
         .init("minWait", "Min wait", ["delay", "pause", "reply", "answer time"], .qsoSignals),
         .init("maxWait", "Max wait", ["delay", "pause", "reply"], .qsoSignals),
         .init("rstRequired", "Copy RST too", ["rst", "signal report", "599", "report"], .qsoRealism),
-        .init("keepPartialCall", "Keep partial call in box", ["partial", "question mark", "fill"], .qsoRealism),
+        .init("keepPartialCall", "Keep my partial call after \"?\"", ["keep partial call in box", "partial", "question mark", "fill"], .qsoRealism),
         .init("keyMySide", "Key my side in Morse", ["transmit", "send", "my side", "cq", "silent"], .qsoRealism),
         .init("autoRecall", "Pileup re-calls after TU", ["recall", "call again", "tu", "agn"], .qsoRealism),
         .init("bustBehavior", "On a busted call", ["bust", "wrong call", "mistake", "correction"], .qsoRealism),

@@ -259,23 +259,23 @@
     <string name="pileup_your_name">YOUR NAME</string>
     <string name="pileup_your_name_placeholder">Optional</string>
     <string name="pileup_your_state">YOUR STATE</string>
-    <string name="pileup_exchange">EXCHANGE</string>
+    <string name="pileup_exchange">PILEUP RUNNER MODE</string>
     <string name="pileup_the_pileup">THE PILEUP</string>
-    <string name="pileup_callers">Callers</string>
+    <string name="pileup_callers">Max callers</string>
     <string name="pileup_callers_value">up to %1$s</string>
-    <string name="pileup_slowest_caller">Slowest caller</string>
-    <string name="pileup_fastest_caller">Fastest caller</string>
+    <string name="pileup_slowest_caller">Callers' min speed</string>
+    <string name="pileup_fastest_caller">Callers' max speed</string>
     <string name="pileup_tone_spread">Tone spread</string>
     <string name="pileup_zero_beat">Zero beat</string>
     <string name="pileup_tone_spread_value">±%1$s Hz</string>
-    <string name="pileup_qsb_fading">QSB fading</string>
-    <string name="pileup_qrn_static">QRN STATIC</string>
+    <string name="pileup_qsb_fading">QSB (fading)</string>
+    <string name="pileup_qrn_static">QRN (NOISE)</string>
     <string name="pileup_callsigns">CALLSIGNS</string>
     <string name="pileup_operating">OPERATING</string>
     <string name="pileup_cut_numbers">Cut numbers (5NN, 1 → A…)</string>
-    <string name="pileup_require_the_rst_copied">Require the RST copied</string>
+    <string name="pileup_require_the_rst_copied">Copy RST too</string>
     <string name="pileup_on_a_busted_call">ON A BUSTED CALL</string>
-    <string name="pileup_impatient_callers_give_up">Impatient callers give up</string>
+    <string name="pileup_impatient_callers_give_up">Callers can give up</string>
     <string name="pileup_tell_me_who_got_away">TELL ME WHO GOT AWAY</string>
     <string name="pileup_keep_my_partial_call_after">Keep my partial call after \"?\"</string>
     <string name="pileup_key_my_side_in_morse">Key my side in Morse</string>
@@ -424,7 +424,7 @@
     <string name="reference_about">About</string>
     <string name="reference_playback">Playback</string>
     <string name="reference_history_and_sources">HISTORY &amp; SOURCES</string>
-    <string name="reference_side_tone">Side tone</string>
+    <string name="reference_side_tone">Sidetone pitch</string>
     <string name="reference_farnsworth_spacing">Farnsworth spacing</string>
     <string name="reference_effective_speed">Effective speed</string>
 
@@ -482,7 +482,7 @@
     <string name="settings_character_speed">Character speed</string>
     <string name="settings_qrq_note">\n\nQRQ territory — %1$s WPM. Great for pushing instant recognition once 30+ feels comfortable.</string>
     <string name="settings_speed_footer">Character speed is how fast the dits and dahs are sent. Farnsworth keeps each character at full speed but adds extra space between characters, down to the effective speed, so you have time to recognize each one. Applies to words, groups and other multi-character content — single characters are unaffected.</string>
-    <string name="settings_speed_warning">Below %1$s WPM it\'s easy to start counting the dits and dahs instead of hearing each character as a single sound. Training at %2$s+ WPM builds instant, by-ear recognition, which is the whole point of the Koch method. If you need more time to answer, raise \"Recognition target\" or lower the Farnsworth speed instead of slowing the code.</string>
+    <string name="settings_speed_warning">Below %1$s WPM it\'s easy to start counting the dits and dahs instead of hearing each character as a single sound. Training at %2$s+ WPM builds instant, by-ear recognition, which is the whole point of the Koch method. If you need more time to answer, raise \"Recognize within\" or lower the Farnsworth speed instead of slowing the code.</string>
     <string name="settings_sound">Sound</string>
     <string name="settings_sidetone_pitch">Sidetone pitch</string>
     <string name="settings_preview_tone">Preview tone</string>
@@ -490,7 +490,7 @@
     <string name="settings_sound_footer">The frequency of the practice tone you hear.</string>
     <string name="settings_practice">Practice</string>
     <string name="settings_answer_choices">Answer choices</string>
-    <string name="settings_recognition_target">Recognition target</string>
+    <string name="settings_recognition_target">Recognize within</string>
     <string name="settings_seconds_1dp">%1$.1f s</string>
     <string name="settings_word_pool">Word pool</string>
     <string name="settings_word_pool_cw77">Use CW 77 (CWOps) instead</string>
@@ -521,6 +521,7 @@
     <string name="settings_slashed_zero_footer">Show the digit 0 with a line through it — the operator\'s convention for telling 0 from O.</string>
     <string name="settings_reminders">Reminders</string>
     <string name="settings_daily_reminder">Daily reminder</string>
+    <string name="settings_remind_me_at">Remind me at</string>
     <string name="settings_reminders_footer">A daily nudge to keep your streak alive.</string>
     <string name="settings_reset_all_progress">Reset all progress</string>
     <string name="settings_reset_footer">Clears your learned characters, stats, streak, and Journey progress. Settings are kept.</string>

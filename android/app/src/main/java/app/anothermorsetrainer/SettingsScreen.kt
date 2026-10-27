@@ -927,7 +927,7 @@ fun SettingsScreen(
                                         verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.SpaceBetween
                                     ) {
-                                        Text(stringResource(R.string.common_time), color = Brand.textPrimary, fontWeight = FontWeight.Medium)
+                                        Text(stringResource(R.string.settings_remind_me_at), color = Brand.textPrimary, fontWeight = FontWeight.Medium)
                                         TextButton(onClick = { pickTime() }) {
                                             Text(formatTime(Settings.reminderHour, Settings.reminderMinute), color = Brand.teal, fontWeight = FontWeight.SemiBold)
                                         }

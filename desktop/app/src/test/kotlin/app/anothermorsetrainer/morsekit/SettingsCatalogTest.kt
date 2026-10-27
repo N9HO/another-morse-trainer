@@ -44,6 +44,7 @@ class SettingsCatalogTest {
             val entry = byId[id]
             assertNotNull("shared setting $id is missing from the Android catalog", entry)
             assertEquals("category of $id", row.getString("category"), entry!!.category.id)
+            assertEquals("title of $id", row.getString("title"), entry.title)
         }
     }
 

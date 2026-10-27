@@ -422,7 +422,7 @@ struct SettingsView: View {
 
     private var soundSection: some View {
         Section("Sound") {
-            sliderRow(title: "Side tone",
+            sliderRow(title: "Sidetone pitch",
                       value: $model.settings.toneFrequency,
                       range: 300...1000, step: 10,
                       format: { "\(Int($0)) Hz" })
@@ -457,7 +457,7 @@ struct SettingsView: View {
 
     private var speedSection: some View {
         Section("Speed") {
-            sliderRow(title: "Speed",
+            sliderRow(title: "Character speed",
                       value: $model.settings.wpm,
                       range: 15...60, step: 1,
                       format: { "\(Int($0)) WPM" })
@@ -677,7 +677,7 @@ struct SettingsView: View {
     private var feedbackSection: some View {
         Section("Feedback") {
             Toggle("Show right / wrong", isOn: $model.settings.showCorrectness)
-            Picker("Reveal the letter", selection: $model.settings.reveal) {
+            Picker("Reveal answer", selection: $model.settings.reveal) {
                 ForEach(RevealMode.allCases) { mode in
                     Text(mode.label).tag(mode)
                 }
@@ -806,7 +806,7 @@ struct SettingsView: View {
 
     private var pileupRunnerSection: some View {
         Section {
-            Picker("Mode", selection: $model.settings.qso.mode) {
+            Picker("Pileup Runner mode", selection: $model.settings.qso.mode) {
                 ForEach(QSOContestMode.allCases) { Text($0.label).tag($0) }
             }
             if model.settings.qso.mode.isPileup {
@@ -816,9 +816,9 @@ struct SettingsView: View {
             }
             // Same 60 WPM ceiling as the global character speed, so QRQ
             // practice carries into the QSO simulator (issue #79).
-            sliderRow(title: "Min speed", value: $model.settings.qso.minWPM,
+            sliderRow(title: "Callers' min speed", value: $model.settings.qso.minWPM,
                       range: 12...60, step: 1, format: { "\(Int($0)) WPM" })
-            sliderRow(title: "Max speed", value: $model.settings.qso.maxWPM,
+            sliderRow(title: "Callers' max speed", value: $model.settings.qso.maxWPM,
                       range: 12...60, step: 1, format: { "\(Int($0)) WPM" })
             Toggle("Farnsworth spacing", isOn: $model.settings.qso.farnsworth)
             sliderRow(title: "Tone spread", value: $model.settings.qso.toneSpread,
@@ -854,7 +854,7 @@ struct SettingsView: View {
             if model.settings.qso.mode.includesRST {
                 Toggle("Copy RST too", isOn: $model.settings.qso.rstRequired)
             }
-            Toggle("Keep partial call in box", isOn: $model.settings.qso.keepPartialCall)
+            Toggle("Keep my partial call after \"?\"", isOn: $model.settings.qso.keepPartialCall)
             Toggle("Key my side in Morse", isOn: $model.settings.qso.keyMySide)
             Toggle("Pileup re-calls after TU", isOn: $model.settings.qso.autoRecall)
             Picker("On a busted call", selection: $model.settings.qso.bustBehavior) {
@@ -876,7 +876,7 @@ struct SettingsView: View {
         } header: {
             Text("QSO · Realism")
         } footer: {
-            Text("Keep partial call: a partly-copied call stays in the box so you can send “?” and add to it instead of retyping. Key my side: your CQ, calls and TU go out in Morse at your tone and speed before the stations reply; off, they are logged silently. Re-calls after TU: the stations still waiting call again on their own once you log a contact; off, send AGN or CQ yourself. Give-up: a station you keep busting drops out after a few misses, but the pileup continues — “Tell me who got away” then names the call you lost and what you had it as, either as it happens or in the end-of-run summary. Cut numbers send numerals as letters (0→T, 9→N) — you can type either form.")
+            Text("Keep my partial call after “?”: a partly-copied call stays in the box so you can send “?” and add to it instead of retyping. Key my side: your CQ, calls and TU go out in Morse at your tone and speed before the stations reply; off, they are logged silently. Re-calls after TU: the stations still waiting call again on their own once you log a contact; off, send AGN or CQ yourself. Give-up: a station you keep busting drops out after a few misses, but the pileup continues — “Tell me who got away” then names the call you lost and what you had it as, either as it happens or in the end-of-run summary. Cut numbers send numerals as letters (0→T, 9→N) — you can type either form.")
         }
         .listRowBackground(rowBackground(.qsoRealism))
     }

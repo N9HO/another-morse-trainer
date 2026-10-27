@@ -1075,7 +1075,7 @@ private struct ModeOptionsCard: View {
             inlinePicker(title: "Pace between items",
                          selection: rapidFirePaceBinding) { (p: RapidFirePace) in p.label }
 
-            Text("Speed, Farnsworth, and side tone are in Settings.")
+            Text("Character speed, Farnsworth, and sidetone pitch are in Settings.")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
         }

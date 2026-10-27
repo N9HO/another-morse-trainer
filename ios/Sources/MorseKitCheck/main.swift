@@ -6569,7 +6569,7 @@ if let fx = loadBuddyListFixture(),
 // phone.
 struct SettingsCatalogFixture: Decodable {
     struct Category: Decodable { let id: String; let title: String }
-    struct Entry: Decodable { let id: String; let category: String }
+    struct Entry: Decodable { let id: String; let title: String; let category: String }
     struct Query: Decodable {
         let name: String
         let query: String
@@ -6604,6 +6604,12 @@ if let fx = loadSettingsCatalogFixture() {
         print("      ↳ \(e.id): catalog has \(byId[e.id]?.category.rawValue ?? "nothing"), fixture says \(e.category)")
     }
     check("every shared setting is in the fixture's category (\(fx.entries.count))", sharedOK)
+    var titlesOK = true
+    for e in fx.entries where byId[e.id]?.title != e.title {
+        titlesOK = false
+        print("      ↳ \(e.id): catalog titles it \"\(byId[e.id]?.title ?? "nothing")\", fixture says \"\(e.title)\"")
+    }
+    check("every shared setting has the fixture's title, the same on every app (\(fx.entries.count))", titlesOK)
     check("catalog ids are unique", byId.count == SettingsCatalog.entries.count)
     check("every category has a section and a searchable setting",
           SettingsCategory.allCases.allSatisfy { c in
