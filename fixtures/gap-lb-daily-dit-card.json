@@ -1,0 +1,60 @@
+{
+  "$comment": "Daily Dit Home card subtitle (gap row-25), consumed by BOTH ports' tests: ios MorseKitCheck, android and desktop GapLbDailyDitCardTest. Data, not code. Expected text is derived from the stated rule, not captured from an implementation: solved => '#N copied [at <wpm> WPM ]<g> guess(es) · <l> listen(s)' where the 'at <wpm> WPM ' part is dropped when no solved speed is recorded (never 'copied at  WPM'); playing with any guess or listen => '#N · <counts> so far'; playing untouched => 'Today's word in Morse — your speed, up to <fastest starting speed> WPM'. Counts are singular at exactly 1; wpm prints whole numbers without '.0'.",
+  "maxStartingWpm": 75,
+  "cases": [
+    {
+      "name": "solved with a speed",
+      "outcome": "solved",
+      "puzzleNumber": 245,
+      "solvedWpm": 60.0,
+      "guessesUsed": 2,
+      "listens": 5,
+      "expected": "#245 copied at 60 WPM · 2 guesses · 5 listens"
+    },
+    {
+      "name": "solved at a fractional speed",
+      "outcome": "solved",
+      "puzzleNumber": 12,
+      "solvedWpm": 37.5,
+      "guessesUsed": 1,
+      "listens": 1,
+      "expected": "#12 copied at 37.5 WPM · 1 guess · 1 listen"
+    },
+    {
+      "name": "solved with no speed recorded drops the speed",
+      "outcome": "solved",
+      "puzzleNumber": 245,
+      "solvedWpm": null,
+      "guessesUsed": 3,
+      "listens": 0,
+      "expected": "#245 copied 3 guesses · 0 listens"
+    },
+    {
+      "name": "playing after a guess",
+      "outcome": "playing",
+      "puzzleNumber": 9,
+      "solvedWpm": null,
+      "guessesUsed": 1,
+      "listens": 0,
+      "expected": "#9 · 1 guess · 0 listens so far"
+    },
+    {
+      "name": "playing after a listen only",
+      "outcome": "playing",
+      "puzzleNumber": 9,
+      "solvedWpm": null,
+      "guessesUsed": 0,
+      "listens": 2,
+      "expected": "#9 · 0 guesses · 2 listens so far"
+    },
+    {
+      "name": "playing, untouched",
+      "outcome": "playing",
+      "puzzleNumber": 9,
+      "solvedWpm": null,
+      "guessesUsed": 0,
+      "listens": 0,
+      "expected": "Today's word in Morse — your speed, up to 75 WPM"
+    }
+  ]
+}

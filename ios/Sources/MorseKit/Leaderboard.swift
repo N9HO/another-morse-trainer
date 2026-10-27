@@ -199,6 +199,34 @@ public enum LeaderboardDisplayName {
     }
 }
 
+// MARK: - Result line
+
+/// The summary card's words for a run's leaderboard verdict (gap row-07),
+/// pinned by `fixtures/gap-lb-result-line.json` and mirrored by Android's
+/// `Leaderboard.resultLine`: a headline, then a detail line. A server verdict
+/// on the run is "not ranked"; the device or network getting in the way is
+/// "not posted".
+public enum LeaderboardResultLine {
+    public static func pending() -> (headline: String, detail: String?) {
+        ("Leaderboard: posting…", nil)
+    }
+
+    public static func posted(rank: Int, metric: Int, correct: Int, total: Int,
+                              personalBest: Bool) -> (headline: String, detail: String?) {
+        ("Leaderboard: #\(rank) · \(metric)",
+         personalBest ? "New personal best · \(correct)/\(total) graded correct"
+                      : "\(correct)/\(total) graded correct")
+    }
+
+    public static func refused(_ reason: String) -> (headline: String, detail: String?) {
+        ("Leaderboard: not ranked", reason)
+    }
+
+    public static func unavailable(_ reason: String) -> (headline: String, detail: String?) {
+        ("Leaderboard: not posted", reason)
+    }
+}
+
 // MARK: - Run speeds
 
 /// The two whole-WPM numbers a run token is issued for. The server needs

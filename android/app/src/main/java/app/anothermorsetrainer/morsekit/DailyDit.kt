@@ -3,6 +3,7 @@ package app.anothermorsetrainer.morsekit
 import java.time.LocalDate
 import java.util.Locale
 import kotlin.math.floor
+import kotlin.math.roundToInt
 
 /**
  * **Daily Dit** — one five-letter word, sent in Morse, the same for every
@@ -222,6 +223,30 @@ object DailyDit {
      */
     fun formatWpm(wpm: Double): String =
         if (wpm == floor(wpm)) wpm.toInt().toString() else String.format(Locale.US, "%.1f", wpm)
+
+    /**
+     * The Home card's subtitle (gap row-25), pinned by
+     * `fixtures/gap-lb-daily-dit-card.json`. A solved game with no speed on
+     * record drops "at <wpm> WPM" rather than printing a blank one.
+     */
+    fun homeSubtitle(
+        outcome: DailyDitOutcome,
+        puzzleNumber: Int,
+        solvedWpm: Double?,
+        guessesUsed: Int,
+        listens: Int
+    ): String {
+        val counts = count(guessesUsed, "guess", "guesses") + " · " + count(listens, "listen", "listens")
+        return when {
+            outcome == DailyDitOutcome.SOLVED -> {
+                val at = solvedWpm?.let { "at ${formatWpm(it)} WPM · " } ?: ""
+                "#$puzzleNumber copied $at$counts"
+            }
+            // A listen starts the day as much as a guess does (#168).
+            guessesUsed > 0 || listens > 0 -> "#$puzzleNumber · $counts so far"
+            else -> "Today's word in Morse — your speed, up to ${(startingSpeeds.maxOrNull() ?: 75.0).roundToInt()} WPM"
+        }
+    }
 
     /** "1 guess", "2 guesses" — the share text is English on both ports, by fixture. */
     fun count(n: Int, singular: String, plural: String): String =

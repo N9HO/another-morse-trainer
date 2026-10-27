@@ -21,6 +21,7 @@ struct IntroView: View {
     @State private var pendingGameSetup = false
     @State private var showingSettings = false
     @State private var showingStats = false
+    @State private var showingBrag = false
     @State private var showingReference = false
     @State private var showingStartHere = false
     @State private var showingDailyDit = false
@@ -108,6 +109,12 @@ struct IntroView: View {
         }
         .sheet(isPresented: $showingStats) {
             StatsView().environmentObject(model).pageSizedSheet()
+        }
+        // Personal bests, lifetime totals and sharing from Home (gap row-13);
+        // Android's Progress screen carries the same, and the session toolbar
+        // opens this same sheet.
+        .sheet(isPresented: $showingBrag) {
+            BragSheetView().environmentObject(model)
         }
         .sheet(isPresented: $showingReference) {
             ReferenceView().environmentObject(model).pageSizedSheet()
@@ -232,6 +239,13 @@ struct IntroView: View {
                     .padding(8)
             }
             .accessibilityLabel("Sending analyzer — send a text and see your accuracy and spacing")
+            Button { showingBrag = true } label: {
+                Image(systemName: "rosette")
+                    .font(.title3)
+                    .foregroundStyle(Theme.teal)
+                    .padding(8)
+            }
+            .accessibilityLabel("Brag sheet — personal bests, lifetime totals and sharing")
             Button { showingStats = true } label: {
                 Image(systemName: "chart.bar")
                     .font(.title3)
@@ -370,18 +384,9 @@ struct IntroView: View {
 
     private var dailyDitSubtitle: String {
         let game = model.dailyDit
-        let counts = DailyDit.count(game.guessesUsed, "guess", "guesses")
-            + " · " + DailyDit.count(game.listens, "listen", "listens")
-        switch game.outcome {
-        case .solved:
-            let at = game.solvedWpm.map { "at \(DailyDit.format(wpm: $0)) WPM · " } ?? ""
-            return "#\(game.puzzleNumber) copied \(at)\(counts)"
-        case .playing where game.guessesUsed > 0 || game.listens > 0:
-            // A listen starts the day as much as a guess does (#168).
-            return "#\(game.puzzleNumber) · \(counts) so far"
-        case .playing:
-            return "Today's word in Morse — your speed, up to \(Int(DailyDit.startingSpeeds.max() ?? 75)) WPM"
-        }
+        return DailyDit.homeSubtitle(outcome: game.outcome, puzzleNumber: game.puzzleNumber,
+                                     solvedWpm: game.solvedWpm, guessesUsed: game.guessesUsed,
+                                     listens: game.listens)
     }
 
     /// The newcomer's way in (#96): the site's guide explains how to begin and

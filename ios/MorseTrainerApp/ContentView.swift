@@ -1858,30 +1858,33 @@ struct ContentView: View {
             case .notSubmitted:
                 EmptyView()
             case .pending:
-                Text("Leaderboard: posting…")
+                Text(LeaderboardResultLine.pending().headline)
                     .foregroundStyle(.secondary)
             case .posted(let rank, let metric, let correct, let total, let best):
+                let line = LeaderboardResultLine.posted(rank: rank, metric: metric, correct: correct,
+                                                        total: total, personalBest: best)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Leaderboard: #\(rank) · \(metric)")
+                    Text(line.headline)
                         .font(.headline.monospacedDigit())
-                    Text(best ? "New personal best · \(correct)/\(total) graded correct"
-                              : "\(correct)/\(total) graded correct")
+                    Text(line.detail ?? "")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
             case .refused(let reason):
+                let line = LeaderboardResultLine.refused(reason)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Leaderboard: not ranked")
+                    Text(line.headline)
                         .font(.headline)
-                    Text(reason)
+                    Text(line.detail ?? reason)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
             case .unavailable(let reason):
+                let line = LeaderboardResultLine.unavailable(reason)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Leaderboard: not posted")
+                    Text(line.headline)
                         .font(.headline)
-                    Text(reason)
+                    Text(line.detail ?? reason)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

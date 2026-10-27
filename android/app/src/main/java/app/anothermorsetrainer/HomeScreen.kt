@@ -58,7 +58,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -68,8 +67,6 @@ import androidx.compose.ui.unit.sp
 import app.anothermorsetrainer.morsekit.Buddy
 import app.anothermorsetrainer.morsekit.BuddyStatus
 import app.anothermorsetrainer.morsekit.DailyDit
-import app.anothermorsetrainer.morsekit.DailyDitOutcome
-import kotlin.math.roundToInt
 
 /** A tappable home-menu tile. Shared with the Games sub-menu ([GamesScreen]). */
 internal data class HomeItem(
@@ -273,31 +270,13 @@ private fun DailyDitCard(onClick: () -> Unit) {
     LaunchedEffect(Unit) { DailyDitStore.refresh() }
     val game = DailyDitStore.game
     val done = game.isFinished
-    val guessesText = pluralStringResource(R.plurals.daily_dit_guesses, game.guessesUsed, game.guessesUsed)
-    val listensText = pluralStringResource(R.plurals.daily_dit_listens, game.listens, game.listens)
-    val subtitle = when (game.outcome) {
-        DailyDitOutcome.SOLVED -> stringResource(
-            R.string.daily_dit_home_sub_solved,
-            game.puzzleNumber,
-            game.solvedWpm?.let { DailyDit.formatWpm(it) } ?: "",
-            guessesText,
-            listensText
-        )
-        // A listen starts the day as much as a guess does (#168).
-        DailyDitOutcome.PLAYING -> if (game.guessesUsed > 0 || game.listens > 0) {
-            stringResource(
-                R.string.daily_dit_home_sub_progress,
-                game.puzzleNumber,
-                guessesText,
-                listensText
-            )
-        } else {
-            stringResource(
-                R.string.daily_dit_home_sub_new,
-                (DailyDit.startingSpeeds.maxOrNull() ?: 75.0).roundToInt()
-            )
-        }
-    }
+    val subtitle = DailyDit.homeSubtitle(
+        outcome = game.outcome,
+        puzzleNumber = game.puzzleNumber,
+        solvedWpm = game.solvedWpm,
+        guessesUsed = game.guessesUsed,
+        listens = game.listens
+    )
     Row(
         modifier = Modifier
             .fillMaxWidth()
