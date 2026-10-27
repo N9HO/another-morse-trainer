@@ -215,7 +215,7 @@ fun SendingPracticeScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Un
     // root takes focus on entry so the keys work without a click first; the
     // preview handler claims Space before a focused button can treat it as a click.
     val keyboardKeying = rememberKeyboardKeying(
-        enabled = !revealed && !showSettings,
+        enabled = !showSettings,
         onStraightKey = { down -> keyPressed = down; keyer.touchKey(down) },
         onPaddleKey = { down, ms -> keyer.touchKey(down, ms) }
     )
@@ -363,8 +363,9 @@ fun SendingPracticeScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Un
             // Straight key or paddles, as chosen in Settings (#233).
             OnScreenKeySwitch(
                 onPaddleKey = { down, ms -> keyer.touchKey(down, ms) },
-                modifier = Modifier.fillMaxWidth().height(120.dp),
-                enabled = !revealed
+                // Live after the answer is revealed too, as on iOS (PARITY.md
+                // row 17): the held correction can be keyed along with.
+                modifier = Modifier.fillMaxWidth().height(120.dp)
             ) {
                 Box(
                     modifier = Modifier
@@ -377,8 +378,7 @@ fun SendingPracticeScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Un
                             color = if (keyPressed) Brand.tealBright else Brand.hairline,
                             shape = RoundedCornerShape(Brand.cornerRadius)
                         )
-                        .pointerInput(revealed) {
-                            if (revealed) return@pointerInput
+                        .pointerInput(Unit) {
                             detectTapGestures(
                                 onPress = {
                                     keyPressed = true
@@ -419,7 +419,6 @@ fun SendingPracticeScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Un
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedButton(
                     onClick = { keyer.clear() },
-                    enabled = !revealed,
                     modifier = Modifier.weight(1f).heightIn(min = 48.dp)
                 ) { Text(stringResource(R.string.common_clear)) }
                 Button(
