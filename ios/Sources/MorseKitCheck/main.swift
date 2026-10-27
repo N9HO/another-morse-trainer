@@ -8822,21 +8822,32 @@ if let fx = loadHuntFixture("hunt-model.json"), let sx = loadHuntFixture("hunt-s
           && hConfig(presets["medium"] as? [String: Any]) == HuntConfig.medium
           && hConfig(presets["hard"] as? [String: Any]) == HuntConfig.hard)
 
-    var rngOK = true
+    var rngU64OK = true, rngDoublesOK = true, rngIntsOK = true, rngRangesOK = true
+    // Integers and ints are compared exactly. The doubles are derived from the
+    // exact 64-bit words, so a wrong generator moves them by far more than the
+    // 1e-12 allowed here, which only absorbs how Foundation parses long decimals.
+    func hNear(_ a: Double, _ b: Double) -> Bool { abs(a - b) <= 1e-12 * max(1.0, abs(b)) }
     for r in hRows(fx["rng"]) {
         let seed = UInt64(hInt(r["seed"]))
         var g = HuntRandom(seed: seed)
         let u = (0..<3).map { _ in String(g.next64()) }
-        if u != (r["u64"] as? [String] ?? []) { rngOK = false }
+        if u != (r["u64"] as? [String] ?? []) { rngU64OK = false }
         var d = HuntRandom(seed: seed)
-        if hDoubles(r["doubles"]).contains(where: { $0 != d.nextDouble() }) { rngOK = false }
+        let wantD = hDoubles(r["doubles"])
+        let gotD = wantD.map { _ in d.nextDouble() }
+        if wantD.isEmpty || !zip(gotD, wantD).allSatisfy({ hNear($0, $1) }) { rngDoublesOK = false }
         var n = HuntRandom(seed: seed)
         let ints = (0..<5).map { _ in n.nextInt(0, 9) }
-        if ints != ((r["ints0to9"] as? [NSNumber]) ?? []).map(\.intValue) { rngOK = false }
+        if ints != ((r["ints0to9"] as? [NSNumber]) ?? []).map(\.intValue) { rngIntsOK = false }
         var rg = HuntRandom(seed: seed)
-        if hDoubles(r["ranges"]).contains(where: { $0 != rg.range(-250, 250) }) { rngOK = false }
+        let wantR = hDoubles(r["ranges"])
+        let gotR = wantR.map { _ in rg.range(-250, 250) }
+        if wantR.isEmpty || !zip(gotR, wantR).allSatisfy({ hNear($0, $1) }) { rngRangesOK = false }
     }
-    check("hunt: the random source is SplitMix64", rngOK)
+    check("hunt: SplitMix64 64-bit words", rngU64OK)
+    check("hunt: random source doubles", rngDoublesOK)
+    check("hunt: random source ints 0...9", rngIntsOK)
+    check("hunt: random source ranges", rngRangesOK)
 
     var spansOK = true
     for s in hRows(fx["spans"]) {

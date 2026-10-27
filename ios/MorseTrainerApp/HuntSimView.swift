@@ -586,7 +586,7 @@ private struct HuntDebrief: View {
         }
     }
 
-    private func mono(_ text: String, weight: Font.Weight = .regular, secondary: Bool = false) -> some View {
+    private func mono(_ text: String, weight: UIFont.Weight = .regular, secondary: Bool = false) -> some View {
         Text(text)
             .font(Theme.copyFont(size: 13, weight: weight, monospaced: true, slashedZero: model.settings.slashedZero))
             .foregroundStyle(secondary ? Theme.textSecondary : .white)
