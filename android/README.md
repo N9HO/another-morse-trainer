@@ -194,7 +194,10 @@ the iOS app's navy/teal look.
   (what was sent, what you answered) is graded by the server, which ranks
   the speed summed over the items you copied correctly, so a game's board
   number is not its on-screen score. Posting needs a genuine Play-installed
-  build (Play Integrity); a "Delete my scores" button removes everything
+  build (Play Integrity) on a device with Google Play services; without
+  them (LineageOS, Aurora installs) the app runs normally, every mode works,
+  scores stay local personal bests and Settings says in one line why sharing
+  and buddy pairing are off (#349); a "Delete my scores" button removes everything
   this install posted
 - **Buddy streak**: pair with up to ten people (on either app) and keep a
   separate streak with each: each day you both practice counts, a day

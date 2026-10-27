@@ -66,6 +66,35 @@ enum LeaderboardStatus: Equatable {
 }
 
 extension AppModel {
+    /// Whether this device can attest, and so rank runs and pair buddies
+    /// (#349). App Attest is unsupported on the simulator and on a Mac
+    /// without it; nothing else in the app depends on it.
+    var attestationState: AttestationState {
+        AttestationAvailability.appleState(isSupported: leaderboard.canAttest)
+    }
+
+    /// What each ranked feature does in `attestationState`
+    /// (`fixtures/attestation-availability.json`).
+    var attestationFeatures: AttestationFeatures {
+        AttestationAvailability.features(for: attestationState)
+    }
+
+    /// The one line that stands in for the Share scores switch when this
+    /// device cannot attest, or nil when it can. The Android and desktop
+    /// apps say the same thing for their platforms.
+    var attestationNote: String? {
+        switch attestationFeatures.note {
+        case .none:
+            return nil
+        default:
+            #if targetEnvironment(macCatalyst)
+            return "This Mac cannot attest, so ranked scores and buddy streaks are off. Everything else works, and your scores stay on this Mac as personal bests."
+            #else
+            return "This device cannot attest (the simulator never can), so ranked scores and buddy streaks are off. Everything else works, and your scores stay on this device as personal bests."
+            #endif
+        }
+    }
+
     /// The board the running mode ranks on, or nil for an unranked mode.
     var leaderboardMode: LeaderboardMode? {
         LeaderboardMode(trainingModeRawValue: mode.rawValue)
@@ -97,12 +126,14 @@ extension AppModel {
         guard settings.leaderboard.shareScores, let board = leaderboardMode else { return }
         // Rapid Fire's review response plays without grading: nothing to rank.
         if board == .rapidFire && settings.rapidFire.response == .review { return }
-        guard LeaderboardDisplayName.isValid(settings.leaderboard.displayName) else {
-            leaderboardStatus = .unavailable("Pick a display name in Settings › Leaderboard & Buddy to post scores.")
+        // Attestation first (#349): a device that cannot attest is told so,
+        // not asked for a display name it could never use.
+        guard attestationFeatures.runsRanked else {
+            leaderboardStatus = .unavailable(LeaderboardError.unsupported.message)
             return
         }
-        guard leaderboard.canAttest else {
-            leaderboardStatus = .unavailable(LeaderboardError.unsupported.message)
+        guard LeaderboardDisplayName.isValid(settings.leaderboard.displayName) else {
+            leaderboardStatus = .unavailable("Pick a display name in Settings › Leaderboard & Buddy to post scores.")
             return
         }
         let speeds = leaderboardRunSpeeds(for: board)

@@ -937,6 +937,14 @@ struct SettingsView: View {
     // what is wrong up front.
     private var leaderboardSection: some View {
         Section {
+            if let note = model.attestationNote {
+                // This device cannot attest (#349): the switch, the name and
+                // Delete my scores are gone and one line says why. Scores
+                // stay local personal bests.
+                Text(note)
+                    .font(.footnote)
+                    .foregroundStyle(.orange)
+            } else {
             Toggle("Share scores to the shared leaderboard", isOn: $model.settings.leaderboard.shareScores)
             HStack {
                 Text("Display name")
@@ -985,6 +993,7 @@ struct SettingsView: View {
                 Text(deleteScoresResult)
                     .font(.footnote)
                     .foregroundStyle(.secondary)
+            }
             }
         } header: {
             Text("Leaderboard")

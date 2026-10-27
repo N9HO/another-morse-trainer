@@ -97,6 +97,17 @@ cannot do, and why (details in `docs/desktop-design.md` §2).
 Listed so nobody "ports" one side's plumbing to the other, or reads it as a
 missing feature.
 
+- **Ranked scores and buddy streaks need device attestation (#349).** iOS uses
+  App Attest, Android Play Integrity (needs Google Play services: a LineageOS
+  device without GApps is "no Play services"), desktop has neither. In every
+  state that cannot attest, all three apps do the same: launch, run every
+  training mode, keep scores as local personal bests, keep the public boards
+  readable, hide the Share scores switch / name / Delete my scores / opt-in
+  prompt behind one explanatory line, and let buddy Invite and Join explain
+  themselves on tap. Pinned by `fixtures/attestation-availability.json`
+  (`AttestationAvailability` in each tree's morsekit). Wording differs by
+  platform (Play services, App Attest, desktop).
+
 - **Big-screen layout.** Both apps run on tablets in any orientation and in
   split-screen or resizable windows, and both re-flow the home grid four
   across on a big window with the same thresholds (`wideLayout` in
