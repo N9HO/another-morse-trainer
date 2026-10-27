@@ -1155,7 +1155,7 @@ private struct ModeOptionsCard: View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Your callsign and name").font(.subheadline)
             HStack(spacing: 8) {
-                cw77StationField("Callsign", prompt: "W1AW", text: $model.settings.qso.myCall)
+                cw77CallsignField
                 cw77StationField("Name", prompt: "Optional", text: $model.settings.qso.myName)
             }
             Text("Once either is filled in, a switch below can add them to the CW 77 set. They're your station everywhere in the app, the same fields as Settings \u{203A} QSO & Pileups \u{203A} Your Station.")
@@ -1176,6 +1176,23 @@ private struct ModeOptionsCard: View {
             }
             .tint(Theme.teal)
         }
+    }
+
+    /// CW 77's callsign field: the same caption-over-entry look as the other
+    /// Your Station fields, with the validated callsign entry inside.
+    private var cw77CallsignField: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Callsign")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(Theme.textSecondary)
+            CallsignEntry(call: $model.settings.qso.myCall)
+                .font(.system(.body, design: .monospaced))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+                .background(Theme.navyRaised, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .accessibilityLabel("Your callsign")
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     /// One of CW 77's Your Station fields: a caption over a monospaced,

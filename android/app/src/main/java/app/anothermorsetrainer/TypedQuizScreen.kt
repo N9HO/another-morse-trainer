@@ -386,7 +386,7 @@ fun TypedQuizScreen(
         }  // end of the header + drill Column
 
         if (showSettings) {
-            SessionSettingsOverlay(scope = settingsMode, onClose = { showSettings = false })
+            SessionSettingsOverlay(scope = settingsMode, onClose = { showSettings = false }, previewItem = { drill.playable })
         }
     }
 }

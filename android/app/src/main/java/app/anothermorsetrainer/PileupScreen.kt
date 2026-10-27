@@ -57,6 +57,7 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.anothermorsetrainer.morsekit.InputRules
 import app.anothermorsetrainer.morsekit.BustBehavior
 import app.anothermorsetrainer.morsekit.CallsignFormat
 import app.anothermorsetrainer.morsekit.CutNumbers
@@ -470,27 +471,16 @@ private fun PileupSetup(onStart: () -> Unit, onBack: () -> Unit, onSwitchMode: (
 }
 
 /**
- * The Pileup Runner's options — your call, the exchange, the pileup, the
- * callsigns and the operating knobs — as a run of items emitted into the
- * caller's column. The setup screen shows them above Start; Settings ›
- * QSO & Pileups shows the same composable (#236), so the two can never
- * disagree. Every write goes straight to [PileupSettings].
+ * Your callsign, name and state, as one run of items. The Pileup Runner's
+ * setup screen shows them through [PileupOptions]; Settings › QSO & Pileups ›
+ * Your Station shows the same composable in Pileup Runner, Contest, Listen &
+ * Learn, Common Words and CW 77 (iOS `yourStationSection`).
  */
 @Composable
-internal fun PileupOptions() {
+internal fun YourStationOptions() {
     val focusManager = LocalFocusManager.current
     PuSectionLabel(stringResource(R.string.pileup_your_call))
-    OutlinedTextField(
-        value = PileupSettings.myCall,
-        onValueChange = { PileupSettings.updateMyCall(it) },
-        singleLine = true,
-        placeholder = { Text(PileupSettings.DEFAULT_CALL) },
-        // A call sign is one field, so the IME's action key closes the
-        // keyboard rather than offering a newline you cannot use (#40).
-        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-        keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
-        modifier = Modifier.fillMaxWidth()
-    )
+    CallsignField(modifier = Modifier.fillMaxWidth())
 
     // Optional; CW 77 can drill it with the call (#240).
     PuSectionLabel(stringResource(R.string.pileup_your_name))
@@ -515,7 +505,59 @@ internal fun PileupOptions() {
         keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
         modifier = Modifier.fillMaxWidth()
     )
+}
 
+/**
+ * The "Your callsign" input, in the one validated form every app uses: upper
+ * case, letters A-Z, digits and "/", 12 characters at most, and a blank entry
+ * stored as W1AW ([InputRules.storedCallsign]). The field keeps its own draft
+ * so clearing it to type another call does not snap to the placeholder
+ * underneath you; [PileupSettings.myCall] always holds the stored value.
+ */
+@Composable
+internal fun CallsignField(
+    modifier: Modifier = Modifier,
+    label: (@Composable () -> Unit)? = null,
+    imeAction: ImeAction = ImeAction.Done,
+    onEdited: () -> Unit = {}
+) {
+    val focusManager = LocalFocusManager.current
+    var draft by remember { mutableStateOf(PileupSettings.myCall) }
+    // Follow a change made elsewhere (another field, a sync) unless it is
+    // just the stored form of what is being typed.
+    LaunchedEffect(PileupSettings.myCall) {
+        if (InputRules.storedCallsign(draft) != PileupSettings.myCall) draft = PileupSettings.myCall
+    }
+    OutlinedTextField(
+        value = draft,
+        onValueChange = {
+            draft = InputRules.normalizeCallsign(it)
+            PileupSettings.updateMyCall(draft)
+            onEdited()
+        },
+        singleLine = true,
+        label = label,
+        placeholder = { Text(InputRules.CALLSIGN_PLACEHOLDER) },
+        // A call sign is one field, so the IME's action key closes the
+        // keyboard rather than offering a newline you cannot use (#40).
+        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters, imeAction = imeAction),
+        keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
+        modifier = modifier
+    )
+}
+
+/**
+ * The Pileup Runner's options — your call, the exchange, the pileup, the
+ * callsigns and the operating knobs — as a run of items emitted into the
+ * caller's column. The setup screen shows them above Start; Settings ›
+ * QSO & Pileups shows the same composable (#236), so the two can never
+ * disagree. Every write goes straight to [PileupSettings].
+ */
+@Composable
+internal fun PileupOptions(includeStation: Boolean = true) {
+    // Settings shows Your Station as its own section (iOS `yourStation`) and
+    // passes false; the setup screen keeps the fields above the exchange.
+    if (includeStation) YourStationOptions()
     PuSectionLabel(stringResource(R.string.pileup_exchange))
     PuPills(QSOContestMode.allCases.map { it to it.label }, PileupSettings.mode) {
         PileupSettings.updateMode(it)
@@ -559,9 +601,9 @@ internal fun PileupOptions() {
     }
     PuSlider(
         label = stringResource(R.string.pileup_tone_spread),
-        value = if (PileupSettings.toneSpread <= 0.0) stringResource(R.string.pileup_zero_beat) else stringResource(R.string.pileup_tone_spread_value, PileupSettings.toneSpread.roundToInt()),
+        value = if (InputRules.isZeroBeat(PileupSettings.toneSpread)) stringResource(R.string.pileup_zero_beat) else stringResource(R.string.pileup_tone_spread_value, PileupSettings.toneSpread.roundToInt()),
         position = PileupSettings.toneSpread.toFloat(),
-        range = 0f..PileupSettings.MAX_TONE_SPREAD.toFloat(), steps = 0,
+        range = 0f..PileupSettings.MAX_TONE_SPREAD.toFloat(), steps = InputRules.TONE_SPREAD_COMPOSE_STEPS,
         onChange = { PileupSettings.updateToneSpread(it.toDouble()) }
     )
     PuToggle(stringResource(R.string.pileup_qsb_fading), PileupSettings.qsbEnabled) { PileupSettings.updateQsbEnabled(it) }

@@ -272,7 +272,7 @@
     <string name="pileup_slowest_caller">Slowest caller</string>
     <string name="pileup_fastest_caller">Fastest caller</string>
     <string name="pileup_tone_spread">Tone spread</string>
-    <string name="pileup_zero_beat">Zero beat</string>
+    <string name="pileup_zero_beat">Zero-beat</string>
     <string name="pileup_tone_spread_value">±%1$s Hz</string>
     <string name="pileup_qsb_fading">QSB fading</string>
     <string name="pileup_qrn_static">QRN STATIC</string>
@@ -484,6 +484,8 @@
     <string name="settings_search_clear">Clear search</string>
     <string name="settings_search_results">Results</string>
     <string name="settings_search_none">No settings match “%1$s”.</string>
+    <string name="settings_your_station">Your Station</string>
+    <string name="settings_your_station_footer">Used across the app — sent when you call CQ and work stations in Pileup Runner, drilled in CW 77 when you include them, and taught in First Four, which also uses your state.</string>
     <string name="settings_pileup_footer">The same options as the Pileup Runner setup screen; a change in either place shows in both.</string>
     <string name="settings_character_speed">Character speed</string>
     <string name="settings_qrq_note">\n\nQRQ territory — %1$s WPM. Great for pushing instant recognition once 30+ feels comfortable.</string>

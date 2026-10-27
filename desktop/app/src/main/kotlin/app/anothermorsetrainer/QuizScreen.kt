@@ -808,6 +808,7 @@ fun QuizScreen(
             SessionSettingsOverlay(
                 scope = settingsMode,
                 onClose = { showSettings = false },
+                previewItem = { drill.playable },
                 // The developer Preview Stage row jumped the shared track
                 // underneath: start drilling the new stage, as iOS does.
                 onPreviewStage = if (progressive != null) {

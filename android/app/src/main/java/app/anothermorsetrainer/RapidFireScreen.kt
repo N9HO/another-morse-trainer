@@ -393,7 +393,7 @@ fun RapidFireScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {
     }
 
     if (showSettings) {
-        SessionSettingsOverlay(scope = SettingsMode.RAPID_FIRE, onClose = { showSettings = false })
+        SessionSettingsOverlay(scope = SettingsMode.RAPID_FIRE, onClose = { showSettings = false }, previewItem = { drill?.playable })
     }
     }
 }

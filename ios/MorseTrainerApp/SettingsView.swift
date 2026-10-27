@@ -424,10 +424,11 @@ struct SettingsView: View {
         Section("Sound") {
             sliderRow(title: "Side tone",
                       value: $model.settings.toneFrequency,
-                      range: 300...1000, step: 10,
+                      range: InputRules.sidetoneMin...InputRules.sidetoneMax,
+                      step: InputRules.sidetoneStep,
                       format: { "\(Int($0)) Hz" })
             Button {
-                model.replay()
+                model.previewTone()
             } label: {
                 Label("Preview tone", systemImage: "speaker.wave.2.fill")
             }
@@ -772,10 +773,8 @@ struct SettingsView: View {
             HStack {
                 Text("Your callsign")
                 Spacer()
-                TextField("W1AW", text: $model.settings.qso.myCall)
+                CallsignEntry(call: $model.settings.qso.myCall)
                     .multilineTextAlignment(.trailing)
-                    .textInputAutocapitalization(.characters)
-                    .autocorrectionDisabled()
                     .font(.system(.body, design: .monospaced))
             }
             HStack {
@@ -817,13 +816,14 @@ struct SettingsView: View {
             // Same 60 WPM ceiling as the global character speed, so QRQ
             // practice carries into the QSO simulator (issue #79).
             sliderRow(title: "Min speed", value: $model.settings.qso.minWPM,
-                      range: 12...60, step: 1, format: { "\(Int($0)) WPM" })
+                      range: InputRules.callerWpmMin...InputRules.callerWpmMax, step: 1, format: { "\(Int($0)) WPM" })
             sliderRow(title: "Max speed", value: $model.settings.qso.maxWPM,
-                      range: 12...60, step: 1, format: { "\(Int($0)) WPM" })
+                      range: InputRules.callerWpmMin...InputRules.callerWpmMax, step: 1, format: { "\(Int($0)) WPM" })
             Toggle("Farnsworth spacing", isOn: $model.settings.qso.farnsworth)
             sliderRow(title: "Tone spread", value: $model.settings.qso.toneSpread,
-                      range: 0...500, step: 10,
-                      format: { $0 < 10 ? "Zero-beat" : "±\(Int($0)) Hz" })
+                      range: InputRules.toneSpreadMin...InputRules.toneSpreadMax,
+                      step: InputRules.toneSpreadStep,
+                      format: { InputRules.toneSpreadLabel($0) })
         } header: {
             Text("Pileup Runner")
         } footer: {
@@ -839,9 +839,9 @@ struct SettingsView: View {
                 ForEach(QRNLevel.allCases) { Text($0.label).tag($0) }
             }
             sliderRow(title: "Min wait", value: $model.settings.qso.minDelay,
-                      range: 0...3, step: 0.1, format: { String(format: "%.1f s", $0) })
+                      range: 0...InputRules.minWaitMax, step: 0.1, format: { String(format: "%.1f s", $0) })
             sliderRow(title: "Max wait", value: $model.settings.qso.maxDelay,
-                      range: 0...4, step: 0.1, format: { String(format: "%.1f s", $0) })
+                      range: 0...InputRules.maxWaitMax, step: 0.1, format: { String(format: "%.1f s", $0) })
         }
         .listRowBackground(rowBackground(.qsoSignals))
     }
@@ -1217,6 +1217,34 @@ struct SettingsView: View {
             return String(decoding: bytes, as: UTF8.self)
         }
         return id.isEmpty ? UIDevice.current.model : id
+    }
+}
+
+/// The "Your callsign" input in the one validated form every app uses
+/// (parity row 20): `InputRules.normalizeCallsign` as you type, and the bound
+/// value is `InputRules.storedCallsign`, so a blank field stores W1AW. It
+/// keeps its own draft, so clearing it to type another call does not snap to
+/// W1AW underneath you; the placeholder shows W1AW while it is empty.
+struct CallsignEntry: View {
+    @Binding var call: String
+    @State private var draft = ""
+
+    var body: some View {
+        TextField(InputRules.callsignPlaceholder, text: $draft)
+            .textInputAutocapitalization(.characters)
+            .autocorrectionDisabled()
+            .onAppear { draft = call }
+            .onChange(of: draft) { newValue in
+                let normalized = InputRules.normalizeCallsign(newValue)
+                if normalized != newValue { draft = normalized }
+                let stored = InputRules.storedCallsign(normalized)
+                if stored != call { call = stored }
+            }
+            .onChange(of: call) { newValue in
+                // Follow a change made elsewhere, but not the stored form of
+                // what is being typed.
+                if InputRules.storedCallsign(draft) != newValue { draft = newValue }
+            }
     }
 }
 

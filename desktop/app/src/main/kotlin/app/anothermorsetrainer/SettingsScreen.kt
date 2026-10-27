@@ -29,6 +29,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.ImeAction
+import app.anothermorsetrainer.morsekit.InputRules
 import app.anothermorsetrainer.morsekit.AnswerEntryMode
 import app.anothermorsetrainer.morsekit.SettingsCatalog
 import app.anothermorsetrainer.morsekit.SettingsCategory
@@ -217,7 +218,14 @@ fun SettingsScreen(
      * Characters session underneath restarts its drill. Null falls back to
      * [onBack], the track already jumped and saved for the next start.
      */
-    onPreviewStage: (() -> Unit)? = null
+    onPreviewStage: (() -> Unit)? = null,
+    /**
+     * The drill item under way in the session that opened this (iOS `replay()`
+     * keys `drill.playable`), for the Preview tone row. Null, or an item that
+     * answers null, means there is no current drill item and PARIS is keyed
+     * instead; Home passes nothing.
+     */
+    previewItem: (() -> MorseItem.Playable?)? = null
 ) {
     val uriHandler = LocalUriHandler.current
     val player = remember { MorsePlayer() }
@@ -318,6 +326,11 @@ fun SettingsScreen(
         SettingsSection.HARDWARE_KEY -> shown(KEY_MODES) && midiSupported
         // The on-screen key needs no MIDI, so it stays on every device (#233).
         SettingsSection.ON_SCREEN_KEY -> shown(KEY_MODES)
+        // Your call and name are also what CW 77 drills when you include them
+        // (#240), so Listen & Learn, Common Words and CW 77 reach them too, and
+        // the pileup surfaces key them (iOS `yourStation`).
+        SettingsSection.YOUR_STATION ->
+            shown(setOf(SettingsMode.PILEUP, SettingsMode.CONTEST, SettingsMode.LISTEN, SettingsMode.WORDS, SettingsMode.CW77))
         SettingsSection.PILEUP -> scope == null
     }
     val visibleCategories = SettingsCategory.entries.filter { c -> c.sections.any { isShown(it) } }
@@ -382,7 +395,7 @@ fun SettingsScreen(
                                     label = stringResource(R.string.settings_sidetone_pitch),
                                     value = stringResource(R.string.common_hz_value, Settings.sidetoneHz.roundToInt()),
                                     position = Settings.sidetoneHz.toFloat(),
-                                    range = 300f..1000f, steps = 0,
+                                    range = 300f..1000f, steps = InputRules.SIDETONE_COMPOSE_STEPS,
                                     onChange = { Settings.updateSidetoneHz(it.toDouble()) }
                                 )
                                 GroupDivider()
@@ -393,7 +406,10 @@ fun SettingsScreen(
                                 ) {
                                     Text(stringResource(R.string.settings_preview_tone), color = Brand.textPrimary, fontWeight = FontWeight.Medium)
                                     OutlinedButton(onClick = {
-                                        player.play(MorseItem.Playable.Text("PARIS"), Settings.sidetoneHz, Settings.timing()) {}
+                                        player.play(
+                                            previewItem?.invoke() ?: MorseItem.Playable.Text("PARIS"),
+                                            Settings.sidetoneHz, Settings.timing()
+                                        ) {}
                                     }) {
                                         Icon(Icons.Filled.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
                                         Text(stringResource(R.string.settings_play_button))
@@ -832,6 +848,14 @@ fun SettingsScreen(
                                     stringResource(R.string.settings_on_screen_key_footer_straight)
                             )
                         }
+                        SettingsSection.YOUR_STATION -> {
+                            SectionHeader(stringResource(R.string.settings_your_station))
+                            Column(
+                                modifier = Modifier.fillMaxWidth().brandCard().padding(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(14.dp)
+                            ) { YourStationOptions() }
+                            SectionFooter(stringResource(R.string.settings_your_station_footer))
+                        }
                         SettingsSection.PILEUP -> {
                             // The Pileup Runner's own options (#236), the same composable its
                             // setup screen shows, so iOS and Android both keep them under
@@ -840,7 +864,7 @@ fun SettingsScreen(
                             Column(
                                 modifier = Modifier.fillMaxWidth().brandCard().padding(16.dp),
                                 verticalArrangement = Arrangement.spacedBy(14.dp)
-                            ) { PileupOptions() }
+                            ) { PileupOptions(includeStation = false) }
                             SectionFooter(stringResource(R.string.settings_pileup_footer))
                         }
                         SettingsSection.REMINDERS -> {
@@ -1210,7 +1234,12 @@ fun SessionSettingsButton(onOpen: () -> Unit) {
  * and picks the changed settings up when this closes. Back closes it too.
  */
 @Composable
-fun SessionSettingsOverlay(scope: SettingsMode, onClose: () -> Unit, onPreviewStage: (() -> Unit)? = null) {
+fun SessionSettingsOverlay(
+    scope: SettingsMode,
+    onClose: () -> Unit,
+    onPreviewStage: (() -> Unit)? = null,
+    previewItem: (() -> MorseItem.Playable?)? = null
+) {
     BackHandler { onClose() }
     Box(
         modifier = Modifier
@@ -1225,7 +1254,7 @@ fun SessionSettingsOverlay(scope: SettingsMode, onClose: () -> Unit, onPreviewSt
                 indication = null
             ) {}
     ) {
-        SettingsScreen(onBack = onClose, scope = scope, onPreviewStage = onPreviewStage)
+        SettingsScreen(onBack = onClose, scope = scope, onPreviewStage = onPreviewStage, previewItem = previewItem)
     }
 }
 

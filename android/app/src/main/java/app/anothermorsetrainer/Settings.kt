@@ -8,6 +8,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.content.edit
+import app.anothermorsetrainer.morsekit.InputRules
 import app.anothermorsetrainer.morsekit.AnswerEntryMode
 import app.anothermorsetrainer.morsekit.Buddy
 import app.anothermorsetrainer.morsekit.BuddyEntry
@@ -527,7 +528,7 @@ object Settings {
             effectiveWpm = if (storedEffective != null && storedEffective < characterWpm) storedEffective else 18.0
         }
         effectiveWpm = effectiveWpm.coerceIn(MIN_EFFECTIVE_WPM, characterWpm)
-        sidetoneHz = prefs.getFloat("sidetone", 600f).toDouble()
+        sidetoneHz = InputRules.clampSidetone(prefs.getFloat("sidetone", 600f).toDouble())
         var storedNoise = runCatching {
             BackgroundNoiseLevel.valueOf(prefs.getString("backgroundNoise", null) ?: "KEEP_ALIVE")
         }.getOrDefault(BackgroundNoiseLevel.KEEP_ALIVE)
@@ -733,7 +734,7 @@ object Settings {
     }
 
     fun updateSidetoneHz(value: Double) {
-        sidetoneHz = value.coerceIn(300.0, 1000.0)
+        sidetoneHz = InputRules.clampSidetone(value)
         persist()
     }
 
