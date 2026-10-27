@@ -36,6 +36,9 @@ three trees stay independent (`CLAUDE.md`).
   record, never touches the Koch ladder or Stats history, and is never submitted
   to the leaderboard, so it does not touch the anti-cheat design in
   `docs/high-scores-design.md`. A share card is out of scope.
+- **Length.** Authored sentences run 5 to 9 words (mostly 6 or 7), a little over the
+  brief's "about five" so each can carry a question with a real answer; tests
+  accept 4 to 9. Open question for the maintainer: trim to five?
 - **Characters.** Every sentence is upper-case A-Z with single spaces; nothing
   that cannot be sent. The bank is authored in plain common words and each item
   records `kochLevel` (1 + the highest position in `MorseCode.kochOrder` of any

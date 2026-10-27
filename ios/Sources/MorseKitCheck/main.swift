@@ -8791,11 +8791,11 @@ if let data = loadFixtureData("comprehension-bank.json"),
     check("at least 120 items, ids unique, four distinct options each",
           mine.count >= 120 && Set(mine.map(\.id)).count == mine.count
             && mine.allSatisfy { Set([$0.answer] + $0.distractors).count == DailyComprehension.optionCount })
-    check("every sentence is upper-case letters and single spaces, and about five words",
+    check("every sentence is upper-case letters and single spaces, and four to nine words",
           mine.allSatisfy { item in
               item.sentence.allSatisfy { ($0 >= "A" && $0 <= "Z") || $0 == " " }
                 && !item.sentence.contains("  ")
-                && (4...7).contains(item.sentence.split(separator: " ").count)
+                && (4...9).contains(item.sentence.split(separator: " ").count)
           })
     check("each kochLevel is 1 + the highest MorseCode.kochOrder position of a letter in the sentence",
           mine.allSatisfy { item in

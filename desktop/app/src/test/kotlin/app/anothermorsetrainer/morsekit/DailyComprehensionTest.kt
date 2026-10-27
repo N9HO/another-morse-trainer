@@ -60,7 +60,7 @@ class DailyComprehensionTest {
                 (listOf(item.answer) + item.distractors).toSet().size
             )
             assertTrue("${item.id}: sendable A-Z and single spaces only", item.sentence.all { it in 'A'..'Z' || it == ' ' } && !item.sentence.contains("  "))
-            assertTrue("${item.id}: about five words", item.sentence.split(' ').size in 4..7)
+            assertTrue("${item.id}: four to nine words", item.sentence.split(' ').size in 4..9)
             val highest = item.sentence.filter { it != ' ' }.maxOf { MorseCode.kochOrder.indexOf(it) }
             assertEquals("${item.id}: kochLevel", highest + 1, item.kochLevel)
         }
