@@ -8738,6 +8738,238 @@ check("an email needs one @ and a dotted domain",
       AccountSync.isPlausibleEmail(" learner@example.org ") && !AccountSync.isPlausibleEmail("learner@example")
         && !AccountSync.isPlausibleEmail("learner example.org") && !AccountSync.isPlausibleEmail("a@b@c.org"))
 
+// MARK: - Hunt simulator (#313)
+
+// fixtures/hunt-model.json and fixtures/hunt-sessions.json, read by this
+// harness AND by the Kotlin HuntSimTest in android/ and desktop/: the RNG, the
+// copy model, the query rules, the hunters, the grader, and whole scripted
+// sessions turn by turn. Worked from docs/operating-procedure-design.md by a
+// reference script, not captured from a port.
+print("\nHunt simulator (fixtures/hunt-model.json, hunt-sessions.json):")
+func loadHuntFixture(_ name: String) -> [String: Any]? {
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent()
+        .deletingLastPathComponent().deletingLastPathComponent()
+    guard let data = try? Data(contentsOf: root.appendingPathComponent("fixtures/\(name)")) else { return nil }
+    return (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+}
+func hNum(_ v: Any?) -> Double { (v as? NSNumber)?.doubleValue ?? .nan }
+func hInt(_ v: Any?) -> Int { (v as? NSNumber)?.intValue ?? -9999 }
+func hBool(_ v: Any?) -> Bool { (v as? NSNumber)?.boolValue ?? false }
+func hStr(_ v: Any?) -> String { v as? String ?? "<missing>" }
+func hRows(_ v: Any?) -> [[String: Any]] { v as? [[String: Any]] ?? [] }
+func hDoubles(_ v: Any?) -> [Double] { ((v as? [NSNumber]) ?? []).map(\.doubleValue) }
+func hClose(_ a: Double, _ b: Double) -> Bool { abs(a - b) <= 1e-9 }
+func hConfig(_ o: [String: Any]?) -> HuntConfig {
+    var c = HuntConfig()
+    guard let o = o else { return c }
+    c.pileupSize = hInt(o["pileupSize"]); c.wpmMin = hNum(o["wpmMin"]); c.wpmMax = hNum(o["wpmMax"])
+    c.activatorWpm = hNum(o["activatorWpm"]); c.qsb = hBool(o["qsb"]); c.qrn = hNum(o["qrn"])
+    c.inaudiblePercent = hNum(o["inaudiblePercent"]); c.bustRate = hNum(o["bustRate"])
+    c.toneSpread = hNum(o["toneSpread"]); c.youLevel = hNum(o["youLevel"])
+    return c
+}
+func hHeard(_ rows: [[String: Any]]) -> [String] {
+    rows.map { "\(($0["who"] as? NSNumber)?.stringValue ?? ($0["who"] as? String) ?? "?")|\(hStr($0["sent"]))|\(hStr($0["decoded"]))" }
+}
+func hPolicy(_ name: String, _ s: HuntSession) -> HuntYouSend? {
+    let t = s.turn
+    let me = s.myCall
+    func y(_ text: String, _ delay: Double, _ off: Double) -> HuntYouSend { HuntYouSend(text: text, wpm: 20, delay: delay, offsetHz: off) }
+    switch name {
+    case "good":
+        switch t.kind {
+        case .calling: return y(me, 0.6, 60)
+        case .query: return HuntModel.answers(t.query, call: me) ? y(me, 0.5, 60) : nil
+        case .exchange: return s.pickedCall == me ? y("5NN \(s.myState) 73", 0.4, 0) : nil
+        case .close: return y("73 E E", 0.3, 0)
+        case .as: return nil
+        }
+    case "pushy":
+        switch t.kind {
+        case .calling: return y("\(me) \(me)", 0.1, 0)
+        case .query: return y(me, 0.1, 0)
+        case .exchange: return s.pickedCall == me ? y("TNX FER CALL UR 5NN \(s.myState)", 0.2, 0) : y(me, 0.1, 150)
+        case .as: return y(me, 0.1, 0)
+        case .close: return nil
+        }
+    default:
+        return nil
+    }
+}
+if let fx = loadHuntFixture("hunt-model.json"), let sx = loadHuntFixture("hunt-sessions.json") {
+    let c = fx["constants"] as? [String: Any] ?? [:]
+    check("hunt: constants",
+          hNum(c["noiseFloor"]) == HuntModel.noiseFloor && hNum(c["maxOdds"]) == HuntModel.maxOdds
+          && hNum(c["maskWeight"]) == HuntModel.maskWeight && hNum(c["zeroBeatHz"]) == HuntModel.zeroBeatHz
+          && HuntModel.zeroBeatHz == OperatingProcedure.zeroBeatToleranceHz
+          && hNum(c["sepFarStart"]) == HuntModel.sepFarStart && hNum(c["sepSlope"]) == HuntModel.sepSlope
+          && hNum(c["sepMin"]) == HuntModel.sepMin && hNum(c["qsbFactor"]) == HuntModel.qsbFactor
+          && hNum(c["doubtOdds"]) == HuntModel.doubtOdds && hNum(c["listenSeconds"]) == HuntModel.listenSeconds
+          && hNum(c["asProb"]) == HuntModel.asProb && hInt(c["sriAfter"]) == HuntModel.sriAfter
+          && hInt(c["maxExchangeTries"]) == HuntModel.maxExchangeTries && hInt(c["maxQueries"]) == HuntModel.maxQueries
+          && hInt(c["maxRounds"]) == HuntModel.maxRounds && hNum(c["callProb"]) == HuntModel.callProb
+          && hNum(c["pickJitter"]) == HuntModel.pickJitter && hInt(c["pileupMin"]) == HuntModel.pileupMin
+          && hNum(c["offsetMinHz"]) == HuntModel.offsetMinHz && hNum(c["offsetMaxHz"]) == HuntModel.offsetMaxHz)
+    check("hunt: prefixes and states", (fx["prefixes"] as? [String]) == HuntModel.prefixes && (fx["states"] as? [String]) == HuntModel.states)
+    check("hunt: type weights",
+          hRows(fx["typeWeights"]).map { "\(hStr($0["type"]))=\(hInt($0["weight"]))" }
+          == HuntType.allCases.map { "\($0.rawValue)=\($0.weight)" })
+    let presets = fx["presets"] as? [String: Any] ?? [:]
+    check("hunt: defaults and presets",
+          hConfig(fx["defaults"] as? [String: Any]) == HuntConfig()
+          && hConfig(presets["easy"] as? [String: Any]) == HuntConfig.easy
+          && hConfig(presets["medium"] as? [String: Any]) == HuntConfig.medium
+          && hConfig(presets["hard"] as? [String: Any]) == HuntConfig.hard)
+
+    var rngOK = true
+    for r in hRows(fx["rng"]) {
+        let seed = UInt64(hInt(r["seed"]))
+        var g = HuntRandom(seed: seed)
+        let u = (0..<3).map { _ in String(g.next64()) }
+        if u != (r["u64"] as? [String] ?? []) { rngOK = false }
+        var d = HuntRandom(seed: seed)
+        if hDoubles(r["doubles"]).contains(where: { $0 != d.nextDouble() }) { rngOK = false }
+        var n = HuntRandom(seed: seed)
+        let ints = (0..<5).map { _ in n.nextInt(0, 9) }
+        if ints != ((r["ints0to9"] as? [NSNumber]) ?? []).map(\.intValue) { rngOK = false }
+        var rg = HuntRandom(seed: seed)
+        if hDoubles(r["ranges"]).contains(where: { $0 != rg.range(-250, 250) }) { rngOK = false }
+    }
+    check("hunt: the random source is SplitMix64", rngOK)
+
+    var spansOK = true
+    for s in hRows(fx["spans"]) {
+        let text = hStr(s["text"])
+        let spans = HuntModel.charSpans(text, wpm: hNum(s["wpm"]), start: hNum(s["start"]))
+        let starts = hDoubles(s["starts"]), ends = hDoubles(s["ends"])
+        if spans.map({ String($0.ch) }).joined() != (s["chars"] as? [String] ?? []).joined() { spansOK = false }
+        for (i, sp) in spans.enumerated() where i < starts.count {
+            if !hClose(sp.start, starts[i]) || !hClose(sp.end, ends[i]) { spansOK = false }
+        }
+        if !hClose(HuntModel.txEnd(text, wpm: hNum(s["wpm"]), start: hNum(s["start"])), hNum(s["end"])) { spansOK = false }
+    }
+    check("hunt: character timing", spansOK)
+    check("hunt: pitch separation", hRows(fx["sep"]).allSatisfy { hClose(HuntModel.sep(hNum($0["diffHz"])), hNum($0["sep"])) })
+    check("hunt: copy odds", hRows(fx["odds"]).allSatisfy { o in
+        let others = hRows(o["others"]).map { HuntModel.Other(overlap: hNum($0["overlap"]), level: hNum($0["level"]), diffHz: hNum($0["diffHz"])) }
+        return hClose(HuntModel.oddsFor(level: hNum(o["level"]), qrn: hNum(o["qrn"]), others: others), hNum(o["odds"]))
+    })
+    var decodeOK = true
+    for d in hRows(fx["decode"]) {
+        let txs = hRows(d["txs"]).enumerated().map { (i, t) in
+            HuntTx(who: i, text: hStr(t["text"]), wpm: hNum(t["wpm"]), start: hNum(t["start"]), level: hNum(t["level"]), pitch: hNum(t["pitch"]))
+        }
+        var rng = HuntRandom(seed: UInt64(hInt(d["seed"])))
+        let want = d["decoded"] as? [String] ?? []
+        let mins = hDoubles(d["minOdds"])
+        for i in 0..<txs.count {
+            let got = HuntModel.decode(i, txs, qrn: hNum(d["qrn"]), bust: hNum(d["bust"]), rng: &rng)
+            if got.text != want[i] || !hClose(got.minOdds, mins[i]) { decodeOK = false }
+        }
+    }
+    check("hunt: decoding with a seed", decodeOK)
+    check("hunt: merged copies", hRows(fx["merge"]).allSatisfy {
+        HuntModel.mergeCopies($0["copies"] as? [String] ?? []) == hStr($0["merged"]) })
+    check("hunt: candidates and runs", hRows(fx["candidates"]).allSatisfy {
+        let m = HuntModel.candidateOf(hStr($0["decoded"]))
+        return m == hStr($0["merged"]) && HuntModel.isCandidate(m) == hBool($0["isCandidate"]) && HuntModel.longestRun(m) == hStr($0["run"])
+    })
+    check("hunt: who answers a query", hRows(fx["queries"]).allSatisfy {
+        let q = hStr($0["query"]), call = hStr($0["call"])
+        return HuntModel.answers(q, call: call) == hBool($0["answers"])
+            && OperatingProcedure.partialMatches(q, call: call) == hBool($0["partial"])
+            && HuntModel.nearMissQuery(q, call: call) == hBool($0["nearMiss"])
+            && HuntModel.looseMatch(q, call: call) == hBool($0["loose"])
+    })
+    check("hunt: exchange and sign-off forms", hRows(fx["exchangeForms"]).allSatisfy {
+        let t = hStr($0["text"]), st = hStr($0["state"])
+        return HuntModel.exchangeForm(t, state: st, myCall: hStr($0["call"]), actCall: hStr($0["activator"])).rawValue == hStr($0["form"])
+            && HuntModel.exchangeAccepts(t, state: st) == hBool($0["accepts"])
+            && HuntModel.signoffForm(t, myCall: hStr($0["call"])) == hBool($0["signoff"])
+    })
+    var huntersOK = true
+    for h in hRows(fx["hunters"]) {
+        let cfg = hConfig(h["config"] as? [String: Any])
+        var rng = HuntRandom(seed: UInt64(hInt(h["seed"])))
+        var taken = [hStr(h["myCall"])]
+        for w in hRows(h["hunters"]) {
+            let got = HuntModel.makeHunter(cfg, &rng, id: hInt(w["id"]), taken: taken)
+            taken.append(got.call)
+            if got.call != hStr(w["call"]) || got.type.rawValue != hStr(w["type"]) || got.state != hStr(w["state"])
+                || !hClose(got.wpm, hNum(w["wpm"])) || !hClose(got.offset, hNum(w["offset"]))
+                || !hClose(got.levelAct, hNum(w["levelAct"])) || !hClose(got.levelYou, hNum(w["levelYou"]))
+                || got.qsb != hBool(w["qsb"]) || got.repeats != hInt(w["repeats"]) { huntersOK = false }
+        }
+    }
+    check("hunt: hunters are generated from the seed", huntersOK)
+    var gradeOK = true
+    for g in hRows(fx["grades"]) {
+        let c = g["ctx"] as? [String: Any] ?? [:]
+        let ctx = HuntGradeContext(
+            kind: HuntKind(rawValue: hStr(c["kind"])) ?? .calling, query: hStr(c["query"]),
+            queryForYou: hBool(c["queryForYou"]), pickedIsYou: hBool(c["pickedIsYou"]), pileup: hBool(c["pileup"]),
+            myCall: hStr(c["myCall"]), myState: hStr(c["myState"]), actCall: hStr(c["actCall"]),
+            pickedCall: c["pickedCall"] as? String, activatorText: hStr(c["activatorText"]))
+        var you: HuntGradeSend?
+        if let y = g["you"] as? [String: Any] {
+            you = HuntGradeSend(text: hStr(y["text"]), delay: hNum(y["delay"]), offsetHz: hNum(y["offsetHz"]), late: hBool(y["late"]))
+        }
+        let want = hRows(g["expected"]).map { "\(hStr($0["code"]))|\(hBool($0["good"]))|\(hStr($0["lesson"]))" }
+        let points = HuntModel.grade(ctx, you)
+        let got = points.map { "\($0.code)|\($0.good)|\($0.lesson.rawValue)" }
+        if got != want { gradeOK = false; print("    grade case failed: \(hStr(g["name"]))") }
+    }
+    check("hunt: the grader", gradeOK)
+
+    for f in hRows(sx["sessions"]) {
+        let name = hStr(f["name"])
+        let s = HuntSession(config: hConfig(f["config"] as? [String: Any]), seed: UInt64(hInt(f["seed"])),
+                            myCall: hStr(f["myCall"]), myState: hStr(f["myState"]))
+        let turns = hRows(f["turns"]), records = hRows(f["records"])
+        var ok = true
+        var i = 0
+        while !s.ended && i < turns.count {
+            let want = turns[i]["turn"] as? [String: Any] ?? [:]
+            let t = s.turn
+            let wv = hRows(want["voices"])
+            if t.kind.rawValue != hStr(want["kind"]) || t.text != hStr(want["text"]) || t.query != hStr(want["query"])
+                || t.round != hInt(want["round"]) || !hClose(t.wpm, hNum(want["wpm"])) || t.voices.count != wv.count {
+                ok = false; print("    \(name) window \(i): turn differs"); break
+            }
+            for (k, w) in wv.enumerated() {
+                let v = t.voices[k]
+                if v.id != hInt(w["id"]) || v.call != hStr(w["call"]) || v.type.rawValue != hStr(w["type"]) || v.text != hStr(w["text"])
+                    || !hClose(v.wpm, hNum(w["wpm"])) || !hClose(v.offsetHz, hNum(w["offsetHz"]))
+                    || !hClose(v.levelAct, hNum(w["levelAct"])) || !hClose(v.levelYou, hNum(w["levelYou"]))
+                    || v.qsb != hBool(w["qsb"]) || !hClose(v.delay, hNum(w["delay"])) { ok = false }
+            }
+            let you = hPolicy(hStr(f["policy"]), s)
+            let wantYou = (turns[i]["you"] as? [String: Any])?["text"] as? String
+            if wantYou != you?.text { ok = false }
+            s.respond(you)
+            let r = records[i]
+            let rec = s.records[i]
+            if hHeard(hRows(r["activatorHeard"])) != rec.activatorHeard.map({ "\($0.who)|\($0.sent)|\($0.decoded)" })
+                || hHeard(hRows(r["youHeard"])) != rec.youHeard.map({ "\($0.who)|\($0.sent)|\($0.decoded)" })
+                || hRows(r["grade"]).map({ "\(hStr($0["code"]))|\(hBool($0["good"]))|\(hStr($0["lesson"]))" })
+                    != rec.grade.map({ "\($0.code)|\($0.good)|\($0.lesson.rawValue)" }) {
+                ok = false; print("    \(name) window \(i): record differs")
+            }
+            if !ok { break }
+            i += 1
+        }
+        check("hunt: session '\(name)' plays out as pinned",
+              ok && i == turns.count && s.ended && s.round == hInt(f["rounds"]) && s.outcome?.rawValue == hStr(f["outcome"]))
+    }
+    let quit = HuntSession(config: .easy, seed: 22, myCall: "W1AW", myState: "WI")
+    quit.quit()
+    quit.respond(HuntYouSend(text: "W1AW", wpm: 20, delay: 0.5, offsetHz: 60))
+    check("hunt: an ended session ignores further sends", quit.ended && quit.records.isEmpty && quit.outcome == .quit)
+} else {
+    check("hunt: fixtures load", false)
+}
+
 print("\n────────────────────────────")
 if failures == 0 {
     print("✅ All \(checks) checks passed.\n")

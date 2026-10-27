@@ -530,25 +530,29 @@ answer shows right or wrong, the explanation, and **"Lesson: Partial calls"**
 is stored but the day's practice; there is no best score (it is not a game,
 and not ranked).
 
-## The hunt simulator (follow-up, #313)
+## The hunt simulator (#313)
 
 Designed here so the first pull request's MorseKit pieces are shaped for it;
-built in its own issue.
+built in #313 (the logic first, then the screens). **Not ranked** (decided:
+maintainer, 2026-10-03; recorded on #313): it records no leaderboard entry and
+no `SessionRecord`, and its grading is about procedure, not speed.
 
 **What it is.** You are a hunter. A simulated activator runs a pileup on a
 simulated frequency, and you call, answer and sign off by keying (on-screen
 key, or a Vail / MIDI key, through the same `SendingKeyer` First Four uses).
 It reuses, not forks:
 
-- **The Pileup Runner's station generator** (`PileupEngine`'s callsign, speed,
-  level, offset, QSB and caller-cap logic, `fixtures/pileup-*.json`) for the
-  other hunters, through a new entry point that returns stations without an
-  engine in the activator's chair.
+- **The Pileup Runner's settings shape** (`PileupConfig`'s WPM range, tone
+  spread, QSB and noise) for the other hunters. It does *not* call
+  `CallsignGenerator` or `PileupEngine`'s `Random`: those use each platform's
+  own random source, so no seed could make three trees agree. The hunters come
+  from the simulator's own generator below (question 1).
 - **The pileup mixer** (`MorsePlayer.playPileup` on every port, which already
   takes per-voice frequency, timing, gain, delay and QSB, and materialises its
-  buffer on purpose — CLAUDE.md's standing trap).
+  buffer on purpose — CLAUDE.md's standing trap). The simulator never changes it.
 - **The lessons' rules** (partial matching, near-miss calls, the exchange) as
-  the grader's definitions of right.
+  the grader's definitions of right: `OperatingProcedure.partialMatches`,
+  `nearMiss` and `reply` / `replyBK`, and the offset maths.
 
 **Two mixes.** Every hunter has a level *at the activator* and a level *at
 you*. The activator decides from its mix (all hunters); you hear yours (a
@@ -556,35 +560,155 @@ subset: some hunters inaudible to you, some weaker). That is what makes
 one-sided contacts and "quiet" frequencies that are actually busy — the
 situations the when-to-call and is-it-me lessons are about.
 
-**The activator**, a state machine: `cq` → `listen` → `pick` (the strongest
-decodable call, or a partial) → `query` (`K9?`, or `?`) → `exchange` → `73 E E`
-→ `listen`. After failed tries it sends `SRI QRZ?`; occasionally `<AS>`.
+### The logic (stage 1), exactly
 
-**The copy model.** For each character a hunter sends, the activator decodes it
-with a probability from: that hunter's level over the noise; how much it
-overlaps another caller in time; and how close their pitches are (a caller
-within 20 Hz of another overlapping caller is "zero beat" with it and both are
-much harder to copy). Busted calls and partials then happen by themselves, and
-zero-beaters blur together. The probabilities are pinned in the fixture.
+Pure logic in `HuntSim` in each MorseKit (`ios/Sources/MorseKit/HuntSim.swift`,
+`android/…/morsekit/HuntSim.kt`, `desktop/…/morsekit/HuntSim.kt`), pinned by
+`fixtures/hunt-model.json` (the pieces) and `fixtures/hunt-sessions.json`
+(whole scripted sessions). Expected values were worked from this section by a
+reference script written separately from the ports; nothing was captured from
+a port. The three trees use only `+ - * / min max` on doubles in a fixed order,
+so they agree to the last bit.
 
-**Simulated hunter types:** good operator; repeater (sends their call
-twice or three times); tail-ender (calls before the current contact ends);
-zero-beater; `?`-sender; wrong-call responder (answers partials that aren't
-theirs); tune-up carrier; QRP (very weak at the activator).
+**Random source.** SplitMix64: `state += 0x9E3779B97F4A7C15`, then
+`z = (z ^ z>>30) * 0xBF58476D1CE4E5B9`, `z = (z ^ z>>27) * 0x94D049BB133111EB`,
+output `z ^ z>>31`, all mod 2^64. `nextDouble = (out >> 11) / 2^53`;
+`nextInt(lo, hi) = lo + floor(nextDouble * (hi-lo+1))` (inclusive);
+`range(a, b) = a + (b-a) * nextDouble`. A session is `(config, seed, your call,
+your state)`; same inputs, same session in every tree.
 
-**Grading**, per contact attempt: timing (calling over a contact makes the
-activator send `AGN?` to the other station, and counts against you);
-sending your full call once; partial handling (the partial-calls rule); offset (your
-XIT, from a control on screen, within 20–100 Hz in a pileup); the exchange
-(either accepted form).
+**Timing of a transmission.** Unit = `1.2 / wpm` s. A character is its dits
+(1) and dahs (3) plus 1 between elements; 3 between characters; 7 between
+words. A transmission `(text, wpm, start)` therefore gives every character a
+start and end second, and the whole transmission an end.
 
-**Difficulty:** pileup size, WPM, QSB/QRN, the percentage of hunters you can't
-hear, and the bust rate.
+**Copy odds** for one character of a transmission with effective level `L`
+(its level, times 0.6 when it fades with QSB), against band noise `qrn`:
 
-**Debrief:** a timeline of "what you heard" against "what the activator
-heard", contact by contact, with each grading point linked to its lesson.
+```
+base  = min(0.98, L / (L + 0.05 + qrn))
+for every other transmission j:
+    o     = fraction of this character's time that j is on the air
+    sep   = 1.0 if |pitch diff| <= 20 Hz, else max(0.15, 0.6 - (diff-20) * 0.0025)
+    mask  = min(1, 2*Lj / (Lj + L))
+    odds *= 1 - 0.9 * o * sep * mask
+```
 
-**Not ranked** (decided: maintainer, 2026-10-03; recorded on #313).
+So a caller within 20 Hz of an overlapping caller of equal strength keeps a
+tenth of its odds ("zero beat"), at 100 Hz about two thirds, and a station
+that is not on the air at the same moment costs nothing.
+
+**Decoding.** Each non-space character is drawn: `u < odds` copies it; else a
+second draw `v < bustRate` gives the wrong neighbour (`shift(c, +1)`, a bust),
+else a gap `?`. Repeats (`K1ABC K1ABC`) are merged position by position, the
+first non-gap wins. A decode is *a candidate* when it is 3+ characters long
+with a decoded digit and a decoded letter. The model's lowest per-character
+odds in the transmission decide the activator's doubt (below 0.6).
+
+**Hunters** (`makeHunter`, draws in this order): prefix (12 listed), digit,
+suffix length 2–3, suffix letters, a type roll 0–99, state (10 listed), WPM in
+the config range, a ±toneSpread offset, a level at the activator
+(`0.25 + 0.75a`, or `0.04 + 0.06a` for QRP), a factor 0.6–1.2 for the level at
+you, an inaudible roll (below `inaudiblePercent`: level at you 0), a QSB roll
+(half the hunters when QSB is on), a repeat count 2–3. Types, with weights out
+of 100: good operator 40, repeater 12 (sends CALL CALL or CALL CALL CALL),
+tail-ender 10, zero-beater 10 (offset 0), `?`-sender 6, wrong-call responder 8,
+tune-up carrier 4 (`TTTT`), QRP 10.
+
+**The activator**, turn by turn. Each turn is the activator's transmission and
+a *window* of the kind below, in which the hunters answer. You key at any time
+in the window (your delay is measured from the end of the activator); a send
+that starts after 3.5 s is late and not heard.
+
+- `calling` — after CQ, QRZ?, SRI QRZ? or a finished contact. Each hunter
+  calls with probability 0.8, at a delay of 0.2–1.4 s.
+- `query` — after `K1A?` (the longest unbroken run it copied, 2+ characters)
+  or `K1ABD?` (a full call it doubts). A hunter answers when the query
+  satisfies the partial-calls rule against its call, or is a full-looking
+  query (4+ characters) one edit from it (the near-miss rule). A wrong-call
+  responder also answers when the query's characters are merely in its call in
+  order.
+- `exchange` — after `CALL 5NN ST ST BK`. The picked hunter answers `5NN ST 73`
+  (delay 0.2–0.5 s); every tail-ender calls over it (delay 0–0.4 s).
+- `close` — after `YOURCALL TU 73 E E`, only when it was you: your sign-off.
+- `as` — the activator sent `<AS>`; nobody calls.
+
+After a `calling` or `query` window the activator copies every transmission,
+takes the candidates, and picks the one with the highest `level + 0.5 *
+random` (one draw each, in order). A full, valid call it is sure of (odds at
+or above 0.6, or already asked twice) goes to `exchange`; a full call it doubts
+is asked back with `?`; a partial with a run of 2+ is asked back as that run
+with `?` (asked twice at most, then it gives up); no candidate is a failed
+try. Two failed tries in a row make `SRI QRZ?` (and reset); otherwise `QRZ?`.
+Before any new calling prompt (not the first CQ, and never twice in a row),
+a draw below 0.1 sends `<AS>` first. In `exchange` the activator copies the
+picked station's reply: a hunter's is accepted when copied exactly; yours when
+copied with no gap or bust and containing a report (`5NN` or `599`) and your
+state. Otherwise it sends `AGN?` to that station (three tries, then it gives
+up and calls `QRZ?`). When a hunter's contact is done the hunter leaves and a
+new one joins, so the pileup stays its size. When yours is done the activator
+sends `YOURCALL TU 73 E E` and the `close` window ends the run: **logged**. A
+run ends after 60 windows (**timeout**) or when you quit.
+
+Calling over a contact needs no special rule: your transmission in the
+`exchange` window is just another one in the copy model, and it garbles the
+picked station's reply, so the activator sends `AGN?` — the "calling over a
+contact makes the activator send `AGN?` to the other station" behaviour is the
+model working, not a script.
+
+**The grader** (`HuntModel.grade`, one window at a time; each point carries
+the lesson that teaches it, and the debrief links there):
+
+| window you sent in | points |
+|---|---|
+| any, after 3.5 s | `timing.late` (bad, *when*) |
+| `calling` | `timing.ok`; your call exactly once and nothing else (`call.once` good, `call.repeated`, `call.extra`, `call.missing` bad; *once*); your offset (below) |
+| `query` the query fits you | `partial.answered` (or `near.answered` for a near miss, *me*); the same call check and offset check |
+| `query` it does not fit you | `partial.notMine` (bad, *partial*) |
+| `exchange`, you are picked | `exchange.ok` for `5NN ST 73` or `5NN ST BK` (after any calls or DE), else `exchange.form` (*exchange*) |
+| `exchange`, someone else is | `near.noQuestion` if it was a near miss of your call with no `?` (*me*), else `timing.over` (*when*) |
+| `close` | `signoff.ok` for `E E` or `73 E E`, else `signoff.form` (*exchange*) |
+| `as` | `as.ignored` (*signals*) |
+
+Silence is graded only where it is wrong: `partial.silent` (the query is yours
+and fits), `exchange.silent` (you were picked), `signoff.missing`. Offset: in
+a pileup (3+ hunters) your transmit offset must be 20–100 Hz either side
+(`offset.zeroBeat` below 20, `offset.far` above 100); with fewer than three
+hunters anything up to 100 Hz is fine. `offset.ok` is the good point.
+
+**Difficulty** (`HuntConfig`): pileup size 1–10 (default 4), hunter WPM range
+(18–24) and the activator's WPM (20), QSB, QRN 0–0.3, the percent of hunters
+you cannot hear (20), the bust rate (0.1), and your strength at the activator
+(0.6). Presets: easy (2 hunters, 14–18 WPM, none inaudible, no busts), medium
+(the defaults), hard (8 hunters, 22–30 WPM, QSB, QRN 0.15, 40% inaudible,
+busts 0.25).
+
+**Debrief.** Each window keeps `activatorHeard` (every transmission, as sent
+and as the activator copied it) and `youHeard` (the hunters you can hear, as
+the model copies them at your level), plus the grade points. The timeline is
+those records, window by window.
+
+**Simulated hunter types** and what each does to you are as listed above; the
+tail-ender and zero-beater are the two that make *you* wrong through the copy
+model alone.
+
+**Questions for the maintainer** (decided here as the simplest reading; say if
+any should change):
+
+1. **Hunter callsigns** come from the simulator's own seeded generator (12
+   prefixes, a digit, 2–3 letters), not `CallsignGenerator`, so a seed means
+   the same pileup in all three trees. The Pileup Runner's calls are
+   unchanged.
+2. **One contact per run.** A run is you getting into the log once (or giving
+   up); the pileup keeps working other hunters meanwhile.
+3. **The model's numbers** (noise floor 0.05, the 0.9 overlap weight, the
+   20 Hz zero-beat blur, doubt at 0.6, 60 windows) are first guesses nobody has
+   heard on air; they are constants in one place and the fixture pins them.
+4. **Hunter exchanges** are always `5NN ST 73`; yours may be either accepted
+   form, and the activator logs any copy with a report and your state, but
+   only the two forms grade as right.
+5. **Sign-off.** Staying silent after `TU 73 E E` is graded
+   (`signoff.missing`), since the lesson teaches sending the dits back.
 
 ## Where it lives
 
@@ -666,7 +790,7 @@ Operating Procedure section (site pull request linked from the app one).
   "What should you do?", the home card under First Four, the First Four
   links; READMEs and the guide. Closes #294 and
   #295's layers 1 and 2.
-- **Follow-up issue #313:** the hunt simulator (section 5), all three apps.
+- **Follow-up issue #313:** the hunt simulator (section 5), all three apps: the logic and fixtures first, then the screens.
 
 ## Decisions (maintainer, 2026-10-03)
 
