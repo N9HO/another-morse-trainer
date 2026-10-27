@@ -232,9 +232,7 @@ struct AsteroidsView: View {
     /// Drawn radius, in points, for a label: single characters small,
     /// fragments smaller, words wider for their letters.
     private static func radius(for a: Asteroid) -> CGFloat {
-        if a.isFragment { return 15 }
-        if a.label.count == 1 { return 19 }
-        return 16 + 6 * CGFloat(a.label.count)
+        CGFloat(AsteroidsHitTest.radiusDp(a))
     }
 
     private static func rockPath(centre: CGPoint, radius: CGFloat, id: Int, spin: Double) -> Path {
@@ -305,19 +303,17 @@ struct AsteroidsView: View {
     private func tapped(at location: CGPoint, in size: CGSize) {
         guard input == .copy, phase == .playing, let game else { return }
         let centre = CGPoint(x: size.width / 2, y: size.height / 2)
-        if hypot(location.x - centre.x, location.y - centre.y) <= 30 {
+        if hypot(location.x - centre.x, location.y - centre.y) <= CGFloat(AsteroidsHitTest.shipReachDp) {
             replayCue()
             return
         }
-        var best: (Asteroid, CGFloat)?
-        for a in field {
-            let p = Self.point(of: a, in: size)
-            let d = hypot(location.x - p.x, location.y - p.y)
-            if d <= Self.radius(for: a) + 14, best == nil || d < best!.1 { best = (a, d) }
-        }
-        guard let (target, _) = best else { return }
+        // Same geometry as the Kotlin ports, pinned by fixtures/asteroid-hit-test.json.
+        guard case .rock(let id) = AsteroidsHitTest.target(
+            x: Double(location.x), y: Double(location.y),
+            width: Double(size.width), height: Double(size.height),
+            density: 1, field: field) else { return }
         let now = Date()
-        let shot = game.tap(target.id)
+        let shot = game.tap(id)
         resolve(shot, now: now)
     }
 

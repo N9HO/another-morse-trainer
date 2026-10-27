@@ -1,0 +1,27 @@
+{
+  "$comment": [
+    "The Vail Adapter keyer modes (#348), in the order every Settings picker lists them,",
+    "pinned for all three ports: VailKeyerMode in ios/Sources/MorseKit/VailKeyerMode.swift",
+    "(MIDIOutput.KeyerMode is an alias), MidiKeyOutput.KeyerMode in",
+    "android/.../MidiKeyOutput.kt and desktop/.../MidiKeyOutput.kt.",
+    "Read by ios/Sources/MorseKitCheck/main.swift and KeyerModesTest.kt (android, desktop).",
+    "",
+    "Source: the Vail firmware's Program Change values (C0 vv). 'code' is that",
+    "value, the picker shows every entry in this order, and none may be dropped.",
+    "'adapterTimesSending' is false for the two modes where the contact keys",
+    "directly (Passthrough, Straight Key) and true for the adapter's own keyers.",
+    "Do not regenerate to make a failing test pass."
+  ],
+  "modes": [
+    { "code": 0, "name": "Passthrough",   "adapterTimesSending": false },
+    { "code": 1, "name": "Straight Key",  "adapterTimesSending": false },
+    { "code": 2, "name": "Bug",           "adapterTimesSending": true },
+    { "code": 3, "name": "Electric Bug",  "adapterTimesSending": true },
+    { "code": 4, "name": "Single Dot",    "adapterTimesSending": true },
+    { "code": 5, "name": "Ultimatic",     "adapterTimesSending": true },
+    { "code": 6, "name": "Plain Iambic",  "adapterTimesSending": true },
+    { "code": 7, "name": "Iambic A",      "adapterTimesSending": true },
+    { "code": 8, "name": "Iambic B",      "adapterTimesSending": true },
+    { "code": 9, "name": "Keyahead",      "adapterTimesSending": true }
+  ]
+}

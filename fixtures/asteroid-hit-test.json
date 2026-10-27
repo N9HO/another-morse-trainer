@@ -1,0 +1,234 @@
+{
+  "$comment": [
+    "CW Asteroids tap hit-testing (#350), pinned for all three ports:",
+    "AsteroidsHitTest in android/.../morsekit/Asteroids.kt and",
+    "desktop/.../morsekit/Asteroids.kt, and AsteroidsHitTest in",
+    "ios/Sources/MorseKit/Asteroids.swift. Read by AsteroidsTest.kt (android,",
+    "desktop) and ios/Sources/MorseKitCheck/main.swift.",
+    "",
+    "Expected values are worked out by hand from the rule below, not captured",
+    "from any port. Do not regenerate to make a failing test pass."
+  ],
+  "rule": [
+    "An asteroid sits at x = 0.5 + 0.5*(1-progress)*cos(angle), y likewise with sin,",
+    "times the field width/height in pixels. A tap within shipReachDp*density of",
+    "the field centre is the ship. Otherwise the asteroid whose centre is nearest",
+    "the tap and within (radiusDp + reachPaddingDp)*density is tapped. radiusDp:",
+    "fragment 15, one-character label 19, longer label 16 + 6*length. Else nothing."
+  ],
+  "shipReachDp": 30,
+  "reachPaddingDp": 14,
+  "width": 1000,
+  "height": 800,
+  "asteroids": [
+    {
+      "id": 1,
+      "label": "K",
+      "angleOverPi": 0.0,
+      "progress": 0.5,
+      "fragment": false,
+      "at": [
+        750,
+        400
+      ],
+      "radiusDp": 19
+    },
+    {
+      "id": 2,
+      "label": "R",
+      "angleOverPi": 1.0,
+      "progress": 0.5,
+      "fragment": false,
+      "at": [
+        250,
+        400
+      ],
+      "radiusDp": 19
+    },
+    {
+      "id": 3,
+      "label": "CQ",
+      "angleOverPi": 0.5,
+      "progress": 0.5,
+      "fragment": false,
+      "at": [
+        500,
+        600
+      ],
+      "radiusDp": 28
+    },
+    {
+      "id": 4,
+      "label": "5",
+      "angleOverPi": -0.5,
+      "progress": 0.5,
+      "fragment": true,
+      "at": [
+        500,
+        200
+      ],
+      "radiusDp": 15
+    },
+    {
+      "id": 5,
+      "label": "M",
+      "angleOverPi": 0.0,
+      "progress": 0.45,
+      "fragment": false,
+      "at": [
+        775,
+        400
+      ],
+      "radiusDp": 19
+    }
+  ],
+  "taps": [
+    {
+      "x": 750,
+      "y": 400,
+      "density": 1,
+      "expect": "rock:1",
+      "note": "dead centre of K"
+    },
+    {
+      "x": 250,
+      "y": 400,
+      "density": 1,
+      "expect": "rock:2",
+      "note": "dead centre of R"
+    },
+    {
+      "x": 500,
+      "y": 400,
+      "density": 1,
+      "expect": "ship",
+      "note": "the ship"
+    },
+    {
+      "x": 529,
+      "y": 400,
+      "density": 1,
+      "expect": "ship",
+      "note": "29 from centre, inside 30"
+    },
+    {
+      "x": 531,
+      "y": 400,
+      "density": 1,
+      "expect": "none",
+      "note": "31 from centre, outside 30, clear of every asteroid"
+    },
+    {
+      "x": 500,
+      "y": 400,
+      "density": 2,
+      "expect": "ship",
+      "note": "ship reach scales with density"
+    },
+    {
+      "x": 555,
+      "y": 400,
+      "density": 2,
+      "expect": "ship",
+      "note": "55 from centre, inside 30*2=60"
+    },
+    {
+      "x": 565,
+      "y": 400,
+      "density": 2,
+      "expect": "none",
+      "note": "65 from centre, outside 60"
+    },
+    {
+      "x": 500,
+      "y": 640,
+      "density": 1,
+      "expect": "rock:3",
+      "note": "40 below CQ, inside 28+14=42"
+    },
+    {
+      "x": 500,
+      "y": 644,
+      "density": 1,
+      "expect": "none",
+      "note": "44 below CQ, outside 42"
+    },
+    {
+      "x": 500,
+      "y": 229,
+      "density": 1,
+      "expect": "rock:4",
+      "note": "29 below fragment 5, inside 15+14=29"
+    },
+    {
+      "x": 500,
+      "y": 231,
+      "density": 1,
+      "expect": "none",
+      "note": "31 below fragment 4, outside 29"
+    },
+    {
+      "x": 500,
+      "y": 171,
+      "density": 1,
+      "expect": "rock:4",
+      "note": "29 above fragment 5, inside 29"
+    },
+    {
+      "x": 500,
+      "y": 169,
+      "density": 1,
+      "expect": "none",
+      "note": "31 above fragment 5, outside 29"
+    },
+    {
+      "x": 782,
+      "y": 400,
+      "density": 1,
+      "expect": "rock:5",
+      "note": "7 right of M(775), and 32 from K: nearest is M"
+    },
+    {
+      "x": 760,
+      "y": 400,
+      "density": 1,
+      "expect": "rock:1",
+      "note": "10 from K, 15 from M: nearest wins"
+    },
+    {
+      "x": 765,
+      "y": 400,
+      "density": 1,
+      "expect": "rock:5",
+      "note": "15 from K, 10 from M: nearest wins"
+    },
+    {
+      "x": 810,
+      "y": 400,
+      "density": 1,
+      "expect": "none",
+      "note": "35 from M, outside 33"
+    },
+    {
+      "x": 810,
+      "y": 400,
+      "density": 2,
+      "expect": "rock:5",
+      "note": "35 from M, inside 33*2=66"
+    },
+    {
+      "x": 100,
+      "y": 100,
+      "density": 1,
+      "expect": "none",
+      "note": "empty space"
+    }
+  ],
+  "emptyField": {
+    "x": 500,
+    "y": 600,
+    "density": 1,
+    "expect": "none",
+    "note": "no asteroids at all"
+  }
+}
