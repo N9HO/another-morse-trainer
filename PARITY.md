@@ -92,6 +92,17 @@ cannot do, and why (details in `docs/desktop-design.md` §2).
 | Daily Dit's "your device is muted" prompt before a listen (#252) | desktop | Java has no portable way to read the system output volume or mute state on Windows or Linux. | Every Play plays; the listen is spent as usual. |
 | Spoken read-back inside the Flatpak | desktop (Linux, Flatpak) | The sandbox has no speech engine; Windows (System.Speech) and a Linux install with `spd-say` or `espeak-ng` do speak. | Shows the text. Bundling espeak-ng is a follow-up. |
 
+#### Daily Comprehension (#353)
+
+Shipped on iOS, Android and desktop in one change; no platform exceptions.
+Each tree reads its own generated copy of `fixtures/comprehension-bank.json`
+(`ios/tools/gen_comprehension_bank.py`), and each has a test that the copy
+equals the fixture. Platform idiom only: desktop adds A-D / 1-4 / Enter on the
+keyboard; the phones answer by tap or by keying A-D on a hardware key (all
+three). The "your device is muted" prompt (#252) is not part of this mode on
+any app, since listens are free and uncounted for scoring. The user guide needs
+a Daily Comprehension section (see `docs/daily-comprehension-design.md`).
+
 ### Same feature, platform mechanism (not gaps)
 
 Listed so nobody "ports" one side's plumbing to the other, or reads it as a

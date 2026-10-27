@@ -90,6 +90,12 @@ the iOS app's navy/teal look.
   short words and callsigns that split into their characters when hit.
   Waves, lives, combos, three difficulties, a gentle speed ramp in hear-it
   mode, and every hit and miss feeds your stats
+- **Daily Comprehension**: a card on Home under Daily Dit. One short
+  sentence a day (about five words, the same for everyone on a date) is sent
+  in Morse at your own speed, then you answer a four-option question about it
+  (A-D) instead of copying it letter for letter. Replay as often as you like,
+  one answer a day; it keeps your daily streak going and is not ranked on the
+  leaderboard
 - **First Four**: just enough CW for a brand-new operator to hunt one POTA
   activator — enter your callsign and state, then hear and send your call,
   your state, ? and 73, and work through three short scenes: a busted call

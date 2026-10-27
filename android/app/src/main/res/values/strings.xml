@@ -646,6 +646,24 @@
     <string name="start_here_know_title">Already know some Morse?</string>
     <string name="start_here_know_body">Open Settings › Characters &amp; Lessons › Proficiency and tell it what you already know. That sets your starting character set instead of making you re-earn A and N. Comfortable with the whole alphabet? Skip Journey and go straight to Common Words, Rapid Fire, or Pileup Runner.</string>
     <!-- Daily Dit: the shared daily puzzle (#155) -->
+    <!-- Daily Comprehension (#353) -->
+    <string name="daily_comprehension_title">Daily Comprehension</string>
+    <string name="daily_comprehension_home_sub_new">Today\'s sentence in Morse, then a question about it</string>
+    <string name="daily_comprehension_home_sub_correct">#%1$d answered correctly · %2$s</string>
+    <string name="daily_comprehension_home_sub_answered">#%1$d answered · %2$s</string>
+    <string name="daily_comprehension_puzzle_number">Puzzle #%1$d</string>
+    <string name="daily_comprehension_play">Play the sentence</string>
+    <string name="daily_comprehension_choose">Choose an answer</string>
+    <string name="daily_comprehension_answer">Answer %1$s</string>
+    <string name="daily_comprehension_correct">Correct</string>
+    <string name="daily_comprehension_wrong">Not quite</string>
+    <string name="daily_comprehension_as_sent">The sentence, as sent. Come back tomorrow for the next one.</string>
+    <string name="daily_comprehension_option_description">Option %1$s: %2$s</string>
+    <string name="daily_comprehension_how_it_works">Listen to the sentence as often as you like, then answer the question about it. You don\'t have to copy every letter, only understand it. You get one answer a day. It keeps your daily streak going; it isn\'t ranked on the leaderboard.</string>
+    <plurals name="daily_comprehension_listens">
+        <item quantity="one">%1$d listen</item>
+        <item quantity="other">%1$d listens</item>
+    </plurals>
     <string name="daily_dit_title">Daily Dit</string>
     <string name="daily_dit_home_sub_new">Today\'s word in Morse — your speed, up to %1$d WPM</string>
     <string name="daily_dit_home_sub_progress">#%1$d · %2$s · %3$s so far</string>
