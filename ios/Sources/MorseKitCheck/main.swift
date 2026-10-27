@@ -3343,6 +3343,73 @@ if let fx = loadLadderFixture() {
     check("fixtures/ladder.json loads and decodes", false)
 }
 
+// MARK: - Studied characters fixture (row-15)
+//
+// fixtures/gap-stats-studied.json, read by this harness and by the android and
+// desktop StudiedCharactersTest. The studied set is the Koch active set.
+struct StudiedFixture: Decodable {
+    struct Case: Decodable {
+        let name: String
+        let proficiency: String
+        let unlocks: Int
+        let selectedPunctuation: String
+        let optedOut: String
+        let statsOnly: String
+        let studied: String
+    }
+    let cases: [Case]
+}
+
+print("\nStudied characters (fixtures/gap-stats-studied.json):")
+do {
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent()
+        .deletingLastPathComponent().deletingLastPathComponent()
+    let url = root.appendingPathComponent("fixtures/gap-stats-studied.json")
+    if let data = try? Data(contentsOf: url),
+       let fx = try? JSONDecoder().decode(StudiedFixture.self, from: data) {
+        var allOK = true
+        for c in fx.cases {
+            let koch = Array(MorseCode.kochOrder)
+            let letters = koch.filter { $0.isLetter }
+            let seed: [Character]
+            switch c.proficiency {
+            case "none": seed = Array(koch.prefix(2))
+            case "someLetters": seed = Array(letters.prefix(13))
+            case "allLetters": seed = letters
+            default: seed = koch
+            }
+            let eng = TrainerEngine(seedCount: 2, rng: SeededRNG(seed: 9))
+            eng.setActiveCharacters(seed)
+            // Opt in (appended at once), then unlock from the ladder.
+            let order = MorseCode.studyOrder(withPunctuation: Set(c.selectedPunctuation))
+            _ = eng.applyStudyOrder(order)
+            for _ in 0..<c.unlocks {
+                if let next = eng.studyOrder.first(where: { !eng.activeCharacters.contains($0) }) {
+                    eng.addActiveCharacter(next)
+                }
+            }
+            if !c.optedOut.isEmpty {
+                let remaining = Set(c.selectedPunctuation).subtracting(Set(c.optedOut))
+                _ = eng.applyStudyOrder(MorseCode.studyOrder(withPunctuation: remaining))
+            }
+            // Stats-only characters: recorded data but never part of the set.
+            for ch in c.statsOnly where !eng.activeCharacters.contains(ch) {
+                eng.addActiveCharacter(ch)
+                eng.removeActiveCharacter(ch)
+            }
+            let got = String(SendingDrill.studiedCharacters(of: eng))
+            if got != c.studied {
+                print("      ↳ \(c.name): got '\(got)', fixture says '\(c.studied)'")
+                allOK = false
+            }
+        }
+        check("studied characters are the Koch active set for all \(fx.cases.count) fixture cases", allOK)
+    } else {
+        check("fixtures/gap-stats-studied.json loads and decodes", false)
+    }
+}
+
 // An opted-in mark is on the ladder's tail as well as in the active set, so
 // with all three opted in the singles stage completes at 40 characters, not
 // 37: the marks have to be mastered like anything else. Driving the ladder
