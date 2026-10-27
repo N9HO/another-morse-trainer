@@ -8961,6 +8961,65 @@ if let fx = loadGapLbFixture("gap-lb-result-line.json"), let cases = fx["cases"]
     }
 } else {
     check("fixtures/gap-lb-result-line.json loads and decodes", false)
+// The Sending Analyzer's key merge and microphone state (parity rows 22-24),
+// against fixtures/gap-analyzer-merge.json and gap-analyzer-mic-state.json —
+// the same files the Kotlin GapAnalyzerTest reads on Android and desktop.
+print("\nSending Analyzer key merge and mic state (fixtures/gap-analyzer-*.json):")
+func loadGapFixtureObject(_ name: String) -> [String: Any]? {
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent()
+        .deletingLastPathComponent().deletingLastPathComponent()
+    guard let data = try? Data(contentsOf: root.appendingPathComponent("fixtures/\(name)")) else { return nil }
+    return (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+}
+if let fx = loadGapFixtureObject("gap-analyzer-merge.json"),
+   let cases = fx["cases"] as? [[String: Any]], !cases.isEmpty {
+    for c in cases {
+        let name = c["name"] as? String ?? "?"
+        let steps = c["steps"] as? [[String]] ?? []
+        let expect = c["expect"] as? [Any] ?? []
+        var merge = KeyMerge<String>()
+        var ok = !steps.isEmpty && steps.count == expect.count
+        if ok {
+            for (i, step) in steps.enumerated() where step.count == 2 {
+                let got: Bool?
+                switch step[1] {
+                case "down": got = merge.update(step[0], isDown: true)
+                case "up": got = merge.update(step[0], isDown: false)
+                case "releaseAll": got = merge.releaseAll()
+                default: got = nil; ok = false
+                }
+                let gotText: String? = got.map { $0 ? "down" : "up" }
+                let wantText = expect[i] as? String   // NSNull -> nil
+                if gotText != wantText { ok = false }
+            }
+        }
+        check("key merge: \(name)", ok)
+    }
+} else {
+    check("fixtures/gap-analyzer-merge.json loads and decodes", false)
+}
+if let fx = loadGapFixtureObject("gap-analyzer-mic-state.json"),
+   let cases = fx["cases"] as? [[String: Any]], !cases.isEmpty {
+    for c in cases {
+        let name = c["name"] as? String ?? "?"
+        let steps = c["steps"] as? [String] ?? []
+        let expect = c["expect"] as? [[Bool]] ?? []
+        var state = MicInputState()
+        var ok = !steps.isEmpty && steps.count == expect.count
+        if ok {
+            for (i, code) in steps.enumerated() {
+                guard let event = MicEvent(rawValue: code) else { ok = false; break }
+                state = state.after(event)
+                if expect[i].count != 2 || state.isListening != expect[i][0] || state.micDenied != expect[i][1] {
+                    ok = false
+                }
+            }
+        }
+        check("mic state: \(name)", ok)
+    }
+} else {
+    check("fixtures/gap-analyzer-mic-state.json loads and decodes", false)
 }
 
 print("\n────────────────────────────")

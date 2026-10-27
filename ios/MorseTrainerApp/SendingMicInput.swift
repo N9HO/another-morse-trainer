@@ -28,6 +28,9 @@ final class SendingMicInput: ObservableObject {
     /// Key edges, in ms since listening started.
     var onEdge: ((_ isDown: Bool, _ atMs: Double) -> Void)?
 
+    /// The two flags above move by MorseKit's `MicInputState` (pinned by
+    /// `fixtures/gap-analyzer-mic-state.json`, row-22/24 of the parity audit).
+    private var state = MicInputState()
     private let audioEngine = AVAudioEngine()
     private let box = DetectorBox()
     private var sessionClaim: AudioSession.Claim?
@@ -50,6 +53,12 @@ final class SendingMicInput: ObservableObject {
         if let sessionClaim { AudioSession.shared.release(sessionClaim) }
     }
 
+    private func transition(_ event: MicEvent) {
+        state = state.after(event)
+        isListening = state.isListening
+        micDenied = state.micDenied
+    }
+
     /// Ask for the microphone (first run only) and start listening.
     func start(sensitivity: Double, manualPitchHz: Double?) {
         guard !isListening else { return }
@@ -58,7 +67,7 @@ final class SendingMicInput: ObservableObject {
         case .granted:
             begin(sensitivity: sensitivity, manualPitchHz: manualPitchHz)
         case .denied:
-            micDenied = true
+            transition(.startDenied)
         case .undetermined:
             session.requestRecordPermission { [weak self] granted in
                 Task { @MainActor in
@@ -66,19 +75,25 @@ final class SendingMicInput: ObservableObject {
                     if granted {
                         self.begin(sensitivity: sensitivity, manualPitchHz: manualPitchHz)
                     } else {
-                        self.micDenied = true
+                        self.transition(.startDenied)
                     }
                 }
             }
         @unknown default:
-            micDenied = true
+            transition(.startDenied)
         }
     }
 
     func stop() {
+        teardown()
+        transition(.stop)
+    }
+
+    /// Everything `stop` does except the flag change, so a failed start can
+    /// report `startFailed` (which, unlike `stop`, also clears a denial).
+    private func teardown() {
         if audioEngine.isRunning { audioEngine.stop() }
         audioEngine.inputNode.removeTap(onBus: 0)
-        isListening = false
         toneOn = false
         level = 0
         if let claim = sessionClaim {
@@ -91,13 +106,12 @@ final class SendingMicInput: ObservableObject {
     func setSensitivity(_ snr: Double) { box.requestSNR(snr) }
 
     private func begin(sensitivity: Double, manualPitchHz: Double?) {
-        micDenied = false
         sessionClaim = AudioSession.shared.claim(.recording)
         let input = audioEngine.inputNode
         let format = input.outputFormat(forBus: 0)
         // A dead input route reports a 0 Hz format; a tap on it crashes.
         guard format.sampleRate >= 6000, format.channelCount > 0 else {
-            stop(); return
+            teardown(); transition(.startFailed); return
         }
         box.configure(sampleRate: format.sampleRate, snr: sensitivity, pitchHz: manualPitchHz)
         let box = self.box
@@ -108,10 +122,10 @@ final class SendingMicInput: ObservableObject {
         audioEngine.prepare()
         do { try audioEngine.start() } catch {
             input.removeTap(onBus: 0)
-            stop()
+            teardown(); transition(.startFailed)
             return
         }
-        isListening = true
+        transition(.startGranted)
     }
 
     private func apply(_ update: DetectorBox.Update) {

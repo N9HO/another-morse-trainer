@@ -4,6 +4,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableDoubleStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import app.anothermorsetrainer.morsekit.MicEvent
+import app.anothermorsetrainer.morsekit.MicInputState
 import app.anothermorsetrainer.morsekit.ToneKeyingDetector
 
 /**
@@ -18,6 +20,13 @@ import app.anothermorsetrainer.morsekit.ToneKeyingDetector
  * sample count, so they are as accurate as the detector, not as late as the
  * main thread. Port of the iOS `SendingMicInput`; on desktop the capture is a
  * Java Sound [PcmIn], and [micDenied] means no input line could be opened.
+ *
+ * The two flags move by [MicInputState] (pinned by
+ * `fixtures/gap-analyzer-mic-state.json`). Desktop has no audio session to
+ * interrupt and no route-change notification the JVM can observe, so the one
+ * "lost" event it can see is the capture line dying under the reader (a USB
+ * microphone unplugged on a platform that reports it): that stops the
+ * microphone as the iOS route loss does, and it does not restart by itself.
  *
  * Nobody has keyed real hardware into this yet: the detector is pinned by a
  * synthetic fixture, and the capture has only been compiled.
@@ -43,6 +52,7 @@ class SendingMicInput {
     /** Key edges (on the main thread), in ms since listening started. */
     var onEdge: ((isDown: Boolean, atMs: Double) -> Unit)? = null
 
+    private var state = MicInputState()
     private val main = MainHandler()
     private var record: PcmIn? = null
     private var thread: Thread? = null
@@ -50,13 +60,22 @@ class SendingMicInput {
     /** Picked up by the capture thread at the start of its next buffer. */
     @Volatile private var pendingSnr: Double? = null
 
-    /** Start listening. */
+    private fun transition(event: MicEvent) {
+        state = state.after(event)
+        isListening = state.isListening
+        micDenied = state.micDenied
+    }
+
+    /**
+     * Start listening. The JVM cannot tell a refused microphone from a missing
+     * one (the open just fails), so a line that will not open is reported as
+     * [MicEvent.START_DENIED] and the notice names both causes.
+     */
     fun start(snr: Double) {
         if (isListening) return
-        micDenied = false
 
         val audio = PcmIn.open(intArrayOf(48_000, 44_100, 16_000), 4 * 1024) ?: run {
-            micDenied = true
+            transition(MicEvent.START_DENIED)
             return
         }
         val rate = audio.sampleRate
@@ -69,7 +88,11 @@ class SendingMicInput {
             val buffer = FloatArray(1024)
             while (running) {
                 val n = audio.read(buffer, buffer.size)
-                if (n < 0) break
+                if (n < 0) {
+                    // The line died under us (not a stop(): that clears `running` first).
+                    main.post { if (running) shutDown(MicEvent.ROUTE_LOST) }
+                    break
+                }
                 if (n == 0) continue
                 pendingSnr?.let { detector.snr = it; pendingSnr = null }
                 val edges = detector.process(buffer, n)
@@ -92,10 +115,12 @@ class SendingMicInput {
         t.name = "sending-mic-capture"
         thread = t
         t.start()
-        isListening = true
+        transition(MicEvent.START_GRANTED)
     }
 
-    fun stop() {
+    fun stop() = shutDown(MicEvent.STOP)
+
+    private fun shutDown(event: MicEvent) {
         running = false
         // Stop the record before joining: stop() is what unblocks a blocking
         // read. Release only after the thread is out.
@@ -104,7 +129,7 @@ class SendingMicInput {
         thread = null
         record?.close()
         record = null
-        isListening = false
+        transition(event)
         toneOn = false
         level = 0.0
     }
