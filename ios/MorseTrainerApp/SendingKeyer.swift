@@ -58,7 +58,9 @@ final class SendingKeyer: ObservableObject {
     /// dit and dah squeezed together, or a release that overlaps the next
     /// press, must not cut the tone short on the first note-off (Android
     /// `MidiKeyInput.updateHeld`). The on-screen key counts as `.straight`.
-    private var heldKeys = Set<MIDIInput.Key>()
+    /// The merge rule is MorseKit's `KeyMerge`, pinned by
+    /// `fixtures/gap-analyzer-merge.json` (row-23 of the parity audit).
+    private var keyMerge = KeyMerge<MIDIInput.Key>()
     /// When the first of the held paddles went down; the burst is timed from
     /// here to the release of the last one.
     private var keyDownAtMs: Int64?
@@ -183,6 +185,8 @@ final class SendingKeyer: ObservableObject {
         idleTask = nil
         midi = nil
         midiOutput = nil
+        keyMerge.releaseAll()
+        keyDownAtMs = nil
         stopSidetone()
     }
 
@@ -230,10 +234,7 @@ final class SendingKeyer: ObservableObject {
     private func handle(key: MIDIInput.Key, isDown: Bool, atMs ms: Int64) {
         // Aggregate per-paddle state into one logical key: down while ANY
         // paddle is held, up only when the last one releases.
-        let wasHeld = !heldKeys.isEmpty
-        if isDown { heldKeys.insert(key) } else { heldKeys.remove(key) }
-        let nowHeld = !heldKeys.isEmpty
-        guard nowHeld != wasHeld else { return }
+        guard let nowHeld = keyMerge.update(key, isDown: isDown) else { return }
         edgeCount &+= 1
         onEdge?(nowHeld, ms)
         if nowHeld {
