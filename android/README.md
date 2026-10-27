@@ -133,6 +133,11 @@ the iOS app's navy/teal look.
 - **On-screen paddles**: the on-screen key can be a straight key or a pair of
   touch paddles with a built-in Iambic A / Iambic B / Ultimatic keyer, dit and
   dah memory, and a left-handed swap — wherever you key on screen
+- **Continue with the key after a miss**: in the keyed-answer modes
+  (Characters with "Key answers", Sending Practice), keying the correct
+  answer again after a miss acts as Next, so you never leave the key; a wrong
+  re-key is ignored. Next still works, and Settings › Keys & Sending can turn
+  it off
 - **A hardware key wherever you type**: a Vail Adapter or other MIDI key
   also works in the Pileup Runner and Contest (what you key goes in the box
   and is sent when you stop keying; key CQ to call CQ), Type It, QRQ Speed,

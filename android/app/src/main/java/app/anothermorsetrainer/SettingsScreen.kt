@@ -2325,6 +2325,30 @@ private fun OnScreenKeySetting() {
                 )
             }
         }
+        // #352, #347: after a keyed miss, keying the right answer is Next.
+        Spacer(Modifier.height(6.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                stringResource(R.string.settings_continue_after_miss),
+                color = Brand.textPrimary,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.weight(1f)
+            )
+            Switch(
+                checked = Settings.continueAfterMiss,
+                onCheckedChange = { Settings.updateContinueAfterMiss(it) },
+                colors = switchColors()
+            )
+        }
+        Text(
+            stringResource(R.string.settings_continue_after_miss_hint),
+            color = Brand.textSecondary,
+            fontSize = 12.sp
+        )
     }
 }
 
