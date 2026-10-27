@@ -980,21 +980,25 @@ fun SettingsScreen(
                                         colors = switchColors()
                                     )
                                 }
-                                if (Settings.leaderboardEnabled) {
+                                // Shown with Share scores off too, as on iOS (gap row-06):
+                                // the name is what buddy pairing shares, and scores posted
+                                // earlier can still be deleted.
+                                if (Leaderboard.showsNameAndDeleteRows(Settings.leaderboardEnabled)) {
                                     GroupDivider()
-                                    val nameOk = Leaderboard.isValidDisplayName(Settings.leaderboardName)
+                                    val nameProblem = Leaderboard.displayNameProblem(Settings.leaderboardName)
+                                        .takeIf { Settings.leaderboardName.isNotEmpty() }
                                     OutlinedTextField(
                                         value = Settings.leaderboardName,
                                         onValueChange = { Settings.updateLeaderboardName(it) },
                                         label = { Text(stringResource(R.string.settings_leaderboard_name)) },
                                         placeholder = { Text(stringResource(R.string.settings_leaderboard_name_hint)) },
                                         singleLine = true,
-                                        isError = Settings.leaderboardName.isNotEmpty() && !nameOk,
+                                        isError = nameProblem != null,
                                         modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)
                                     )
-                                    if (!nameOk) {
+                                    if (nameProblem != null) {
                                         Text(
-                                            stringResource(R.string.settings_leaderboard_name_invalid),
+                                            nameProblem,
                                             color = Brand.warning, fontSize = 12.sp,
                                             modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp)
                                         )

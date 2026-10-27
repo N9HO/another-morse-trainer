@@ -8837,6 +8837,65 @@ if let fx = loadGapLbFixture("gap-lb-daily-dit-card.json"), let cases = fx["case
     check("fixtures/gap-lb-daily-dit-card.json loads and decodes", false)
 }
 
+print("\nLeaderboard display-name rule, against fixtures/gap-lb-display-name.json:")
+if let fx = loadGapLbFixture("gap-lb-display-name.json"), let cases = fx["cases"] as? [[String: Any]] {
+    check("display-name fixture has 23 cases", cases.count == 23)
+    for c in cases {
+        let raw = c["raw"] as? String ?? "?"
+        let problem = c["problem"] as? String
+        check("display-name problem: '\(raw)'", LeaderboardDisplayName.problem(with: raw) == problem)
+        check("display-name valid: '\(raw)'", LeaderboardDisplayName.isValid(raw) == (problem == nil))
+        if let want = c["normalized"] as? String {
+            check("display-name normalized: '\(raw)'", LeaderboardDisplayName.normalize(raw) == want)
+        }
+    }
+} else {
+    check("fixtures/gap-lb-display-name.json loads and decodes", false)
+}
+
+print("\nLeaderboard metric display, against fixtures/gap-lb-metric.json:")
+if let fx = loadGapLbFixture("gap-lb-metric.json"), let cases = fx["cases"] as? [[String: Any]] {
+    check("metric fixture has 8 cases", cases.count == 8)
+    for c in cases {
+        let metric = (c["metric"] as? NSNumber)?.doubleValue ?? -1
+        let body: [String: Any] = ["rank": 1, "displayName": "X", "metric": metric, "platform": "ios", "date": "2026-01-01"]
+        if let data = try? JSONSerialization.data(withJSONObject: body),
+           let row = try? JSONDecoder().decode(LeaderboardBoardRow.self, from: data) {
+            check("metric label \(metric)", row.metricLabel == c["expected"] as? String)
+        } else {
+            check("metric row decodes for \(metric)", false)
+        }
+    }
+} else {
+    check("fixtures/gap-lb-metric.json loads and decodes", false)
+}
+
+print("\nLeaderboard post-run line, against fixtures/gap-lb-result-line.json:")
+if let fx = loadGapLbFixture("gap-lb-result-line.json"), let cases = fx["cases"] as? [[String: Any]] {
+    check("result-line fixture has 6 cases", cases.count == 6)
+    for c in cases {
+        let reason = c["reason"] as? String ?? ""
+        let line: (headline: String, detail: String?)
+        switch c["kind"] as? String ?? "" {
+        case "pending": line = LeaderboardResultLine.pending()
+        case "posted":
+            // The model rounds the server's metric before it reaches the card.
+            let metric = Int(((c["metric"] as? NSNumber)?.doubleValue ?? 0).rounded())
+            line = LeaderboardResultLine.posted(rank: (c["rank"] as? NSNumber)?.intValue ?? -1, metric: metric,
+                                                correct: (c["correct"] as? NSNumber)?.intValue ?? -1,
+                                                total: (c["total"] as? NSNumber)?.intValue ?? -1,
+                                                personalBest: (c["personalBest"] as? NSNumber)?.boolValue ?? false)
+        case "refused": line = LeaderboardResultLine.refused(reason)
+        default: line = LeaderboardResultLine.unavailable(reason)
+        }
+        let name = c["name"] as? String ?? "?"
+        check("result line headline: \(name)", line.headline == c["headline"] as? String)
+        check("result line detail: \(name)", line.detail == c["detail"] as? String)
+    }
+} else {
+    check("fixtures/gap-lb-result-line.json loads and decodes", false)
+}
+
 print("\n────────────────────────────")
 if failures == 0 {
     print("✅ All \(checks) checks passed.\n")

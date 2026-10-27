@@ -1,0 +1,58 @@
+{
+  "$comment": "Post-run leaderboard line (gap row-07), read by ios MorseKitCheck and android/desktop JUnit. Data, not code. Rule (the iOS summary card): accepted run -> headline 'Leaderboard: #<rank> · <metric rounded>' and detail '[New personal best · ]<correct>/<total> graded correct'; the server's verdict against the run -> 'Leaderboard: not ranked' + the reason; the device/network/name getting in the way -> 'Leaderboard: not posted' + the reason; in flight -> 'Leaderboard: posting…'. On Android the line is headline + newline + detail.",
+  "cases": [
+    {
+      "name": "pending",
+      "kind": "pending",
+      "headline": "Leaderboard: posting…",
+      "detail": null
+    },
+    {
+      "name": "posted, not a best",
+      "kind": "posted",
+      "rank": 12,
+      "metric": 340.0,
+      "correct": 9,
+      "total": 10,
+      "personalBest": false,
+      "headline": "Leaderboard: #12 · 340",
+      "detail": "9/10 graded correct"
+    },
+    {
+      "name": "posted, new personal best",
+      "kind": "posted",
+      "rank": 1,
+      "metric": 1500.0,
+      "correct": 30,
+      "total": 30,
+      "personalBest": true,
+      "headline": "Leaderboard: #1 · 1500",
+      "detail": "New personal best · 30/30 graded correct"
+    },
+    {
+      "name": "posted, metric rounds to nearest",
+      "kind": "posted",
+      "rank": 7,
+      "metric": 339.6,
+      "correct": 5,
+      "total": 6,
+      "personalBest": false,
+      "headline": "Leaderboard: #7 · 340",
+      "detail": "5/6 graded correct"
+    },
+    {
+      "name": "server refused the run",
+      "kind": "refused",
+      "reason": "speed too high for the audio",
+      "headline": "Leaderboard: not ranked",
+      "detail": "speed too high for the audio"
+    },
+    {
+      "name": "device or network in the way",
+      "kind": "unavailable",
+      "reason": "couldn't reach the server",
+      "headline": "Leaderboard: not posted",
+      "detail": "couldn't reach the server"
+    }
+  ]
+}

@@ -647,9 +647,6 @@
     <string name="start_here_know_body">Open Settings › Characters &amp; Lessons › Proficiency and tell it what you already know. That sets your starting character set instead of making you re-earn A and N. Comfortable with the whole alphabet? Skip Journey and go straight to Common Words, Rapid Fire, or Pileup Runner.</string>
     <!-- Daily Dit: the shared daily puzzle (#155) -->
     <string name="daily_dit_title">Daily Dit</string>
-    <string name="daily_dit_home_sub_new">Today\'s word in Morse — your speed, up to %1$d WPM</string>
-    <string name="daily_dit_home_sub_progress">#%1$d · %2$s · %3$s so far</string>
-    <string name="daily_dit_home_sub_solved">#%1$d copied at %2$s WPM · %3$s · %4$s</string>
     <string name="daily_dit_puzzle_number">Puzzle #%1$d</string>
     <string name="daily_dit_status_playing">%1$s WPM · %2$s · %3$s</string>
     <string name="daily_dit_status_solved">Copied at %1$s WPM · %2$s · %3$s</string>
@@ -1201,11 +1198,8 @@
     <string name="leaderboard_optin_not_now">Not now</string>
     <string name="leaderboard_optin_never">Don\'t ask again</string>
     <!-- The run-summary line: rank, then the server's metric -->
-    <string name="leaderboard_result">Leaderboard: #%1$d · %2$d</string>
-    <string name="leaderboard_refused">Leaderboard: %1$s</string>
-    <string name="leaderboard_submitting">Leaderboard: submitting…</string>
-    <string name="leaderboard_reason_no_name">set a display name in Settings</string>
-    <string name="leaderboard_reason_not_registered">run not registered (%1$s)</string>
+    <string name="leaderboard_submitting">Leaderboard: posting…</string>
+    <string name="leaderboard_reason_no_name">Pick a display name in Settings › Leaderboard &amp; Buddy to post scores.</string>
     <string name="leaderboard_reason_network">couldn\'t reach the server</string>
     <string name="leaderboard_reason_attestation">device attestation failed</string>
     <!-- Settings › Leaderboard &amp; Buddy -->
@@ -1213,8 +1207,7 @@
     <string name="settings_leaderboard_share">Share scores to the shared leaderboard</string>
     <string name="settings_leaderboard_name">Display name</string>
     <string name="settings_leaderboard_name_hint">Call sign or name</string>
-    <string name="settings_leaderboard_name_invalid">2 to 12 characters: letters, digits, space, / and -. Runs are not posted until this is valid.</string>
-    <string name="settings_leaderboard_delete">Delete my scores</string>
+        <string name="settings_leaderboard_delete">Delete my scores</string>
     <string name="settings_leaderboard_deleting">Deleting…</string>
     <string name="settings_leaderboard_delete_confirm_title">Delete your scores?</string>
     <string name="settings_leaderboard_delete_confirm_body">Removes every score this install has posted to the shared leaderboard, on every mode. This cannot be undone.</string>
