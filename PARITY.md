@@ -108,6 +108,14 @@ missing feature.
   window is resizable and uses the Android rule and thresholds
   (`isWideLayout()` in its own `Responsive.kt`).
 
+- **The hunt simulator's key (#313).** You key the simulator with the
+  on-screen key (straight or paddles), the keyboard on desktop, or a Vail /
+  MIDI key, through the same `SendingKeyer` First Four uses. iOS pairs a BLE
+  key through the system sheet, Android scans in-app, desktop takes USB keys
+  and the keyboard (its BLE gap is already in the table above). The simulator
+  itself, its difficulty settings, XIT control and debrief are the same on
+  all three; it has no platform-limited exception.
+
 - **Notification permission.** Android 13+ makes `POST_NOTIFICATIONS` a
   runtime permission, so the Android app asks for it when the reminder is
   switched on; iOS asks through `UNUserNotificationCenter` at the same

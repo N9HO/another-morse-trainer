@@ -692,6 +692,44 @@ those records, window by window.
 tail-ender and zero-beater are the two that make *you* wrong through the copy
 model alone.
 
+### The screens (stage 2)
+
+Entry: a row under "What should you do?" on the Operating Procedure home
+(`OpPage.Hunt` on desktop, the `hunt` screen tag on Android, `Screen.hunt` in
+`OperatingProcedureView` on iOS). It opens `HuntSimPage` (desktop and Android
+`HuntSimScreen.kt`) or `HuntSimView` (iOS `HuntSimView.swift`), three stages:
+
+- **Setup.** Easy / Medium / Hard, then the steppers for each difficulty
+  setting (pileup size, hunter speed, QSB, noise, hunters you cannot hear,
+  activator mis-copies). The settings live for the sitting only.
+- **Run.** The activator's text is logged (the last five lines) as it is
+  sounded at your tone and its own speed; then the window opens and the
+  pileup you can hear plays through `MorsePlayer.playPileup` (hunters with
+  level at you above 0, at `tone + offset`, `gain = level at you`, QSB where
+  they fade, noise at half the QRN setting). You key on the on-screen key
+  (straight or paddles), the keyboard on desktop, or a Vail / MIDI key,
+  through `SendingKeyer`; the key decodes your send, which goes to the
+  session when you press Send, or by itself after a pause of 2.5 word gaps
+  (at least 1.5 s). Your first key-down in the window gives your delay; the
+  XIT shown then gives your offset. Stay silent skips the window, and so does
+  3.5 s of not keying. XIT is on-screen buttons (±10, ±50, Zero), ±300 Hz.
+  A run in flight is not saved.
+- **Debrief.** Logged / timed out / stopped, the count of points right and to
+  work on, then every window: what the activator sent, what you heard (the
+  copy model at your levels; hunters you could not hear are named), what the
+  activator heard, what you sent, and the grade points, each with a
+  "Lesson: …" link that opens the lesson in the section. Go again, or Change
+  difficulty.
+
+A graded window counts as practice for the day (`markPracticedToday` /
+`Stats.recordPracticeDay`); nothing else is stored.
+
+**Guide.** The user guide's CW Operating Procedure section needs a "Hunt
+simulator" subsection: the entry row, the three stages, the difficulty
+settings, the XIT control and the 20-100 Hz rule, the hunter types, what each
+graded point means with its lesson, and that it is not ranked. Its source is
+outside this repository; the pull request's Guide section names it.
+
 **Questions for the maintainer** (decided here as the simplest reading; say if
 any should change):
 
