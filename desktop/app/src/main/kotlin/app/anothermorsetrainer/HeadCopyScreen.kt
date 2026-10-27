@@ -436,7 +436,7 @@ fun HeadCopyScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
         }
 
         if (showSettings) {
-            SessionSettingsOverlay(scope = SettingsMode.HEAD_COPY, onClose = { showSettings = false })
+            SessionSettingsOverlay(scope = SettingsMode.HEAD_COPY, onClose = { showSettings = false }, previewItem = { drill.playable })
         }
     }
 }

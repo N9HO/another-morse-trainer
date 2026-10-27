@@ -449,7 +449,18 @@ enum BackgroundNoiseLevel: String, Codable, CaseIterable, Identifiable {
 /// AppSettings; every field has a default so older saves upgrade cleanly.
 struct QSOSettings: Codable, Equatable {
     /// Your callsign — sent when you call CQ, work a station, and say TU.
-    var myCall: String = "W1AW"
+    ///
+    /// Always in the validated form every app uses (parity row 20): upper
+    /// case, letters, digits and "/", 12 characters at most, and a blank
+    /// value stored as W1AW. Whoever writes it, `didSet` enforces that; the
+    /// field views keep their own draft so clearing one to type another call
+    /// does not snap to W1AW underneath the typist.
+    var myCall: String = InputRules.callsignPlaceholder {
+        didSet {
+            let stored = InputRules.storedCallsign(myCall)
+            if stored != myCall { myCall = stored }
+        }
+    }
     /// Your first name, optional. Only CW 77's "include my callsign and
     /// name" uses it so far (#240).
     var myName: String = ""
@@ -509,14 +520,16 @@ extension QSOSettings {
         s.myState = try c.decodeIfPresent(String.self, forKey: .myState) ?? s.myState
         s.mode = try c.decodeIfPresent(QSOContestMode.self, forKey: .mode) ?? s.mode
         s.maxStations = try c.decodeIfPresent(Int.self, forKey: .maxStations) ?? s.maxStations
-        s.minWPM = try c.decodeIfPresent(Double.self, forKey: .minWPM) ?? s.minWPM
-        s.maxWPM = try c.decodeIfPresent(Double.self, forKey: .maxWPM) ?? s.maxWPM
+        // The speed and wait edges are four independent settings (parity row
+        // 19): each is clamped to its own range on load, none to another.
+        s.minWPM = InputRules.clampCallerWpm(try c.decodeIfPresent(Double.self, forKey: .minWPM) ?? s.minWPM)
+        s.maxWPM = InputRules.clampCallerWpm(try c.decodeIfPresent(Double.self, forKey: .maxWPM) ?? s.maxWPM)
         s.farnsworth = try c.decodeIfPresent(Bool.self, forKey: .farnsworth) ?? s.farnsworth
-        s.toneSpread = try c.decodeIfPresent(Double.self, forKey: .toneSpread) ?? s.toneSpread
+        s.toneSpread = InputRules.clampToneSpread(try c.decodeIfPresent(Double.self, forKey: .toneSpread) ?? s.toneSpread)
         s.minVolume = try c.decodeIfPresent(Double.self, forKey: .minVolume) ?? s.minVolume
         s.maxVolume = try c.decodeIfPresent(Double.self, forKey: .maxVolume) ?? s.maxVolume
-        s.minDelay = try c.decodeIfPresent(Double.self, forKey: .minDelay) ?? s.minDelay
-        s.maxDelay = try c.decodeIfPresent(Double.self, forKey: .maxDelay) ?? s.maxDelay
+        s.minDelay = InputRules.clampMinWait(try c.decodeIfPresent(Double.self, forKey: .minDelay) ?? s.minDelay)
+        s.maxDelay = InputRules.clampMaxWait(try c.decodeIfPresent(Double.self, forKey: .maxDelay) ?? s.maxDelay)
         s.qsbEnabled = try c.decodeIfPresent(Bool.self, forKey: .qsbEnabled) ?? s.qsbEnabled
         s.qrn = try c.decodeIfPresent(QRNLevel.self, forKey: .qrn) ?? s.qrn
         s.cutNumbersEnabled = try c.decodeIfPresent(Bool.self, forKey: .cutNumbersEnabled) ?? s.cutNumbersEnabled
@@ -887,7 +900,7 @@ extension AppSettings {
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         var s = AppSettings()
-        s.toneFrequency = try c.decodeIfPresent(Double.self, forKey: .toneFrequency) ?? s.toneFrequency
+        s.toneFrequency = InputRules.clampSidetone(try c.decodeIfPresent(Double.self, forKey: .toneFrequency) ?? s.toneFrequency)
         s.wpm = try c.decodeIfPresent(Double.self, forKey: .wpm) ?? s.wpm
         s.farnsworth = try c.decodeIfPresent(Bool.self, forKey: .farnsworth) ?? s.farnsworth
         s.effectiveWpm = try c.decodeIfPresent(Double.self, forKey: .effectiveWpm) ?? s.effectiveWpm

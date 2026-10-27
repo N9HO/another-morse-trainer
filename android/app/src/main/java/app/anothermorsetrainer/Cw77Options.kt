@@ -81,17 +81,11 @@ fun Cw77Options(modifier: Modifier = Modifier, onChange: () -> Unit = {}) {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             // Saved on every keystroke, but [onChange] (which restarts a
             // playing Listen loop) waits until a field is left, not per letter.
-            OutlinedTextField(
-                value = PileupSettings.myCall,
-                onValueChange = {
-                    PileupSettings.updateMyCall(it)
-                    edited = true
-                },
-                singleLine = true,
+            CallsignField(
+                modifier = Modifier.weight(1f).onFocusChanged { if (!it.isFocused) settle() },
                 label = { Text(stringResource(R.string.cw77_callsign)) },
-                placeholder = { Text(PileupSettings.DEFAULT_CALL) },
-                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters, imeAction = ImeAction.Next),
-                modifier = Modifier.weight(1f).onFocusChanged { if (!it.isFocused) settle() }
+                imeAction = ImeAction.Next,
+                onEdited = { edited = true }
             )
             OutlinedTextField(
                 value = PileupSettings.myName,

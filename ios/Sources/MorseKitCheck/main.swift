@@ -6696,6 +6696,103 @@ if let fx = loadSettingsCatalogFixture() {
     check("fixtures/settings-catalog.json loads and decodes", false)
 }
 
+// MARK: - Input settings rules (parity rows 18-20)
+//
+// fixtures/gap-input-settings-rules.json — read by this harness AND by android
+// and desktop InputRulesFixtureTest. Side tone / tone spread slider shape,
+// pileup speed and wait ranges, and the validated callsign input.
+func loadInputRulesFixture() -> [String: Any]? {
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+    guard let data = try? Data(contentsOf: root.appendingPathComponent("fixtures/gap-input-settings-rules.json")),
+          let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+    return obj
+}
+
+print("\nInput settings rules (fixtures/gap-input-settings-rules.json):")
+if let fx = loadInputRulesFixture(),
+   let sidetone = fx["sidetone"] as? [String: Any],
+   let spread = fx["toneSpread"] as? [String: Any],
+   let pileup = fx["pileupRanges"] as? [String: Any],
+   let callsign = fx["callsign"] as? [String: Any] {
+    func num(_ v: Any?) -> Double { (v as? NSNumber)?.doubleValue ?? .nan }
+    func near(_ a: Double, _ b: Double) -> Bool { abs(a - b) < 1e-12 }
+
+    check("side tone slider runs \(Int(InputRules.sidetoneMin))...\(Int(InputRules.sidetoneMax)) in \(Int(InputRules.sidetoneStep)) Hz steps",
+          near(InputRules.sidetoneMin, num(sidetone["min"])) && near(InputRules.sidetoneMax, num(sidetone["max"]))
+          && near(InputRules.sidetoneStep, num(sidetone["step"])))
+    let sideLoad = sidetone["load"] as? [[String: Any]] ?? []
+    check("a stored side tone is clamped on load (\(sideLoad.count) cases)",
+          !sideLoad.isEmpty && sideLoad.allSatisfy { near(InputRules.clampSidetone(num($0["stored"])), num($0["value"])) })
+
+    check("tone spread slider runs 0...500 in 10 Hz steps",
+          near(InputRules.toneSpreadMin, num(spread["min"])) && near(InputRules.toneSpreadMax, num(spread["max"]))
+          && near(InputRules.toneSpreadStep, num(spread["step"])))
+    let labels = spread["labels"] as? [[String: Any]] ?? []
+    check("tone spread reads Zero-beat below one step and ±N Hz otherwise (\(labels.count) cases)",
+          !labels.isEmpty && labels.allSatisfy { c in
+              let v = num(c["value"])
+              guard InputRules.isZeroBeat(v) == (c["zeroBeat"] as? Bool) else { return false }
+              if let label = c["label"] as? String { return InputRules.toneSpreadLabel(v) == label }
+              return InputRules.toneSpreadLabel(v) == "Zero-beat"
+          })
+    let spreadLoad = spread["load"] as? [[String: Any]] ?? []
+    check("a stored tone spread is clamped on load (\(spreadLoad.count) cases)",
+          !spreadLoad.isEmpty && spreadLoad.allSatisfy { near(InputRules.clampToneSpread(num($0["stored"])), num($0["value"])) })
+
+    let speed = pileup["speed"] as? [String: Any] ?? [:]
+    let minWait = pileup["minWait"] as? [String: Any] ?? [:]
+    let maxWait = pileup["maxWait"] as? [String: Any] ?? [:]
+    check("pileup speed and wait ranges match the fixture",
+          near(InputRules.callerWpmMin, num(speed["min"])) && near(InputRules.callerWpmMax, num(speed["max"]))
+          && near(InputRules.minWaitMax, num(minWait["max"])) && near(InputRules.maxWaitMax, num(maxWait["max"])))
+    let clampCases = pileup["clamp"] as? [[String: Any]] ?? []
+    check("each pileup setting clamps to its own range only (\(clampCases.count) cases)",
+          !clampCases.isEmpty && clampCases.allSatisfy { c in
+              let input = num(c["input"])
+              let got: Double
+              switch c["field"] as? String {
+              case "minSpeed", "maxSpeed": got = InputRules.clampCallerWpm(input)
+              case "minWait": got = InputRules.clampMinWait(input)
+              case "maxWait": got = InputRules.clampMaxWait(input)
+              default: return false
+              }
+              return near(got, num(c["value"]))
+          })
+    let effSpeed = pileup["effectiveSpeed"] as? [[String: Any]] ?? []
+    check("effective caller speed band is the sorted pair (\(effSpeed.count) cases)",
+          !effSpeed.isEmpty && effSpeed.allSatisfy { c in
+              let r = InputRules.effectiveSpeedRange(min: num(c["min"]), max: num(c["max"]))
+              return near(r.lo, num(c["lo"])) && near(r.hi, num(c["hi"]))
+          })
+    let effWait = pileup["effectiveWait"] as? [[String: Any]] ?? []
+    check("effective reply wait collapses onto min when min is above max (\(effWait.count) cases)",
+          !effWait.isEmpty && effWait.allSatisfy { c in
+              let r = InputRules.effectiveWaitRange(min: num(c["min"]), max: num(c["max"]))
+              return near(r.lo, num(c["lo"])) && near(r.hi, num(c["hi"]))
+          })
+
+    check("callsign placeholder and limit match the fixture",
+          InputRules.callsignPlaceholder == (callsign["placeholder"] as? String)
+          && InputRules.callsignMaxLength == (callsign["maxLength"] as? Int))
+    let callCases = callsign["cases"] as? [[String: Any]] ?? []
+    var callOK = !callCases.isEmpty
+    for c in callCases {
+        let input = c["input"] as? String ?? ""
+        let got = InputRules.storedCallsign(input)
+        if got != (c["stored"] as? String) {
+            callOK = false
+            print("      ↳ \"\(input)\" stored as \"\(got)\", fixture says \"\(c["stored"] as? String ?? "?")\"")
+        }
+    }
+    check("callsign input becomes the stored value (\(callCases.count) cases)", callOK)
+} else {
+    check("fixtures/gap-input-settings-rules.json loads and decodes", false)
+}
+
 // ---------------------------------------------------------------------------
 // Keyboard-entry answers (#232), against fixtures/answer-entry.json — read by
 // this harness and by android AnswerEntryTest.

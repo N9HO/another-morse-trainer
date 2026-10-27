@@ -2468,6 +2468,19 @@ final class AppModel: ObservableObject {
                                   timing: timing)
     }
 
+    /// Settings' Preview tone: replays the current drill item, and keys PARIS
+    /// only when there is no current drill item (parity row 21: every app does
+    /// both, so the row always sounds something).
+    func previewTone() {
+        if drill != nil {
+            replay()
+        } else {
+            player.replaySound(playable: .text("PARIS"),
+                               frequency: settings.toneFrequency,
+                               timing: timing)
+        }
+    }
+
     func select(_ choice: String) {
         guard phase == .awaiting, drill != nil, let end = toneEndDate else { return }
         commitAnswer(choice, ttr: Date().timeIntervalSince(end))

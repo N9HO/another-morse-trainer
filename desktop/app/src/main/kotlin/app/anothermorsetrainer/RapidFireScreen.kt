@@ -392,7 +392,7 @@ fun RapidFireScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {
             // Desktop: keyboard keying for a keyed run, on the same path as
             // the on-screen key; live only while that key is.
             val keyboardKeying = rememberKeyboardKeying(
-                enabled = response == RapidFireResponse.KEY && revealBox && !showSettings,
+                enabled = response == RapidFireResponse.KEY && !showSettings,
                 onStraightKey = { down ->
                     keyPressed = down
                     keyer.touchKey(down)
@@ -458,7 +458,7 @@ fun RapidFireScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {
     }
 
     if (showSettings) {
-        SessionSettingsOverlay(scope = SettingsMode.RAPID_FIRE, onClose = { showSettings = false })
+        SessionSettingsOverlay(scope = SettingsMode.RAPID_FIRE, onClose = { showSettings = false }, previewItem = { drill?.playable })
     }
     }
 }
@@ -667,8 +667,9 @@ private fun RapidFireRun(
                 // Straight key or paddles, as chosen in Settings (#233).
                 OnScreenKeySwitch(
                     onPaddleKey = onPaddleKey,
-                    modifier = Modifier.fillMaxWidth().height(110.dp),
-                    enabled = revealBox
+                    // Live before the item has finished and after it, as on iOS
+                    // (PARITY.md row 17): key along with the tone if you can.
+                    modifier = Modifier.fillMaxWidth().height(110.dp)
                 ) {
                     Box(
                         modifier = Modifier
@@ -681,8 +682,7 @@ private fun RapidFireRun(
                                 color = if (keyPressed) Brand.tealBright else Brand.hairline,
                                 shape = RoundedCornerShape(Brand.cornerRadius)
                             )
-                            .pointerInput(revealBox) {
-                                if (!revealBox) return@pointerInput
+                            .pointerInput(Unit) {
                                 detectTapGestures(
                                     onPress = {
                                         onKey(true)
