@@ -33,7 +33,7 @@ struct DailyComprehensionView: View {
             }
             .scrollContentBackground(.hidden)
             .background(Theme.Background())
-            .navigationTitle("Daily Comprehension")
+            .navigationTitle("The Daily Didaaaahdit")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
