@@ -227,15 +227,17 @@ enum TrainingMode: String, CaseIterable, Identifiable {
     var hasMenuEntry: Bool { menuEntry == self }
 
     /// Whether a session-length choice applies. Exam (a fixed-format proficiency
-    /// run) and Story (one passage played end to end) are self-contained, so a
-    /// "how long?" question is meaningless for them.
+    /// run) is self-contained, so a "how long?" question is meaningless for it.
+    /// Short Stories does take one: `startSession` starts the same countdown
+    /// for it as for every other timed mode, so without the picker and the
+    /// timer menu a story ended silently on a clock the learner never chose.
     var usesSessionLength: Bool {
         switch self {
         // Contest picks its own length (the real one-hour event or a sprint) in
         // its setup card, so the generic duration picker would be redundant.
         // The arcade games (#170) end when the last life — or, for Defender,
         // the last asset — is lost, not on a clock.
-        case .exam, .story, .contest, .invaders, .galaga, .defender, .dungeon, .frogger, .asteroids: return false
+        case .exam, .contest, .invaders, .galaga, .defender, .dungeon, .frogger, .asteroids: return false
         default: return true
         }
     }
