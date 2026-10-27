@@ -1372,6 +1372,7 @@
     <string name="analyzer_sensitivity_low">Low</string>
     <string name="analyzer_sensitivity_normal">Normal</string>
     <string name="analyzer_sensitivity_high">High</string>
+    <string name="analyzer_mic_denied">Microphone access is off. Allow it in Android Settings → Apps → Permissions → Microphone.</string>
     <string name="analyzer_mic_note">Key your oscillator, keyer or rig near the phone. The light should follow your key; if it flickers in the gaps, lower the sensitivity.</string>
     <string name="analyzer_copied_so_far">Copied so far</string>
     <string name="analyzer_finish">Finish</string>
