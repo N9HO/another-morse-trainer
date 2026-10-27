@@ -8804,6 +8804,39 @@ if let kx = loadUIContractFixture("keyer-modes.json"), let want = kx["keyerModes
     check("fixtures/keyer-modes.json loads and decodes", false)
 }
 
+// ---------------------------------------------------------------------------
+// Leaderboard parity group (gap-lb-*): fixtures/gap-lb-*.json, read by this
+// harness AND by android and desktop JUnit. Data, not code.
+// ---------------------------------------------------------------------------
+
+func loadGapLbFixture(_ name: String) -> [String: Any]? {
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+    guard let data = try? Data(contentsOf: root.appendingPathComponent("fixtures/\(name)")),
+          let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+    return obj
+}
+
+print("\nHome Daily Dit card, against fixtures/gap-lb-daily-dit-card.json:")
+if let fx = loadGapLbFixture("gap-lb-daily-dit-card.json"), let cases = fx["cases"] as? [[String: Any]] {
+    check("daily-dit card fixture has 6 cases", cases.count == 6)
+    for c in cases {
+        let outcome: DailyDitOutcome = (c["outcome"] as? String) == "solved" ? .solved : .playing
+        let wpm = c["solvedWpm"] as? Double
+        let text = DailyDit.homeSubtitle(outcome: outcome,
+                                         puzzleNumber: c["puzzleNumber"] as? Int ?? -1,
+                                         solvedWpm: wpm,
+                                         guessesUsed: c["guessesUsed"] as? Int ?? -1,
+                                         listens: c["listens"] as? Int ?? -1)
+        check("daily-dit card: \(c["name"] as? String ?? "?")", text == c["expected"] as? String)
+    }
+} else {
+    check("fixtures/gap-lb-daily-dit-card.json loads and decodes", false)
+}
+
 print("\n────────────────────────────")
 if failures == 0 {
     print("✅ All \(checks) checks passed.\n")

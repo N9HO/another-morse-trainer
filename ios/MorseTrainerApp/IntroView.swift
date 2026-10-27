@@ -370,18 +370,9 @@ struct IntroView: View {
 
     private var dailyDitSubtitle: String {
         let game = model.dailyDit
-        let counts = DailyDit.count(game.guessesUsed, "guess", "guesses")
-            + " · " + DailyDit.count(game.listens, "listen", "listens")
-        switch game.outcome {
-        case .solved:
-            let at = game.solvedWpm.map { "at \(DailyDit.format(wpm: $0)) WPM · " } ?? ""
-            return "#\(game.puzzleNumber) copied \(at)\(counts)"
-        case .playing where game.guessesUsed > 0 || game.listens > 0:
-            // A listen starts the day as much as a guess does (#168).
-            return "#\(game.puzzleNumber) · \(counts) so far"
-        case .playing:
-            return "Today's word in Morse — your speed, up to \(Int(DailyDit.startingSpeeds.max() ?? 75)) WPM"
-        }
+        return DailyDit.homeSubtitle(outcome: game.outcome, puzzleNumber: game.puzzleNumber,
+                                     solvedWpm: game.solvedWpm, guessesUsed: game.guessesUsed,
+                                     listens: game.listens)
     }
 
     /// The newcomer's way in (#96): the site's guide explains how to begin and
