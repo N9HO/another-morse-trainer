@@ -730,7 +730,7 @@ private fun PersonalBests(snapshot: ProgressiveCharacters.Snapshot) {
 
     Column(modifier = Modifier.fillMaxWidth().brandCard(14.dp).padding(horizontal = 14.dp, vertical = 4.dp)) {
         BestRow(Icons.Filled.Bolt, stringResource(R.string.stats_fastest_copy), Brand.teal,
-            Stats.bestTtrMs?.let { fmtMs(it) } ?: "—", Brand.teal)
+            Stats.bestTtrMs?.let { stringResource(R.string.common_seconds_2dp, it / 1000.0) } ?: "—", Brand.teal)
         HairlineDivider()
         BestRow(Icons.Filled.TrackChanges, stringResource(R.string.stats_best_session_accuracy), Brand.textSecondary,
             bestAcc?.let { "${(it * 100).roundToInt()}%" } ?: "—", if (bestAcc == null) Brand.textPrimary else GOOD)
@@ -830,7 +830,7 @@ private fun SessionRow(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(modifier = Modifier.weight(1f)) {
-            Text(mode, fontWeight = FontWeight.SemiBold, color = Brand.textPrimary)
+            Text(SessionRecord.displayTitle(mode), fontWeight = FontWeight.SemiBold, color = Brand.textPrimary)
             Text(date, style = MaterialTheme.typography.labelSmall, color = Brand.textSecondary)
         }
         Text(
@@ -862,7 +862,7 @@ private fun SessionDetail(record: SessionRecord, onBack: () -> Unit) {
             contentModifier = Modifier.padding(horizontal = 20.dp)
         ) {
             Text(
-                record.mode,
+                SessionRecord.displayTitle(record.mode),
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.fillMaxWidth(),

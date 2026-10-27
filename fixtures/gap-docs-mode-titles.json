@@ -1,0 +1,130 @@
+{
+ "about": "The title a Stats session row and the session detail show for each of the 25 modes, the same on every app (gap copy-labels). 'id' is the iOS TrainingMode raw value (the sync wire id), 'title' the shown name (the iOS TrainingMode.title table, read from its source text by the Swift harness), 'kotlinMode' the string Android and desktop store in SessionRecord.mode, which SessionRecord.displayTitle maps to 'title'. Four modes are stored under a shorter name (Sending, Listen, Pileup, Stories); the stored strings must not change, they key saved records and the sync table. Read by ios MorseKitCheck, android SessionTitlesTest and desktop SessionTitlesTest.",
+ "modes": [
+  {
+   "id": "journey",
+   "title": "Journey",
+   "kotlinMode": "Journey"
+  },
+  {
+   "id": "characters",
+   "title": "Characters",
+   "kotlinMode": "Characters"
+  },
+  {
+   "id": "words",
+   "title": "Common Words",
+   "kotlinMode": "Common Words"
+  },
+  {
+   "id": "cw77",
+   "title": "CW 77",
+   "kotlinMode": "CW 77"
+  },
+  {
+   "id": "cw77Listen",
+   "title": "CW 77 Listen",
+   "kotlinMode": "CW 77 Listen"
+  },
+  {
+   "id": "abbreviations",
+   "title": "Abbreviations",
+   "kotlinMode": "Abbreviations"
+  },
+  {
+   "id": "qCodes",
+   "title": "Q-Codes",
+   "kotlinMode": "Q-Codes"
+  },
+  {
+   "id": "prosigns",
+   "title": "Prosigns",
+   "kotlinMode": "Prosigns"
+  },
+  {
+   "id": "headCopy",
+   "title": "Head Copy",
+   "kotlinMode": "Head Copy"
+  },
+  {
+   "id": "typed",
+   "title": "Type It",
+   "kotlinMode": "Type It"
+  },
+  {
+   "id": "sending",
+   "title": "Sending Practice",
+   "kotlinMode": "Sending"
+  },
+  {
+   "id": "confusion",
+   "title": "Confusion Drill",
+   "kotlinMode": "Confusion Drill"
+  },
+  {
+   "id": "listen",
+   "title": "Listen & Learn",
+   "kotlinMode": "Listen"
+  },
+  {
+   "id": "qso",
+   "title": "Pileup Runner",
+   "kotlinMode": "Pileup"
+  },
+  {
+   "id": "contest",
+   "title": "Contest",
+   "kotlinMode": "Contest"
+  },
+  {
+   "id": "story",
+   "title": "Short Stories",
+   "kotlinMode": "Stories"
+  },
+  {
+   "id": "exam",
+   "title": "Code Exam",
+   "kotlinMode": "Code Exam"
+  },
+  {
+   "id": "qrq",
+   "title": "QRQ Speed",
+   "kotlinMode": "QRQ Speed"
+  },
+  {
+   "id": "rapidFire",
+   "title": "Rapid Fire",
+   "kotlinMode": "Rapid Fire"
+  },
+  {
+   "id": "invaders",
+   "title": "Morse Invaders",
+   "kotlinMode": "Morse Invaders"
+  },
+  {
+   "id": "galaga",
+   "title": "CW Galaga",
+   "kotlinMode": "CW Galaga"
+  },
+  {
+   "id": "defender",
+   "title": "Morse Defender",
+   "kotlinMode": "Morse Defender"
+  },
+  {
+   "id": "dungeon",
+   "title": "CW Dungeon",
+   "kotlinMode": "CW Dungeon"
+  },
+  {
+   "id": "frogger",
+   "title": "CW Frogger",
+   "kotlinMode": "CW Frogger"
+  },
+  {
+   "id": "asteroids",
+   "title": "CW Asteroids",
+   "kotlinMode": "CW Asteroids"
+  }
+ ]
+}

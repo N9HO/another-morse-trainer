@@ -6636,7 +6636,8 @@ if let fx = loadBuddyListFixture(),
 // phone.
 struct SettingsCatalogFixture: Decodable {
     struct Category: Decodable { let id: String; let title: String }
-    struct Entry: Decodable { let id: String; let category: String }
+    struct Entry: Decodable { let id: String; let title: String; let section: String; let category: String }
+    struct Section: Decodable { let id: String; let category: String }
     struct Query: Decodable {
         let name: String
         let query: String
@@ -6646,6 +6647,7 @@ struct SettingsCatalogFixture: Decodable {
         let first: String?
     }
     let categories: [Category]
+    let sections: [Section]
     let entries: [Entry]
     let queries: [Query]
 }
@@ -6671,6 +6673,23 @@ if let fx = loadSettingsCatalogFixture() {
         print("      ↳ \(e.id): catalog has \(byId[e.id]?.category.rawValue ?? "nothing"), fixture says \(e.category)")
     }
     check("every shared setting is in the fixture's category (\(fx.entries.count))", sharedOK)
+    var titlesOK = true
+    for e in fx.entries where byId[e.id]?.title != e.title {
+        titlesOK = false
+        print("      ↳ \(e.id): catalog titles it \"\(byId[e.id]?.title ?? "nothing")\", fixture says \"\(e.title)\"")
+    }
+    check("every shared setting has the fixture's title, the same on every app (\(fx.entries.count))", titlesOK)
+    check("sections match the fixture, in order, each in its category",
+          SettingsSection.allCases.map { "\($0.rawValue)=\($0.category.rawValue)" } == fx.sections.map { "\($0.id)=\($0.category)" })
+    var sectionsOK = true
+    for e in fx.entries where byId[e.id]?.section.rawValue != e.section {
+        sectionsOK = false
+        print("      ↳ \(e.id): catalog has \(byId[e.id]?.section.rawValue ?? "nothing"), fixture says \(e.section)")
+    }
+    check("every shared setting is in the fixture's section (\(fx.entries.count))", sectionsOK)
+    let sharedIds = fx.entries.map(\.id)
+    check("shared settings are in the fixture's order (Reveal after Show right / wrong, Devices before Delete account)",
+          SettingsCatalog.entries.map(\.id).filter(sharedIds.contains) == sharedIds)
     check("catalog ids are unique", byId.count == SettingsCatalog.entries.count)
     check("every category has a section and a searchable setting",
           SettingsCategory.allCases.allSatisfy { c in
@@ -9158,6 +9177,44 @@ if let fx = loadSessionClockFixture() {
     check("subtracting time follows the fixture (\(fx.subtract.count) cases)", subOK)
 } else {
     check("fixtures/gap-timers-session-clock.json loads and decodes", false)
+// MARK: - Session row titles (gap copy-labels)
+//
+// fixtures/gap-docs-mode-titles.json: the title a Stats session row shows for
+// each mode. TrainingMode lives in the app target, out of the harness's reach,
+// so its `title` table is read from AppModel.swift's source text.
+print("\nSession row titles (fixtures/gap-docs-mode-titles.json):")
+if let tx = loadUIContractFixture("gap-docs-mode-titles.json"), let rows = tx["modes"] as? [[String: Any]] {
+    check("fixtures/gap-docs-mode-titles.json lists 25 modes", rows.count == 25)
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent()
+        .deletingLastPathComponent().deletingLastPathComponent()
+    if let text = try? String(contentsOf: root.appendingPathComponent("ios/MorseTrainerApp/AppModel.swift"),
+                              encoding: .utf8) {
+        var titles: [String: String] = [:]
+        var inTable = false
+        for line in text.split(separator: "\n", omittingEmptySubsequences: false) {
+            let t = line.trimmingCharacters(in: .whitespaces)
+            if t.hasPrefix("var title: String") { inTable = true; continue }
+            guard inTable else { continue }
+            if t.hasPrefix("var icon") { break }
+            if t.hasPrefix("case ."), let colon = t.firstIndex(of: ":"), let open = t.firstIndex(of: "\"") {
+                let rest = t[t.index(after: open)...]
+                guard let close = rest.firstIndex(of: "\"") else { continue }
+                let name = String(t[t.index(t.startIndex, offsetBy: 6)..<colon])
+                titles[name] = String(rest[..<close])
+            }
+        }
+        var allMatch = !titles.isEmpty
+        for row in rows {
+            let id = row["id"] as? String ?? ""
+            if titles[id] != (row["title"] as? String) { allMatch = false }
+        }
+        check("TrainingMode.title table equals the fixture's titles for all 25 modes", allMatch && titles.count == 25)
+    } else {
+        check("AppModel.swift is readable for the session-title check", false)
+    }
+} else {
+    check("fixtures/gap-docs-mode-titles.json loads and decodes", false)
 }
 
 print("\n────────────────────────────")

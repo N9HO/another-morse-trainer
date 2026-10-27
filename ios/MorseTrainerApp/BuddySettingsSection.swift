@@ -137,7 +137,7 @@ struct BuddySettingsSection: View {
         } header: {
             Text("Buddy streak")
         } footer: {
-            Text("Pair with up to ten people and keep a separate streak with each: the days you both practiced. Any practice day counts, the same as your own streak, and one practice counts for every buddy. Your buddies see your leaderboard display name and whether you practiced each day, nothing else; pairing needs the same device attestation as posting a score but not the Share scores switch. Leaving a buddy ends that streak for both of you and keeps the others, and Delete my scores above removes every pairing.")
+            Text("Pair with up to ten people and keep a separate streak with each: each day you both practice counts, and a day either of you misses resets it. One practice counts for every buddy. Your buddies see your leaderboard display name and whether you practiced each day, nothing else. Pairing works on its own; the leaderboard switch above stays yours. Leaving a buddy ends that streak for both of you and keeps the others, and Delete my scores above removes every pairing. Pairing needs the same device attestation as posting a score.")
         }
         .listRowBackground(rowBackground)
     }
@@ -198,12 +198,12 @@ struct BuddySettingsSection: View {
                 .foregroundStyle(Theme.tealBright)
                 .frame(maxWidth: .infinity)
                 .accessibilityLabel("Invite code \(code.map(String.init).joined(separator: " "))")
-            Text("Send this to your buddy however you like — it works once and expires \(expiresAt.formatted(date: .abbreviated, time: .shortened)).")
+            Text("Send this code to your buddy. It works once, within 24 hours (until \(expiresAt.formatted(date: .abbreviated, time: .shortened))).")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
             HStack {
                 ShareLink(item: shareText(code: code)) {
-                    Label("Share", systemImage: "square.and.arrow.up")
+                    Label("Share code", systemImage: "square.and.arrow.up")
                 }
                 Spacer()
                 Button {
@@ -220,6 +220,6 @@ struct BuddySettingsSection: View {
     }
 
     private func shareText(code: String) -> String {
-        "Be my Morse buddy in Another Morse Trainer: open Settings › Leaderboard & Buddy › Buddy streak and join with the code \(code). It works once and expires in 24 hours."
+        "Be my Morse buddy on Another Morse Trainer: open Settings › Leaderboard & Buddy › Buddy streak › Join with a code and enter \(code) (good for 24 hours)."
     }
 }
