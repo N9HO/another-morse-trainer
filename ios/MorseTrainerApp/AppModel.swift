@@ -107,7 +107,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .sending:       return "Key it back"
         case .confusion:     return "Drill your mix-ups"
         case .listen:        return "Hands-free, eyes-free"
-        case .qso:           return "Simulated contact"
+        case .qso:           return "Work a CW pileup"
         case .contest:       return "Timed contest runs"
         case .story:         return "Continuous copy"
         case .exam:          return "ARRL/FCC code exam"
@@ -159,7 +159,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .exam:
             return "Sit a recreation of the old ARRL/FCC code-proficiency exam: a 5-minute QSO-style transmission at 5, 13, or 20 WPM. Graded the way the ARRL VEC graded it: copy the whole message, then fill in ten blanks about it from your copy. Pass with one minute of solid copy (25, 65 or 100 in a row, numerals, punctuation and prosigns counting two) or seven right answers."
         case .qrq:
-            return "Push your speed: hear whole words and call signs at 35 or 40 WPM and type what you copy. Too fast to count dits — this trains instant, whole-word recognition (QRQ = “send faster”)."
+            return "Push your speed: hear whole words and call signs at 35, 40, 50 or 60 WPM and type what you copy. Too fast to count dits — this trains instant, whole-word recognition (QRQ = “send faster”)."
         case .rapidFire:
             return "Real-world copy drill: a stream of call signs, words, number groups, or state abbreviations sent back to back at whatever pace you choose. Type each one as it lands, send it back on a key, or just copy along and review the full list of what was transmitted at the end."
         case .invaders:

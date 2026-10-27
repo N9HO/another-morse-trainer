@@ -1214,7 +1214,7 @@
     <string name="settings_leaderboard_delete">Delete my scores</string>
     <string name="settings_leaderboard_deleting">Deleting…</string>
     <string name="settings_leaderboard_delete_confirm_title">Delete your scores?</string>
-    <string name="settings_leaderboard_delete_confirm_body">Removes every score this install has posted to the shared leaderboard, on every mode. This cannot be undone.</string>
+    <string name="settings_leaderboard_delete_confirm_body">Removes every score this device has posted to the shared leaderboard, on every mode. Your local stats and personal bests stay. This cannot be undone.</string>
     <string name="settings_leaderboard_delete_done">Your scores were deleted.</string>
     <string name="settings_leaderboard_delete_failed">Couldn\'t delete: %1$s</string>
     <string name="settings_leaderboard_footer">Off by default. When on, each finished Rapid Fire, Contest, Pileup Runner or arcade run is sent to the shared leaderboard under your display name and graded there: the board ranks server-graded copies, the speed summed over the items you copied correctly, so a game\'s board number is not its on-screen score. Only builds installed from Google Play can post; the board itself is open to everyone.</string>
@@ -1253,7 +1253,7 @@
     <string name="settings_buddy_leave_confirm_body">Ends your buddy streak with %1$s, for both of you. Your other buddies are not affected, and either of you can pair again with a new code.</string>
     <string name="settings_buddy_refreshing">Checking…</string>
     <string name="settings_buddy_error">Couldn\'t do that: %1$s</string>
-    <string name="settings_buddy_footer">Pair with up to ten people and keep a separate streak with each: each day you both practice counts, and a day either of you misses resets it. One practice counts for every buddy. Your buddies see your leaderboard display name and whether you practiced each day, nothing else. Leaving a buddy ends that streak for both of you and keeps the others. Pairing works on its own; the leaderboard switch above stays yours. Only builds installed from Google Play can pair.</string>
+    <string name="settings_buddy_footer">Pair with up to ten people and keep a separate streak with each: each day you both practice counts, and a day either of you misses resets it. One practice counts for every buddy. Your buddies see your leaderboard display name and whether you practiced each day, nothing else. Pairing works on its own; the leaderboard switch above stays yours. Leaving a buddy ends that streak for both of you and keeps the others, and Delete my scores above removes every pairing. Only builds installed from Google Play can pair.</string>
     <!-- Settings › Account & Sync (the optional account, accounts Worker). -->
     <string name="account_header">Account</string>
     <string name="account_intro">An account is optional. Signed in, your progress syncs across your devices and comes back on a new install. Everything works without one.</string>

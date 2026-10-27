@@ -967,7 +967,7 @@ struct SettingsView: View {
                 }
             }
             .disabled(deletingScores)
-            .confirmationDialog("Delete every score this device has posted?",
+            .confirmationDialog("Delete your scores?",
                                 isPresented: $confirmDeleteScores, titleVisibility: .visible) {
                 Button("Delete my scores", role: .destructive) {
                     deletingScores = true
@@ -979,7 +979,7 @@ struct SettingsView: View {
                     }
                 }
             } message: {
-                Text("Removes this device's scores and submissions from the shared board. Your local stats and personal bests stay.")
+                Text("Removes every score this device has posted to the shared leaderboard, on every mode. Your local stats and personal bests stay. This cannot be undone.")
             }
             if let deleteScoresResult {
                 Text(deleteScoresResult)

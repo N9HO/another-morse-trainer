@@ -8804,6 +8804,46 @@ if let kx = loadUIContractFixture("keyer-modes.json"), let want = kx["keyerModes
     check("fixtures/keyer-modes.json loads and decodes", false)
 }
 
+// MARK: - Session row titles (gap copy-labels)
+//
+// fixtures/gap-docs-mode-titles.json: the title a Stats session row shows for
+// each mode. TrainingMode lives in the app target, out of the harness's reach,
+// so its `title` table is read from AppModel.swift's source text.
+print("\nSession row titles (fixtures/gap-docs-mode-titles.json):")
+if let tx = loadUIContractFixture("gap-docs-mode-titles.json"), let rows = tx["modes"] as? [[String: Any]] {
+    check("fixtures/gap-docs-mode-titles.json lists 25 modes", rows.count == 25)
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent()
+        .deletingLastPathComponent().deletingLastPathComponent()
+    if let text = try? String(contentsOf: root.appendingPathComponent("ios/MorseTrainerApp/AppModel.swift"),
+                              encoding: .utf8) {
+        var titles: [String: String] = [:]
+        var inTable = false
+        for line in text.split(separator: "\n", omittingEmptySubsequences: false) {
+            let t = line.trimmingCharacters(in: .whitespaces)
+            if t.hasPrefix("var title: String") { inTable = true; continue }
+            guard inTable else { continue }
+            if t.hasPrefix("var icon") { break }
+            if t.hasPrefix("case ."), let colon = t.firstIndex(of: ":"), let open = t.firstIndex(of: "\"") {
+                let rest = t[t.index(after: open)...]
+                guard let close = rest.firstIndex(of: "\"") else { continue }
+                let name = String(t[t.index(t.startIndex, offsetBy: 6)..<colon])
+                titles[name] = String(rest[..<close])
+            }
+        }
+        var allMatch = !titles.isEmpty
+        for row in rows {
+            let id = row["id"] as? String ?? ""
+            if titles[id] != (row["title"] as? String) { allMatch = false }
+        }
+        check("TrainingMode.title table equals the fixture's titles for all 25 modes", allMatch && titles.count == 25)
+    } else {
+        check("AppModel.swift is readable for the session-title check", false)
+    }
+} else {
+    check("fixtures/gap-docs-mode-titles.json loads and decodes", false)
+}
+
 print("\n────────────────────────────")
 if failures == 0 {
     print("✅ All \(checks) checks passed.\n")
