@@ -1,0 +1,653 @@
+{
+ "about": "Where each tree registers what parity/check.py compares. Paths: trees[*].root is relative to the repo; every other path is relative to that root. An option list with no entry for a tree means that tree has no such list: say so in the manifest, with a reason.",
+ "trees": {
+  "ios": {
+   "root": "ios",
+   "readme": "ios/README.md",
+   "modeEnum": {
+    "file": "MorseTrainerApp/AppModel.swift",
+    "enum": "TrainingMode"
+   },
+   "screenDir": "MorseTrainerApp",
+   "settingsCatalog": "Sources/MorseKit/SettingsCatalog.swift"
+  },
+  "android": {
+   "root": "android/app/src/main/java/app/anothermorsetrainer",
+   "readme": "android/README.md",
+   "modeEnum": {
+    "file": "SessionMenus.kt",
+    "enum": "TrainingMode"
+   },
+   "routeType": {
+    "file": "MainActivity.kt",
+    "type": "Route"
+   },
+   "settingsCatalog": "morsekit/SettingsCatalog.kt"
+  },
+  "desktop": {
+   "root": "desktop/app/src/main/kotlin/app/anothermorsetrainer",
+   "readme": "desktop/README.md",
+   "modeEnum": {
+    "file": "SessionMenus.kt",
+    "enum": "TrainingMode"
+   },
+   "routeType": {
+    "file": "Main.kt",
+    "type": "Route"
+   },
+   "settingsCatalog": "morsekit/SettingsCatalog.kt"
+  }
+ },
+ "optionLists": {
+  "keyerModes": {
+   "ios": {
+    "file": "MorseTrainerApp/MIDIOutput.swift",
+    "enum": "KeyerMode",
+    "labels": "displayName"
+   },
+   "android": {
+    "file": "MidiKeyOutput.kt",
+    "enum": "KeyerMode",
+    "labelArg": 0
+   },
+   "desktop": {
+    "file": "MidiKeyOutput.kt",
+    "enum": "KeyerMode",
+    "labelArg": 0
+   }
+  },
+  "paddleModes": {
+   "ios": {
+    "file": "Sources/MorseKit/PaddleKeyer.swift",
+    "enum": "Mode"
+   },
+   "android": {
+    "file": "morsekit/PaddleKeyer.kt",
+    "enum": "Mode"
+   },
+   "desktop": {
+    "file": "morsekit/PaddleKeyer.kt",
+    "enum": "Mode"
+   }
+  },
+  "onScreenKeyTypes": {
+   "ios": {
+    "file": "MorseTrainerApp/OnScreenPaddles.swift",
+    "enum": "OnScreenKeyType"
+   },
+   "android": {
+    "file": "Settings.kt",
+    "enum": "OnScreenKeyType"
+   },
+   "desktop": {
+    "file": "Settings.kt",
+    "enum": "OnScreenKeyType"
+   }
+  },
+  "revealModes": {
+   "ios": {
+    "file": "MorseTrainerApp/AppSettings.swift",
+    "enum": "RevealMode",
+    "labels": "label"
+   },
+   "android": {
+    "file": "Settings.kt",
+    "enum": "RevealMode",
+    "labelArg": 0
+   },
+   "desktop": {
+    "file": "Settings.kt",
+    "enum": "RevealMode",
+    "labelArg": 0
+   }
+  },
+  "practiceDurations": {
+   "ios": {
+    "file": "MorseTrainerApp/AppSettings.swift",
+    "enum": "PracticeDuration",
+    "labels": "label"
+   },
+   "android": {
+    "file": "Settings.kt",
+    "enum": "PracticeDuration",
+    "labelArg": 0
+   },
+   "desktop": {
+    "file": "Settings.kt",
+    "enum": "PracticeDuration",
+    "labelArg": 0
+   }
+  },
+  "storyContent": {
+   "ios": {
+    "file": "MorseTrainerApp/AppSettings.swift",
+    "enum": "StoryContent",
+    "labels": "label"
+   },
+   "android": {
+    "file": "Settings.kt",
+    "enum": "StoryContent",
+    "labelArg": 0
+   },
+   "desktop": {
+    "file": "Settings.kt",
+    "enum": "StoryContent",
+    "labelArg": 0
+   }
+  },
+  "backgroundNoiseLevels": {
+   "ios": {
+    "file": "MorseTrainerApp/AppSettings.swift",
+    "enum": "BackgroundNoiseLevel"
+   },
+   "android": {
+    "file": "Settings.kt",
+    "enum": "BackgroundNoiseLevel"
+   },
+   "desktop": {
+    "file": "Settings.kt",
+    "enum": "BackgroundNoiseLevel"
+   }
+  },
+  "proficiency": {
+   "ios": {
+    "file": "MorseTrainerApp/AppSettings.swift",
+    "enum": "Proficiency"
+   },
+   "android": {
+    "file": "Settings.kt",
+    "enum": "Proficiency"
+   },
+   "desktop": {
+    "file": "Settings.kt",
+    "enum": "Proficiency"
+   }
+  },
+  "listenContent": {
+   "ios": {
+    "file": "MorseTrainerApp/AppSettings.swift",
+    "enum": "ListenContent"
+   },
+   "android": {
+    "file": "Listen.kt",
+    "enum": "ListenContent"
+   },
+   "desktop": {
+    "file": "Listen.kt",
+    "enum": "ListenContent"
+   }
+  },
+  "listenReadback": {
+   "ios": {
+    "file": "MorseTrainerApp/AppSettings.swift",
+    "enum": "ListenReadback"
+   },
+   "android": {
+    "file": "Listen.kt",
+    "enum": "ListenReadback"
+   },
+   "desktop": {
+    "file": "Listen.kt",
+    "enum": "ListenReadback"
+   }
+  },
+  "listenGaps": {
+   "ios": {
+    "file": "MorseTrainerApp/AppSettings.swift",
+    "enum": "AnswerGap",
+    "labels": "label"
+   },
+   "android": {
+    "file": "Listen.kt",
+    "enum": "ListenGap",
+    "labelArg": 0
+   },
+   "desktop": {
+    "file": "Listen.kt",
+    "enum": "ListenGap",
+    "labelArg": 0
+   }
+  },
+  "answerEntryModes": {
+   "ios": {
+    "file": "Sources/MorseKit/AnswerEntry.swift",
+    "enum": "AnswerEntryMode"
+   },
+   "android": {
+    "file": "morsekit/AnswerEntry.kt",
+    "enum": "AnswerEntryMode"
+   },
+   "desktop": {
+    "file": "morsekit/AnswerEntry.kt",
+    "enum": "AnswerEntryMode"
+   }
+  },
+  "answerEntryTiers": {
+   "ios": {
+    "file": "Sources/MorseKit/AnswerEntry.swift",
+    "enum": "AnswerEntryTier"
+   },
+   "android": {
+    "file": "morsekit/AnswerEntry.kt",
+    "enum": "AnswerEntryTier"
+   },
+   "desktop": {
+    "file": "morsekit/AnswerEntry.kt",
+    "enum": "AnswerEntryTier"
+   }
+  },
+  "qsoExchangeModes": {
+   "ios": {
+    "file": "Sources/MorseKit/PileupQSO.swift",
+    "enum": "QSOContestMode"
+   },
+   "android": {
+    "file": "morsekit/PileupQSO.kt",
+    "enum": "QSOContestMode"
+   },
+   "desktop": {
+    "file": "morsekit/PileupQSO.kt",
+    "enum": "QSOContestMode"
+   }
+  },
+  "missedCallerFeedback": {
+   "ios": {
+    "file": "Sources/MorseKit/PileupQSO.swift",
+    "enum": "MissedCallerFeedback"
+   },
+   "android": {
+    "file": "morsekit/PileupQSO.kt",
+    "enum": "MissedCallerFeedback"
+   },
+   "desktop": {
+    "file": "morsekit/PileupQSO.kt",
+    "enum": "MissedCallerFeedback"
+   }
+  },
+  "bustBehavior": {
+   "ios": {
+    "file": "Sources/MorseKit/PileupQSO.swift",
+    "enum": "BustBehavior"
+   },
+   "android": {
+    "file": "morsekit/PileupQSO.kt",
+    "enum": "BustBehavior"
+   },
+   "desktop": {
+    "file": "morsekit/PileupQSO.kt",
+    "enum": "BustBehavior"
+   }
+  },
+  "qrnLevels": {
+   "ios": {
+    "file": "MorseTrainerApp/AppSettings.swift",
+    "enum": "QRNLevel",
+    "labels": "label"
+   },
+   "android": {
+    "file": "PileupSettings.kt",
+    "enum": "QrnPreset",
+    "labelArg": 0
+   },
+   "desktop": {
+    "file": "PileupSettings.kt",
+    "enum": "QrnPreset",
+    "labelArg": 0
+   }
+  },
+  "contestTypes": {
+   "ios": {
+    "file": "Sources/MorseKit/Contest.swift",
+    "enum": "ContestType"
+   },
+   "android": {
+    "file": "morsekit/Contest.kt",
+    "enum": "ContestType"
+   },
+   "desktop": {
+    "file": "morsekit/Contest.kt",
+    "enum": "ContestType"
+   }
+  },
+  "contestLengths": {
+   "ios": {
+    "file": "MorseTrainerApp/AppSettings.swift",
+    "enum": "ContestLength"
+   },
+   "android": {
+    "file": "morsekit/Contest.kt",
+    "enum": "ContestLength"
+   },
+   "desktop": {
+    "file": "morsekit/Contest.kt",
+    "enum": "ContestLength"
+   }
+  },
+  "examSpeeds": {
+   "ios": {
+    "file": "Sources/MorseKit/MorseExam.swift",
+    "enum": "ExamSpeed"
+   },
+   "android": {
+    "file": "morsekit/MorseExam.kt",
+    "enum": "ExamSpeed"
+   },
+   "desktop": {
+    "file": "morsekit/MorseExam.kt",
+    "enum": "ExamSpeed"
+   }
+  },
+  "cw77Styles": {
+   "ios": {
+    "file": "Sources/MorseKit/MorseDataCW77.swift",
+    "enum": "CW77Style"
+   },
+   "android": {
+    "file": "morsekit/MorseDataCW77.kt",
+    "enum": "Cw77Style"
+   },
+   "desktop": {
+    "file": "morsekit/MorseDataCW77.kt",
+    "enum": "Cw77Style"
+   }
+  },
+  "rapidFireContent": {
+   "ios": {
+    "file": "Sources/MorseKit/RapidFire.swift",
+    "enum": "RapidFireContent"
+   },
+   "android": {
+    "file": "morsekit/RapidFire.kt",
+    "enum": "RapidFireContent"
+   },
+   "desktop": {
+    "file": "morsekit/RapidFire.kt",
+    "enum": "RapidFireContent"
+   }
+  },
+  "rapidFireResponse": {
+   "ios": {
+    "file": "MorseTrainerApp/AppSettings.swift",
+    "enum": "RapidFireResponse"
+   },
+   "android": {
+    "file": "morsekit/RapidFire.kt",
+    "enum": "RapidFireResponse"
+   },
+   "desktop": {
+    "file": "morsekit/RapidFire.kt",
+    "enum": "RapidFireResponse"
+   }
+  },
+  "rapidFirePace": {
+   "ios": {
+    "file": "MorseTrainerApp/AppSettings.swift",
+    "enum": "RapidFirePace"
+   },
+   "android": {
+    "file": "morsekit/RapidFire.kt",
+    "enum": "RapidFirePace"
+   },
+   "desktop": {
+    "file": "morsekit/RapidFire.kt",
+    "enum": "RapidFirePace"
+   }
+  },
+  "invadersInput": {
+   "ios": {
+    "file": "Sources/MorseKit/Invaders.swift",
+    "enum": "InvadersInput"
+   },
+   "android": {
+    "file": "morsekit/Invaders.kt",
+    "enum": "InvadersInput"
+   },
+   "desktop": {
+    "file": "morsekit/Invaders.kt",
+    "enum": "InvadersInput"
+   }
+  },
+  "invadersDifficulty": {
+   "ios": {
+    "file": "Sources/MorseKit/Invaders.swift",
+    "enum": "InvadersDifficulty"
+   },
+   "android": {
+    "file": "morsekit/Invaders.kt",
+    "enum": "InvadersDifficulty"
+   },
+   "desktop": {
+    "file": "morsekit/Invaders.kt",
+    "enum": "InvadersDifficulty"
+   }
+  },
+  "invadersCharacterSet": {
+   "ios": {
+    "file": "Sources/MorseKit/Invaders.swift",
+    "enum": "InvadersCharacterSet"
+   },
+   "android": {
+    "file": "morsekit/Invaders.kt",
+    "enum": "InvadersCharacterSet"
+   },
+   "desktop": {
+    "file": "morsekit/Invaders.kt",
+    "enum": "InvadersCharacterSet"
+   }
+  },
+  "defenderInput": {
+   "ios": {
+    "file": "Sources/MorseKit/Defender.swift",
+    "enum": "DefenderInput"
+   },
+   "android": {
+    "file": "morsekit/Defender.kt",
+    "enum": "DefenderInput"
+   },
+   "desktop": {
+    "file": "morsekit/Defender.kt",
+    "enum": "DefenderInput"
+   }
+  },
+  "asteroidsInput": {
+   "ios": {
+    "file": "Sources/MorseKit/Asteroids.swift",
+    "enum": "AsteroidsInput"
+   },
+   "android": {
+    "file": "morsekit/Asteroids.kt",
+    "enum": "AsteroidsInput"
+   },
+   "desktop": {
+    "file": "morsekit/Asteroids.kt",
+    "enum": "AsteroidsInput"
+   }
+  },
+  "callsignFormats": {
+   "ios": {
+    "file": "Sources/MorseKit/Callsigns.swift",
+    "enum": "CallsignFormat"
+   },
+   "android": {
+    "file": "morsekit/Callsigns.kt",
+    "enum": "CallsignFormat"
+   },
+   "desktop": {
+    "file": "morsekit/Callsigns.kt",
+    "enum": "CallsignFormat"
+   }
+  },
+  "sendingKeyTypes": {
+   "ios": {
+    "file": "Sources/MorseKit/SendingAnalysis.swift",
+    "enum": "SendingKeyType"
+   },
+   "android": {
+    "file": "morsekit/SendingAnalysis.kt",
+    "enum": "SendingKeyType"
+   },
+   "desktop": {
+    "file": "morsekit/SendingAnalysis.kt",
+    "enum": "SendingKeyType"
+   }
+  },
+  "analyzerSources": {
+   "ios": {
+    "file": "MorseTrainerApp/SendingAnalyzer.swift",
+    "enum": "Source"
+   },
+   "android": {
+    "file": "SendingAnalyzerScreen.kt",
+    "enum": "AnalyzerSource"
+   },
+   "desktop": {
+    "file": "SendingAnalyzerScreen.kt",
+    "enum": "AnalyzerSource"
+   }
+  },
+  "analyzerInputs": {
+   "ios": {
+    "file": "MorseTrainerApp/SendingAnalyzer.swift",
+    "enum": "Input"
+   },
+   "android": {
+    "file": "SendingAnalyzerScreen.kt",
+    "enum": "AnalyzerInput"
+   },
+   "desktop": {
+    "file": "SendingAnalyzerScreen.kt",
+    "enum": "AnalyzerInput"
+   }
+  },
+  "analyzerSensitivity": {
+   "ios": {
+    "file": "MorseTrainerApp/SendingAnalyzer.swift",
+    "enum": "Sensitivity"
+   },
+   "android": {
+    "file": "SendingAnalyzerScreen.kt",
+    "enum": "MicSensitivity"
+   },
+   "desktop": {
+    "file": "SendingAnalyzerScreen.kt",
+    "enum": "MicSensitivity"
+   }
+  },
+  "sendingDrillKinds": {
+   "ios": {
+    "file": "Sources/MorseKit/SendingDrill.swift",
+    "enum": "Kind"
+   },
+   "android": {
+    "file": "morsekit/SendingDrill.kt",
+    "enum": "Kind"
+   },
+   "desktop": {
+    "file": "morsekit/SendingDrill.kt",
+    "enum": "Kind"
+   }
+  },
+  "newsSources": {
+   "ios": {
+    "file": "MorseTrainerApp/NewsFetcher.swift",
+    "enum": "NewsSource"
+   },
+   "android": {
+    "file": "NewsFetcher.kt",
+    "enum": "NewsSource"
+   },
+   "desktop": {
+    "file": "NewsFetcher.kt",
+    "enum": "NewsSource"
+   }
+  },
+  "settingsCategories": {
+   "ios": {
+    "file": "Sources/MorseKit/SettingsCatalog.swift",
+    "enum": "SettingsCategory"
+   },
+   "android": {
+    "file": "morsekit/SettingsCatalog.kt",
+    "enum": "SettingsCategory"
+   },
+   "desktop": {
+    "file": "morsekit/SettingsCatalog.kt",
+    "enum": "SettingsCategory"
+   }
+  },
+  "settingsSections": {
+   "ios": {
+    "file": "Sources/MorseKit/SettingsCatalog.swift",
+    "enum": "SettingsSection"
+   },
+   "android": {
+    "file": "morsekit/SettingsCatalog.kt",
+    "enum": "SettingsSection"
+   },
+   "desktop": {
+    "file": "morsekit/SettingsCatalog.kt",
+    "enum": "SettingsSection"
+   }
+  },
+  "firstFourStages": {
+   "ios": {
+    "file": "Sources/MorseKit/FirstFour.swift",
+    "enum": "FirstFourStage"
+   },
+   "android": {
+    "file": "morsekit/FirstFour.kt",
+    "enum": "FirstFourStage"
+   },
+   "desktop": {
+    "file": "morsekit/FirstFour.kt",
+    "enum": "FirstFourStage"
+   }
+  },
+  "operatingProcedureLessons": {
+   "ios": {
+    "file": "Sources/MorseKit/OperatingProcedure.swift",
+    "enum": "OpLesson"
+   },
+   "android": {
+    "file": "morsekit/OperatingProcedure.kt",
+    "enum": "OpLesson"
+   },
+   "desktop": {
+    "file": "morsekit/OperatingProcedure.kt",
+    "enum": "OpLesson"
+   }
+  },
+  "dungeonMonsters": {
+   "ios": {
+    "file": "Sources/MorseKit/Dungeon.swift",
+    "enum": "DungeonMonsterKind"
+   },
+   "android": {
+    "file": "morsekit/Dungeon.kt",
+    "enum": "DungeonMonsterKind"
+   },
+   "desktop": {
+    "file": "morsekit/Dungeon.kt",
+    "enum": "DungeonMonsterKind"
+   }
+  },
+  "referenceCategories": {
+   "ios": {
+    "file": "MorseTrainerApp/ReferenceView.swift",
+    "enum": "RefCategory",
+    "labels": "label"
+   },
+   "android": {
+    "file": "ReferenceScreen.kt",
+    "enum": "RefCategory",
+    "labelArg": 0
+   },
+   "desktop": {
+    "file": "ReferenceScreen.kt",
+    "enum": "RefCategory",
+    "labelArg": 0
+   },
+   "compare": "labels"
+  }
+ }
+}
