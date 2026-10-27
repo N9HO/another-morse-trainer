@@ -36,14 +36,21 @@ the iOS app's navy/teal look.
   one-tap 40 WPM, no-Farnsworth preset sit on its setup sheet, and it
   remembers the style you last chose
 - **Confusion Drill**: targeted review of the pairs you mix up
-- **Head Copy**, **Type It**, **QRQ Speed**: copy in your head with
-  auto-repeats and a timed reveal, free-recall typing, and high-speed copy at
-  35 / 40 / 50 / 60 WPM on its own setting
+- **Head Copy**: copy in your head with auto-repeats and a timed reveal
+- **Type It / QRQ Speed**: free-recall typing, plus high-speed copy at
+  35 / 40 / 50 / 60 WPM on its own speed setting
 - **Rapid Fire**: a stream of call signs / words / number groups / states
   (optionally with ARRL/RAC Field Day sections) / contest serials (cut
   numbers optional) / names / power sent back to back at your chosen pace;
   type as you hear it, head-copy then type, key each one back, or just listen
   and review the transmitted list
+- **The Daily DiDaaaaahDit**: one five-letter word a day, sent in Morse and
+  the same for every player on a given date. Replay it as often as you like,
+  guess as many real five-letter words as it takes, each scored per letter
+  (right place, wrong place, not in the word); the code starts at the speed
+  you chose (up to 75 WPM) and steps down 5 WPM for every three listens and
+  every three wrong guesses, and your brag is the slowest speed you heard it
+  at before you got it. Called Daily Dit elsewhere in this README
 - **Games**: the six arcade games below sit behind one Games tile on the
   home screen (and under a Games heading in the mid-session mode switcher),
   so the main menu stays short as more games are added
@@ -128,8 +135,9 @@ the iOS app's navy/teal look.
   graded the ARRL VEC way: copy it, then fill in 10 blanks from your copy; pass
   on one minute of solid copy (25 / 65 / 100 in a row, numerals, punctuation and
   prosigns counting two) or 7 of 10 answers (random or a bundled passage)
-- **Sending Practice**: key it back (touch or MIDI key); quizzes can also be
-  answered by keying
+- **Sending Practice**: a dedicated hear-it, key-it-back mode on the adaptive
+  ladder, keyed on the on-screen key or a MIDI key, with live decode,
+  always-on replay, and a connected-MIDI-key readout
 - **On-screen paddles**: the on-screen key can be a straight key or a pair of
   touch paddles with a built-in Iambic A / Iambic B / Ultimatic keyer, dit and
   dah memory, and a left-handed swap — wherever you key on screen
@@ -138,10 +146,16 @@ the iOS app's navy/teal look.
   and is sent when you stop keying; key CQ to call CQ), Type It, QRQ Speed,
   Daily Dit, Journey and Morse Defender's typed copy, decoded as you key
   with sidetone
-- **Repeater**: live CW over the Vail network with a server picker and
-  private-channel option, plus Vail Adapter support: MIDI key input *and*
-  output (keyer mode + speed, sidetone, opt-out RX piezo buzz), Bluetooth LE
-  MIDI keys, and unplug detection
+- **Vail repeater**: live CW over the [Vail](https://vail.woozle.org) network
+  with a server picker and private-channel option, plus Vail Adapter support:
+  MIDI key input *and* output (keyer modes, speed, sidetone, RX piezo buzz),
+  unplug detection, chat, and a signal timeline
+- **Bluetooth LE MIDI keys**: found by an in-app scan and paired from inside
+  the app, no system sheet needed (iOS pairs through the system MIDI sheet)
+- **Bluetooth keep-alive and band noise**: a near-silent floor (on by
+  default) that stops Bluetooth earbuds sleeping through the first character,
+  and a separate band-noise level to copy through (heard only while a mode,
+  game or lesson plays, with a short sample when the level is picked)
 - **Reference**: browsable, tap-to-hear chart of prosigns, Q-codes,
   abbreviations, ham lingo, cut numbers, and the full alphabet, with
   per-signal detail
@@ -164,6 +178,7 @@ the iOS app's navy/teal look.
 - **Voice answers**: speak your answer instead of tapping (microphone), with
   NATO/letter-name/digit-word matching, a "did you say…?" confirm-and-correct
   flow, and a learned per-user voice profile
+- **Answer by keying**: key the answer on a touch or hardware Morse key
 - **Keyboard-entry answers**: type the character or word you heard instead
   of picking it, in the choice quizzes, either always or as a progression
   step: each level starts at 4 choices, moves to 6, then to typing, and a
@@ -220,13 +235,11 @@ the iOS app's navy/teal look.
 - Timed practice sessions (1-30 min or open-ended) with mid-session timer
   controls and an end-of-session summary, and a mode switcher that jumps
   between drills without going home
+- A first-run question about how much Morse you already know, which seeds
+  the Characters ladder and unlocks the Journey that far
 - Daily practice reminders (streak-aware; inexact by a few minutes, see
   [PARITY.md](../PARITY.md))
-- **Settings**: character speed to 60 WPM, Farnsworth, sidetone pitch, a
-  Bluetooth keep-alive floor (on by default, so earbuds don't sleep through
-  the first character) and a separate band-noise level to copy through
-  (heard only while a mode, game or lesson plays, with a short sample when
-  the level is picked),
+- **Settings**: character speed to 60 WPM, Farnsworth, sidetone pitch,
   haptics, daily reminders, session length, custom word lists, punctuation
   opt-ins, and a slashed-zero display option
 - **Settings** grouped into eleven categories (Sound, Speed & Timing,
