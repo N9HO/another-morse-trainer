@@ -2644,6 +2644,50 @@
      }
     ]
    }
+  },
+  {
+   "id": "dailyComprehension",
+   "name": "The Daily DiDaaaaahDit",
+   "kind": "screen",
+   "status": {
+    "ios": "present",
+    "android": "present",
+    "desktop": "present"
+   },
+   "claims": {
+    "ios": {
+     "screens": [
+      "DailyComprehensionView.swift"
+     ]
+    },
+    "android": {
+     "routes": [
+      "dailycomprehension"
+     ],
+     "screens": [
+      "DailyComprehensionScreen.kt"
+     ]
+    },
+    "desktop": {
+     "routes": [
+      "dailycomprehension"
+     ],
+     "screens": [
+      "DailyComprehensionScreen.kt"
+     ]
+    }
+   },
+   "readme": {
+    "ios": [
+     "The Daily DiDaaaaahDit"
+    ],
+    "android": [
+     "The Daily DiDaaaaahDit"
+    ],
+    "desktop": [
+     "The Daily DiDaaaaahDit"
+    ]
+   }
   }
  ],
  "optionLists": {
