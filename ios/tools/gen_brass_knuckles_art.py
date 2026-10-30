@@ -7,9 +7,12 @@ Output: one generated source file per tree (Swift for ios/, Kotlin for android/
         and desktop/), each holding the same decoded art:
           - every sprite as w, h, pivot and one hex digit per pixel (palette index),
           - every palette quantised through RGB565 exactly as the device does,
+          - the two bitmap fonts (B612 Mono, SIL OFL 1.1) as one cell of 0..15
+            coverage digits per character,
           - the LOOKS table (which torso/legs/kneel/emblem each opponent wears).
 
-Usage: gen_brass_knuckles_art.py PATH/TO/sprites.rs [--check]
+Usage: gen_brass_knuckles_art.py PATH/TO/firmware/src [--check]
+        (the directory holding sprites.rs and fonts.rs)
   --check  verify the committed files match what would be generated.
 
 The three outputs are parallel ports, not shared code (see CLAUDE.md); this tool
@@ -115,6 +118,43 @@ def parse_looks(src):
     return out
 
 
+def parse_font(src, name):
+    m = re.search(r"pub static %s: Font = Font \{(.*?)\n\};" % name, src, re.S)
+    assert m, name
+    b = m.group(1)
+    w = int(re.search(r"width: (\d+)", b).group(1))
+    h = int(re.search(r"height: (\d+)", b).group(1))
+    chars = re.search(r'chars: b"(.*?)",\n', b).group(1)
+    chars = chars.replace('\\"', '"').replace("\\\\", "\\")
+    boxes = [tuple(map(int, x)) for x in re.findall(r"\[(\d+), (\d+), (\d+), (\d+)\]", re.search(r"boxes: &\[(.*?)\],\n    offsets", b, re.S).group(1))]
+    offs = [int(x) for x in re.findall(r"\d+", re.search(r"offsets: &\[(.*?)\],\n    pixels", b, re.S).group(1))]
+    px = num_list(re.search(r"pixels: &\[(.*?)\],\n?\s*$", b, re.S).group(1))
+    assert len(chars) == len(boxes) == len(offs) - 1, (name, len(chars), len(boxes), len(offs))
+    cells = []
+    for i in range(len(chars)):
+        left, top, bw, bh = boxes[i]
+        g = px[offs[i]:offs[i + 1]]
+        cell = []
+        for y in range(h):
+            for x in range(w):
+                bx, by = x - left, y - top
+                if 0 <= bx < bw and 0 <= by < bh:
+                    n = by * bw + bx
+                    cell.append((g[n // 2] >> (4 if n % 2 == 0 else 0)) & 15)
+                else:
+                    cell.append(0)
+        cells.append("".join("%x" % v for v in cell))
+    return (name, w, h, chars, cells)
+
+
+def kq(s):
+    return '"' + s.replace("\\", "\\\\").replace('"', '\\"').replace("$", "\\$") + '"'
+
+
+def sq(s):
+    return '"' + s.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
 def argb(c):
     return 0xFF000000 | c[0] << 16 | c[1] << 8 | c[2]
 
@@ -126,7 +166,14 @@ def kotlin(art):
           "class BkSprite(val w: Int, val h: Int, val ox: Int, val oy: Int, val pixels: String)", "",
           "/** Opponent look: indexes into the torso and legs tables. */",
           "class BkLook(val torso: Int, val legs: Int, val kneel: Int, val emblem: Boolean)", "",
+          "/** A monospace bitmap font: [cells] has one w*h string of 0..15 coverage digits per character in [chars]. */",
+          "class BkFont(val w: Int, val h: Int, val chars: String, val cells: List<String>)", "",
           "object BrassKnucklesArt {"]
+    for (n, fw, fh, ch, cells) in art["fonts"]:
+        L.append(f"    val FONT_{n}: BkFont = BkFont({fw}, {fh}, {kq(ch)}, listOf(")
+        for c in cells:
+            L.append(f'        "{c}",')
+        L.append("    ))")
     for name, items in art["sprites"]:
         L.append(f"    val {name}: List<BkSprite> = listOf(")
         for (w, h, ox, oy, px) in items:
@@ -153,7 +200,14 @@ def swift(art):
           "struct BkSprite { let w: Int; let h: Int; let ox: Int; let oy: Int; let pixels: String }", "",
           "/// Opponent look: indexes into the torso and legs tables.",
           "struct BkLook { let torso: Int; let legs: Int; let kneel: Int; let emblem: Bool }", "",
+          "/// A monospace bitmap font: `cells` has one w*h string of 0..15 coverage digits per character in `chars`.",
+          "struct BkFont { let w: Int; let h: Int; let chars: String; let cells: [String] }", "",
           "enum BrassKnucklesArt {"]
+    for (n, fw, fh, ch, cells) in art["fonts"]:
+        L.append(f"    static let font{n.capitalize()} = BkFont(w: {fw}, h: {fh}, chars: {sq(ch)}, cells: [")
+        for c in cells:
+            L.append(f'        "{c}",')
+        L.append("    ])")
     for name, items in art["sprites"]:
         L.append(f"    static let {name.lower()}: [BkSprite] = [")
         for (w, h, ox, oy, px) in items:
@@ -175,12 +229,15 @@ def swift(art):
 
 def main():
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
-    src = Path(args[0]).read_text()
+    d = Path(args[0])
+    src = (d / "sprites.rs").read_text()
+    fsrc = (d / "fonts.rs").read_text()
     art = {
         "sprites": [(n, parse_sprites(src, n)) for n in SPRITE_TABLES],
         "palettes": [(n, parse_palettes(src, n)) for n in PALETTE_TABLES],
         "singles": [(n, parse_single(src, n)) for n in PALETTE_SINGLES],
         "looks": parse_looks(src),
+        "fonts": [parse_font(fsrc, n) for n in ("SMALL", "TINY")],
     }
     outs = [(SWIFT_OUT, swift(art))] + [(p, kotlin(art)) for p in KOTLIN_OUTS]
     if "--check" in sys.argv:
