@@ -1,0 +1,95 @@
+{
+  "about": "Continue with the key after a miss (#352 Characters, #347 Sending Practice), read by ios MorseKitCheck, android ContinueAfterMissTest and desktop ContinueAfterMissTest. After a miss in a keyed-answer mode the screen is 'awaiting acknowledgement': keying the correct answer again acts as Next, a wrong re-key is ignored (stays on the miss; the screen counts no further miss), and anything keyed in the first debounceMs after the miss feedback is ignored too, so the dits still being sent when the miss landed cannot answer for the learner. Next/tap still works and is the 'reset' op here.",
+  "derivation": "Worked from the design rule, not by running any port. State: idle, or awaiting(target, missAtMs). 'miss' arms it with the target when the setting is on and the target has a non-blank trimmed form; otherwise it stays idle. 'input' while idle -> inactive. While awaiting: atMs - missAtMs < debounceMs -> debounced; else the text, trimmed and upper-cased, equal to the target upper-cased -> advance (and idle); else wrong (still awaiting). 'reset' (Next pressed, or any new drill) -> idle. The debounce boundary is inclusive: exactly debounceMs after the miss is accepted. 'awaiting' on a step is the state after that step.",
+  "debounceMs": 600,
+  "cases": [
+    { "name": "the correct character after the pause advances",
+      "enabled": true,
+      "steps": [
+        { "op": "miss", "target": "D", "atMs": 1000, "awaiting": true },
+        { "op": "input", "text": "D", "atMs": 1700, "expect": "advance", "awaiting": false }
+      ] },
+    { "name": "case and surrounding spaces do not matter",
+      "enabled": true,
+      "steps": [
+        { "op": "miss", "target": "D", "atMs": 0, "awaiting": true },
+        { "op": "input", "text": " d ", "atMs": 5000, "expect": "advance", "awaiting": false }
+      ] },
+    { "name": "a wrong re-key is ignored and the right one still advances",
+      "enabled": true,
+      "steps": [
+        { "op": "miss", "target": "D", "atMs": 1000, "awaiting": true },
+        { "op": "input", "text": "7", "atMs": 1700, "expect": "wrong", "awaiting": true },
+        { "op": "input", "text": "K", "atMs": 2400, "expect": "wrong", "awaiting": true },
+        { "op": "input", "text": "D", "atMs": 3100, "expect": "advance", "awaiting": false }
+      ] },
+    { "name": "keying inside the debounce is ignored even when it is right",
+      "enabled": true,
+      "steps": [
+        { "op": "miss", "target": "Z", "atMs": 1000, "awaiting": true },
+        { "op": "input", "text": "Z", "atMs": 1000, "expect": "debounced", "awaiting": true },
+        { "op": "input", "text": "Z", "atMs": 1599, "expect": "debounced", "awaiting": true },
+        { "op": "input", "text": "Z", "atMs": 1600, "expect": "advance", "awaiting": false }
+      ] },
+    { "name": "a wrong re-key inside the debounce is debounced, not wrong",
+      "enabled": true,
+      "steps": [
+        { "op": "miss", "target": "Z", "atMs": 1000, "awaiting": true },
+        { "op": "input", "text": "7", "atMs": 1200, "expect": "debounced", "awaiting": true }
+      ] },
+    { "name": "nothing is armed before a miss",
+      "enabled": true,
+      "steps": [
+        { "op": "input", "text": "D", "atMs": 100, "expect": "inactive", "awaiting": false }
+      ] },
+    { "name": "the setting off arms nothing",
+      "enabled": false,
+      "steps": [
+        { "op": "miss", "target": "D", "atMs": 1000, "awaiting": false },
+        { "op": "input", "text": "D", "atMs": 5000, "expect": "inactive", "awaiting": false }
+      ] },
+    { "name": "once advanced, the same key press does not advance twice",
+      "enabled": true,
+      "steps": [
+        { "op": "miss", "target": "D", "atMs": 1000, "awaiting": true },
+        { "op": "input", "text": "D", "atMs": 2000, "expect": "advance", "awaiting": false },
+        { "op": "input", "text": "D", "atMs": 2100, "expect": "inactive", "awaiting": false }
+      ] },
+    { "name": "Next pressed by hand disarms it",
+      "enabled": true,
+      "steps": [
+        { "op": "miss", "target": "D", "atMs": 1000, "awaiting": true },
+        { "op": "reset", "awaiting": false },
+        { "op": "input", "text": "D", "atMs": 3000, "expect": "inactive", "awaiting": false }
+      ] },
+    { "name": "a later miss re-arms with its own target and debounce",
+      "enabled": true,
+      "steps": [
+        { "op": "miss", "target": "D", "atMs": 1000, "awaiting": true },
+        { "op": "input", "text": "D", "atMs": 2000, "expect": "advance", "awaiting": false },
+        { "op": "miss", "target": "K", "atMs": 5000, "awaiting": true },
+        { "op": "input", "text": "D", "atMs": 6000, "expect": "wrong", "awaiting": true },
+        { "op": "input", "text": "K", "atMs": 6100, "expect": "advance", "awaiting": false }
+      ] },
+    { "name": "a word target needs the whole word",
+      "enabled": true,
+      "steps": [
+        { "op": "miss", "target": "CQ", "atMs": 0, "awaiting": true },
+        { "op": "input", "text": "C", "atMs": 1000, "expect": "wrong", "awaiting": true },
+        { "op": "input", "text": "CA", "atMs": 2000, "expect": "wrong", "awaiting": true },
+        { "op": "input", "text": "cq", "atMs": 3000, "expect": "advance", "awaiting": false }
+      ] },
+    { "name": "a target of spaces arms nothing",
+      "enabled": true,
+      "steps": [
+        { "op": "miss", "target": "  ", "atMs": 0, "awaiting": false },
+        { "op": "input", "text": "", "atMs": 5000, "expect": "inactive", "awaiting": false }
+      ] },
+    { "name": "blank keying after a miss is wrong, never an advance",
+      "enabled": true,
+      "steps": [
+        { "op": "miss", "target": "D", "atMs": 0, "awaiting": true },
+        { "op": "input", "text": "  ", "atMs": 5000, "expect": "wrong", "awaiting": true }
+      ] }
+  ]
+}

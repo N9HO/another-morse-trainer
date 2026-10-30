@@ -8738,6 +8738,57 @@ check("an email needs one @ and a dotted domain",
       AccountSync.isPlausibleEmail(" learner@example.org ") && !AccountSync.isPlausibleEmail("learner@example")
         && !AccountSync.isPlausibleEmail("learner example.org") && !AccountSync.isPlausibleEmail("a@b@c.org"))
 
+// ---------------------------------------------------------------------------
+// Continue with the key after a miss (#352, #347), against
+// fixtures/continue-after-miss.json — read by this harness and by the android
+// and desktop ContinueAfterMissTest.
+struct ContinueAfterMissFixture: Decodable {
+    struct Step: Decodable {
+        let op: String
+        let target: String?
+        let text: String?
+        let atMs: Int64?
+        let expect: String?
+        let awaiting: Bool
+    }
+    struct Case: Decodable {
+        let name: String
+        let enabled: Bool
+        let steps: [Step]
+    }
+    let debounceMs: Int64
+    let cases: [Case]
+}
+func loadContinueAfterMissFixture() -> ContinueAfterMissFixture? {
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent()
+        .deletingLastPathComponent().deletingLastPathComponent()
+    guard let data = try? Data(contentsOf: root.appendingPathComponent("fixtures/continue-after-miss.json")) else { return nil }
+    return try? JSONDecoder().decode(ContinueAfterMissFixture.self, from: data)
+}
+print("\nContinue with the key after a miss (fixtures/continue-after-miss.json):")
+if let fx = loadContinueAfterMissFixture() {
+    check("debounce is \(fx.debounceMs) ms", ContinueAfterMiss.debounceMs == fx.debounceMs)
+    check("fixture has cases", !fx.cases.isEmpty)
+    for c in fx.cases {
+        var machine = ContinueAfterMiss()
+        var ok = true
+        for s in c.steps {
+            switch s.op {
+            case "miss": machine.miss(target: s.target ?? "", atMs: s.atMs ?? 0, enabled: c.enabled)
+            case "input":
+                if machine.input(s.text ?? "", atMs: s.atMs ?? 0).rawValue != s.expect { ok = false }
+            case "reset": machine.reset()
+            default: ok = false
+            }
+            if machine.isAwaiting != s.awaiting { ok = false }
+        }
+        check("continue after miss: \(c.name)", ok)
+    }
+} else {
+    check("fixtures/continue-after-miss.json loads and decodes", false)
+}
+
 // MARK: - UI contract: option lists
 //
 // Every enumerated option list the user picks from is the same, in the same

@@ -72,6 +72,7 @@ import app.anothermorsetrainer.morsekit.AnswerEntryTier
 import app.anothermorsetrainer.morsekit.AnswerKeys
 import app.anothermorsetrainer.morsekit.CharacterIntroduction
 import app.anothermorsetrainer.morsekit.ConfusionQuiz
+import app.anothermorsetrainer.morsekit.ContinueAfterMiss
 import app.anothermorsetrainer.morsekit.Drill
 import app.anothermorsetrainer.morsekit.PhraseQuiz
 import app.anothermorsetrainer.morsekit.ProgressiveCharacters
@@ -79,6 +80,7 @@ import app.anothermorsetrainer.morsekit.QuizSource
 import app.anothermorsetrainer.morsekit.TypedAnswer
 import app.anothermorsetrainer.morsekit.PaddleKeyer
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
 private val OK_GREEN = Color(0xFF2E7D32)
@@ -251,6 +253,25 @@ fun QuizScreen(
         onDispose { midi.stop(); keyer.stop() }
     }
 
+    // A keyed miss holds the correction for Next; keying the right answer again
+    // is Next too (#352). The decision lives in morsekit/ContinueAfterMiss.
+    val missAck = remember { ContinueAfterMiss() }
+    var ackAwaiting by remember { mutableStateOf(false) }
+
+    /** Apply one keyed re-key while a miss is held. */
+    fun acknowledgeKeyed(sent: String, advanceNow: () -> Unit) {
+        when (missAck.input(sent, System.nanoTime() / 1_000_000)) {
+            ContinueAfterMiss.Outcome.ADVANCE -> {
+                ackAwaiting = missAck.isAwaiting
+                keyer.clear()
+                advanceNow()
+            }
+            // A wrong or too-early re-key is dropped: no new miss, no penalty.
+            ContinueAfterMiss.Outcome.WRONG, ContinueAfterMiss.Outcome.DEBOUNCED -> keyer.clear()
+            ContinueAfterMiss.Outcome.INACTIVE -> ackAwaiting = false
+        }
+    }
+
     /** Persist the session once (summary entry or an early Back, whichever first). */
     fun recordSession(): Int? {
         if (recorded) return null
@@ -290,6 +311,8 @@ fun QuizScreen(
      * where the replay button sits, leaking the upcoming answer (issue #63).
      */
     fun advance() {
+        missAck.reset()
+        ackAwaiting = false
         applyChoiceCount()
         drillTier = ladder.tier
         promotedTo = null
@@ -431,6 +454,21 @@ fun QuizScreen(
             if (outcome.correct) haptics.success() else haptics.error()
         }
         revealed = true
+        // A keyed miss: key it again to continue (#352). The decoder is wiped
+        // now and again once the debounce ends, so dits still in flight when
+        // the miss landed cannot be read as the re-key.
+        if (!outcome.correct && Settings.answerByKeying && drill.isKeyable) {
+            missAck.miss(drill.correct, System.nanoTime() / 1_000_000, Settings.continueAfterMiss)
+            ackAwaiting = missAck.isAwaiting
+            if (ackAwaiting) {
+                keyer.clear()
+                val armedRound = round
+                scope.launch {
+                    delay(ContinueAfterMiss.DEBOUNCE_MS)
+                    if (round == armedRound && ackAwaiting) keyer.clear()
+                }
+            }
+        }
     }
 
     /** Grade a typed answer, normalized the shared way; a blank waits. */
@@ -442,6 +480,13 @@ fun QuizScreen(
     // Keyed answers auto-submit once the decoded copy reaches the answer's
     // length and the key has gone idle (the Sending Practice rhythm).
     LaunchedEffect(keyer.decodedText, keyer.isKeying, revealed, round) {
+        if (revealed && ackAwaiting && !keyer.isKeying) {
+            val sent = keyer.decodedText.trim()
+            if (sent.isNotEmpty() && sent.length >= drill.correct.length) {
+                acknowledgeKeyed(sent) { if (phase == QuizPhase.RUNNING) advance() }
+            }
+            return@LaunchedEffect
+        }
         if (!Settings.answerByKeying || revealed || intro != null || phase != QuizPhase.RUNNING || keyer.isKeying) return@LaunchedEffect
         if (!drill.isKeyable) return@LaunchedEffect
         val sent = keyer.decodedText.trim()
@@ -487,12 +532,12 @@ fun QuizScreen(
         }
         if (element == null) {
             if (down == spaceDown) return true   // auto-repeat
-            if (down && revealed) return true
+            if (down && revealed && !ackAwaiting) return true
             spaceDown = down
             keyPressed = down
             keyer.touchKey(down)
         } else {
-            if (down && revealed) return true
+            if (down && revealed && !ackAwaiting) return true
             keyboardPaddles.paddle(element, down)   // ignores a repeat of the held state
         }
         return true
@@ -764,10 +809,18 @@ fun QuizScreen(
             Spacer(Modifier.height(28.dp))
             val keyedMode = Settings.answerByKeying && drill.isKeyable
             if (keyedMode) {
+                if (ackAwaiting) {
+                    Text(
+                        stringResource(R.string.sending_key_to_continue, drill.correct),
+                        color = Brand.teal,
+                        fontSize = 13.sp
+                    )
+                    Spacer(Modifier.height(6.dp))
+                }
                 KeyedAnswerPanel(
                     decoded = keyer.decodedText,
                     keyPressed = keyPressed,
-                    enabled = !revealed,
+                    enabled = !revealed || ackAwaiting,
                     midiDevice = midiDevice,
                     onPaddleKey = { down, ms -> keyer.touchKey(down, ms) },
                     onKey = { down ->
@@ -775,7 +828,14 @@ fun QuizScreen(
                         keyer.touchKey(down)
                     },
                     onClear = { keyer.clear() },
-                    onSubmit = { answer(keyer.submit().uppercase()) }
+                    onSubmit = {
+                        val sent = keyer.submit().uppercase()
+                        if (revealed) {
+                            if (ackAwaiting && sent.isNotEmpty()) acknowledgeKeyed(sent) { advance() }
+                        } else {
+                            answer(sent)
+                        }
+                    }
                 )
             } else if (typedAnswering()) {
                 val single = drill.correct.length == 1

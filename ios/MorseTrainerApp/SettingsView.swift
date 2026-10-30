@@ -755,12 +755,14 @@ struct SettingsView: View {
                 }
                 Toggle("Dah on the left", isOn: $model.settings.paddleSwap)
             }
+            Toggle("Continue with the key after a miss", isOn: $model.settings.continueAfterMiss)
         } header: {
             Text("On-screen key")
         } footer: {
             Text(model.settings.onScreenKey == .paddles
                  ? "Two touch paddles, dit and dah, timed at your speed. Hold one to repeat it; hold both to squeeze. Iambic A stops when you let go; Iambic B adds one more alternate element; Ultimatic repeats whichever paddle you pressed last. \"Dah on the left\" swaps them for a left-handed operator."
                  : "One hold-to-key pad: the tone sounds for as long as you hold it. Choose Paddles to key with two touch paddles and a built-in iambic keyer instead.")
+            + Text(" \"Continue with the key after a miss\": when a keyed answer is wrong, key the correct answer to move on, instead of tapping Next. Next still works.")
         }
         .listRowBackground(rowBackground(.onScreenKey))
     }
