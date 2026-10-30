@@ -2644,6 +2644,44 @@
      }
     ]
    }
+  },
+  {
+   "id": "huntSimulator",
+   "name": "POTA hunt simulator",
+   "kind": "screen",
+   "status": {
+    "ios": "present",
+    "android": "present",
+    "desktop": "present"
+   },
+   "claims": {
+    "ios": {
+     "screens": [
+      "HuntSimView.swift"
+     ]
+    },
+    "android": {
+     "screens": [
+      "HuntSimScreen.kt"
+     ]
+    },
+    "desktop": {
+     "screens": [
+      "HuntSimScreen.kt"
+     ]
+    }
+   },
+   "readme": {
+    "ios": [
+     "Operating Procedure"
+    ],
+    "android": [
+     "Operating Procedure"
+    ],
+    "desktop": [
+     "Operating Procedure"
+    ]
+   }
   }
  ],
  "optionLists": {
