@@ -269,7 +269,8 @@ there is one target and one code base; the Mac-only code is in
   opens the user guide.
 - **The leaderboard** needs App Attest to post. Where the Mac cannot attest,
   the boards stay readable and a run says why it was not posted, as in the
-  simulator.
+  simulator; Settings shows one line in place of the Share scores switch and
+  buddy pairing explains itself (#349, `AttestationAvailability`).
 - **Listen & Learn** keeps playing in the background: a Mac app is not
   suspended when its window is not in front.
 - **Sandbox**: the Mac build is sandboxed with network-client and

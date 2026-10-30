@@ -1220,8 +1220,10 @@
     <string name="settings_leaderboard_delete_confirm_body">Removes every score this install has posted to the shared leaderboard, on every mode. This cannot be undone.</string>
     <string name="settings_leaderboard_delete_done">Your scores were deleted.</string>
     <string name="settings_leaderboard_delete_failed">Couldn\'t delete: %1$s</string>
-    <string name="settings_leaderboard_footer">Off by default. When on, each finished Rapid Fire, Contest, Pileup Runner or arcade run is sent to the shared leaderboard under your display name and graded there: the board ranks server-graded copies, the speed summed over the items you copied correctly, so a game\'s board number is not its on-screen score. Only builds installed from Google Play can post; the board itself is open to everyone.</string>
+    <string name="settings_leaderboard_footer">Off by default. When on, each finished Rapid Fire, Contest, Pileup Runner or arcade run is sent to the shared leaderboard under your display name and graded there: the board ranks server-graded copies, the speed summed over the items you copied correctly, so a game\'s board number is not its on-screen score. Only builds installed from Google Play, on a device with Google Play services, can post; the board itself is open to everyone, and without Play your scores stay on the device as personal bests.</string>
     <string name="settings_leaderboard_unconfigured">The leaderboard is not enabled in this build.</string>
+    <!-- No Google Play services on this device (#349). One line; the iOS and desktop apps say the equivalent for their platforms. -->
+    <string name="settings_leaderboard_no_play">Ranked scores and buddy streaks need Google Play services, which this device does not have. Everything else works, and your scores stay on this device as personal bests.</string>
     <!-- Settings › Leaderboard &amp; Buddy › Buddy streak (docs/buddy-streak-design.md, #219, #237) -->
     <string name="settings_buddy">Buddy streak</string>
     <string name="settings_buddy_unpaired">Invite a buddy, or join with a code they send you.</string>
@@ -1260,7 +1262,7 @@
     <string name="settings_buddy_leave_confirm_body">Ends your buddy streak with %1$s, for both of you. Your other buddies are not affected, and either of you can pair again with a new code.</string>
     <string name="settings_buddy_refreshing">Checking…</string>
     <string name="settings_buddy_error">Couldn\'t do that: %1$s</string>
-    <string name="settings_buddy_footer">Pair with up to ten people and keep a separate streak with each: each day you both practice counts, and a day either of you misses resets it. One practice counts for every buddy. Your buddies see your leaderboard display name and whether you practiced each day, nothing else. Leaving a buddy ends that streak for both of you and keeps the others. Pairing works on its own; the leaderboard switch above stays yours. Only builds installed from Google Play can pair.</string>
+    <string name="settings_buddy_footer">Pair with up to ten people and keep a separate streak with each: each day you both practice counts, and a day either of you misses resets it. One practice counts for every buddy. Your buddies see your leaderboard display name and whether you practiced each day, nothing else. Leaving a buddy ends that streak for both of you and keeps the others. Pairing works on its own; the leaderboard switch above stays yours. Only builds installed from Google Play, on a device with Google Play services, can pair.</string>
     <!-- The home screen's buddy line switch (#253), under the Buddy streak section. -->
     <string name="settings_buddy_on_home">Show buddy line on home screen</string>
     <string name="settings_buddy_on_home_footer">The line under your streak on the home screen: who has practiced today and your buddy streak. It appears only while you have a buddy. Turning it off hides it there and nowhere else; the list above and the daily reminder still show your buddies.</string>

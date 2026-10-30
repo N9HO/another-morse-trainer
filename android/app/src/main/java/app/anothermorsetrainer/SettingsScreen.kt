@@ -958,12 +958,13 @@ fun SettingsScreen(
                             // The shared leaderboard (docs/high-scores-design.md, step 2):
                             // opt-in, off by default, a display name the server's rule
                             // accepts, and the delete button both stores require. The
-                            // toggle is offered even before the maintainer has filled the
-                            // Cloud project number, so the preference survives into the
-                            // build that turns attestation on; the footnote says why
-                            // nothing is posted meanwhile.
+                            // switch, the name and the delete button appear only where the
+                            // device can attest; elsewhere (no Google Play services, an
+                            // unconfigured build) one line replaces them (#349,
+                            // AttestationAvailability).
                             SectionHeader(stringResource(R.string.settings_leaderboard))
                             SettingsGroup {
+                              if (LeaderboardClient.features.shareSwitchVisible) {
                                 Row(
                                     modifier = Modifier.fillMaxWidth().padding(16.dp),
                                     verticalAlignment = Alignment.CenterVertically,
@@ -1020,14 +1021,17 @@ fun SettingsScreen(
                                         )
                                     }
                                 }
-                                if (!LeaderboardClient.isConfigured) {
-                                    GroupDivider()
-                                    Text(
-                                        stringResource(R.string.settings_leaderboard_unconfigured),
-                                        color = Brand.warning, fontSize = 12.sp,
-                                        modifier = Modifier.padding(16.dp)
-                                    )
-                                }
+                              } else {
+                                // No Google Play services (or an unconfigured build): the
+                                // switch, Delete my scores and the prompt are gone, one
+                                // line says why, and nothing asks for Play (#349). Scores
+                                // stay local personal bests.
+                                Text(
+                                    stringResource(LeaderboardClient.unavailableNoteRes(LeaderboardClient.attestationState)),
+                                    color = Brand.warning, fontSize = 12.sp,
+                                    modifier = Modifier.padding(16.dp)
+                                )
+                              }
                             }
                             SectionFooter(stringResource(R.string.settings_leaderboard_footer))
                         }
@@ -1279,14 +1283,14 @@ private fun BuddySection() {
     val full = status?.isFull == true
     val today = Buddy.today()
     val hasName = BuddyClient.displayName() != null
-    val ready = hasName && LeaderboardClient.isConfigured && busy == null
+    val ready = hasName && LeaderboardClient.canAttest && busy == null
     // Resource strings read at composition (lint: LocalContextGetResources).
     val errorTemplate = stringResource(R.string.settings_buddy_error)
     // Why pairing cannot start on this install, or null. Invite and Join stay
     // tappable while it is set (#335): their rows looked the same enabled or
     // not, so a tap that did nothing said nothing. The tap explains instead.
     val unavailableReason = when {
-        !LeaderboardClient.isConfigured -> stringResource(R.string.settings_leaderboard_unconfigured)
+        !LeaderboardClient.canAttest -> stringResource(LeaderboardClient.unavailableNoteRes(LeaderboardClient.attestationState))
         !hasName -> stringResource(R.string.settings_buddy_no_name)
         else -> null
     }
@@ -1504,10 +1508,10 @@ private fun BuddySection() {
                 modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp)
             )
         }
-        if (!LeaderboardClient.isConfigured) {
+        if (!LeaderboardClient.canAttest) {
             GroupDivider()
             Text(
-                stringResource(R.string.settings_leaderboard_unconfigured),
+                stringResource(LeaderboardClient.unavailableNoteRes(LeaderboardClient.attestationState)),
                 color = Brand.warning, fontSize = 12.sp,
                 modifier = Modifier.padding(16.dp)
             )
