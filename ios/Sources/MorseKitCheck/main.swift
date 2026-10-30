@@ -8789,6 +8789,72 @@ if let fx = loadContinueAfterMissFixture() {
     check("fixtures/continue-after-miss.json loads and decodes", false)
 }
 
+// MARK: - UI contract: option lists
+//
+// Every enumerated option list the user picks from is the same, in the same
+// order, on every app. fixtures/keyer-modes.json (#348) and
+// fixtures/option-lists.json are read here, by the Kotlin
+// OptionListsFixtureTest on android and desktop, and by parity/check.py.
+// The harness can only see MorseKit; the app-target enums (the Vail adapter's
+// KeyerMode, RevealMode, PracticeDuration ...) are checked statically by
+// parity/check.py, and the keyer-mode labels are also read out of
+// MIDIOutput.swift's source text below, because that is the list #348 is about.
+print("\nOption lists (fixtures/keyer-modes.json, fixtures/option-lists.json):")
+func loadUIContractFixture(_ name: String) -> [String: Any]? {
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent()
+        .deletingLastPathComponent().deletingLastPathComponent()
+    guard let data = try? Data(contentsOf: root.appendingPathComponent("fixtures/" + name)) else { return nil }
+    return (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+}
+/// Lowercase letters and digits only: iambicA, IAMBIC_A and "Iambic A" agree.
+func foldOptionName(_ s: String) -> String {
+    String(s.lowercased().filter { $0.isLetter || $0.isNumber })
+}
+@MainActor
+func checkOptionList(_ fixture: [String: Any], _ key: String, _ cases: [String]) {
+    let want = ((fixture[key] as? [String]) ?? []).map(foldOptionName)
+    check("option list \(key) equals the fixture, in order",
+          !want.isEmpty && want == cases.map(foldOptionName))
+}
+if let fx = loadUIContractFixture("option-lists.json") {
+    checkOptionList(fx, "paddleModes", PaddleKeyer.Mode.allCases.map { String(describing: $0) })
+    checkOptionList(fx, "answerEntryModes", AnswerEntryMode.allCases.map { String(describing: $0) })
+    checkOptionList(fx, "answerEntryTiers", AnswerEntryTier.allCases.map { String(describing: $0) })
+    checkOptionList(fx, "qsoExchangeModes", QSOContestMode.allCases.map { String(describing: $0) })
+} else {
+    check("fixtures/option-lists.json loads and decodes", false)
+}
+if let kx = loadUIContractFixture("keyer-modes.json"), let want = kx["keyerModes"] as? [String] {
+    check("fixtures/keyer-modes.json lists the ten Vail keyer modes", want.count == 10)
+    // MIDIOutput.KeyerMode is in the app target, out of the harness's reach:
+    // read its displayName table from the source text instead.
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent()
+        .deletingLastPathComponent().deletingLastPathComponent()
+    if let text = try? String(contentsOf: root.appendingPathComponent("ios/MorseTrainerApp/MIDIOutput.swift"),
+                              encoding: .utf8) {
+        var labels: [String] = []
+        var inTable = false
+        for line in text.split(separator: "\n", omittingEmptySubsequences: false) {
+            let t = line.trimmingCharacters(in: .whitespaces)
+            if t.hasPrefix("public var displayName") { inTable = true; continue }
+            guard inTable else { continue }
+            if t.hasPrefix("case ."), let open = t.firstIndex(of: "\"") {
+                let rest = t[t.index(after: open)...]
+                if let close = rest.firstIndex(of: "\"") { labels.append(String(rest[..<close])) }
+            } else if t == "}" && !labels.isEmpty {
+                break
+            }
+        }
+        check("MIDIOutput.KeyerMode displayName table equals the keyer-mode fixture, in order", labels == want)
+    } else {
+        check("MIDIOutput.swift is readable for the keyer-mode check", false)
+    }
+} else {
+    check("fixtures/keyer-modes.json loads and decodes", false)
+}
+
 print("\n────────────────────────────")
 if failures == 0 {
     print("✅ All \(checks) checks passed.\n")
