@@ -1066,3 +1066,109 @@ class BoxingFight(
         }
     }
 }
+
+/** What a mark or gap is, for judging timing. */
+enum class BoxingKind(val ideal: Double) { DIT(1.0), DAH(3.0), ELEMENT_GAP(1.0), CHAR_GAP(3.0), WORD_GAP(7.0) }
+
+/** A character the key spelled, and the worst timing in it; [char] is null for a pattern no character uses. */
+data class BoxingJudged(val char: Char?, val quality: BoxingQuality)
+
+/**
+ * Judges keying the way the game does (logic/src/timing.rs): each mark and gap is measured in dots,
+ * a character is judged on its own marks and the gaps inside it (not the pause before it), and a
+ * character ends two dots after its last mark. Feed it key edges with [edge] and call [poll] on the clock.
+ */
+object BoxingTiming {
+    private const val GOOD_ERROR = 0.20
+    private const val DAH_DOTS = 2.0
+    private const val CHAR_GAP_DOTS = 2.0
+    private const val WORD_GAP_DOTS = 5.0
+
+    /** The decoder's split points below and above the ideal length, in dots. */
+    private fun splits(k: BoxingKind): Pair<Double?, Double?> = when (k) {
+        BoxingKind.DIT -> null to DAH_DOTS
+        BoxingKind.DAH -> DAH_DOTS to null
+        BoxingKind.ELEMENT_GAP -> null to CHAR_GAP_DOTS
+        BoxingKind.CHAR_GAP -> CHAR_GAP_DOTS to WORD_GAP_DOTS
+        BoxingKind.WORD_GAP -> WORD_GAP_DOTS to null
+    }
+
+    /**
+     * Good: within 20% of ideal. Bad: more than halfway from ideal to a decoder split point.
+     * Off: between, and beyond ideal on a side with no split point.
+     */
+    fun quality(kind: BoxingKind, units: Double): BoxingQuality {
+        val ideal = kind.ideal
+        if (Math.abs(units / ideal - 1.0) <= GOOD_ERROR) return BoxingQuality.GOOD
+        val (below, above) = splits(kind)
+        val split = if (units < ideal) below else above
+        return if (split != null && Math.abs(units - ideal) > Math.abs(split - ideal) / 2.0) BoxingQuality.BAD else BoxingQuality.OFF
+    }
+
+    private val CODES: Map<String, Char> by lazy {
+        val m = HashMap<String, Char>()
+        for (c in BoxingRules.KOCH) BoxingRules.code(c)?.let { m.putIfAbsent(it, c) }
+        m
+    }
+
+    /** The character for dots and dashes [marks], or null. */
+    fun charOf(marks: String): Char? = CODES[marks]
+
+    const val MAX_MARKS = 8
+}
+
+class BoxingKeying {
+    private var downAt: Int? = null
+    private var upAt: Int? = null
+    private val marks = StringBuilder()
+    private var worst = BoxingQuality.GOOD
+
+    /** The dots and dashes of the character being keyed. */
+    fun marks(): String = marks.toString()
+
+    /** The worst timing so far in the character being keyed. */
+    fun worst(): BoxingQuality = worst
+
+    fun reset() {
+        downAt = null; upAt = null; marks.setLength(0); worst = BoxingQuality.GOOD
+    }
+
+    private fun worse(a: BoxingQuality, b: BoxingQuality) = if (b.ordinal > a.ordinal) b else a
+
+    private fun finish(): BoxingJudged {
+        val j = BoxingJudged(if (marks.length > BoxingTiming.MAX_MARKS) null else BoxingTiming.charOf(marks.toString()), worst)
+        marks.setLength(0); worst = BoxingQuality.GOOD; upAt = null
+        return j
+    }
+
+    /** The key went down or up at [atMs]; returns the character the edge finished, if it was a down after a long pause. */
+    fun edge(down: Boolean, atMs: Int, ditMs: Int): BoxingJudged? {
+        if (down) {
+            if (downAt != null) return null
+            var done: BoxingJudged? = null
+            val up = upAt
+            if (up != null && marks.isNotEmpty()) {
+                val gap = (atMs - up).toDouble() / ditMs
+                if (gap >= 2.0) done = finish() else worst = worse(worst, BoxingTiming.quality(BoxingKind.ELEMENT_GAP, gap))
+            }
+            downAt = atMs
+            upAt = null
+            return done
+        }
+        val start = downAt ?: return null
+        downAt = null
+        upAt = atMs
+        val units = (atMs - start).toDouble() / ditMs
+        val dah = units >= 2.0
+        marks.append(if (dah) '-' else '.')
+        worst = worse(worst, BoxingTiming.quality(if (dah) BoxingKind.DAH else BoxingKind.DIT, units))
+        return null
+    }
+
+    /** Ends the character once the key has been up two dots. */
+    fun poll(nowMs: Int, ditMs: Int): BoxingJudged? {
+        val up = upAt ?: return null
+        if (downAt != null || marks.isEmpty()) return null
+        return if (nowMs - up >= 2 * ditMs) finish() else null
+    }
+}

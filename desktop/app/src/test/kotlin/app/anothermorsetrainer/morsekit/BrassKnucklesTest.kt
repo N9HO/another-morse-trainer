@@ -295,4 +295,53 @@ class BrassKnucklesTest {
             }
         }
     }
+
+    // --- The keying judge ----------------------------------------------------------------
+
+    private val keying: JSONObject by lazy {
+        val stream = javaClass.classLoader?.getResourceAsStream("brass-knuckles-keying.json")
+        assertNotNull("fixtures/brass-knuckles-keying.json is not on the test classpath", stream)
+        JSONObject(stream!!.bufferedReader().readText())
+    }
+
+    @Test
+    fun timingQualityIsTheFixtures() {
+        val rows = keying.getJSONArray("quality")
+        for (i in 0 until rows.length()) {
+            val r = rows.getJSONArray(i)
+            val kind = when (r.getString(0)) {
+                "dit" -> BoxingKind.DIT
+                "dah" -> BoxingKind.DAH
+                "elementGap" -> BoxingKind.ELEMENT_GAP
+                "charGap" -> BoxingKind.CHAR_GAP
+                else -> BoxingKind.WORD_GAP
+            }
+            assertEquals("${r.getString(0)} ${r.getDouble(1)}", quality(r.getString(2)), BoxingTiming.quality(kind, r.getDouble(1)))
+        }
+    }
+
+    @Test
+    fun keyingIsJudgedAsTheFixtureSays() {
+        val cases = keying.getJSONArray("keying")
+        assertTrue(cases.length() > 0)
+        for (i in 0 until cases.length()) {
+            val c = cases.getJSONObject(i)
+            val dit = c.getInt("dit")
+            val ops = c.getJSONArray("ops")
+            val want = strings(c.getJSONArray("expect"))
+            assertEquals(ops.length(), want.size)
+            val k = BoxingKeying()
+            for (n in 0 until ops.length()) {
+                val op = ops.getJSONArray(n)
+                val at = op.getInt(1)
+                val got = when (op.getString(0)) {
+                    "down" -> k.edge(true, at, dit)
+                    "up" -> k.edge(false, at, dit)
+                    else -> k.poll(at, dit)
+                }
+                val text = if (got == null) "" else "${got.char ?: '?'}:${got.quality.name.lowercase()}"
+                assertEquals("${c.getString("name")}, step $n", want[n], text)
+            }
+        }
+    }
 }

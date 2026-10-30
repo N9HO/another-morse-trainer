@@ -1106,3 +1106,120 @@ public struct BoxingFight: Sendable {
         copies.removeAll()
     }
 }
+
+// MARK: - The keying judge
+
+/// What a mark or gap is, for judging timing.
+public enum BoxingKind: Sendable {
+    case dit, dah, elementGap, charGap, wordGap
+
+    var ideal: Double {
+        switch self {
+        case .dit, .elementGap: return 1
+        case .dah, .charGap: return 3
+        case .wordGap: return 7
+        }
+    }
+}
+
+/// A character the key spelled, and the worst timing in it; `char` is nil for a pattern no character uses.
+public struct BoxingJudged: Equatable, Sendable {
+    public let char: Character?
+    public let quality: BoxingQuality
+}
+
+/// Judges keying the way the game does (logic/src/timing.rs): each mark and gap is measured in dots,
+/// a character is judged on its own marks and the gaps inside it (not the pause before it), and a
+/// character ends two dots after its last mark. Twin of the Kotlin `BoxingTiming`/`BoxingKeying`.
+public enum BoxingTiming {
+    static let goodError = 0.20
+    static let dahDots = 2.0
+    static let charGapDots = 2.0
+    static let wordGapDots = 5.0
+    public static let maxMarks = 8
+
+    /// The decoder's split points below and above the ideal length, in dots.
+    static func splits(_ k: BoxingKind) -> (Double?, Double?) {
+        switch k {
+        case .dit: return (nil, dahDots)
+        case .dah: return (dahDots, nil)
+        case .elementGap: return (nil, charGapDots)
+        case .charGap: return (charGapDots, wordGapDots)
+        case .wordGap: return (wordGapDots, nil)
+        }
+    }
+
+    /// Good: within 20% of ideal. Bad: more than halfway from ideal to a decoder split point.
+    /// Off: between, and beyond ideal on a side with no split point.
+    public static func quality(_ kind: BoxingKind, _ units: Double) -> BoxingQuality {
+        let ideal = kind.ideal
+        if abs(units / ideal - 1) <= goodError { return .good }
+        let (below, above) = splits(kind)
+        if let split = units < ideal ? below : above, abs(units - ideal) > abs(split - ideal) / 2 { return .bad }
+        return .off
+    }
+
+    static let codes: [String: Character] = {
+        var m: [String: Character] = [:]
+        for c in BoxingRules.koch { if let code = BoxingRules.code(c), m[code] == nil { m[code] = c } }
+        return m
+    }()
+
+    /// The character for dots and dashes `marks`, or nil.
+    public static func char(of marks: String) -> Character? { codes[marks] }
+}
+
+public struct BoxingKeying: Sendable {
+    private var downAt: UInt32?
+    private var upAt: UInt32?
+    public private(set) var marks = ""
+    public private(set) var worst = BoxingQuality.good
+
+    public init() {}
+
+    public mutating func reset() {
+        downAt = nil; upAt = nil; marks = ""; worst = .good
+    }
+
+    private static func worse(_ a: BoxingQuality, _ b: BoxingQuality) -> BoxingQuality {
+        func rank(_ q: BoxingQuality) -> Int { q == .good ? 0 : q == .off ? 1 : 2 }
+        return rank(b) > rank(a) ? b : a
+    }
+
+    private mutating func finish() -> BoxingJudged {
+        let j = BoxingJudged(char: marks.count > BoxingTiming.maxMarks ? nil : BoxingTiming.char(of: marks), quality: worst)
+        marks = ""; worst = .good; upAt = nil
+        return j
+    }
+
+    /// The key went down or up at `atMs`; returns the character the edge finished, if it was a down after a long pause.
+    public mutating func edge(down: Bool, atMs: UInt32, ditMs: Int) -> BoxingJudged? {
+        if down {
+            if downAt != nil { return nil }
+            var done: BoxingJudged?
+            if let up = upAt, !marks.isEmpty {
+                let gap = Double(Int32(bitPattern: atMs &- up)) / Double(ditMs)
+                if gap >= 2 { done = finish() } else {
+                    worst = Self.worse(worst, BoxingTiming.quality(.elementGap, gap))
+                }
+            }
+            downAt = atMs
+            upAt = nil
+            return done
+        }
+        guard let start = downAt else { return nil }
+        downAt = nil
+        upAt = atMs
+        let units = Double(Int32(bitPattern: atMs &- start)) / Double(ditMs)
+        let dah = units >= 2
+        marks.append(dah ? "-" : ".")
+        worst = Self.worse(worst, BoxingTiming.quality(dah ? .dah : .dit, units))
+        return nil
+    }
+
+    /// Ends the character once the key has been up two dots.
+    public mutating func poll(nowMs: UInt32, ditMs: Int) -> BoxingJudged? {
+        guard let up = upAt, downAt == nil, !marks.isEmpty else { return nil }
+        return Int32(bitPattern: nowMs &- up) >= Int32(2 * ditMs) ? finish() : nil
+    }
+}

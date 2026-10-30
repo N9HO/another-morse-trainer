@@ -9018,6 +9018,68 @@ if let bk = loadBrassKnucklesFixture() {
     check("fixtures/brass-knuckles.json loads", false)
 }
 
+// MARK: - Brass Knuckles Knock Out: the keying judge
+//
+// fixtures/brass-knuckles-keying.json, read here and by the Kotlin BrassKnucklesTest (Android
+// and desktop). Derived by hand from the game's timing rules, not from either port.
+print("\nBrass Knuckles Knock Out keying judge (fixtures/brass-knuckles-keying.json):")
+@MainActor
+func checkBrassKnucklesKeying() {
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent()
+        .deletingLastPathComponent().deletingLastPathComponent()
+    guard let data = try? Data(contentsOf: root.appendingPathComponent("fixtures/brass-knuckles-keying.json")),
+          let fx = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+          let table = fx["quality"] as? [[Any]], let cases = fx["keying"] as? [[String: Any]] else {
+        check("fixtures/brass-knuckles-keying.json loads", false)
+        return
+    }
+    func quality(_ s: String) -> BoxingQuality { s == "good" ? .good : s == "off" ? .off : .bad }
+    var bad: [String] = []
+    for row in table {
+        let kind: BoxingKind
+        switch row[0] as? String ?? "" {
+        case "dit": kind = .dit
+        case "dah": kind = .dah
+        case "elementGap": kind = .elementGap
+        case "charGap": kind = .charGap
+        default: kind = .wordGap
+        }
+        let units = (row[1] as? NSNumber)?.doubleValue ?? -1
+        if BoxingTiming.quality(kind, units) != quality(row[2] as? String ?? "") { bad.append("\(row[0]) \(units)") }
+    }
+    check("timing quality matches the fixture (\(table.count) rows)", bad.isEmpty)
+    if !bad.isEmpty { print("    differs: \(bad)") }
+    var firstBad: String?
+    for c in cases {
+        let name = c["name"] as? String ?? "?"
+        let dit = (c["dit"] as? NSNumber)?.intValue ?? 60
+        let ops = c["ops"] as? [[Any]] ?? []
+        let want = c["expect"] as? [String] ?? []
+        var k = BoxingKeying()
+        for (n, op) in ops.enumerated() {
+            let at = UInt32(bitPattern: Int32(truncatingIfNeeded: (op[1] as? NSNumber)?.intValue ?? 0))
+            let got: BoxingJudged?
+            switch op[0] as? String ?? "" {
+            case "down": got = k.edge(down: true, atMs: at, ditMs: dit)
+            case "up": got = k.edge(down: false, atMs: at, ditMs: dit)
+            default: got = k.poll(nowMs: at, ditMs: dit)
+            }
+            var text = ""
+            if let g = got {
+                let q = g.quality == .good ? "good" : g.quality == .off ? "off" : "bad"
+                text = "\(g.char.map { String($0) } ?? "?"):\(q)"
+            }
+            if n >= want.count || text != want[n], firstBad == nil {
+                firstBad = "\(name), step \(n): want \(n < want.count ? want[n] : "-") got \(text)"
+            }
+        }
+    }
+    check("keying is judged as the fixture says (\(cases.count) cases)", firstBad == nil)
+    if let b = firstBad { print("    \(b)") }
+}
+checkBrassKnucklesKeying()
+
 // MARK: - UI contract: option lists
 //
 // Every enumerated option list the user picks from is the same, in the same

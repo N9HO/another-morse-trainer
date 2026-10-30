@@ -1,0 +1,439 @@
+{
+ "$comment": [
+  "Brass Knuckles Knock Out keying judge (BoxingTiming/BoxingKeying, MorseKit on every app).",
+  "Derived by hand from the game's timing rules (logic/src/timing.rs, Derick KO6PBZ): a mark or gap is judged in dots,",
+  "good within 20% of ideal, bad past halfway from ideal to the decoder split (dah 2, character gap 2, word gap 5 dots),",
+  "otherwise off; a character is judged on its marks and the gaps inside it, and ends two dots after its last mark.",
+  "The quality table repeats the assertions in that file's tests. Not captured from any port.",
+  "Times are signed 32-bit patterns of the wrapping millisecond tick.",
+  "Read by ios MorseKitCheck and the Android and desktop BrassKnucklesTest."
+ ],
+ "quality": [
+  [
+   "dit",
+   1.19,
+   "good"
+  ],
+  [
+   "dit",
+   0.81,
+   "good"
+  ],
+  [
+   "dah",
+   3.59,
+   "good"
+  ],
+  [
+   "wordGap",
+   5.61,
+   "good"
+  ],
+  [
+   "dit",
+   1.21,
+   "off"
+  ],
+  [
+   "dah",
+   3.61,
+   "off"
+  ],
+  [
+   "dit",
+   1.5,
+   "off"
+  ],
+  [
+   "dit",
+   1.51,
+   "bad"
+  ],
+  [
+   "charGap",
+   4.0,
+   "off"
+  ],
+  [
+   "charGap",
+   4.01,
+   "bad"
+  ],
+  [
+   "dah",
+   2.39,
+   "bad"
+  ],
+  [
+   "dit",
+   0.3,
+   "off"
+  ],
+  [
+   "dah",
+   6.0,
+   "off"
+  ],
+  [
+   "wordGap",
+   13.0,
+   "off"
+  ],
+  [
+   "elementGap",
+   1.9,
+   "bad"
+  ],
+  [
+   "elementGap",
+   1.4,
+   "off"
+  ],
+  [
+   "elementGap",
+   1.0,
+   "good"
+  ]
+ ],
+ "keying": [
+  {
+   "name": "E, one dit",
+   "dit": 60,
+   "ops": [
+    [
+     "down",
+     0
+    ],
+    [
+     "up",
+     60
+    ],
+    [
+     "poll",
+     179
+    ],
+    [
+     "poll",
+     180
+    ],
+    [
+     "poll",
+     500
+    ]
+   ],
+   "expect": [
+    "",
+    "",
+    "",
+    "E:good",
+    ""
+   ]
+  },
+  {
+   "name": "K, dah dit dah",
+   "dit": 60,
+   "ops": [
+    [
+     "down",
+     0
+    ],
+    [
+     "up",
+     180
+    ],
+    [
+     "down",
+     240
+    ],
+    [
+     "up",
+     300
+    ],
+    [
+     "down",
+     360
+    ],
+    [
+     "up",
+     540
+    ],
+    [
+     "poll",
+     659
+    ],
+    [
+     "poll",
+     660
+    ]
+   ],
+   "expect": [
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "K:good"
+   ]
+  },
+  {
+   "name": "a long dit is still a dit but off",
+   "dit": 60,
+   "ops": [
+    [
+     "down",
+     0
+    ],
+    [
+     "up",
+     60
+    ],
+    [
+     "down",
+     120
+    ],
+    [
+     "up",
+     210
+    ],
+    [
+     "poll",
+     329
+    ],
+    [
+     "poll",
+     330
+    ]
+   ],
+   "expect": [
+    "",
+    "",
+    "",
+    "",
+    "",
+    "I:off"
+   ]
+  },
+  {
+   "name": "a nearly-too-long gap inside a character is bad",
+   "dit": 60,
+   "ops": [
+    [
+     "down",
+     0
+    ],
+    [
+     "up",
+     60
+    ],
+    [
+     "down",
+     174
+    ],
+    [
+     "up",
+     234
+    ],
+    [
+     "poll",
+     353
+    ],
+    [
+     "poll",
+     354
+    ]
+   ],
+   "expect": [
+    "",
+    "",
+    "",
+    "",
+    "",
+    "I:bad"
+   ]
+  },
+  {
+   "name": "the pause before a character is not judged; the next down ends the last one",
+   "dit": 60,
+   "ops": [
+    [
+     "down",
+     0
+    ],
+    [
+     "up",
+     60
+    ],
+    [
+     "down",
+     1000
+    ],
+    [
+     "up",
+     1180
+    ],
+    [
+     "poll",
+     1299
+    ],
+    [
+     "poll",
+     1300
+    ]
+   ],
+   "expect": [
+    "",
+    "",
+    "E:good",
+    "",
+    "",
+    "T:good"
+   ]
+  },
+  {
+   "name": "seven dits spell nothing",
+   "dit": 60,
+   "ops": [
+    [
+     "down",
+     0
+    ],
+    [
+     "up",
+     60
+    ],
+    [
+     "down",
+     120
+    ],
+    [
+     "up",
+     180
+    ],
+    [
+     "down",
+     240
+    ],
+    [
+     "up",
+     300
+    ],
+    [
+     "down",
+     360
+    ],
+    [
+     "up",
+     420
+    ],
+    [
+     "down",
+     480
+    ],
+    [
+     "up",
+     540
+    ],
+    [
+     "down",
+     600
+    ],
+    [
+     "up",
+     660
+    ],
+    [
+     "down",
+     720
+    ],
+    [
+     "up",
+     780
+    ],
+    [
+     "poll",
+     900
+    ]
+   ],
+   "expect": [
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "?:good"
+   ]
+  },
+  {
+   "name": "a down while down is ignored and an up while up is ignored",
+   "dit": 60,
+   "ops": [
+    [
+     "down",
+     0
+    ],
+    [
+     "down",
+     10
+    ],
+    [
+     "up",
+     60
+    ],
+    [
+     "up",
+     70
+    ],
+    [
+     "poll",
+     180
+    ]
+   ],
+   "expect": [
+    "",
+    "",
+    "",
+    "",
+    "E:good"
+   ]
+  },
+  {
+   "name": "the clock wraps",
+   "dit": 60,
+   "ops": [
+    [
+     "down",
+     2147483547
+    ],
+    [
+     "up",
+     2147483607
+    ],
+    [
+     "poll",
+     -2147483570
+    ],
+    [
+     "poll",
+     -2147483569
+    ]
+   ],
+   "expect": [
+    "",
+    "",
+    "",
+    "E:good"
+   ]
+  }
+ ]
+}
