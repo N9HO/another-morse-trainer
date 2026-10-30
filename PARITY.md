@@ -6,8 +6,8 @@ trainer, and they are meant to be **the same trainer**. Since #264 there is a
 third: the desktop app (`desktop/`, Windows and Linux), forked from the Android
 tree and kept as its own independent port. Everything below applies to all
 three; where it still says "both", read "every". This file is the one
-place that says so, lists every exception, and records what the last audit
-found. It exists because of #171: parity was reached once by deliberate
+place that says so and lists every exception; `parity/manifest.json` and
+`parity/check.py` hold the rest. It exists because of #171: parity was reached once by deliberate
 effort, and nothing stopped it drifting again.
 
 ## The rule
@@ -54,6 +54,10 @@ effort, and nothing stopped it drifting again.
 - **Issue templates.** A feature request carries a "Shipped on" checklist
   with one box per platform. A bug report asks where it was seen and carries
   a two-box "fixed or confirmed absent" checklist for whoever closes it.
+- **Parity check.** `parity/check.py` (CI job *Parity check*, see *Audits are
+  replaced by a check* below) fails any pull request that leaves a mode,
+  screen, setting, option list, README heading or platform status diverging
+  between the apps without a manifest record that carries a reason.
 - **Shared fixtures.** `fixtures/` pins the training logic to one set of
   expected values on both ports (see `CLAUDE.md`); a logic change that lands
   on one side fails the other side's build.
@@ -69,11 +73,11 @@ changes and the gap is closed.
 
 | What | Missing on | Why | What the app does instead |
 |---|---|---|---|
-| Pairing a Bluetooth LE MIDI key by scanning from inside the app | iOS | CoreMIDI only exposes a BLE MIDI peripheral once it has been connected through the system `CABTMIDICentralViewController` sheet; there is no app-level scan API. | Opens that system sheet from the screens that take a key (Sending Practice and keyed answers via `SendingKeyerView`, the Repeater, the Sending Analyzer; `BluetoothMIDISheet.swift`). Same outcome: a paired key. |
-| Hardware-key section always visible in Settings | Android | Some Android devices ship without `FEATURE_MIDI`; showing MIDI controls there would offer a feature the device cannot use. | The section is hidden on devices without the feature (`SettingsScreen.kt`, `FEATURE_MIDI` check). On devices that have it, the section matches iOS. |
-| Voice answers: listening starts by itself when the tone ends, and the time-to-recognize clock starts at speech onset | Android | Android's `SpeechRecognizer` is one-shot: each invocation plays the system start sound and takes audio focus, so auto-listening after every prompt would chime over every character; it also owns the microphone, so the app gets no audio to detect onset from. | A "Speak answer" button starts one recognition per prompt (`QuizScreen.kt`); the clock runs from the tap. |
-| A desktop build (#264) | Android | Android has no desktop build of its own. The Apple app reaches the Mac through Mac Catalyst from the same target. | Windows and Linux get the separate `desktop/` app (#264), forked from the Android code and listed below; the Android app itself is phone and tablet only. |
-| Daily reminder at exactly the chosen minute | Android | The app deliberately does not request `SCHEDULE_EXACT_ALARM`, which Android 12+ gates behind a special permission; an inexact alarm may fire minutes late when the OS batches it. | `setInexactRepeating` at the chosen time; the reminder still arrives, at minute precision only on iOS. |
+| <a id="ex-ios-ble-scan"></a>Pairing a Bluetooth LE MIDI key by scanning from inside the app | iOS | CoreMIDI only exposes a BLE MIDI peripheral once it has been connected through the system `CABTMIDICentralViewController` sheet; there is no app-level scan API. | Opens that system sheet from the screens that take a key (Sending Practice and keyed answers via `SendingKeyerView`, the Repeater, the Sending Analyzer; `BluetoothMIDISheet.swift`). Same outcome: a paired key. |
+| <a id="ex-android-midi-section"></a>Hardware-key section always visible in Settings | Android | Some Android devices ship without `FEATURE_MIDI`; showing MIDI controls there would offer a feature the device cannot use. | The section is hidden on devices without the feature (`SettingsScreen.kt`, `FEATURE_MIDI` check). On devices that have it, the section matches iOS. |
+| <a id="ex-android-voice-auto"></a>Voice answers: listening starts by itself when the tone ends, and the time-to-recognize clock starts at speech onset | Android | Android's `SpeechRecognizer` is one-shot: each invocation plays the system start sound and takes audio focus, so auto-listening after every prompt would chime over every character; it also owns the microphone, so the app gets no audio to detect onset from. | A "Speak answer" button starts one recognition per prompt (`QuizScreen.kt`); the clock runs from the tap. |
+| <a id="ex-android-desktop-build"></a>A desktop build (#264) | Android | Android has no desktop build of its own. The Apple app reaches the Mac through Mac Catalyst from the same target. | Windows and Linux get the separate `desktop/` app (#264), forked from the Android code and listed below; the Android app itself is phone and tablet only. |
+| <a id="ex-android-reminder-exact"></a>Daily reminder at exactly the chosen minute | Android | The app deliberately does not request `SCHEDULE_EXACT_ALARM`, which Android 12+ gates behind a special permission; an inexact alarm may fire minutes late when the OS batches it. | `setInexactRepeating` at the chosen time; the reminder still arrives, at minute precision only on iOS. |
 
 #### Desktop (Windows, Linux) — #264
 
@@ -82,15 +86,15 @@ cannot do, and why (details in `docs/desktop-design.md` §2).
 
 | What | Missing on | Why | What the app does instead |
 |---|---|---|---|
-| Bluetooth LE MIDI keys | desktop | Java Sound's MIDI providers are WinMM on Windows and ALSA raw MIDI on Linux; BLE MIDI is exposed only through WinRT (Windows) and as an ALSA sequencer client with no raw-MIDI node (BlueZ), neither reachable from `javax.sound.midi`, and Java has no Bluetooth stack to scan with. | USB MIDI keys (the Vail Adapter) and the keyboard (Space, `[` `]`); the hardware-key settings say so (`DesktopCopy.KEY_CONNECT_HINT`). |
-| Voice answers | desktop | No speech recognizer is reachable from the JVM: Windows' is WinRT-only, and Linux has no system recognizer. | Typed, choice and keyed answers; Settings says why instead of the switch. |
-| Daily reminder | desktop | A reminder must fire while the app is closed. Windows needs a WinRT scheduled toast, Linux has no time-of-day scheduler for a sandboxed app; neither is possible from pure Java. | Settings says so instead of the switch. Follow-up with a native helper if asked for. |
-| Haptics | desktop | Desktops have no vibration hardware. | The switch is hidden (`Haptics.isAvailable`). |
-| Ranked leaderboard runs, and buddy streaks (with them the home screen's buddy line and its "Show buddy line on home screen" switch, #253) | desktop | Both rest on device attestation (App Attest, Play Integrity; `docs/high-scores-design.md` §3), which neither OS offers to an open-source app. With no pairing there is never a buddy line to hide, so the switch is not shown. | Runs count toward personal bests; post-run lines say "Not ranked"; the board is readable; Settings explains. Settings search still finds the Buddy section by "home screen" (the shared catalog), and lands on that explanation. The section offers no Invite or Join button, so the phone apps' "a tap that cannot pair says why" fix (#335) has nothing to change here. |
-| Listen & Learn controls in the lock screen, notification or car display | desktop | There is no media-session surface a JVM app can publish to. | The window's own controls; a minimised window keeps playing. |
-| −6 dB headroom on the built-in speaker (#228 iOS, #259 Android) | desktop | Java Sound exposes mixers, not output routes: a laptop's speaker and its headphone jack are usually one mixer, and nothing portable says which is playing, so the app cannot tell when to apply it. Applying it everywhere would quieten headphones and interfaces too. | Every output plays at full level (samples as `fixtures/render.json` pins them); the OS volume is the control. Revisit if desktop users report pops at high speed on laptop speakers. |
-| Daily Dit's "your device is muted" prompt before a listen (#252) | desktop | Java has no portable way to read the system output volume or mute state on Windows or Linux. | Every Play plays; the listen is spent as usual. |
-| Spoken read-back inside the Flatpak | desktop (Linux, Flatpak) | The sandbox has no speech engine; Windows (System.Speech) and a Linux install with `spd-say` or `espeak-ng` do speak. | Shows the text. Bundling espeak-ng is a follow-up. |
+| <a id="ex-desktop-ble"></a>Bluetooth LE MIDI keys | desktop | Java Sound's MIDI providers are WinMM on Windows and ALSA raw MIDI on Linux; BLE MIDI is exposed only through WinRT (Windows) and as an ALSA sequencer client with no raw-MIDI node (BlueZ), neither reachable from `javax.sound.midi`, and Java has no Bluetooth stack to scan with. | USB MIDI keys (the Vail Adapter) and the keyboard (Space, `[` `]`); the hardware-key settings say so (`DesktopCopy.KEY_CONNECT_HINT`). |
+| <a id="ex-desktop-voice"></a>Voice answers | desktop | No speech recognizer is reachable from the JVM: Windows' is WinRT-only, and Linux has no system recognizer. | Typed, choice and keyed answers; Settings says why instead of the switch. |
+| <a id="ex-desktop-reminder"></a>Daily reminder | desktop | A reminder must fire while the app is closed. Windows needs a WinRT scheduled toast, Linux has no time-of-day scheduler for a sandboxed app; neither is possible from pure Java. | Settings says so instead of the switch. Follow-up with a native helper if asked for. |
+| <a id="ex-desktop-haptics"></a>Haptics | desktop | Desktops have no vibration hardware. | The switch is hidden (`Haptics.isAvailable`). |
+| <a id="ex-desktop-ranked"></a>Ranked leaderboard runs, and buddy streaks (with them the home screen's buddy line and its "Show buddy line on home screen" switch, #253) | desktop | Both rest on device attestation (App Attest, Play Integrity; `docs/high-scores-design.md` §3), which neither OS offers to an open-source app. With no pairing there is never a buddy line to hide, so the switch is not shown. | Runs count toward personal bests; post-run lines say "Not ranked"; the board is readable; Settings explains. Settings search still finds the Buddy section by "home screen" (the shared catalog), and lands on that explanation. The section offers no Invite or Join button, so the phone apps' "a tap that cannot pair says why" fix (#335) has nothing to change here. |
+| <a id="ex-desktop-listen-controls"></a>Listen & Learn controls in the lock screen, notification or car display | desktop | There is no media-session surface a JVM app can publish to. | The window's own controls; a minimised window keeps playing. |
+| <a id="ex-desktop-headroom"></a>−6 dB headroom on the built-in speaker (#228 iOS, #259 Android) | desktop | Java Sound exposes mixers, not output routes: a laptop's speaker and its headphone jack are usually one mixer, and nothing portable says which is playing, so the app cannot tell when to apply it. Applying it everywhere would quieten headphones and interfaces too. | Every output plays at full level (samples as `fixtures/render.json` pins them); the OS volume is the control. Revisit if desktop users report pops at high speed on laptop speakers. |
+| <a id="ex-desktop-dailydit-mute"></a>Daily Dit's "your device is muted" prompt before a listen (#252) | desktop | Java has no portable way to read the system output volume or mute state on Windows or Linux. | Every Play plays; the listen is spent as usual. |
+| <a id="ex-desktop-flatpak-speech"></a>Spoken read-back inside the Flatpak | desktop (Linux, Flatpak) | The sandbox has no speech engine; Windows (System.Speech) and a Linux install with `spd-say` or `espeak-ng` do speak. | Shows the text. Bundling espeak-ng is a follow-up. |
 
 ### Same feature, platform mechanism (not gaps)
 
@@ -180,54 +184,56 @@ missing feature.
   `mediaServicesWereReset` (`AudioSession.swift`); Android has no such
   event and catches `IllegalStateException` instead.
 
-## Audit of 2026-09-04, and what closed it
+## Audits are replaced by a check
 
-The audit compared the two trees file by file in five slices: every mode and
-its options, settings and defaults, progress and sharing, the hardware,
-audio, voice, decoder and repeater layers, and the MorseKit logic layer with
-its data tables. Every mode, every data table and every engine constant was
-already on both apps; the divergences were in options a mode offered,
-defaults and ranges, what the Stats screens showed, and the repeater's
-secondary features. **All of them were closed in the same change that
-recorded them**, on the side that lacked each behaviour, in that tree's
-idiom. This section keeps the list so the next audit can start from it, and
-so a regression of any row is recognisable.
+Until #171 closed, parity was kept by audits: someone read the trees side by
+side, wrote down the differences, and fixed them. Two audits (2026-09-04 and
+2026-09-27) found dozens of divergences each, and a third would have found
+more. **That work is now a program.** `python3 parity/check.py` (CI job
+*Parity check*, `.github/workflows/parity.yml`) compares the three trees
+against `parity/manifest.json` on every pull request and fails on any
+divergence the manifest does not record.
 
-Closed on Android (behaviour iOS had): the Journey "misses drain the bar"
-toggle; Code Exam's built-in-passage option; Rapid Fire call-sign shape
-chips; mid-session timer controls (add 5 min, add 1 min, remove the limit);
-the mid-session mode switcher; Head Copy's repeat count, 0–10 s reveal and
-live "Revealing in N…" countdown; the fourth Listen & Learn gap tier; show
-right / wrong and show replay button; copy diagnostic info; Developer ·
-Preview Stage; QSO wait-between-callers, per-caller Farnsworth and
-which-digits-are-cut settings; mode setup remembered across launches (Rapid
-Fire, QRQ speed, Contest, Exam); an explicit Farnsworth switch; the
-most-confused-pairs section; the per-character table with pattern, attempts
-and mastered seal; the Stats header; the session chart's goal line, gridlines
-and axis; the stage name on the share card; the streak badge's milestone
-emoji and best; the mastered count computed with a minimum-attempt gate;
-speed bands over the full history; the repeater's unread-chat badge with a
-per-channel read watermark and 60-second roster expiry; a repeater sidetone
-that ducks other audio instead of taking it; and the "MIDI unavailable"
-readout distinct from "no key connected".
+What the check reads, from source text only (it runs no app code and needs no
+network or toolchain):
 
-Closed on iOS (behaviour Android had): first-run onboarding that asks the
-proficiency once, seeds the ladder and unlocks the Journey that far
-(`JourneyCurriculum.firstLevelBeyond`, now on both), with the per-mode
-"Where are you starting?" card dropped from the setup sheet for the reason
-in #151; keyed answers in every keyable drill, with an in-quiz toggle; the
-QSO "Key my side in Morse" and "re-calls after TU" toggles; an explicit "Use
-my word list" switch with the two-word minimum; session detail's duration,
-fastest copy and speed; the share button hidden until a first session; a
-history decoder that drops one corrupt row instead of the whole history;
-lifetime totals as monotonic counters (seeded once from the existing history
-so nobody's numbers drop); a reset that clears the streak, history and stats
-its dialog promises; the three-tier session chart colours; Reset all
-progress hidden mid-session; live adapter reconfiguration from Settings on
-every screen; a stuck key released when the key is unplugged; the key held
-while any paddle note is held; a lone connected MIDI device taken as the
-adapter for RX buzz; and the note under the keyer picker saying which modes
-the adapter clocks.
+- every training mode (`TrainingMode`), Android and desktop route
+  (`sealed interface Route`) and screen file each tree registers;
+- every enumerated option list a user picks from (keyer modes, paddle modes,
+  durations, reveal modes ...), in order and by label, across the trees, and
+  against `fixtures/keyer-modes.json` and `fixtures/option-lists.json`, which
+  the Swift harness and both Kotlin test suites also read;
+- the Settings catalog of each tree (which settings exist, their titles and
+  their order);
+- the feature headings of the three READMEs;
+- that every feature the manifest says is `limited` or `absent` on a platform
+  has a reason and an anchor in this file.
+
+`python3 parity/check.py --self-test` is the negative control: it feeds the
+checker deliberately drifted data and fails unless every drift is caught.
+
+What it cannot see: behaviour. Whether a slider has the same range, a screen
+the same layout, a drill the same scoring, still takes a reader (or a shared
+fixture, which is why `fixtures/` exists). The check guarantees that no mode,
+screen, setting or option list appears on one app and not another without
+somebody writing down why.
+
+### Adding a feature
+
+1. Build it on every tree (iOS, Android, desktop), one edit per tree.
+2. Add its entry to `parity/manifest.json`: its modes/routes/screens/files per
+   tree, its README headings, and a status per platform. A platform that does
+   not get it needs a `notes` entry with the reason and an anchor here.
+3. Run `python3 parity/check.py`. It names anything it still sees diverge.
+
+A new enumerated setting also gets its list added to `fixtures/option-lists.json`
+and its enum locations to `parity/sources.json`.
+
+## Agreed values (kept from the audits)
+
+The audits' lists of closed items are in git history (this file before the
+check landed). What stays is the record of values and rules the apps agreed
+on, so a regression is recognisable.
 
 Values the two apps now agree on (the iOS value, the original app's, unless
 Android's was plainly safer): character speed floor 15 WPM; Farnsworth off
@@ -270,85 +276,41 @@ MorseKit's own `MorseDecoder`, and save/load. Neither side tests
 `SendingDrill`. The way to close these is the one `CLAUDE.md` prescribes: a
 fixture derived from the spec, read by both.
 
-## Audit of 2026-09-27: open rows
+## Open gaps
 
-A second audit, in the same slices, after CW 77, the Sending Analyzer,
-on-screen paddles, keyboard-entry answers and multiple buddies landed. Those
-five features were found at parity in their logic: the CW 77 table, every
-Sending Analyzer threshold and text, the paddle keyer (pinned by
-`fixtures/paddle-keyer.json`), answer entry (`fixtures/answer-entry.json`) and
-the buddy limits all match. What follows had not been closed when it was
-recorded. Each row is closed per *Closing an item* below.
+The divergences the last audit (2026-09-27) found and nobody has closed yet
+live in the `gaps` list of `parity/manifest.json`, one record each (rows 1-25,
+the copy differences, the layout decisions and the documentation gaps), with
+the platforms it affects, its state and, where the source can show it, a probe
+that makes the check fail when the gap closes so the record cannot go stale.
+`python3 parity/check.py --gaps` prints them. Audit rows had no issue numbers
+when they were written; the `ref` field is the row (`audit-0927-NN`) and
+`issue` is `null` until one is opened.
 
-Behavior (a user can do something on one app and not the other, or gets a
-different result):
+The desktop app was forked from `android/` at `7bcb50a` (2026-09-30), so it
+inherits every Android-side gap as it stood then. It closes one half of row
+16: Head Copy takes R, Return and X on desktop, as on iOS.
 
-| # | Divergence | iOS | Android |
-|---|---|---|---|
-| 1 | Session length in Journey, Sending Practice, Rapid Fire and Pileup Runner | Picker, five-minute default, countdown and timer menu (`AppModel.usesSessionLength`) | None; the run lasts until End. Rapid Fire and Pileup Runner are ranked, so runs are not comparable |
-| 2 | Session length in Short Stories | No picker or timer menu, yet `startSession` starts the `practiceDuration` clock for every mode but Contest, so a story appears to end silently at five minutes; Code Exam and the games may be affected the same way (read from code, not yet run) | Picker and countdown (`DURATION_MODES` includes STORY) |
-| 3 | Timer menu "Subtract 1 minute" | Present (`reduceSessionTime`) | Missing (`SessionMenus.kt`) |
-| 4 | Pileup Runner / Contest options mid-session | In the in-session Settings sheet | Home Settings only (`SettingsScreen.kt` `PILEUP -> scope == null`) |
-| 5 | Your callsign / name from a CW 77, Listen or Common Words session | Your Station section shown | Unreachable; the fields live in the home-only Pileup section |
-| 6 | Display name and Delete my scores with Share scores off | Always shown | Hidden, so deleting scores or buddy pairings needs sharing switched back on |
-| 7 | Post-run leaderboard line | Rank and metric, plus "New personal best · c/t graded correct"; "not ranked" (refused) told apart from "not posted" | Rank and metric or a reason only |
-| 8 | Leaderboard metric display | Rounded (`metric.rounded()`) | Truncated (`toLong()`): 339.6 reads 340 vs 339 |
-| 9 | Display-name validation | Server deny list and specific messages; no error on an empty field | No deny list, one generic message, shown when empty |
-| 10 | Stats › Recent sessions | Whole history (up to 100), each opens its detail | Latest 6 |
-| 11 | Best session accuracy and biggest session | Over the full history | Over `Stats.recent` (50) |
-| 12 | Stats before the first session | Characters table shown | Only the empty message |
-| 13 | Personal bests, lifetime totals and sharing from Home | Unreachable: the Brag Sheet opens only from a session toolbar | On the Progress screen from Home |
-| 14 | Bluetooth LE key in Invaders, Galaga, Dungeon, Asteroids | A paired key feeds them | No `BluetoothKeyButton`, so only USB/Vail MIDI works |
-| 15 | "Studied characters" (Analyzer Groups, Sending Drills) | The Koch ladder's active set | Seed plus every character with stats |
-| 16 | Hardware-keyboard shortcuts in Head Copy (R, Return, X) and R to replay on the new-character intro | Present | Missing |
-| 17 | On-screen key after the answer is revealed | Stays live | Disabled (Sending Practice, Rapid Fire) |
-| 18 | Sidetone and tone-spread slider steps | 10 Hz; "Zero-beat" below 10 Hz | Continuous; "Zero beat" only at 0; stored sidetone not clamped on load |
-| 19 | Pileup min/max speed and wait | Independent; min can pass max | Coupled |
-| 20 | Your callsign input | Free text | Uppercase, letters/digits/`/`, 12 max, blank → W1AW |
-| 21 | Preview tone | Replays the current drill item; silent with none | Always keys PARIS |
-| 22 | Sending Analyzer, microphone input | Key closed | Hardware key stays open with its sidetone |
-| 23 | Sending Analyzer, two keys at once | Merged into one logical key | Recorded separately |
-| 24 | Sending Analyzer, microphone | Stops on interruption or route loss; own denied-permission message | No interruption handling; reuses the decoder's message ("…to decode audio") |
-| 25 | Home Daily Dit card, solved with no WPM recorded | Drops the speed | Shows "copied at  WPM" (a bug) |
-
-Copy and labels (same feature, different words; pick one per row):
-reminder notification title and no-streak body; buddy footer, invite share
-text and the "New invite code" relabel; delete-scores dialog; setting names (Side tone / Sidetone pitch, Speed /
-Character speed, Recognize within / Recognition target, Reveal the letter /
-Reveal answer, and the Pileup Runner rows); Android session rows showing
-record keys ("Pileup", "Stories") where iOS shows mode titles; fastest copy
-"0.84 s" vs "840ms"; the stale iOS QRQ blurb ("35 or 40 WPM", both offer
-35/40/50/60); the Pileup Runner tagline.
-
-Layout, recorded for a decision rather than as gaps: where the voice and
-keyed-answer switches, word pool, "Use my word list", track stage and QRQ
-speed live (setup sheet on iOS, Settings or the mode screen on Android);
-Sending Drills, Sending Analyzer, Reference and the Repeater as toolbar
-icons (iOS) vs tiles (Android); home tile order; the last-used tile
-highlight (iOS only); the setup sheet's long blurb vs short tagline; iOS's
+Layout, recorded for a decision rather than as gaps (gap `layout-decisions`):
+where the voice and keyed-answer switches, word pool, "Use my word list",
+track stage and QRQ speed live (setup sheet on iOS, Settings or the mode
+screen on Android); Sending Drills, Sending Analyzer, Reference and the
+Repeater as toolbar icons (iOS) vs tiles (Android); home tile order; the
+last-used tile highlight; the setup sheet's long blurb vs short tagline; iOS's
 finer Settings sections. If these are accepted as idiom they move to *Same
 feature, platform mechanism*.
 
-Documentation: neither README mentions the Daily Dit; the Android README
-lacks the first-run proficiency question and describes Sending Practice and
-the Repeater more briefly than iOS's.
-
-### The desktop app and this audit
-
-The desktop tree was forked from `android/` at `7bcb50a` (2026-09-30), so it
-inherits every Android-side row above as it stood then. It closes one half of
-row 16: Head Copy takes R, Return and X on desktop, as on iOS (the R-to-replay
-on the new-character intro is still missing on desktop and Android). Closing
-a row now means closing it on every app that has the gap.
-
 ## Closing an item
 
-When an audit, a bug report or a review finds a divergence, add it as a row
-here first, then fix it on the side that lacks it, in that tree's idiom, and
-delete the row in the same pull request. If, on inspection, the behaviour
-turns out to be one the platform cannot provide, move the row to *Documented
-exceptions* instead, with the reason. If the two apps disagree on a default
-or a range, pick the value the user guide documents (or the better one, and
-update the guide), and change the other side. A pull request that closes a
-row is a single-platform PR by nature; tick "Paired issue" and name the row's
-issue, or tick "All platforms" when every side changes.
+When a divergence is found by a bug report or a review, add a record to
+`gaps` in `parity/manifest.json` first, then fix it on the side that lacks
+it, in that tree's idiom, and delete the record in the same pull request
+(the check fails on a recorded gap whose source no longer shows it, so a
+closed gap cannot linger). If, on inspection, the behaviour turns out to be
+one the platform cannot provide, record it under *Documented exceptions*
+above with an `ex-` anchor, and reference that anchor from the feature's
+`notes` in the manifest. If the apps disagree on a default or a range, pick
+the value the user guide documents (or the better one, and update the guide),
+and change the other side. A pull request that closes a gap is a
+single-platform PR by nature; tick "Paired issue" and name the gap's issue, or
+tick "All platforms" when every side changes.

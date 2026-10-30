@@ -1,0 +1,3520 @@
+{
+ "about": "The single machine-readable list of every user-visible feature, mode, game, setting, option list, hardware-key capability and sharing/social feature across the three apps, with a per-platform status (present | limited | absent). Every non-present entry carries a reason and a PARITY.md anchor. parity/check.py compares this file with what each tree's source and README actually register and exits non-zero on any unrecorded divergence. To add a feature: edit all three trees, add its entry here, run `python3 parity/check.py`. See PARITY.md.",
+ "schema": 1,
+ "statuses": {
+  "present": "the app has it",
+  "limited": "the app has it, constrained by a recorded platform limitation or a recorded open difference",
+  "absent": "the app does not have it"
+ },
+ "features": [
+  {
+   "id": "journey",
+   "name": "Journey",
+   "kind": "mode",
+   "status": {
+    "ios": "present",
+    "android": "present",
+    "desktop": "present"
+   },
+   "claims": {
+    "ios": {
+     "modes": [
+      "journey"
+     ],
+     "screens": [
+      "JourneyMapView.swift"
+     ]
+    },
+    "android": {
+     "modes": [
+      "journey"
+     ],
+     "routes": [
+      "journey"
+     ],
+     "screens": [
+      "JourneyScreen.kt"
+     ]
+    },
+    "desktop": {
+     "modes": [
+      "journey"
+     ],
+     "routes": [
+      "journey"
+     ],
+     "screens": [
+      "JourneyScreen.kt"
+     ]
+    }
+   },
+   "readme": {
+    "ios": [
+     "Journey"
+    ],
+    "android": [
+     "Journey"
+    ],
+    "desktop": [
+     "Journey"
+    ]
+   }
+  },
+  {
+   "id": "characters",
+   "name": "Characters (Koch ladder)",
+   "kind": "mode",
+   "status": {
+    "ios": "present",
+    "android": "present",
+    "desktop": "present"
+   },
+   "claims": {
+    "ios": {
+     "modes": [
+      "characters"
+     ]
+    },
+    "android": {
+     "modes": [
+      "characters"
+     ]
+    },
+    "desktop": {
+     "modes": [
+      "characters"
+     ]
+    }
+   },
+   "readme": {
+    "ios": [
+     "Characters"
+    ],
+    "android": [
+     "Characters"
+    ],
+    "desktop": [
+     "Characters"
+    ]
+   }
+  },
+  {
+   "id": "words",
+   "name": "Common Words",
+   "kind": "mode",
+   "status": {
+    "ios": "present",
+    "android": "present",
+    "desktop": "present"
+   },
+   "claims": {
+    "ios": {
+     "modes": [
+      "words"
+     ]
+    },
+    "android": {
+     "modes": [
+      "words"
+     ]
+    },
+    "desktop": {
+     "modes": [
+      "words"
+     ]
+    }
+   },
+   "readme": {
+    "ios": [
+     "Common Words"
+    ],
+    "android": [
+     "Common Words"
+    ],
+    "desktop": [
+     "Common Words"
+    ]
+   }
+  },
+  {
+   "id": "cw77",
+   "name": "CW 77",
+   "kind": "mode",
+   "status": {
+    "ios": "present",
+    "android": "present",
+    "desktop": "present"
+   },
+   "claims": {
+    "ios": {
+     "modes": [
+      "cw77",
+      "cw77listen"
+     ]
+    },
+    "android": {
+     "modes": [
+      "cw77"
+     ],
+     "routes": [
+      "cw77"
+     ]
+    },
+    "desktop": {
+     "modes": [
+      "cw77"
+     ],
+     "routes": [
+      "cw77"
+     ]
+    }
+   },
+   "readme": {
+    "ios": [
+     "CW 77"
+    ],
+    "android": [
+     "CW 77"
+    ],
+    "desktop": [
+     "CW 77"
+    ]
+   }
+  },
+  {
+   "id": "abbreviations",
+   "name": "Abbreviations",
+   "kind": "mode",
+   "status": {
+    "ios": "present",
+    "android": "present",
+    "desktop": "present"
+   },
+   "claims": {
+    "ios": {
+     "modes": [
+      "abbreviations"
+     ]
+    },
+    "android": {
+     "modes": [
+      "abbreviations"
+     ]
+    },
+    "desktop": {
+     "modes": [
+      "abbreviations"
+     ]
+    }
+   },
+   "readme": {
+    "ios": [
+     "Abbreviations"
+    ],
+    "android": [
+     "Abbreviations"
+    ],
+    "desktop": [
+     "Abbreviations"
+    ]
+   }
+  },
+  {
+   "id": "qcodes",
+   "name": "Q-Codes",
+   "kind": "mode",
+   "status": {
+    "ios": "present",
+    "android": "present",
+    "desktop": "present"
+   },
+   "claims": {
+    "ios": {
+     "modes": [
+      "qcodes"
+     ]
+    },
+    "android": {
+     "modes": [
+      "qcodes"
+     ]
+    },
+    "desktop": {
+     "modes": [
+      "qcodes"
+     ]
+    }
+   },
+   "readme": {
+    "ios": [
+     "Q-Codes"
+    ],
+    "android": [
+     "Q-Codes"
+    ],
+    "desktop": [
+     "Q-Codes"
+    ]
+   }
+  },
+  {
+   "id": "prosigns",
+   "name": "Prosigns",
+   "kind": "mode",
+   "status": {
+    "ios": "present",
+    "android": "present",
+    "desktop": "present"
+   },
+   "claims": {
+    "ios": {
+     "modes": [
+      "prosigns"
+     ]
+    },
+    "android": {
+     "modes": [
+      "prosigns"
+     ]
+    },
+    "desktop": {
+     "modes": [
+      "prosigns"
+     ]
+    }
+   },
+   "readme": {
+    "ios": [
+     "Prosigns"
+    ],
+    "android": [
+     "Prosigns"
+    ],
+    "desktop": [
+     "Prosigns"
+    ]
+   }
+  },
+  {
+   "id": "confusion",
+   "name": "Confusion Drill",
+   "kind": "mode",
+   "status": {
+    "ios": "present",
+    "android": "present",
+    "desktop": "present"
+   },
+   "claims": {
+    "ios": {
+     "modes": [
+      "confusion"
+     ]
+    },
+    "android": {
+     "modes": [
+      "confusion"
+     ]
+    },
+    "desktop": {
+     "modes": [
+      "confusion"
+     ]
+    }
+   },
+   "readme": {
+    "ios": [
+     "Confusion Drill"
+    ],
+    "android": [
+     "Confusion Drill"
+    ],
+    "desktop": [
+     "Confusion Drill"
+    ]
+   }
+  },
+  {
+   "id": "headcopy",
+   "name": "Head Copy",
+   "kind": "mode",
+   "status": {
+    "ios": "present",
+    "android": "present",
+    "desktop": "present"
+   },
+   "claims": {
+    "ios": {
+     "modes": [
+      "headcopy"
+     ]
+    },
+    "android": {
+     "modes": [
+      "headcopy"
+     ],
+     "routes": [
+      "headcopy"
+     ],
+     "screens": [
+      "HeadCopyScreen.kt"
+     ]
+    },
+    "desktop": {
+     "modes": [
+      "headcopy"
+     ],
+     "routes": [
+      "headcopy"
+     ],
+     "screens": [
+      "HeadCopyScreen.kt"
+     ]
+    }
+   },
+   "readme": {
+    "ios": [
+     "Head Copy"
+    ],
+    "android": [
+     "Head Copy"
+    ],
+    "desktop": [
+     "Head Copy"
+    ]
+   }
+  },
+  {
+   "id": "typeit",
+   "name": "Type It",
+   "kind": "mode",
+   "status": {
+    "ios": "present",
+    "android": "present",
+    "desktop": "present"
+   },
+   "claims": {
+    "ios": {
+     "modes": [
+      "typed"
+     ]
+    },
+    "android": {
+     "modes": [
+      "typeit"
+     ],
+     "routes": [
+      "typeit"
+     ],
+     "screens": [
+      "TypedQuizScreen.kt"
+     ]
+    },
+    "desktop": {
+     "modes": [
+      "typeit"
+     ],
+     "routes": [
+      "typeit"
+     ],
+     "screens": [
+      "TypedQuizScreen.kt"
+     ]
+    }
+   },
+   "readme": {
+    "ios": [
+     "Type It / QRQ Speed"
+    ],
+    "android": [
+     "Type It"
+    ],
+    "desktop": [
+     "Type It"
+    ]
+   }
+  },
+  {
+   "id": "qrq",
+   "name": "QRQ Speed",
+   "kind": "mode",
+   "status": {
+    "ios": "present",
+    "android": "present",
+    "desktop": "present"
+   },
+   "claims": {
+    "ios": {
+     "modes": [
+      "qrq"
+     ]
+    },
+    "android": {
+     "modes": [
+      "qrq"
+     ],
+     "routes": [
+      "qrq"
+     ],
+     "screens": [
+      "TypedQuizScreen.kt"
+     ]
+    },
+    "desktop": {
+     "modes": [
+      "qrq"
+     ],
+     "routes": [
+      "qrq"
+     ],
+     "screens": [
+      "TypedQuizScreen.kt"
+     ]
+    }
+   },
+   "readme": {
+    "ios": [
+     "Type It / QRQ Speed"
+    ],
+    "android": [
+     "QRQ Speed"
+    ],
+    "desktop": [
+     "QRQ Speed"
+    ]
+   }
+  },
+  {
+   "id": "sending",
+   "name": "Sending Practice",
+   "kind": "mode",
+   "status": {
+    "ios": "present",
+    "android": "present",
+    "desktop": "present"
+   },
+   "claims": {
+    "ios": {
+     "modes": [
+      "sending"
+     ],
+     "screens": [
+      "SendingKeyerView.swift"
+     ]
+    },
+    "android": {
+     "modes": [
+      "sending"
+     ],
+     "routes": [
+      "sending"
+     ],
+     "screens": [
+      "SendingPracticeScreen.kt"
+     ]
+    },
+    "desktop": {
+     "modes": [
+      "sending"
+     ],
+     "routes": [
+      "sending"
+     ],
+     "screens": [
+      "SendingPracticeScreen.kt"
+     ]
+    }
+   },
+   "readme": {
+    "ios": [
+     "Sending Practice"
+    ],
+    "android": [
+     "Sending Practice"
+    ],
+    "desktop": [
+     "Sending Practice"
+    ]
+   }
+  },
+  {
+   "id": "listen",
+   "name": "Listen & Learn",
+   "kind": "mode",
+   "status": {
+    "ios": "present",
+    "android": "present",
+    "desktop": "present"
+   },
+   "claims": {
+    "ios": {
+     "modes": [
+      "listen"
+     ]
+    },
+    "android": {
+     "modes": [
+      "listen"
+     ],
+     "routes": [
+      "listen"
+     ],
+     "screens": [
+      "ListenScreen.kt"
+     ]
+    },
+    "desktop": {
+     "modes": [
+      "listen"
+     ],
+     "routes": [
+      "listen"
+     ],
+     "screens": [
+      "ListenScreen.kt"
+     ]
+    }
+   },
+   "readme": {
+    "ios": [
+     "Listen & Learn"
+    ],
+    "android": [
+     "Listen & Learn"
+    ],
+    "desktop": [
+     "Listen & Learn"
+    ]
+   }
+  },
+  {
+   "id": "pileup",
+   "name": "Pileup Runner",
+   "kind": "mode",
+   "status": {
+    "ios": "present",
+    "android": "present",
+    "desktop": "present"
+   },
+   "claims": {
+    "ios": {
+     "modes": [
+      "qso"
+     ]
+    },
+    "android": {
+     "modes": [
+      "pileup"
+     ],
+     "routes": [
+      "pileup"
+     ],
+     "screens": [
+      "PileupScreen.kt"
+     ]
+    },
+    "desktop": {
+     "modes": [
+      "pileup"
+     ],
+     "routes": [
+      "pileup"
+     ],
+     "screens": [
+      "PileupScreen.kt"
+     ]
+    }
+   },
+   "readme": {
+    "ios": [
+     "Pileup Runner"
+    ],
+    "android": [
+     "Pileup Runner"
+    ],
+    "desktop": [
+     "Pileup Runner"
+    ]
+   }
+  },
+  {
+   "id": "contest",
+   "name": "Contest",
+   "kind": "mode",
+   "status": {
+    "ios": "present",
+    "android": "present",
+    "desktop": "present"
+   },
+   "claims": {
+    "ios": {
+     "modes": [
+      "contest"
+     ]
+    },
+    "android": {
+     "modes": [
+      "contest"
+     ],
+     "routes": [
+      "contest"
+     ],
+     "screens": [
+      "ContestScreen.kt"
+     ]
+    },
+    "desktop": {
+     "modes": [
+      "contest"
+     ],
+     "routes": [
+      "contest"
+     ],
+     "screens": [
+      "ContestScreen.kt"
+     ]
+    }
+   },
+   "readme": {
+    "ios": [
+     "Contest"
+    ],
+    "android": [
+     "Contest"
+    ],
+    "desktop": [
+     "Contest"
+    ]
+   }
+  },
+  {
+   "id": "story",
+   "name": "Short Stories",
+   "kind": "mode",
+   "status": {
+    "ios": "present",
+    "android": "present",
+    "desktop": "present"
+   },
+   "claims": {
+    "ios": {
+     "modes": [
+      "story"
+     ]
+    },
+    "android": {
+     "modes": [
+      "story"
+     ],
+     "routes": [
+      "story"
+     ],
+     "screens": [
+      "StoryScreen.kt"
+     ]
+    },
+    "desktop": {
+     "modes": [
+      "story"
+     ],
+     "routes": [
+      "story"
+     ],
+     "screens": [
+      "StoryScreen.kt"
+     ]
+    }
+   },
+   "readme": {
+    "ios": [
+     "Short Stories"
+    ],
+    "android": [
+     "Short Stories"
+    ],
+    "desktop": [
+     "Short Stories"
+    ]
+   }
+  },
+  {
+   "id": "exam",
+   "name": "Code Exam",
+   "kind": "mode",
+   "status": {
+    "ios": "present",
+    "android": "present",
+    "desktop": "present"
+   },
+   "claims": {
+    "ios": {
+     "modes": [
+      "exam"
+     ]
+    },
+    "android": {
+     "modes": [
+      "exam"
+     ],
+     "routes": [
+      "exam"
+     ],
+     "screens": [
+      "CodeExamScreen.kt"
+     ]
+    },
+    "desktop": {
+     "modes": [
+      "exam"
+     ],
+     "routes": [
+      "exam"
+     ],
+     "screens": [
+      "CodeExamScreen.kt"
+     ]
+    }
+   },
+   "readme": {
+    "ios": [
+     "Code Exam"
+    ],
+    "android": [
+     "Code Exam"
+    ],
+    "desktop": [
+     "Code Exam"
+    ]
+   }
+  },
+  {
+   "id": "rapidfire",
+   "name": "Rapid Fire",
+   "kind": "mode",
+   "status": {
+    "ios": "present",
+    "android": "present",
+    "desktop": "present"
+   },
+   "claims": {
+    "ios": {
+     "modes": [
+      "rapidfire"
+     ]
+    },
+    "android": {
+     "modes": [
+      "rapidfire"
+     ],
+     "routes": [
+      "rapidfire"
+     ],
+     "screens": [
+      "RapidFireScreen.kt"
+     ]
+    },
+    "desktop": {
+     "modes": [
+      "rapidfire"
+     ],
+     "routes": [
+      "rapidfire"
+     ],
+     "screens": [
+      "RapidFireScreen.kt"
+     ]
+    }
+   },
+   "readme": {
+    "ios": [
+     "Rapid Fire"
+    ],
+    "android": [
+     "Rapid Fire"
+    ],
+    "desktop": [
+     "Rapid Fire"
+    ]
+   }
+  },
+  {
+   "id": "quizScreen",
+   "name": "Choice-quiz screen (drives the phrase and character drills)",
+   "kind": "screen",
+   "status": {
+    "ios": "present",
+    "android": "present",
+    "desktop": "present"
+   },
+   "claims": {
+    "ios": {
+     "files": [
+      "MorseTrainerApp/ContentView.swift"
+     ]
+    },
+    "android": {
+     "routes": [
+      "quiz"
+     ],
+     "screens": [
+      "QuizScreen.kt"
+     ]
+    },
+    "desktop": {
+     "routes": [
+      "quiz"
+     ],
+     "screens": [
+      "QuizScreen.kt"
+     ]
+    }
+   }
+  },
+  {
+   "id": "games",
+   "name": "Games hub",
+   "kind": "game",
+   "status": {
+    "ios": "present",
+    "android": "present",
+    "desktop": "present"
+   },
+   "claims": {
+    "ios": {
+     "files": [
+      "MorseTrainerApp/ContentView.swift"
+     ]
+    },
+    "android": {
+     "routes": [
+      "games"
+     ],
+     "screens": [
+      "GamesScreen.kt"
+     ]
+    },
+    "desktop": {
+     "routes": [
+      "games"
+     ],
+     "screens": [
+      "GamesScreen.kt"
+     ]
+    }
+   },
+   "readme": {
+    "ios": [
+     "Games"
+    ],
+    "android": [
+     "Games"
+    ],
+    "desktop": [
+     "Games"
+    ]
+   }
+  },
+  {
+   "id": "invaders",
+   "name": "Morse Invaders",
+   "kind": "game",
+   "status": {
+    "ios": "present",
+    "android": "present",
+    "desktop": "present"
+   },
+   "claims": {
+    "ios": {
+     "modes": [
+      "invaders"
+     ],
+     "screens": [
+      "InvadersView.swift"
+     ]
+    },
+    "android": {
+     "modes": [
+      "invaders"
+     ],
+     "routes": [
+      "invaders"
+     ],
+     "screens": [
+      "InvadersScreen.kt"
+     ]
+    },
+    "desktop": {
+     "modes": [
+      "invaders"
+     ],
+     "routes": [
+      "invaders"
+     ],
+     "screens": [
+      "InvadersScreen.kt"
+     ]
+    }
+   },
+   "readme": {
+    "ios": [
+     "Morse Invaders"
+    ],
+    "android": [
+     "Morse Invaders"
+    ],
+    "desktop": [
+     "Morse Invaders"
+    ]
+   }
+  },
+  {
+   "id": "galaga",
+   "name": "CW Galaga",
+   "kind": "game",
+   "status": {
+    "ios": "present",
+    "android": "present",
+    "desktop": "present"
+   },
+   "claims": {
+    "ios": {
+     "modes": [
+      "galaga"
+     ],
+     "screens": [
+      "GalagaView.swift"
+     ]
+    },
+    "android": {
+     "modes": [
+      "galaga"
+     ],
+     "routes": [
+      "galaga"
+     ],
+     "screens": [
+      "GalagaScreen.kt"
+     ]
+    },
+    "desktop": {
+     "modes": [
+      "galaga"
+     ],
+     "routes": [
+      "galaga"
+     ],
+     "screens": [
+      "GalagaScreen.kt"
+     ]
+    }
+   },
+   "readme": {
+    "ios": [
+     "CW Galaga"
+    ],
+    "android": [
+     "CW Galaga"
+    ],
+    "desktop": [
+     "CW Galaga"
+    ]
+   }
+  },
+  {
+   "id": "defender",
+   "name": "Morse Defender",
+   "kind": "game",
+   "status": {
+    "ios": "present",
+    "android": "present",
+    "desktop": "present"
+   },
+   "claims": {
+    "ios": {
+     "modes": [
+      "defender"
+     ],
+     "screens": [
+      "DefenderView.swift"
+     ]
+    },
+    "android": {
+     "modes": [
+      "defender"
+     ],
+     "routes": [
+      "defender"
+     ],
+     "screens": [
+      "DefenderScreen.kt"
+     ]
+    },
+    "desktop": {
+     "modes": [
+      "defender"
+     ],
+     "routes": [
+      "defender"
+     ],
+     "screens": [
+      "DefenderScreen.kt"
+     ]
+    }
+   },
+   "readme": {
+    "ios": [
+     "Morse Defender"
+    ],
+    "android": [
+     "Morse Defender"
+    ],
+    "desktop": [
+     "Morse Defender"
+    ]
+   }
+  },
+  {
+   "id": "dungeon",
+   "name": "CW Dungeon",
+   "kind": "game",
+   "status": {
+    "ios": "present",
+    "android": "present",
+    "desktop": "present"
+   },
+   "claims": {
+    "ios": {
+     "modes": [
+      "dungeon"
+     ],
+     "screens": [
+      "DungeonView.swift"
+     ]
+    },
+    "android": {
+     "modes": [
+      "dungeon"
+     ],
+     "routes": [
+      "dungeon"
+     ],
+     "screens": [
+      "DungeonScreen.kt"
+     ]
+    },
+    "desktop": {
+     "modes": [
+      "dungeon"
+     ],
+     "routes": [
+      "dungeon"
+     ],
+     "screens": [
+      "DungeonScreen.kt"
+     ]
+    }
+   },
+   "readme": {
+    "ios": [
+     "CW Dungeon"
+    ],
+    "android": [
+     "CW Dungeon"
+    ],
+    "desktop": [
+     "CW Dungeon"
+    ]
+   }
+  },
+  {
+   "id": "frogger",
+   "name": "CW Frogger",
+   "kind": "game",
+   "status": {
+    "ios": "present",
+    "android": "present",
+    "desktop": "present"
+   },
+   "claims": {
+    "ios": {
+     "modes": [
+      "frogger"
+     ],
+     "screens": [
+      "FroggerView.swift"
+     ]
+    },
+    "android": {
+     "modes": [
+      "frogger"
+     ],
+     "routes": [
+      "frogger"
+     ],
+     "screens": [
+      "FroggerScreen.kt"
+     ]
+    },
+    "desktop": {
+     "modes": [
+      "frogger"
+     ],
+     "routes": [
+      "frogger"
+     ],
+     "screens": [
+      "FroggerScreen.kt"
+     ]
+    }
+   },
+   "readme": {
+    "ios": [
+     "CW Frogger"
+    ],
+    "android": [
+     "CW Frogger"
+    ],
+    "desktop": [
+     "CW Frogger"
+    ]
+   }
+  },
+  {
+   "id": "asteroids",
+   "name": "CW Asteroids",
+   "kind": "game",
+   "status": {
+    "ios": "present",
+    "android": "present",
+    "desktop": "present"
+   },
+   "claims": {
+    "ios": {
+     "modes": [
+      "asteroids"
+     ],
+     "screens": [
+      "AsteroidsView.swift"
+     ]
+    },
+    "android": {
+     "modes": [
+      "asteroids"
+     ],
+     "routes": [
+      "asteroids"
+     ],
+     "screens": [
+      "AsteroidsScreen.kt"
+     ]
+    },
+    "desktop": {
+     "modes": [
+      "asteroids"
+     ],
+     "routes": [
+      "asteroids"
+     ],
+     "screens": [
+      "AsteroidsScreen.kt"
+     ]
+    }
+   },
+   "readme": {
+    "ios": [
+     "CW Asteroids"
+    ],
+    "android": [
+     "CW Asteroids"
+    ],
+    "desktop": [
+     "CW Asteroids"
+    ]
+   }
+  },
+  {
+   "id": "home",
+   "name": "Home (tile grid, mode switcher)",
+   "kind": "screen",
+   "status": {
+    "ios": "present",
+    "android": "present",
+    "desktop": "present"
+   },
+   "claims": {
+    "ios": {
+     "screens": [
+      "ContentView.swift",
+      "IntroView.swift"
+     ]
+    },
+    "android": {
+     "routes": [
+      "home"
+     ],
+     "screens": [
+      "HomeScreen.kt"
+     ]
+    },
+    "desktop": {
+     "routes": [
+      "home"
+     ],
+     "screens": [
+      "HomeScreen.kt"
+     ]
+    }
+   }
+  },
+  {
+   "id": "onboarding",
+   "name": "First-run onboarding (proficiency question)",
+   "kind": "screen",
+   "status": {
+    "ios": "present",
+    "android": "present",
+    "desktop": "present"
+   },
+   "claims": {
+    "ios": {
+     "screens": [
+      "OnboardingView.swift"
+     ]
+    },
+    "android": {
+     "routes": [
+      "onboarding"
+     ],
+     "screens": [
+      "OnboardingScreen.kt"
+     ]
+    },
+    "desktop": {
+     "routes": [
+      "onboarding"
+     ],
+     "screens": [
+      "OnboardingScreen.kt"
+     ]
+    }
+   }
+  },
+  {
+   "id": "startHere",
+   "name": "Start here",
+   "kind": "screen",
+   "status": {
+    "ios": "present",
+    "android": "present",
+    "desktop": "present"
+   },
+   "claims": {
+    "ios": {
+     "screens": [
+      "StartHereView.swift"
+     ]
+    },
+    "android": {
+     "routes": [
+      "starthere"
+     ],
+     "screens": [
+      "StartHereScreen.kt"
+     ]
+    },
+    "desktop": {
+     "routes": [
+      "starthere"
+     ],
+     "screens": [
+      "StartHereScreen.kt"
+     ]
+    }
+   }
+  },
+  {
+   "id": "dailyDit",
+   "name": "Daily Dit",
+   "kind": "screen",
+   "status": {
+    "ios": "present",
+    "android": "present",
+    "desktop": "present"
+   },
+   "claims": {
+    "ios": {
+     "screens": [
+      "DailyDitView.swift"
+     ]
+    },
+    "android": {
+     "routes": [
+      "dailydit"
+     ],
+     "screens": [
+      "DailyDitScreen.kt"
+     ]
+    },
+    "desktop": {
+     "routes": [
+      "dailydit"
+     ],
+     "screens": [
+      "DailyDitScreen.kt"
+     ]
+    }
+   },
+   "readme": {
+    "ios": [],
+    "android": [],
+    "desktop": []
+   }
+  },
+  {
+   "id": "firstFour",
+   "name": "First Four",
+   "kind": "screen",
+   "status": {
+    "ios": "present",
+    "android": "present",
+    "desktop": "present"
+   },
+   "claims": {
+    "ios": {
+     "screens": [
+      "FirstFourView.swift"
+     ]
+    },
+    "android": {
+     "routes": [
+      "firstfour"
+     ],
+     "screens": [
+      "FirstFourScreen.kt"
+     ]
+    },
+    "desktop": {
+     "routes": [
+      "firstfour"
+     ],
+     "screens": [
+      "FirstFourScreen.kt"
+     ]
+    }
+   },
+   "readme": {
+    "ios": [
+     "First Four"
+    ],
+    "android": [
+     "First Four"
+    ],
+    "desktop": [
+     "First Four"
+    ]
+   }
+  },
+  {
+   "id": "operatingProcedure",
+   "name": "Operating Procedure",
+   "kind": "screen",
+   "status": {
+    "ios": "present",
+    "android": "present",
+    "desktop": "present"
+   },
+   "claims": {
+    "ios": {
+     "screens": [
+      "OperatingProcedureView.swift"
+     ]
+    },
+    "android": {
+     "routes": [
+      "operatingprocedure"
+     ],
+     "screens": [
+      "OperatingProcedureScreen.kt"
+     ]
+    },
+    "desktop": {
+     "routes": [
+      "operatingprocedure"
+     ],
+     "screens": [
+      "OperatingProcedureScreen.kt"
+     ]
+    }
+   },
+   "readme": {
+    "ios": [
+     "Operating Procedure"
+    ],
+    "android": [
+     "Operating Procedure"
+    ],
+    "desktop": [
+     "Operating Procedure"
+    ]
+   }
+  },
+  {
+   "id": "reference",
+   "name": "Reference",
+   "kind": "screen",
+   "status": {
+    "ios": "present",
+    "android": "present",
+    "desktop": "present"
+   },
+   "claims": {
+    "ios": {
+     "screens": [
+      "ReferenceView.swift"
+     ]
+    },
+    "android": {
+     "routes": [
+      "reference"
+     ],
+     "screens": [
+      "ReferenceScreen.kt"
+     ]
+    },
+    "desktop": {
+     "routes": [
+      "reference"
+     ],
+     "screens": [
+      "ReferenceScreen.kt"
+     ]
+    }
+   },
+   "readme": {
+    "ios": [
+     "Reference"
+    ],
+    "android": [
+     "Reference"
+    ],
+    "desktop": [
+     "Reference"
+    ]
+   }
+  },
+  {
+   "id": "cwDecoder",
+   "name": "CW Decoder",
+   "kind": "screen",
+   "status": {
+    "ios": "present",
+    "android": "present",
+    "desktop": "present"
+   },
+   "claims": {
+    "ios": {
+     "screens": [
+      "CWDecoderView.swift"
+     ],
+     "files": [
+      "MorseTrainerApp/CWDecoderEngine.swift"
+     ]
+    },
+    "android": {
+     "routes": [
+      "cwdecoder"
+     ],
+     "screens": [
+      "CwDecoderScreen.kt"
+     ],
+     "files": [
+      "CwDecoderEngine.kt"
+     ]
+    },
+    "desktop": {
+     "routes": [
+      "cwdecoder"
+     ],
+     "screens": [
+      "CwDecoderScreen.kt"
+     ],
+     "files": [
+      "CwDecoderEngine.kt"
+     ]
+    }
+   },
+   "readme": {
+    "ios": [
+     "CW Decoder"
+    ],
+    "android": [
+     "CW Decoder"
+    ],
+    "desktop": [
+     "CW Decoder"
+    ]
+   }
+  },
+  {
+   "id": "sendingDrills",
+   "name": "Sending Drills (printable sheets)",
+   "kind": "screen",
+   "status": {
+    "ios": "present",
+    "android": "present",
+    "desktop": "present"
+   },
+   "claims": {
+    "ios": {
+     "screens": [
+      "SendingDrillView.swift"
+     ]
+    },
+    "android": {
+     "routes": [
+      "sendingdrills"
+     ],
+     "screens": [
+      "SendingDrillScreen.kt"
+     ]
+    },
+    "desktop": {
+     "routes": [
+      "sendingdrills"
+     ],
+     "screens": [
+      "SendingDrillScreen.kt"
+     ]
+    }
+   },
+   "readme": {
+    "ios": [],
+    "android": [
+     "Sending Drills"
+    ],
+    "desktop": [
+     "Sending Drills"
+    ]
+   }
+  },
+  {
+   "id": "sendingAnalyzer",
+   "name": "Sending Analyzer",
+   "kind": "screen",
+   "status": {
+    "ios": "present",
+    "android": "present",
+    "desktop": "present"
+   },
+   "claims": {
+    "ios": {
+     "screens": [
+      "SendingAnalyzerView.swift"
+     ],
+     "files": [
+      "MorseTrainerApp/SendingAnalyzer.swift",
+      "MorseTrainerApp/SendingMicInput.swift"
+     ]
+    },
+    "android": {
+     "routes": [
+      "sendinganalyzer"
+     ],
+     "screens": [
+      "SendingAnalyzerScreen.kt"
+     ],
+     "files": [
+      "SendingMicInput.kt"
+     ]
+    },
+    "desktop": {
+     "routes": [
+      "sendinganalyzer"
+     ],
+     "screens": [
+      "SendingAnalyzerScreen.kt"
+     ],
+     "files": [
+      "SendingMicInput.kt"
+     ]
+    }
+   },
+   "readme": {
+    "ios": [
+     "Sending Analyzer"
+    ],
+    "android": [
+     "Sending Analyzer"
+    ],
+    "desktop": [
+     "Sending Analyzer"
+    ]
+   }
+  },
+  {
+   "id": "repeater",
+   "name": "Vail repeater",
+   "kind": "screen",
+   "status": {
+    "ios": "present",
+    "android": "present",
+    "desktop": "present"
+   },
+   "claims": {
+    "ios": {
+     "screens": [
+      "RepeaterView.swift",
+      "RepeaterSignalTimelineView.swift",
+      "RepeaterTouchKeyView.swift"
+     ],
+     "files": [
+      "MorseTrainerApp/VailClient.swift"
+     ]
+    },
+    "android": {
+     "routes": [
+      "repeater"
+     ],
+     "screens": [
+      "RepeaterScreen.kt"
+     ],
+     "files": [
+      "vail/VailClient.kt"
+     ]
+    },
+    "desktop": {
+     "routes": [
+      "repeater"
+     ],
+     "screens": [
+      "RepeaterScreen.kt"
+     ],
+     "files": [
+      "vail/VailClient.kt"
+     ]
+    }
+   },
+   "readme": {
+    "ios": [
+     "Vail repeater"
+    ],
+    "android": [
+     "Repeater"
+    ],
+    "desktop": [
+     "Repeater"
+    ]
+   }
+  },
+  {
+   "id": "progress",
+   "name": "Progress (stats, history, personal bests, share)",
+   "kind": "screen",
+   "status": {
+    "ios": "present",
+    "android": "present",
+    "desktop": "present"
+   },
+   "claims": {
+    "ios": {
+     "screens": [
+      "StatsView.swift",
+      "SessionDetailView.swift",
+      "BragSheetView.swift"
+     ]
+    },
+    "android": {
+     "routes": [
+      "stats"
+     ],
+     "screens": [
+      "StatsScreen.kt"
+     ]
+    },
+    "desktop": {
+     "routes": [
+      "stats"
+     ],
+     "screens": [
+      "StatsScreen.kt"
+     ]
+    }
+   },
+   "readme": {
+    "ios": [
+     "Progress"
+    ],
+    "android": [
+     "Progress"
+    ],
+    "desktop": [
+     "Progress"
+    ]
+   }
+  },
+  {
+   "id": "settings",
+   "name": "Settings (eleven categories, search)",
+   "kind": "setting",
+   "status": {
+    "ios": "present",
+    "android": "present",
+    "desktop": "present"
+   },
+   "claims": {
+    "ios": {
+     "screens": [
+      "SettingsView.swift"
+     ],
+     "files": [
+      "Sources/MorseKit/SettingsCatalog.swift"
+     ]
+    },
+    "android": {
+     "routes": [
+      "settings"
+     ],
+     "screens": [
+      "SettingsScreen.kt"
+     ],
+     "files": [
+      "morsekit/SettingsCatalog.kt"
+     ]
+    },
+    "desktop": {
+     "routes": [
+      "settings"
+     ],
+     "screens": [
+      "SettingsScreen.kt"
+     ],
+     "files": [
+      "morsekit/SettingsCatalog.kt"
+     ]
+    }
+   },
+   "readme": {
+    "ios": [
+     "Settings"
+    ],
+    "android": [
+     "Settings"
+    ],
+    "desktop": [
+     "Settings"
+    ]
+   }
+  },
+  {
+   "id": "bigScreenLayout",
+   "name": "Big-screen / resizable-window layout",
+   "kind": "screen",
+   "status": {
+    "ios": "present",
+    "android": "present",
+    "desktop": "present"
+   },
+   "claims": {
+    "ios": {
+     "files": [
+      "MorseTrainerApp/Theme.swift"
+     ]
+    },
+    "android": {
+     "files": [
+      "Responsive.kt"
+     ]
+    },
+    "desktop": {
+     "files": [
+      "Responsive.kt"
+     ]
+    }
+   },
+   "readme": {
+    "ios": [
+     "iPhone and iPad"
+    ],
+    "android": "exempt",
+    "desktop": "exempt"
+   }
+  },
+  {
+   "id": "voiceAnswers",
+   "name": "Voice answers",
+   "kind": "setting",
+   "status": {
+    "ios": "present",
+    "android": "limited",
+    "desktop": "absent"
+   },
+   "claims": {
+    "ios": {
+     "files": [
+      "MorseTrainerApp/VoiceRecognizer.swift"
+     ]
+    },
+    "android": {
+     "files": [
+      "VoiceRecognizer.kt"
+     ]
+    },
+    "desktop": {}
+   },
+   "readme": {
+    "ios": [
+     "Voice answers"
+    ],
+    "android": [
+     "Voice answers"
+    ],
+    "desktop": "exempt"
+   },
+   "notes": {
+    "android": [
+     {
+      "state": "exception",
+      "reason": "SpeechRecognizer is one-shot: a Speak answer button per prompt, no auto-listen, clock starts at the tap.",
+      "anchor": "PARITY.md#ex-android-voice-auto"
+     }
+    ],
+    "desktop": [
+     {
+      "state": "exception",
+      "reason": "No speech recognizer is reachable from the JVM.",
+      "anchor": "PARITY.md#ex-desktop-voice"
+     }
+    ]
+   }
+  },
+  {
+   "id": "keyboardEntryAnswers",
+   "name": "Keyboard-entry answers",
+   "kind": "setting",
+   "status": {
+    "ios": "present",
+    "android": "present",
+    "desktop": "present"
+   },
+   "claims": {
+    "ios": {
+     "files": [
+      "Sources/MorseKit/AnswerEntry.swift"
+     ]
+    },
+    "android": {
+     "files": [
+      "morsekit/AnswerEntry.kt"
+     ]
+    },
+    "desktop": {
+     "files": [
+      "morsekit/AnswerEntry.kt"
+     ]
+    }
+   },
+   "readme": {
+    "ios": [
+     "Keyboard-entry answers"
+    ],
+    "android": [
+     "Keyboard-entry answers"
+    ],
+    "desktop": [
+     "Keyboard-entry answers"
+    ]
+   }
+  },
+  {
+   "id": "answerByKeying",
+   "name": "Answer by keying",
+   "kind": "setting",
+   "status": {
+    "ios": "present",
+    "android": "present",
+    "desktop": "present"
+   },
+   "claims": {
+    "ios": {
+     "files": [
+      "MorseTrainerApp/SendingKeyer.swift"
+     ]
+    },
+    "android": {
+     "files": [
+      "SendingKeyer.kt"
+     ]
+    },
+    "desktop": {
+     "files": [
+      "SendingKeyer.kt"
+     ]
+    }
+   },
+   "readme": {
+    "ios": [
+     "Answer by keying"
+    ],
+    "android": [],
+    "desktop": []
+   }
+  },
+  {
+   "id": "onScreenPaddles",
+   "name": "On-screen straight key and paddles",
+   "kind": "hardware",
+   "status": {
+    "ios": "present",
+    "android": "present",
+    "desktop": "present"
+   },
+   "claims": {
+    "ios": {
+     "files": [
+      "MorseTrainerApp/OnScreenPaddles.swift",
+      "Sources/MorseKit/PaddleKeyer.swift"
+     ]
+    },
+    "android": {
+     "files": [
+      "OnScreenPaddles.kt",
+      "morsekit/PaddleKeyer.kt"
+     ]
+    },
+    "desktop": {
+     "files": [
+      "OnScreenPaddles.kt",
+      "morsekit/PaddleKeyer.kt"
+     ]
+    }
+   },
+   "readme": {
+    "ios": [
+     "On-screen paddles"
+    ],
+    "android": [
+     "On-screen paddles"
+    ],
+    "desktop": [
+     "On-screen paddles"
+    ]
+   }
+  },
+  {
+   "id": "usbMidiKey",
+   "name": "MIDI key input and Vail adapter output (USB)",
+   "kind": "hardware",
+   "status": {
+    "ios": "present",
+    "android": "present",
+    "desktop": "present"
+   },
+   "claims": {
+    "ios": {
+     "files": [
+      "MorseTrainerApp/MIDIInput.swift",
+      "MorseTrainerApp/MIDIOutput.swift"
+     ]
+    },
+    "android": {
+     "files": [
+      "MidiKeyInput.kt",
+      "MidiKeyOutput.kt"
+     ]
+    },
+    "desktop": {
+     "files": [
+      "MidiKeyInput.kt",
+      "MidiKeyOutput.kt",
+      "MidiPorts.kt"
+     ]
+    }
+   },
+   "readme": {
+    "ios": [
+     "A hardware key wherever you type"
+    ],
+    "android": [
+     "A hardware key wherever you type"
+    ],
+    "desktop": [
+     "A hardware key wherever you type"
+    ]
+   }
+  },
+  {
+   "id": "bleMidiKey",
+   "name": "Bluetooth LE MIDI key",
+   "kind": "hardware",
+   "status": {
+    "ios": "limited",
+    "android": "present",
+    "desktop": "absent"
+   },
+   "claims": {
+    "ios": {
+     "files": [
+      "MorseTrainerApp/BluetoothMIDISheet.swift"
+     ]
+    },
+    "android": {
+     "files": [
+      "BleMidi.kt",
+      "BluetoothKeyButton.kt"
+     ]
+    },
+    "desktop": {}
+   },
+   "readme": {
+    "ios": [
+     "Bluetooth LE MIDI keys"
+    ],
+    "android": [],
+    "desktop": "exempt"
+   },
+   "notes": {
+    "ios": [
+     {
+      "state": "exception",
+      "reason": "CoreMIDI only exposes a BLE MIDI peripheral once paired through the system sheet; no app-level scan API.",
+      "anchor": "PARITY.md#ex-ios-ble-scan"
+     }
+    ],
+    "desktop": [
+     {
+      "state": "exception",
+      "reason": "Java Sound has no BLE MIDI provider and Java has no Bluetooth stack.",
+      "anchor": "PARITY.md#ex-desktop-ble"
+     }
+    ]
+   }
+  },
+  {
+   "id": "hardwareKeySettings",
+   "name": "Hardware-key section in Settings",
+   "kind": "hardware",
+   "status": {
+    "ios": "present",
+    "android": "limited",
+    "desktop": "present"
+   },
+   "claims": {
+    "ios": {
+     "files": [
+      "MorseTrainerApp/SettingsView.swift"
+     ]
+    },
+    "android": {
+     "files": [
+      "SettingsScreen.kt"
+     ]
+    },
+    "desktop": {
+     "files": [
+      "SettingsScreen.kt"
+     ]
+    }
+   },
+   "notes": {
+    "android": [
+     {
+      "state": "exception",
+      "reason": "Hidden on devices without FEATURE_MIDI.",
+      "anchor": "PARITY.md#ex-android-midi-section"
+     }
+    ]
+   }
+  },
+  {
+   "id": "desktopKeyboardKey",
+   "name": "Keyboard keys as a Morse key (Space, [ ])",
+   "kind": "hardware",
+   "status": {
+    "ios": "absent",
+    "android": "absent",
+    "desktop": "present"
+   },
+   "claims": {
+    "ios": {},
+    "android": {},
+    "desktop": {
+     "files": [
+      "Main.kt"
+     ]
+    }
+   },
+   "notes": {
+    "ios": [
+     {
+      "state": "exception",
+      "reason": "Desktop idiom: a keyboard has no touch key; phones and tablets use the on-screen key.",
+      "anchor": "PARITY.md#same-feature-platform-mechanism-not-gaps"
+     }
+    ],
+    "android": [
+     {
+      "state": "exception",
+      "reason": "Desktop idiom: a keyboard has no touch key; phones and tablets use the on-screen key.",
+      "anchor": "PARITY.md#same-feature-platform-mechanism-not-gaps"
+     }
+    ]
+   }
+  },
+  {
+   "id": "bandNoise",
+   "name": "Band noise and Bluetooth keep-alive",
+   "kind": "setting",
+   "status": {
+    "ios": "present",
+    "android": "present",
+    "desktop": "present"
+   },
+   "claims": {
+    "ios": {
+     "files": [
+      "MorseTrainerApp/MorsePlayer.swift"
+     ]
+    },
+    "android": {
+     "files": [
+      "BackgroundNoise.kt"
+     ]
+    },
+    "desktop": {
+     "files": [
+      "BackgroundNoise.kt"
+     ]
+    }
+   },
+   "readme": {
+    "ios": [
+     "Bluetooth keep-alive and band noise"
+    ],
+    "android": [],
+    "desktop": []
+   }
+  },
+  {
+   "id": "speakerHeadroom",
+   "name": "-6 dB headroom on the built-in speaker",
+   "kind": "setting",
+   "status": {
+    "ios": "present",
+    "android": "present",
+    "desktop": "absent"
+   },
+   "claims": {
+    "ios": {
+     "files": [
+      "MorseTrainerApp/MorsePlayer.swift"
+     ]
+    },
+    "android": {
+     "files": [
+      "SpeakerHeadroom.kt"
+     ]
+    },
+    "desktop": {}
+   },
+   "notes": {
+    "desktop": [
+     {
+      "state": "exception",
+      "reason": "Java Sound cannot tell the built-in speaker from other outputs.",
+      "anchor": "PARITY.md#ex-desktop-headroom"
+     }
+    ]
+   }
+  },
+  {
+   "id": "haptics",
+   "name": "Haptic feedback",
+   "kind": "setting",
+   "status": {
+    "ios": "present",
+    "android": "present",
+    "desktop": "absent"
+   },
+   "claims": {
+    "ios": {
+     "files": [
+      "MorseTrainerApp/Haptics.swift"
+     ]
+    },
+    "android": {
+     "files": [
+      "Haptics.kt"
+     ]
+    },
+    "desktop": {}
+   },
+   "notes": {
+    "desktop": [
+     {
+      "state": "exception",
+      "reason": "Desktops have no vibration hardware; the switch is hidden.",
+      "anchor": "PARITY.md#ex-desktop-haptics"
+     }
+    ]
+   }
+  },
+  {
+   "id": "dailyReminder",
+   "name": "Daily practice reminder",
+   "kind": "setting",
+   "status": {
+    "ios": "present",
+    "android": "limited",
+    "desktop": "absent"
+   },
+   "claims": {
+    "ios": {
+     "files": [
+      "MorseTrainerApp/Notifications.swift"
+     ]
+    },
+    "android": {
+     "files": [
+      "Reminders.kt",
+      "ReminderReceiver.kt"
+     ]
+    },
+    "desktop": {}
+   },
+   "notes": {
+    "android": [
+     {
+      "state": "exception",
+      "reason": "Inexact alarm: SCHEDULE_EXACT_ALARM deliberately not requested.",
+      "anchor": "PARITY.md#ex-android-reminder-exact"
+     }
+    ],
+    "desktop": [
+     {
+      "state": "exception",
+      "reason": "A reminder must fire while the app is closed; not possible from pure Java.",
+      "anchor": "PARITY.md#ex-desktop-reminder"
+     }
+    ]
+   }
+  },
+  {
+   "id": "spokenReadback",
+   "name": "Spoken read-back (Listen & Learn)",
+   "kind": "setting",
+   "status": {
+    "ios": "present",
+    "android": "present",
+    "desktop": "limited"
+   },
+   "claims": {
+    "ios": {
+     "files": [
+      "MorseTrainerApp/SpeechPlayer.swift"
+     ]
+    },
+    "android": {
+     "files": [
+      "SpeechPlayer.kt"
+     ]
+    },
+    "desktop": {
+     "files": [
+      "SpeechPlayer.kt"
+     ]
+    }
+   },
+   "notes": {
+    "desktop": [
+     {
+      "state": "exception",
+      "reason": "Flatpak sandbox has no speech engine; shows the text.",
+      "anchor": "PARITY.md#ex-desktop-flatpak-speech"
+     }
+    ]
+   }
+  },
+  {
+   "id": "listenBackground",
+   "name": "Listen & Learn controls on lock screen / car display",
+   "kind": "hardware",
+   "status": {
+    "ios": "present",
+    "android": "present",
+    "desktop": "absent"
+   },
+   "claims": {
+    "ios": {
+     "files": [
+      "MorseTrainerApp/MorsePlayer.swift"
+     ]
+    },
+    "android": {
+     "files": [
+      "ListenService.kt"
+     ]
+    },
+    "desktop": {}
+   },
+   "notes": {
+    "desktop": [
+     {
+      "state": "exception",
+      "reason": "No media-session surface a JVM app can publish to.",
+      "anchor": "PARITY.md#ex-desktop-listen-controls"
+     }
+    ]
+   }
+  },
+  {
+   "id": "dailyDitMutePrompt",
+   "name": "Daily Dit device-muted prompt",
+   "kind": "setting",
+   "status": {
+    "ios": "present",
+    "android": "present",
+    "desktop": "absent"
+   },
+   "claims": {
+    "ios": {
+     "files": [
+      "MorseTrainerApp/DailyDitView.swift"
+     ]
+    },
+    "android": {
+     "files": [
+      "DailyDitScreen.kt"
+     ]
+    },
+    "desktop": {}
+   },
+   "notes": {
+    "desktop": [
+     {
+      "state": "exception",
+      "reason": "No portable way to read system volume or mute state from Java.",
+      "anchor": "PARITY.md#ex-desktop-dailydit-mute"
+     }
+    ]
+   }
+  },
+  {
+   "id": "shareCard",
+   "name": "Share card / Brag Sheet image",
+   "kind": "sharing",
+   "status": {
+    "ios": "present",
+    "android": "present",
+    "desktop": "present"
+   },
+   "claims": {
+    "ios": {
+     "files": [
+      "MorseTrainerApp/BragSheetView.swift"
+     ]
+    },
+    "android": {
+     "files": [
+      "ShareCard.kt",
+      "DailyDitShareCard.kt"
+     ]
+    },
+    "desktop": {
+     "files": [
+      "ShareCard.kt",
+      "DailyDitShareCard.kt",
+      "DesktopShare.kt"
+     ]
+    }
+   },
+   "readme": {
+    "ios": "exempt",
+    "android": "exempt",
+    "desktop": "exempt"
+   }
+  },
+  {
+   "id": "leaderboard",
+   "name": "Leaderboard (browse and post)",
+   "kind": "sharing",
+   "status": {
+    "ios": "present",
+    "android": "present",
+    "desktop": "limited"
+   },
+   "claims": {
+    "ios": {
+     "screens": [
+      "LeaderboardView.swift"
+     ],
+     "files": [
+      "MorseTrainerApp/LeaderboardClient.swift"
+     ]
+    },
+    "android": {
+     "routes": [
+      "leaderboard",
+      "gamesleaderboard"
+     ],
+     "screens": [
+      "LeaderboardScreen.kt"
+     ],
+     "files": [
+      "LeaderboardClient.kt"
+     ]
+    },
+    "desktop": {
+     "routes": [
+      "leaderboard",
+      "gamesleaderboard"
+     ],
+     "screens": [
+      "LeaderboardScreen.kt"
+     ],
+     "files": [
+      "LeaderboardClient.kt"
+     ]
+    }
+   },
+   "readme": {
+    "ios": [
+     "Leaderboard"
+    ],
+    "android": [
+     "Leaderboard"
+    ],
+    "desktop": [
+     "Leaderboard"
+    ]
+   },
+   "notes": {
+    "desktop": [
+     {
+      "state": "exception",
+      "reason": "Ranked runs need device attestation (App Attest, Play Integrity); desktop scores are unranked, the board is readable.",
+      "anchor": "PARITY.md#ex-desktop-ranked"
+     }
+    ]
+   }
+  },
+  {
+   "id": "buddyStreak",
+   "name": "Buddy streak",
+   "kind": "sharing",
+   "status": {
+    "ios": "present",
+    "android": "present",
+    "desktop": "absent"
+   },
+   "claims": {
+    "ios": {
+     "files": [
+      "MorseTrainerApp/AppModel+Buddy.swift",
+      "MorseTrainerApp/BuddySettingsSection.swift"
+     ]
+    },
+    "android": {
+     "files": [
+      "BuddyClient.kt",
+      "BuddyWords.kt"
+     ]
+    },
+    "desktop": {}
+   },
+   "readme": {
+    "ios": [
+     "Buddy streak"
+    ],
+    "android": [
+     "Buddy streak"
+    ],
+    "desktop": [
+     "Buddy streak"
+    ]
+   },
+   "notes": {
+    "desktop": [
+     {
+      "state": "exception",
+      "reason": "Buddy streaks rest on device attestation, which neither desktop OS offers to an open-source app.",
+      "anchor": "PARITY.md#ex-desktop-ranked"
+     }
+    ]
+   }
+  },
+  {
+   "id": "accountSync",
+   "name": "Account and sync",
+   "kind": "account",
+   "status": {
+    "ios": "present",
+    "android": "present",
+    "desktop": "present"
+   },
+   "claims": {
+    "ios": {
+     "files": [
+      "MorseTrainerApp/AccountServices.swift",
+      "MorseTrainerApp/AccountSettingsSection.swift",
+      "MorseTrainerApp/SyncCoordinator.swift"
+     ]
+    },
+    "android": {
+     "files": [
+      "AccountClient.kt",
+      "SyncCoordinator.kt",
+      "SyncEngine.kt"
+     ]
+    },
+    "desktop": {
+     "files": [
+      "AccountClient.kt",
+      "AccountSettingsSection.kt",
+      "SyncCoordinator.kt",
+      "SyncEngine.kt"
+     ]
+    }
+   },
+   "readme": {
+    "ios": [
+     "Account & sync"
+    ],
+    "android": [
+     "Account & sync"
+    ],
+    "desktop": [
+     "Account & sync"
+    ]
+   }
+  },
+  {
+   "id": "newsHeadlines",
+   "name": "Todays-news stories source",
+   "kind": "setting",
+   "status": {
+    "ios": "present",
+    "android": "present",
+    "desktop": "present"
+   },
+   "claims": {
+    "ios": {
+     "files": [
+      "MorseTrainerApp/NewsFetcher.swift"
+     ]
+    },
+    "android": {
+     "files": [
+      "NewsFetcher.kt"
+     ]
+    },
+    "desktop": {
+     "files": [
+      "NewsFetcher.kt"
+     ]
+    }
+   }
+  },
+  {
+   "id": "platformDesktopBuild",
+   "name": "A Windows/Linux desktop build",
+   "kind": "platform",
+   "status": {
+    "ios": "present",
+    "android": "absent",
+    "desktop": "present"
+   },
+   "claims": {
+    "ios": {
+     "files": [
+      "MorseTrainerApp/MacCatalystSupport.swift"
+     ]
+    },
+    "android": {},
+    "desktop": {
+     "files": [
+      "Main.kt"
+     ]
+    }
+   },
+   "notes": {
+    "android": [
+     {
+      "state": "exception",
+      "reason": "Android has no desktop build of its own; the Apple app reaches the Mac through Mac Catalyst and Windows/Linux get desktop/.",
+      "anchor": "PARITY.md#ex-android-desktop-build"
+     }
+    ]
+   }
+  },
+  {
+   "id": "huntSimulator",
+   "name": "POTA hunt simulator",
+   "kind": "screen",
+   "status": {
+    "ios": "present",
+    "android": "present",
+    "desktop": "present"
+   },
+   "claims": {
+    "ios": {
+     "screens": [
+      "HuntSimView.swift"
+     ]
+    },
+    "android": {
+     "screens": [
+      "HuntSimScreen.kt"
+     ]
+    },
+    "desktop": {
+     "screens": [
+      "HuntSimScreen.kt"
+     ]
+    }
+   },
+   "readme": {
+    "ios": [
+     "Operating Procedure"
+    ],
+    "android": [
+     "Operating Procedure"
+    ],
+    "desktop": [
+     "Operating Procedure"
+    ]
+   }
+  }
+ ],
+ "optionLists": {
+  "keyerModes": {
+   "fixture": "fixtures/keyer-modes.json",
+   "key": "keyerModes",
+   "labels": true,
+   "pickers": {
+    "ios": {
+     "file": "MorseTrainerApp/SettingsView.swift",
+     "pattern": "KeyerMode\\.allCases"
+    },
+    "android": {
+     "file": "SettingsScreen.kt",
+     "pattern": "KeyerMode\\.entries"
+    },
+    "desktop": {
+     "file": "SettingsScreen.kt",
+     "pattern": "KeyerMode\\.entries"
+    }
+   }
+  },
+  "paddleModes": {
+   "fixture": "fixtures/option-lists.json",
+   "key": "paddleModes"
+  },
+  "onScreenKeyTypes": {
+   "fixture": "fixtures/option-lists.json",
+   "key": "onScreenKeyTypes"
+  },
+  "revealModes": {
+   "fixture": "fixtures/option-lists.json",
+   "key": "revealModes"
+  },
+  "practiceDurations": {
+   "fixture": "fixtures/option-lists.json",
+   "key": "practiceDurations"
+  },
+  "storyContent": {
+   "fixture": "fixtures/option-lists.json",
+   "key": "storyContent"
+  },
+  "backgroundNoiseLevels": {
+   "fixture": "fixtures/option-lists.json",
+   "key": "backgroundNoiseLevels"
+  },
+  "answerEntryModes": {
+   "fixture": "fixtures/option-lists.json",
+   "key": "answerEntryModes"
+  },
+  "answerEntryTiers": {
+   "fixture": "fixtures/option-lists.json",
+   "key": "answerEntryTiers"
+  },
+  "qsoExchangeModes": {
+   "fixture": "fixtures/option-lists.json",
+   "key": "qsoExchangeModes"
+  },
+  "contestLengths": {
+   "fixture": "fixtures/option-lists.json",
+   "key": "contestLengths"
+  },
+  "listenGaps": {
+   "fixture": "fixtures/option-lists.json",
+   "key": "listenGaps"
+  }
+ },
+ "settings": {
+  "trackStage": {
+   "status": {
+    "ios": "present",
+    "android": "absent",
+    "desktop": "absent"
+   },
+   "notes": {
+    "android": [
+     {
+      "state": "open",
+      "reason": "Track stage lives on the mode setup sheet / mode screen, not in the Settings catalog (layout decision).",
+      "anchor": "PARITY.md#open-gaps",
+      "ref": "audit-0927-layout"
+     }
+    ],
+    "desktop": [
+     {
+      "state": "open",
+      "reason": "Track stage lives on the mode setup sheet / mode screen, not in the Settings catalog (layout decision).",
+      "anchor": "PARITY.md#open-gaps",
+      "ref": "audit-0927-layout"
+     }
+    ]
+   }
+  },
+  "voiceAnswers": {
+   "status": {
+    "ios": "absent",
+    "android": "present",
+    "desktop": "limited"
+   },
+   "notes": {
+    "ios": [
+     {
+      "state": "open",
+      "reason": "Voice answers switch is on the iOS mode setup sheet, not in the Settings catalog (layout decision).",
+      "anchor": "PARITY.md#open-gaps",
+      "ref": "audit-0927-layout"
+     }
+    ],
+    "desktop": [
+     {
+      "state": "exception",
+      "reason": "Catalog entry exists so search lands on the explanation; the switch is replaced by it.",
+      "anchor": "PARITY.md#ex-desktop-voice"
+     }
+    ]
+   }
+  },
+  "customWords": {
+   "status": {
+    "ios": "absent",
+    "android": "present",
+    "desktop": "present"
+   },
+   "notes": {
+    "ios": [
+     {
+      "state": "open",
+      "reason": "Lives on the iOS mode setup sheet, not in the Settings catalog (layout decision).",
+      "anchor": "PARITY.md#open-gaps",
+      "ref": "audit-0927-layout"
+     }
+    ]
+   }
+  },
+  "sessionLength": {
+   "status": {
+    "ios": "absent",
+    "android": "present",
+    "desktop": "present"
+   },
+   "notes": {
+    "ios": [
+     {
+      "state": "open",
+      "reason": "Lives on the iOS mode setup sheet, not in the Settings catalog (layout decision).",
+      "anchor": "PARITY.md#open-gaps",
+      "ref": "audit-0927-layout"
+     }
+    ]
+   }
+  },
+  "wordPool": {
+   "status": {
+    "ios": "absent",
+    "android": "present",
+    "desktop": "present"
+   },
+   "notes": {
+    "ios": [
+     {
+      "state": "open",
+      "reason": "Lives on the iOS mode setup sheet, not in the Settings catalog (layout decision).",
+      "anchor": "PARITY.md#open-gaps",
+      "ref": "audit-0927-layout"
+     }
+    ]
+   }
+  }
+ },
+ "gaps": [
+  {
+   "id": "row-01",
+   "kind": "behavior",
+   "summary": "Session length (picker, 5-minute default, countdown, timer menu) in Journey, Sending Practice, Rapid Fire and Pileup Runner; Rapid Fire and Pileup Runner are ranked so runs are not comparable",
+   "state": "open",
+   "status": {
+    "ios": "present",
+    "android": "absent",
+    "desktop": "absent"
+   },
+   "reason": "Recorded by the 2026-09-27 audit and not yet closed.",
+   "anchor": "PARITY.md#open-gaps",
+   "ref": "audit-0927-01",
+   "issue": null,
+   "detect": {
+    "type": "manual"
+   }
+  },
+  {
+   "id": "row-02",
+   "kind": "behavior",
+   "summary": "Short Stories: iOS starts the practiceDuration clock but shows no picker or timer menu, so a story may end silently (read from code, not run)",
+   "state": "open",
+   "status": {
+    "ios": "absent",
+    "android": "present",
+    "desktop": "present"
+   },
+   "reason": "Recorded by the 2026-09-27 audit and not yet closed.",
+   "anchor": "PARITY.md#open-gaps",
+   "ref": "audit-0927-02",
+   "issue": null,
+   "detect": {
+    "type": "manual"
+   }
+  },
+  {
+   "id": "row-03",
+   "kind": "behavior",
+   "summary": "Timer menu 'Subtract 1 minute'",
+   "state": "open",
+   "status": {
+    "ios": "present",
+    "android": "absent",
+    "desktop": "absent"
+   },
+   "reason": "Recorded by the 2026-09-27 audit and not yet closed.",
+   "anchor": "PARITY.md#open-gaps",
+   "ref": "audit-0927-03",
+   "issue": null,
+   "detect": {
+    "type": "probe",
+    "conditions": [
+     {
+      "tree": "ios",
+      "file": "MorseTrainerApp/ContentView.swift",
+      "pattern": "Subtract 1 minute",
+      "matches": true
+     },
+     {
+      "tree": "android",
+      "file": "SessionMenus.kt",
+      "pattern": "(?i)subtract|reduce",
+      "matches": false
+     },
+     {
+      "tree": "desktop",
+      "file": "SessionMenus.kt",
+      "pattern": "(?i)subtract|reduce",
+      "matches": false
+     }
+    ]
+   }
+  },
+  {
+   "id": "row-04",
+   "kind": "behavior",
+   "summary": "Pileup Runner / Contest options mid-session (iOS in-session Settings sheet; Android and desktop home Settings only)",
+   "state": "open",
+   "status": {
+    "ios": "present",
+    "android": "absent",
+    "desktop": "absent"
+   },
+   "reason": "Recorded by the 2026-09-27 audit and not yet closed.",
+   "anchor": "PARITY.md#open-gaps",
+   "ref": "audit-0927-04",
+   "issue": null,
+   "detect": {
+    "type": "manual"
+   }
+  },
+  {
+   "id": "row-05",
+   "kind": "behavior",
+   "summary": "Your callsign / name reachable from a CW 77, Listen or Common Words session",
+   "state": "open",
+   "status": {
+    "ios": "present",
+    "android": "absent",
+    "desktop": "absent"
+   },
+   "reason": "Recorded by the 2026-09-27 audit and not yet closed.",
+   "anchor": "PARITY.md#open-gaps",
+   "ref": "audit-0927-05",
+   "issue": null,
+   "detect": {
+    "type": "manual"
+   }
+  },
+  {
+   "id": "row-06",
+   "kind": "behavior",
+   "summary": "Display name and Delete my scores shown with Share scores off",
+   "state": "open",
+   "status": {
+    "ios": "present",
+    "android": "absent",
+    "desktop": "absent"
+   },
+   "reason": "Recorded by the 2026-09-27 audit and not yet closed.",
+   "anchor": "PARITY.md#open-gaps",
+   "ref": "audit-0927-06",
+   "issue": null,
+   "detect": {
+    "type": "manual"
+   }
+  },
+  {
+   "id": "row-07",
+   "kind": "behavior",
+   "summary": "Post-run leaderboard line: rank, metric, new personal best, 'not ranked' vs 'not posted'",
+   "state": "open",
+   "status": {
+    "ios": "present",
+    "android": "absent",
+    "desktop": "absent"
+   },
+   "reason": "Recorded by the 2026-09-27 audit and not yet closed.",
+   "anchor": "PARITY.md#open-gaps",
+   "ref": "audit-0927-07",
+   "issue": null,
+   "detect": {
+    "type": "manual"
+   }
+  },
+  {
+   "id": "row-08",
+   "kind": "behavior",
+   "summary": "Leaderboard metric display rounded (iOS) vs truncated (Android): 339.6 reads 340 vs 339",
+   "state": "open",
+   "status": {
+    "ios": "present",
+    "android": "absent",
+    "desktop": "absent"
+   },
+   "reason": "Recorded by the 2026-09-27 audit and not yet closed.",
+   "anchor": "PARITY.md#open-gaps",
+   "ref": "audit-0927-08",
+   "issue": null,
+   "detect": {
+    "type": "manual"
+   }
+  },
+  {
+   "id": "row-09",
+   "kind": "behavior",
+   "summary": "Display-name validation: server deny list and specific messages (iOS) vs one generic message",
+   "state": "open",
+   "status": {
+    "ios": "present",
+    "android": "absent",
+    "desktop": "absent"
+   },
+   "reason": "Recorded by the 2026-09-27 audit and not yet closed.",
+   "anchor": "PARITY.md#open-gaps",
+   "ref": "audit-0927-09",
+   "issue": null,
+   "detect": {
+    "type": "manual"
+   }
+  },
+  {
+   "id": "row-10",
+   "kind": "behavior",
+   "summary": "Stats > Recent sessions: whole history, each opens its detail (iOS) vs latest 6",
+   "state": "open",
+   "status": {
+    "ios": "present",
+    "android": "absent",
+    "desktop": "absent"
+   },
+   "reason": "Recorded by the 2026-09-27 audit and not yet closed.",
+   "anchor": "PARITY.md#open-gaps",
+   "ref": "audit-0927-10",
+   "issue": null,
+   "detect": {
+    "type": "probe",
+    "conditions": [
+     {
+      "tree": "android",
+      "file": "StatsScreen.kt",
+      "pattern": "Stats\\.recent\\.take\\(6\\)",
+      "matches": true
+     }
+    ]
+   }
+  },
+  {
+   "id": "row-11",
+   "kind": "behavior",
+   "summary": "Best session accuracy and biggest session over the full history (iOS) vs Stats.recent (Android)",
+   "state": "open",
+   "status": {
+    "ios": "present",
+    "android": "absent",
+    "desktop": "absent"
+   },
+   "reason": "Recorded by the 2026-09-27 audit and not yet closed.",
+   "anchor": "PARITY.md#open-gaps",
+   "ref": "audit-0927-11",
+   "issue": null,
+   "detect": {
+    "type": "manual"
+   }
+  },
+  {
+   "id": "row-12",
+   "kind": "behavior",
+   "summary": "Stats before the first session: Characters table shown (iOS) vs only the empty message",
+   "state": "open",
+   "status": {
+    "ios": "present",
+    "android": "absent",
+    "desktop": "absent"
+   },
+   "reason": "Recorded by the 2026-09-27 audit and not yet closed.",
+   "anchor": "PARITY.md#open-gaps",
+   "ref": "audit-0927-12",
+   "issue": null,
+   "detect": {
+    "type": "manual"
+   }
+  },
+  {
+   "id": "row-13",
+   "kind": "behavior",
+   "summary": "Personal bests, lifetime totals and sharing reachable from Home (Android Progress screen); iOS opens the Brag Sheet only from a session toolbar",
+   "state": "open",
+   "status": {
+    "ios": "absent",
+    "android": "present",
+    "desktop": "present"
+   },
+   "reason": "Recorded by the 2026-09-27 audit and not yet closed.",
+   "anchor": "PARITY.md#open-gaps",
+   "ref": "audit-0927-13",
+   "issue": null,
+   "detect": {
+    "type": "manual"
+   }
+  },
+  {
+   "id": "row-14",
+   "kind": "behavior",
+   "summary": "Bluetooth LE key feeds Invaders, Galaga, Dungeon and Asteroids (iOS) vs USB/Vail MIDI only",
+   "state": "open",
+   "status": {
+    "ios": "present",
+    "android": "absent",
+    "desktop": "absent"
+   },
+   "reason": "Recorded by the 2026-09-27 audit and not yet closed.",
+   "anchor": "PARITY.md#open-gaps",
+   "ref": "audit-0927-14",
+   "issue": null,
+   "detect": {
+    "type": "probe",
+    "conditions": [
+     {
+      "tree": "ios",
+      "file": "MorseTrainerApp/InvadersView.swift",
+      "pattern": "midiDeviceNames",
+      "matches": true
+     },
+     {
+      "tree": "android",
+      "file": "InvadersScreen.kt",
+      "pattern": "BluetoothKeyButton",
+      "matches": false
+     },
+     {
+      "tree": "desktop",
+      "file": "InvadersScreen.kt",
+      "pattern": "BluetoothKeyButton",
+      "matches": false
+     }
+    ]
+   }
+  },
+  {
+   "id": "row-15",
+   "kind": "behavior",
+   "summary": "'Studied characters' (Analyzer Groups, Sending Drills): Koch active set (iOS) vs seed plus every character with stats (Android); decision needed",
+   "state": "open",
+   "status": {
+    "ios": "limited",
+    "android": "limited",
+    "desktop": "limited"
+   },
+   "reason": "Recorded by the 2026-09-27 audit and not yet closed.",
+   "anchor": "PARITY.md#open-gaps",
+   "ref": "audit-0927-15",
+   "issue": null,
+   "detect": {
+    "type": "manual"
+   }
+  },
+  {
+   "id": "row-16",
+   "kind": "behavior",
+   "summary": "Hardware-keyboard shortcuts in Head Copy (R, Return, X) and R to replay on the new-character intro; desktop has the first half",
+   "state": "open",
+   "status": {
+    "ios": "present",
+    "android": "absent",
+    "desktop": "limited"
+   },
+   "reason": "Recorded by the 2026-09-27 audit and not yet closed.",
+   "anchor": "PARITY.md#open-gaps",
+   "ref": "audit-0927-16",
+   "issue": null,
+   "detect": {
+    "type": "manual"
+   }
+  },
+  {
+   "id": "row-17",
+   "kind": "behavior",
+   "summary": "On-screen key stays live after the answer is revealed (iOS) vs disabled in Sending Practice and Rapid Fire",
+   "state": "open",
+   "status": {
+    "ios": "present",
+    "android": "absent",
+    "desktop": "absent"
+   },
+   "reason": "Recorded by the 2026-09-27 audit and not yet closed.",
+   "anchor": "PARITY.md#open-gaps",
+   "ref": "audit-0927-17",
+   "issue": null,
+   "detect": {
+    "type": "manual"
+   }
+  },
+  {
+   "id": "row-18",
+   "kind": "behavior",
+   "summary": "Sidetone and tone-spread slider steps: 10 Hz and 'Zero-beat' below 10 Hz (iOS) vs continuous; stored sidetone not clamped on load",
+   "state": "open",
+   "status": {
+    "ios": "present",
+    "android": "absent",
+    "desktop": "absent"
+   },
+   "reason": "Recorded by the 2026-09-27 audit and not yet closed.",
+   "anchor": "PARITY.md#open-gaps",
+   "ref": "audit-0927-18",
+   "issue": null,
+   "detect": {
+    "type": "manual"
+   }
+  },
+  {
+   "id": "row-19",
+   "kind": "behavior",
+   "summary": "Pileup min/max speed and wait independent (iOS) vs coupled",
+   "state": "open",
+   "status": {
+    "ios": "present",
+    "android": "absent",
+    "desktop": "absent"
+   },
+   "reason": "Recorded by the 2026-09-27 audit and not yet closed.",
+   "anchor": "PARITY.md#open-gaps",
+   "ref": "audit-0927-19",
+   "issue": null,
+   "detect": {
+    "type": "manual"
+   }
+  },
+  {
+   "id": "row-20",
+   "kind": "behavior",
+   "summary": "Your callsign input: free text (iOS) vs uppercase, letters/digits//, 12 max, blank -> W1AW; decision needed",
+   "state": "open",
+   "status": {
+    "ios": "limited",
+    "android": "limited",
+    "desktop": "limited"
+   },
+   "reason": "Recorded by the 2026-09-27 audit and not yet closed.",
+   "anchor": "PARITY.md#open-gaps",
+   "ref": "audit-0927-20",
+   "issue": null,
+   "detect": {
+    "type": "manual"
+   }
+  },
+  {
+   "id": "row-21",
+   "kind": "behavior",
+   "summary": "Preview tone: replays the current drill item (iOS) vs always keys PARIS; decision needed",
+   "state": "open",
+   "status": {
+    "ios": "limited",
+    "android": "limited",
+    "desktop": "limited"
+   },
+   "reason": "Recorded by the 2026-09-27 audit and not yet closed.",
+   "anchor": "PARITY.md#open-gaps",
+   "ref": "audit-0927-21",
+   "issue": null,
+   "detect": {
+    "type": "manual"
+   }
+  },
+  {
+   "id": "row-22",
+   "kind": "behavior",
+   "summary": "Sending Analyzer microphone input: key closed (iOS) vs hardware key stays open with its sidetone",
+   "state": "open",
+   "status": {
+    "ios": "present",
+    "android": "absent",
+    "desktop": "absent"
+   },
+   "reason": "Recorded by the 2026-09-27 audit and not yet closed.",
+   "anchor": "PARITY.md#open-gaps",
+   "ref": "audit-0927-22",
+   "issue": null,
+   "detect": {
+    "type": "manual"
+   }
+  },
+  {
+   "id": "row-23",
+   "kind": "behavior",
+   "summary": "Sending Analyzer, two keys at once: merged into one logical key (iOS) vs recorded separately",
+   "state": "open",
+   "status": {
+    "ios": "present",
+    "android": "absent",
+    "desktop": "absent"
+   },
+   "reason": "Recorded by the 2026-09-27 audit and not yet closed.",
+   "anchor": "PARITY.md#open-gaps",
+   "ref": "audit-0927-23",
+   "issue": null,
+   "detect": {
+    "type": "manual"
+   }
+  },
+  {
+   "id": "row-24",
+   "kind": "behavior",
+   "summary": "Sending Analyzer microphone: stops on interruption or route loss, own denied-permission message (iOS) vs none",
+   "state": "open",
+   "status": {
+    "ios": "present",
+    "android": "absent",
+    "desktop": "absent"
+   },
+   "reason": "Recorded by the 2026-09-27 audit and not yet closed.",
+   "anchor": "PARITY.md#open-gaps",
+   "ref": "audit-0927-24",
+   "issue": null,
+   "detect": {
+    "type": "manual"
+   }
+  },
+  {
+   "id": "row-25",
+   "kind": "behavior",
+   "summary": "Home Daily Dit card with no WPM recorded: drops the speed (iOS) vs shows 'copied at  WPM' (a bug)",
+   "state": "open",
+   "status": {
+    "ios": "present",
+    "android": "absent",
+    "desktop": "absent"
+   },
+   "reason": "Recorded by the 2026-09-27 audit and not yet closed.",
+   "anchor": "PARITY.md#open-gaps",
+   "ref": "audit-0927-25",
+   "issue": null,
+   "detect": {
+    "type": "manual"
+   }
+  },
+  {
+   "id": "copy-labels",
+   "kind": "copy",
+   "summary": "Copy and labels: reminder notification text, buddy footer/invite text, delete-scores dialog, session-row mode titles, fastest-copy format, stale iOS QRQ blurb, Pileup Runner tagline",
+   "state": "open",
+   "status": {
+    "ios": "limited",
+    "android": "limited",
+    "desktop": "limited"
+   },
+   "reason": "Recorded by the 2026-09-27 audit and not yet closed.",
+   "anchor": "PARITY.md#open-gaps",
+   "ref": "audit-0927-labels",
+   "issue": null,
+   "detect": {
+    "type": "manual"
+   }
+  },
+  {
+   "id": "copy-setting-names",
+   "kind": "copy",
+   "summary": "Setting names differ between iOS and Android/desktop (every settings title the extraction sees differ)",
+   "state": "open",
+   "status": {
+    "ios": "limited",
+    "android": "limited",
+    "desktop": "limited"
+   },
+   "reason": "Recorded by the 2026-09-27 audit and not yet closed.",
+   "anchor": "PARITY.md#open-gaps",
+   "ref": "audit-0927-names",
+   "issue": null,
+   "detect": {
+    "type": "finding",
+    "keys": [
+     "settingTitle:sidetone",
+     "settingTitle:speed",
+     "settingTitle:recognizeWithin",
+     "settingTitle:reveal",
+     "settingTitle:exchange",
+     "settingTitle:maxCallers",
+     "settingTitle:callerMinSpeed",
+     "settingTitle:callerMaxSpeed",
+     "settingTitle:qsb",
+     "settingTitle:qsoQrn",
+     "settingTitle:rstRequired",
+     "settingTitle:keepPartialCall",
+     "settingTitle:giveUp",
+     "settingTitle:reminderTime"
+    ]
+   }
+  },
+  {
+   "id": "settings-order",
+   "kind": "layout",
+   "summary": "Order of settings inside a category differs: iOS lists Answer entry, Show right / wrong, Reveal; Android and desktop list Reveal, Answer entry, Show right / wrong; iOS lists Delete account before Devices, Android and desktop after",
+   "state": "open",
+   "status": {
+    "ios": "limited",
+    "android": "limited",
+    "desktop": "limited"
+   },
+   "reason": "Recorded by the 2026-09-27 audit and not yet closed.",
+   "anchor": "PARITY.md#open-gaps",
+   "ref": "audit-0927-order",
+   "issue": null,
+   "detect": {
+    "type": "finding",
+    "keys": [
+     "settingOrder:android",
+     "settingOrder:desktop"
+    ]
+   }
+  },
+  {
+   "id": "layout-decisions",
+   "kind": "layout",
+   "summary": "Layout recorded for a decision: where the voice and keyed-answer switches, word pool, 'Use my word list', track stage and QRQ speed live; toolbar icons vs tiles; tile order; last-used highlight; setup-sheet blurb vs tagline; iOS's finer Settings sections",
+   "state": "open",
+   "status": {
+    "ios": "limited",
+    "android": "limited",
+    "desktop": "limited"
+   },
+   "reason": "Recorded by the 2026-09-27 audit and not yet closed.",
+   "anchor": "PARITY.md#open-gaps",
+   "ref": "audit-0927-decisions",
+   "issue": null,
+   "detect": {
+    "type": "finding",
+    "keys": [
+     "options:settingsSections:android",
+     "options:settingsSections:desktop"
+    ]
+   }
+  },
+  {
+   "id": "docs-daily-dit",
+   "kind": "docs",
+   "summary": "No README lists the Daily Dit",
+   "state": "open",
+   "status": {
+    "ios": "absent",
+    "android": "absent",
+    "desktop": "absent"
+   },
+   "reason": "Recorded by the 2026-09-27 audit and not yet closed.",
+   "anchor": "PARITY.md#open-gaps",
+   "ref": "audit-0927-dit",
+   "issue": null,
+   "detect": {
+    "type": "finding",
+    "keys": [
+     "readme-missing:dailyDit:ios",
+     "readme-missing:dailyDit:android",
+     "readme-missing:dailyDit:desktop"
+    ]
+   }
+  },
+  {
+   "id": "docs-readme-headings",
+   "kind": "docs",
+   "summary": "READMEs do not list the same features: Answer by keying, Bluetooth keep-alive / band noise and Bluetooth LE MIDI keys are headings on iOS only; Sending Drills heading is missing on iOS; the repeater and Type It / QRQ Speed headings are named differently",
+   "state": "open",
+   "status": {
+    "ios": "limited",
+    "android": "limited",
+    "desktop": "limited"
+   },
+   "reason": "Recorded by the 2026-09-27 audit and not yet closed.",
+   "anchor": "PARITY.md#open-gaps",
+   "ref": "audit-0927-headings",
+   "issue": null,
+   "detect": {
+    "type": "finding",
+    "keys": [
+     "readme-missing:answerByKeying:android",
+     "readme-missing:answerByKeying:desktop",
+     "readme-missing:bleMidiKey:android",
+     "readme-missing:bandNoise:android",
+     "readme-missing:bandNoise:desktop",
+     "readme-missing:sendingDrills:ios",
+     "readme-name:typeit",
+     "readme-name:qrq",
+     "readme-name:repeater"
+    ]
+   }
+  },
+  {
+   "id": "docs-android-readme",
+   "kind": "docs",
+   "summary": "The Android and desktop READMEs lack the first-run proficiency question and describe Sending Practice and the Repeater more briefly than iOS's",
+   "state": "open",
+   "status": {
+    "ios": "absent",
+    "android": "present",
+    "desktop": "present"
+   },
+   "reason": "Recorded by the 2026-09-27 audit and not yet closed.",
+   "anchor": "PARITY.md#open-gaps",
+   "ref": "audit-0927-readme",
+   "issue": null,
+   "detect": {
+    "type": "manual"
+   }
+  }
+ ]
+}
