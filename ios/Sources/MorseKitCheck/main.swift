@@ -8856,6 +8856,7 @@ func boxingQuality(_ s: String) -> BoxingQuality {
 }
 
 /// Runs one scripted op; returns the new clock.
+@MainActor
 func boxingRun(_ f: inout BoxingFight, _ op: [String], _ nowIn: UInt32) -> UInt32 {
     var now = nowIn
     func n(_ i: Int) -> UInt32 { i < op.count ? UInt32(truncatingIfNeeded: Int(op[i]) ?? 0) : 0 }
