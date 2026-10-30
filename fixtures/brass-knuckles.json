@@ -1,0 +1,2048 @@
+{
+ "$comment": [
+  "Brass Knuckles Knock Out (docs/brass-knuckles-design.md), pinned for every port:",
+  "BoxingFight in ios/Sources/MorseKit/BrassKnuckles.swift and",
+  "android/.../morsekit/BrassKnuckles.kt and desktop/.../morsekit/BrassKnuckles.kt.",
+  "Read by ios/Sources/MorseKitCheck/main.swift and the Android and desktop",
+  "BrassKnucklesTest.kt.",
+  "",
+  "Every expected value comes from the game's own reference implementation,",
+  "pocketcw-logic 0.4.0 (logic/src/boxing.rs, rng.rs, ticks.rs by Derick KO6PBZ, for the HamCube",
+  "PocketCW firmware by Kristen K5MME; GPL-3.0-or-later), run on a seed and a script, not",
+  "from any of our ports. The generator is fixtures/brass-knuckles-oracle.rs. Do not",
+  "regenerate this file to make a failing test pass; regenerate it only when the rules are",
+  "meant to change, and say so in the commit."
+ ],
+ "derivation": {
+  "ladder": "[name, from, blurb, koch, speedBump, spacingPct, hint, noise, fading, maxTell, hp, power, reactMs, restLeastMs, restExtraMs, openMs, pitchOffsetHz, fist] for each of the eight fighters, in order.",
+  "speeds": "[fighter, baseWpm, farnsworth, characterWpm, effectiveWpm]: Fighter.speeds(base, farnsworth).",
+  "characters": "[character, punch, units, damageGood, damageOff, damageBad] for the 41 Koch characters in order. punch is jab (all dits), hook (all dahs) or comboN (N runs, at most 4). units is the ideal length in dots with no trailing gap. noPunch has no code and throws nothing.",
+  "rng": "xorshift32, seed | 1. below(n) is the next state mod n. Three sequences, and the US calls us_call builds from the same generator (call area digit k % 10).",
+  "tellsAndWords": "For each fighter: 12 tells drawn from a fight seeded 12345, and 10 uppercut words from a fight seeded 777 (callsign K5MME), all with weights at their default of 8.",
+  "career": "[fighter, won, score, opensNext, unlockedAfter, bestScoreAfter, winsAfter] after each finished fight in order, on a fresh career.",
+  "worst": "FightStats.worst after K right twice, M wrong once, R right once and wrong once: worst first.",
+  "fights": "Each fight starts at tick 1000 and runs 'ops' in order; after every op 'expect' has one snapshot line. Ops: start, startFalse (start must be refused), advance (jump to the deadline and update; nothing if none), update dt, wait dt, tellPlayed dt, answer quality dt (key the whole tell), key char quality dt, keyUnknown dt, getUp quality dt, star dt, word quality dt, pause dt, resume dt, setFoeHp n, setMyHp n, setStars n. dt is milliseconds added to the clock before the op. After each op the pending play (take_play) and judged copies (take_copies) are taken and appended. Snapshot: phase|duel|hp foe me|st stars run cleanRun|sc score|rd round|now|dl deadline|tell|ans|word|typed|cnt|up getUp|play|stats tells,dodged,punches,clean,damage,taken,uppercuts,knockdowns,knocked|foe pose|me pose|call callout|stop|copies sent+copied (_ = missed)."
+ },
+ "ladder": [
+  [
+   "LID LARRY",
+   "THE BOTTOM OF THE BAND",
+   "CALLS CQ ON TOP OF EVERYONE",
+   5,
+   0,
+   40,
+   true,
+   0,
+   0,
+   1,
+   60,
+   12,
+   2600,
+   1800,
+   1400,
+   4800,
+   -60,
+   14
+  ],
+  [
+   "QRM QUEEN",
+   "RIGHT ON YOUR FREQUENCY",
+   "SHE SPLATTERS AND SHE KNOWS IT",
+   10,
+   0,
+   50,
+   true,
+   1,
+   0,
+   1,
+   75,
+   13,
+   2300,
+   1600,
+   1300,
+   4500,
+   90,
+   4
+  ],
+  [
+   "PILEUP PETE",
+   "THE FRONT OF EVERY PILEUP",
+   "NEVER WAITS HIS TURN",
+   15,
+   1,
+   60,
+   true,
+   2,
+   0,
+   1,
+   85,
+   14,
+   2000,
+   1400,
+   1200,
+   4200,
+   -40,
+   6
+  ],
+  [
+   "BAREFOOT BOB",
+   "100 WATTS AND A WIRE",
+   "NO AMP, NO HINTS, NO MERCY",
+   20,
+   2,
+   70,
+   false,
+   3,
+   0,
+   1,
+   95,
+   15,
+   1800,
+   1300,
+   1100,
+   3900,
+   50,
+   0
+  ],
+  [
+   "CONTEST CARL",
+   "A 48 HOUR CONTEST",
+   "599 TU. NEXT!",
+   25,
+   3,
+   80,
+   false,
+   3,
+   0,
+   2,
+   105,
+   17,
+   1600,
+   1100,
+   1000,
+   3600,
+   -80,
+   0
+  ],
+  [
+   "SKIP SADIE",
+   "THE F2 LAYER",
+   "HERE ONE SECOND, GONE THE NEXT",
+   30,
+   4,
+   90,
+   false,
+   4,
+   5,
+   2,
+   115,
+   18,
+   1450,
+   1000,
+   900,
+   3300,
+   110,
+   3
+  ],
+  [
+   "SIDESWIPER SID",
+   "A KEY CUT FROM A HACKSAW BLADE",
+   "WAGS BOTH WAYS, FAST",
+   35,
+   5,
+   100,
+   false,
+   5,
+   6,
+   3,
+   125,
+   20,
+   1300,
+   900,
+   800,
+   3000,
+   -100,
+   10
+  ],
+  [
+   "BARON VON KILOWATT",
+   "A CASTLE FULL OF AMPLIFIERS",
+   "THE LEGAL LIMIT IS A SUGGESTION",
+   41,
+   6,
+   100,
+   false,
+   6,
+   7,
+   3,
+   140,
+   23,
+   1150,
+   800,
+   700,
+   2800,
+   0,
+   0
+  ]
+ ],
+ "speeds": [
+  [
+   0,
+   20,
+   0,
+   20,
+   8
+  ],
+  [
+   0,
+   20,
+   15,
+   20,
+   8
+  ],
+  [
+   0,
+   5,
+   0,
+   5,
+   5
+  ],
+  [
+   0,
+   58,
+   0,
+   58,
+   23
+  ],
+  [
+   1,
+   20,
+   0,
+   20,
+   10
+  ],
+  [
+   1,
+   20,
+   15,
+   20,
+   10
+  ],
+  [
+   1,
+   5,
+   0,
+   5,
+   5
+  ],
+  [
+   1,
+   58,
+   0,
+   58,
+   29
+  ],
+  [
+   2,
+   20,
+   0,
+   21,
+   12
+  ],
+  [
+   2,
+   20,
+   15,
+   21,
+   12
+  ],
+  [
+   2,
+   5,
+   0,
+   6,
+   5
+  ],
+  [
+   2,
+   58,
+   0,
+   59,
+   35
+  ],
+  [
+   3,
+   20,
+   0,
+   22,
+   15
+  ],
+  [
+   3,
+   20,
+   15,
+   22,
+   15
+  ],
+  [
+   3,
+   5,
+   0,
+   7,
+   5
+  ],
+  [
+   3,
+   58,
+   0,
+   60,
+   42
+  ],
+  [
+   4,
+   20,
+   0,
+   23,
+   18
+  ],
+  [
+   4,
+   20,
+   15,
+   23,
+   15
+  ],
+  [
+   4,
+   5,
+   0,
+   8,
+   6
+  ],
+  [
+   4,
+   58,
+   0,
+   60,
+   48
+  ],
+  [
+   5,
+   20,
+   0,
+   24,
+   21
+  ],
+  [
+   5,
+   20,
+   15,
+   24,
+   15
+  ],
+  [
+   5,
+   5,
+   0,
+   9,
+   8
+  ],
+  [
+   5,
+   58,
+   0,
+   60,
+   54
+  ],
+  [
+   6,
+   20,
+   0,
+   25,
+   25
+  ],
+  [
+   6,
+   20,
+   15,
+   25,
+   15
+  ],
+  [
+   6,
+   5,
+   0,
+   10,
+   10
+  ],
+  [
+   6,
+   58,
+   0,
+   60,
+   60
+  ],
+  [
+   7,
+   20,
+   0,
+   26,
+   26
+  ],
+  [
+   7,
+   20,
+   15,
+   26,
+   15
+  ],
+  [
+   7,
+   5,
+   0,
+   11,
+   11
+  ],
+  [
+   7,
+   58,
+   0,
+   60,
+   60
+  ]
+ ],
+ "characters": [
+  [
+   "K",
+   "combo3",
+   9,
+   9,
+   5,
+   3
+  ],
+  [
+   "M",
+   "hook",
+   7,
+   6,
+   3,
+   2
+  ],
+  [
+   "U",
+   "combo2",
+   7,
+   9,
+   5,
+   3
+  ],
+  [
+   "R",
+   "combo3",
+   7,
+   9,
+   5,
+   3
+  ],
+  [
+   "E",
+   "jab",
+   1,
+   4,
+   2,
+   1
+  ],
+  [
+   "S",
+   "jab",
+   5,
+   6,
+   3,
+   2
+  ],
+  [
+   "N",
+   "combo2",
+   5,
+   7,
+   4,
+   2
+  ],
+  [
+   "A",
+   "combo2",
+   5,
+   7,
+   4,
+   2
+  ],
+  [
+   "P",
+   "combo3",
+   11,
+   11,
+   7,
+   3
+  ],
+  [
+   "T",
+   "hook",
+   3,
+   5,
+   3,
+   1
+  ],
+  [
+   "L",
+   "combo3",
+   9,
+   11,
+   7,
+   3
+  ],
+  [
+   "W",
+   "combo2",
+   9,
+   9,
+   5,
+   3
+  ],
+  [
+   "I",
+   "jab",
+   3,
+   5,
+   3,
+   1
+  ],
+  [
+   ".",
+   "combo4",
+   17,
+   15,
+   9,
+   5
+  ],
+  [
+   "J",
+   "combo2",
+   13,
+   11,
+   7,
+   3
+  ],
+  [
+   "Z",
+   "combo2",
+   11,
+   11,
+   7,
+   3
+  ],
+  [
+   "=",
+   "combo3",
+   13,
+   13,
+   8,
+   4
+  ],
+  [
+   "F",
+   "combo3",
+   9,
+   11,
+   7,
+   3
+  ],
+  [
+   "O",
+   "hook",
+   11,
+   7,
+   4,
+   2
+  ],
+  [
+   "Y",
+   "combo3",
+   13,
+   11,
+   7,
+   3
+  ],
+  [
+   ",",
+   "combo3",
+   19,
+   15,
+   9,
+   5
+  ],
+  [
+   "V",
+   "combo2",
+   9,
+   11,
+   7,
+   3
+  ],
+  [
+   "G",
+   "combo2",
+   9,
+   9,
+   5,
+   3
+  ],
+  [
+   "5",
+   "jab",
+   9,
+   8,
+   5,
+   2
+  ],
+  [
+   "/",
+   "combo4",
+   13,
+   13,
+   8,
+   4
+  ],
+  [
+   "Q",
+   "combo3",
+   13,
+   11,
+   7,
+   3
+  ],
+  [
+   "9",
+   "combo2",
+   17,
+   13,
+   8,
+   4
+  ],
+  [
+   "2",
+   "combo2",
+   15,
+   13,
+   8,
+   4
+  ],
+  [
+   "H",
+   "jab",
+   7,
+   7,
+   4,
+   2
+  ],
+  [
+   "3",
+   "combo2",
+   13,
+   13,
+   8,
+   4
+  ],
+  [
+   "8",
+   "combo2",
+   15,
+   13,
+   8,
+   4
+  ],
+  [
+   "B",
+   "combo2",
+   9,
+   11,
+   7,
+   3
+  ],
+  [
+   "?",
+   "combo3",
+   15,
+   15,
+   9,
+   5
+  ],
+  [
+   "4",
+   "combo2",
+   11,
+   13,
+   8,
+   4
+  ],
+  [
+   "7",
+   "combo2",
+   13,
+   13,
+   8,
+   4
+  ],
+  [
+   "C",
+   "combo4",
+   11,
+   11,
+   7,
+   3
+  ],
+  [
+   "1",
+   "combo2",
+   17,
+   13,
+   8,
+   4
+  ],
+  [
+   "D",
+   "combo2",
+   7,
+   9,
+   5,
+   3
+  ],
+  [
+   "6",
+   "combo2",
+   11,
+   13,
+   8,
+   4
+  ],
+  [
+   "0",
+   "hook",
+   19,
+   9,
+   5,
+   3
+  ],
+  [
+   "X",
+   "combo3",
+   11,
+   11,
+   7,
+   3
+  ]
+ ],
+ "noPunch": "#",
+ "rng": {
+  "seed1Below100": [
+   69,
+   89,
+   61,
+   95,
+   33,
+   4,
+   82,
+   10,
+   29,
+   32,
+   99,
+   43,
+   42,
+   98,
+   69,
+   93
+  ],
+  "seedDEADBEEFBelow1000": [
+   711,
+   402,
+   520,
+   467,
+   808,
+   131,
+   188,
+   635,
+   710,
+   525,
+   802,
+   556,
+   723,
+   267,
+   600,
+   609
+  ],
+  "usCallsSeed1": [
+   "N0VN",
+   "KX1KFG",
+   "WY2YLT",
+   "KQ3FP",
+   "N4VWZ",
+   "N5PEL",
+   "NZ6IA",
+   "WT7ZN",
+   "WO8DLT",
+   "NV9PX",
+   "NA0K",
+   "W1TZL",
+   "KK2Y",
+   "KI3X",
+   "KR4UKS",
+   "N5JD",
+   "WW6FWU",
+   "WE7MJW",
+   "W8RWQ",
+   "K9KP",
+   "N0WKH",
+   "WX1I",
+   "WG2CDP",
+   "KK3RSA"
+  ]
+ },
+ "tellsAndWords": [
+  {
+   "fighter": 0,
+   "tells": [
+    "R",
+    "K",
+    "R",
+    "R",
+    "R",
+    "E",
+    "U",
+    "M",
+    "E",
+    "U",
+    "R",
+    "E"
+   ],
+   "words": [
+    "RUE",
+    "MURK",
+    "MURK",
+    "MURK",
+    "EMU",
+    "EMU",
+    "EMU",
+    "UR",
+    "UR",
+    "EMU"
+   ]
+  },
+  {
+   "fighter": 1,
+   "tells": [
+    "S",
+    "S",
+    "P",
+    "P",
+    "N",
+    "S",
+    "A",
+    "R",
+    "U",
+    "A",
+    "P",
+    "T"
+   ],
+   "words": [
+    "UR",
+    "USER",
+    "SKA",
+    "SNAP",
+    "EMU",
+    "EMU",
+    "MUSE",
+    "SUM",
+    "ANT",
+    "EMU"
+   ]
+  },
+  {
+   "fighter": 2,
+   "tells": [
+    "K",
+    "S",
+    "N",
+    ".",
+    "T",
+    "L",
+    "I",
+    "R",
+    "U",
+    "A",
+    "L",
+    "U"
+   ],
+   "words": [
+    "SPARK",
+    "WIRE",
+    "WATTS",
+    "EMU",
+    "PAUSE",
+    "WPM",
+    "RUSE",
+    "PARK",
+    "ANTS",
+    "WPM"
+   ]
+  },
+  {
+   "fighter": 3,
+   "tells": [
+    "O",
+    "Z",
+    "O",
+    "O",
+    "T",
+    "Y",
+    "F",
+    "R",
+    "I",
+    "F",
+    "O",
+    "Y"
+   ],
+   "words": [
+    "RST",
+    "SUM",
+    "SUM",
+    "LOOP",
+    "TRAMP",
+    "WIRE",
+    "RANK",
+    "SPARK",
+    "ES",
+    "SURE"
+   ]
+  },
+  {
+   "fighter": 4,
+   "tells": [
+    "V",
+    "L",
+    "M",
+    "J",
+    "K",
+    "G",
+    "RU",
+    "F",
+    "Y/",
+    "5",
+    "WP",
+    "FF"
+   ],
+   "words": [
+    "SUM",
+    "SKA",
+    "GM",
+    "WIRE",
+    "WATTS",
+    "RUE",
+    "RIG",
+    "TUNE",
+    "PILEUP",
+    "PARK"
+   ]
+  },
+  {
+   "fighter": 5,
+   "tells": [
+    "S",
+    "S",
+    "W",
+    "3",
+    "Z",
+    "I",
+    "RG",
+    "2",
+    "T3",
+    "Y",
+    "=.",
+    "II"
+   ],
+   "words": [
+    "QRP",
+    "QRM",
+    "RUE",
+    "SKA",
+    "RUE",
+    "WPM",
+    "MURK",
+    "RST",
+    "MUSE",
+    "ANTS"
+   ]
+  },
+  {
+   "fighter": 6,
+   "tells": [
+    "PK",
+    "?L",
+    "8I",
+    "A",
+    "57",
+    ",W",
+    "YF",
+    "/",
+    "7OB",
+    "973",
+    ".",
+    "4."
+   ],
+   "words": [
+    "WATTS",
+    "PARK",
+    "RIG",
+    "QTH",
+    "599",
+    "TRAMP",
+    "SOTA",
+    "PILEUP",
+    "ANTS",
+    "PSE"
+   ]
+  },
+  {
+   "fighter": 7,
+   "tells": [
+    "1I",
+    "V.",
+    "1Z",
+    ",",
+    "8?",
+    "V8",
+    "IJ",
+    "J",
+    "H1D",
+    "D4K",
+    "P",
+    "BK"
+   ],
+   "words": [
+    "POTA",
+    "SKA",
+    "FIST",
+    "FIST",
+    "SKED",
+    "QRP",
+    "CW",
+    "PARK",
+    "SURE",
+    "QRP"
+   ]
+  }
+ ],
+ "career": [
+  [
+   0,
+   false,
+   1234,
+   false,
+   1,
+   1230,
+   0
+  ],
+  [
+   0,
+   true,
+   900,
+   true,
+   2,
+   1230,
+   1
+  ],
+  [
+   0,
+   true,
+   99999,
+   false,
+   2,
+   99990,
+   2
+  ],
+  [
+   1,
+   true,
+   5000,
+   true,
+   3,
+   5000,
+   1
+  ],
+  [
+   3,
+   true,
+   10,
+   false,
+   3,
+   10,
+   1
+  ],
+  [
+   1,
+   true,
+   7,
+   false,
+   3,
+   5000,
+   2
+  ]
+ ],
+ "worst": [
+  [
+   "M",
+   0,
+   1
+  ],
+  [
+   "R",
+   1,
+   2
+  ],
+  [
+   "K",
+   2,
+   2
+  ]
+ ],
+ "fights": [
+  {
+   "name": "dodge_and_counter",
+   "fighter": 0,
+   "seed": 7,
+   "hints": true,
+   "ditMs": 60,
+   "callsign": "K5MME",
+   "ops": [
+    [
+     "start"
+    ],
+    [
+     "advance"
+    ],
+    [
+     "advance"
+    ],
+    [
+     "tellPlayed",
+     "500"
+    ],
+    [
+     "answer",
+     "good",
+     "200"
+    ],
+    [
+     "advance"
+    ],
+    [
+     "key",
+     "E",
+     "good",
+     "100"
+    ],
+    [
+     "key",
+     "K",
+     "off",
+     "800"
+    ],
+    [
+     "advance"
+    ],
+    [
+     "key",
+     "T",
+     "good",
+     "10"
+    ],
+    [
+     "advance"
+    ],
+    [
+     "advance"
+    ]
+   ],
+   "expect": [
+    "RoundStart|Neutral|hp 60 100|st 0 run 0|sc 0|rd 1|now 1000|dl 2800|tell |ans |word |typed |cnt 0|up K|play -|stats 0,0,0,0,0,0,0,0,0|foe Idle|me Idle|call -|stop false|copies ",
+    "Fight|Neutral|hp 60 100|st 0 run 0|sc 0|rd 1|now 2800|dl 3700|tell |ans |word |typed |cnt 0|up K|play -|stats 0,0,0,0,0,0,0,0,0|foe Idle|me Idle|call -|stop false|copies ",
+    "Fight|Tell|hp 60 100|st 0 run 0|sc 0|rd 1|now 3700|dl 92800|tell U|ans |word |typed |cnt 0|up K|play U|stats 1,0,0,0,0,0,0,0,0|foe Windup(Right)|me Idle|call -|stop false|copies ",
+    "Fight|Window|hp 60 100|st 0 run 0|sc 0|rd 1|now 4200|dl 7400|tell U|ans |word |typed |cnt 0|up K|play -|stats 1,0,0,0,0,0,0,0,0|foe Windup(Right)|me Idle|call -|stop false|copies ",
+    "Fight|Punch:true|hp 60 100|st 0 run 0|sc 50|rd 1|now 4400|dl 4820|tell U|ans U|word |typed |cnt 0|up K|play -|stats 1,1,0,0,0,0,0,0,0|foe Whiff(Right)|me Dodge(Left)|call Dodge|stop true|copies UU",
+    "Fight|Open|hp 60 100|st 0 run 0|sc 50|rd 1|now 4820|dl 9620|tell U|ans U|word |typed |cnt 0|up K|play -|stats 1,1,0,0,0,0,0,0,0|foe Open|me Idle|call Dodge|stop true|copies ",
+    "Fight|Open|hp 56 100|st 0 run 1|sc 110|rd 1|now 4920|dl 9620|tell U|ans U|word |typed |cnt 0|up K|play -|stats 1,1,1,1,4,0,0,0,0|foe Hurt(Left)|me Jab(Right)|call Clean|stop true|copies ",
+    "Fight|Open|hp 51 100|st 0 run 1|sc 160|rd 1|now 5720|dl 9620|tell U|ans U|word |typed |cnt 0|up K|play -|stats 1,1,2,1,9,0,0,0,0|foe Hurt(Right)|me Combo(3)|call -|stop true|copies ",
+    "Fight|Neutral|hp 51 100|st 0 run 1|sc 160|rd 1|now 9620|dl 11981|tell U|ans U|word |typed |cnt 0|up K|play -|stats 1,1,2,1,9,0,0,0,0|foe Idle|me Idle|call -|stop true|copies ",
+    "Fight|Neutral|hp 51 100|st 0 run 1|sc 160|rd 1|now 9630|dl 11981|tell U|ans U|word |typed |cnt 0|up K|play -|stats 1,1,2,1,9,0,0,0,0|foe Block|me Blocked(Right)|call Blocked|stop true|copies ",
+    "Fight|Tell|hp 51 100|st 0 run 1|sc 160|rd 1|now 11981|dl 92800|tell M|ans |word |typed |cnt 0|up K|play M|stats 2,1,2,1,9,0,0,0,0|foe Windup(Left)|me Idle|call Blocked|stop true|copies ",
+    "RoundEnd|Neutral|hp 51 100|st 0 run 1|sc 160|rd 1|now 92800|dl 95400|tell |ans |word |typed |cnt 0|up K|play -|stats 2,1,2,1,9,0,0,0,0|foe Idle|me Idle|call Blocked|stop true|copies "
+   ]
+  },
+  {
+   "name": "wrong_answer_then_too_slow",
+   "fighter": 0,
+   "seed": 3,
+   "hints": false,
+   "ditMs": 60,
+   "callsign": "N9HO",
+   "ops": [
+    [
+     "start"
+    ],
+    [
+     "advance"
+    ],
+    [
+     "advance"
+    ],
+    [
+     "key",
+     "Z",
+     "good",
+     "300"
+    ],
+    [
+     "advance"
+    ],
+    [
+     "advance"
+    ],
+    [
+     "advance"
+    ],
+    [
+     "tellPlayed",
+     "400"
+    ],
+    [
+     "advance"
+    ],
+    [
+     "advance"
+    ],
+    [
+     "advance"
+    ],
+    [
+     "keyUnknown",
+     "0"
+    ]
+   ],
+   "expect": [
+    "RoundStart|Neutral|hp 60 100|st 0 run 0|sc 0|rd 1|now 1000|dl 2800|tell |ans |word |typed |cnt 0|up K|play -|stats 0,0,0,0,0,0,0,0,0|foe Idle|me Idle|call -|stop false|copies ",
+    "Fight|Neutral|hp 60 100|st 0 run 0|sc 0|rd 1|now 2800|dl 3700|tell |ans |word |typed |cnt 0|up K|play -|stats 0,0,0,0,0,0,0,0,0|foe Idle|me Idle|call -|stop false|copies ",
+    "Fight|Tell|hp 60 100|st 0 run 0|sc 0|rd 1|now 3700|dl 92800|tell K|ans |word |typed |cnt 0|up K|play K|stats 1,0,0,0,0,0,0,0,0|foe Windup(Right)|me Idle|call -|stop false|copies ",
+    "Fight|Punch:false|hp 60 100|st 0 run 0|sc 0|rd 1|now 4000|dl 4260|tell K|ans Z|word |typed |cnt 0|up K|play -|stats 1,0,0,0,0,0,0,0,0|foe Punch(Right)|me Idle|call Wrong:Z|stop true|copies KZ",
+    "Fight|Stagger|hp 60 88|st 0 run 0|sc 0|rd 1|now 4260|dl 5860|tell K|ans Z|word |typed |cnt 0|up K|play -|stats 1,0,0,0,0,12,0,0,0|foe Idle|me Hurt|call Wrong:Z|stop true|copies ",
+    "Fight|Tell|hp 60 88|st 0 run 0|sc 0|rd 1|now 5860|dl 92800|tell M|ans |word |typed |cnt 0|up K|play M|stats 2,0,0,0,0,12,0,0,0|foe Windup(Right)|me Idle|call Wrong:Z|stop true|copies ",
+    "RoundEnd|Neutral|hp 60 88|st 0 run 0|sc 0|rd 1|now 92800|dl 95400|tell |ans |word |typed |cnt 0|up K|play -|stats 2,0,0,0,0,12,0,0,0|foe Idle|me Idle|call Wrong:Z|stop true|copies ",
+    "RoundEnd|Neutral|hp 60 88|st 0 run 0|sc 0|rd 1|now 93200|dl 95400|tell |ans |word |typed |cnt 0|up K|play -|stats 2,0,0,0,0,12,0,0,0|foe Idle|me Idle|call Wrong:Z|stop true|copies ",
+    "RoundEnd|Neutral|hp 60 88|st 0 run 0|sc 0|rd 1|now 95400|dl -|tell |ans |word |typed |cnt 0|up K|play -|stats 2,0,0,0,0,12,0,0,0|foe Idle|me Idle|call Wrong:Z|stop true|copies ",
+    "RoundEnd|Neutral|hp 60 88|st 0 run 0|sc 0|rd 1|now 95400|dl -|tell |ans |word |typed |cnt 0|up K|play -|stats 2,0,0,0,0,12,0,0,0|foe Idle|me Idle|call Wrong:Z|stop true|copies ",
+    "RoundEnd|Neutral|hp 60 88|st 0 run 0|sc 0|rd 1|now 95400|dl -|tell |ans |word |typed |cnt 0|up K|play -|stats 2,0,0,0,0,12,0,0,0|foe Idle|me Idle|call Wrong:Z|stop true|copies ",
+    "RoundEnd|Neutral|hp 60 88|st 0 run 0|sc 0|rd 1|now 95400|dl -|tell |ans |word |typed |cnt 0|up K|play -|stats 2,0,0,0,0,12,0,0,0|foe Idle|me Idle|call Wrong:Z|stop true|copies "
+   ]
+  },
+  {
+   "name": "star_and_uppercut",
+   "fighter": 1,
+   "seed": 9,
+   "hints": true,
+   "ditMs": 80,
+   "callsign": "K5MME",
+   "ops": [
+    [
+     "start"
+    ],
+    [
+     "advance"
+    ],
+    [
+     "advance"
+    ],
+    [
+     "tellPlayed",
+     "300"
+    ],
+    [
+     "answer",
+     "good",
+     "100"
+    ],
+    [
+     "advance"
+    ],
+    [
+     "key",
+     "S",
+     "good",
+     "100"
+    ],
+    [
+     "key",
+     "S",
+     "good",
+     "100"
+    ],
+    [
+     "key",
+     "S",
+     "good",
+     "100"
+    ],
+    [
+     "star",
+     "100"
+    ],
+    [
+     "word",
+     "good",
+     "500"
+    ],
+    [
+     "star",
+     "100"
+    ],
+    [
+     "advance"
+    ],
+    [
+     "advance"
+    ]
+   ],
+   "expect": [
+    "RoundStart|Neutral|hp 75 100|st 0 run 0|sc 0|rd 1|now 1000|dl 2800|tell |ans |word |typed |cnt 0|up K|play -|stats 0,0,0,0,0,0,0,0,0|foe Idle|me Idle|call -|stop false|copies ",
+    "Fight|Neutral|hp 75 100|st 0 run 0|sc 0|rd 1|now 2800|dl 3700|tell |ans |word |typed |cnt 0|up K|play -|stats 0,0,0,0,0,0,0,0,0|foe Idle|me Idle|call -|stop false|copies ",
+    "Fight|Tell|hp 75 100|st 0 run 0|sc 0|rd 1|now 3700|dl 92800|tell M|ans |word |typed |cnt 0|up K|play M|stats 1,0,0,0,0,0,0,0,0|foe Windup(Left)|me Idle|call -|stop false|copies ",
+    "Fight|Window|hp 75 100|st 0 run 0|sc 0|rd 1|now 4000|dl 7100|tell M|ans |word |typed |cnt 0|up K|play -|stats 1,0,0,0,0,0,0,0,0|foe Windup(Left)|me Idle|call -|stop false|copies ",
+    "Fight|Punch:true|hp 75 100|st 0 run 0|sc 50|rd 1|now 4100|dl 4520|tell M|ans M|word |typed |cnt 0|up K|play -|stats 1,1,0,0,0,0,0,0,0|foe Whiff(Left)|me Dodge(Right)|call Dodge|stop true|copies MM",
+    "Fight|Open|hp 75 100|st 0 run 0|sc 50|rd 1|now 4520|dl 9020|tell M|ans M|word |typed |cnt 0|up K|play -|stats 1,1,0,0,0,0,0,0,0|foe Open|me Idle|call Dodge|stop true|copies ",
+    "Fight|Open|hp 69 100|st 0 run 1|sc 130|rd 1|now 4620|dl 9020|tell M|ans M|word |typed |cnt 0|up K|play -|stats 1,1,1,1,6,0,0,0,0|foe Hurt(Left)|me Jab(Right)|call Clean|stop true|copies ",
+    "Fight|Open|hp 63 100|st 0 run 2|sc 210|rd 1|now 4720|dl 9020|tell M|ans M|word |typed |cnt 0|up K|play -|stats 1,1,2,2,12,0,0,0,0|foe Hurt(Right)|me Jab(Left)|call Clean|stop true|copies ",
+    "Fight|Open|hp 57 100|st 1 run 0|sc 290|rd 1|now 4820|dl 9020|tell M|ans M|word |typed |cnt 0|up K|play -|stats 1,1,3,3,18,0,0,0,0|foe Hurt(Left)|me Jab(Right)|call Star|stop true|copies ",
+    "Fight|Star|hp 57 100|st 0 run 0|sc 290|rd 1|now 4920|dl 12220|tell M|ans M|word TREK|typed |cnt 0|up K|play -|stats 1,1,3,3,18,0,0,0,0|foe Stunned|me Jab(Right)|call -|stop true|copies ",
+    "Fight|Neutral|hp 15 100|st 0 run 0|sc 790|rd 1|now 5420|dl 8077|tell M|ans M|word |typed |cnt 0|up K|play -|stats 1,1,3,3,60,0,1,0,0|foe Hurt(Left)|me Uppercut|call Uppercut|stop true|copies ",
+    "Fight|Neutral|hp 15 100|st 0 run 0|sc 790|rd 1|now 5520|dl 8077|tell M|ans M|word |typed |cnt 0|up K|play -|stats 1,1,3,3,60,0,1,0,0|foe Hurt(Left)|me Uppercut|call Uppercut|stop true|copies ",
+    "Fight|Tell|hp 15 100|st 0 run 0|sc 790|rd 1|now 8077|dl 92800|tell K|ans |word |typed |cnt 0|up K|play K|stats 2,1,3,3,60,0,1,0,0|foe Windup(Right)|me Idle|call Uppercut|stop true|copies ",
+    "RoundEnd|Neutral|hp 15 100|st 0 run 0|sc 790|rd 1|now 92800|dl 95400|tell |ans |word |typed |cnt 0|up K|play -|stats 2,1,3,3,60,0,1,0,0|foe Idle|me Idle|call Uppercut|stop true|copies "
+   ]
+  },
+  {
+   "name": "star_wasted_by_a_wrong_character",
+   "fighter": 1,
+   "seed": 5,
+   "hints": true,
+   "ditMs": 80,
+   "callsign": "K5MME",
+   "ops": [
+    [
+     "start"
+    ],
+    [
+     "advance"
+    ],
+    [
+     "advance"
+    ],
+    [
+     "tellPlayed",
+     "300"
+    ],
+    [
+     "answer",
+     "good",
+     "100"
+    ],
+    [
+     "advance"
+    ],
+    [
+     "setStars",
+     "1"
+    ],
+    [
+     "star",
+     "0"
+    ],
+    [
+     "key",
+     "#",
+     "good",
+     "100"
+    ],
+    [
+     "keyUnknown",
+     "50"
+    ],
+    [
+     "advance"
+    ]
+   ],
+   "expect": [
+    "RoundStart|Neutral|hp 75 100|st 0 run 0|sc 0|rd 1|now 1000|dl 2800|tell |ans |word |typed |cnt 0|up K|play -|stats 0,0,0,0,0,0,0,0,0|foe Idle|me Idle|call -|stop false|copies ",
+    "Fight|Neutral|hp 75 100|st 0 run 0|sc 0|rd 1|now 2800|dl 3700|tell |ans |word |typed |cnt 0|up K|play -|stats 0,0,0,0,0,0,0,0,0|foe Idle|me Idle|call -|stop false|copies ",
+    "Fight|Tell|hp 75 100|st 0 run 0|sc 0|rd 1|now 3700|dl 92800|tell N|ans |word |typed |cnt 0|up K|play N|stats 1,0,0,0,0,0,0,0,0|foe Windup(Right)|me Idle|call -|stop false|copies ",
+    "Fight|Window|hp 75 100|st 0 run 0|sc 0|rd 1|now 4000|dl 6940|tell N|ans |word |typed |cnt 0|up K|play -|stats 1,0,0,0,0,0,0,0,0|foe Windup(Right)|me Idle|call -|stop false|copies ",
+    "Fight|Punch:true|hp 75 100|st 0 run 0|sc 50|rd 1|now 4100|dl 4520|tell N|ans N|word |typed |cnt 0|up K|play -|stats 1,1,0,0,0,0,0,0,0|foe Whiff(Right)|me Dodge(Left)|call Dodge|stop true|copies NN",
+    "Fight|Open|hp 75 100|st 0 run 0|sc 50|rd 1|now 4520|dl 9020|tell N|ans N|word |typed |cnt 0|up K|play -|stats 1,1,0,0,0,0,0,0,0|foe Open|me Idle|call Dodge|stop true|copies ",
+    "Fight|Open|hp 75 100|st 1 run 0|sc 50|rd 1|now 4520|dl 9020|tell N|ans N|word |typed |cnt 0|up K|play -|stats 1,1,0,0,0,0,0,0,0|foe Open|me Idle|call Dodge|stop true|copies ",
+    "Fight|Star|hp 75 100|st 0 run 0|sc 50|rd 1|now 4520|dl 13020|tell N|ans N|word TRAMP|typed |cnt 0|up K|play -|stats 1,1,0,0,0,0,0,0,0|foe Stunned|me Idle|call -|stop true|copies ",
+    "Fight|Neutral|hp 75 100|st 0 run 0|sc 50|rd 1|now 4620|dl 6270|tell N|ans N|word |typed |cnt 0|up K|play -|stats 1,1,0,0,0,0,0,0,0|foe Idle|me Miss|call Missed|stop true|copies ",
+    "Fight|Neutral|hp 75 100|st 0 run 0|sc 50|rd 1|now 4670|dl 6270|tell N|ans N|word |typed |cnt 0|up K|play -|stats 1,1,0,0,0,0,0,0,0|foe Idle|me Miss|call Missed|stop true|copies ",
+    "Fight|Tell|hp 75 100|st 0 run 0|sc 50|rd 1|now 6270|dl 92800|tell P|ans |word |typed |cnt 0|up K|play P|stats 2,1,0,0,0,0,0,0,0|foe Windup(Right)|me Idle|call Missed|stop true|copies "
+   ]
+  },
+  {
+   "name": "three_knockdowns_tko",
+   "fighter": 0,
+   "seed": 7,
+   "hints": true,
+   "ditMs": 60,
+   "callsign": "K5MME",
+   "ops": [
+    [
+     "start"
+    ],
+    [
+     "advance"
+    ],
+    [
+     "advance"
+    ],
+    [
+     "tellPlayed",
+     "400"
+    ],
+    [
+     "answer",
+     "good",
+     "100"
+    ],
+    [
+     "advance"
+    ],
+    [
+     "setFoeHp",
+     "1"
+    ],
+    [
+     "key",
+     "E",
+     "good",
+     "50"
+    ],
+    [
+     "advance"
+    ],
+    [
+     "advance"
+    ],
+    [
+     "advance"
+    ],
+    [
+     "advance"
+    ],
+    [
+     "advance"
+    ],
+    [
+     "tellPlayed",
+     "400"
+    ],
+    [
+     "answer",
+     "good",
+     "100"
+    ],
+    [
+     "advance"
+    ],
+    [
+     "setFoeHp",
+     "1"
+    ],
+    [
+     "key",
+     "E",
+     "good",
+     "50"
+    ],
+    [
+     "advance"
+    ],
+    [
+     "advance"
+    ],
+    [
+     "advance"
+    ],
+    [
+     "advance"
+    ],
+    [
+     "advance"
+    ],
+    [
+     "advance"
+    ],
+    [
+     "advance"
+    ],
+    [
+     "tellPlayed",
+     "400"
+    ],
+    [
+     "answer",
+     "good",
+     "100"
+    ],
+    [
+     "advance"
+    ],
+    [
+     "setFoeHp",
+     "1"
+    ],
+    [
+     "key",
+     "E",
+     "good",
+     "50"
+    ],
+    [
+     "advance"
+    ],
+    [
+     "advance"
+    ],
+    [
+     "advance"
+    ],
+    [
+     "advance"
+    ],
+    [
+     "advance"
+    ],
+    [
+     "advance"
+    ],
+    [
+     "advance"
+    ],
+    [
+     "advance"
+    ],
+    [
+     "advance"
+    ],
+    [
+     "advance"
+    ]
+   ],
+   "expect": [
+    "RoundStart|Neutral|hp 60 100|st 0 run 0|sc 0|rd 1|now 1000|dl 2800|tell |ans |word |typed |cnt 0|up K|play -|stats 0,0,0,0,0,0,0,0,0|foe Idle|me Idle|call -|stop false|copies ",
+    "Fight|Neutral|hp 60 100|st 0 run 0|sc 0|rd 1|now 2800|dl 3700|tell |ans |word |typed |cnt 0|up K|play -|stats 0,0,0,0,0,0,0,0,0|foe Idle|me Idle|call -|stop false|copies ",
+    "Fight|Tell|hp 60 100|st 0 run 0|sc 0|rd 1|now 3700|dl 92800|tell U|ans |word |typed |cnt 0|up K|play U|stats 1,0,0,0,0,0,0,0,0|foe Windup(Right)|me Idle|call -|stop false|copies ",
+    "Fight|Window|hp 60 100|st 0 run 0|sc 0|rd 1|now 4100|dl 7300|tell U|ans |word |typed |cnt 0|up K|play -|stats 1,0,0,0,0,0,0,0,0|foe Windup(Right)|me Idle|call -|stop false|copies ",
+    "Fight|Punch:true|hp 60 100|st 0 run 0|sc 50|rd 1|now 4200|dl 4620|tell U|ans U|word |typed |cnt 0|up K|play -|stats 1,1,0,0,0,0,0,0,0|foe Whiff(Right)|me Dodge(Left)|call Dodge|stop true|copies UU",
+    "Fight|Open|hp 60 100|st 0 run 0|sc 50|rd 1|now 4620|dl 9420|tell U|ans U|word |typed |cnt 0|up K|play -|stats 1,1,0,0,0,0,0,0,0|foe Open|me Idle|call Dodge|stop true|copies ",
+    "Fight|Open|hp 1 100|st 0 run 0|sc 50|rd 1|now 4620|dl 9420|tell U|ans U|word |typed |cnt 0|up K|play -|stats 1,1,0,0,0,0,0,0,0|foe Open|me Idle|call Dodge|stop true|copies ",
+    "FoeDown|Neutral|hp 0 100|st 0 run 1|sc 1110|rd 1|now 4670|dl 5670|tell |ans |word |typed |cnt 0|up K|play -|stats 1,1,1,1,4,0,0,1,0|foe Down|me Jab(Right)|call Down|stop true|copies ",
+    "FoeDown|Neutral|hp 0 100|st 0 run 1|sc 1110|rd 1|now 5670|dl 6670|tell |ans |word |typed |cnt 1|up K|play -|stats 1,1,1,1,4,0,0,1,0|foe Down|me Idle|call Down|stop true|copies ",
+    "FoeDown|Neutral|hp 0 100|st 0 run 1|sc 1110|rd 1|now 6670|dl 7670|tell |ans |word |typed |cnt 2|up K|play -|stats 1,1,1,1,4,0,0,1,0|foe Down|me Idle|call Down|stop true|copies ",
+    "FoeDown|Neutral|hp 0 100|st 0 run 1|sc 1110|rd 1|now 7670|dl 8670|tell |ans |word |typed |cnt 3|up K|play -|stats 1,1,1,1,4,0,0,1,0|foe Down|me Idle|call Down|stop true|copies ",
+    "Fight|Neutral|hp 27 100|st 0 run 1|sc 1110|rd 1|now 8670|dl 11031|tell |ans |word |typed |cnt 4|up K|play -|stats 1,1,1,1,4,0,0,1,0|foe Rise|me Idle|call Up|stop true|copies ",
+    "Fight|Tell|hp 27 100|st 0 run 1|sc 1110|rd 1|now 11031|dl 96800|tell M|ans |word |typed |cnt 4|up K|play M|stats 2,1,1,1,4,0,0,1,0|foe Windup(Left)|me Idle|call Up|stop true|copies ",
+    "Fight|Window|hp 27 100|st 0 run 1|sc 1110|rd 1|now 11431|dl 14631|tell M|ans |word |typed |cnt 4|up K|play -|stats 2,1,1,1,4,0,0,1,0|foe Windup(Left)|me Idle|call Up|stop true|copies ",
+    "Fight|Punch:true|hp 27 100|st 0 run 1|sc 1160|rd 1|now 11531|dl 11951|tell M|ans M|word |typed |cnt 4|up K|play -|stats 2,2,1,1,4,0,0,1,0|foe Whiff(Left)|me Dodge(Right)|call Dodge|stop true|copies MM",
+    "Fight|Open|hp 27 100|st 0 run 1|sc 1160|rd 1|now 11951|dl 16751|tell M|ans M|word |typed |cnt 4|up K|play -|stats 2,2,1,1,4,0,0,1,0|foe Open|me Idle|call Dodge|stop true|copies ",
+    "Fight|Open|hp 1 100|st 0 run 1|sc 1160|rd 1|now 11951|dl 16751|tell M|ans M|word |typed |cnt 4|up K|play -|stats 2,2,1,1,4,0,0,1,0|foe Open|me Idle|call Dodge|stop true|copies ",
+    "FoeDown|Neutral|hp 0 100|st 0 run 2|sc 2220|rd 1|now 12001|dl 13001|tell |ans |word |typed |cnt 0|up K|play -|stats 2,2,2,2,8,0,0,2,0|foe Down|me Jab(Left)|call Down|stop true|copies ",
+    "FoeDown|Neutral|hp 0 100|st 0 run 2|sc 2220|rd 1|now 13001|dl 14001|tell |ans |word |typed |cnt 1|up K|play -|stats 2,2,2,2,8,0,0,2,0|foe Down|me Idle|call Down|stop true|copies ",
+    "FoeDown|Neutral|hp 0 100|st 0 run 2|sc 2220|rd 1|now 14001|dl 15001|tell |ans |word |typed |cnt 2|up K|play -|stats 2,2,2,2,8,0,0,2,0|foe Down|me Idle|call Down|stop true|copies ",
+    "FoeDown|Neutral|hp 0 100|st 0 run 2|sc 2220|rd 1|now 15001|dl 16001|tell |ans |word |typed |cnt 3|up K|play -|stats 2,2,2,2,8,0,0,2,0|foe Down|me Idle|call Down|stop true|copies ",
+    "FoeDown|Neutral|hp 0 100|st 0 run 2|sc 2220|rd 1|now 16001|dl 17001|tell |ans |word |typed |cnt 4|up K|play -|stats 2,2,2,2,8,0,0,2,0|foe Down|me Idle|call Down|stop true|copies ",
+    "FoeDown|Neutral|hp 0 100|st 0 run 2|sc 2220|rd 1|now 17001|dl 18001|tell |ans |word |typed |cnt 5|up K|play -|stats 2,2,2,2,8,0,0,2,0|foe Down|me Idle|call Down|stop true|copies ",
+    "Fight|Neutral|hp 18 100|st 0 run 2|sc 2220|rd 1|now 18001|dl 19964|tell |ans |word |typed |cnt 6|up K|play -|stats 2,2,2,2,8,0,0,2,0|foe Rise|me Idle|call Up|stop true|copies ",
+    "Fight|Tell|hp 18 100|st 0 run 2|sc 2220|rd 1|now 19964|dl 102800|tell M|ans |word |typed |cnt 6|up K|play M|stats 3,2,2,2,8,0,0,2,0|foe Windup(Right)|me Idle|call Up|stop true|copies ",
+    "Fight|Window|hp 18 100|st 0 run 2|sc 2220|rd 1|now 20364|dl 23564|tell M|ans |word |typed |cnt 6|up K|play -|stats 3,2,2,2,8,0,0,2,0|foe Windup(Right)|me Idle|call Up|stop true|copies ",
+    "Fight|Punch:true|hp 18 100|st 0 run 2|sc 2270|rd 1|now 20464|dl 20884|tell M|ans M|word |typed |cnt 6|up K|play -|stats 3,3,2,2,8,0,0,2,0|foe Whiff(Right)|me Dodge(Left)|call Dodge|stop true|copies MM",
+    "Fight|Open|hp 18 100|st 0 run 2|sc 2270|rd 1|now 20884|dl 25684|tell M|ans M|word |typed |cnt 6|up K|play -|stats 3,3,2,2,8,0,0,2,0|foe Open|me Idle|call Dodge|stop true|copies ",
+    "Fight|Open|hp 1 100|st 0 run 2|sc 2270|rd 1|now 20884|dl 25684|tell M|ans M|word |typed |cnt 6|up K|play -|stats 3,3,2,2,8,0,0,2,0|foe Open|me Idle|call Dodge|stop true|copies ",
+    "FoeDown|Neutral|hp 0 100|st 1 run 0|sc 3330|rd 1|now 20934|dl 21934|tell |ans |word |typed |cnt 0|up K|play -|stats 3,3,3,3,12,0,0,3,0|foe Out|me Jab(Right)|call Down|stop true|copies ",
+    "FoeDown|Neutral|hp 0 100|st 1 run 0|sc 3330|rd 1|now 21934|dl 22934|tell |ans |word |typed |cnt 1|up K|play -|stats 3,3,3,3,12,0,0,3,0|foe Out|me Idle|call Down|stop true|copies ",
+    "FoeDown|Neutral|hp 0 100|st 1 run 0|sc 3330|rd 1|now 22934|dl 23934|tell |ans |word |typed |cnt 2|up K|play -|stats 3,3,3,3,12,0,0,3,0|foe Out|me Idle|call Down|stop true|copies ",
+    "FoeDown|Neutral|hp 0 100|st 1 run 0|sc 3330|rd 1|now 23934|dl 24934|tell |ans |word |typed |cnt 3|up K|play -|stats 3,3,3,3,12,0,0,3,0|foe Out|me Idle|call Down|stop true|copies ",
+    "FoeDown|Neutral|hp 0 100|st 1 run 0|sc 3330|rd 1|now 24934|dl 25934|tell |ans |word |typed |cnt 4|up K|play -|stats 3,3,3,3,12,0,0,3,0|foe Out|me Idle|call Down|stop true|copies ",
+    "FoeDown|Neutral|hp 0 100|st 1 run 0|sc 3330|rd 1|now 25934|dl 26934|tell |ans |word |typed |cnt 5|up K|play -|stats 3,3,3,3,12,0,0,3,0|foe Out|me Idle|call Down|stop true|copies ",
+    "FoeDown|Neutral|hp 0 100|st 1 run 0|sc 3330|rd 1|now 26934|dl 27934|tell |ans |word |typed |cnt 6|up K|play -|stats 3,3,3,3,12,0,0,3,0|foe Out|me Idle|call Down|stop true|copies ",
+    "FoeDown|Neutral|hp 0 100|st 1 run 0|sc 3330|rd 1|now 27934|dl 28934|tell |ans |word |typed |cnt 7|up K|play -|stats 3,3,3,3,12,0,0,3,0|foe Out|me Idle|call Down|stop true|copies ",
+    "FoeDown|Neutral|hp 0 100|st 1 run 0|sc 3330|rd 1|now 28934|dl 29934|tell |ans |word |typed |cnt 8|up K|play -|stats 3,3,3,3,12,0,0,3,0|foe Out|me Idle|call Down|stop true|copies ",
+    "FoeDown|Neutral|hp 0 100|st 1 run 0|sc 3330|rd 1|now 29934|dl 30934|tell |ans |word |typed |cnt 9|up K|play -|stats 3,3,3,3,12,0,0,3,0|foe Out|me Idle|call Down|stop true|copies ",
+    "Over:true:Tko|Neutral|hp 0 100|st 1 run 0|sc 9140|rd 1|now 30934|dl -|tell |ans |word |typed |cnt 10|up K|play -|stats 3,3,3,3,12,0,0,3,0|foe Out|me Victory|call Down|stop true|copies "
+   ]
+  },
+  {
+   "name": "knocked_down_then_get_up",
+   "fighter": 3,
+   "seed": 11,
+   "hints": true,
+   "ditMs": 60,
+   "callsign": "K5MME",
+   "ops": [
+    [
+     "start"
+    ],
+    [
+     "advance"
+    ],
+    [
+     "setMyHp",
+     "1"
+    ],
+    [
+     "advance"
+    ],
+    [
+     "key",
+     "Z",
+     "good",
+     "300"
+    ],
+    [
+     "advance"
+    ],
+    [
+     "advance"
+    ],
+    [
+     "keyUnknown",
+     "20"
+    ],
+    [
+     "advance"
+    ],
+    [
+     "getUp",
+     "bad",
+     "20"
+    ],
+    [
+     "advance"
+    ],
+    [
+     "advance"
+    ]
+   ],
+   "expect": [
+    "RoundStart|Neutral|hp 95 100|st 0 run 0|sc 0|rd 1|now 1000|dl 2800|tell |ans |word |typed |cnt 0|up K|play -|stats 0,0,0,0,0,0,0,0,0|foe Idle|me Idle|call -|stop false|copies ",
+    "Fight|Neutral|hp 95 100|st 0 run 0|sc 0|rd 1|now 2800|dl 3700|tell |ans |word |typed |cnt 0|up K|play -|stats 0,0,0,0,0,0,0,0,0|foe Idle|me Idle|call -|stop false|copies ",
+    "Fight|Neutral|hp 95 1|st 0 run 0|sc 0|rd 1|now 2800|dl 3700|tell |ans |word |typed |cnt 0|up K|play -|stats 0,0,0,0,0,0,0,0,0|foe Idle|me Idle|call -|stop false|copies ",
+    "Fight|Tell|hp 95 1|st 0 run 0|sc 0|rd 1|now 3700|dl 92800|tell M|ans |word |typed |cnt 0|up K|play M|stats 1,0,0,0,0,0,0,0,0|foe Windup(Left)|me Idle|call -|stop false|copies ",
+    "Fight|Punch:false|hp 95 1|st 0 run 0|sc 0|rd 1|now 4000|dl 4260|tell M|ans Z|word |typed |cnt 0|up K|play -|stats 1,0,0,0,0,0,0,0,0|foe Punch(Left)|me Idle|call Wrong:Z|stop true|copies MZ",
+    "MeDown|Neutral|hp 95 0|st 0 run 0|sc 0|rd 1|now 4260|dl 5260|tell |ans |word |typed |cnt 0|up .|play -|stats 1,0,0,0,0,15,0,0,1|foe Victory|me Down|call Down|stop true|copies ",
+    "MeDown|Neutral|hp 95 0|st 0 run 0|sc 0|rd 1|now 5260|dl 6260|tell |ans |word |typed |cnt 1|up .|play -|stats 1,0,0,0,0,15,0,0,1|foe Victory|me Down|call Down|stop true|copies ",
+    "MeDown|Neutral|hp 95 0|st 0 run 0|sc 0|rd 1|now 5280|dl 6260|tell |ans |word |typed |cnt 1|up .|play -|stats 1,0,0,0,0,15,0,0,1|foe Victory|me Down|call Wrong:*|stop true|copies ._",
+    "MeDown|Neutral|hp 95 0|st 0 run 0|sc 0|rd 1|now 6260|dl 7260|tell |ans |word |typed |cnt 2|up .|play -|stats 1,0,0,0,0,15,0,0,1|foe Victory|me Down|call Wrong:*|stop true|copies ",
+    "Fight|Neutral|hp 95 50|st 0 run 0|sc 0|rd 1|now 6280|dl 8605|tell |ans |word |typed |cnt 2|up .|play -|stats 1,0,0,0,0,15,0,0,1|foe Idle|me Rise|call Up|stop true|copies ..",
+    "Fight|Tell|hp 95 50|st 0 run 0|sc 0|rd 1|now 8605|dl 94820|tell .|ans |word |typed |cnt 2|up .|play .|stats 2,0,0,0,0,15,0,0,1|foe Windup(Right)|me Idle|call Up|stop true|copies ",
+    "RoundEnd|Neutral|hp 95 50|st 0 run 0|sc 0|rd 1|now 94820|dl 97420|tell |ans |word |typed |cnt 2|up .|play -|stats 2,0,0,0,0,15,0,0,1|foe Idle|me Idle|call Up|stop true|copies "
+   ]
+  },
+  {
+   "name": "staying_down_loses_by_ko",
+   "fighter": 0,
+   "seed": 2,
+   "hints": true,
+   "ditMs": 60,
+   "callsign": "K5MME",
+   "ops": [
+    [
+     "start"
+    ],
+    [
+     "advance"
+    ],
+    [
+     "setMyHp",
+     "1"
+    ],
+    [
+     "advance"
+    ],
+    [
+     "tellPlayed",
+     "10"
+    ],
+    [
+     "advance"
+    ],
+    [
+     "advance"
+    ],
+    [
+     "advance"
+    ],
+    [
+     "advance"
+    ],
+    [
+     "advance"
+    ],
+    [
+     "advance"
+    ],
+    [
+     "advance"
+    ],
+    [
+     "advance"
+    ],
+    [
+     "advance"
+    ],
+    [
+     "advance"
+    ],
+    [
+     "advance"
+    ],
+    [
+     "advance"
+    ]
+   ],
+   "expect": [
+    "RoundStart|Neutral|hp 60 100|st 0 run 0|sc 0|rd 1|now 1000|dl 2800|tell |ans |word |typed |cnt 0|up K|play -|stats 0,0,0,0,0,0,0,0,0|foe Idle|me Idle|call -|stop false|copies ",
+    "Fight|Neutral|hp 60 100|st 0 run 0|sc 0|rd 1|now 2800|dl 3700|tell |ans |word |typed |cnt 0|up K|play -|stats 0,0,0,0,0,0,0,0,0|foe Idle|me Idle|call -|stop false|copies ",
+    "Fight|Neutral|hp 60 1|st 0 run 0|sc 0|rd 1|now 2800|dl 3700|tell |ans |word |typed |cnt 0|up K|play -|stats 0,0,0,0,0,0,0,0,0|foe Idle|me Idle|call -|stop false|copies ",
+    "Fight|Tell|hp 60 1|st 0 run 0|sc 0|rd 1|now 3700|dl 92800|tell K|ans |word |typed |cnt 0|up K|play K|stats 1,0,0,0,0,0,0,0,0|foe Windup(Right)|me Idle|call -|stop false|copies ",
+    "Fight|Window|hp 60 1|st 0 run 0|sc 0|rd 1|now 3710|dl 7030|tell K|ans |word |typed |cnt 0|up K|play -|stats 1,0,0,0,0,0,0,0,0|foe Windup(Right)|me Idle|call -|stop false|copies ",
+    "Fight|Punch:false|hp 60 1|st 0 run 0|sc 0|rd 1|now 7030|dl 7290|tell K|ans |word |typed |cnt 0|up K|play -|stats 1,0,0,0,0,0,0,0,0|foe Punch(Right)|me Idle|call TooSlow|stop true|copies K_",
+    "MeDown|Neutral|hp 60 0|st 0 run 0|sc 0|rd 1|now 7290|dl 8290|tell |ans |word |typed |cnt 0|up R|play -|stats 1,0,0,0,0,12,0,0,1|foe Victory|me Down|call Down|stop true|copies ",
+    "MeDown|Neutral|hp 60 0|st 0 run 0|sc 0|rd 1|now 8290|dl 9290|tell |ans |word |typed |cnt 1|up R|play -|stats 1,0,0,0,0,12,0,0,1|foe Victory|me Down|call Down|stop true|copies ",
+    "MeDown|Neutral|hp 60 0|st 0 run 0|sc 0|rd 1|now 9290|dl 10290|tell |ans |word |typed |cnt 2|up R|play -|stats 1,0,0,0,0,12,0,0,1|foe Victory|me Down|call Down|stop true|copies ",
+    "MeDown|Neutral|hp 60 0|st 0 run 0|sc 0|rd 1|now 10290|dl 11290|tell |ans |word |typed |cnt 3|up R|play -|stats 1,0,0,0,0,12,0,0,1|foe Victory|me Down|call Down|stop true|copies ",
+    "MeDown|Neutral|hp 60 0|st 0 run 0|sc 0|rd 1|now 11290|dl 12290|tell |ans |word |typed |cnt 4|up R|play -|stats 1,0,0,0,0,12,0,0,1|foe Victory|me Down|call Down|stop true|copies ",
+    "MeDown|Neutral|hp 60 0|st 0 run 0|sc 0|rd 1|now 12290|dl 13290|tell |ans |word |typed |cnt 5|up R|play -|stats 1,0,0,0,0,12,0,0,1|foe Victory|me Down|call Down|stop true|copies ",
+    "MeDown|Neutral|hp 60 0|st 0 run 0|sc 0|rd 1|now 13290|dl 14290|tell |ans |word |typed |cnt 6|up R|play -|stats 1,0,0,0,0,12,0,0,1|foe Victory|me Down|call Down|stop true|copies ",
+    "MeDown|Neutral|hp 60 0|st 0 run 0|sc 0|rd 1|now 14290|dl 15290|tell |ans |word |typed |cnt 7|up R|play -|stats 1,0,0,0,0,12,0,0,1|foe Victory|me Down|call Down|stop true|copies ",
+    "MeDown|Neutral|hp 60 0|st 0 run 0|sc 0|rd 1|now 15290|dl 16290|tell |ans |word |typed |cnt 8|up R|play -|stats 1,0,0,0,0,12,0,0,1|foe Victory|me Down|call Down|stop true|copies ",
+    "MeDown|Neutral|hp 60 0|st 0 run 0|sc 0|rd 1|now 16290|dl 17290|tell |ans |word |typed |cnt 9|up R|play -|stats 1,0,0,0,0,12,0,0,1|foe Victory|me Down|call Down|stop true|copies ",
+    "Over:false:Ko|Neutral|hp 60 0|st 0 run 0|sc 0|rd 1|now 17290|dl -|tell |ans |word |typed |cnt 10|up R|play -|stats 1,0,0,0,0,12,0,0,1|foe Victory|me Down|call Down|stop true|copies "
+   ]
+  },
+  {
+   "name": "the_bell_and_the_decision",
+   "fighter": 0,
+   "seed": 7,
+   "hints": true,
+   "ditMs": 60,
+   "callsign": "K5MME",
+   "ops": [
+    [
+     "start"
+    ],
+    [
+     "advance"
+    ],
+    [
+     "advance"
+    ],
+    [
+     "tellPlayed",
+     "300"
+    ],
+    [
+     "answer",
+     "good",
+     "100"
+    ],
+    [
+     "advance"
+    ],
+    [
+     "key",
+     "S",
+     "good",
+     "50"
+    ],
+    [
+     "update",
+     "90000"
+    ],
+    [
+     "startFalse"
+    ],
+    [
+     "advance"
+    ],
+    [
+     "start"
+    ],
+    [
+     "advance"
+    ],
+    [
+     "update",
+     "90000"
+    ],
+    [
+     "advance"
+    ],
+    [
+     "start"
+    ],
+    [
+     "advance"
+    ],
+    [
+     "update",
+     "90000"
+    ]
+   ],
+   "expect": [
+    "RoundStart|Neutral|hp 60 100|st 0 run 0|sc 0|rd 1|now 1000|dl 2800|tell |ans |word |typed |cnt 0|up K|play -|stats 0,0,0,0,0,0,0,0,0|foe Idle|me Idle|call -|stop false|copies ",
+    "Fight|Neutral|hp 60 100|st 0 run 0|sc 0|rd 1|now 2800|dl 3700|tell |ans |word |typed |cnt 0|up K|play -|stats 0,0,0,0,0,0,0,0,0|foe Idle|me Idle|call -|stop false|copies ",
+    "Fight|Tell|hp 60 100|st 0 run 0|sc 0|rd 1|now 3700|dl 92800|tell U|ans |word |typed |cnt 0|up K|play U|stats 1,0,0,0,0,0,0,0,0|foe Windup(Right)|me Idle|call -|stop false|copies ",
+    "Fight|Window|hp 60 100|st 0 run 0|sc 0|rd 1|now 4000|dl 7200|tell U|ans |word |typed |cnt 0|up K|play -|stats 1,0,0,0,0,0,0,0,0|foe Windup(Right)|me Idle|call -|stop false|copies ",
+    "Fight|Punch:true|hp 60 100|st 0 run 0|sc 50|rd 1|now 4100|dl 4520|tell U|ans U|word |typed |cnt 0|up K|play -|stats 1,1,0,0,0,0,0,0,0|foe Whiff(Right)|me Dodge(Left)|call Dodge|stop true|copies UU",
+    "Fight|Open|hp 60 100|st 0 run 0|sc 50|rd 1|now 4520|dl 9320|tell U|ans U|word |typed |cnt 0|up K|play -|stats 1,1,0,0,0,0,0,0,0|foe Open|me Idle|call Dodge|stop true|copies ",
+    "Fight|Open|hp 54 100|st 0 run 1|sc 130|rd 1|now 4570|dl 9320|tell U|ans U|word |typed |cnt 0|up K|play -|stats 1,1,1,1,6,0,0,0,0|foe Hurt(Left)|me Jab(Right)|call Clean|stop true|copies ",
+    "RoundEnd|Neutral|hp 54 100|st 0 run 1|sc 130|rd 1|now 94570|dl 97170|tell |ans |word |typed |cnt 0|up K|play -|stats 1,1,1,1,6,0,0,0,0|foe Idle|me Idle|call Clean|stop true|copies ",
+    "RoundEnd|Neutral|hp 54 100|st 0 run 1|sc 130|rd 1|now 94570|dl 97170|tell |ans |word |typed |cnt 0|up K|play -|stats 1,1,1,1,6,0,0,0,0|foe Idle|me Idle|call Clean|stop true|copies ",
+    "RoundEnd|Neutral|hp 54 100|st 0 run 1|sc 130|rd 1|now 97170|dl -|tell |ans |word |typed |cnt 0|up K|play -|stats 1,1,1,1,6,0,0,0,0|foe Idle|me Idle|call Clean|stop true|copies ",
+    "RoundStart|Neutral|hp 55 100|st 0 run 1|sc 130|rd 2|now 97170|dl 98970|tell |ans |word |typed |cnt 0|up K|play -|stats 1,1,1,1,6,0,0,0,0|foe Idle|me Idle|call Clean|stop true|copies ",
+    "Fight|Neutral|hp 55 100|st 0 run 1|sc 130|rd 2|now 98970|dl 99870|tell |ans |word |typed |cnt 0|up K|play -|stats 1,1,1,1,6,0,0,0,0|foe Idle|me Idle|call Clean|stop true|copies ",
+    "RoundEnd|Neutral|hp 55 100|st 0 run 1|sc 130|rd 2|now 188970|dl 191570|tell |ans |word |typed |cnt 0|up K|play -|stats 1,1,1,1,6,0,0,0,0|foe Idle|me Idle|call Clean|stop true|copies ",
+    "RoundEnd|Neutral|hp 55 100|st 0 run 1|sc 130|rd 2|now 191570|dl -|tell |ans |word |typed |cnt 0|up K|play -|stats 1,1,1,1,6,0,0,0,0|foe Idle|me Idle|call Clean|stop true|copies ",
+    "RoundStart|Neutral|hp 56 100|st 0 run 1|sc 130|rd 3|now 191570|dl 193370|tell |ans |word |typed |cnt 0|up K|play -|stats 1,1,1,1,6,0,0,0,0|foe Idle|me Idle|call Clean|stop true|copies ",
+    "Fight|Neutral|hp 56 100|st 0 run 1|sc 130|rd 3|now 193370|dl 194270|tell |ans |word |typed |cnt 0|up K|play -|stats 1,1,1,1,6,0,0,0,0|foe Idle|me Idle|call Clean|stop true|copies ",
+    "Over:true:Decision|Neutral|hp 56 100|st 0 run 1|sc 2130|rd 3|now 283370|dl -|tell |ans |word |typed |cnt 0|up K|play -|stats 1,1,1,1,6,0,0,0,0|foe Idle|me Victory|call Clean|stop true|copies "
+   ]
+  },
+  {
+   "name": "pause_stops_every_clock",
+   "fighter": 0,
+   "seed": 7,
+   "hints": true,
+   "ditMs": 60,
+   "callsign": "K5MME",
+   "ops": [
+    [
+     "start"
+    ],
+    [
+     "advance"
+    ],
+    [
+     "advance"
+    ],
+    [
+     "tellPlayed",
+     "0"
+    ],
+    [
+     "pause",
+     "100"
+    ],
+    [
+     "update",
+     "50000"
+    ],
+    [
+     "resume",
+     "10000"
+    ],
+    [
+     "advance"
+    ],
+    [
+     "advance"
+    ],
+    [
+     "pause",
+     "10"
+    ],
+    [
+     "resume",
+     "10"
+    ]
+   ],
+   "expect": [
+    "RoundStart|Neutral|hp 60 100|st 0 run 0|sc 0|rd 1|now 1000|dl 2800|tell |ans |word |typed |cnt 0|up K|play -|stats 0,0,0,0,0,0,0,0,0|foe Idle|me Idle|call -|stop false|copies ",
+    "Fight|Neutral|hp 60 100|st 0 run 0|sc 0|rd 1|now 2800|dl 3700|tell |ans |word |typed |cnt 0|up K|play -|stats 0,0,0,0,0,0,0,0,0|foe Idle|me Idle|call -|stop false|copies ",
+    "Fight|Tell|hp 60 100|st 0 run 0|sc 0|rd 1|now 3700|dl 92800|tell U|ans |word |typed |cnt 0|up K|play U|stats 1,0,0,0,0,0,0,0,0|foe Windup(Right)|me Idle|call -|stop false|copies ",
+    "Fight|Window|hp 60 100|st 0 run 0|sc 0|rd 1|now 3700|dl 6900|tell U|ans |word |typed |cnt 0|up K|play -|stats 1,0,0,0,0,0,0,0,0|foe Windup(Right)|me Idle|call -|stop false|copies ",
+    "Fight|Window|hp 60 100|st 0 run 0|sc 0|rd 1|now 3800|dl -|tell U|ans |word |typed |cnt 0|up K|play -|stats 1,0,0,0,0,0,0,0,0|foe Windup(Right)|me Idle|call -|stop true|copies ",
+    "Fight|Window|hp 60 100|st 0 run 0|sc 0|rd 1|now 53800|dl -|tell U|ans |word |typed |cnt 0|up K|play -|stats 1,0,0,0,0,0,0,0,0|foe Windup(Right)|me Idle|call -|stop true|copies ",
+    "Fight|Window|hp 60 100|st 0 run 0|sc 0|rd 1|now 63800|dl 66900|tell U|ans |word |typed |cnt 0|up K|play -|stats 1,0,0,0,0,0,0,0,0|foe Windup(Right)|me Idle|call -|stop true|copies ",
+    "Fight|Punch:false|hp 60 100|st 0 run 0|sc 0|rd 1|now 66900|dl 67160|tell U|ans |word |typed |cnt 0|up K|play -|stats 1,0,0,0,0,0,0,0,0|foe Punch(Right)|me Idle|call TooSlow|stop true|copies U_",
+    "Fight|Stagger|hp 60 88|st 0 run 0|sc 0|rd 1|now 67160|dl 68760|tell U|ans |word |typed |cnt 0|up K|play -|stats 1,0,0,0,0,12,0,0,0|foe Idle|me Hurt|call TooSlow|stop true|copies ",
+    "Fight|Stagger|hp 60 88|st 0 run 0|sc 0|rd 1|now 67170|dl -|tell U|ans |word |typed |cnt 0|up K|play -|stats 1,0,0,0,0,12,0,0,0|foe Idle|me Hurt|call TooSlow|stop true|copies ",
+    "Fight|Stagger|hp 60 88|st 0 run 0|sc 0|rd 1|now 67180|dl 68770|tell U|ans |word |typed |cnt 0|up K|play -|stats 1,0,0,0,0,12,0,0,0|foe Idle|me Hurt|call TooSlow|stop true|copies "
+   ]
+  },
+  {
+   "name": "pausing_mid_tell_takes_it_back",
+   "fighter": 4,
+   "seed": 21,
+   "hints": false,
+   "ditMs": 50,
+   "callsign": "W1AW",
+   "ops": [
+    [
+     "start"
+    ],
+    [
+     "advance"
+    ],
+    [
+     "advance"
+    ],
+    [
+     "pause",
+     "100"
+    ],
+    [
+     "resume",
+     "4900"
+    ],
+    [
+     "tellPlayed",
+     "100"
+    ],
+    [
+     "advance"
+    ],
+    [
+     "advance"
+    ],
+    [
+     "tellPlayed",
+     "100"
+    ],
+    [
+     "answer",
+     "bad",
+     "200"
+    ],
+    [
+     "advance"
+    ],
+    [
+     "advance"
+    ]
+   ],
+   "expect": [
+    "RoundStart|Neutral|hp 105 100|st 0 run 0|sc 0|rd 1|now 1000|dl 2800|tell |ans |word |typed |cnt 0|up K|play -|stats 0,0,0,0,0,0,0,0,0|foe Idle|me Idle|call -|stop false|copies ",
+    "Fight|Neutral|hp 105 100|st 0 run 0|sc 0|rd 1|now 2800|dl 3700|tell |ans |word |typed |cnt 0|up K|play -|stats 0,0,0,0,0,0,0,0,0|foe Idle|me Idle|call -|stop false|copies ",
+    "Fight|Tell|hp 105 100|st 0 run 0|sc 0|rd 1|now 3700|dl 92800|tell Z|ans |word |typed |cnt 0|up K|play Z|stats 1,0,0,0,0,0,0,0,0|foe Windup(Right)|me Idle|call -|stop false|copies ",
+    "Fight|Neutral|hp 105 100|st 0 run 0|sc 0|rd 1|now 3800|dl -|tell |ans |word |typed |cnt 0|up K|play -|stats 0,0,0,0,0,0,0,0,0|foe Idle|me Idle|call -|stop true|copies ",
+    "Fight|Neutral|hp 105 100|st 0 run 0|sc 0|rd 1|now 8700|dl 9500|tell |ans |word |typed |cnt 0|up K|play -|stats 0,0,0,0,0,0,0,0,0|foe Idle|me Idle|call -|stop true|copies ",
+    "Fight|Neutral|hp 105 100|st 0 run 0|sc 0|rd 1|now 8800|dl 9500|tell |ans |word |typed |cnt 0|up K|play -|stats 0,0,0,0,0,0,0,0,0|foe Idle|me Idle|call -|stop true|copies ",
+    "Fight|Tell|hp 105 100|st 0 run 0|sc 0|rd 1|now 9500|dl 97700|tell 5R|ans |word |typed |cnt 0|up K|play 5R|stats 1,0,0,0,0,0,0,0,0|foe Windup(Left)|me Idle|call -|stop true|copies ",
+    "RoundEnd|Neutral|hp 105 100|st 0 run 0|sc 0|rd 1|now 97700|dl 100300|tell |ans |word |typed |cnt 0|up K|play -|stats 1,0,0,0,0,0,0,0,0|foe Idle|me Idle|call -|stop true|copies ",
+    "RoundEnd|Neutral|hp 105 100|st 0 run 0|sc 0|rd 1|now 97800|dl 100300|tell |ans |word |typed |cnt 0|up K|play -|stats 1,0,0,0,0,0,0,0,0|foe Idle|me Idle|call -|stop true|copies ",
+    "RoundEnd|Neutral|hp 105 100|st 0 run 0|sc 0|rd 1|now 98000|dl 100300|tell |ans |word |typed |cnt 0|up K|play -|stats 1,0,0,0,0,0,0,0,0|foe Idle|me Idle|call -|stop true|copies ",
+    "RoundEnd|Neutral|hp 105 100|st 0 run 0|sc 0|rd 1|now 100300|dl -|tell |ans |word |typed |cnt 0|up K|play -|stats 1,0,0,0,0,0,0,0,0|foe Idle|me Idle|call -|stop true|copies ",
+    "RoundEnd|Neutral|hp 105 100|st 0 run 0|sc 0|rd 1|now 100300|dl -|tell |ans |word |typed |cnt 0|up K|play -|stats 1,0,0,0,0,0,0,0,0|foe Idle|me Idle|call -|stop true|copies "
+   ]
+  },
+  {
+   "name": "last_fighter_long_tells",
+   "fighter": 7,
+   "seed": 99,
+   "hints": true,
+   "ditMs": 40,
+   "callsign": "AB1CD",
+   "ops": [
+    [
+     "start"
+    ],
+    [
+     "advance"
+    ],
+    [
+     "advance"
+    ],
+    [
+     "tellPlayed",
+     "300"
+    ],
+    [
+     "answer",
+     "off",
+     "100"
+    ],
+    [
+     "advance"
+    ],
+    [
+     "advance"
+    ],
+    [
+     "advance"
+    ],
+    [
+     "advance"
+    ],
+    [
+     "tellPlayed",
+     "300"
+    ],
+    [
+     "answer",
+     "good",
+     "100"
+    ],
+    [
+     "advance"
+    ],
+    [
+     "key",
+     "Q",
+     "bad",
+     "100"
+    ],
+    [
+     "advance"
+    ],
+    [
+     "advance"
+    ],
+    [
+     "advance"
+    ]
+   ],
+   "expect": [
+    "RoundStart|Neutral|hp 140 100|st 0 run 0|sc 0|rd 1|now 1000|dl 2800|tell |ans |word |typed |cnt 0|up K|play -|stats 0,0,0,0,0,0,0,0,0|foe Idle|me Idle|call -|stop false|copies ",
+    "Fight|Neutral|hp 140 100|st 0 run 0|sc 0|rd 1|now 2800|dl 3700|tell |ans |word |typed |cnt 0|up K|play -|stats 0,0,0,0,0,0,0,0,0|foe Idle|me Idle|call -|stop false|copies ",
+    "Fight|Tell|hp 140 100|st 0 run 0|sc 0|rd 1|now 3700|dl 92800|tell XCP|ans |word |typed |cnt 0|up K|play XCP|stats 1,0,0,0,0,0,0,0,0|foe Windup(Left)|me Idle|call -|stop false|copies ",
+    "Fight|Window|hp 140 100|st 0 run 0|sc 0|rd 1|now 4000|dl 6830|tell XCP|ans |word |typed |cnt 0|up K|play -|stats 1,0,0,0,0,0,0,0,0|foe Windup(Left)|me Idle|call -|stop false|copies ",
+    "Fight|Punch:true|hp 140 100|st 0 run 0|sc 50|rd 1|now 4100|dl 4520|tell XCP|ans XCP|word |typed |cnt 0|up K|play -|stats 1,1,0,0,0,0,0,0,0|foe Whiff(Left)|me Dodge(Right)|call Dodge|stop true|copies XX,CC,PP",
+    "Fight|Open|hp 140 100|st 0 run 0|sc 50|rd 1|now 4520|dl 7320|tell XCP|ans XCP|word |typed |cnt 0|up K|play -|stats 1,1,0,0,0,0,0,0,0|foe Open|me Idle|call Dodge|stop true|copies ",
+    "Fight|Neutral|hp 140 100|st 0 run 0|sc 50|rd 1|now 7320|dl 8177|tell XCP|ans XCP|word |typed |cnt 0|up K|play -|stats 1,1,0,0,0,0,0,0,0|foe Idle|me Idle|call Dodge|stop true|copies ",
+    "Fight|Tell|hp 140 100|st 0 run 0|sc 50|rd 1|now 8177|dl 92800|tell X|ans |word |typed |cnt 0|up K|play X|stats 2,1,0,0,0,0,0,0,0|foe Windup(Left)|me Idle|call Dodge|stop true|copies ",
+    "RoundEnd|Neutral|hp 140 100|st 0 run 0|sc 50|rd 1|now 92800|dl 95400|tell |ans |word |typed |cnt 0|up K|play -|stats 2,1,0,0,0,0,0,0,0|foe Idle|me Idle|call Dodge|stop true|copies ",
+    "RoundEnd|Neutral|hp 140 100|st 0 run 0|sc 50|rd 1|now 93100|dl 95400|tell |ans |word |typed |cnt 0|up K|play -|stats 2,1,0,0,0,0,0,0,0|foe Idle|me Idle|call Dodge|stop true|copies ",
+    "RoundEnd|Neutral|hp 140 100|st 0 run 0|sc 50|rd 1|now 93200|dl 95400|tell |ans |word |typed |cnt 0|up K|play -|stats 2,1,0,0,0,0,0,0,0|foe Idle|me Idle|call Dodge|stop true|copies ",
+    "RoundEnd|Neutral|hp 140 100|st 0 run 0|sc 50|rd 1|now 95400|dl -|tell |ans |word |typed |cnt 0|up K|play -|stats 2,1,0,0,0,0,0,0,0|foe Idle|me Idle|call Dodge|stop true|copies ",
+    "RoundEnd|Neutral|hp 140 100|st 0 run 0|sc 50|rd 1|now 95500|dl -|tell |ans |word |typed |cnt 0|up K|play -|stats 2,1,0,0,0,0,0,0,0|foe Idle|me Idle|call Dodge|stop true|copies ",
+    "RoundEnd|Neutral|hp 140 100|st 0 run 0|sc 50|rd 1|now 95500|dl -|tell |ans |word |typed |cnt 0|up K|play -|stats 2,1,0,0,0,0,0,0,0|foe Idle|me Idle|call Dodge|stop true|copies ",
+    "RoundEnd|Neutral|hp 140 100|st 0 run 0|sc 50|rd 1|now 95500|dl -|tell |ans |word |typed |cnt 0|up K|play -|stats 2,1,0,0,0,0,0,0,0|foe Idle|me Idle|call Dodge|stop true|copies ",
+    "RoundEnd|Neutral|hp 140 100|st 0 run 0|sc 50|rd 1|now 95500|dl -|tell |ans |word |typed |cnt 0|up K|play -|stats 2,1,0,0,0,0,0,0,0|foe Idle|me Idle|call Dodge|stop true|copies "
+   ]
+  }
+ ]
+}
