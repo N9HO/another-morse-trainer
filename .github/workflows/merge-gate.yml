@@ -2,8 +2,8 @@ name: Merge gate
 
 # The single status check to mark "required" on main.
 #
-# Why this exists: ios.yml, android-ci.yml, desktop.yml and triage-bot.yml are
-# path-filtered,
+# Why this exists: ios.yml, android-ci.yml, desktop.yml, triage-bot.yml and
+# parity.yml are path-filtered,
 # and a workflow whose paths filter does not match creates NO check run at all —
 # not a skipped one, not a pending one, nothing. A required status check that
 # never reports blocks its pull request forever, so none of those builds can
@@ -31,6 +31,12 @@ name: Merge gate
 # must also tick "Guide updated" or "No guide change needed" in its Guide
 # section. Both are declarations, not proofs — the website's source is outside
 # this repository — but a reviewer can read them.
+#
+# Unlike those declarations, the parity check is a proof: parity.yml runs
+# parity/check.py (python3, stdlib only) against parity/manifest.json, and this
+# gate waits for its "Parity check" run whenever the diff touches a tree, the
+# fixtures, parity/ or PARITY.md. The job is path-filtered, so it is never itself
+# a required status check; this gate is, and it is what requires it.
 
 on:
   pull_request:
@@ -176,7 +182,7 @@ jobs:
 
           # ---- 2. Which builds must therefore pass? ----
           # These conditions must stay in step with the `paths:` filters in
-          # ios.yml, android-ci.yml, desktop.yml and triage-bot.yml.
+          # ios.yml, android-ci.yml, desktop.yml, triage-bot.yml and parity.yml.
           NEED=""
           # ios.yml is `ios/**` minus `!ios/tools/**`, so drop the tools lines
           # before asking whether any iOS source changed. When a PR touches
@@ -198,6 +204,12 @@ jobs:
             NEED="$NEED Desktop-unit-tests Desktop-Linux-packages Desktop-Flatpak Desktop-Windows-packages"
           fi
 
+          # parity.yml: any tree, the guard itself, the shared fixtures or PARITY.md
+          # (the manifest and the check read all of them).
+          if printf '%s' "$FILES" | grep -qE '^(ios/|android/|desktop/|fixtures/|parity/|PARITY\.md$|\.github/workflows/parity\.yml$)'; then
+            NEED="$NEED Parity-check"
+          fi
+
           if [ -z "$NEED" ]; then
             echo
             echo "✅ This PR touches no platform subtree — no build is required."
@@ -215,6 +227,7 @@ jobs:
               Release-smoke-test)      echo "Release smoke test" ;;
               Android-lint)            echo "Android lint" ;;
               Triage-bot-tests)        echo "Triage bot tests" ;;
+              Parity-check)            echo "Parity check" ;;
               Desktop-unit-tests)      echo "Desktop unit tests" ;;
               Desktop-Linux-packages)  echo "Desktop Linux packages" ;;
               Desktop-Flatpak)         echo "Desktop Flatpak" ;;

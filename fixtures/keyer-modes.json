@@ -1,0 +1,15 @@
+{
+  "about": "The Vail adapter keyer modes (#348), in the order the Keyer mode picker lists them and by the name it shows. The order is the Program Change number the adapter firmware assigns (0-9), so it is not cosmetic. Read by the Swift harness (where the enum is visible), the Kotlin tests on android and desktop, and by parity/check.py, which also checks that every Settings picker builds from the whole enum. Derived from the Vail firmware's mode table and the in-app picker, not from either port.",
+  "keyerModes": [
+    "Passthrough",
+    "Straight Key",
+    "Bug",
+    "Electric Bug",
+    "Single Dot",
+    "Ultimatic",
+    "Plain Iambic",
+    "Iambic A",
+    "Iambic B",
+    "Keyahead"
+  ]
+}
