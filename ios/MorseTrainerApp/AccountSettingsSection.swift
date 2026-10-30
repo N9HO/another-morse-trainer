@@ -50,7 +50,7 @@ struct AccountSettingsSection: View {
         } header: {
             Text("Account")
         } footer: {
-            Text("Optional. An account keeps your progress in step across your devices and restores it on a new install: sessions, practice days, the Journey and Characters positions, First Four, Operating Procedure and story bookmarks. Sign-in is by an emailed link; there is no password. Settings are not synced, and nothing here touches the shared leaderboard.")
+            Text("Optional. An account keeps your progress and your training settings in step across your devices and restores them on a new install: sessions, practice days, the Journey and Characters positions, First Four, Operating Procedure, story bookmarks, and settings such as speed, tone, session length and each mode's options. Sign-in is by an emailed link; there is no password. Sound output, keys, haptics, reminders and the leaderboard opt-in stay on each device, and nothing here touches the shared leaderboard.")
         }
         .listRowBackground(rowBackground)
     }

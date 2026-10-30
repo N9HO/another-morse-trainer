@@ -9,6 +9,7 @@ import app.anothermorsetrainer.morsekit.PracticeStreak
 import app.anothermorsetrainer.morsekit.SessionRecord
 import app.anothermorsetrainer.morsekit.SyncMerge
 import app.anothermorsetrainer.morsekit.SyncRetry
+import app.anothermorsetrainer.morsekit.SyncSettings
 import app.anothermorsetrainer.morsekit.SyncState
 import app.anothermorsetrainer.morsekit.SyncThrottle
 import app.anothermorsetrainer.morsekit.SyncTrigger
@@ -106,8 +107,14 @@ object SyncCoordinator {
         appContext = context.applicationContext
         AccountClient.init(appContext)
         engine = SyncEngine(AccountClient.api, AccountClient.PrefsKeyValues, AppHost, ::mirror)
+        // Every store is loaded by now (MainActivity inits this last), so these
+        // are the settings as saved, not their defaults.
+        lastSettings = SettingsSync.values()
         mirror()
     }
+
+    /** The synced settings as last seen, so a save stamps only the ones it changed. */
+    private var lastSettings: Map<String, Any> = emptyMap()
 
     private fun mirror() {
         account = engine.account
@@ -132,12 +139,26 @@ object SyncCoordinator {
         if (engine.isSignedIn && !wasPending) requestSync(delayMs = PUSH_DELAY_MS)
     }
 
-    /** A synced store saved [key] ([SyncState.KEYS]). */
+    /** A synced store saved [key] ([SyncState.ALL_KEYS]). */
     fun stateChanged(key: String) {
         if (!isInitialized) return
         val wasPending = key in engine.pendingState
         engine.stateChanged(key)
         if (!wasPending && key in engine.pendingState) requestSync(delayMs = PUSH_DELAY_MS)
+    }
+
+    /**
+     * [Settings] or [PileupSettings] saved. Each synced setting whose wire
+     * value changed is stamped and queued ([SyncEngine.stateChanged]); one
+     * the account just handed us is not, since the engine is applying it
+     * (fixture `settings.stamping`). Signed out, nothing is stamped.
+     */
+    fun settingsChanged() {
+        if (!isInitialized) return
+        val now = SettingsSync.values()
+        val changed = now.filter { (key, value) -> !SyncSettings.jsonEquals(lastSettings[key], value) }.keys
+        lastSettings = now
+        for (key in changed) stateChanged(key)
     }
 
     /**
@@ -351,23 +372,29 @@ object SyncCoordinator {
          * device, so a fresh install's defaults are not pushed over the
          * account's real progress (the snapshot fills them instead).
          */
-        override fun stateValue(key: String): JSONObject? = when (key) {
+        override fun stateValue(key: String): Any? = when (key) {
             SyncState.JOURNEY -> if (JourneyStore.hasSaved) SyncState.journeyToWire(JourneyStore.load()) else null
             SyncState.CHARACTERS -> if (EngineStore.hasSaved) SyncState.charactersToWire(EngineStore.snapshot()) else null
             SyncState.FIRST_FOUR -> if (FirstFourStore.hasSaved) SyncState.firstFourToWire(FirstFourStore.progress) else null
             SyncState.OPERATING_PROCEDURE ->
                 if (OperatingProcedureStore.hasSaved) SyncState.operatingProcedureToWire(OperatingProcedureStore.progress) else null
             SyncState.STORY_BOOKMARKS -> Settings.storyBookmarksRaw().takeIf { it.isNotEmpty() }?.let { SyncState.storyBookmarksToWire(it) }
-            else -> null
+            // A training setting always has a value; the engine sends it only once stamped.
+            else -> SettingsSync.value(key)
         }
 
-        override fun applyState(key: String, value: JSONObject) {
+        override fun applyState(key: String, value: Any) {
+            if (SyncSettings.isSetting(key)) {
+                SettingsSync.apply(key, value)
+                return
+            }
+            val o = value as? JSONObject ?: return
             when (key) {
-                SyncState.JOURNEY -> JourneyStore.save(SyncState.journeyFromWire(value))
-                SyncState.CHARACTERS -> EngineStore.applySynced(SyncState.applyCharacters(EngineStore.snapshot(), value))
-                SyncState.FIRST_FOUR -> FirstFourStore.save(SyncState.firstFourFromWire(value))
-                SyncState.OPERATING_PROCEDURE -> OperatingProcedureStore.save(SyncState.operatingProcedureFromWire(value))
-                SyncState.STORY_BOOKMARKS -> Settings.replaceStoryBookmarks(SyncState.storyBookmarksFromWire(value))
+                SyncState.JOURNEY -> JourneyStore.save(SyncState.journeyFromWire(o))
+                SyncState.CHARACTERS -> EngineStore.applySynced(SyncState.applyCharacters(EngineStore.snapshot(), o))
+                SyncState.FIRST_FOUR -> FirstFourStore.save(SyncState.firstFourFromWire(o))
+                SyncState.OPERATING_PROCEDURE -> OperatingProcedureStore.save(SyncState.operatingProcedureFromWire(o))
+                SyncState.STORY_BOOKMARKS -> Settings.replaceStoryBookmarks(SyncState.storyBookmarksFromWire(o))
             }
         }
 

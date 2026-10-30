@@ -3,6 +3,7 @@ package app.anothermorsetrainer
 import app.anothermorsetrainer.morsekit.AccountProfile
 import app.anothermorsetrainer.morsekit.SessionRecord
 import app.anothermorsetrainer.morsekit.SyncAccountState
+import app.anothermorsetrainer.morsekit.SyncSettings
 import app.anothermorsetrainer.morsekit.SyncThrottle
 import app.anothermorsetrainer.morsekit.SyncTrigger
 import kotlinx.coroutines.CoroutineScope
@@ -77,7 +78,31 @@ object SyncCoordinator {
     fun init() {
         if (engine != null) return
         engine = SyncEngine(AccountClient.shared, PrefsSyncStore(Prefs.open("amt_account")), AppSyncLocal)
+        // Every store is loaded by now (Main inits this last), so these are
+        // the settings as saved, not their defaults.
+        lastSettings = SettingsSync.values()
         onForeground()
+    }
+
+    /** The synced settings as last seen, so a save stamps only the ones it changed. */
+    private var lastSettings: Map<String, Any> = emptyMap()
+
+    /** True while [AppSyncLocal] writes a setting the account handed us: seen, never stamped. */
+    @Volatile var applyingSettings = false
+
+    /**
+     * [Settings] or [PileupSettings] saved. Each synced setting whose wire
+     * value changed is stamped and queued; one the account just handed us is
+     * not (fixture `settings.stamping`). Signed out, the engine stamps nothing.
+     */
+    fun settingsChanged() {
+        val e = engine ?: return
+        val now = SettingsSync.values()
+        val changed = now.filter { (key, value) -> !SyncSettings.jsonEquals(lastSettings[key], value) }.keys
+        lastSettings = now
+        if (applyingSettings || changed.isEmpty()) return
+        for (key in changed) e.stateChanged(key)
+        requestSync()
     }
 
     /**

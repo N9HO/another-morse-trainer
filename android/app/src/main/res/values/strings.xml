@@ -1266,7 +1266,7 @@
     <string name="settings_buddy_on_home_footer">The line under your streak on the home screen: who has practiced today and your buddy streak. It appears only while you have a buddy. Turning it off hides it there and nowhere else; the list above and the daily reminder still show your buddies.</string>
     <!-- Account & Sync (the optional account; accounts Worker). -->
     <string name="settings_account">Account</string>
-    <string name="settings_account_intro">An account syncs your progress across your devices and restores it on a new install. It is optional: everything works without one.</string>
+    <string name="settings_account_intro">An account syncs your progress and your training settings across your devices and restores them on a new install. It is optional: everything works without one.</string>
     <string name="settings_account_email">Email</string>
     <string name="settings_account_email_hint">you@example.org</string>
     <string name="settings_account_email_invalid">Enter an email address.</string>
@@ -1309,7 +1309,7 @@
     <string name="settings_account_delete_confirm_title">Delete your account?</string>
     <string name="settings_account_delete_confirm_body">Deletes your account and everything synced to it from the server. This device keeps its own progress; clear it with Reset all progress. This cannot be undone.</string>
     <string name="settings_account_delete_error">Not deleted: %1$s</string>
-    <string name="settings_account_footer">Sync runs in the background when you finish a session and when you open the app. Signing out keeps everything on this device.</string>
+    <string name="settings_account_footer">Sync runs in the background when you finish a session and when you open the app. Training settings sync too (speed, tone, session length, each mode\'s options); sound output, keys, haptics, reminders and the leaderboard opt-in stay on each device. Signing out keeps everything on this device.</string>
     <string name="buddy_reason_no_name">pick a display name in Settings › Leaderboard &amp; Buddy first</string>
     <string name="buddy_reason_bad_code">the code is six letters or digits</string>
     <string name="buddy_reason_bad_reply">the server sent something unexpected</string>

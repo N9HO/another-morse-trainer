@@ -212,6 +212,9 @@ object SyncStateCodec {
 
     val keys: List<String> = listOf(JOURNEY, CHARACTERS, FIRST_FOUR, OPERATING_PROCEDURE, STORY_BOOKMARKS)
 
+    /** Every state key this app syncs: the five progress keys, then each training setting ([SyncSettings]). */
+    val allKeys: List<String> = keys + SyncSettings.KEYS
+
     // ---- journey (amt_journey) ----
 
     /** `completed` goes ascending; the store keeps it as an unordered set of strings. */

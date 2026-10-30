@@ -54,6 +54,7 @@ what it stores). Once signed in:
 | Training sessions | the app's session record: date, mode, speeds, attempts, correct, recognition times, duration, score, per-character results | until the account is deleted |
 | Practice days | per device, local calendar day and seconds practised | newest 400 days; until deleted |
 | Course progress | Journey position, Characters ladder position, First Four and Operating Procedure progress, story bookmarks | until the account is deleted |
+| Training settings | only the ones the user changed: speeds, tone, session and drill options, word lists they typed, each mode's set-up, and the station details they typed for Pileup, Contest, CW 77 and First Four (callsign, optional first name, state or province). Never device settings (audio output, keys, haptics, reminders) and never the leaderboard opt-in | until the account is deleted |
 
 Unlike the leaderboard, this data **is linked to the user**: it exists to
 follow one person across their devices. It is not public, not used for
@@ -65,8 +66,8 @@ row at once; also by email. Sign out only removes this device's sign-in.
 
 ## App Store Connect › App Privacy
 
-Answer **Yes, we collect data from this app**, then declare five data types.
-"Used for tracking" is **No** for all five. "Linked to the user's identity"
+Answer **Yes, we collect data from this app**, then declare six data types.
+"Used for tracking" is **No** for all six. "Linked to the user's identity"
 is **No** for the leaderboard's per-install data, but **Yes** wherever the
 optional account also collects the type, because Apple asks per data type
 and an account links it to a person.
@@ -74,10 +75,11 @@ and an account links it to a person.
 | Data type | Category | Purpose(s) | Linked to user | Tracking | Collected by |
 |---|---|---|---|---|---|
 | Email Address | Contact Info | App Functionality | Yes | No | account |
+| Name | Contact Info | App Functionality | Yes | No | account (the optional first name typed for CW 77, synced with the settings only if typed) |
 | User ID | Identifiers | App Functionality | Yes | No | account |
 | Device ID | Identifiers | App Functionality | No | No | leaderboard |
-| Other User Content | User Content | App Functionality | Yes | No | leaderboard (display name, unlinked); account (callsign and display name, linked) |
-| Product Interaction | Usage Data | App Functionality | Yes | No | leaderboard (run transcript, unlinked); account (sessions, practice days, progress, linked) |
+| Other User Content | User Content | App Functionality | Yes | No | leaderboard (display name, unlinked); account (callsign and display name; the station callsign, state and custom word list in the synced settings; linked) |
+| Product Interaction | Usage Data | App Functionality | Yes | No | leaderboard (run transcript, unlinked); account (sessions, practice days, progress, training settings, linked) |
 
 Apple also requires in-app account deletion for any app that lets users
 create an account: Settings › Account & Sync › **Delete account** does it
@@ -85,7 +87,7 @@ create an account: Settings › Account & Sync › **Delete account** does it
 
 Notes for the reviewer field, if asked: "Optional account, signed out by
 default: sign-in is by an emailed link, it syncs the user's own training
-progress between their devices, and Settings › Account & Sync › Delete
+progress and training settings between their devices, and Settings › Account & Sync › Delete
 account deletes it. Optional leaderboard, off by
 default. Device ID = the App Attest key identifier for this install, used
 only to keep one best score per device and to let the user delete it. Other
@@ -114,19 +116,23 @@ policy's "Deleting your account" section (site PR, same release): it says
 how to delete in the app and gives the email to ask for deletion. Enter it
 in Play Console's Data deletion field before release.
 
-Declare four data types, each **Collected**, **not shared**, **Optional**
+Declare five data types, each **Collected**, **not shared**, **Optional**
 (users choose whether it is collected: each feature is opt-in), not
 processed ephemerally:
 
 | Data type | Group | Purposes |
 |---|---|---|
 | Email address | Personal info | App functionality; Account management |
+| Name | Personal info | App functionality |
 | Device or other IDs | Device or other IDs | App functionality; Fraud prevention, security, and compliance |
 | User IDs | Personal info | App functionality; Account management |
 | App interactions | App activity | App functionality |
 
 - **Email address**: typed to sign in to the optional account; the sign-in
   link is sent to it.
+- **Name**: the optional first name a user types for CW 77 ("include my
+  callsign and name"), which the account syncs with the other training
+  settings once they are signed in. Nothing else asks for a name.
 
 - **Device or other IDs**: the hash of a random per-install identifier the
   app generates, plus what the Play Integrity token carries to Google for
@@ -139,7 +145,8 @@ processed ephemerally:
   category ("identifiers that relate to an identifiable person, such as an
   account name"). It is not a real name unless the user makes it one.
 - **App interactions**: the leaderboard run transcript and score, and the
-  account's synced sessions, practice days and course progress.
+  account's synced sessions, practice days, course progress and training
+  settings.
 
 Play Console may also surface a **Play Integrity** entry from the Google
 Play SDK Index with its own suggested data-safety lines; accept Google's
