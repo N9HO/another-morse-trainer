@@ -10,18 +10,75 @@
     "value, the picker shows every entry in this order, and none may be dropped.",
     "'adapterTimesSending' is false for the two modes where the contact keys",
     "directly (Passthrough, Straight Key) and true for the adapter's own keyers.",
-    "Do not regenerate to make a failing test pass."
+    "Do not regenerate to make a failing test pass.",
+    "",
+    "Two readers, one file: 'modes' (code, name, adapterTimesSending) is read by the",
+    "keyer-mode tests; 'keyerModes' is the same names in the same order, read by",
+    "parity/check.py and the option-list tests (which check every Settings picker",
+    "builds from the whole enum). Both must equal the enum, so they cannot drift apart."
+  ],
+  "keyerModes": [
+    "Passthrough",
+    "Straight Key",
+    "Bug",
+    "Electric Bug",
+    "Single Dot",
+    "Ultimatic",
+    "Plain Iambic",
+    "Iambic A",
+    "Iambic B",
+    "Keyahead"
   ],
   "modes": [
-    { "code": 0, "name": "Passthrough",   "adapterTimesSending": false },
-    { "code": 1, "name": "Straight Key",  "adapterTimesSending": false },
-    { "code": 2, "name": "Bug",           "adapterTimesSending": true },
-    { "code": 3, "name": "Electric Bug",  "adapterTimesSending": true },
-    { "code": 4, "name": "Single Dot",    "adapterTimesSending": true },
-    { "code": 5, "name": "Ultimatic",     "adapterTimesSending": true },
-    { "code": 6, "name": "Plain Iambic",  "adapterTimesSending": true },
-    { "code": 7, "name": "Iambic A",      "adapterTimesSending": true },
-    { "code": 8, "name": "Iambic B",      "adapterTimesSending": true },
-    { "code": 9, "name": "Keyahead",      "adapterTimesSending": true }
+    {
+      "code": 0,
+      "name": "Passthrough",
+      "adapterTimesSending": false
+    },
+    {
+      "code": 1,
+      "name": "Straight Key",
+      "adapterTimesSending": false
+    },
+    {
+      "code": 2,
+      "name": "Bug",
+      "adapterTimesSending": true
+    },
+    {
+      "code": 3,
+      "name": "Electric Bug",
+      "adapterTimesSending": true
+    },
+    {
+      "code": 4,
+      "name": "Single Dot",
+      "adapterTimesSending": true
+    },
+    {
+      "code": 5,
+      "name": "Ultimatic",
+      "adapterTimesSending": true
+    },
+    {
+      "code": 6,
+      "name": "Plain Iambic",
+      "adapterTimesSending": true
+    },
+    {
+      "code": 7,
+      "name": "Iambic A",
+      "adapterTimesSending": true
+    },
+    {
+      "code": 8,
+      "name": "Iambic B",
+      "adapterTimesSending": true
+    },
+    {
+      "code": 9,
+      "name": "Keyahead",
+      "adapterTimesSending": true
+    }
   ]
 }
