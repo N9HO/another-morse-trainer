@@ -219,6 +219,17 @@ fun ContestScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
         onSwitchMode(mode)
     }
 
+    // Options changed in the mid-run Settings sheet reach a contest already on
+    // the air at once (iOS applySettings -> pileup.update(contestConfig), #143).
+    val liveConfig = PileupSettings.config().forContest(contest, PileupSettings.maxStations)
+    LaunchedEffect(liveConfig) {
+        val e = engine ?: return@LaunchedEffect
+        if (phase == CtPhase.RUNNING) {
+            e.update(liveConfig)
+            rev++
+        }
+    }
+
     fun startRun() {
         // The Pileup realism settings carry over, with the contest's own
         // exchange and speed band pinned: the iOS contestConfig() (#323).

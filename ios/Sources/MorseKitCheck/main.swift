@@ -3343,6 +3343,73 @@ if let fx = loadLadderFixture() {
     check("fixtures/ladder.json loads and decodes", false)
 }
 
+// MARK: - Studied characters fixture (row-15)
+//
+// fixtures/gap-stats-studied.json, read by this harness and by the android and
+// desktop StudiedCharactersTest. The studied set is the Koch active set.
+struct StudiedFixture: Decodable {
+    struct Case: Decodable {
+        let name: String
+        let proficiency: String
+        let unlocks: Int
+        let selectedPunctuation: String
+        let optedOut: String
+        let statsOnly: String
+        let studied: String
+    }
+    let cases: [Case]
+}
+
+print("\nStudied characters (fixtures/gap-stats-studied.json):")
+do {
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent()
+        .deletingLastPathComponent().deletingLastPathComponent()
+    let url = root.appendingPathComponent("fixtures/gap-stats-studied.json")
+    if let data = try? Data(contentsOf: url),
+       let fx = try? JSONDecoder().decode(StudiedFixture.self, from: data) {
+        var allOK = true
+        for c in fx.cases {
+            let koch = Array(MorseCode.kochOrder)
+            let letters = koch.filter { $0.isLetter }
+            let seed: [Character]
+            switch c.proficiency {
+            case "none": seed = Array(koch.prefix(2))
+            case "someLetters": seed = Array(letters.prefix(13))
+            case "allLetters": seed = letters
+            default: seed = koch
+            }
+            let eng = TrainerEngine(seedCount: 2, rng: SeededRNG(seed: 9))
+            eng.setActiveCharacters(seed)
+            // Opt in (appended at once), then unlock from the ladder.
+            let order = MorseCode.studyOrder(withPunctuation: Set(c.selectedPunctuation))
+            _ = eng.applyStudyOrder(order)
+            for _ in 0..<c.unlocks {
+                if let next = eng.studyOrder.first(where: { !eng.activeCharacters.contains($0) }) {
+                    eng.addActiveCharacter(next)
+                }
+            }
+            if !c.optedOut.isEmpty {
+                let remaining = Set(c.selectedPunctuation).subtracting(Set(c.optedOut))
+                _ = eng.applyStudyOrder(MorseCode.studyOrder(withPunctuation: remaining))
+            }
+            // Stats-only characters: recorded data but never part of the set.
+            for ch in c.statsOnly where !eng.activeCharacters.contains(ch) {
+                eng.addActiveCharacter(ch)
+                eng.removeActiveCharacter(ch)
+            }
+            let got = String(SendingDrill.studiedCharacters(of: eng))
+            if got != c.studied {
+                print("      ↳ \(c.name): got '\(got)', fixture says '\(c.studied)'")
+                allOK = false
+            }
+        }
+        check("studied characters are the Koch active set for all \(fx.cases.count) fixture cases", allOK)
+    } else {
+        check("fixtures/gap-stats-studied.json loads and decodes", false)
+    }
+}
+
 // An opted-in mark is on the ladder's tail as well as in the active set, so
 // with all three opted in the singles stage completes at 40 characters, not
 // 37: the marks have to be mastered like anything else. Driving the ladder
@@ -6569,7 +6636,8 @@ if let fx = loadBuddyListFixture(),
 // phone.
 struct SettingsCatalogFixture: Decodable {
     struct Category: Decodable { let id: String; let title: String }
-    struct Entry: Decodable { let id: String; let category: String }
+    struct Entry: Decodable { let id: String; let title: String; let section: String; let category: String }
+    struct Section: Decodable { let id: String; let category: String }
     struct Query: Decodable {
         let name: String
         let query: String
@@ -6579,6 +6647,7 @@ struct SettingsCatalogFixture: Decodable {
         let first: String?
     }
     let categories: [Category]
+    let sections: [Section]
     let entries: [Entry]
     let queries: [Query]
 }
@@ -6604,6 +6673,23 @@ if let fx = loadSettingsCatalogFixture() {
         print("      ↳ \(e.id): catalog has \(byId[e.id]?.category.rawValue ?? "nothing"), fixture says \(e.category)")
     }
     check("every shared setting is in the fixture's category (\(fx.entries.count))", sharedOK)
+    var titlesOK = true
+    for e in fx.entries where byId[e.id]?.title != e.title {
+        titlesOK = false
+        print("      ↳ \(e.id): catalog titles it \"\(byId[e.id]?.title ?? "nothing")\", fixture says \"\(e.title)\"")
+    }
+    check("every shared setting has the fixture's title, the same on every app (\(fx.entries.count))", titlesOK)
+    check("sections match the fixture, in order, each in its category",
+          SettingsSection.allCases.map { "\($0.rawValue)=\($0.category.rawValue)" } == fx.sections.map { "\($0.id)=\($0.category)" })
+    var sectionsOK = true
+    for e in fx.entries where byId[e.id]?.section.rawValue != e.section {
+        sectionsOK = false
+        print("      ↳ \(e.id): catalog has \(byId[e.id]?.section.rawValue ?? "nothing"), fixture says \(e.section)")
+    }
+    check("every shared setting is in the fixture's section (\(fx.entries.count))", sectionsOK)
+    let sharedIds = fx.entries.map(\.id)
+    check("shared settings are in the fixture's order (Reveal after Show right / wrong, Devices before Delete account)",
+          SettingsCatalog.entries.map(\.id).filter(sharedIds.contains) == sharedIds)
     check("catalog ids are unique", byId.count == SettingsCatalog.entries.count)
     check("every category has a section and a searchable setting",
           SettingsCategory.allCases.allSatisfy { c in
@@ -6627,6 +6713,103 @@ if let fx = loadSettingsCatalogFixture() {
     check("search answers match the fixture across \(fx.queries.count) queries", queriesOK)
 } else {
     check("fixtures/settings-catalog.json loads and decodes", false)
+}
+
+// MARK: - Input settings rules (parity rows 18-20)
+//
+// fixtures/gap-input-settings-rules.json — read by this harness AND by android
+// and desktop InputRulesFixtureTest. Side tone / tone spread slider shape,
+// pileup speed and wait ranges, and the validated callsign input.
+func loadInputRulesFixture() -> [String: Any]? {
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+    guard let data = try? Data(contentsOf: root.appendingPathComponent("fixtures/gap-input-settings-rules.json")),
+          let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+    return obj
+}
+
+print("\nInput settings rules (fixtures/gap-input-settings-rules.json):")
+if let fx = loadInputRulesFixture(),
+   let sidetone = fx["sidetone"] as? [String: Any],
+   let spread = fx["toneSpread"] as? [String: Any],
+   let pileup = fx["pileupRanges"] as? [String: Any],
+   let callsign = fx["callsign"] as? [String: Any] {
+    func num(_ v: Any?) -> Double { (v as? NSNumber)?.doubleValue ?? .nan }
+    func near(_ a: Double, _ b: Double) -> Bool { abs(a - b) < 1e-12 }
+
+    check("side tone slider runs \(Int(InputRules.sidetoneMin))...\(Int(InputRules.sidetoneMax)) in \(Int(InputRules.sidetoneStep)) Hz steps",
+          near(InputRules.sidetoneMin, num(sidetone["min"])) && near(InputRules.sidetoneMax, num(sidetone["max"]))
+          && near(InputRules.sidetoneStep, num(sidetone["step"])))
+    let sideLoad = sidetone["load"] as? [[String: Any]] ?? []
+    check("a stored side tone is clamped on load (\(sideLoad.count) cases)",
+          !sideLoad.isEmpty && sideLoad.allSatisfy { near(InputRules.clampSidetone(num($0["stored"])), num($0["value"])) })
+
+    check("tone spread slider runs 0...500 in 10 Hz steps",
+          near(InputRules.toneSpreadMin, num(spread["min"])) && near(InputRules.toneSpreadMax, num(spread["max"]))
+          && near(InputRules.toneSpreadStep, num(spread["step"])))
+    let labels = spread["labels"] as? [[String: Any]] ?? []
+    check("tone spread reads Zero-beat below one step and ±N Hz otherwise (\(labels.count) cases)",
+          !labels.isEmpty && labels.allSatisfy { c in
+              let v = num(c["value"])
+              guard InputRules.isZeroBeat(v) == (c["zeroBeat"] as? Bool) else { return false }
+              if let label = c["label"] as? String { return InputRules.toneSpreadLabel(v) == label }
+              return InputRules.toneSpreadLabel(v) == "Zero-beat"
+          })
+    let spreadLoad = spread["load"] as? [[String: Any]] ?? []
+    check("a stored tone spread is clamped on load (\(spreadLoad.count) cases)",
+          !spreadLoad.isEmpty && spreadLoad.allSatisfy { near(InputRules.clampToneSpread(num($0["stored"])), num($0["value"])) })
+
+    let speed = pileup["speed"] as? [String: Any] ?? [:]
+    let minWait = pileup["minWait"] as? [String: Any] ?? [:]
+    let maxWait = pileup["maxWait"] as? [String: Any] ?? [:]
+    check("pileup speed and wait ranges match the fixture",
+          near(InputRules.callerWpmMin, num(speed["min"])) && near(InputRules.callerWpmMax, num(speed["max"]))
+          && near(InputRules.minWaitMax, num(minWait["max"])) && near(InputRules.maxWaitMax, num(maxWait["max"])))
+    let clampCases = pileup["clamp"] as? [[String: Any]] ?? []
+    check("each pileup setting clamps to its own range only (\(clampCases.count) cases)",
+          !clampCases.isEmpty && clampCases.allSatisfy { c in
+              let input = num(c["input"])
+              let got: Double
+              switch c["field"] as? String {
+              case "minSpeed", "maxSpeed": got = InputRules.clampCallerWpm(input)
+              case "minWait": got = InputRules.clampMinWait(input)
+              case "maxWait": got = InputRules.clampMaxWait(input)
+              default: return false
+              }
+              return near(got, num(c["value"]))
+          })
+    let effSpeed = pileup["effectiveSpeed"] as? [[String: Any]] ?? []
+    check("effective caller speed band is the sorted pair (\(effSpeed.count) cases)",
+          !effSpeed.isEmpty && effSpeed.allSatisfy { c in
+              let r = InputRules.effectiveSpeedRange(min: num(c["min"]), max: num(c["max"]))
+              return near(r.lo, num(c["lo"])) && near(r.hi, num(c["hi"]))
+          })
+    let effWait = pileup["effectiveWait"] as? [[String: Any]] ?? []
+    check("effective reply wait collapses onto min when min is above max (\(effWait.count) cases)",
+          !effWait.isEmpty && effWait.allSatisfy { c in
+              let r = InputRules.effectiveWaitRange(min: num(c["min"]), max: num(c["max"]))
+              return near(r.lo, num(c["lo"])) && near(r.hi, num(c["hi"]))
+          })
+
+    check("callsign placeholder and limit match the fixture",
+          InputRules.callsignPlaceholder == (callsign["placeholder"] as? String)
+          && InputRules.callsignMaxLength == (callsign["maxLength"] as? Int))
+    let callCases = callsign["cases"] as? [[String: Any]] ?? []
+    var callOK = !callCases.isEmpty
+    for c in callCases {
+        let input = c["input"] as? String ?? ""
+        let got = InputRules.storedCallsign(input)
+        if got != (c["stored"] as? String) {
+            callOK = false
+            print("      ↳ \"\(input)\" stored as \"\(got)\", fixture says \"\(c["stored"] as? String ?? "?")\"")
+        }
+    }
+    check("callsign input becomes the stored value (\(callCases.count) cases)", callOK)
+} else {
+    check("fixtures/gap-input-settings-rules.json loads and decodes", false)
 }
 
 // ---------------------------------------------------------------------------
@@ -8802,6 +8985,247 @@ if let kx = loadUIContractFixture("keyer-modes.json"), let want = kx["keyerModes
     }
 } else {
     check("fixtures/keyer-modes.json loads and decodes", false)
+}
+
+// ---------------------------------------------------------------------------
+// Leaderboard parity group (gap-lb-*): fixtures/gap-lb-*.json, read by this
+// harness AND by android and desktop JUnit. Data, not code.
+// ---------------------------------------------------------------------------
+
+func loadGapLbFixture(_ name: String) -> [String: Any]? {
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+    guard let data = try? Data(contentsOf: root.appendingPathComponent("fixtures/\(name)")),
+          let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+    return obj
+}
+
+// MARK: - Session clock fixture (parity audit row-03)
+//
+// fixtures/gap-timers-session-clock.json, consumed by this harness AND by the
+// android and desktop SessionClockTest. Shared *data*: the timer menu's add and
+// subtract arithmetic, derived from the documented menu rules.
+struct SessionClockFixture: Decodable {
+    struct Case: Decodable { let remaining: Int?; let seconds: Int; let expected: Int? }
+    let add: [Case]
+    let subtract: [Case]
+}
+
+func loadSessionClockFixture() -> SessionClockFixture? {
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+    let url = root.appendingPathComponent("fixtures/gap-timers-session-clock.json")
+    guard let data = try? Data(contentsOf: url) else { return nil }
+    return try? JSONDecoder().decode(SessionClockFixture.self, from: data)
+}
+
+print("\nHome Daily Dit card, against fixtures/gap-lb-daily-dit-card.json:")
+if let fx = loadGapLbFixture("gap-lb-daily-dit-card.json"), let cases = fx["cases"] as? [[String: Any]] {
+    check("daily-dit card fixture has 6 cases", cases.count == 6)
+    for c in cases {
+        let outcome: DailyDitOutcome = (c["outcome"] as? String) == "solved" ? .solved : .playing
+        let wpm = c["solvedWpm"] as? Double
+        let text = DailyDit.homeSubtitle(outcome: outcome,
+                                         puzzleNumber: c["puzzleNumber"] as? Int ?? -1,
+                                         solvedWpm: wpm,
+                                         guessesUsed: c["guessesUsed"] as? Int ?? -1,
+                                         listens: c["listens"] as? Int ?? -1)
+        check("daily-dit card: \(c["name"] as? String ?? "?")", text == c["expected"] as? String)
+    }
+} else {
+    check("fixtures/gap-lb-daily-dit-card.json loads and decodes", false)
+}
+
+print("\nLeaderboard display-name rule, against fixtures/gap-lb-display-name.json:")
+if let fx = loadGapLbFixture("gap-lb-display-name.json"), let cases = fx["cases"] as? [[String: Any]] {
+    check("display-name fixture has 23 cases", cases.count == 23)
+    for c in cases {
+        let raw = c["raw"] as? String ?? "?"
+        let problem = c["problem"] as? String
+        check("display-name problem: '\(raw)'", LeaderboardDisplayName.problem(with: raw) == problem)
+        check("display-name valid: '\(raw)'", LeaderboardDisplayName.isValid(raw) == (problem == nil))
+        if let want = c["normalized"] as? String {
+            check("display-name normalized: '\(raw)'", LeaderboardDisplayName.normalize(raw) == want)
+        }
+    }
+} else {
+    check("fixtures/gap-lb-display-name.json loads and decodes", false)
+}
+
+print("\nLeaderboard metric display, against fixtures/gap-lb-metric.json:")
+if let fx = loadGapLbFixture("gap-lb-metric.json"), let cases = fx["cases"] as? [[String: Any]] {
+    check("metric fixture has 8 cases", cases.count == 8)
+    for c in cases {
+        let metric = (c["metric"] as? NSNumber)?.doubleValue ?? -1
+        let body: [String: Any] = ["rank": 1, "displayName": "X", "metric": metric, "platform": "ios", "date": "2026-01-01"]
+        if let data = try? JSONSerialization.data(withJSONObject: body),
+           let row = try? JSONDecoder().decode(LeaderboardBoardRow.self, from: data) {
+            check("metric label \(metric)", row.metricLabel == c["expected"] as? String)
+        } else {
+            check("metric row decodes for \(metric)", false)
+        }
+    }
+} else {
+    check("fixtures/gap-lb-metric.json loads and decodes", false)
+}
+
+print("\nLeaderboard post-run line, against fixtures/gap-lb-result-line.json:")
+if let fx = loadGapLbFixture("gap-lb-result-line.json"), let cases = fx["cases"] as? [[String: Any]] {
+    check("result-line fixture has 6 cases", cases.count == 6)
+    for c in cases {
+        let reason = c["reason"] as? String ?? ""
+        let line: (headline: String, detail: String?)
+        switch c["kind"] as? String ?? "" {
+        case "pending": line = LeaderboardResultLine.pending()
+        case "posted":
+            // The model rounds the server's metric before it reaches the card.
+            let metric = Int(((c["metric"] as? NSNumber)?.doubleValue ?? 0).rounded())
+            line = LeaderboardResultLine.posted(rank: (c["rank"] as? NSNumber)?.intValue ?? -1, metric: metric,
+                                                correct: (c["correct"] as? NSNumber)?.intValue ?? -1,
+                                                total: (c["total"] as? NSNumber)?.intValue ?? -1,
+                                                personalBest: (c["personalBest"] as? NSNumber)?.boolValue ?? false)
+        case "refused": line = LeaderboardResultLine.refused(reason)
+        default: line = LeaderboardResultLine.unavailable(reason)
+        }
+        let name = c["name"] as? String ?? "?"
+        check("result line headline: \(name)", line.headline == c["headline"] as? String)
+        check("result line detail: \(name)", line.detail == c["detail"] as? String)
+    }
+} else {
+    check("fixtures/gap-lb-result-line.json loads and decodes", false)
+}
+
+// The Sending Analyzer's key merge and microphone state (parity rows 22-24),
+// against fixtures/gap-analyzer-merge.json and gap-analyzer-mic-state.json —
+// the same files the Kotlin GapAnalyzerTest reads on Android and desktop.
+print("\nSending Analyzer key merge and mic state (fixtures/gap-analyzer-*.json):")
+func loadGapFixtureObject(_ name: String) -> [String: Any]? {
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent()
+        .deletingLastPathComponent().deletingLastPathComponent()
+    guard let data = try? Data(contentsOf: root.appendingPathComponent("fixtures/\(name)")) else { return nil }
+    return (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+}
+if let fx = loadGapFixtureObject("gap-analyzer-merge.json"),
+   let cases = fx["cases"] as? [[String: Any]], !cases.isEmpty {
+    for c in cases {
+        let name = c["name"] as? String ?? "?"
+        let steps = c["steps"] as? [[String]] ?? []
+        let expect = c["expect"] as? [Any] ?? []
+        var merge = KeyMerge<String>()
+        var ok = !steps.isEmpty && steps.count == expect.count
+        if ok {
+            for (i, step) in steps.enumerated() where step.count == 2 {
+                let got: Bool?
+                switch step[1] {
+                case "down": got = merge.update(step[0], isDown: true)
+                case "up": got = merge.update(step[0], isDown: false)
+                case "releaseAll": got = merge.releaseAll()
+                default: got = nil; ok = false
+                }
+                let gotText: String? = got.map { $0 ? "down" : "up" }
+                let wantText = expect[i] as? String   // NSNull -> nil
+                if gotText != wantText { ok = false }
+            }
+        }
+        check("key merge: \(name)", ok)
+    }
+} else {
+    check("fixtures/gap-analyzer-merge.json loads and decodes", false)
+}
+if let fx = loadGapFixtureObject("gap-analyzer-mic-state.json"),
+   let cases = fx["cases"] as? [[String: Any]], !cases.isEmpty {
+    for c in cases {
+        let name = c["name"] as? String ?? "?"
+        let steps = c["steps"] as? [String] ?? []
+        let expect = c["expect"] as? [[Bool]] ?? []
+        var state = MicInputState()
+        var ok = !steps.isEmpty && steps.count == expect.count
+        if ok {
+            for (i, code) in steps.enumerated() {
+                guard let event = MicEvent(rawValue: code) else { ok = false; break }
+                state = state.after(event)
+                if expect[i].count != 2 || state.isListening != expect[i][0] || state.micDenied != expect[i][1] {
+                    ok = false
+                }
+            }
+        }
+        check("mic state: \(name)", ok)
+    }
+} else {
+    check("fixtures/gap-analyzer-mic-state.json loads and decodes", false)
+}
+
+print("\nSession clock (timer menu add / subtract), against fixtures/gap-timers-session-clock.json:")
+if let fx = loadSessionClockFixture() {
+    func intOrNil(_ v: TimeInterval?) -> Int? {
+        guard let v else { return nil }
+        return Int(v)
+    }
+    func secs(_ v: Int?) -> TimeInterval? {
+        guard let v else { return nil }
+        return TimeInterval(v)
+    }
+    var addOK = !fx.add.isEmpty
+    for c in fx.add where intOrNil(SessionClock.added(secs(c.remaining), by: TimeInterval(c.seconds))) != c.expected {
+        addOK = false
+        print("      ↳ add \(c.seconds) to \(String(describing: c.remaining)): fixture says \(String(describing: c.expected))")
+    }
+    check("adding time follows the fixture (\(fx.add.count) cases)", addOK)
+    var subOK = !fx.subtract.isEmpty
+    for c in fx.subtract where intOrNil(SessionClock.reduced(secs(c.remaining), by: TimeInterval(c.seconds))) != c.expected {
+        subOK = false
+        print("      ↳ subtract \(c.seconds) from \(String(describing: c.remaining)): fixture says \(String(describing: c.expected))")
+    }
+    check("subtracting time follows the fixture (\(fx.subtract.count) cases)", subOK)
+} else {
+    check("fixtures/gap-timers-session-clock.json loads and decodes", false)
+}
+
+// MARK: - Session row titles (gap copy-labels)
+//
+// fixtures/gap-docs-mode-titles.json: the title a Stats session row shows for
+// each mode. TrainingMode lives in the app target, out of the harness's reach,
+// so its `title` table is read from AppModel.swift's source text.
+print("\nSession row titles (fixtures/gap-docs-mode-titles.json):")
+if let tx = loadUIContractFixture("gap-docs-mode-titles.json"), let rows = tx["modes"] as? [[String: Any]] {
+    check("fixtures/gap-docs-mode-titles.json lists 25 modes", rows.count == 25)
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent()
+        .deletingLastPathComponent().deletingLastPathComponent()
+    if let text = try? String(contentsOf: root.appendingPathComponent("ios/MorseTrainerApp/AppModel.swift"),
+                              encoding: .utf8) {
+        var titles: [String: String] = [:]
+        var inTable = false
+        for line in text.split(separator: "\n", omittingEmptySubsequences: false) {
+            let t = line.trimmingCharacters(in: .whitespaces)
+            if t.hasPrefix("var title: String") { inTable = true; continue }
+            guard inTable else { continue }
+            if t.hasPrefix("var icon") { break }
+            if t.hasPrefix("case ."), let colon = t.firstIndex(of: ":"), let open = t.firstIndex(of: "\"") {
+                let rest = t[t.index(after: open)...]
+                guard let close = rest.firstIndex(of: "\"") else { continue }
+                let name = String(t[t.index(t.startIndex, offsetBy: 6)..<colon])
+                titles[name] = String(rest[..<close])
+            }
+        }
+        var allMatch = !titles.isEmpty
+        for row in rows {
+            let id = row["id"] as? String ?? ""
+            if titles[id] != (row["title"] as? String) { allMatch = false }
+        }
+        check("TrainingMode.title table equals the fixture's titles for all 25 modes", allMatch && titles.count == 25)
+    } else {
+        check("AppModel.swift is readable for the session-title check", false)
+    }
+} else {
+    check("fixtures/gap-docs-mode-titles.json loads and decodes", false)
 }
 
 print("\n────────────────────────────")

@@ -119,6 +119,7 @@
 
     <!-- SessionSetupSheet -->
     <string name="setup_track_stage">Track stage</string>
+    <string name="settings_track_stage_footer_tail">Takes effect on the next item.</string>
     <string name="setup_duration_question">How long do you want to practice?</string>
     <string name="setup_start_training">Start Training</string>
 
@@ -153,6 +154,7 @@
     <string name="quiz_next_step_typing">Next step: type your answers</string>
     <string name="settings_answer_entry">Answer entry</string>
     <string name="settings_answer_entry_footer">Tap picks from the buttons. Progressive starts each level at 4 choices, moves to 6 after 18 of 20 right, then to typing the answer after 18 of 20 more; a new character or stage starts again at 4. Type always has you type. Answers that are a meaning or a prosign always show choices.</string>
+    <string name="settings_voice_answers_footer">Voice answers let you speak instead of tap (uses the microphone) — turning them on turns keyed answers off, and the reverse.</string>
     <string name="quiz_new_character">★ New: %1$s</string>
     <string name="quiz_intro_new_character">★ New character</string>
     <string name="quiz_intro_new_prosign">★ New prosign</string>
@@ -259,23 +261,23 @@
     <string name="pileup_your_name">YOUR NAME</string>
     <string name="pileup_your_name_placeholder">Optional</string>
     <string name="pileup_your_state">YOUR STATE</string>
-    <string name="pileup_exchange">EXCHANGE</string>
+    <string name="pileup_exchange">PILEUP RUNNER MODE</string>
     <string name="pileup_the_pileup">THE PILEUP</string>
-    <string name="pileup_callers">Callers</string>
+    <string name="pileup_callers">Max callers</string>
     <string name="pileup_callers_value">up to %1$s</string>
-    <string name="pileup_slowest_caller">Slowest caller</string>
-    <string name="pileup_fastest_caller">Fastest caller</string>
+    <string name="pileup_slowest_caller">Callers\' min speed</string>
+    <string name="pileup_fastest_caller">Callers\' max speed</string>
     <string name="pileup_tone_spread">Tone spread</string>
-    <string name="pileup_zero_beat">Zero beat</string>
+    <string name="pileup_zero_beat">Zero-beat</string>
     <string name="pileup_tone_spread_value">±%1$s Hz</string>
-    <string name="pileup_qsb_fading">QSB fading</string>
-    <string name="pileup_qrn_static">QRN STATIC</string>
+    <string name="pileup_qsb_fading">QSB (fading)</string>
+    <string name="pileup_qrn_static">QRN (NOISE)</string>
     <string name="pileup_callsigns">CALLSIGNS</string>
     <string name="pileup_operating">OPERATING</string>
     <string name="pileup_cut_numbers">Cut numbers (5NN, 1 → A…)</string>
-    <string name="pileup_require_the_rst_copied">Require the RST copied</string>
+    <string name="pileup_require_the_rst_copied">Copy RST too</string>
     <string name="pileup_on_a_busted_call">ON A BUSTED CALL</string>
-    <string name="pileup_impatient_callers_give_up">Impatient callers give up</string>
+    <string name="pileup_impatient_callers_give_up">Callers can give up</string>
     <string name="pileup_tell_me_who_got_away">TELL ME WHO GOT AWAY</string>
     <string name="pileup_keep_my_partial_call_after">Keep my partial call after \"?\"</string>
     <string name="pileup_key_my_side_in_morse">Key my side in Morse</string>
@@ -424,14 +426,15 @@
     <string name="reference_about">About</string>
     <string name="reference_playback">Playback</string>
     <string name="reference_history_and_sources">HISTORY &amp; SOURCES</string>
-    <string name="reference_side_tone">Side tone</string>
+    <string name="reference_side_tone">Sidetone pitch</string>
     <string name="reference_farnsworth_spacing">Farnsworth spacing</string>
     <string name="reference_effective_speed">Effective speed</string>
 
     <!-- StatsScreen -->
     <string name="stats_share_your_brag_sheet">Share your brag sheet</string>
     <string name="stats_brag_sheet">Brag Sheet</string>
-    <string name="stats_empty">No sessions yet.\nFinish a practice round and your stats will show up here.</string>
+    <string name="stats_empty">No sessions yet. Finish a practice round and it will show up here.</string>
+    <string name="stats_recent_sessions_blurb">Tap a session to see its per-character recognition-time chart.</string>
     <string name="stats_lifetime">Lifetime</string>
     <string name="stats_sessions">Sessions</string>
     <string name="stats_practice_time">Practice time</string>
@@ -478,24 +481,32 @@
     <string name="settings_search_clear">Clear search</string>
     <string name="settings_search_results">Results</string>
     <string name="settings_search_none">No settings match “%1$s”.</string>
-    <string name="settings_pileup_footer">The same options as the Pileup Runner setup screen; a change in either place shows in both.</string>
+    <string name="settings_pileup_runner_footer">Max callers thins a pileup at once; the other settings reach callers as they arrive. Tone spread splits callers across the band; zero-beat stacks them all on your pitch. The same options as the Pileup Runner setup screen; a change in either place shows in both.</string>
+    <string name="settings_qso_signals">QSO · Signals</string>
+    <string name="settings_qso_realism">QSO · Realism</string>
+    <string name="settings_qso_realism_footer">Keep my partial call after “?”: a partly-copied call stays in the box so you can send “?” and add to it instead of retyping. Key my side: your CQ, calls and TU go out in Morse at your tone and speed before the stations reply; off, they are logged silently. Re-calls after TU: the stations still waiting call again on their own once you log a contact; off, send AGN or CQ yourself. Give-up: a station you keep busting drops out after a few misses, but the pileup continues — “Tell me who got away” then names the call you lost and what you had it as, either as it happens or in the end-of-run summary. Cut numbers send numerals as letters (0→T, 9→N) — you can type either form.</string>
+    <string name="settings_qso_callsigns">QSO · Callsigns</string>
+    <string name="settings_qso_callsigns_footer">Which callsign shapes appear in pileups. Turn off US-only to mix in DX prefixes.</string>
+    <string name="settings_your_station">Your Station</string>
+    <string name="settings_your_station_footer">Used across the app — sent when you call CQ and work stations in Pileup Runner, drilled in CW 77 when you include them, and taught in First Four, which also uses your state.</string>
     <string name="settings_character_speed">Character speed</string>
     <string name="settings_qrq_note">\n\nQRQ territory — %1$s WPM. Great for pushing instant recognition once 30+ feels comfortable.</string>
-    <string name="settings_speed_footer">Character speed is how fast the dits and dahs are sent. Farnsworth keeps each character at full speed but adds extra space between characters, down to the effective speed, so you have time to recognize each one. Applies to words, groups and other multi-character content — single characters are unaffected.</string>
-    <string name="settings_speed_warning">Below %1$s WPM it\'s easy to start counting the dits and dahs instead of hearing each character as a single sound. Training at %2$s+ WPM builds instant, by-ear recognition, which is the whole point of the Koch method. If you need more time to answer, raise \"Recognition target\" or lower the Farnsworth speed instead of slowing the code.</string>
+    <string name="settings_speed_footer">Character speed is how fast the dits and dahs are sent.</string>
+    <string name="settings_farnsworth_header">Farnsworth (multi-character)</string>
+    <string name="settings_farnsworth_footer">Farnsworth keeps each character at full speed but adds extra space between characters, down to the effective speed, so you have time to recognize each one. Applies to words, groups and other multi-character content — single characters are unaffected.</string>
+    <string name="settings_speed_warning">Below %1$s WPM it\'s easy to start counting the dits and dahs instead of hearing each character as a single sound. Training at %2$s+ WPM builds instant, by-ear recognition, which is the whole point of the Koch method. If you need more time to answer, raise \"Recognize within\" or lower the Farnsworth speed instead of slowing the code.</string>
     <string name="settings_sound">Sound</string>
     <string name="settings_sidetone_pitch">Sidetone pitch</string>
     <string name="settings_preview_tone">Preview tone</string>
     <string name="settings_play_button">" Play"</string>
     <string name="settings_sound_footer">The frequency of the practice tone you hear.</string>
-    <string name="settings_practice">Practice</string>
+    <string name="settings_learning">Learning</string>
     <string name="settings_answer_choices">Answer choices</string>
-    <string name="settings_recognition_target">Recognition target</string>
+    <string name="settings_recognition_target">Recognize within</string>
     <string name="settings_seconds_1dp">%1$.1f s</string>
     <string name="settings_word_pool">Word pool</string>
     <string name="settings_word_pool_cw77">Use CW 77 (CWOps) instead</string>
     <string name="settings_reveal_answer">Reveal answer</string>
-    <string name="settings_my_words">My words</string>
     <string name="settings_use_my_word_list">Use my word list</string>
     <string name="settings_custom_words_placeholder">CQ DX\nANTENNA\nMORSE …</string>
     <string name="settings_custom_words_footer_lead">"One word per line (spaces and commas split too). "</string>
@@ -512,8 +523,8 @@
     <string name="settings_feedback">Feedback</string>
     <string name="settings_haptic_feedback">Haptic feedback</string>
     <string name="settings_voice_answers">Voice answers</string>
-    <string name="settings_feedback_footer">Show right / wrong colors the answers and says which it was; the replay button lets you hear the item again before answering. Buzz on right and wrong answers. Voice answers let you speak instead of tap (uses the microphone) — turning them on turns keyed answers off, and the reverse.</string>
-    <string name="settings_feedback_footer_haptics_only">Show right / wrong colors the answers and says which it was; the replay button lets you hear the item again before answering. Buzz on right and wrong answers.</string>
+    <string name="settings_feedback_footer">Show right / wrong colors the answers and says which it was; the replay button lets you hear the item again before answering. Buzz on right and wrong answers.</string>
+    <string name="settings_feedback_footer_reveal">Reveal answer chooses when the correct answer is shown after you respond.</string>
     <string name="settings_hardware_key">Hardware key</string>
     <string name="settings_hardware_key_footer">How the adapter should read your key. Straight key is the default; pick an iambic mode for a paddle. This is your key, not a drill setting — it applies in Sending Practice and on the Vail screen alike.</string>
     <string name="settings_display">Display</string>
@@ -521,6 +532,7 @@
     <string name="settings_slashed_zero_footer">Show the digit 0 with a line through it — the operator\'s convention for telling 0 from O.</string>
     <string name="settings_reminders">Reminders</string>
     <string name="settings_daily_reminder">Daily reminder</string>
+    <string name="settings_remind_me_at">Remind me at</string>
     <string name="settings_reminders_footer">A daily nudge to keep your streak alive.</string>
     <string name="settings_reset_all_progress">Reset all progress</string>
     <string name="settings_reset_footer">Clears your learned characters, stats, streak, and Journey progress. Settings are kept.</string>
@@ -647,9 +659,6 @@
     <string name="start_here_know_body">Open Settings › Characters &amp; Lessons › Proficiency and tell it what you already know. That sets your starting character set instead of making you re-earn A and N. Comfortable with the whole alphabet? Skip Journey and go straight to Common Words, Rapid Fire, or Pileup Runner.</string>
     <!-- Daily Dit: the shared daily puzzle (#155) -->
     <string name="daily_dit_title">Daily Dit</string>
-    <string name="daily_dit_home_sub_new">Today\'s word in Morse — your speed, up to %1$d WPM</string>
-    <string name="daily_dit_home_sub_progress">#%1$d · %2$s · %3$s so far</string>
-    <string name="daily_dit_home_sub_solved">#%1$d copied at %2$s WPM · %3$s · %4$s</string>
     <string name="daily_dit_puzzle_number">Puzzle #%1$d</string>
     <string name="daily_dit_status_playing">%1$s WPM · %2$s · %3$s</string>
     <string name="daily_dit_status_solved">Copied at %1$s WPM · %2$s · %3$s</string>
@@ -706,6 +715,7 @@
     <!-- Mid-session timer menu and mode switcher (SessionMenus.kt) -->
     <string name="session_add_5_minutes">Add 5 minutes</string>
     <string name="session_add_1_minute">Add 1 minute</string>
+    <string name="session_subtract_1_minute">Subtract 1 minute</string>
     <string name="session_remove_time_limit">Remove time limit</string>
     <string name="session_timer_adjust">Adjust the session timer</string>
     <string name="session_switch_mode">Switch mode</string>
@@ -742,7 +752,7 @@
     <string name="settings_repeat_times">%1$d×</string>
     <string name="settings_seconds_whole">%1$d s</string>
     <string name="settings_preview_stage">Developer · Preview Stage</string>
-    <string name="settings_preview_stage_footer">Jumps the Characters track to a stage for testing (✓ is where the track is now). Stages beyond Characters expand your active set to all letters &amp; numbers, and a jump clears any hold. To hold the track at a stage during normal practice, use Track stage in the drill.</string>
+    <string name="settings_preview_stage_footer">Jumps the Characters track to a stage for testing (✓ is where the track is now). Stages beyond Characters expand your active set to all letters &amp; numbers, and a jump clears any hold. To hold the track at a stage during normal practice, use Track stage above.</string>
     <string name="settings_bug_reports">Bug reports</string>
     <string name="settings_copy_diagnostics">Copy diagnostic info</string>
     <string name="settings_copied_diagnostics">Copied to clipboard</string>
@@ -1201,11 +1211,8 @@
     <string name="leaderboard_optin_not_now">Not now</string>
     <string name="leaderboard_optin_never">Don\'t ask again</string>
     <!-- The run-summary line: rank, then the server's metric -->
-    <string name="leaderboard_result">Leaderboard: #%1$d · %2$d</string>
-    <string name="leaderboard_refused">Leaderboard: %1$s</string>
-    <string name="leaderboard_submitting">Leaderboard: submitting…</string>
-    <string name="leaderboard_reason_no_name">set a display name in Settings</string>
-    <string name="leaderboard_reason_not_registered">run not registered (%1$s)</string>
+    <string name="leaderboard_submitting">Leaderboard: posting…</string>
+    <string name="leaderboard_reason_no_name">Pick a display name in Settings › Leaderboard &amp; Buddy to post scores.</string>
     <string name="leaderboard_reason_network">couldn\'t reach the server</string>
     <string name="leaderboard_reason_attestation">device attestation failed</string>
     <!-- Settings › Leaderboard &amp; Buddy -->
@@ -1213,11 +1220,10 @@
     <string name="settings_leaderboard_share">Share scores to the shared leaderboard</string>
     <string name="settings_leaderboard_name">Display name</string>
     <string name="settings_leaderboard_name_hint">Call sign or name</string>
-    <string name="settings_leaderboard_name_invalid">2 to 12 characters: letters, digits, space, / and -. Runs are not posted until this is valid.</string>
-    <string name="settings_leaderboard_delete">Delete my scores</string>
+        <string name="settings_leaderboard_delete">Delete my scores</string>
     <string name="settings_leaderboard_deleting">Deleting…</string>
     <string name="settings_leaderboard_delete_confirm_title">Delete your scores?</string>
-    <string name="settings_leaderboard_delete_confirm_body">Removes every score this install has posted to the shared leaderboard, on every mode. This cannot be undone.</string>
+    <string name="settings_leaderboard_delete_confirm_body">Removes every score this device has posted to the shared leaderboard, on every mode. Your local stats and personal bests stay. This cannot be undone.</string>
     <string name="settings_leaderboard_delete_done">Your scores were deleted.</string>
     <string name="settings_leaderboard_delete_failed">Couldn\'t delete: %1$s</string>
     <string name="settings_leaderboard_footer">Off by default. When on, each finished Rapid Fire, Contest, Pileup Runner or arcade run is sent to the shared leaderboard under your display name and graded there: the board ranks server-graded copies, the speed summed over the items you copied correctly, so a game\'s board number is not its on-screen score. Only builds installed from Google Play can post; the board itself is open to everyone.</string>
@@ -1260,7 +1266,7 @@
     <string name="settings_buddy_leave_confirm_body">Ends your buddy streak with %1$s, for both of you. Your other buddies are not affected, and either of you can pair again with a new code.</string>
     <string name="settings_buddy_refreshing">Checking…</string>
     <string name="settings_buddy_error">Couldn\'t do that: %1$s</string>
-    <string name="settings_buddy_footer">Pair with up to ten people and keep a separate streak with each: each day you both practice counts, and a day either of you misses resets it. One practice counts for every buddy. Your buddies see your leaderboard display name and whether you practiced each day, nothing else. Leaving a buddy ends that streak for both of you and keeps the others. Pairing works on its own; the leaderboard switch above stays yours. Only builds installed from Google Play can pair.</string>
+    <string name="settings_buddy_footer">Pair with up to ten people and keep a separate streak with each: each day you both practice counts, and a day either of you misses resets it. One practice counts for every buddy. Your buddies see your leaderboard display name and whether you practiced each day, nothing else. Pairing works on its own; the leaderboard switch above stays yours. Leaving a buddy ends that streak for both of you and keeps the others, and Delete my scores above removes every pairing. Only builds installed from Google Play can pair.</string>
     <!-- The home screen's buddy line switch (#253), under the Buddy streak section. -->
     <string name="settings_buddy_on_home">Show buddy line on home screen</string>
     <string name="settings_buddy_on_home_footer">The line under your streak on the home screen: who has practiced today and your buddy streak. It appears only while you have a buddy. Turning it off hides it there and nowhere else; the list above and the daily reminder still show your buddies.</string>
@@ -1372,6 +1378,7 @@
     <string name="analyzer_sensitivity_low">Low</string>
     <string name="analyzer_sensitivity_normal">Normal</string>
     <string name="analyzer_sensitivity_high">High</string>
+    <string name="analyzer_mic_denied">Microphone access is off. Allow it in Android Settings → Apps → Permissions → Microphone.</string>
     <string name="analyzer_mic_note">Key your oscillator, keyer or rig near the phone. The light should follow your key; if it flickers in the gaps, lower the sensitivity.</string>
     <string name="analyzer_copied_so_far">Copied so far</string>
     <string name="analyzer_finish">Finish</string>

@@ -1,0 +1,37 @@
+{
+  "$comment": "Leaderboard metric display (gap row-08): the board shows the server's metric rounded to the nearest whole number, halves up, so 339.6 reads 340 (never truncated to 339). Read by ios MorseKitCheck and android/desktop JUnit. Data, not code.",
+  "cases": [
+    {
+      "metric": 339.6,
+      "expected": "340"
+    },
+    {
+      "metric": 339.5,
+      "expected": "340"
+    },
+    {
+      "metric": 339.4,
+      "expected": "339"
+    },
+    {
+      "metric": 0.0,
+      "expected": "0"
+    },
+    {
+      "metric": 0.5,
+      "expected": "1"
+    },
+    {
+      "metric": 1234.0,
+      "expected": "1234"
+    },
+    {
+      "metric": 99.49,
+      "expected": "99"
+    },
+    {
+      "metric": 12000.5,
+      "expected": "12001"
+    }
+  ]
+}

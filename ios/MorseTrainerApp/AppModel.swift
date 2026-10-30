@@ -107,7 +107,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .sending:       return "Key it back"
         case .confusion:     return "Drill your mix-ups"
         case .listen:        return "Hands-free, eyes-free"
-        case .qso:           return "Simulated contact"
+        case .qso:           return "Work a CW pileup"
         case .contest:       return "Timed contest runs"
         case .story:         return "Continuous copy"
         case .exam:          return "ARRL/FCC code exam"
@@ -159,7 +159,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .exam:
             return "Sit a recreation of the old ARRL/FCC code-proficiency exam: a 5-minute QSO-style transmission at 5, 13, or 20 WPM. Graded the way the ARRL VEC graded it: copy the whole message, then fill in ten blanks about it from your copy. Pass with one minute of solid copy (25, 65 or 100 in a row, numerals, punctuation and prosigns counting two) or seven right answers."
         case .qrq:
-            return "Push your speed: hear whole words and call signs at 35 or 40 WPM and type what you copy. Too fast to count dits — this trains instant, whole-word recognition (QRQ = “send faster”)."
+            return "Push your speed: hear whole words and call signs at 35, 40, 50 or 60 WPM and type what you copy. Too fast to count dits — this trains instant, whole-word recognition (QRQ = “send faster”)."
         case .rapidFire:
             return "Real-world copy drill: a stream of call signs, words, number groups, or state abbreviations sent back to back at whatever pace you choose. Type each one as it lands, send it back on a key, or just copy along and review the full list of what was transmitted at the end."
         case .invaders:
@@ -227,15 +227,17 @@ enum TrainingMode: String, CaseIterable, Identifiable {
     var hasMenuEntry: Bool { menuEntry == self }
 
     /// Whether a session-length choice applies. Exam (a fixed-format proficiency
-    /// run) and Story (one passage played end to end) are self-contained, so a
-    /// "how long?" question is meaningless for them.
+    /// run) is self-contained, so a "how long?" question is meaningless for it.
+    /// Short Stories does take one: `startSession` starts the same countdown
+    /// for it as for every other timed mode, so without the picker and the
+    /// timer menu a story ended silently on a clock the learner never chose.
     var usesSessionLength: Bool {
         switch self {
         // Contest picks its own length (the real one-hour event or a sprint) in
         // its setup card, so the generic duration picker would be redundant.
         // The arcade games (#170) end when the last life — or, for Defender,
         // the last asset — is lost, not on a clock.
-        case .exam, .story, .contest, .invaders, .galaga, .defender, .dungeon, .frogger, .asteroids: return false
+        case .exam, .contest, .invaders, .galaga, .defender, .dungeon, .frogger, .asteroids: return false
         default: return true
         }
     }
@@ -2144,9 +2146,12 @@ final class AppModel: ObservableObject {
     func addSessionTime(_ seconds: TimeInterval) {
         guard !sessionEnded, seconds > 0 else { return }
         if let end = sessionEndDate {
-            let newEnd = end.addingTimeInterval(seconds)
-            sessionEndDate = newEnd
-            sessionRemaining = max(0, newEnd.timeIntervalSinceNow)
+            // The arithmetic is SessionClock's, pinned by
+            // fixtures/gap-timers-session-clock.json (Android and desktop
+            // run the same rule in their own SessionClock).
+            let remaining = SessionClock.added(end.timeIntervalSinceNow, by: seconds) ?? seconds
+            sessionEndDate = Date().addingTimeInterval(remaining)
+            sessionRemaining = remaining
         } else {
             startCountdown(seconds: seconds)
         }
@@ -2156,10 +2161,9 @@ final class AppModel: ObservableObject {
     /// Ends the session if that takes the remaining time to zero.
     func reduceSessionTime(_ seconds: TimeInterval) {
         guard !sessionEnded, seconds > 0, let end = sessionEndDate else { return }
-        let newEnd = end.addingTimeInterval(-seconds)
-        let remaining = newEnd.timeIntervalSinceNow
+        let remaining = SessionClock.reduced(end.timeIntervalSinceNow, by: seconds) ?? 0
         if remaining <= 0 { sessionRemaining = 0; endSession(); return }
-        sessionEndDate = newEnd
+        sessionEndDate = Date().addingTimeInterval(remaining)
         sessionRemaining = remaining
     }
 
@@ -2462,6 +2466,19 @@ final class AppModel: ObservableObject {
         return player.replaySound(playable: drill.playable,
                                   frequency: settings.toneFrequency,
                                   timing: timing)
+    }
+
+    /// Settings' Preview tone: replays the current drill item, and keys PARIS
+    /// only when there is no current drill item (parity row 21: every app does
+    /// both, so the row always sounds something).
+    func previewTone() {
+        if drill != nil {
+            replay()
+        } else {
+            player.replaySound(playable: .text("PARIS"),
+                               frequency: settings.toneFrequency,
+                               timing: timing)
+        }
     }
 
     func select(_ choice: String) {
@@ -2795,7 +2812,7 @@ final class AppModel: ObservableObject {
 
     /// The characters the learner has studied so far (the active Koch ladder) —
     /// the pool a sending-practice sheet should draw from.
-    var studiedCharacters: [Character] { engine.activeCharacters }
+    var studiedCharacters: [Character] { SendingDrill.studiedCharacters(of: engine) }
 
     /// Per-character difficulty weights for a personalized sending drill: higher
     /// means "drill this more." Weak (low accuracy) and slow (high TTR relative to

@@ -255,7 +255,7 @@ private fun SetupCard(title: String, content: @Composable () -> Unit) {
 }
 
 /** What the track is doing right now, and what pinning would change (iOS parity). */
-private fun stageNote(track: ProgressiveCharacters): String {
+internal fun stageNote(track: ProgressiveCharacters): String {
     val pinned = track.pinnedStage
     if (pinned != null) {
         return "Holding at ${pinned.displayName} — the track stays here until you switch back to Auto."
