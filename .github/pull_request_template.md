@@ -15,6 +15,15 @@ touches some but not all of `ios/`, `android/` and `desktop/`.
 - [ ] **Platform limitation** — the missing platform(s) cannot do this; the exception is added to `PARITY.md` in this pull request.
 - [ ] **Platform-internal** — no user-visible behaviour changes (build, CI, lint, refactor, version bump, crash fix in platform-only code).
 
+The **Parity check** job (`python3 parity/check.py`) runs on every pull request
+that touches a tree, `fixtures/`, `parity/` or `PARITY.md`, and the merge gate
+waits for it. It fails on a mode, screen, setting, option list or README
+heading that differs between the apps without a record in
+`parity/manifest.json`. If this pull request adds or changes a feature, its
+manifest entry is part of the change (the three steps are in `CLAUDE.md`);
+there is nothing to tick.
+
+
 ## Guide
 
 The user guide at [anothermorsetrainer.app/guide](https://anothermorsetrainer.app/guide/)
