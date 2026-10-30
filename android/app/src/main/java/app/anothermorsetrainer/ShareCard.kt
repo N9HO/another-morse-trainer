@@ -18,7 +18,11 @@ import java.io.FileOutputStream
 import kotlin.math.roundToInt
 
 /**
- * Renders the Brag Sheet highlights to a shareable PNG and fires a share sheet.
+ * Renders the Brag Sheet highlights to a shareable PNG and fires a share sheet
+ * with the image alone. No [Intent.EXTRA_TEXT] rides along: Discord and similar
+ * targets post a caption as a message of its own, so the brag arrived twice
+ * (the same fix as [DailyDitShareCard], #334). The card already shows the
+ * streak, total, accuracy and URL the caption repeated.
  * Drawn with a plain [Canvas] (not an off-screen composition) so it's robust
  * across devices and Compose versions, and mirrors the iOS `BragShareCard`.
  */
@@ -99,9 +103,7 @@ object ShareCard {
         val intent = Intent(Intent.ACTION_SEND).apply {
             type = "image/png"
             putExtra(Intent.EXTRA_STREAM, uri)
-            putExtra(Intent.EXTRA_TEXT,
-                "${Stats.currentStreak}-day Morse streak — ${Stats.totalAttempts} copied at " +
-                    "${(Stats.overallAccuracy * 100).roundToInt()}%. anothermorsetrainer.app")
+            // No EXTRA_TEXT: see the class comment.
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
         context.startActivity(Intent.createChooser(intent, "Share your progress"))
