@@ -8993,6 +8993,16 @@ if let kx = loadUIContractFixture("keyer-modes.json"), let want = kx["keyerModes
 // ---------------------------------------------------------------------------
 
 func loadGapLbFixture(_ name: String) -> [String: Any]? {
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+    guard let data = try? Data(contentsOf: root.appendingPathComponent("fixtures/\(name)")),
+          let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+    return obj
+}
+
 // MARK: - Session clock fixture (parity audit row-03)
 //
 // fixtures/gap-timers-session-clock.json, consumed by this harness AND by the
@@ -9010,9 +9020,9 @@ func loadSessionClockFixture() -> SessionClockFixture? {
         .deletingLastPathComponent()
         .deletingLastPathComponent()
         .deletingLastPathComponent()
-    guard let data = try? Data(contentsOf: root.appendingPathComponent("fixtures/\(name)")),
-          let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
-    return obj
+    let url = root.appendingPathComponent("fixtures/gap-timers-session-clock.json")
+    guard let data = try? Data(contentsOf: url) else { return nil }
+    return try? JSONDecoder().decode(SessionClockFixture.self, from: data)
 }
 
 print("\nHome Daily Dit card, against fixtures/gap-lb-daily-dit-card.json:")
@@ -9089,6 +9099,8 @@ if let fx = loadGapLbFixture("gap-lb-result-line.json"), let cases = fx["cases"]
     }
 } else {
     check("fixtures/gap-lb-result-line.json loads and decodes", false)
+}
+
 // The Sending Analyzer's key merge and microphone state (parity rows 22-24),
 // against fixtures/gap-analyzer-merge.json and gap-analyzer-mic-state.json —
 // the same files the Kotlin GapAnalyzerTest reads on Android and desktop.
@@ -9148,9 +9160,6 @@ if let fx = loadGapFixtureObject("gap-analyzer-mic-state.json"),
     }
 } else {
     check("fixtures/gap-analyzer-mic-state.json loads and decodes", false)
-    let url = root.appendingPathComponent("fixtures/gap-timers-session-clock.json")
-    guard let data = try? Data(contentsOf: url) else { return nil }
-    return try? JSONDecoder().decode(SessionClockFixture.self, from: data)
 }
 
 print("\nSession clock (timer menu add / subtract), against fixtures/gap-timers-session-clock.json:")
@@ -9177,6 +9186,8 @@ if let fx = loadSessionClockFixture() {
     check("subtracting time follows the fixture (\(fx.subtract.count) cases)", subOK)
 } else {
     check("fixtures/gap-timers-session-clock.json loads and decodes", false)
+}
+
 // MARK: - Session row titles (gap copy-labels)
 //
 // fixtures/gap-docs-mode-titles.json: the title a Stats session row shows for

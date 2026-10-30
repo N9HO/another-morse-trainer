@@ -271,8 +271,8 @@
     <string name="pileup_the_pileup">THE PILEUP</string>
     <string name="pileup_callers">Max callers</string>
     <string name="pileup_callers_value">up to %1$s</string>
-    <string name="pileup_slowest_caller">Callers' min speed</string>
-    <string name="pileup_fastest_caller">Callers' max speed</string>
+    <string name="pileup_slowest_caller">Callers\' min speed</string>
+    <string name="pileup_fastest_caller">Callers\' max speed</string>
     <string name="pileup_tone_spread">Tone spread</string>
     <string name="pileup_zero_beat">Zero-beat</string>
     <string name="pileup_tone_spread_value">±%1$s Hz</string>
