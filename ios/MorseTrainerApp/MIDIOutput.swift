@@ -25,44 +25,10 @@ private let log = Logger(subsystem: "com.justinrogers.MorseTrainer", category: "
 
 public actor MIDIOutput {
     /// Keyer mode set on the adapter via Program Change. Values match the
-    /// Vail adapter firmware (see CLAUDE.md §4).
-    public enum KeyerMode: Int, CaseIterable, Sendable {
-        case passthrough = 0
-        case straightKey = 1
-        case bug = 2
-        case electricBug = 3
-        case singleDot = 4
-        case ultimatic = 5
-        case plainIambic = 6
-        case iambicA = 7
-        case iambicB = 8
-        case keyahead = 9
-
-        public var displayName: String {
-            switch self {
-            case .passthrough: "Passthrough"
-            case .straightKey: "Straight Key"
-            case .bug: "Bug"
-            case .electricBug: "Electric Bug"
-            case .singleDot: "Single Dot"
-            case .ultimatic: "Ultimatic"
-            case .plainIambic: "Plain Iambic"
-            case .iambicA: "Iambic A"
-            case .iambicB: "Iambic B"
-            case .keyahead: "Keyahead"
-            }
-        }
-
-        /// Whether the adapter times the sending itself in this mode. A
-        /// straight key and passthrough key from the contact directly; the
-        /// rest are the adapter's own keyer, sending at whatever speed the
-        /// screen pushed — the practice speed in a drill, the keyer slider on
-        /// the repeater screen. Mirrors `AdapterKeyer.adapterTimesSending` on
-        /// Android, which drives the same note under the Settings picker.
-        public var adapterTimesSending: Bool {
-            self != .straightKey && self != .passthrough
-        }
-    }
+    /// Vail adapter firmware (see CLAUDE.md §4). The list itself lives in
+    /// MorseKit (`VailKeyerMode`) so MorseKitCheck can pin it against
+    /// `fixtures/keyer-modes.json` (#348).
+    public typealias KeyerMode = VailKeyerMode
 
     /// Adapter configuration mirrored locally so it can be (re)applied whenever
     /// the adapter (re)connects.
@@ -355,4 +321,16 @@ public actor MIDIOutput {
 
 public enum MIDIOutputError: Error {
     case osStatus(String, OSStatus)
+}
+
+extension VailKeyerMode {
+    /// Whether the adapter times the sending itself in this mode. A
+    /// straight key and passthrough key from the contact directly; the
+    /// rest are the adapter's own keyer, sending at whatever speed the
+    /// screen pushed — the practice speed in a drill, the keyer slider on
+    /// the repeater screen. Mirrors `AdapterKeyer.adapterTimesSending` on
+    /// Android, which drives the same note under the Settings picker.
+    public var adapterTimesSending: Bool {
+        self != .straightKey && self != .passthrough
+    }
 }

@@ -6264,6 +6264,86 @@ if let fx = loadAsteroidsFixture() {
 // Shared leaderboard (docs/high-scores-design.md, step 2): the pure rules the
 // app applies before talking to the server, each pinned to the server's own
 // (src/modes.ts, src/grade.ts, src/names.ts in the leaderboard repository).
+// MARK: - Keyer modes and Asteroids tap hit-testing (#348, #350)
+// fixtures/keyer-modes.json and fixtures/asteroid-hit-test.json, consumed by this
+// harness AND by the Kotlin KeyerModesTest / AsteroidHitTestTest.
+
+struct KeyerModesFixture: Decodable {
+    struct Mode: Decodable { let code: Int; let name: String; let adapterTimesSending: Bool }
+    let modes: [Mode]
+}
+
+struct AsteroidHitTestFixture: Decodable {
+    struct Rock: Decodable {
+        let id: Int; let label: String; let angleOverPi: Double; let progress: Double
+        let fragment: Bool; let at: [Double]; let radiusDp: Double
+    }
+    struct Tap: Decodable { let x: Double; let y: Double; let density: Double; let expect: String; let note: String }
+    let shipReachDp: Double
+    let reachPaddingDp: Double
+    let width: Double
+    let height: Double
+    let asteroids: [Rock]
+    let taps: [Tap]
+}
+
+func loadSharedFixture<T: Decodable>(_ name: String, as type: T.Type) -> T? {
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+    guard let data = try? Data(contentsOf: root.appendingPathComponent("fixtures/\(name)")) else { return nil }
+    return try? JSONDecoder().decode(T.self, from: data)
+}
+
+print("\nKeyer modes (fixtures/keyer-modes.json):")
+if let fx = loadSharedFixture("keyer-modes.json", as: KeyerModesFixture.self) {
+    let all = VailKeyerMode.allCases
+    check("keyer modes: the list is as long as the fixture's", all.count == fx.modes.count)
+    check("keyer modes: names and codes are the fixture's, in its order",
+          all.count == fx.modes.count
+          && zip(all, fx.modes).allSatisfy { $0.displayName == $1.name && $0.rawValue == $1.code })
+    check("keyer modes: adapterTimesSending is the fixture's",
+          all.count == fx.modes.count
+          && zip(all, fx.modes).allSatisfy { ($0 != .straightKey && $0 != .passthrough) == $1.adapterTimesSending })
+} else {
+    check("keyer modes fixture loads", false)
+}
+
+print("\nAsteroids tap hit-testing (fixtures/asteroid-hit-test.json):")
+if let fx = loadSharedFixture("asteroid-hit-test.json", as: AsteroidHitTestFixture.self) {
+    check("hit-test constants are the fixture's",
+          AsteroidsHitTest.shipReachDp == fx.shipReachDp && AsteroidsHitTest.reachPaddingDp == fx.reachPaddingDp)
+    let field = fx.asteroids.map {
+        Asteroid(id: $0.id, label: $0.label, angle: $0.angleOverPi * Double.pi, progress: $0.progress,
+                 approachTime: 10, isFragment: $0.fragment)
+    }
+    check("hit-test radii are the fixture's",
+          zip(field, fx.asteroids).allSatisfy { AsteroidsHitTest.radiusDp($0) == $1.radiusDp })
+    check("hit-test asteroids sit where the fixture says",
+          zip(field, fx.asteroids).allSatisfy {
+              abs($0.x * fx.width - $1.at[0]) < 1e-6 && abs($0.y * fx.height - $1.at[1]) < 1e-6
+          })
+    func describe(_ t: AsteroidsTap) -> String {
+        switch t {
+        case .ship: return "ship"
+        case .rock(let id): return "rock:\(id)"
+        case .empty: return "none"
+        }
+    }
+    for (i, t) in fx.taps.enumerated() {
+        let got = AsteroidsHitTest.target(x: t.x, y: t.y, width: fx.width, height: fx.height,
+                                          density: t.density, field: field)
+        check("hit-test tap \(i + 1) (\(t.note)) is \(t.expect)", describe(got) == t.expect)
+    }
+    check("hit-test: an empty field has nothing to tap",
+          describe(AsteroidsHitTest.target(x: 500, y: 600, width: fx.width, height: fx.height,
+                                           density: 1, field: [])) == "none")
+} else {
+    check("asteroid hit-test fixture loads", false)
+}
+
 print("\nLeaderboard:")
 do {
     // Mode ids and the qso -> pileup mapping.
@@ -8744,10 +8824,10 @@ check("an email needs one @ and a dotted domain",
 // order, on every app. fixtures/keyer-modes.json (#348) and
 // fixtures/option-lists.json are read here, by the Kotlin
 // OptionListsFixtureTest on android and desktop, and by parity/check.py.
-// The harness can only see MorseKit; the app-target enums (the Vail adapter's
-// KeyerMode, RevealMode, PracticeDuration ...) are checked statically by
-// parity/check.py, and the keyer-mode labels are also read out of
-// MIDIOutput.swift's source text below, because that is the list #348 is about.
+// The harness can only see MorseKit; the app-target enums (
+// RevealMode, PracticeDuration ...) are checked statically by
+// parity/check.py; the Vail keyer modes live in MorseKit (VailKeyerMode, #348),
+// so their names are compared with the fixture here directly.
 print("\nOption lists (fixtures/keyer-modes.json, fixtures/option-lists.json):")
 func loadUIContractFixture(_ name: String) -> [String: Any]? {
     let root = URL(fileURLWithPath: #filePath)
@@ -8776,30 +8856,9 @@ if let fx = loadUIContractFixture("option-lists.json") {
 }
 if let kx = loadUIContractFixture("keyer-modes.json"), let want = kx["keyerModes"] as? [String] {
     check("fixtures/keyer-modes.json lists the ten Vail keyer modes", want.count == 10)
-    // MIDIOutput.KeyerMode is in the app target, out of the harness's reach:
-    // read its displayName table from the source text instead.
-    let root = URL(fileURLWithPath: #filePath)
-        .deletingLastPathComponent().deletingLastPathComponent()
-        .deletingLastPathComponent().deletingLastPathComponent()
-    if let text = try? String(contentsOf: root.appendingPathComponent("ios/MorseTrainerApp/MIDIOutput.swift"),
-                              encoding: .utf8) {
-        var labels: [String] = []
-        var inTable = false
-        for line in text.split(separator: "\n", omittingEmptySubsequences: false) {
-            let t = line.trimmingCharacters(in: .whitespaces)
-            if t.hasPrefix("public var displayName") { inTable = true; continue }
-            guard inTable else { continue }
-            if t.hasPrefix("case ."), let open = t.firstIndex(of: "\"") {
-                let rest = t[t.index(after: open)...]
-                if let close = rest.firstIndex(of: "\"") { labels.append(String(rest[..<close])) }
-            } else if t == "}" && !labels.isEmpty {
-                break
-            }
-        }
-        check("MIDIOutput.KeyerMode displayName table equals the keyer-mode fixture, in order", labels == want)
-    } else {
-        check("MIDIOutput.swift is readable for the keyer-mode check", false)
-    }
+    // VailKeyerMode lives in MorseKit (#348), so the picker's own list is visible here.
+    check("VailKeyerMode displayNames equal the keyer-mode fixture, in order",
+          VailKeyerMode.allCases.map { $0.displayName } == want)
 } else {
     check("fixtures/keyer-modes.json loads and decodes", false)
 }
