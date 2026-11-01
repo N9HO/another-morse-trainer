@@ -4,7 +4,7 @@ import MediaPlayer
 
 /// The ways to practice.
 enum TrainingMode: String, CaseIterable, Identifiable {
-    case journey, characters, words, cw77, cw77Listen, abbreviations, qCodes, prosigns, headCopy, typed, sending, confusion, listen, qso, contest, story, exam, qrq, rapidFire, invaders, galaga, defender, dungeon, frogger, asteroids
+    case journey, characters, words, cw77, cw77Listen, abbreviations, qCodes, prosigns, headCopy, typed, sending, confusion, listen, qso, contest, story, exam, qrq, rapidFire, invaders, galaga, defender, dungeon, frogger, asteroids, brassKnuckles
     var id: String { rawValue }
     var title: String {
         switch self {
@@ -33,6 +33,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .dungeon:      return "CW Dungeon"
         case .frogger:      return "CW Frogger"
         case .asteroids:    return "CW Asteroids"
+        case .brassKnuckles: return "Brass Knuckles"
         }
     }
     var icon: String {
@@ -61,6 +62,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .dungeon:       return "wand.and.stars"
         case .frogger:       return "road.lanes"
         case .asteroids:     return "scope"
+        case .brassKnuckles: return "figure.boxing"
         }
     }
     /// In meaning-based modes the question is "what are they saying?"
@@ -89,6 +91,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .dungeon:            return "Key the counter-spell"
         case .frogger:            return "Cross on the character you hear"
         case .asteroids:          return "Send the label on each asteroid"
+        case .brassKnuckles:      return "Key the tell back to dodge, then throw punches"
         }
     }
     /// A very short descriptor shown on the mode-selection tiles (intro screen).
@@ -119,6 +122,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         case .dungeon:       return "Roguelike sending"
         case .frogger:       return "Arcade crossing"
         case .asteroids:     return "Arcade sending"
+        case .brassKnuckles: return "Arcade boxing"
         }
     }
 
@@ -174,6 +178,8 @@ enum TrainingMode: String, CaseIterable, Identifiable {
             return "Hop a frog across three lanes of traffic and three of river. Every vehicle and log carries a character, and each lane is cued in Morse: only the cued vehicle is harmless and only the cued log floats. Three lives; each crossing is a wave and the traffic gets faster. Labels hide as the waves go on. Wrong lanes feed your confusion drill."
         case .asteroids:
             return "Labeled asteroids drift in toward your ship. See one and key its label to destroy it, or hear one sent and tap the asteroid carrying it. Later waves bring short words and callsigns that split into their characters when hit. Three lives; every wave comes faster. Misses feed your confusion drill."
+        case .brassKnuckles:
+            return "A boxing game that teaches Morse. Your opponent sends a character or two, the tell. Key it back before the punch lands to dodge, then every character you send is a punch: dits jab, dahs hook, a mix throws a combo. Eight fighters climb the Koch order; beat one to unlock the next. Created by Derick (KO6PBZ) for the HamCube PocketCW firmware by Kristen (K5MME), sponsored by The Brass Knuckle Gang."
         }
     }
 
@@ -237,7 +243,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
         // its setup card, so the generic duration picker would be redundant.
         // The arcade games (#170) end when the last life — or, for Defender,
         // the last asset — is lost, not on a clock.
-        case .exam, .contest, .invaders, .galaga, .defender, .dungeon, .frogger, .asteroids: return false
+        case .exam, .contest, .invaders, .galaga, .defender, .dungeon, .frogger, .asteroids, .brassKnuckles: return false
         default: return true
         }
     }
@@ -249,7 +255,7 @@ enum TrainingMode: String, CaseIterable, Identifiable {
     /// mid-session switcher groups them under the same heading.
     var isGame: Bool {
         switch self {
-        case .invaders, .galaga, .defender, .dungeon, .frogger, .asteroids: return true
+        case .invaders, .galaga, .defender, .dungeon, .frogger, .asteroids, .brassKnuckles: return true
         default: return false
         }
     }
@@ -597,6 +603,7 @@ final class AppModel: ObservableObject {
         case .dungeon:      return charLadder   // unused: CW Dungeon runs its own game loop (DungeonView)
         case .frogger:      return charLadder   // unused: Frogger runs its own game loop (FroggerView)
         case .asteroids:    return charLadder   // unused: Asteroids runs its own game loop (AsteroidsView)
+        case .brassKnuckles: return charLadder  // unused: Brass Knuckles runs its own fight loop (BoxingView)
         }
     }
 
@@ -630,6 +637,8 @@ final class AppModel: ObservableObject {
     var isFrogger: Bool { mode == .frogger }
     /// CW Asteroids (#189): the arcade sending game, run by `AsteroidsView` on its own frame clock.
     var isAsteroids: Bool { mode == .asteroids }
+    /// Brass Knuckles Knock Out: the boxing game, run by `BoxingView` on its own frame clock.
+    var isBoxing: Bool { mode == .brassKnuckles }
     /// Rapid Fire's hands-off "just listen, review the list at the end" variant,
     /// which streams items on its own loop instead of waiting for an answer.
     var isRapidFireReview: Bool { isRapidFire && settings.rapidFire.response == .review }
@@ -885,7 +894,7 @@ final class AppModel: ObservableObject {
             startStory(active: false)
             startRapidFire()
         } else if mode == .invaders || mode == .galaga || mode == .defender
-                    || mode == .dungeon || mode == .frogger || mode == .asteroids {
+                    || mode == .dungeon || mode == .frogger || mode == .asteroids || mode == .brassKnuckles {
             stopListening()
             startStory(active: false)
             // The game itself lives in its own view (InvadersView, GalagaView,
@@ -2208,7 +2217,7 @@ final class AppModel: ObservableObject {
         qsoBusy = false
         qsoActive = false
         rapidFireGeneration += 1   // cancel any pending Rapid Fire stream
-        if isRapidFire || isInvaders || isGalaga || isDefender || isDungeon || isFrogger || isAsteroids { player.stop() }
+        if isRapidFire || isInvaders || isGalaga || isDefender || isDungeon || isFrogger || isAsteroids || isBoxing { player.stop() }
         phase = .idle
         // Hand the transcript to the shared leaderboard (a background task;
         // the summary shows the verdict when it arrives).
@@ -2337,7 +2346,7 @@ final class AppModel: ObservableObject {
         case .contest: return contestScore
         case .qso: return qsoCount
         case .rapidFire: return correct
-        case .invaders, .galaga, .defender, .dungeon, .frogger, .asteroids: return sessionBestGameScore
+        case .invaders, .galaga, .defender, .dungeon, .frogger, .asteroids, .brassKnuckles: return sessionBestGameScore
         default: return nil
         }
     }
@@ -3629,6 +3638,28 @@ final class AppModel: ObservableObject {
     }
 
     func stopAsteroids() { player.stop() }
+
+    // MARK: - Brass Knuckles Knock Out
+
+    /// Sound one of the opponent's tells at `wpm` (Farnsworth-spaced to `effectiveWpm` when it is lower), at the
+    /// sidetone pitch plus the fighter's offset, and return the sound's duration so the view can date the end
+    /// of the tell. Twin of `BoxingScreen`'s `playTell` on Android.
+    @discardableResult
+    func playBoxingTell(_ text: String, wpm: Int, effectiveWpm: Int, pitchOffsetHz: Int) -> TimeInterval {
+        player.replaySound(playable: .text(text),
+                           frequency: settings.toneFrequency + Double(pitchOffsetHz),
+                           timing: MorseTiming(characterWpm: Double(wpm), effectiveWpm: Double(effectiveWpm)))
+    }
+
+    func stopBoxing() { player.stop() }
+
+    /// A finished fight, for the session record and the Stats screen: each tell is an attempt and each dodge a
+    /// correct one, and the fight's score feeds the mode's personal best. Fights read the letter statistics
+    /// and do not write them, so no per-character tally or confusion pair is touched here.
+    func noteBoxingFight(tells: Int, dodged: Int, score: Int) {
+        for i in 0..<max(tells, 0) { noteSessionResult(correct: i < dodged, ttr: 0) }
+        noteGameScore(score)
+    }
 
     /// An asteroid destroyed: every character of its label is a correct
     /// recognition with the time it took (copy mode) or 0 (send mode). The

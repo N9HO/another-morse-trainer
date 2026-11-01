@@ -2673,6 +2673,97 @@
    }
   },
   {
+   "id": "brassKnuckles",
+   "name": "Brass Knuckles Knock Out",
+   "kind": "game",
+   "status": {
+    "ios": "present",
+    "android": "present",
+    "desktop": "present"
+   },
+   "claims": {
+    "ios": {
+     "modes": [
+      "brassknuckles"
+     ],
+     "screens": [
+      "BoxingView.swift"
+     ]
+    },
+    "android": {
+     "routes": [
+      "brassknuckles"
+     ],
+     "screens": [
+      "BoxingScreen.kt"
+     ],
+     "modes": [
+      "brassknuckles"
+     ]
+    },
+    "desktop": {
+     "routes": [
+      "brassknuckles"
+     ],
+     "screens": [
+      "BoxingScreen.kt"
+     ],
+     "modes": [
+      "brassknuckles"
+     ]
+    }
+   },
+   "readme": {
+    "ios": [
+     "Brass Knuckles Knock Out"
+    ],
+    "android": [
+     "Brass Knuckles Knock Out"
+    ],
+    "desktop": [
+     "Brass Knuckles Knock Out"
+    ]
+   }
+  },
+  {
+   "id": "continueAfterMiss",
+   "name": "Continue with the key after a miss",
+   "kind": "setting",
+   "status": {
+    "ios": "present",
+    "android": "present",
+    "desktop": "present"
+   },
+   "claims": {
+    "ios": {
+     "files": [
+      "Sources/MorseKit/ContinueAfterMiss.swift"
+     ]
+    },
+    "android": {
+     "files": [
+      "morsekit/ContinueAfterMiss.kt"
+     ]
+    },
+    "desktop": {
+     "files": [
+      "morsekit/ContinueAfterMiss.kt"
+     ]
+    }
+   },
+   "readme": {
+    "ios": [
+     "Continue with the key after a miss"
+    ],
+    "android": [
+     "Continue with the key after a miss"
+    ],
+    "desktop": [
+     "Continue with the key after a miss"
+    ]
+   }
+  },
+  {
    "id": "dailyComprehension",
    "name": "The Daily DiDaaaaahDit",
    "kind": "screen",
@@ -2713,44 +2804,6 @@
     ],
     "desktop": [
      "The Daily DiDaaaaahDit"
-    ]
-   }
-  },
-  {
-   "id": "continueAfterMiss",
-   "name": "Continue with the key after a miss",
-   "kind": "setting",
-   "status": {
-    "ios": "present",
-    "android": "present",
-    "desktop": "present"
-   },
-   "claims": {
-    "ios": {
-     "files": [
-      "Sources/MorseKit/ContinueAfterMiss.swift"
-     ]
-    },
-    "android": {
-     "files": [
-      "morsekit/ContinueAfterMiss.kt"
-     ]
-    },
-    "desktop": {
-     "files": [
-      "morsekit/ContinueAfterMiss.kt"
-     ]
-    }
-   },
-   "readme": {
-    "ios": [
-     "Continue with the key after a miss"
-    ],
-    "android": [
-     "Continue with the key after a miss"
-    ],
-    "desktop": [
-     "Continue with the key after a miss"
     ]
    }
   }

@@ -59,6 +59,8 @@ struct ContentView: View {
                     FroggerView()
                 } else if model.isAsteroids {
                     AsteroidsView()
+                } else if model.isBoxing {
+                    BoxingView()
                 } else if let intro = model.introduction {
                     introductionView(intro)
                 } else {

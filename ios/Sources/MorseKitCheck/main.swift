@@ -9062,6 +9062,472 @@ check("an email needs one @ and a dotted domain",
       AccountSync.isPlausibleEmail(" learner@example.org ") && !AccountSync.isPlausibleEmail("learner@example")
         && !AccountSync.isPlausibleEmail("learner example.org") && !AccountSync.isPlausibleEmail("a@b@c.org"))
 
+// MARK: - Brass Knuckles Knock Out
+//
+// fixtures/brass-knuckles.json, consumed by this harness AND by the Kotlin
+// BrassKnucklesTest (Android and desktop). Shared data, never shared code. The
+// expected values come from the game's own reference implementation, not from
+// either port (see the fixture's comment): the ladder, speeds, punch and damage
+// tables, the xorshift generator, tells and words, the career rules, and a
+// scripted snapshot trace for each of eleven fights.
+func loadBrassKnucklesFixture() -> [String: Any]? {
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+    guard let data = try? Data(contentsOf: root.appendingPathComponent("fixtures/brass-knuckles.json")) else { return nil }
+    return (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+}
+
+func boxingSideName(_ s: BoxingSide) -> String { s.rawValue }
+
+func boxingFoeName(_ p: BoxingFoe) -> String {
+    switch p {
+    case .idle: return "Idle"
+    case .windup(let s): return "Windup(\(boxingSideName(s)))"
+    case .punch(let s): return "Punch(\(boxingSideName(s)))"
+    case .whiff(let s): return "Whiff(\(boxingSideName(s)))"
+    case .open: return "Open"
+    case .hurt(let s): return "Hurt(\(boxingSideName(s)))"
+    case .block: return "Block"
+    case .stunned: return "Stunned"
+    case .down: return "Down"
+    case .out: return "Out"
+    case .rise: return "Rise"
+    case .victory: return "Victory"
+    }
+}
+
+func boxingMeName(_ p: BoxingMe) -> String {
+    switch p {
+    case .idle: return "Idle"
+    case .dodge(let s): return "Dodge(\(boxingSideName(s)))"
+    case .jab(let s): return "Jab(\(boxingSideName(s)))"
+    case .hook(let s): return "Hook(\(boxingSideName(s)))"
+    case .combo(let n): return "Combo(\(n))"
+    case .uppercut: return "Uppercut"
+    case .blocked(let s): return "Blocked(\(boxingSideName(s)))"
+    case .miss: return "Miss"
+    case .hurt: return "Hurt"
+    case .down: return "Down"
+    case .rise: return "Rise"
+    case .victory: return "Victory"
+    }
+}
+
+func boxingPhaseName(_ p: BoxingPhase) -> String {
+    switch p {
+    case .intro: return "Intro"
+    case .roundStart: return "RoundStart"
+    case .fight: return "Fight"
+    case .foeDown: return "FoeDown"
+    case .meDown: return "MeDown"
+    case .roundEnd: return "RoundEnd"
+    case .over(let won, let how): return "Over:\(won):\(how.rawValue)"
+    }
+}
+
+func boxingCalloutName(_ c: BoxingCallout?) -> String {
+    guard let c else { return "-" }
+    switch c {
+    case .dodge: return "Dodge"
+    case .wrong(let sent): return "Wrong:\(sent)"
+    case .tooSlow: return "TooSlow"
+    case .clean: return "Clean"
+    case .star: return "Star"
+    case .uppercut: return "Uppercut"
+    case .blocked: return "Blocked"
+    case .missed: return "Missed"
+    case .down: return "Down"
+    case .up: return "Up"
+    }
+}
+
+func boxingSnapshot(_ f: BoxingFight, _ now: UInt32, _ played: String?) -> String {
+    let s = f.stats
+    let parts: [String] = [
+        boxingPhaseName(f.phase),
+        f.duelName,
+        "hp \(f.foeHp) \(f.myHp)",
+        "st \(f.stars) run \(f.cleanRun)",
+        "sc \(f.score)",
+        "rd \(f.round)",
+        "now \(now)",
+        "dl \(f.deadline.map { String($0) } ?? "-")",
+        "tell \(f.tell)",
+        "ans \(f.answer)",
+        "word \(f.word)",
+        "typed \(f.typed)",
+        "cnt \(f.count)",
+        "up \(f.getUp)",
+        "play \(played ?? "-")",
+        "stats \(s.tells),\(s.dodged),\(s.punches),\(s.clean),\(s.damage),\(s.taken),\(s.uppercuts),\(s.knockdowns),\(s.knocked)",
+        "foe \(boxingFoeName(f.foePose(now: now).0))",
+        "me \(boxingMeName(f.mePose(now: now).0))",
+        "call \(boxingCalloutName(f.callout?.0))",
+        "stop \(f.stop)",
+    ]
+    return parts.joined(separator: "|")
+}
+
+func boxingQuality(_ s: String) -> BoxingQuality {
+    switch s {
+    case "good": return .good
+    case "off": return .off
+    default: return .bad
+    }
+}
+
+/// Runs one scripted op; returns the new clock.
+@MainActor
+func boxingRun(_ f: inout BoxingFight, _ op: [String], _ nowIn: UInt32) -> UInt32 {
+    var now = nowIn
+    func n(_ i: Int) -> UInt32 { i < op.count ? UInt32(truncatingIfNeeded: Int(op[i]) ?? 0) : 0 }
+    switch op[0] {
+    case "start": if !f.start(now: now) { print("  start refused"); failures += 1 }
+    case "startFalse": if f.start(now: now) { print("  start should be refused"); failures += 1 }
+    case "advance": if let d = f.deadline { now = d; f.update(now: now) }
+    case "update": now = now &+ n(1); f.update(now: now)
+    case "tellPlayed": now = now &+ n(1); f.tellPlayed(now: now)
+    case "answer":
+        now = now &+ n(2)
+        for c in f.tell { f.key(c, quality: boxingQuality(op[1]), now: now) }
+    case "key": now = now &+ n(3); f.key(Character(op[1]), quality: boxingQuality(op[2]), now: now)
+    case "keyUnknown": now = now &+ n(1); f.keyUnknown(now: now)
+    case "getUp": now = now &+ n(2); f.key(f.getUp, quality: boxingQuality(op[1]), now: now)
+    case "star": now = now &+ n(1); f.star(now: now)
+    case "word":
+        now = now &+ n(2)
+        for c in f.word { f.key(c, quality: boxingQuality(op[1]), now: now) }
+    case "pause": now = now &+ n(1); f.pause(now: now)
+    case "resume": now = now &+ n(1); f.resume(now: now)
+    case "setFoeHp": f.foeHp = Int(n(1))
+    case "setMyHp": f.myHp = Int(n(1))
+    case "setStars": f.stars = Int(n(1))
+    case "wait": now = now &+ n(1)
+    default: print("  unknown op \(op[0])"); failures += 1
+    }
+    return now
+}
+
+print("\nBrass Knuckles Knock Out (fixtures/brass-knuckles.json):")
+if let bk = loadBrassKnucklesFixture() {
+    // The ladder.
+    var ladderOK = true
+    if let rows = bk["ladder"] as? [[Any]], rows.count == BoxingRules.fighters {
+        for (i, r) in rows.enumerated() {
+            let f = BoxingRules.ladder[i]
+            let got: [Any] = [f.name, f.from, f.blurb, f.koch, f.speedBump, f.spacingPct, f.hint, f.noise, f.fading,
+                              f.maxTell, f.hp, f.power, f.reactMs, f.restLeastMs, f.restExtraMs, f.openMs, f.pitchOffsetHz, f.fist]
+            if r.count != got.count { ladderOK = false; continue }
+            for (a, b) in zip(r, got) {
+                if let sa = a as? String, let sb = b as? String { if sa != sb { ladderOK = false } }
+                else if let ba = a as? Bool, let bb = b as? Bool { if ba != bb { ladderOK = false } }
+                else if let ia = a as? Int, let ib = b as? Int { if ia != ib { ladderOK = false } }
+                else { ladderOK = false }
+            }
+        }
+    } else { ladderOK = false }
+    check("the eight fighters are the fixture's", ladderOK)
+
+    var speedsOK = true
+    for row in (bk["speeds"] as? [[Int]]) ?? [] {
+        let (w, e) = BoxingRules.ladder[row[0]].speeds(baseWpm: row[1], farnsworth: row[2])
+        if w != row[3] || e != row[4] { speedsOK = false }
+    }
+    check("tell speeds are the fixture's", speedsOK && !((bk["speeds"] as? [[Int]]) ?? []).isEmpty)
+
+    var charsOK = true
+    var order = ""
+    let charRows = (bk["characters"] as? [[Any]]) ?? []
+    for r in charRows {
+        guard let cs = r[0] as? String, let c = cs.first, let kind = r[1] as? String,
+              let units = r[2] as? Int, let g = r[3] as? Int, let o = r[4] as? Int, let b = r[5] as? Int else { charsOK = false; continue }
+        order.append(c)
+        let got: String
+        switch BoxingRules.punchOf(c) {
+        case .jab: got = "jab"
+        case .hook: got = "hook"
+        case .combo(let n): got = "combo\(n)"
+        case nil: got = "none"
+        }
+        if got != kind || BoxingRules.units(c) != units || BoxingRules.damage(c, .good) != g
+            || BoxingRules.damage(c, .off) != o || BoxingRules.damage(c, .bad) != b { charsOK = false }
+    }
+    check("punches, damage and dot units of the 41 characters are the fixture's",
+          charsOK && charRows.count == 41 && order == String(BoxingRules.koch))
+    check("a character with no code throws nothing",
+          BoxingRules.punchOf("#") == nil && BoxingRules.damage("#", .good) == 0)
+    var allChars = ""
+    for (i, f) in BoxingRules.ladder.enumerated() { allChars += String(f.newChars(index: i)) }
+    check("the ladder adds Koch characters in order", allChars == String(BoxingRules.koch))
+
+    // The generator, tells and words.
+    if let rng = bk["rng"] as? [String: Any] {
+        var a = BoxingRng(seed: 1)
+        check("the generator follows the fixture (seed 1)", (rng["seed1Below100"] as? [Int]) == (0..<16).map { _ in Int(a.below(100)) })
+        var b = BoxingRng(seed: 0xDEADBEEF)
+        check("the generator follows the fixture (seed DEADBEEF)",
+              (rng["seedDEADBEEFBelow1000"] as? [Int]) == (0..<16).map { _ in Int(b.below(1000)) })
+        var c = BoxingRng(seed: 1)
+        check("US calls follow the fixture", (rng["usCallsSeed1"] as? [String]) == (0..<24).map { c.usCall(digit: $0 % 10) })
+    } else { check("the generator section loads", false) }
+
+    var tellsOK = true
+    let tw = (bk["tellsAndWords"] as? [[String: Any]]) ?? []
+    for row in tw {
+        guard let k = row["fighter"] as? Int, let tells = row["tells"] as? [String], let words = row["words"] as? [String] else { tellsOK = false; continue }
+        var f = BoxingFight(fighter: k, seed: 12345, hints: true, myDitMs: 60, callsign: "K5MME")
+        if tells != (0..<12).map({ _ in f.pickTell() }) { tellsOK = false }
+        var g = BoxingFight(fighter: k, seed: 777, hints: true, myDitMs: 60, callsign: "K5MME")
+        if words != (0..<10).map({ _ in g.pickWord() }) { tellsOK = false }
+    }
+    check("tells and uppercut words are the fixture's", tellsOK && tw.count == BoxingRules.fighters)
+
+    // Career.
+    var careerOK = true
+    var career = BoxingCareer()
+    for row in (bk["career"] as? [[Any]]) ?? [] {
+        guard let fi = row[0] as? Int, let won = row[1] as? Bool, let sc = row[2] as? Int, let opens = row[3] as? Bool,
+              let unlocked = row[4] as? Int, let best = row[5] as? Int, let wins = row[6] as? Int else { careerOK = false; continue }
+        let o = career.finished(fighter: fi, won: won, score: sc)
+        if o != opens || career.unlocked != unlocked || career.bestScore(fi) != best || career.wins[fi] != wins { careerOK = false }
+    }
+    var champ = BoxingCareer(unlocked: BoxingRules.fighters)
+    let champOpens = champ.finished(fighter: BoxingRules.fighters - 1, won: true, score: 10)
+    check("the career opens fighters as the fixture says", careerOK && !career.champion && !champOpens && champ.champion)
+
+    var stats = BoxingStats()
+    stats.count("K", right: true); stats.count("K", right: true); stats.count("M", right: false)
+    stats.count("R", right: true); stats.count("R", right: false)
+    let want = (bk["worst"] as? [[Any]]) ?? []
+    let got = stats.worst()
+    var worstOK = want.count == got.count
+    if worstOK {
+        for (w, g) in zip(want, got) {
+            if (w[0] as? String) != String(g.0) || (w[1] as? Int) != g.1 || (w[2] as? Int) != g.2 { worstOK = false }
+        }
+    }
+    check("the worst characters come first", worstOK)
+
+    // The scripted fights.
+    let fights = (bk["fights"] as? [[String: Any]]) ?? []
+    check("the fixture has its scripted fights", fights.count >= 10)
+    for fx in fights {
+        let name = fx["name"] as? String ?? "?"
+        guard let fighter = fx["fighter"] as? Int, let seed = fx["seed"] as? Int, let hints = fx["hints"] as? Bool,
+              let dit = fx["ditMs"] as? Int, let call = fx["callsign"] as? String,
+              let ops = fx["ops"] as? [[String]], let expect = fx["expect"] as? [String], ops.count == expect.count else {
+            check("fight \(name) is well formed", false); continue
+        }
+        var f = BoxingFight(fighter: fighter, seed: UInt32(seed), hints: hints, myDitMs: dit, callsign: call)
+        var now: UInt32 = 1000
+        var firstBad: String?
+        for (i, op) in ops.enumerated() {
+            now = boxingRun(&f, op, now)
+            let played = f.takePlay()
+            var line = boxingSnapshot(f, now, played)
+            var copies: [String] = []
+            f.takeCopies { sent, copied in copies.append("\(sent)\(copied.map { String($0) } ?? "_")") }
+            line += "|copies \(copies.joined(separator: ","))"
+            if line != expect[i] && firstBad == nil {
+                firstBad = "step \(i) \(op)\n      want \(expect[i])\n      got  \(line)"
+            }
+        }
+        check("fight \(name) plays out as the fixture says", firstBad == nil)
+        if let bad = firstBad { print("    \(bad)") }
+    }
+} else {
+    check("fixtures/brass-knuckles.json loads", false)
+}
+
+// MARK: - Brass Knuckles Knock Out: the keying judge
+//
+// fixtures/brass-knuckles-keying.json, read here and by the Kotlin BrassKnucklesTest (Android
+// and desktop). Derived by hand from the game's timing rules, not from either port.
+print("\nBrass Knuckles Knock Out keying judge (fixtures/brass-knuckles-keying.json):")
+@MainActor
+func checkBrassKnucklesKeying() {
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent()
+        .deletingLastPathComponent().deletingLastPathComponent()
+    guard let data = try? Data(contentsOf: root.appendingPathComponent("fixtures/brass-knuckles-keying.json")),
+          let fx = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+          let table = fx["quality"] as? [[Any]], let cases = fx["keying"] as? [[String: Any]] else {
+        check("fixtures/brass-knuckles-keying.json loads", false)
+        return
+    }
+    func quality(_ s: String) -> BoxingQuality { s == "good" ? .good : s == "off" ? .off : .bad }
+    var bad: [String] = []
+    for row in table {
+        let kind: BoxingKind
+        switch row[0] as? String ?? "" {
+        case "dit": kind = .dit
+        case "dah": kind = .dah
+        case "elementGap": kind = .elementGap
+        case "charGap": kind = .charGap
+        default: kind = .wordGap
+        }
+        let units = (row[1] as? NSNumber)?.doubleValue ?? -1
+        if BoxingTiming.quality(kind, units) != quality(row[2] as? String ?? "") { bad.append("\(row[0]) \(units)") }
+    }
+    check("timing quality matches the fixture (\(table.count) rows)", bad.isEmpty)
+    if !bad.isEmpty { print("    differs: \(bad)") }
+    var firstBad: String?
+    for c in cases {
+        let name = c["name"] as? String ?? "?"
+        let dit = (c["dit"] as? NSNumber)?.intValue ?? 60
+        let ops = c["ops"] as? [[Any]] ?? []
+        let want = c["expect"] as? [String] ?? []
+        var k = BoxingKeying()
+        for (n, op) in ops.enumerated() {
+            let at = UInt32(bitPattern: Int32(truncatingIfNeeded: (op[1] as? NSNumber)?.intValue ?? 0))
+            let got: BoxingJudged?
+            switch op[0] as? String ?? "" {
+            case "down": got = k.edge(down: true, atMs: at, ditMs: dit)
+            case "up": got = k.edge(down: false, atMs: at, ditMs: dit)
+            default: got = k.poll(nowMs: at, ditMs: dit)
+            }
+            var text = ""
+            if let g = got {
+                let q = g.quality == .good ? "good" : g.quality == .off ? "off" : "bad"
+                text = "\(g.char.map { String($0) } ?? "?"):\(q)"
+            }
+            if n >= want.count || text != want[n], firstBad == nil {
+                firstBad = "\(name), step \(n): want \(n < want.count ? want[n] : "-") got \(text)"
+            }
+        }
+    }
+    check("keying is judged as the fixture says (\(cases.count) cases)", firstBad == nil)
+    if let b = firstBad { print("    \(b)") }
+}
+checkBrassKnucklesKeying()
+
+// MARK: - Brass Knuckles Knock Out: the ring renderer
+//
+// BkRing (Sources/MorseKit/BrassKnucklesRing.swift) is the pixel renderer under the fight screen.
+// There is nothing to compare its pixels with except the other ports, so this checks what must hold
+// for any pixels: buffer sizes, the art tables, the colour maths, the banner width maths, and that
+// every pose on every stage draws without trapping.
+print("\nBrass Knuckles Knock Out ring renderer:")
+@MainActor
+func checkBrassKnucklesRing() {
+    let problems = BkRing.artProblems()
+    check("every sprite is w*h digits and every table lines up (\(problems.count) problems)", problems.isEmpty)
+    for p in problems.prefix(5) { print("    \(p)") }
+
+    check("the art is 160 x 120 and the screen is double that",
+          BkRing.artW == 160 && BkRing.artH == 120 && BkRing.screenW == 320 && BkRing.screenH == 240)
+    check("there are four stages with names", BkRing.stages.count == 4 && BkRing.stages.allSatisfy { !$0.name.isEmpty })
+
+    // Colour: RGB565 rounding, opaque, and mixing that hits both ends.
+    check("white and black survive the RGB565 rounding", BkRing.rgb(0xFFFFFF) == 0xFFFFFFFF && BkRing.rgb(0x000000) == 0xFF000000)
+    check("0x1A1426 rounds to 0xFF181421", BkRing.rgb(0x1A1426) == 0xFF181421)
+    let ca = BkRing.rgb(0xD83A3A), cb = BkRing.rgb(0x3A5AD8)
+    check("mix at 0% and 100% gives the ends", BkRing.mix(ca, cb, 0) == ca && BkRing.mix(ca, cb, 100) == cb)
+    check("mix keeps the colour opaque", BkRing.mix(ca, cb, 37) >> 24 == 0xFF)
+
+    // Banners.
+    let edge = BkRing.rgb(0x3A0A0C)
+    let round = BkRing.Banner("ROUND 3", color: BkRing.rgb(0xE8B020), y: 36, px: 3, edge: edge)
+    let gang = BkRing.Banner("GANG", color: BkRing.rgb(0xFFE030), y: 77, px: 2, edge: edge)
+    check("a banner is six blocks a letter less the gap (ROUND 3 at 3 px = 123, GANG at 2 px = 46)",
+          round.width == 7 * 6 * 3 - 3 && round.width == 123 && gang.width == 4 * 6 * 2 - 2 && gang.width == 46)
+
+    // The ring: every pose, on every stage, at several moments, with and without a banner.
+    var foes: [BoxingFoe] = [.idle, .open, .block, .stunned, .down, .out, .rise, .victory]
+    for s in [BoxingSide.left, .right] { foes += [.windup(s), .punch(s), .whiff(s), .hurt(s)] }
+    var mes: [BoxingMe] = [.idle, .uppercut, .miss, .hurt, .down, .rise, .victory]
+    for s in [BoxingSide.left, .right] { mes += [.dodge(s), .jab(s), .hook(s), .blocked(s)] }
+    for n in 1...4 { mes.append(.combo(n)) }
+    let nows: [UInt32] = [0, 1000, 0xFFFF_FF00]
+    let ages: [UInt32] = [0, 60, 130, 250, 450, 900, 5000]
+    var sizesOK = true
+    var drawn = 0
+    for stage in 0..<BkRing.stages.count {
+        for fighter in 0..<BoxingRules.fighters {
+            for (i, foe) in foes.enumerated() {
+                let me = mes[i % mes.count]
+                for now in nows {
+                    let age = ages[(i + fighter) % ages.count]
+                    let banner: BkRing.Banner? = (i + stage) % 3 == 0 ? round : nil
+                    let buf = BkRing.ring(fighter: fighter, foe: (foe, now &- age), me: (me, now &- age),
+                                          hurting: i % 2 == 0, now: now, stage: stage, banner: banner)
+                    if buf.count != BkRing.artW * BkRing.artH { sizesOK = false }
+                    if buf.contains(where: { $0 >> 24 != 0xFF }) { sizesOK = false }
+                    drawn += 1
+                }
+            }
+        }
+    }
+    check("ring() draws every foe pose against every stage and fighter, 160 x 120 and opaque (\(drawn) frames)", sizesOK && drawn > 0)
+    var posesOK = true
+    for me in mes {
+        for foe in foes {
+            let buf = BkRing.ring(fighter: 7, foe: (foe, 1000), me: (me, 1000), hurting: false, now: 1050, stage: 3)
+            if buf.count != 19_200 { posesOK = false }
+        }
+    }
+    check("ring() draws every pairing of your poses and the foe's (\(mes.count) x \(foes.count))", posesOK)
+    let a = BkRing.ring(fighter: 2, foe: (.windup(.left), 1000), me: (.idle, 0), hurting: false, now: 1200, stage: 0)
+    let b = BkRing.ring(fighter: 2, foe: (.windup(.left), 1000), me: (.idle, 0), hurting: false, now: 1200, stage: 0)
+    let c = BkRing.ring(fighter: 2, foe: (.punch(.left), 1000), me: (.idle, 0), hurting: false, now: 1200, stage: 0)
+    check("ring() is deterministic and a different pose draws differently", a == b && a != c)
+    let withBanner = BkRing.ring(fighter: 2, foe: (.idle, 0), me: (.idle, 0), hurting: false, now: 500, stage: 1, banner: round)
+    let without = BkRing.ring(fighter: 2, foe: (.idle, 0), me: (.idle, 0), hurting: false, now: 500, stage: 1)
+    var boxOK = withBanner != without
+    for i in 0..<withBanner.count where withBanner[i] != without[i] {
+        let row = i / BkRing.artW
+        let col = i % BkRing.artW
+        let inside = row >= 35 && row < 60 && col >= 17 && col < 144
+        if !inside { boxOK = false }
+    }
+    check("a banner changes only pixels inside its box", boxOK)
+
+    // The splash.
+    var splashOK = true
+    for t in [0, 100, 399, 400, 650, 700, 900, 1200, 1499, 1500, 2100, 3000, 7000] {
+        if BkRing.splash(t: t, seed: 0x5BD1E995).count != BkRing.screenW * BkRing.screenH { splashOK = false }
+    }
+    check("splash() is a 320 x 240 buffer at every moment, before and after the motto", splashOK)
+    check("splash() is the same for the same seed and differs for another once the stars start",
+          BkRing.splash(t: 1000, seed: 1) == BkRing.splash(t: 1000, seed: 1)
+            && BkRing.splash(t: 1000, seed: 1) != BkRing.splash(t: 1000, seed: 2))
+    check("the motto band appears at 1.5 s", BkRing.splash(t: 1499, seed: 1)[BkRing.mottoY * BkRing.screenW + 3]
+            != BkRing.splash(t: 1500, seed: 1)[BkRing.mottoY * BkRing.screenW + 3])
+    check("slam() is true for 90 ms as each title line lands",
+          BkRing.slam(650) && BkRing.slam(739) && !BkRing.slam(740) && BkRing.slam(900) && BkRing.slam(1150)
+            && !BkRing.slam(0) && !BkRing.slam(5000))
+    check("the prompt row sits under the motto, inside the screen",
+          BkRing.promptY == BkRing.mottoY + BkRing.mottoH + 2 && BkRing.mottoY + BkRing.mottoH <= BkRing.screenH)
+
+    // Portraits.
+    var portraitsOK = true
+    var silhouetteOK = true
+    let bg = BkRing.rgb(0x120E1C)
+    let tint = BkRing.rgb(0x2A2434)
+    for f in 0..<BoxingRules.fighters {
+        for face in 0..<6 {
+            let open = BkRing.portrait(fighter: f, face: face, locked: false, bg: bg)
+            let shut = BkRing.portrait(fighter: f, face: face, locked: true, bg: bg)
+            if open.count != BkRing.portraitSize * BkRing.portraitSize || shut.count != open.count { portraitsOK = false }
+            if open == shut { silhouetteOK = false }
+            if !shut.allSatisfy({ $0 == bg || $0 == tint }) { silhouetteOK = false }
+        }
+    }
+    check("portraits are 48 x 48 for every fighter and face", portraitsOK && BkRing.portraitSize == 48)
+    check("a locked portrait is a one-colour silhouette that differs from the open one", silhouetteOK)
+
+    let doubled = BkRing.doubled(a)
+    check("doubled() turns every art pixel into a 2 x 2 block",
+          doubled.count == BkRing.screenW * BkRing.screenH
+            && doubled[0] == a[0] && doubled[1] == a[0] && doubled[BkRing.screenW] == a[0]
+            && doubled[BkRing.screenW * 5 + 7] == a[2 * BkRing.artW + 3]
+            && doubled[doubled.count - 1] == a[a.count - 1])
+}
+checkBrassKnucklesRing()
+
 // MARK: - Daily Comprehension (#353)
 //
 // fixtures/comprehension-bank.json and fixtures/comprehension-selection.json,
