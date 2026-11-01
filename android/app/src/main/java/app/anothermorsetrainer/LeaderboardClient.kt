@@ -203,6 +203,8 @@ object LeaderboardClient {
         internal val token = CompletableDeferred<String?>()
         /** Why there is no token, in the words the summary line shows. */
         internal var refusal: String? = null
+        /** True when [refusal] is the server's verdict ("not ranked"), false when the device or network got in the way ("not posted"). */
+        internal var refusedByServer = false
     }
 
     /**
@@ -222,6 +224,7 @@ object LeaderboardClient {
         // A run with no usable name is refused locally; no point minting a token.
         if (Leaderboard.normalizeDisplayName(Settings.leaderboardName) == null) {
             handle.refusal = appContext.getString(R.string.leaderboard_reason_no_name)
+            handle.refusedByServer = false
             handle.token.complete(null)
             return handle
         }
@@ -245,15 +248,15 @@ object LeaderboardClient {
                 if (reply.code == 200 && token != null) {
                     handle.token.complete(token)
                 } else {
-                    handle.refusal = appContext.getString(
-                        R.string.leaderboard_reason_not_registered,
-                        reply.body?.optString("reason")?.takeIf { it.isNotEmpty() } ?: "HTTP ${reply.code}"
-                    )
+                    // The server's verdict on this run (iOS: a `.server` error, "not ranked").
+                    handle.refusal = reply.reason
+                    handle.refusedByServer = true
                     handle.token.complete(null)
                 }
             } catch (e: Exception) {
                 Log.d(TAG, "run/start failed: ${e.message}")
-                handle.refusal = appContext.getString(R.string.leaderboard_reason_not_registered, describe(e))
+                handle.refusal = describe(e)
+                handle.refusedByServer = false
                 handle.token.complete(null)
             }
         }
@@ -262,9 +265,11 @@ object LeaderboardClient {
 
     /**
      * Submit a finished run's transcript and report the outcome to
-     * [onResult] on the main thread: the `Leaderboard: #rank · metric` line,
-     * a one-line reason it was refused, or null when there is nothing to say
-     * (an empty transcript). Fire and forget: the summary shows the line when
+     * [onResult] on the main thread: the `Leaderboard: #rank · metric` line
+     * with its personal-best detail, "not ranked" with the server's reason, or
+     * "not posted" with why the device or network could not (the iOS card's
+     * words, [Leaderboard.resultLine]); null when there is nothing to say (an
+     * empty transcript). Fire and forget: the summary shows the line when
      * it arrives, and nothing waits on it.
      */
     fun submit(handle: RunHandle, transcript: List<LeaderboardItem>, onResult: (String?) -> Unit) {
@@ -274,7 +279,7 @@ object LeaderboardClient {
                 submitNow(handle, transcript)
             } catch (e: Exception) {
                 Log.d(TAG, "run/submit failed: ${e.message}")
-                refused(describe(e))
+                unavailable(describe(e))
             }
             onResult(line)
         }
@@ -284,9 +289,10 @@ object LeaderboardClient {
         // The start may still be in flight if the run was short; give it the
         // time its own timeouts allow, then give up on the token.
         val runToken = withTimeoutOrNull(START_GRACE_MS) { handle.token.await() }
-            ?: return refused(handle.refusal ?: appContext.getString(R.string.leaderboard_reason_network))
+            ?: return if (handle.refusal != null && handle.refusedByServer) refused(handle.refusal!!)
+            else unavailable(handle.refusal ?: appContext.getString(R.string.leaderboard_reason_network))
         val name = Leaderboard.normalizeDisplayName(Settings.leaderboardName)
-            ?: return refused(appContext.getString(R.string.leaderboard_reason_no_name))
+            ?: return unavailable(appContext.getString(R.string.leaderboard_reason_no_name))
         val body = JSONObject()
             .put("runToken", runToken)
             .put("displayName", name)
@@ -295,16 +301,21 @@ object LeaderboardClient {
         val reply = postJson("/v1/run/submit", body)
         val b = reply.body
         if (reply.code == 200 && b != null && b.optBoolean("accepted", false)) {
-            return appContext.getString(
-                R.string.leaderboard_result,
-                b.optInt("rank", 0),
-                b.optDouble("metric", 0.0).toLong()
+            return Leaderboard.resultLine(
+                "posted",
+                rank = b.optInt("rank", 0),
+                metric = b.optDouble("metric", 0.0),
+                correct = b.optInt("correct", 0),
+                total = b.optInt("total", 0),
+                personalBest = b.optBoolean("personalBest", false)
             )
         }
-        return refused(b?.optString("reason")?.takeIf { it.isNotEmpty() } ?: "HTTP ${reply.code}")
+        return refused(reply.reason)
     }
 
-    private fun refused(reason: String): String = appContext.getString(R.string.leaderboard_refused, reason)
+    private fun refused(reason: String): String = Leaderboard.resultLine("refused", reason = reason)
+
+    private fun unavailable(reason: String): String = Leaderboard.resultLine("unavailable", reason = reason)
 
     /** One row of a board, as `GET /v1/board/{mode}` returns it. */
     data class BoardRow(val rank: Int, val displayName: String, val metric: Long, val platform: String, val date: String)
@@ -340,7 +351,7 @@ object LeaderboardClient {
                     BoardRow(
                         rank = o.getInt("rank"),
                         displayName = o.getString("displayName"),
-                        metric = o.getDouble("metric").toLong(),
+                        metric = Leaderboard.roundedMetric(o.getDouble("metric")),
                         platform = o.optString("platform", ""),
                         date = o.optString("date", "")
                     )

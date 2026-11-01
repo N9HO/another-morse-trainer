@@ -1,0 +1,26 @@
+{
+  "$comment": "Shared 'studied characters' fixture (row-15), consumed by BOTH Kotlin trees (android and desktop StudiedCharactersTest) and the iOS MorseKitCheck harness. Data, not code - see CLAUDE.md's separate-ports rule. Expected strings are written out by hand from the Koch ladder spec in fixtures/ladder.json, not captured from either implementation.",
+  "derivation": {
+    "kochOrder": "KMRSUAPTLOWINJEF0YVG5Q9ZH38B?427C1D6X (fixtures/ladder.json)",
+    "studied": "The characters the learner has actually been taught: the Koch ACTIVE SET, in active-set order. A character with recorded stats that is not in the active set has NOT been studied (the old Android/desktop rule counted it).",
+    "seed": "proficiency none: first 2 of kochOrder (KM). someLetters: the first 13 letters of kochOrder (KMRSUAPTLOWIN). allLetters: every letter of kochOrder, in kochOrder order. allLettersAndNumbers: all of kochOrder.",
+    "unlock": "Each unlock appends the first studyOrder character that is not yet active (studyOrder = kochOrder, then the opted-in punctuation).",
+    "optIn": "Opted-in punctuation is added to the active set at once, appended in pickable order (fixtures/ladder.json optIn).",
+    "optOut": "An opted-out mark leaves the active set; its stats are kept, but it is not studied.",
+    "statsOnly": "Characters given recorded attempts while not in the active set (added then removed, or not yet reached). They never appear in the studied set."
+  },
+  "cases": [
+    { "name": "beginner, nothing unlocked yet", "proficiency": "none", "unlocks": 0, "selectedPunctuation": "", "optedOut": "", "statsOnly": "", "studied": "KM" },
+    { "name": "beginner, three unlocks", "proficiency": "none", "unlocks": 3, "selectedPunctuation": "", "optedOut": "", "statsOnly": "", "studied": "KMRSU" },
+    { "name": "beginner with stats on characters not yet reached", "proficiency": "none", "unlocks": 0, "selectedPunctuation": "", "optedOut": "", "statsOnly": "Z9E", "studied": "KM" },
+    { "name": "some letters, nothing unlocked", "proficiency": "someLetters", "unlocks": 0, "selectedPunctuation": "", "optedOut": "", "statsOnly": "", "studied": "KMRSUAPTLOWIN" },
+    { "name": "some letters, two unlocks", "proficiency": "someLetters", "unlocks": 2, "selectedPunctuation": "", "optedOut": "", "statsOnly": "", "studied": "KMRSUAPTLOWINJE" },
+    { "name": "some letters with stats on a later letter", "proficiency": "someLetters", "unlocks": 0, "selectedPunctuation": "", "optedOut": "", "statsOnly": "X", "studied": "KMRSUAPTLOWIN" },
+    { "name": "all letters", "proficiency": "allLetters", "unlocks": 0, "selectedPunctuation": "", "optedOut": "", "statsOnly": "", "studied": "KMRSUAPTLOWINJEFYVGQZHBCDX" },
+    { "name": "all letters, two unlocks reach the digits", "proficiency": "allLetters", "unlocks": 2, "selectedPunctuation": "", "optedOut": "", "statsOnly": "", "studied": "KMRSUAPTLOWINJEFYVGQZHBCDX05" },
+    { "name": "all letters and numbers", "proficiency": "allLettersAndNumbers", "unlocks": 0, "selectedPunctuation": "", "optedOut": "", "statsOnly": "", "studied": "KMRSUAPTLOWINJEF0YVG5Q9ZH38B?427C1D6X" },
+    { "name": "beginner opts in to the period: it is active at once", "proficiency": "none", "unlocks": 0, "selectedPunctuation": ".", "optedOut": "", "statsOnly": "", "studied": "KM." },
+    { "name": "some letters opts in to all three marks", "proficiency": "someLetters", "unlocks": 0, "selectedPunctuation": ".,/", "optedOut": "", "statsOnly": "", "studied": "KMRSUAPTLOWIN.,/" },
+    { "name": "opted in then out of the period: gone from the set, stats kept", "proficiency": "someLetters", "unlocks": 0, "selectedPunctuation": ".,", "optedOut": ".", "statsOnly": "", "studied": "KMRSUAPTLOWIN," }
+  ]
+}

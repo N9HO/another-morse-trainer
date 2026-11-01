@@ -1,0 +1,28 @@
+{
+  "$comment": "Shared session-clock fixture (parity audit row-03), consumed by the iOS MorseKitCheck harness, android SessionClockTest and desktop SessionClockTest. Data, not code - see CLAUDE.md's separate-ports rule. Expected values are derived from the rules in `derivation` (the iOS timer menu's documented behaviour, issue #41), not captured from any implementation.",
+  "derivation": {
+    "remaining": "seconds left on the session countdown, or null for an open-ended session; 0 means the clock has run out and the session ends",
+    "add": "the timer menu's 'Add 5 minutes' / 'Add 1 minute': on a timed session the seconds are added to what is left; on an open-ended one they start a countdown of exactly that many seconds; a seconds value of zero or less changes nothing",
+    "subtract": "the timer menu's 'Subtract 1 minute', offered only while the session is timed: what is left drops by the seconds, never below 0, and reaching 0 ends the session; an open-ended session has nothing to subtract from and stays open-ended; a seconds value of zero or less changes nothing",
+    "remove": "'Remove time limit' makes any session open-ended (remaining becomes null)",
+    "note": "Derived from these rules directly, independently of any implementation."
+  },
+  "add": [
+    { "remaining": null, "seconds": 300, "expected": 300 },
+    { "remaining": null, "seconds": 60, "expected": 60 },
+    { "remaining": 120, "seconds": 300, "expected": 420 },
+    { "remaining": 59, "seconds": 60, "expected": 119 },
+    { "remaining": 120, "seconds": 0, "expected": 120 },
+    { "remaining": null, "seconds": 0, "expected": null },
+    { "remaining": 120, "seconds": -60, "expected": 120 }
+  ],
+  "subtract": [
+    { "remaining": 300, "seconds": 60, "expected": 240 },
+    { "remaining": 61, "seconds": 60, "expected": 1 },
+    { "remaining": 60, "seconds": 60, "expected": 0 },
+    { "remaining": 30, "seconds": 60, "expected": 0 },
+    { "remaining": null, "seconds": 60, "expected": null },
+    { "remaining": 120, "seconds": 0, "expected": 120 },
+    { "remaining": 120, "seconds": -60, "expected": 120 }
+  ]
+}

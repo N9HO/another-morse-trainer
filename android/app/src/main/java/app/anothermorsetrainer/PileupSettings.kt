@@ -8,6 +8,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.content.edit
+import app.anothermorsetrainer.morsekit.InputRules
 import app.anothermorsetrainer.morsekit.BustBehavior
 import app.anothermorsetrainer.morsekit.CallsignFormat
 import app.anothermorsetrainer.morsekit.CutNumbers
@@ -38,7 +39,7 @@ object PileupSettings {
     private lateinit var prefs: SharedPreferences
 
     /** The station keyed when no call has been entered — the iOS default. */
-    const val DEFAULT_CALL = "W1AW"
+    const val DEFAULT_CALL = InputRules.CALLSIGN_PLACEHOLDER
 
     /** Slowest and fastest a simulated caller may send. The top matches the
      *  global character-speed ceiling so QRQ practice carries into a pileup
@@ -112,18 +113,18 @@ object PileupSettings {
 
     fun init(context: Context) {
         prefs = context.applicationContext.getSharedPreferences("amt_pileup", Context.MODE_PRIVATE)
-        myCall = prefs.getString("myCall", DEFAULT_CALL) ?: DEFAULT_CALL
+        myCall = InputRules.storedCallsign(prefs.getString("myCall", DEFAULT_CALL) ?: DEFAULT_CALL)
         myName = prefs.getString("myName", "") ?: ""
         myState = prefs.getString("myState", "") ?: ""
         mode = QSOContestMode.allCases.firstOrNull { it.code == prefs.getString("mode", null) }
             ?: QSOContestMode.Pota
         maxStations = prefs.getInt("maxStations", 4).coerceIn(1, 8)
-        minWpm = prefs.getFloat("minWpm", 18f).toDouble().coerceIn(MIN_CALLER_WPM, MAX_CALLER_WPM)
-        maxWpm = prefs.getFloat("maxWpm", 28f).toDouble().coerceIn(minWpm, MAX_CALLER_WPM)
+        minWpm = InputRules.clampCallerWpm(prefs.getFloat("minWpm", 18f).toDouble())
+        maxWpm = InputRules.clampCallerWpm(prefs.getFloat("maxWpm", 28f).toDouble())
         callerFarnsworth = prefs.getBoolean("farnsworth", false)
-        toneSpread = prefs.getFloat("toneSpread", 250f).toDouble().coerceIn(0.0, MAX_TONE_SPREAD)
-        minDelay = prefs.getFloat("minDelay", 0.2f).toDouble().coerceIn(0.0, MAX_MIN_DELAY)
-        maxDelay = prefs.getFloat("maxDelay", 1.5f).toDouble().coerceIn(minDelay, MAX_MAX_DELAY)
+        toneSpread = InputRules.clampToneSpread(prefs.getFloat("toneSpread", 250f).toDouble())
+        minDelay = InputRules.clampMinWait(prefs.getFloat("minDelay", 0.2f).toDouble())
+        maxDelay = InputRules.clampMaxWait(prefs.getFloat("maxDelay", 1.5f).toDouble())
         qsbEnabled = prefs.getBoolean("qsb", false)
         // The pre-iOS-parity presets were Off/Light/Medium/Heavy at
         // 0/0.04/0.09/0.16; an install still on one of the renamed names lands
@@ -155,7 +156,9 @@ object PileupSettings {
     }
 
     fun updateMyCall(value: String) {
-        myCall = value.uppercase().filter { it.isLetterOrDigit() || it == '/' }.take(12)
+        // The validated form everywhere: upper case, A-Z 0-9 and "/", 12
+        // characters, a blank result stored as the W1AW placeholder.
+        myCall = InputRules.storedCallsign(value)
         persist()
     }
 
@@ -173,32 +176,33 @@ object PileupSettings {
 
     fun updateMaxStations(value: Int) { maxStations = value.coerceIn(1, 8); persist() }
 
-    /** Speed band edges keep min ≤ max by dragging the other edge along. */
+    /**
+     * The four speed and wait edges are independent settings, as on iOS:
+     * moving one never drags another along. The engine reads the speed pair in
+     * sorted order and collapses the wait window onto min wait when min is
+     * above max ([InputRules.effectiveSpeedRange], [InputRules.effectiveWaitRange]).
+     */
     fun updateMinWpm(value: Double) {
-        minWpm = value.coerceIn(MIN_CALLER_WPM, MAX_CALLER_WPM)
-        if (maxWpm < minWpm) maxWpm = minWpm
+        minWpm = InputRules.clampCallerWpm(value)
         persist()
     }
 
     fun updateMaxWpm(value: Double) {
-        maxWpm = value.coerceIn(MIN_CALLER_WPM, MAX_CALLER_WPM)
-        if (minWpm > maxWpm) minWpm = maxWpm
+        maxWpm = InputRules.clampCallerWpm(value)
         persist()
     }
 
     fun updateCallerFarnsworth(value: Boolean) { callerFarnsworth = value; persist() }
-    fun updateToneSpread(value: Double) { toneSpread = value.coerceIn(0.0, MAX_TONE_SPREAD); persist() }
+    fun updateToneSpread(value: Double) { toneSpread = InputRules.clampToneSpread(value); persist() }
 
-    /** Reply-delay edges keep min ≤ max by dragging the other edge along, like the speed band. */
+    /** Reply-delay edges are independent too, like the speed band. */
     fun updateMinDelay(value: Double) {
-        minDelay = value.coerceIn(0.0, MAX_MIN_DELAY)
-        if (maxDelay < minDelay) maxDelay = minDelay
+        minDelay = InputRules.clampMinWait(value)
         persist()
     }
 
     fun updateMaxDelay(value: Double) {
-        maxDelay = value.coerceIn(0.0, MAX_MAX_DELAY)
-        if (minDelay > maxDelay) minDelay = maxDelay
+        maxDelay = InputRules.clampMaxWait(value)
         persist()
     }
 

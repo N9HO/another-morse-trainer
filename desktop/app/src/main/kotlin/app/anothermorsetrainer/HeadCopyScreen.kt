@@ -1,5 +1,6 @@
 package app.anothermorsetrainer
 
+import app.anothermorsetrainer.morsekit.SessionClock
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
@@ -295,6 +296,7 @@ fun HeadCopyScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
                     SessionTimerMenu(
                         remaining = remaining,
                         onAddSeconds = { remaining = (remaining ?: 0) + it },
+                        onSubtractSeconds = { remaining = SessionClock.reduced(remaining, it) },
                         onRemoveLimit = { remaining = null }
                     )
                     SessionSettingsButton { showSettings = true }
@@ -434,7 +436,7 @@ fun HeadCopyScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
         }
 
         if (showSettings) {
-            SessionSettingsOverlay(scope = SettingsMode.HEAD_COPY, onClose = { showSettings = false })
+            SessionSettingsOverlay(scope = SettingsMode.HEAD_COPY, onClose = { showSettings = false }, previewItem = { drill.playable })
         }
     }
 }

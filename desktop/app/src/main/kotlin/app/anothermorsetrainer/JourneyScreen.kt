@@ -67,8 +67,11 @@ import app.anothermorsetrainer.morsekit.JourneyLevel
 import app.anothermorsetrainer.morsekit.JourneyProgress
 import app.anothermorsetrainer.morsekit.JourneyQuiz
 import app.anothermorsetrainer.morsekit.JourneyScoring
+import app.anothermorsetrainer.morsekit.SessionClock
 import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
+
+private enum class JyPhase { RUNNING, SUMMARY }
 
 private val OK_GREEN = Color(0xFF2E7D32)
 private val ERR_RED = Color(0xFFC62828)
@@ -105,6 +108,23 @@ fun JourneyScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
     }
 
     var showMap by remember { mutableStateOf(false) }
+
+    // Session length (iOS usesSessionLength): the countdown the Session Length
+    // picker set, the timer menu adjusts, and expiry turns into the summary.
+    // Declared above the map so the clock keeps running while the map is up.
+    var phase by rememberSaveable { mutableStateOf(JyPhase.RUNNING) }
+    var remaining by rememberSaveable(stateSaver = OptionalIntSaver) {
+        mutableStateOf<Int?>(Settings.practiceDuration.seconds)
+    }
+    LaunchedEffect(phase, remaining == null) {
+        if (phase != JyPhase.RUNNING) return@LaunchedEffect
+        while (true) {
+            val r = remaining ?: return@LaunchedEffect
+            if (r <= 0) return@LaunchedEffect
+            delay(1000)
+            remaining = remaining?.minus(1)
+        }
+    }
 
     if (showMap) {
         BackHandler { showMap = false }
@@ -144,7 +164,9 @@ fun JourneyScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
 
     // Saved with the instance state, so a process reclaimed mid-session still
     // records what it had on the way out; the level itself is in JourneyStore.
-    val tally = rememberSaveable(saver = TallySaver) { Tally() }
+    var tally by rememberSaveable(stateSaver = TallySaver) { mutableStateOf(Tally()) }
+    var recorded by rememberSaveable { mutableStateOf(false) }
+    var milestone by remember { mutableStateOf<Int?>(null) }
     val animatedBar by animateFloatAsState(targetValue = barProgress, label = "journeyBar")
 
     LaunchedEffect(round) {
@@ -175,21 +197,27 @@ fun JourneyScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
                 // #77) — and after a beat repeats what was sent, so you
                 // re-hear the sound you got wrong while the answer shows.
                 delay(450)
-                player.replaySound(drill.playable, Settings.sidetoneHz, Settings.timing())
+                if (phase == JyPhase.RUNNING) player.replaySound(drill.playable, Settings.sidetoneHz, Settings.timing())
                 return@LaunchedEffect
             }
             delay(1100)
-            advanceNow()
+            if (phase == JyPhase.RUNNING) advanceNow()
         }
     }
 
     DisposableEffect(Unit) { onDispose { player.release() } }
 
-    /** Close the session out — save the level, record the tally — without leaving. */
-    fun close() {
+    /**
+     * Close the session out — save the level, record the tally — without
+     * leaving. Once per session: the summary's entry or an early Back, whichever
+     * comes first.
+     */
+    fun close(): Int? {
+        if (recorded) return null
+        recorded = true
         progress.currentLevel = quiz.levelNumber
         JourneyStore.save(progress)
-        Stats.record(
+        return Stats.record(
             mode = "Journey", attempts = tally.attempts, correct = tally.correct,
             bestTtrMs = tally.bestMs, durationSeconds = tally.elapsedSeconds(),
             characterWpm = Settings.characterWpm.roundToInt(), medianTtrMs = tally.medianMs(),
@@ -197,15 +225,39 @@ fun JourneyScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
         )
     }
 
+    /** The timer ran out or End was tapped: record the session and show the summary. */
+    fun endSession() {
+        if (phase == JyPhase.SUMMARY) return
+        player.stop()
+        milestone = close()
+        phase = JyPhase.SUMMARY
+    }
+
     fun finish() {
         close()
         onBack()
     }
 
-    BackHandler { finish() }
+    /** Start a fresh session from the summary screen. */
+    fun practiceAgain() {
+        tally = Tally()
+        recorded = false
+        milestone = null
+        remaining = Settings.practiceDuration.seconds
+        phase = JyPhase.RUNNING
+        advanceNow()
+    }
+
+    // The countdown reached zero (or the menu subtracted the last minute).
+    LaunchedEffect(phase, remaining) {
+        val r = remaining
+        if (phase == JyPhase.RUNNING && r != null && r <= 0) endSession()
+    }
+
+    BackHandler { if (phase == JyPhase.SUMMARY) onBack() else finish() }
 
     fun answer(choice: String) {
-        if (revealed) return
+        if (revealed || phase != JyPhase.RUNNING) return
         val ttr = if (toneFinishedAt == 0L) 0.0 else (System.nanoTime() - toneFinishedAt) / 1_000_000_000.0
         lastTtr = ttr
         chosen = choice
@@ -247,7 +299,7 @@ fun JourneyScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
     var keyed by remember { mutableStateOf("") }
     LaunchedEffect(round) { keyed = "" }
     fun keyedText(chunk: String) {
-        if (revealed) { keyed = ""; return }
+        if (revealed || phase != JyPhase.RUNNING) { keyed = ""; return }
         keyed = appendKeyed(keyed, chunk)
         val sent = keyed.trim()
         if (drill.isKeyable) {
@@ -263,7 +315,7 @@ fun JourneyScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
     fun keyedPause() {
         val sent = keyed.trim()
         keyed = ""
-        if (revealed || !drill.isKeyable || sent.isEmpty()) return
+        if (revealed || phase != JyPhase.RUNNING || !drill.isKeyable || sent.isEmpty()) return
         answer(sent)
     }
     HardwareKeyInput(onText = { keyedText(it) }, onPause = { keyedPause() })
@@ -277,7 +329,7 @@ fun JourneyScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
     val hwFocus = remember { FocusRequester() }
     fun handleHardwareKey(event: androidx.compose.ui.input.key.KeyEvent): Boolean {
         if (event.type != KeyEventType.KeyDown) return false
-        if (showMap || showSettings) return false
+        if (showMap || showSettings || phase != JyPhase.RUNNING) return false
         if (revealed) {
             // Enter leaves the held correction (issue #77).
             if ((event.key == Key.Enter || event.key == Key.NumPadEnter) && lastCorrect == false) {
@@ -319,18 +371,41 @@ fun JourneyScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
         ) {
             TextButton(onClick = { finish() }) { Text(stringResource(R.string.common_back), color = Brand.teal) }
             Row(verticalAlignment = Alignment.CenterVertically) {
-                SessionSettingsButton { showSettings = true }
+                if (phase == JyPhase.RUNNING) SessionSettingsButton { showSettings = true }
                 SwitchModeButton(TrainingMode.JOURNEY) { mode ->
                     player.stop()
                     close()
                     onSwitchMode(mode)
                 }
-                OutlinedButton(onClick = { player.stop(); showMap = true }) {
-                    Icon(Icons.Filled.Map, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text(stringResource(R.string.journey_map_button))
+                if (phase == JyPhase.RUNNING) {
+                    OutlinedButton(onClick = { player.stop(); showMap = true }) {
+                        Icon(Icons.Filled.Map, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text(stringResource(R.string.journey_map_button))
+                    }
                 }
             }
+        }
+
+        if (phase == JyPhase.SUMMARY) {
+            SessionSummaryContent(
+                title = stringResource(R.string.mode_journey),
+                tally = tally,
+                milestone = milestone,
+                onPracticeAgain = { practiceAgain() },
+                onDone = onBack
+            )
+            return@Column
+        }
+
+        // The iOS session bar: the countdown (a menu) and End.
+        SessionTimerBar(
+            remaining = remaining,
+            onAddSeconds = { remaining = (remaining ?: 0) + it },
+            onSubtractSeconds = { remaining = SessionClock.reduced(remaining, it) },
+            onRemoveLimit = { remaining = null }
+        ) {
+            TextButton(onClick = { endSession() }) { Text(stringResource(R.string.common_end)) }
         }
 
         Column(
@@ -427,7 +502,7 @@ fun JourneyScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
     }
 
     if (showSettings) {
-        SessionSettingsOverlay(scope = SettingsMode.JOURNEY, onClose = { showSettings = false })
+        SessionSettingsOverlay(scope = SettingsMode.JOURNEY, onClose = { showSettings = false }, previewItem = { drill.playable })
     }
     }
 }

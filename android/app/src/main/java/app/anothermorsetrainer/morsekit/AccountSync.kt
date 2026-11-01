@@ -139,7 +139,7 @@ object SyncWire {
 
 /**
  * Canonical mode ids (the iOS `TrainingMode` raw values) for the mode strings
- * this port passes to `Stats.record`. All 25, both ways; pinned by the
+ * this port passes to `Stats.record`. All 26, both ways; pinned by the
  * fixture's `modeIds.kotlin`. Not [Leaderboard.modeIds], which names the
  * leaderboard Worker's own ids (Pileup is `pileup` there, `qso` here).
  */
@@ -169,7 +169,8 @@ object SyncModes {
         "Morse Defender" to "defender",
         "CW Dungeon" to "dungeon",
         "CW Frogger" to "frogger",
-        "CW Asteroids" to "asteroids"
+        "CW Asteroids" to "asteroids",
+        "Brass Knuckles" to "brassKnuckles"
     )
 
     private val localModes: Map<String, String> = wireIds.entries.associate { (k, v) -> v to k }
