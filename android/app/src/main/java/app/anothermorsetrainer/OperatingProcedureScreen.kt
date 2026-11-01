@@ -186,6 +186,7 @@ fun OperatingProcedureScreen(onBack: () -> Unit, onOpenFirstFour: () -> Unit) {
                 when {
                     lesson != null -> opLessonTitle(lesson)
                     screenTag == OP_SCENARIOS -> stringResource(R.string.op_scenarios_title)
+                    screenTag == OP_HUNT -> stringResource(R.string.hunt_title)
                     else -> stringResource(R.string.op_title)
                 },
                 style = MaterialTheme.typography.titleMedium,
@@ -199,7 +200,7 @@ fun OperatingProcedureScreen(onBack: () -> Unit, onOpenFirstFour: () -> Unit) {
 
         // The wide column is for the two-column lesson list and a lesson's
         // two columns; the station card and the scenario mode stay phone-width.
-        val roomy = wide && !showingStation && screenTag != OP_SCENARIOS
+        val roomy = wide && !showingStation && screenTag != OP_SCENARIOS && screenTag != OP_HUNT
         CenteredScrollColumn(
             contentModifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 32.dp),
             maxWidth = if (roomy) WIDE_CONTENT_MAX_WIDTH else CONTENT_MAX_WIDTH,
@@ -211,6 +212,11 @@ fun OperatingProcedureScreen(onBack: () -> Unit, onOpenFirstFour: () -> Unit) {
                     call = call,
                     state = state,
                     audio = audio,
+                    onOpenLesson = { open(opLessonTag(it)) }
+                )
+                screenTag == OP_HUNT -> HuntSimPage(
+                    call = call,
+                    state = state,
                     onOpenLesson = { open(opLessonTag(it)) }
                 )
                 lesson != null -> key(lesson) {
@@ -249,6 +255,7 @@ internal const val OP_YOUTUBE_URL = "https://www.youtube.com/@WB0RLJ"
 // The open level, as a saveable string.
 private const val OP_HOME = "home"
 private const val OP_SCENARIOS = "scenarios"
+private const val OP_HUNT = "hunt"
 private const val OP_LESSON_PREFIX = "lesson:"
 
 private fun opLessonTag(lesson: OpLesson): String = OP_LESSON_PREFIX + lesson.raw
@@ -513,6 +520,7 @@ private fun OpHome(
     }
 
     OpScenarioModeRow { onOpen(OP_SCENARIOS) }
+    OpHuntRow { onOpen(OP_HUNT) }
 
     Text(
         stringResource(R.string.op_speed_note, Settings.characterWpm.roundToInt()),
@@ -610,6 +618,33 @@ private fun OpLessonRow(number: Int, lesson: OpLesson, passed: Boolean, modifier
         Column(modifier = Modifier.weight(1f)) {
             Text(title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = Brand.textPrimary)
             Text(opLessonSubtitle(lesson), style = MaterialTheme.typography.labelSmall, color = Brand.textSecondary)
+        }
+        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = Brand.textSecondary)
+    }
+}
+
+@Composable
+private fun OpHuntRow(onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(Brand.navyElevated)
+            .border(1.dp, Brand.tealBright.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Icon(Icons.Filled.SettingsInputAntenna, contentDescription = null, tint = Brand.teal)
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                stringResource(R.string.hunt_row_title),
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = Brand.textPrimary
+            )
+            Text(stringResource(R.string.hunt_row_sub), style = MaterialTheme.typography.labelSmall, color = Brand.textSecondary)
         }
         Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = Brand.textSecondary)
     }
@@ -1411,7 +1446,7 @@ private fun opRigTable(): List<OpRig> = listOf(
 )
 
 @Composable
-private fun opLessonTitle(lesson: OpLesson): String = stringResource(
+internal fun opLessonTitle(lesson: OpLesson): String = stringResource(
     when (lesson) {
         OpLesson.SIGNALS -> R.string.op_lesson_signals
         OpLesson.WHEN -> R.string.op_lesson_when
