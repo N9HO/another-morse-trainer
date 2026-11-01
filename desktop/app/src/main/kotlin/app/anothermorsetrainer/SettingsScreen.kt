@@ -1023,6 +1023,10 @@ fun SettingsScreen(
                         stringResource(R.string.licenses_cw_decoder_mit),
                         color = Brand.textSecondary, fontSize = 12.sp, fontFamily = FontFamily.Monospace
                     )
+                    Text(stringResource(R.string.licenses_brass_title), color = Brand.textPrimary, fontWeight = FontWeight.SemiBold)
+                    Text(stringResource(R.string.licenses_brass_notice), color = Brand.textSecondary, fontSize = 13.sp)
+                    Text(stringResource(R.string.licenses_b612_title), color = Brand.textPrimary, fontWeight = FontWeight.SemiBold)
+                    Text(stringResource(R.string.licenses_b612_notice), color = Brand.textSecondary, fontSize = 13.sp)
                     // Desktop: no Play Integrity (it is not in the desktop build).
                     // OkHttp is, for the public leaderboard, news and repeater
                     // calls (CLAUDE.md, Licensing: a dependency with a notice
