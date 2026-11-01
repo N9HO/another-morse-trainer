@@ -16,7 +16,7 @@ struct OperatingProcedureView: View {
     @Environment(\.wideLayout) private var wide
 
     private enum Screen: Hashable {
-        case home, lesson(OpLesson), scenarios
+        case home, lesson(OpLesson), scenarios, hunt
     }
 
     @State private var progress = OperatingProcedureStore.load()
@@ -51,6 +51,8 @@ struct OperatingProcedureView: View {
                                 .id(lesson)
                         case .scenarios:
                             OpScenarioMode(call: call, state: state, onOpenLesson: { open(.lesson($0)) })
+                        case .hunt:
+                            HuntSimView(call: call, state: state, onOpenLesson: { open(.lesson($0)) })
                         }
                     }
                 }
@@ -111,6 +113,7 @@ struct OperatingProcedureView: View {
         case .home: return "Operating Procedure"
         case .lesson(let l): return OpCopy.title(l)
         case .scenarios: return "What should you do?"
+        case .hunt: return "Hunt simulator"
         }
     }
 
@@ -236,6 +239,8 @@ struct OperatingProcedureView: View {
 
             scenarioModeRow
 
+            huntRow
+
             Text("Everything plays at your own speed (\(Int(model.settings.wpm)) WPM) and tone — change them in Settings. Any lesson can be opened at any time.")
                 .font(.caption)
                 .foregroundStyle(Theme.textSecondary)
@@ -321,6 +326,34 @@ struct OperatingProcedureView: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Lesson \(number), \(OpCopy.title(lesson))\(passed ? ", passed" : "")")
+    }
+
+    /// The hunt simulator (#313): a full pileup, keyed by you.
+    private var huntRow: some View {
+        Button {
+            Haptics.selection()
+            open(.hunt)
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "antenna.radiowaves.left.and.right")
+                    .font(.title3)
+                    .foregroundStyle(Theme.teal)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Hunt simulator").font(.subheadline.weight(.semibold))
+                    Text("Call into a simulated POTA pileup and key it yourself · graded on procedure")
+                        .font(.caption).foregroundStyle(Theme.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer()
+                Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(Theme.textSecondary)
+            }
+            .foregroundStyle(.white)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .background(Theme.navyElevated, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Theme.tealBright.opacity(0.5), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
     }
 
     private var scenarioModeRow: some View {

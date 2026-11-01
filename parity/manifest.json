@@ -2673,6 +2673,88 @@
    }
   },
   {
+   "id": "huntSimulator",
+   "name": "POTA hunt simulator",
+   "kind": "screen",
+   "status": {
+    "ios": "present",
+    "android": "present",
+    "desktop": "present"
+   },
+   "claims": {
+    "ios": {
+     "screens": [
+      "HuntSimView.swift"
+     ]
+    },
+    "android": {
+     "screens": [
+      "HuntSimScreen.kt"
+     ]
+    },
+    "desktop": {
+     "screens": [
+      "HuntSimScreen.kt"
+     ]
+    }
+   },
+   "readme": {
+    "ios": [
+     "Operating Procedure"
+    ],
+    "android": [
+     "Operating Procedure"
+    ],
+    "desktop": [
+     "Operating Procedure"
+    ]
+   }
+  },
+  {
+   "id": "dailyComprehension",
+   "name": "The Daily DiDaaaaahDit",
+   "kind": "screen",
+   "status": {
+    "ios": "present",
+    "android": "present",
+    "desktop": "present"
+   },
+   "claims": {
+    "ios": {
+     "screens": [
+      "DailyComprehensionView.swift"
+     ]
+    },
+    "android": {
+     "routes": [
+      "dailycomprehension"
+     ],
+     "screens": [
+      "DailyComprehensionScreen.kt"
+     ]
+    },
+    "desktop": {
+     "routes": [
+      "dailycomprehension"
+     ],
+     "screens": [
+      "DailyComprehensionScreen.kt"
+     ]
+    }
+   },
+   "readme": {
+    "ios": [
+     "The Daily DiDaaaaahDit"
+    ],
+    "android": [
+     "The Daily DiDaaaaahDit"
+    ],
+    "desktop": [
+     "The Daily DiDaaaaahDit"
+    ]
+   }
+  },
+  {
    "id": "brassKnuckles",
    "name": "Brass Knuckles Knock Out",
    "kind": "game",
@@ -2760,50 +2842,6 @@
     ],
     "desktop": [
      "Continue with the key after a miss"
-    ]
-   }
-  },
-  {
-   "id": "dailyComprehension",
-   "name": "The Daily DiDaaaaahDit",
-   "kind": "screen",
-   "status": {
-    "ios": "present",
-    "android": "present",
-    "desktop": "present"
-   },
-   "claims": {
-    "ios": {
-     "screens": [
-      "DailyComprehensionView.swift"
-     ]
-    },
-    "android": {
-     "routes": [
-      "dailycomprehension"
-     ],
-     "screens": [
-      "DailyComprehensionScreen.kt"
-     ]
-    },
-    "desktop": {
-     "routes": [
-      "dailycomprehension"
-     ],
-     "screens": [
-      "DailyComprehensionScreen.kt"
-     ]
-    }
-   },
-   "readme": {
-    "ios": [
-     "The Daily DiDaaaaahDit"
-    ],
-    "android": [
-     "The Daily DiDaaaaahDit"
-    ],
-    "desktop": [
-     "The Daily DiDaaaaahDit"
     ]
    }
   }
