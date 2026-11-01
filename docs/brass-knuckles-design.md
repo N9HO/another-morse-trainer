@@ -181,8 +181,8 @@ new code. The on-screen number is the original's fight score.
    access to it, or the maintainer makes that change, before step 1 ships.
 
 So the app work can land with local bests and no board, and the board follows
-when the server is ready. The Leaderboard screen lists nine ranked modes
-today; this makes ten.
+when the server is ready. The Leaderboard screen listed nine ranked modes;
+Brass Knuckles Knock Out is the tenth (shipped: see below).
 
 ## Parity
 
@@ -235,7 +235,10 @@ hear any of the apps, so:
    (Android and desktop tests have been run, the Swift harness has not: see the PR.)
 3. Android screen, then iOS, then desktop, each reusing its app's keying path.
 4. Title splash, credits, Licenses entries, README and `PARITY.md` rows.
-5. Leaderboard registration once the server repo is ready.
+5. **Done:** leaderboard registration. The server accepts `brassKnuckles`
+   as a ramping mode; every app sends one item per tell (`sent` = the tell,
+   `answered` = what was keyed back or "", `reactionMs` from the end of the
+   tell's audio, `wpm` = the fighter's tell speed). Punches are not items.
 
 Each step is a separate commit; the whole thing is one feature in one pull
 request, or three if the reviewer prefers them split per app with paired
@@ -250,7 +253,7 @@ issues, as `CLAUDE.md` allows.
 - **Timing feel.** The original was tuned for the device's keyer. Re-using
   AMT's keyer keeps the app consistent but may change difficulty; the
   fixtures pin the arithmetic, not the feel. Plan for a tuning pass.
-- **Leaderboard grading** is unscoped until the server side is seen.
+- **Leaderboard grading** is the server README's `brassKnuckles` row (one item per tell).
 - **Frame rate on desktop under Xvfb** is untested; screenshot tests will
   need a deterministic seed and tick.
 

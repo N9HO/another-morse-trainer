@@ -227,7 +227,7 @@ paddles.
   by 5-WPM speed band, a shareable Brag Sheet, and personal bests including
   your best score in each arcade game, Contest, Pileup Runner and Rapid Fire
 - **Leaderboard**: the shared board for Rapid Fire, Contest, Pileup Runner
-  and the six arcade games, browsable per mode from the Games sub-menu and
+  and the seven arcade games (Brass Knuckles Knock Out included), browsable per mode from the Games sub-menu and
   from Progress. Desktop runs are **not ranked**: posting needs a device
   attestation (App Attest, Play Integrity) that Windows and Linux cannot
   give, so the screens say "Not ranked" where a phone would post
