@@ -87,23 +87,76 @@ object Leaderboard {
     fun isRamping(modeId: String): Boolean = modeId in rampingModes
 
     /**
-     * The display-name rule, mirroring `src/names.ts` so the Settings field
-     * can say no before the server does: trimmed, upper-cased, runs of
-     * whitespace collapsed, 2 to 12 characters, a letter or digit first, then
-     * letters, digits, space, `/` and `-`. Returns the normalised name, or
-     * null when it is not allowed. The server's short deny list is its own
-     * business; the client does not duplicate it.
+     * The display-name rule, mirroring `src/names.ts` and iOS's
+     * `LeaderboardDisplayName` so the Settings field can say no before the
+     * server does: trimmed, upper-cased, runs of whitespace collapsed, 2 to 12
+     * characters, a letter or digit first, then letters, digits, space, `/`
+     * and `-`, and none of the server's short deny list. Returns the
+     * normalised name, or null when it is not allowed; [displayNameProblem]
+     * says why.
      */
     fun normalizeDisplayName(raw: String): String? {
-        val name = raw.trim().uppercase().replace(Regex("\\s+"), " ")
-        if (name.length < 2 || name.length > 12) return null
-        if (!DISPLAY_NAME.matches(name)) return null
-        return name
+        if (displayNameProblem(raw) != null) return null
+        return raw.trim().uppercase().replace(Regex("\\s+"), " ")
     }
 
-    fun isValidDisplayName(raw: String): Boolean = normalizeDisplayName(raw) != null
+    fun isValidDisplayName(raw: String): Boolean = displayNameProblem(raw) == null
 
     private val DISPLAY_NAME = Regex("^[A-Z0-9][A-Z0-9 /-]{1,11}$")
+
+    /** The display-name messages, word for word the iOS `LeaderboardDisplayName.problem` ones. */
+    const val NAME_LENGTH_PROBLEM = "Display name must be 2 to 12 characters"
+    const val NAME_CHARACTERS_PROBLEM = "Display name may use letters, digits, space, / and -"
+    const val NAME_DENIED_PROBLEM = "Display name not allowed"
+
+    /** The server's short deny list (`src/names.ts`), matched against the name's letters with everything else squashed out. */
+    private val NAME_DENY = listOf("FUCK", "SHIT", "CUNT", "NIGG", "FAG", "KIKE", "SPIC", "RAPE", "NAZI", "HITLER")
+
+    /**
+     * Why [raw] would be refused, or null when it is acceptable (gap row-09,
+     * pinned by `fixtures/gap-lb-display-name.json`). Checked in the iOS
+     * order: length, then characters, then the deny list.
+     */
+    fun displayNameProblem(raw: String): String? {
+        val name = raw.trim().uppercase().replace(Regex("\\s+"), " ")
+        if (name.length < 2 || name.length > 12) return NAME_LENGTH_PROBLEM
+        if (!DISPLAY_NAME.matches(name)) return NAME_CHARACTERS_PROBLEM
+        val letters = name.filter { it in 'A'..'Z' }
+        if (NAME_DENY.any { letters.contains(it) }) return NAME_DENIED_PROBLEM
+        return null
+    }
+
+    /**
+     * The metric as a board shows it (gap row-08): a whole number, rounded to
+     * nearest, so 339.6 reads 340 (iOS `Int(metric.rounded())`).
+     */
+    fun metricLabel(metric: Double): String = Math.round(metric).toString()
+
+    /** The metric as a whole number, rounded like [metricLabel]. */
+    fun roundedMetric(metric: Double): Long = Math.round(metric)
+
+    /**
+     * Whether Settings shows the display-name field and "Delete my scores"
+     * (gap row-06). Always: iOS shows both with Share scores off, because the
+     * name is also what buddy pairing shares and scores posted earlier can
+     * still be deleted after sharing is switched off.
+     */
+    @Suppress("UNUSED_PARAMETER")
+    fun showsNameAndDeleteRows(sharing: Boolean): Boolean = true
+
+    /**
+     * The post-run line (gap row-07, pinned by
+     * `fixtures/gap-lb-result-line.json`), as the iOS summary card words it:
+     * a headline, then a detail line.
+     */
+    fun resultLine(kind: String, rank: Int = 0, metric: Double = 0.0, correct: Int = 0, total: Int = 0,
+                   personalBest: Boolean = false, reason: String = ""): String = when (kind) {
+        "pending" -> "Leaderboard: posting…"
+        "posted" -> "Leaderboard: #$rank · ${metricLabel(metric)}\n" +
+            (if (personalBest) "New personal best · " else "") + "$correct/$total graded correct"
+        "refused" -> "Leaderboard: not ranked\n$reason"
+        else -> "Leaderboard: not posted\n$reason"
+    }
 
     /**
      * The Play Integrity request hash: base64url, no padding, of the SHA-256

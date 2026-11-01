@@ -168,15 +168,13 @@ fun SendingDrillScreen(onBack: () -> Unit) {
 }
 
 /**
- * The characters the learner has studied — the declared Koch seed plus anything
- * with recorded recognition data. (iOS reads the live engine's active ladder;
- * Android's engines are per-session, so the persisted stats stand in.)
+ * The characters the learner has studied: the Koch active set from the saved
+ * progress snapshot, as iOS reads the live engine's `activeCharacters`. Not the
+ * seed plus every character that merely has stats (see
+ * [SendingDrill.studiedCharacters]).
  */
-internal fun studiedCharacters(): List<Char> {
-    val seed = Settings.seedCharacters()
-    val drilled = Stats.charStats.keys.mapNotNull { it.firstOrNull() }
-    return (seed + drilled).distinct()
-}
+internal fun studiedCharacters(): List<Char> =
+    SendingDrill.studiedCharacters(EngineStore.snapshot().engine)
 
 /**
  * Per-character difficulty weights for a personalized sheet: higher means

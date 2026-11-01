@@ -435,6 +435,25 @@ public extension DailyDit {
         wpm == wpm.rounded() ? String(Int(wpm)) : String(format: "%.1f", wpm)
     }
 
+    /// The Home card's subtitle (gap row-25), pinned by
+    /// `fixtures/gap-lb-daily-dit-card.json`. A solved game with no speed on
+    /// record drops "at <wpm> WPM" rather than printing a blank one.
+    static func homeSubtitle(outcome: DailyDitOutcome, puzzleNumber: Int, solvedWpm: Double?,
+                             guessesUsed: Int, listens: Int) -> String {
+        let counts = count(guessesUsed, "guess", "guesses")
+            + " · " + count(listens, "listen", "listens")
+        switch outcome {
+        case .solved:
+            let at = solvedWpm.map { "at \(format(wpm: $0)) WPM · " } ?? ""
+            return "#\(puzzleNumber) copied \(at)\(counts)"
+        case .playing where guessesUsed > 0 || listens > 0:
+            // A listen starts the day as much as a guess does (#168).
+            return "#\(puzzleNumber) · \(counts) so far"
+        case .playing:
+            return "Today's word in Morse — your speed, up to \(Int(startingSpeeds.max() ?? 75)) WPM"
+        }
+    }
+
     /// "1 guess", "2 guesses" — the share text is English on both ports, by fixture.
     static func count(_ n: Int, _ singular: String, _ plural: String) -> String {
         "\(n) \(n == 1 ? singular : plural)"

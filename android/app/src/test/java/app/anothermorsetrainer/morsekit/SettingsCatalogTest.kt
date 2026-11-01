@@ -44,7 +44,27 @@ class SettingsCatalogTest {
             val entry = byId[id]
             assertNotNull("shared setting $id is missing from the Android catalog", entry)
             assertEquals("category of $id", row.getString("category"), entry!!.category.id)
+            assertEquals("title of $id", row.getString("title"), entry.title)
+            assertEquals("section of $id", fold(row.getString("section")), fold(entry.section.name))
         }
+    }
+
+    /** A section's name folded to lowercase letters and digits: NEW_CHARACTERS and newCharacters agree. */
+    private fun fold(name: String): String = name.lowercase().filter { it.isLetterOrDigit() }
+
+    @Test
+    fun sectionsMatchTheFixtureInOrder() {
+        val rows = fixture.getJSONArray("sections")
+        val expected = (0 until rows.length()).map { rows.getJSONObject(it).let { r -> r.getString("id") to r.getString("category") } }
+        assertEquals(expected.map { fold(it.first) to it.second }, SettingsSection.entries.map { fold(it.name) to it.category.id })
+    }
+
+    @Test
+    fun sharedSettingsAreInTheFixturesOrder() {
+        // Reveal after Show right / wrong, Devices before Delete account: one order on every app.
+        val rows = fixture.getJSONArray("entries")
+        val shared = (0 until rows.length()).map { rows.getJSONObject(it).getString("id") }
+        assertEquals(shared, SettingsCatalog.entries.map { it.id }.filter { it in shared })
     }
 
     @Test

@@ -40,6 +40,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -70,6 +71,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.content.edit
 import app.anothermorsetrainer.morsekit.CallsignFormat
 import app.anothermorsetrainer.morsekit.CallsignGenerator
+import app.anothermorsetrainer.morsekit.KeyMerge
 import app.anothermorsetrainer.morsekit.KeyingRecorder
 import app.anothermorsetrainer.morsekit.MorseCode
 import app.anothermorsetrainer.morsekit.MorseData
@@ -135,6 +137,13 @@ enum class MicSensitivity(val id: String, val snr: Double) {
 class SendingAnalyzerController(private val context: Context) {
     enum class Phase { SETUP, SENDING, RESULTS }
 
+    /**
+     * The places a key edge can come from. Every one feeds the same logical key
+     * ([keyMerge], row-23 of the parity audit): it is down while any is held
+     * and up only when the last is released, as the iOS `SendingKeyer` does.
+     */
+    enum class KeySource { SCREEN, PADDLES, MIDI }
+
     private val prefs = SendingStore.prefs(context)
 
     var phase by mutableStateOf(Phase.SETUP)
@@ -183,6 +192,7 @@ class SendingAnalyzerController(private val context: Context) {
     val mic = SendingMicInput()
     val sidetone = SidetoneGenerator(Settings.sidetoneHz)
     private val recorder = KeyingRecorder()
+    private val keyMerge = KeyMerge<KeySource>()
     private var finishJob: Job? = null
     var scope: CoroutineScope? = null
 
@@ -229,12 +239,21 @@ class SendingAnalyzerController(private val context: Context) {
     fun applyInput() {
         when (input) {
             AnalyzerInput.KEY -> { mic.stop(); sidetone.start() }
-            AnalyzerInput.MICROPHONE -> { sidetone.stop(); mic.start(context, sensitivity.snr) }
+            // The key is closed while the microphone is the input (iOS
+            // `SendingKeyer.stop`): nothing held stays held, the sidetone is
+            // silent, and the screen closes the hardware key (see [SendingAnalyzerScreen]).
+            AnalyzerInput.MICROPHONE -> { releaseKeys(); sidetone.stop(); mic.start(context, sensitivity.snr) }
         }
+    }
+
+    private fun releaseKeys() {
+        keyMerge.releaseAll()
+        sidetone.setKeyDown(false)
     }
 
     fun stopAll() {
         finishJob?.cancel()
+        releaseKeys()
         sidetone.stop()
         mic.stop()
     }
@@ -284,10 +303,20 @@ class SendingAnalyzerController(private val context: Context) {
         if (input == AnalyzerInput.MICROPHONE && !mic.isListening) applyInput()
     }
 
-    /** On-screen or MIDI key edge, in [System.nanoTime] terms. */
-    fun keyEdgeNanos(down: Boolean, atNanos: Long) {
+    /** An on-screen or MIDI key edge, in [System.nanoTime] terms. */
+    fun keyEdgeNanos(source: KeySource, down: Boolean, atNanos: Long) {
+        sourceEdge(source, down, atNanos / 1_000_000.0)
+    }
+
+    /**
+     * One source went down or up: merge it into the one logical key, sound the
+     * sidetone from the merged state, and record only a change of that state.
+     */
+    private fun sourceEdge(source: KeySource, down: Boolean, atMs: Double) {
         if (input != AnalyzerInput.KEY) return
-        keyEdge(down, atNanos / 1_000_000.0)
+        val edge = keyMerge.update(source, down) ?: return
+        sidetone.setKeyDown(edge)
+        keyEdge(edge, atMs)
     }
 
     /**
@@ -300,9 +329,8 @@ class SendingAnalyzerController(private val context: Context) {
     fun paddleEdge(down: Boolean, atWallMs: Long) {
         if (input != AnalyzerInput.KEY) return
         if (phase == Phase.SENDING) onScreenPaddlesUsed = true
-        sidetone.setKeyDown(down)
         val offsetMs = System.nanoTime() / 1_000_000.0 - System.currentTimeMillis()
-        keyEdge(down, atWallMs + offsetMs)
+        sourceEdge(KeySource.PADDLES, down, atWallMs + offsetMs)
     }
 
     /** One edge from any input. */
@@ -404,14 +432,28 @@ fun SendingAnalyzerScreen(onBack: () -> Unit) {
         } else {
             controller.applyInput()
         }
-        midi.start(
-            onKey = { down -> if (controller.input == AnalyzerInput.KEY) controller.sidetone.setKeyDown(down) },
-            onConnected = { name -> midiDevice = name },
-            onKeyTimed = { down, nanos -> controller.keyEdgeNanos(down, nanos) }
-        )
         onDispose {
             midi.stop()
             controller.stopAll()
+        }
+    }
+    // The hardware key is open only while the key is the input; with the
+    // microphone as the input it is closed (iOS `inputChanged` stops the keyer),
+    // so a paddle touched meanwhile does nothing and the adapter is not kept awake.
+    var midiOpen by remember { mutableStateOf(false) }
+    LaunchedEffect(controller.input) {
+        if (controller.input == AnalyzerInput.KEY && !midiOpen) {
+            midiOpen = true
+            midi.start(
+                // The sidetone follows the merged key in the controller.
+                onKey = { },
+                onConnected = { name -> midiDevice = name },
+                onKeyTimed = { down, nanos -> controller.keyEdgeNanos(SendingAnalyzerController.KeySource.MIDI, down, nanos) }
+            )
+        } else if (controller.input == AnalyzerInput.MICROPHONE && midiOpen) {
+            midiOpen = false
+            midi.stop()
+            midiDevice = null
         }
     }
     BackHandler { onBack() }
@@ -672,7 +714,7 @@ private fun MicPanel(c: SendingAnalyzerController) {
             c.sensitivity
         ) { c.pickSensitivity(it) }
         if (mic.micDenied) {
-            Note(stringResource(R.string.decoder_mic_denied), Color(0xFFE08A1E))
+            Note(stringResource(R.string.analyzer_mic_denied), Color(0xFFE08A1E))
         } else {
             Note(stringResource(R.string.analyzer_mic_note))
         }
@@ -735,14 +777,12 @@ private fun SendingSection(c: SendingAnalyzerController, midi: HardwareKey, midi
                         detectTapGestures(
                             onPress = {
                                 keyPressed = true
-                                c.sidetone.setKeyDown(true)
-                                c.keyEdgeNanos(true, System.nanoTime())
+                                c.keyEdgeNanos(SendingAnalyzerController.KeySource.SCREEN, true, System.nanoTime())
                                 try {
                                     tryAwaitRelease()
                                 } finally {
                                     keyPressed = false
-                                    c.sidetone.setKeyDown(false)
-                                    c.keyEdgeNanos(false, System.nanoTime())
+                                    c.keyEdgeNanos(SendingAnalyzerController.KeySource.SCREEN, false, System.nanoTime())
                                 }
                             }
                         )

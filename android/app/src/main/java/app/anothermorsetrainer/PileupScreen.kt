@@ -57,6 +57,7 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.anothermorsetrainer.morsekit.InputRules
 import app.anothermorsetrainer.morsekit.BustBehavior
 import app.anothermorsetrainer.morsekit.CallsignFormat
 import app.anothermorsetrainer.morsekit.CutNumbers
@@ -66,6 +67,7 @@ import app.anothermorsetrainer.morsekit.MorseTiming
 import app.anothermorsetrainer.morsekit.MissedCallerFeedback
 import app.anothermorsetrainer.morsekit.PileupEngine
 import app.anothermorsetrainer.morsekit.QSOContestMode
+import app.anothermorsetrainer.morsekit.SessionClock
 import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
 
@@ -107,6 +109,14 @@ fun PileupScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) 
     val haptics = remember { Haptics(context) }
 
     var phase by rememberSaveable { mutableStateOf(PuPhase.SETUP) }
+
+    // Session length (iOS usesSessionLength): the countdown the Session Length
+    // picker on the setup screen set and the timer menu adjusts. Pileup Runner
+    // is ranked, and iOS ranks it with no length adjustment - the board's
+    // number is the server-graded run however long it ran, and the personal
+    // best is the QSO count - so a run of any length is posted and recorded
+    // the same way.
+    var remaining by rememberSaveable(stateSaver = OptionalIntSaver) { mutableStateOf<Int?>(null) }
     var engine by remember { mutableStateOf<PileupEngine?>(null) }
     var input by remember { mutableStateOf("") }
     var reveal by remember { mutableStateOf(false) }
@@ -213,6 +223,7 @@ fun PileupScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) 
         input = ""
         reveal = false
         startedAtMs = System.currentTimeMillis()
+        remaining = Settings.practiceDuration.seconds
         endedAtMs = 0L
         runQsos = 0
         runBusts = 0
@@ -350,6 +361,19 @@ fun PileupScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) 
         input = ""
     }
 
+    // Options changed in the mid-run Settings sheet reach a pileup already on
+    // the air at once (iOS applySettings -> pileup.update, #143): callers on
+    // the air keep the speed and pitch they arrived with, but the caller cap
+    // applies now.
+    val liveConfig = PileupSettings.config()
+    LaunchedEffect(liveConfig) {
+        val e = engine ?: return@LaunchedEffect
+        if (phase == PuPhase.RUNNING) {
+            e.update(liveConfig)
+            rev++
+        }
+    }
+
     // The run clock: tick once a second so the rate and elapsed readouts move.
     LaunchedEffect(phase) {
         if (phase != PuPhase.RUNNING) return@LaunchedEffect
@@ -358,6 +382,24 @@ fun PileupScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) 
             rev++
             syncRun()
         }
+    }
+
+    // Session countdown; also keyed on whether a limit exists, so the timer
+    // menu starting a countdown on an open-ended run (or dropping one)
+    // restarts the loop. Reaching zero (or subtracting the last minute) ends
+    // the run as End does.
+    LaunchedEffect(phase, remaining == null) {
+        if (phase != PuPhase.RUNNING) return@LaunchedEffect
+        while (true) {
+            val r = remaining ?: return@LaunchedEffect
+            if (r <= 0) return@LaunchedEffect
+            delay(1000)
+            remaining = remaining?.minus(1)
+        }
+    }
+    LaunchedEffect(phase, remaining) {
+        val r = remaining
+        if (phase == PuPhase.RUNNING && r != null && r <= 0) endRun()
     }
 
     BackHandler {
@@ -402,6 +444,14 @@ fun PileupScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) 
                 onLog = { perform(tracked(null) { e.logCurrent() }) },
                 onSettings = { showSettings = true },
                 onSwitchMode = ::switchTo,
+                timerBar = {
+                    SessionTimerBar(
+                        remaining = remaining,
+                        onAddSeconds = { remaining = (remaining ?: 0) + it },
+                        onSubtractSeconds = { remaining = SessionClock.reduced(remaining, it) },
+                        onRemoveLimit = { remaining = null }
+                    )
+                },
                 // The engine isn't Compose-observable, so clearing it has to
                 // ride the same rev bump everything else does or the banner
                 // would sit there until the next clock tick.
@@ -458,6 +508,10 @@ private fun PileupSetup(onStart: () -> Unit, onBack: () -> Unit, onSwitchMode: (
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             PileupOptions()
+            // How long the run lasts (iOS's "How long do you want to practice?"
+            // card); the timer menu adjusts it mid-run.
+            PuSectionLabel(stringResource(R.string.setup_duration_question))
+            PuPills(PracticeDuration.entries.map { it to it.label }, Settings.practiceDuration) { Settings.updatePracticeDuration(it) }
             Spacer(Modifier.height(4.dp))
             Button(
                 onClick = onStart,
@@ -473,24 +527,30 @@ private fun PileupSetup(onStart: () -> Unit, onBack: () -> Unit, onSwitchMode: (
  * The Pileup Runner's options — your call, the exchange, the pileup, the
  * callsigns and the operating knobs — as a run of items emitted into the
  * caller's column. The setup screen shows them above Start; Settings ›
- * QSO & Pileups shows the same composable (#236), so the two can never
- * disagree. Every write goes straight to [PileupSettings].
+ * QSO & Pileups shows the same composables (#236), one per section (Your
+ * Station, Pileup Runner, QSO · Signals, QSO · Realism, QSO · Callsigns, as on
+ * iOS), so the two can never disagree. Every write goes straight to
+ * [PileupSettings].
  */
 @Composable
 internal fun PileupOptions() {
+    PileupYourStationOptions()
+    PileupExchangeOptions()
+    PuSectionLabel(stringResource(R.string.pileup_the_pileup))
+    PileupRunnerSpeedOptions()
+    PileupSignalsOptions()
+    PuSectionLabel(stringResource(R.string.pileup_callsigns))
+    PileupCallsignOptions()
+    PuSectionLabel(stringResource(R.string.pileup_operating))
+    PileupRealismOptions()
+}
+
+/** Settings › QSO & Pileups › Your Station: call, name and state. */
+@Composable
+internal fun PileupYourStationOptions() {
     val focusManager = LocalFocusManager.current
     PuSectionLabel(stringResource(R.string.pileup_your_call))
-    OutlinedTextField(
-        value = PileupSettings.myCall,
-        onValueChange = { PileupSettings.updateMyCall(it) },
-        singleLine = true,
-        placeholder = { Text(PileupSettings.DEFAULT_CALL) },
-        // A call sign is one field, so the IME's action key closes the
-        // keyboard rather than offering a newline you cannot use (#40).
-        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-        keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
-        modifier = Modifier.fillMaxWidth()
-    )
+    CallsignField(modifier = Modifier.fillMaxWidth())
 
     // Optional; CW 77 can drill it with the call (#240).
     PuSectionLabel(stringResource(R.string.pileup_your_name))
@@ -515,7 +575,56 @@ internal fun PileupOptions() {
         keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
         modifier = Modifier.fillMaxWidth()
     )
+}
 
+/**
+ * The "Your callsign" input, in the one validated form every app uses: upper
+ * case, letters A-Z, digits and "/", 12 characters at most, and a blank entry
+ * stored as W1AW ([InputRules.storedCallsign]). The field keeps its own draft
+ * so clearing it to type another call does not snap to the placeholder
+ * underneath you; [PileupSettings.myCall] always holds the stored value.
+ */
+@Composable
+internal fun CallsignField(
+    modifier: Modifier = Modifier,
+    label: (@Composable () -> Unit)? = null,
+    imeAction: ImeAction = ImeAction.Done,
+    onEdited: () -> Unit = {}
+) {
+    val focusManager = LocalFocusManager.current
+    var draft by remember { mutableStateOf(PileupSettings.myCall) }
+    // Follow a change made elsewhere (another field, a sync) unless it is
+    // just the stored form of what is being typed.
+    LaunchedEffect(PileupSettings.myCall) {
+        if (InputRules.storedCallsign(draft) != PileupSettings.myCall) draft = PileupSettings.myCall
+    }
+    OutlinedTextField(
+        value = draft,
+        onValueChange = {
+            draft = InputRules.normalizeCallsign(it)
+            PileupSettings.updateMyCall(draft)
+            onEdited()
+        },
+        singleLine = true,
+        label = label,
+        placeholder = { Text(InputRules.CALLSIGN_PLACEHOLDER) },
+        // A call sign is one field, so the IME's action key closes the
+        // keyboard rather than offering a newline you cannot use (#40).
+        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters, imeAction = imeAction),
+        keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
+        modifier = modifier
+    )
+}
+
+/** Settings › QSO & Pileups › Pileup Runner: the mode, then the callers' number, speeds, spacing and tone spread. */
+@Composable
+internal fun PileupRunnerOptions() {
+    PileupExchangeOptions()
+    PileupRunnerSpeedOptions()
+}
+
+@Composable
+private fun PileupExchangeOptions() {
     PuSectionLabel(stringResource(R.string.pileup_exchange))
     PuPills(QSOContestMode.allCases.map { it to it.label }, PileupSettings.mode) {
         PileupSettings.updateMode(it)
@@ -525,8 +634,10 @@ internal fun PileupOptions() {
         style = MaterialTheme.typography.bodySmall,
         color = Brand.textSecondary
     )
+}
 
-    PuSectionLabel(stringResource(R.string.pileup_the_pileup))
+@Composable
+private fun PileupRunnerSpeedOptions() {
     PuSlider(
         label = stringResource(R.string.pileup_callers),
         value = stringResource(R.string.pileup_callers_value, PileupSettings.maxStations),
@@ -559,11 +670,16 @@ internal fun PileupOptions() {
     }
     PuSlider(
         label = stringResource(R.string.pileup_tone_spread),
-        value = if (PileupSettings.toneSpread <= 0.0) stringResource(R.string.pileup_zero_beat) else stringResource(R.string.pileup_tone_spread_value, PileupSettings.toneSpread.roundToInt()),
+        value = if (InputRules.isZeroBeat(PileupSettings.toneSpread)) stringResource(R.string.pileup_zero_beat) else stringResource(R.string.pileup_tone_spread_value, PileupSettings.toneSpread.roundToInt()),
         position = PileupSettings.toneSpread.toFloat(),
-        range = 0f..PileupSettings.MAX_TONE_SPREAD.toFloat(), steps = 0,
+        range = 0f..PileupSettings.MAX_TONE_SPREAD.toFloat(), steps = InputRules.TONE_SPREAD_COMPOSE_STEPS,
         onChange = { PileupSettings.updateToneSpread(it.toDouble()) }
     )
+}
+
+/** Settings › QSO & Pileups › QSO · Signals: fading, noise and how long callers wait. */
+@Composable
+internal fun PileupSignalsOptions() {
     PuToggle(stringResource(R.string.pileup_qsb_fading), PileupSettings.qsbEnabled) { PileupSettings.updateQsbEnabled(it) }
     Column {
         PuSectionLabel(stringResource(R.string.pileup_qrn_static))
@@ -589,8 +705,11 @@ internal fun PileupOptions() {
         steps = (PileupSettings.MAX_MAX_DELAY * 10).roundToInt() - 1,
         onChange = { PileupSettings.updateMaxDelay((it * 10).roundToInt() / 10.0) }
     )
+}
 
-    PuSectionLabel(stringResource(R.string.pileup_callsigns))
+/** Settings › QSO & Pileups › QSO · Callsigns: which shapes appear, and US only. */
+@Composable
+internal fun PileupCallsignOptions() {
     Row(
         modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -613,8 +732,46 @@ internal fun PileupOptions() {
         }
     }
     PuToggle(stringResource(R.string.common_us_calls_only), PileupSettings.usOnly) { PileupSettings.updateUsOnly(it) }
+}
 
-    PuSectionLabel(stringResource(R.string.pileup_operating))
+/**
+ * Settings › QSO & Pileups › QSO · Realism, in the iOS order: the RST, the
+ * partial call, keying your side, re-calls, a busted call, giving up, cut numbers.
+ */
+@Composable
+internal fun PileupRealismOptions() {
+    if (PileupSettings.mode.includesRST) {
+        PuToggle(stringResource(R.string.pileup_require_the_rst_copied), PileupSettings.rstRequired) {
+            PileupSettings.updateRstRequired(it)
+        }
+    }
+    PuToggle(stringResource(R.string.pileup_keep_my_partial_call_after), PileupSettings.keepPartialCall) {
+        PileupSettings.updateKeepPartialCall(it)
+    }
+    PuToggle(stringResource(R.string.pileup_key_my_side_in_morse), PileupSettings.keyMySide) {
+        PileupSettings.updateKeyMySide(it)
+    }
+    PuToggle(stringResource(R.string.pileup_recall_after_tu), PileupSettings.autoRecall) {
+        PileupSettings.updateAutoRecall(it)
+    }
+Column {
+        PuSectionLabel(stringResource(R.string.pileup_on_a_busted_call))
+        PuPills(BustBehavior.allCases.map { it to it.label }, PileupSettings.bustBehavior) {
+            PileupSettings.updateBustBehavior(it)
+        }
+    }
+    PuToggle(stringResource(R.string.pileup_impatient_callers_give_up), PileupSettings.giveUpEnabled) {
+        PileupSettings.updateGiveUpEnabled(it)
+    }
+    if (PileupSettings.giveUpEnabled) {
+        Column {
+            PuSectionLabel(stringResource(R.string.pileup_tell_me_who_got_away))
+            PuPills(
+                MissedCallerFeedback.allCases.map { it to it.label },
+                PileupSettings.missedCallerFeedback
+            ) { PileupSettings.updateMissedCallerFeedback(it) }
+        }
+    }
     PuToggle(stringResource(R.string.pileup_cut_numbers), PileupSettings.cutNumbersEnabled) {
         PileupSettings.updateCutNumbersEnabled(it)
     }
@@ -646,38 +803,6 @@ internal fun PileupOptions() {
             }
         }
     }
-    if (PileupSettings.mode.includesRST) {
-        PuToggle(stringResource(R.string.pileup_require_the_rst_copied), PileupSettings.rstRequired) {
-            PileupSettings.updateRstRequired(it)
-        }
-    }
-    Column {
-        PuSectionLabel(stringResource(R.string.pileup_on_a_busted_call))
-        PuPills(BustBehavior.allCases.map { it to it.label }, PileupSettings.bustBehavior) {
-            PileupSettings.updateBustBehavior(it)
-        }
-    }
-    PuToggle(stringResource(R.string.pileup_impatient_callers_give_up), PileupSettings.giveUpEnabled) {
-        PileupSettings.updateGiveUpEnabled(it)
-    }
-    if (PileupSettings.giveUpEnabled) {
-        Column {
-            PuSectionLabel(stringResource(R.string.pileup_tell_me_who_got_away))
-            PuPills(
-                MissedCallerFeedback.allCases.map { it to it.label },
-                PileupSettings.missedCallerFeedback
-            ) { PileupSettings.updateMissedCallerFeedback(it) }
-        }
-    }
-    PuToggle(stringResource(R.string.pileup_keep_my_partial_call_after), PileupSettings.keepPartialCall) {
-        PileupSettings.updateKeepPartialCall(it)
-    }
-    PuToggle(stringResource(R.string.pileup_key_my_side_in_morse), PileupSettings.keyMySide) {
-        PileupSettings.updateKeyMySide(it)
-    }
-    PuToggle(stringResource(R.string.pileup_recall_after_tu), PileupSettings.autoRecall) {
-        PileupSettings.updateAutoRecall(it)
-    }
 }
 
 // MARK: - Run
@@ -700,6 +825,7 @@ private fun PileupRun(
     onLog: () -> Unit,
     onSettings: () -> Unit,
     onSwitchMode: (TrainingMode) -> Unit,
+    timerBar: @Composable () -> Unit,
     onDismissMissed: () -> Unit,
     onEnd: () -> Unit
 ) {
@@ -722,6 +848,7 @@ private fun PileupRun(
             SessionSettingsButton(onOpen = onSettings)
             SwitchModeButton(TrainingMode.PILEUP, onSwitchMode)
         }
+        timerBar()
 
       CenteredContent {
         Column(modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp)) {

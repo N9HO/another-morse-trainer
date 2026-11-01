@@ -80,6 +80,17 @@ data class SendingDrill(
         val numberPunctuationPool: List<Char> = "0123456789".toList() + ".,?/=+".toList()
 
         /**
+         * The characters the learner has studied: the Koch active set, i.e.
+         * the characters they have actually been taught (the declared seed,
+         * every unlock since, and any opted-in punctuation), in active-set
+         * order. A character with recorded stats that is not in the active
+         * set (one not yet reached, or an opted-out mark whose history is
+         * kept) has not been studied. Pinned by `fixtures/gap-stats-studied.json`.
+         */
+        fun studiedCharacters(snapshot: TrainerEngine.Snapshot): List<Char> =
+            snapshot.activeCharacters
+
+        /**
          * Build a sheet.
          *
          * @param kind which pool to draw from.

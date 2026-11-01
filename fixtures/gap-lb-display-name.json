@@ -1,0 +1,120 @@
+{
+  "$comment": "Leaderboard display-name rule (gap row-09), read by ios MorseKitCheck and android/desktop JUnit. Data, not code. Derived from the server rule (names.ts) and the iOS messages: normalise (trim, uppercase, collapse whitespace); then in this order: length 2-12 -> 'must be 2 to 12 characters'; first char A-Z/0-9 and the rest A-Z, 0-9, space, / or - -> 'may use letters, digits, space, / and -'; the name's letters, squashed together, containing FUCK SHIT CUNT NIGG FAG KIKE SPIC RAPE NAZI HITLER -> 'not allowed'. normalized is null whenever there is a problem.",
+  "cases": [
+    {
+      "raw": "W1AW",
+      "normalized": "W1AW",
+      "problem": null
+    },
+    {
+      "raw": " w1aw ",
+      "normalized": "W1AW",
+      "problem": null
+    },
+    {
+      "raw": "k1abc/p",
+      "normalized": "K1ABC/P",
+      "problem": null
+    },
+    {
+      "raw": "op   jim-2",
+      "normalized": "OP JIM-2",
+      "problem": null
+    },
+    {
+      "raw": "AB\tcd",
+      "normalized": "AB CD",
+      "problem": null
+    },
+    {
+      "raw": "ab",
+      "normalized": "AB",
+      "problem": null
+    },
+    {
+      "raw": "abcdefghijkl",
+      "normalized": "ABCDEFGHIJKL",
+      "problem": null
+    },
+    {
+      "raw": "SH1T",
+      "normalized": "SH1T",
+      "problem": null
+    },
+    {
+      "raw": "A",
+      "normalized": null,
+      "problem": "Display name must be 2 to 12 characters"
+    },
+    {
+      "raw": "ABCDEFGHIJKLM",
+      "normalized": null,
+      "problem": "Display name must be 2 to 12 characters"
+    },
+    {
+      "raw": "",
+      "normalized": null,
+      "problem": "Display name must be 2 to 12 characters"
+    },
+    {
+      "raw": "   ",
+      "normalized": null,
+      "problem": "Display name must be 2 to 12 characters"
+    },
+    {
+      "raw": "-W1AW",
+      "normalized": null,
+      "problem": "Display name may use letters, digits, space, / and -"
+    },
+    {
+      "raw": "  /W1AW",
+      "normalized": null,
+      "problem": "Display name may use letters, digits, space, / and -"
+    },
+    {
+      "raw": "W1AW!",
+      "normalized": null,
+      "problem": "Display name may use letters, digits, space, / and -"
+    },
+    {
+      "raw": "W1_AW",
+      "normalized": null,
+      "problem": "Display name may use letters, digits, space, / and -"
+    },
+    {
+      "raw": "ÀB",
+      "normalized": null,
+      "problem": "Display name may use letters, digits, space, / and -"
+    },
+    {
+      "raw": "fuck",
+      "normalized": null,
+      "problem": "Display name not allowed"
+    },
+    {
+      "raw": "Nazi 1",
+      "normalized": null,
+      "problem": "Display name not allowed"
+    },
+    {
+      "raw": "hitler",
+      "normalized": null,
+      "problem": "Display name not allowed"
+    },
+    {
+      "raw": "a-f-a-g",
+      "normalized": null,
+      "problem": "Display name not allowed"
+    },
+    {
+      "raw": "SPI C",
+      "normalized": null,
+      "problem": "Display name not allowed"
+    },
+    {
+      "raw": "SCUNTHORPE",
+      "normalized": null,
+      "problem": "Display name not allowed"
+    }
+  ]
+}

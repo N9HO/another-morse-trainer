@@ -1,5 +1,6 @@
 package app.anothermorsetrainer
 
+import app.anothermorsetrainer.morsekit.Leaderboard
 import app.anothermorsetrainer.morsekit.AttestationAvailability
 import app.anothermorsetrainer.morsekit.AttestationFeatures
 import app.anothermorsetrainer.morsekit.AttestationState
@@ -161,7 +162,7 @@ object LeaderboardClient {
                     BoardRow(
                         rank = o.getInt("rank"),
                         displayName = o.getString("displayName"),
-                        metric = o.getDouble("metric").toLong(),
+                        metric = Leaderboard.roundedMetric(o.getDouble("metric")),
                         platform = o.optString("platform", ""),
                         date = o.optString("date", "")
                     )

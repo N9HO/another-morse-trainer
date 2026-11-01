@@ -237,6 +237,10 @@ fun DungeonScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
     // The key: the same decoder Sending Practice uses, plus a hardware key.
     val keyer = remember { SendingKeyer(wpm = Settings.characterWpm, toneHz = Settings.sidetoneHz) }
     val midi = remember { HardwareKey(context) }
+    // One BLE-MIDI link for the whole screen: a key found on the setup page
+    // must still be attached once the run starts (see BluetoothKeyButton).
+    val ble = remember { BleMidi(context) }
+    DisposableEffect(Unit) { onDispose { ble.release() } }
     AdapterConfigSync(midi)
     val scope = rememberCoroutineScope()
     var keyPressed by remember { mutableStateOf(false) }
@@ -485,6 +489,7 @@ fun DungeonScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
                     difficulty = difficulty, onDifficulty = { difficulty = it },
                     onStart = { if (LeaderboardOptIn.shouldOffer()) optInPending = true else startGame() },
                     onBack = onBack,
+                    ble = ble,
                     onSwitchMode = ::switchTo
                 )
             }
@@ -530,7 +535,8 @@ private fun DungeonSetup(
     pool: DungeonPool,
     difficulty: InvadersDifficulty, onDifficulty: (InvadersDifficulty) -> Unit,
     onStart: () -> Unit, onBack: () -> Unit,
-    onSwitchMode: (TrainingMode) -> Unit
+    onSwitchMode: (TrainingMode) -> Unit,
+    ble: BleMidi
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         Row(modifier = Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -544,6 +550,7 @@ private fun DungeonSetup(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Text(stringResource(R.string.dungeon_blurb), style = MaterialTheme.typography.bodySmall, color = Brand.textSecondary)
+            BluetoothKeyButton(ownedBleMidi = ble)
             DgnLabel(stringResource(R.string.dungeon_characters))
             DgnPills(InvadersCharacterSet.entries.map { it to it.label }, characterSet, onCharacterSet)
             DgnLabel(stringResource(R.string.dungeon_spell_book))
