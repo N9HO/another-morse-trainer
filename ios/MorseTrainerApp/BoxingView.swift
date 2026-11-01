@@ -98,12 +98,18 @@ final class BoxingController: ObservableObject {
     @Published private(set) var stage = 0
     @Published private(set) var opened = false
     @Published private(set) var hints: Bool
+    /// The shared leaderboard's first-play prompt (#226), raised by a fight
+    /// button while sharing is off and unanswered, never mid-fight.
+    @Published var optInPrompt = false
+    private(set) var pendingFighter = 0
 
     private(set) var splashAt: UInt32
     private(set) var seed: UInt32
     private var overAt: UInt32?
     private var recorded = false
     private var tellEndsAt: UInt32?
+    /// The speed the tell now in play was sent at, for its leaderboard item.
+    private var tellWpm = 5
     private var keying = BoxingKeying()
     private weak var model: AppModel?
     private let defaults = UserDefaults.standard
@@ -150,6 +156,16 @@ final class BoxingController: ObservableObject {
         hints = on
         career.hints = on
         saveCareer()
+    }
+
+    /// Start a fight, first asking once about sharing scores when it is on offer.
+    func requestFight(_ index: Int) {
+        if model?.shouldOfferLeaderboardOptIn == true {
+            pendingFighter = index
+            optInPrompt = true
+        } else {
+            beginFight(index)
+        }
     }
 
     func beginFight(_ index: Int) {
@@ -201,7 +217,7 @@ final class BoxingController: ObservableObject {
     func nextFighter() {
         guard let f = fight else { return }
         pick = min(f.fighter + 1, BoxingRules.fighters - 1)
-        beginFight(pick)
+        requestFight(pick)
     }
 
     // MARK: The key
@@ -264,6 +280,7 @@ final class BoxingController: ObservableObject {
                 tellEndsAt = nil
             }
             f.takeCopies { _, _ in }   // fights read the letter stats, they do not write them
+            drainTells(&f)
         }
         if case .over(let won, _) = f.phase {
             if overAt == nil { overAt = now }
@@ -283,9 +300,17 @@ final class BoxingController: ObservableObject {
         let base = Int(model.settings.wpm.rounded())
         let farnsworth = model.settings.farnsworth ? Int(model.settings.effectiveWpm.rounded()) : 0
         let (wpm, eff) = foe.speeds(baseWpm: base, farnsworth: farnsworth)
+        tellWpm = min(max(wpm, 5), 60)
         let seconds = model.playBoxingTell(text, wpm: wpm, effectiveWpm: eff, pitchOffsetHz: foe.pitchOffsetHz)
         // No completion callback from the player: date the end of the tell from its length.
         tellEndsAt = Self.clock() &+ UInt32(max(0, (seconds * 1000).rounded()))
+    }
+
+    /// Hand the tells answered since the last frame to the shared leaderboard's transcript.
+    private func drainTells(_ f: inout BoxingFight) {
+        guard let model else { return }
+        let wpm = tellWpm
+        f.takeTellResults { model.noteBoxingTell($0, wpm: wpm) }
     }
 
     private func finishRecord(_ f: BoxingFight, won: Bool) {
@@ -346,6 +371,7 @@ struct BoxingView: View {
             .allowsHitTesting(false)
         )
         .onAppear { ctl.attach(model) }
+        .leaderboardOptInPrompt(isPresented: $ctl.optInPrompt) { ctl.beginFight(ctl.pendingFighter) }
         .onDisappear { ctl.leave() }
         // Leaving the app pauses the fight; the player comes back to the pause card.
         .onChange(of: scenePhase) { phase in
@@ -434,7 +460,7 @@ private struct BoxingTitleView: View {
                 .padding(.top, 4)
                 Button {
                     Haptics.tap()
-                    ctl.beginFight(ctl.pick)
+                    ctl.requestFight(ctl.pick)
                 } label: {
                     Text("Fight")
                         .font(.headline)
@@ -871,7 +897,7 @@ private struct BoxingResultsView: View {
                     .tint(Theme.teal)
                 }
                 Button {
-                    ctl.beginFight(f.fighter)
+                    ctl.requestFight(f.fighter)
                 } label: {
                     Text("Fight again")
                         .font(.headline)

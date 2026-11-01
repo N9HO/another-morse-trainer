@@ -3644,6 +3644,13 @@ final class AppModel: ObservableObject {
         noteGameScore(score)
     }
 
+    /// A tell answered, for the shared leaderboard only: fights write no
+    /// per-character stats. `wpm` is the fighter's tell speed.
+    func noteBoxingTell(_ r: BoxingTellResult, wpm: Int) {
+        noteLeaderboardItem(.ramping(sent: r.sent, answered: r.answered,
+                                     reaction: Double(r.reactionMs) / 1000, wpm: Double(wpm)))
+    }
+
     /// An asteroid destroyed: every character of its label is a correct
     /// recognition with the time it took (copy mode) or 0 (send mode). The
     /// session tally and the per-character chart take each the way a
