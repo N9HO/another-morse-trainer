@@ -1688,6 +1688,67 @@ if let fx = loadChartAxisFixture(), !fx.cases.isEmpty {
     check("fixtures/chart-axis.json loads and decodes", false)
 }
 
+// What the leaderboard and buddy streak do when the device cannot attest
+// (#349), against fixtures/attestation-availability.json — the same file the
+// Kotlin AttestationAvailabilityTest reads on Android and desktop.
+print("\nAttestation availability (fixtures/attestation-availability.json):")
+struct AttestationFixture: Decodable {
+    struct StateRow: Decodable {
+        let state: String
+        let shareSwitchVisible: Bool
+        let optInPromptOffered: Bool
+        let runsRanked: Bool
+        let deleteScoresOffered: Bool
+        let buddyActionsEnabled: Bool
+        let boardReadable: Bool
+        let personalBestsKept: Bool
+        let trainingModesWork: Bool
+        let noteKey: String
+    }
+    struct AppleCase: Decodable { let supported: Bool; let expect: String }
+    struct AppleProbe: Decodable { let cases: [AppleCase] }
+    let states: [StateRow]
+    let appleProbe: AppleProbe
+}
+func loadAttestationFixture() -> AttestationFixture? {
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent()
+        .deletingLastPathComponent().deletingLastPathComponent()
+    guard let data = try? Data(contentsOf: root.appendingPathComponent("fixtures/attestation-availability.json")) else { return nil }
+    return try? JSONDecoder().decode(AttestationFixture.self, from: data)
+}
+if let fx = loadAttestationFixture(), !fx.states.isEmpty {
+    check("the fixture lists every state", fx.states.count == AttestationState.allCases.count)
+    for row in fx.states {
+        guard let state = AttestationState(rawValue: row.state), let note = AttestationNote(rawValue: row.noteKey) else {
+            check("fixture state \(row.state) and note \(row.noteKey) are known", false)
+            continue
+        }
+        let f = AttestationAvailability.features(for: state)
+        check("\(row.state): switch, prompt, ranking, delete, buddy, board, bests, training, note",
+              f.shareSwitchVisible == row.shareSwitchVisible
+                && f.optInPromptOffered == row.optInPromptOffered
+                && f.runsRanked == row.runsRanked
+                && f.deleteScoresOffered == row.deleteScoresOffered
+                && f.buddyActionsEnabled == row.buddyActionsEnabled
+                && f.boardReadable == row.boardReadable
+                && f.personalBestsKept == row.personalBestsKept
+                && f.trainingModesWork == row.trainingModesWork
+                && f.note == note)
+    }
+    check("training and personal bests never depend on attestation",
+          AttestationState.allCases.allSatisfy {
+              let f = AttestationAvailability.features(for: $0)
+              return f.trainingModesWork && f.personalBestsKept && f.boardReadable
+          })
+    for c in fx.appleProbe.cases {
+        check("App Attest supported=\(c.supported) is \(c.expect)",
+              AttestationAvailability.appleState(isSupported: c.supported).rawValue == c.expect)
+    }
+} else {
+    check("fixtures/attestation-availability.json loads and decodes", false)
+}
+
 // Per-mode personal bests (docs/high-scores-design.md, step 1), against
 // fixtures/mode-bests.json — the same file the Kotlin ModeBestsTest reads.
 print("\nPer-mode personal bests (fixtures/mode-bests.json):")
@@ -6331,6 +6392,86 @@ if let fx = loadAsteroidsFixture() {
 // Shared leaderboard (docs/high-scores-design.md, step 2): the pure rules the
 // app applies before talking to the server, each pinned to the server's own
 // (src/modes.ts, src/grade.ts, src/names.ts in the leaderboard repository).
+// MARK: - Keyer modes and Asteroids tap hit-testing (#348, #350)
+// fixtures/keyer-modes.json and fixtures/asteroid-hit-test.json, consumed by this
+// harness AND by the Kotlin KeyerModesTest / AsteroidHitTestTest.
+
+struct KeyerModesFixture: Decodable {
+    struct Mode: Decodable { let code: Int; let name: String; let adapterTimesSending: Bool }
+    let modes: [Mode]
+}
+
+struct AsteroidHitTestFixture: Decodable {
+    struct Rock: Decodable {
+        let id: Int; let label: String; let angleOverPi: Double; let progress: Double
+        let fragment: Bool; let at: [Double]; let radiusDp: Double
+    }
+    struct Tap: Decodable { let x: Double; let y: Double; let density: Double; let expect: String; let note: String }
+    let shipReachDp: Double
+    let reachPaddingDp: Double
+    let width: Double
+    let height: Double
+    let asteroids: [Rock]
+    let taps: [Tap]
+}
+
+func loadSharedFixture<T: Decodable>(_ name: String, as type: T.Type) -> T? {
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+    guard let data = try? Data(contentsOf: root.appendingPathComponent("fixtures/\(name)")) else { return nil }
+    return try? JSONDecoder().decode(T.self, from: data)
+}
+
+print("\nKeyer modes (fixtures/keyer-modes.json):")
+if let fx = loadSharedFixture("keyer-modes.json", as: KeyerModesFixture.self) {
+    let all = VailKeyerMode.allCases
+    check("keyer modes: the list is as long as the fixture's", all.count == fx.modes.count)
+    check("keyer modes: names and codes are the fixture's, in its order",
+          all.count == fx.modes.count
+          && zip(all, fx.modes).allSatisfy { $0.displayName == $1.name && $0.rawValue == $1.code })
+    check("keyer modes: adapterTimesSending is the fixture's",
+          all.count == fx.modes.count
+          && zip(all, fx.modes).allSatisfy { ($0 != .straightKey && $0 != .passthrough) == $1.adapterTimesSending })
+} else {
+    check("keyer modes fixture loads", false)
+}
+
+print("\nAsteroids tap hit-testing (fixtures/asteroid-hit-test.json):")
+if let fx = loadSharedFixture("asteroid-hit-test.json", as: AsteroidHitTestFixture.self) {
+    check("hit-test constants are the fixture's",
+          AsteroidsHitTest.shipReachDp == fx.shipReachDp && AsteroidsHitTest.reachPaddingDp == fx.reachPaddingDp)
+    let field = fx.asteroids.map {
+        Asteroid(id: $0.id, label: $0.label, angle: $0.angleOverPi * Double.pi, progress: $0.progress,
+                 approachTime: 10, isFragment: $0.fragment)
+    }
+    check("hit-test radii are the fixture's",
+          zip(field, fx.asteroids).allSatisfy { AsteroidsHitTest.radiusDp($0) == $1.radiusDp })
+    check("hit-test asteroids sit where the fixture says",
+          zip(field, fx.asteroids).allSatisfy {
+              abs($0.x * fx.width - $1.at[0]) < 1e-6 && abs($0.y * fx.height - $1.at[1]) < 1e-6
+          })
+    func describe(_ t: AsteroidsTap) -> String {
+        switch t {
+        case .ship: return "ship"
+        case .rock(let id): return "rock:\(id)"
+        case .empty: return "none"
+        }
+    }
+    for (i, t) in fx.taps.enumerated() {
+        let got = AsteroidsHitTest.target(x: t.x, y: t.y, width: fx.width, height: fx.height,
+                                          density: t.density, field: field)
+        check("hit-test tap \(i + 1) (\(t.note)) is \(t.expect)", describe(got) == t.expect)
+    }
+    check("hit-test: an empty field has nothing to tap",
+          describe(AsteroidsHitTest.target(x: 500, y: 600, width: fx.width, height: fx.height,
+                                           density: 1, field: [])) == "none")
+} else {
+    check("asteroid hit-test fixture loads", false)
+}
+
 print("\nLeaderboard:")
 do {
     // Mode ids and the qso -> pileup mapping.
@@ -8921,16 +9062,173 @@ check("an email needs one @ and a dotted domain",
       AccountSync.isPlausibleEmail(" learner@example.org ") && !AccountSync.isPlausibleEmail("learner@example")
         && !AccountSync.isPlausibleEmail("learner example.org") && !AccountSync.isPlausibleEmail("a@b@c.org"))
 
+// MARK: - Daily Comprehension (#353)
+//
+// fixtures/comprehension-bank.json and fixtures/comprehension-selection.json,
+// read by this harness AND by the android and desktop tests. The bank is
+// mirrored into ComprehensionBank.swift by tools/gen_comprehension_bank.py;
+// the first block below is what fails when the copy and the fixture drift.
+struct ComprehensionBankFixture: Decodable {
+    struct Item: Decodable {
+        let id, sentence, question, answer: String
+        let distractors: [String]
+        let kochLevel: Int
+    }
+    let items: [Item]
+}
+struct ComprehensionSelectionFixture: Decodable {
+    struct Rules: Decodable { let selectionStride, itemCount, optionCount: Int }
+    struct Case: Decodable {
+        struct Date: Decodable { let year, month, day: Int }
+        let date: Date
+        let puzzleNumber, itemIndex: Int
+        let itemId: String
+        let optionOrder: [Int]
+        let correctPosition: Int
+    }
+    struct Shuffle: Decodable { let puzzleNumber: Int; let optionOrder: [Int] }
+    let rules: Rules
+    let cases: [Case]
+    let shuffles: [Shuffle]
+    let cycle: [Int]
+}
+
+func loadFixtureData(_ name: String) -> Data? {
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+    return try? Data(contentsOf: root.appendingPathComponent("fixtures/\(name)"))
+}
+
+print("\nDaily Comprehension, against fixtures/comprehension-*.json:")
+if let data = loadFixtureData("comprehension-bank.json"),
+   let bank = try? JSONDecoder().decode(ComprehensionBankFixture.self, from: data) {
+    let mine = ComprehensionBank.items
+    check("the bundled bank equals fixtures/comprehension-bank.json (\(bank.items.count) items, same order)",
+          mine.count == bank.items.count
+            && zip(mine, bank.items).allSatisfy { m, f in
+                m.id == f.id && m.sentence == f.sentence && m.question == f.question
+                    && m.answer == f.answer && m.distractors == f.distractors && m.kochLevel == f.kochLevel
+            })
+    check("at least 120 items, ids unique, four distinct options each",
+          mine.count >= 120 && Set(mine.map(\.id)).count == mine.count
+            && mine.allSatisfy { Set([$0.answer] + $0.distractors).count == DailyComprehension.optionCount })
+    check("every sentence is upper-case letters and single spaces, and four to nine words",
+          mine.allSatisfy { item in
+              item.sentence.allSatisfy { ($0 >= "A" && $0 <= "Z") || $0 == " " }
+                && !item.sentence.contains("  ")
+                && (4...9).contains(item.sentence.split(separator: " ").count)
+          })
+    check("each kochLevel is 1 + the highest MorseCode.kochOrder position of a letter in the sentence",
+          mine.allSatisfy { item in
+              item.kochLevel == 1 + (item.sentence.filter { $0 != " " }
+                  .compactMap { MorseCode.kochOrder.firstIndex(of: $0) }.max() ?? -1)
+          })
+} else {
+    check("fixtures/comprehension-bank.json loads and decodes", false)
+}
+if let data = loadFixtureData("comprehension-selection.json"),
+   let fx = try? JSONDecoder().decode(ComprehensionSelectionFixture.self, from: data) {
+    check("rule constants match the fixture",
+          DailyComprehension.selectionStride == fx.rules.selectionStride
+            && DailyComprehension.optionCount == fx.rules.optionCount
+            && ComprehensionBank.items.count == fx.rules.itemCount)
+    check("the stride is coprime with the bank size: one full cycle visits every item once",
+          Set(fx.cycle).count == ComprehensionBank.items.count
+            && fx.cycle == (1...ComprehensionBank.items.count).map {
+                DailyComprehension.itemIndex(forPuzzle: $0, itemCount: ComprehensionBank.items.count)
+            })
+    var casesOK = !fx.cases.isEmpty
+    for c in fx.cases {
+        let n = DailyDit.puzzleNumber(year: c.date.year, month: c.date.month, day: c.date.day)
+        let index = DailyComprehension.itemIndex(forPuzzle: n, itemCount: ComprehensionBank.items.count)
+        let order = DailyComprehension.optionOrder(forPuzzle: n)
+        if n != c.puzzleNumber || index != c.itemIndex
+            || DailyComprehension.item(forPuzzle: n).id != c.itemId
+            || order != c.optionOrder
+            || DailyComprehension.options(forPuzzle: n).correctPosition != c.correctPosition {
+            casesOK = false
+            print("    mismatch for \(c.date.year)-\(c.date.month)-\(c.date.day)")
+        }
+    }
+    check("date -> puzzle -> item -> option order matches the fixture (\(fx.cases.count) dates)", casesOK)
+    check("option shuffles match the fixture (\(fx.shuffles.count) seeds)",
+          !fx.shuffles.isEmpty && fx.shuffles.allSatisfy { DailyComprehension.optionOrder(forPuzzle: $0.puzzleNumber) == $0.optionOrder })
+    var g = DailyComprehensionGame(puzzleNumber: 2)
+    g.noteListen(); g.noteListen()
+    let wrong = (g.correctPosition + 1) % DailyComprehension.optionCount
+    let tookWrong = g.choose(wrong)
+    let tookSecond = g.choose(g.correctPosition)
+    g.noteListen()
+    check("a game counts listens until answered, takes one answer, and then is closed",
+          tookWrong && !tookSecond && g.listens == 2 && g.isFinished && !g.isCorrect)
+} else {
+    check("fixtures/comprehension-selection.json loads and decodes", false)
+}
+
+// ---------------------------------------------------------------------------
+// Continue with the key after a miss (#352, #347), against
+// fixtures/continue-after-miss.json — read by this harness and by the android
+// and desktop ContinueAfterMissTest.
+struct ContinueAfterMissFixture: Decodable {
+    struct Step: Decodable {
+        let op: String
+        let target: String?
+        let text: String?
+        let atMs: Int64?
+        let expect: String?
+        let awaiting: Bool
+    }
+    struct Case: Decodable {
+        let name: String
+        let enabled: Bool
+        let steps: [Step]
+    }
+    let debounceMs: Int64
+    let cases: [Case]
+}
+func loadContinueAfterMissFixture() -> ContinueAfterMissFixture? {
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent()
+        .deletingLastPathComponent().deletingLastPathComponent()
+    guard let data = try? Data(contentsOf: root.appendingPathComponent("fixtures/continue-after-miss.json")) else { return nil }
+    return try? JSONDecoder().decode(ContinueAfterMissFixture.self, from: data)
+}
+print("\nContinue with the key after a miss (fixtures/continue-after-miss.json):")
+if let fx = loadContinueAfterMissFixture() {
+    check("debounce is \(fx.debounceMs) ms", ContinueAfterMiss.debounceMs == fx.debounceMs)
+    check("fixture has cases", !fx.cases.isEmpty)
+    for c in fx.cases {
+        var machine = ContinueAfterMiss()
+        var ok = true
+        for s in c.steps {
+            switch s.op {
+            case "miss": machine.miss(target: s.target ?? "", atMs: s.atMs ?? 0, enabled: c.enabled)
+            case "input":
+                if machine.input(s.text ?? "", atMs: s.atMs ?? 0).rawValue != s.expect { ok = false }
+            case "reset": machine.reset()
+            default: ok = false
+            }
+            if machine.isAwaiting != s.awaiting { ok = false }
+        }
+        check("continue after miss: \(c.name)", ok)
+    }
+} else {
+    check("fixtures/continue-after-miss.json loads and decodes", false)
+}
+
 // MARK: - UI contract: option lists
 //
 // Every enumerated option list the user picks from is the same, in the same
 // order, on every app. fixtures/keyer-modes.json (#348) and
 // fixtures/option-lists.json are read here, by the Kotlin
 // OptionListsFixtureTest on android and desktop, and by parity/check.py.
-// The harness can only see MorseKit; the app-target enums (the Vail adapter's
-// KeyerMode, RevealMode, PracticeDuration ...) are checked statically by
-// parity/check.py, and the keyer-mode labels are also read out of
-// MIDIOutput.swift's source text below, because that is the list #348 is about.
+// The harness can only see MorseKit; the app-target enums (
+// RevealMode, PracticeDuration ...) are checked statically by
+// parity/check.py; the Vail keyer modes live in MorseKit (VailKeyerMode, #348),
+// so their names are compared with the fixture here directly.
 print("\nOption lists (fixtures/keyer-modes.json, fixtures/option-lists.json):")
 func loadUIContractFixture(_ name: String) -> [String: Any]? {
     let root = URL(fileURLWithPath: #filePath)
@@ -8959,30 +9257,9 @@ if let fx = loadUIContractFixture("option-lists.json") {
 }
 if let kx = loadUIContractFixture("keyer-modes.json"), let want = kx["keyerModes"] as? [String] {
     check("fixtures/keyer-modes.json lists the ten Vail keyer modes", want.count == 10)
-    // MIDIOutput.KeyerMode is in the app target, out of the harness's reach:
-    // read its displayName table from the source text instead.
-    let root = URL(fileURLWithPath: #filePath)
-        .deletingLastPathComponent().deletingLastPathComponent()
-        .deletingLastPathComponent().deletingLastPathComponent()
-    if let text = try? String(contentsOf: root.appendingPathComponent("ios/MorseTrainerApp/MIDIOutput.swift"),
-                              encoding: .utf8) {
-        var labels: [String] = []
-        var inTable = false
-        for line in text.split(separator: "\n", omittingEmptySubsequences: false) {
-            let t = line.trimmingCharacters(in: .whitespaces)
-            if t.hasPrefix("public var displayName") { inTable = true; continue }
-            guard inTable else { continue }
-            if t.hasPrefix("case ."), let open = t.firstIndex(of: "\"") {
-                let rest = t[t.index(after: open)...]
-                if let close = rest.firstIndex(of: "\"") { labels.append(String(rest[..<close])) }
-            } else if t == "}" && !labels.isEmpty {
-                break
-            }
-        }
-        check("MIDIOutput.KeyerMode displayName table equals the keyer-mode fixture, in order", labels == want)
-    } else {
-        check("MIDIOutput.swift is readable for the keyer-mode check", false)
-    }
+    // VailKeyerMode lives in MorseKit (#348), so the picker's own list is visible here.
+    check("VailKeyerMode displayNames equal the keyer-mode fixture, in order",
+          VailKeyerMode.allCases.map { $0.displayName } == want)
 } else {
     check("fixtures/keyer-modes.json loads and decodes", false)
 }

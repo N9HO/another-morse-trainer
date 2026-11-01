@@ -99,6 +99,12 @@ testers, bug reports and feature chat live on
   short words and callsigns that split into their characters when hit.
   Waves, lives, combos, three difficulties, a gentle speed ramp in hear-it
   mode, and every hit and miss feeds your stats
+- **The Daily DiDaaaaahDit**: a card on Home under Daily Dit. One short
+  sentence a day (about five words, the same for everyone on a date) is sent
+  in Morse at your own speed, then you answer a four-option question about it
+  (A-D) instead of copying it letter for letter. Replay as often as you like,
+  one answer a day; it keeps your daily streak going and is not ranked on the
+  leaderboard
 - **First Four**: just enough CW for a brand-new operator to hunt one POTA
   activator — enter your callsign and state, then hear and send your call,
   your state, ? and 73, and work through three short scenes: a busted call
@@ -161,6 +167,11 @@ testers, bug reports and feature chat live on
 - **On-screen paddles**: the on-screen key can be a straight key or a pair of
   touch paddles with a built-in Iambic A / Iambic B / Ultimatic keyer, dit and
   dah memory, and a left-handed swap — wherever you key on screen
+- **Continue with the key after a miss**: in the keyed-answer modes
+  (Characters with "Key answers", Sending Practice), keying the correct
+  answer again after a miss acts as Next, so you never leave the key; a wrong
+  re-key is ignored. Next still works, and Settings › Keys & Sending can turn
+  it off
 - **A hardware key wherever you type**: a Vail Adapter or other MIDI key
   also works in the Pileup Runner and Contest (what you key goes in the box
   and is sent when you stop keying; key CQ to call CQ), Type It, QRQ Speed,
@@ -278,7 +289,8 @@ there is one target and one code base; the Mac-only code is in
   opens the user guide.
 - **The leaderboard** needs App Attest to post. Where the Mac cannot attest,
   the boards stay readable and a run says why it was not posted, as in the
-  simulator.
+  simulator; Settings shows one line in place of the Share scores switch and
+  buddy pairing explains itself (#349, `AttestationAvailability`).
 - **Listen & Learn** keeps playing in the background: a Mac app is not
   suspended when its window is not in front.
 - **Sandbox**: the Mac build is sandboxed with network-client and

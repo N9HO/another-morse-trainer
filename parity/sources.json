@@ -41,8 +41,8 @@
  "optionLists": {
   "keyerModes": {
    "ios": {
-    "file": "MorseTrainerApp/MIDIOutput.swift",
-    "enum": "KeyerMode",
+    "file": "Sources/MorseKit/VailKeyerMode.swift",
+    "enum": "VailKeyerMode",
     "labels": "displayName"
    },
    "android": {

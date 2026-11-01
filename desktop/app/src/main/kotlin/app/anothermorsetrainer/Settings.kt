@@ -288,6 +288,12 @@ object Settings {
     /** Dah on the left, dit on the right — for a left-handed operator. */
     var paddleSwap by mutableStateOf(false)
         private set
+    /**
+     * After a miss in a keyed-answer mode, keying the correct answer again acts
+     * as Next (#352, #347). Next and a tap still work. See [ContinueAfterMiss].
+     */
+    var continueAfterMiss by mutableStateOf(true)
+        private set
 
     // ---- Short Stories (fables / serials / news) ----
 
@@ -573,6 +579,7 @@ object Settings {
             .getOrDefault(OnScreenKeyType.STRAIGHT)
         paddleMode = PaddleKeyer.Mode.fromId(prefs.getString("paddleMode", null))
         paddleSwap = prefs.getBoolean("paddleSwap", false)
+        continueAfterMiss = prefs.getBoolean("continueAfterMiss", true)
         storyContent = runCatching { StoryContent.valueOf(prefs.getString("storyContent", null) ?: "FABLES") }
             .getOrDefault(StoryContent.FABLES)
         storySerialId = prefs.getString("storySerialId", "") ?: ""
@@ -808,6 +815,11 @@ object Settings {
 
     fun updatePaddleSwap(value: Boolean) {
         paddleSwap = value
+        persist()
+    }
+
+    fun updateContinueAfterMiss(value: Boolean) {
+        continueAfterMiss = value
         persist()
     }
 
@@ -1258,6 +1270,7 @@ object Settings {
             putString("onScreenKey", onScreenKey.name)
             putString("paddleMode", paddleMode.id)
             putBoolean("paddleSwap", paddleSwap)
+            putBoolean("continueAfterMiss", continueAfterMiss)
             putString("storyContent", storyContent.name)
             putString("storySerialId", storySerialId)
             putString("newsSource", newsSource.name)

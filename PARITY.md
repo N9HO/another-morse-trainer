@@ -97,6 +97,17 @@ cannot do, and why (details in `docs/desktop-design.md` §2).
 | <a id="ex-desktop-flatpak-speech"></a>Spoken read-back inside the Flatpak | desktop (Linux, Flatpak) | The sandbox has no speech engine; Windows (System.Speech) and a Linux install with `spd-say` or `espeak-ng` do speak. | Shows the text. Bundling espeak-ng is a follow-up. |
 | <a id="ex-desktop-analyzer-mic"></a>Sending Analyzer microphone: stopping on an audio interruption or route loss, and its own denied-permission message (audit row 24) | desktop | Java Sound exposes no audio-session interruption, focus or input-device-change callbacks, and a denied microphone looks the same as a missing one. | The microphone runs until the user stops it; a failed open shows the generic no-input message. |
 
+#### The Daily DiDaaaaahDit (#353)
+
+Shipped on iOS, Android and desktop in one change; no platform exceptions.
+Each tree reads its own generated copy of `fixtures/comprehension-bank.json`
+(`ios/tools/gen_comprehension_bank.py`), and each has a test that the copy
+equals the fixture. Platform idiom only: desktop adds A-D / 1-4 / Enter on the
+keyboard; the phones answer by tap or by keying A-D on a hardware key (all
+three). The "your device is muted" prompt (#252) is not part of this mode on
+any app, since listens are free and uncounted for scoring. The user guide needs
+The Daily DiDaaaaahDit section (see `docs/daily-comprehension-design.md`).
+
 ### Same feature, platform mechanism (not gaps)
 
 Listed so nobody "ports" one side's plumbing to the other, or reads it as a
@@ -109,6 +120,17 @@ missing feature.
   Repeater are toolbar icons on iOS and tiles elsewhere; the home tile order,
   last-used highlight and setup blurb follow each platform's idiom. Accepted
   2026-10-27; the user can reach every one of them on every app.
+
+- **Ranked scores and buddy streaks need device attestation (#349).** iOS uses
+  App Attest, Android Play Integrity (needs Google Play services: a LineageOS
+  device without GApps is "no Play services"), desktop has neither. In every
+  state that cannot attest, all three apps do the same: launch, run every
+  training mode, keep scores as local personal bests, keep the public boards
+  readable, hide the Share scores switch / name / Delete my scores / opt-in
+  prompt behind one explanatory line, and let buddy Invite and Join explain
+  themselves on tap. Pinned by `fixtures/attestation-availability.json`
+  (`AttestationAvailability` in each tree's morsekit). Wording differs by
+  platform (Play services, App Attest, desktop).
 
 - **Big-screen layout.** Both apps run on tablets in any orientation and in
   split-screen or resizable windows, and both re-flow the home grid four

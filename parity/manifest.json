@@ -2671,6 +2671,88 @@
      }
     ]
    }
+  },
+  {
+   "id": "dailyComprehension",
+   "name": "The Daily DiDaaaaahDit",
+   "kind": "screen",
+   "status": {
+    "ios": "present",
+    "android": "present",
+    "desktop": "present"
+   },
+   "claims": {
+    "ios": {
+     "screens": [
+      "DailyComprehensionView.swift"
+     ]
+    },
+    "android": {
+     "routes": [
+      "dailycomprehension"
+     ],
+     "screens": [
+      "DailyComprehensionScreen.kt"
+     ]
+    },
+    "desktop": {
+     "routes": [
+      "dailycomprehension"
+     ],
+     "screens": [
+      "DailyComprehensionScreen.kt"
+     ]
+    }
+   },
+   "readme": {
+    "ios": [
+     "The Daily DiDaaaaahDit"
+    ],
+    "android": [
+     "The Daily DiDaaaaahDit"
+    ],
+    "desktop": [
+     "The Daily DiDaaaaahDit"
+    ]
+   }
+  },
+  {
+   "id": "continueAfterMiss",
+   "name": "Continue with the key after a miss",
+   "kind": "setting",
+   "status": {
+    "ios": "present",
+    "android": "present",
+    "desktop": "present"
+   },
+   "claims": {
+    "ios": {
+     "files": [
+      "Sources/MorseKit/ContinueAfterMiss.swift"
+     ]
+    },
+    "android": {
+     "files": [
+      "morsekit/ContinueAfterMiss.kt"
+     ]
+    },
+    "desktop": {
+     "files": [
+      "morsekit/ContinueAfterMiss.kt"
+     ]
+    }
+   },
+   "readme": {
+    "ios": [
+     "Continue with the key after a miss"
+    ],
+    "android": [
+     "Continue with the key after a miss"
+    ],
+    "desktop": [
+     "Continue with the key after a miss"
+    ]
+   }
   }
  ],
  "optionLists": {

@@ -146,6 +146,8 @@ public enum SettingsCatalog {
               ["iambic", "iambic a", "iambic b", "ultimatic", "keyer", "squeeze", "touch paddles"], .onScreenKey),
         .init("paddleSwap", "Dah on the left",
               ["left handed", "lefty", "swap", "reverse", "paddles", "dit"], .onScreenKey),
+        .init("continueAfterMiss", "Continue with the key after a miss",
+              ["next", "miss", "wrong", "retry", "acknowledge", "key", "keying", "advance"], .onScreenKey),
 
         // QSO & Pileups
         .init("myCall", "Your callsign", ["call sign", "call", "station", "my call", "w1aw"], .yourStation),
