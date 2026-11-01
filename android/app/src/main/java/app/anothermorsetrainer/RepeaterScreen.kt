@@ -16,6 +16,8 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -72,6 +74,7 @@ import app.anothermorsetrainer.vail.VailRepeater
  * follow-ups; the audio + connection core is here. Requires the network, so this
  * screen can't be exercised on a dev machine — verified by build only.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun RepeaterScreen(onBack: () -> Unit) {
     val context = LocalContext.current
@@ -337,9 +340,10 @@ fun RepeaterScreen(onBack: () -> Unit) {
                             fontSize = 12.sp
                         )
                         Spacer(Modifier.height(8.dp))
-                        Row(
-                            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        FlowRow(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             MidiKeyOutput.KeyerMode.entries.forEach { mode ->
                                 val sel = mode == repeater.keyerMode

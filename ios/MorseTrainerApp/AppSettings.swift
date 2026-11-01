@@ -708,6 +708,11 @@ struct AppSettings: Codable, Equatable {
     /// answer (`Drill.isKeyable`), never for a meaning or a prosign glyph.
     var keyingResponse: Bool = false
 
+    /// After a miss in a keyed-answer mode, keying the correct answer again
+    /// acts as Next, so the learner never leaves the key (#352, #347). Next and
+    /// a tap still work. See `ContinueAfterMiss`.
+    var continueAfterMiss: Bool = true
+
     /// How the choice quizzes take an answer (#232): tap the choices (the
     /// default), climb four choices → six → typed per level, or always type.
     /// Honoured per drill like keying: a drill whose answer is a meaning or a
@@ -866,7 +871,7 @@ extension AppSettings {
         case learningMode, practiceDuration
         case listenContent, listenGap, listenReadback, wordTier, customWords, useCustomWords
         case cw77IncludeMe, cw77Style
-        case voiceResponse, keyingResponse
+        case voiceResponse, keyingResponse, continueAfterMiss
         case answerEntry
         case qrqSpeed, backgroundNoise, didMigrateNoiseFloor
         case bluetoothKeepAlive, bandNoise
@@ -953,6 +958,7 @@ extension AppSettings {
         s.syncBackgroundNoise()
         s.voiceResponse = try c.decodeIfPresent(Bool.self, forKey: .voiceResponse) ?? s.voiceResponse
         s.keyingResponse = try c.decodeIfPresent(Bool.self, forKey: .keyingResponse) ?? s.keyingResponse
+        s.continueAfterMiss = try c.decodeIfPresent(Bool.self, forKey: .continueAfterMiss) ?? s.continueAfterMiss
         // Read as a raw string so a value from a newer build falls back to the default.
         s.answerEntry = (try? c.decodeIfPresent(String.self, forKey: .answerEntry))
             .flatMap { $0 }.flatMap(AnswerEntryMode.init(rawValue:)) ?? s.answerEntry
