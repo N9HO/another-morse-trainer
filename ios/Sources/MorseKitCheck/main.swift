@@ -9080,6 +9080,130 @@ func checkBrassKnucklesKeying() {
 }
 checkBrassKnucklesKeying()
 
+// MARK: - Brass Knuckles Knock Out: the ring renderer
+//
+// BkRing (Sources/MorseKit/BrassKnucklesRing.swift) is the pixel renderer under the fight screen.
+// There is nothing to compare its pixels with except the other ports, so this checks what must hold
+// for any pixels: buffer sizes, the art tables, the colour maths, the banner width maths, and that
+// every pose on every stage draws without trapping.
+print("\nBrass Knuckles Knock Out ring renderer:")
+@MainActor
+func checkBrassKnucklesRing() {
+    let problems = BkRing.artProblems()
+    check("every sprite is w*h digits and every table lines up (\(problems.count) problems)", problems.isEmpty)
+    for p in problems.prefix(5) { print("    \(p)") }
+
+    check("the art is 160 x 120 and the screen is double that",
+          BkRing.artW == 160 && BkRing.artH == 120 && BkRing.screenW == 320 && BkRing.screenH == 240)
+    check("there are four stages with names", BkRing.stages.count == 4 && BkRing.stages.allSatisfy { !$0.name.isEmpty })
+
+    // Colour: RGB565 rounding, opaque, and mixing that hits both ends.
+    check("white and black survive the RGB565 rounding", BkRing.rgb(0xFFFFFF) == 0xFFFFFFFF && BkRing.rgb(0x000000) == 0xFF000000)
+    check("0x1A1426 rounds to 0xFF181421", BkRing.rgb(0x1A1426) == 0xFF181421)
+    let ca = BkRing.rgb(0xD83A3A), cb = BkRing.rgb(0x3A5AD8)
+    check("mix at 0% and 100% gives the ends", BkRing.mix(ca, cb, 0) == ca && BkRing.mix(ca, cb, 100) == cb)
+    check("mix keeps the colour opaque", BkRing.mix(ca, cb, 37) >> 24 == 0xFF)
+
+    // Banners.
+    let edge = BkRing.rgb(0x3A0A0C)
+    let round = BkRing.Banner("ROUND 3", color: BkRing.rgb(0xE8B020), y: 36, px: 3, edge: edge)
+    let gang = BkRing.Banner("GANG", color: BkRing.rgb(0xFFE030), y: 77, px: 2, edge: edge)
+    check("a banner is six blocks a letter less the gap (ROUND 3 at 3 px = 123, GANG at 2 px = 46)",
+          round.width == 7 * 6 * 3 - 3 && round.width == 123 && gang.width == 4 * 6 * 2 - 2 && gang.width == 46)
+
+    // The ring: every pose, on every stage, at several moments, with and without a banner.
+    var foes: [BoxingFoe] = [.idle, .open, .block, .stunned, .down, .out, .rise, .victory]
+    for s in [BoxingSide.left, .right] { foes += [.windup(s), .punch(s), .whiff(s), .hurt(s)] }
+    var mes: [BoxingMe] = [.idle, .uppercut, .miss, .hurt, .down, .rise, .victory]
+    for s in [BoxingSide.left, .right] { mes += [.dodge(s), .jab(s), .hook(s), .blocked(s)] }
+    for n in 1...4 { mes.append(.combo(n)) }
+    let nows: [UInt32] = [0, 1000, 0xFFFF_FF00]
+    let ages: [UInt32] = [0, 60, 130, 250, 450, 900, 5000]
+    var sizesOK = true
+    var drawn = 0
+    for stage in 0..<BkRing.stages.count {
+        for fighter in 0..<BoxingRules.fighters {
+            for (i, foe) in foes.enumerated() {
+                let me = mes[i % mes.count]
+                for now in nows {
+                    let age = ages[(i + fighter) % ages.count]
+                    let banner: BkRing.Banner? = (i + stage) % 3 == 0 ? round : nil
+                    let buf = BkRing.ring(fighter: fighter, foe: (foe, now &- age), me: (me, now &- age),
+                                          hurting: i % 2 == 0, now: now, stage: stage, banner: banner)
+                    if buf.count != BkRing.artW * BkRing.artH { sizesOK = false }
+                    if buf.contains(where: { $0 >> 24 != 0xFF }) { sizesOK = false }
+                    drawn += 1
+                }
+            }
+        }
+    }
+    check("ring() draws every foe pose against every stage and fighter, 160 x 120 and opaque (\(drawn) frames)", sizesOK && drawn > 0)
+    var posesOK = true
+    for me in mes {
+        for foe in foes {
+            let buf = BkRing.ring(fighter: 7, foe: (foe, 1000), me: (me, 1000), hurting: false, now: 1050, stage: 3)
+            if buf.count != 19_200 { posesOK = false }
+        }
+    }
+    check("ring() draws every pairing of your poses and the foe's (\(mes.count) x \(foes.count))", posesOK)
+    let a = BkRing.ring(fighter: 2, foe: (.windup(.left), 1000), me: (.idle, 0), hurting: false, now: 1200, stage: 0)
+    let b = BkRing.ring(fighter: 2, foe: (.windup(.left), 1000), me: (.idle, 0), hurting: false, now: 1200, stage: 0)
+    let c = BkRing.ring(fighter: 2, foe: (.punch(.left), 1000), me: (.idle, 0), hurting: false, now: 1200, stage: 0)
+    check("ring() is deterministic and a different pose draws differently", a == b && a != c)
+    let withBanner = BkRing.ring(fighter: 2, foe: (.idle, 0), me: (.idle, 0), hurting: false, now: 500, stage: 1, banner: round)
+    let without = BkRing.ring(fighter: 2, foe: (.idle, 0), me: (.idle, 0), hurting: false, now: 500, stage: 1)
+    var boxOK = withBanner != without
+    for i in 0..<withBanner.count where withBanner[i] != without[i] {
+        let row = i / BkRing.artW
+        let col = i % BkRing.artW
+        let inside = row >= 35 && row < 60 && col >= 17 && col < 144
+        if !inside { boxOK = false }
+    }
+    check("a banner changes only pixels inside its box", boxOK)
+
+    // The splash.
+    var splashOK = true
+    for t in [0, 100, 399, 400, 650, 700, 900, 1200, 1499, 1500, 2100, 3000, 7000] {
+        if BkRing.splash(t: t, seed: 0x5BD1E995).count != BkRing.screenW * BkRing.screenH { splashOK = false }
+    }
+    check("splash() is a 320 x 240 buffer at every moment, before and after the motto", splashOK)
+    check("splash() is the same for the same seed and differs for another once the stars start",
+          BkRing.splash(t: 1000, seed: 1) == BkRing.splash(t: 1000, seed: 1)
+            && BkRing.splash(t: 1000, seed: 1) != BkRing.splash(t: 1000, seed: 2))
+    check("the motto band appears at 1.5 s", BkRing.splash(t: 1499, seed: 1)[BkRing.mottoY * BkRing.screenW + 3]
+            != BkRing.splash(t: 1500, seed: 1)[BkRing.mottoY * BkRing.screenW + 3])
+    check("slam() is true for 90 ms as each title line lands",
+          BkRing.slam(650) && BkRing.slam(739) && !BkRing.slam(740) && BkRing.slam(900) && BkRing.slam(1150)
+            && !BkRing.slam(0) && !BkRing.slam(5000))
+    check("the prompt row sits under the motto, inside the screen",
+          BkRing.promptY == BkRing.mottoY + BkRing.mottoH + 2 && BkRing.mottoY + BkRing.mottoH <= BkRing.screenH)
+
+    // Portraits.
+    var portraitsOK = true
+    var silhouetteOK = true
+    let bg = BkRing.rgb(0x120E1C)
+    let tint = BkRing.rgb(0x2A2434)
+    for f in 0..<BoxingRules.fighters {
+        for face in 0..<6 {
+            let open = BkRing.portrait(fighter: f, face: face, locked: false, bg: bg)
+            let shut = BkRing.portrait(fighter: f, face: face, locked: true, bg: bg)
+            if open.count != BkRing.portraitSize * BkRing.portraitSize || shut.count != open.count { portraitsOK = false }
+            if open == shut { silhouetteOK = false }
+            if !shut.allSatisfy({ $0 == bg || $0 == tint }) { silhouetteOK = false }
+        }
+    }
+    check("portraits are 48 x 48 for every fighter and face", portraitsOK && BkRing.portraitSize == 48)
+    check("a locked portrait is a one-colour silhouette that differs from the open one", silhouetteOK)
+
+    let doubled = BkRing.doubled(a)
+    check("doubled() turns every art pixel into a 2 x 2 block",
+          doubled.count == BkRing.screenW * BkRing.screenH
+            && doubled[0] == a[0] && doubled[1] == a[0] && doubled[BkRing.screenW] == a[0]
+            && doubled[BkRing.screenW * 5 + 7] == a[2 * BkRing.artW + 3]
+            && doubled[doubled.count - 1] == a[a.count - 1])
+}
+checkBrassKnucklesRing()
+
 // MARK: - UI contract: option lists
 //
 // Every enumerated option list the user picks from is the same, in the same
