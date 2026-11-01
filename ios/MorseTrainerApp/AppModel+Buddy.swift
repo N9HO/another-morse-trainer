@@ -42,15 +42,15 @@ extension AppModel {
     /// tappable so a tap always answers, rather than being disabled with a
     /// label that looks no different.
     var buddyUnavailableReason: String? {
-        guard LeaderboardDisplayName.isValid(settings.leaderboard.displayName) else {
-            return "Set a display name in the Leaderboard section above first. It is the name your buddies see, and Share scores can stay off."
-        }
-        guard leaderboard.canAttest else {
+        guard attestationFeatures.buddyActionsEnabled else {
             #if targetEnvironment(macCatalyst)
             return "This Mac cannot attest, so it cannot pair with a buddy. Pair from an iPhone or iPad instead."
             #else
             return "This device cannot attest, so it cannot pair with a buddy. The simulator never can; on an iPhone or iPad, check that the app came from the App Store or TestFlight."
             #endif
+        }
+        guard LeaderboardDisplayName.isValid(settings.leaderboard.displayName) else {
+            return "Set a display name in the Leaderboard section above first. It is the name your buddies see, and Share scores can stay off."
         }
         return nil
     }

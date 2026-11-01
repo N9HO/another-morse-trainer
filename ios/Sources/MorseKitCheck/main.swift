@@ -1688,6 +1688,67 @@ if let fx = loadChartAxisFixture(), !fx.cases.isEmpty {
     check("fixtures/chart-axis.json loads and decodes", false)
 }
 
+// What the leaderboard and buddy streak do when the device cannot attest
+// (#349), against fixtures/attestation-availability.json — the same file the
+// Kotlin AttestationAvailabilityTest reads on Android and desktop.
+print("\nAttestation availability (fixtures/attestation-availability.json):")
+struct AttestationFixture: Decodable {
+    struct StateRow: Decodable {
+        let state: String
+        let shareSwitchVisible: Bool
+        let optInPromptOffered: Bool
+        let runsRanked: Bool
+        let deleteScoresOffered: Bool
+        let buddyActionsEnabled: Bool
+        let boardReadable: Bool
+        let personalBestsKept: Bool
+        let trainingModesWork: Bool
+        let noteKey: String
+    }
+    struct AppleCase: Decodable { let supported: Bool; let expect: String }
+    struct AppleProbe: Decodable { let cases: [AppleCase] }
+    let states: [StateRow]
+    let appleProbe: AppleProbe
+}
+func loadAttestationFixture() -> AttestationFixture? {
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent()
+        .deletingLastPathComponent().deletingLastPathComponent()
+    guard let data = try? Data(contentsOf: root.appendingPathComponent("fixtures/attestation-availability.json")) else { return nil }
+    return try? JSONDecoder().decode(AttestationFixture.self, from: data)
+}
+if let fx = loadAttestationFixture(), !fx.states.isEmpty {
+    check("the fixture lists every state", fx.states.count == AttestationState.allCases.count)
+    for row in fx.states {
+        guard let state = AttestationState(rawValue: row.state), let note = AttestationNote(rawValue: row.noteKey) else {
+            check("fixture state \(row.state) and note \(row.noteKey) are known", false)
+            continue
+        }
+        let f = AttestationAvailability.features(for: state)
+        check("\(row.state): switch, prompt, ranking, delete, buddy, board, bests, training, note",
+              f.shareSwitchVisible == row.shareSwitchVisible
+                && f.optInPromptOffered == row.optInPromptOffered
+                && f.runsRanked == row.runsRanked
+                && f.deleteScoresOffered == row.deleteScoresOffered
+                && f.buddyActionsEnabled == row.buddyActionsEnabled
+                && f.boardReadable == row.boardReadable
+                && f.personalBestsKept == row.personalBestsKept
+                && f.trainingModesWork == row.trainingModesWork
+                && f.note == note)
+    }
+    check("training and personal bests never depend on attestation",
+          AttestationState.allCases.allSatisfy {
+              let f = AttestationAvailability.features(for: $0)
+              return f.trainingModesWork && f.personalBestsKept && f.boardReadable
+          })
+    for c in fx.appleProbe.cases {
+        check("App Attest supported=\(c.supported) is \(c.expect)",
+              AttestationAvailability.appleState(isSupported: c.supported).rawValue == c.expect)
+    }
+} else {
+    check("fixtures/attestation-availability.json loads and decodes", false)
+}
+
 // Per-mode personal bests (docs/high-scores-design.md, step 1), against
 // fixtures/mode-bests.json — the same file the Kotlin ModeBestsTest reads.
 print("\nPer-mode personal bests (fixtures/mode-bests.json):")

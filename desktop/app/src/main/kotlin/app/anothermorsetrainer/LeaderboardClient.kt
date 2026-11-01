@@ -1,5 +1,8 @@
 package app.anothermorsetrainer
 
+import app.anothermorsetrainer.morsekit.AttestationAvailability
+import app.anothermorsetrainer.morsekit.AttestationFeatures
+import app.anothermorsetrainer.morsekit.AttestationState
 import app.anothermorsetrainer.morsekit.LeaderboardItem
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -59,7 +62,17 @@ object LeaderboardClient {
      * keeps the buddy buttons disabled, as an Android build without a Cloud
      * project number did.
      */
-    val isConfigured: Boolean get() = false
+    val isConfigured: Boolean get() = features.runsRanked
+
+    /**
+     * The attestation rule for this build (#349): always
+     * [AttestationState.NO_PLATFORM_ATTESTATION] here, so the Share scores
+     * switch is replaced by [DesktopCopy.UNRANKED_NOTE], no run is ranked and
+     * no buddy action is offered, while training and personal bests are
+     * untouched. Pinned by `fixtures/attestation-availability.json`.
+     */
+    val attestationState: AttestationState = AttestationAvailability.desktopState
+    val features: AttestationFeatures get() = AttestationAvailability.features(attestationState)
 
     private var initialized = false
 
