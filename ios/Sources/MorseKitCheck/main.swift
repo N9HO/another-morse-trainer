@@ -1688,6 +1688,67 @@ if let fx = loadChartAxisFixture(), !fx.cases.isEmpty {
     check("fixtures/chart-axis.json loads and decodes", false)
 }
 
+// What the leaderboard and buddy streak do when the device cannot attest
+// (#349), against fixtures/attestation-availability.json — the same file the
+// Kotlin AttestationAvailabilityTest reads on Android and desktop.
+print("\nAttestation availability (fixtures/attestation-availability.json):")
+struct AttestationFixture: Decodable {
+    struct StateRow: Decodable {
+        let state: String
+        let shareSwitchVisible: Bool
+        let optInPromptOffered: Bool
+        let runsRanked: Bool
+        let deleteScoresOffered: Bool
+        let buddyActionsEnabled: Bool
+        let boardReadable: Bool
+        let personalBestsKept: Bool
+        let trainingModesWork: Bool
+        let noteKey: String
+    }
+    struct AppleCase: Decodable { let supported: Bool; let expect: String }
+    struct AppleProbe: Decodable { let cases: [AppleCase] }
+    let states: [StateRow]
+    let appleProbe: AppleProbe
+}
+func loadAttestationFixture() -> AttestationFixture? {
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent()
+        .deletingLastPathComponent().deletingLastPathComponent()
+    guard let data = try? Data(contentsOf: root.appendingPathComponent("fixtures/attestation-availability.json")) else { return nil }
+    return try? JSONDecoder().decode(AttestationFixture.self, from: data)
+}
+if let fx = loadAttestationFixture(), !fx.states.isEmpty {
+    check("the fixture lists every state", fx.states.count == AttestationState.allCases.count)
+    for row in fx.states {
+        guard let state = AttestationState(rawValue: row.state), let note = AttestationNote(rawValue: row.noteKey) else {
+            check("fixture state \(row.state) and note \(row.noteKey) are known", false)
+            continue
+        }
+        let f = AttestationAvailability.features(for: state)
+        check("\(row.state): switch, prompt, ranking, delete, buddy, board, bests, training, note",
+              f.shareSwitchVisible == row.shareSwitchVisible
+                && f.optInPromptOffered == row.optInPromptOffered
+                && f.runsRanked == row.runsRanked
+                && f.deleteScoresOffered == row.deleteScoresOffered
+                && f.buddyActionsEnabled == row.buddyActionsEnabled
+                && f.boardReadable == row.boardReadable
+                && f.personalBestsKept == row.personalBestsKept
+                && f.trainingModesWork == row.trainingModesWork
+                && f.note == note)
+    }
+    check("training and personal bests never depend on attestation",
+          AttestationState.allCases.allSatisfy {
+              let f = AttestationAvailability.features(for: $0)
+              return f.trainingModesWork && f.personalBestsKept && f.boardReadable
+          })
+    for c in fx.appleProbe.cases {
+        check("App Attest supported=\(c.supported) is \(c.expect)",
+              AttestationAvailability.appleState(isSupported: c.supported).rawValue == c.expect)
+    }
+} else {
+    check("fixtures/attestation-availability.json loads and decodes", false)
+}
+
 // Per-mode personal bests (docs/high-scores-design.md, step 1), against
 // fixtures/mode-bests.json — the same file the Kotlin ModeBestsTest reads.
 print("\nPer-mode personal bests (fixtures/mode-bests.json):")
@@ -9283,6 +9344,112 @@ func checkBrassKnucklesRing() {
             && doubled[doubled.count - 1] == a[a.count - 1])
 }
 checkBrassKnucklesRing()
+
+// MARK: - Daily Comprehension (#353)
+//
+// fixtures/comprehension-bank.json and fixtures/comprehension-selection.json,
+// read by this harness AND by the android and desktop tests. The bank is
+// mirrored into ComprehensionBank.swift by tools/gen_comprehension_bank.py;
+// the first block below is what fails when the copy and the fixture drift.
+struct ComprehensionBankFixture: Decodable {
+    struct Item: Decodable {
+        let id, sentence, question, answer: String
+        let distractors: [String]
+        let kochLevel: Int
+    }
+    let items: [Item]
+}
+struct ComprehensionSelectionFixture: Decodable {
+    struct Rules: Decodable { let selectionStride, itemCount, optionCount: Int }
+    struct Case: Decodable {
+        struct Date: Decodable { let year, month, day: Int }
+        let date: Date
+        let puzzleNumber, itemIndex: Int
+        let itemId: String
+        let optionOrder: [Int]
+        let correctPosition: Int
+    }
+    struct Shuffle: Decodable { let puzzleNumber: Int; let optionOrder: [Int] }
+    let rules: Rules
+    let cases: [Case]
+    let shuffles: [Shuffle]
+    let cycle: [Int]
+}
+
+func loadFixtureData(_ name: String) -> Data? {
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+    return try? Data(contentsOf: root.appendingPathComponent("fixtures/\(name)"))
+}
+
+print("\nDaily Comprehension, against fixtures/comprehension-*.json:")
+if let data = loadFixtureData("comprehension-bank.json"),
+   let bank = try? JSONDecoder().decode(ComprehensionBankFixture.self, from: data) {
+    let mine = ComprehensionBank.items
+    check("the bundled bank equals fixtures/comprehension-bank.json (\(bank.items.count) items, same order)",
+          mine.count == bank.items.count
+            && zip(mine, bank.items).allSatisfy { m, f in
+                m.id == f.id && m.sentence == f.sentence && m.question == f.question
+                    && m.answer == f.answer && m.distractors == f.distractors && m.kochLevel == f.kochLevel
+            })
+    check("at least 120 items, ids unique, four distinct options each",
+          mine.count >= 120 && Set(mine.map(\.id)).count == mine.count
+            && mine.allSatisfy { Set([$0.answer] + $0.distractors).count == DailyComprehension.optionCount })
+    check("every sentence is upper-case letters and single spaces, and four to nine words",
+          mine.allSatisfy { item in
+              item.sentence.allSatisfy { ($0 >= "A" && $0 <= "Z") || $0 == " " }
+                && !item.sentence.contains("  ")
+                && (4...9).contains(item.sentence.split(separator: " ").count)
+          })
+    check("each kochLevel is 1 + the highest MorseCode.kochOrder position of a letter in the sentence",
+          mine.allSatisfy { item in
+              item.kochLevel == 1 + (item.sentence.filter { $0 != " " }
+                  .compactMap { MorseCode.kochOrder.firstIndex(of: $0) }.max() ?? -1)
+          })
+} else {
+    check("fixtures/comprehension-bank.json loads and decodes", false)
+}
+if let data = loadFixtureData("comprehension-selection.json"),
+   let fx = try? JSONDecoder().decode(ComprehensionSelectionFixture.self, from: data) {
+    check("rule constants match the fixture",
+          DailyComprehension.selectionStride == fx.rules.selectionStride
+            && DailyComprehension.optionCount == fx.rules.optionCount
+            && ComprehensionBank.items.count == fx.rules.itemCount)
+    check("the stride is coprime with the bank size: one full cycle visits every item once",
+          Set(fx.cycle).count == ComprehensionBank.items.count
+            && fx.cycle == (1...ComprehensionBank.items.count).map {
+                DailyComprehension.itemIndex(forPuzzle: $0, itemCount: ComprehensionBank.items.count)
+            })
+    var casesOK = !fx.cases.isEmpty
+    for c in fx.cases {
+        let n = DailyDit.puzzleNumber(year: c.date.year, month: c.date.month, day: c.date.day)
+        let index = DailyComprehension.itemIndex(forPuzzle: n, itemCount: ComprehensionBank.items.count)
+        let order = DailyComprehension.optionOrder(forPuzzle: n)
+        if n != c.puzzleNumber || index != c.itemIndex
+            || DailyComprehension.item(forPuzzle: n).id != c.itemId
+            || order != c.optionOrder
+            || DailyComprehension.options(forPuzzle: n).correctPosition != c.correctPosition {
+            casesOK = false
+            print("    mismatch for \(c.date.year)-\(c.date.month)-\(c.date.day)")
+        }
+    }
+    check("date -> puzzle -> item -> option order matches the fixture (\(fx.cases.count) dates)", casesOK)
+    check("option shuffles match the fixture (\(fx.shuffles.count) seeds)",
+          !fx.shuffles.isEmpty && fx.shuffles.allSatisfy { DailyComprehension.optionOrder(forPuzzle: $0.puzzleNumber) == $0.optionOrder })
+    var g = DailyComprehensionGame(puzzleNumber: 2)
+    g.noteListen(); g.noteListen()
+    let wrong = (g.correctPosition + 1) % DailyComprehension.optionCount
+    let tookWrong = g.choose(wrong)
+    let tookSecond = g.choose(g.correctPosition)
+    g.noteListen()
+    check("a game counts listens until answered, takes one answer, and then is closed",
+          tookWrong && !tookSecond && g.listens == 2 && g.isFinished && !g.isCorrect)
+} else {
+    check("fixtures/comprehension-selection.json loads and decodes", false)
+}
 
 // ---------------------------------------------------------------------------
 // Continue with the key after a miss (#352, #347), against

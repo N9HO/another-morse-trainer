@@ -99,7 +99,10 @@ paragraph. Delete my scores clears it all.
 ## Parity
 
 Same feature on both apps, same server, same routes; only the attestation
-mechanism differs, which is the platform's own idiom. Pairing across
+mechanism differs, which is the platform's own idiom. Where the device cannot
+attest (no Google Play services, the iOS simulator, desktop) pairing is
+unavailable with a one-line reason and nothing else changes; see
+`docs/high-scores-design.md` §3a and `fixtures/attestation-availability.json`. Pairing across
 platforms works because identities are platform-neutral on the server.
 
 ## Open questions for the reporter (asked on #219)

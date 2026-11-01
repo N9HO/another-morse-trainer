@@ -98,6 +98,12 @@ the iOS app's navy/teal look.
   clean timing hits harder, and stars buy an uppercut. Eight fighters, four
   stages, three rounds; each win unlocks the next fighter. GPL-3.0-or-later,
   used with the authors' permission.
+- **The Daily DiDaaaaahDit**: a card on Home under Daily Dit. One short
+  sentence a day (about five words, the same for everyone on a date) is sent
+  in Morse at your own speed, then you answer a four-option question about it
+  (A-D) instead of copying it letter for letter. Replay as often as you like,
+  one answer a day; it keeps your daily streak going and is not ranked on the
+  leaderboard
 - **First Four**: just enough CW for a brand-new operator to hunt one POTA
   activator — enter your callsign and state, then hear and send your call,
   your state, ? and 73, and work through three short scenes: a busted call
@@ -207,7 +213,10 @@ the iOS app's navy/teal look.
   (what was sent, what you answered) is graded by the server, which ranks
   the speed summed over the items you copied correctly, so a game's board
   number is not its on-screen score. Posting needs a genuine Play-installed
-  build (Play Integrity); a "Delete my scores" button removes everything
+  build (Play Integrity) on a device with Google Play services; without
+  them (LineageOS, Aurora installs) the app runs normally, every mode works,
+  scores stay local personal bests and Settings says in one line why sharing
+  and buddy pairing are off (#349); a "Delete my scores" button removes everything
   this install posted
 - **Buddy streak**: pair with up to ten people (on either app) and keep a
   separate streak with each: each day you both practice counts, a day

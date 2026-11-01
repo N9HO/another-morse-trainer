@@ -35,6 +35,10 @@
         <intent>
             <action android:name="android.speech.RecognitionService" />
         </intent>
+        <!-- So the leaderboard can tell, without crashing or prompting, whether the
+             Play Store and Play services exist (#349); same visibility rule. -->
+        <package android:name="com.android.vending" />
+        <package android:name="com.google.android.gms" />
     </queries>
 
     <application

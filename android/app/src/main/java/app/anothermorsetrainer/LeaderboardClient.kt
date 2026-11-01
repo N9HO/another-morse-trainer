@@ -3,7 +3,13 @@ package app.anothermorsetrainer
 import android.content.Context
 import android.content.SharedPreferences
 import android.util.Log
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.core.content.edit
+import app.anothermorsetrainer.morsekit.AttestationAvailability
+import app.anothermorsetrainer.morsekit.AttestationFeatures
+import app.anothermorsetrainer.morsekit.AttestationState
 import app.anothermorsetrainer.morsekit.Leaderboard
 import app.anothermorsetrainer.morsekit.LeaderboardItem
 import kotlinx.coroutines.CompletableDeferred
@@ -77,6 +83,7 @@ object LeaderboardClient {
 
     private lateinit var prefs: SharedPreferences
     internal lateinit var appContext: Context
+    /** Built on first use, and only on a device that passed [probe]: see [attesterOrNull]. */
     private var attester: PlayIntegrityAttester? = null
 
     private val http = OkHttpClient.Builder()
@@ -98,6 +105,29 @@ object LeaderboardClient {
     val isConfigured: Boolean get() = LEADERBOARD_CLOUD_PROJECT_NUMBER != 0L
 
     /**
+     * Whether this install can attest, and so rank runs and pair buddies
+     * (#349). Decided at [init] without touching Play Integrity, so a device
+     * with no Google Play services starts normally, and downgraded for the rest
+     * of the process if the Play Integrity client cannot even be created.
+     * Observable: Settings recomposes when it changes. The rule that turns it
+     * into feature switches is `AttestationAvailability`, pinned by
+     * `fixtures/attestation-availability.json`.
+     */
+    var attestationState by mutableStateOf(AttestationAvailability.androidState(
+        configured = LEADERBOARD_CLOUD_PROJECT_NUMBER != 0L, playStorePresent = true, playServicesPresent = true
+    ))
+        private set
+
+    val features: AttestationFeatures get() = AttestationAvailability.features(attestationState)
+
+    /**
+     * True when attested writes (run submission, "Delete my scores", the buddy
+     * routes) can be made. Everything that used to ask [isConfigured] asks this:
+     * no Play services means the same quiet "off" as an unconfigured build.
+     */
+    val canAttest: Boolean get() = attestationState == AttestationState.AVAILABLE
+
+    /**
      * True once [init] has run. `Stats.record` can fire from `ListenService`
      * in a process the system restarted without `MainActivity`, and the buddy
      * report hanging off it must then do nothing rather than trip a lateinit.
@@ -107,7 +137,48 @@ object LeaderboardClient {
     fun init(context: Context) {
         appContext = context.applicationContext
         prefs = appContext.getSharedPreferences("amt_leaderboard", Context.MODE_PRIVATE)
-        if (isConfigured) attester = PlayIntegrityAttester(appContext, LEADERBOARD_CLOUD_PROJECT_NUMBER)
+        attestationState = probe(appContext)
+    }
+
+    /**
+     * Ask the package manager, and nothing else, whether the Play Store and
+     * Play services are present and enabled (#349). Never throws, never
+     * starts a Play component and never shows anything: a LineageOS device
+     * without GApps, or one that installed this app through Aurora, answers
+     * "no" here and launches like any other. A device that has both but is not
+     * signed in, or runs microG, passes here; its first attested call fails
+     * and says so in the run's one-line result.
+     */
+    private fun probe(context: Context): AttestationState = AttestationAvailability.androidState(
+        configured = isConfigured,
+        playStorePresent = isEnabledPackage(context, "com.android.vending"),
+        playServicesPresent = isEnabledPackage(context, "com.google.android.gms")
+    )
+
+    @Suppress("DEPRECATION")   // the flags overload is API 33; minSdk is 24
+    private fun isEnabledPackage(context: Context, packageName: String): Boolean = try {
+        context.packageManager.getApplicationInfo(packageName, 0).enabled
+    } catch (e: Exception) {
+        false
+    }
+
+    /**
+     * The Play Integrity client, created on the first attested call. Creating
+     * it is the first time any Play class is touched; if that throws (a
+     * missing or broken Play component), the state drops to
+     * [AttestationState.NO_PLAY_SERVICES] for this process and the caller sees
+     * "unavailable", exactly as if [probe] had said so.
+     */
+    private fun attesterOrNull(): PlayIntegrityAttester? {
+        attester?.let { return it }
+        if (!canAttest) return null
+        return try {
+            PlayIntegrityAttester(appContext, LEADERBOARD_CLOUD_PROJECT_NUMBER).also { attester = it }
+        } catch (t: Throwable) {   // includes LinkageError from a stripped Play component
+            Log.d(TAG, "Play Integrity unavailable: ${t.message}")
+            attestationState = AttestationState.NO_PLAY_SERVICES
+            null
+        }
     }
 
     /**
@@ -145,7 +216,7 @@ object LeaderboardClient {
      * @param effectiveWpm the run's effective speed, whole WPM, <= character.
      */
     fun beginRun(statsMode: String, characterWpm: Int, effectiveWpm: Int): RunHandle? {
-        if (!isConfigured || !Settings.leaderboardEnabled) return null
+        if (!features.runsRanked || !Settings.leaderboardEnabled) return null
         val modeId = Leaderboard.modeId(statsMode) ?: return null
         val handle = RunHandle(modeId)
         // A run with no usable name is refused locally; no point minting a token.
@@ -284,7 +355,7 @@ object LeaderboardClient {
      * Returns null on success or the reason it failed.
      */
     suspend fun deleteMyScores(): String? {
-        if (!isConfigured) return appContext.getString(R.string.settings_leaderboard_unconfigured)
+        if (!canAttest) return appContext.getString(unavailableNoteRes(attestationState))
         return try {
             val challenge = postJson("/v1/attest/challenge", JSONObject())
                 .body?.optString("challenge")?.takeIf { it.isNotEmpty() }
@@ -317,7 +388,7 @@ object LeaderboardClient {
      * out. Throws on the network or the attestation, like the rest.
      */
     internal suspend fun attestedPost(path: String, fields: JSONObject): Reply {
-        if (!isConfigured) throw IllegalStateException("not configured")
+        if (!canAttest) throw IllegalStateException("attestation unavailable")
         val challenge = postJson("/v1/attest/challenge", JSONObject())
             .body?.optString("challenge")?.takeIf { it.isNotEmpty() }
             ?: throw IOException("no challenge")
@@ -330,11 +401,17 @@ object LeaderboardClient {
 
     /** The `attestation` object every write carries; see `src/attest/playintegrity.ts`. */
     private suspend fun attestation(challenge: String): JSONObject {
-        val a = attester ?: throw IllegalStateException("not configured")
+        val a = attesterOrNull() ?: throw IllegalStateException("attestation unavailable")
         val token = a.token(Leaderboard.requestHash(challenge))
         return JSONObject()
             .put("platform", "android")
             .put("payload", JSONObject().put("token", token).put("installId", installId))
+    }
+
+    /** The one-line explanation for a state that cannot attest (string resource). */
+    fun unavailableNoteRes(state: AttestationState): Int = when (state) {
+        AttestationState.NO_PLAY_SERVICES -> R.string.settings_leaderboard_no_play
+        else -> R.string.settings_leaderboard_unconfigured
     }
 
     // ---- HTTP ----

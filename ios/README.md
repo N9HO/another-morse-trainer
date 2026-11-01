@@ -100,6 +100,12 @@ testers, bug reports and feature chat live on
   clean timing hits harder, and stars buy an uppercut. Eight fighters, four
   stages, three rounds; each win unlocks the next fighter. GPL-3.0-or-later,
   used with the authors' permission.
+- **The Daily DiDaaaaahDit**: a card on Home under Daily Dit. One short
+  sentence a day (about five words, the same for everyone on a date) is sent
+  in Morse at your own speed, then you answer a four-option question about it
+  (A-D) instead of copying it letter for letter. Replay as often as you like,
+  one answer a day; it keeps your daily streak going and is not ranked on the
+  leaderboard
 - **First Four**: just enough CW for a brand-new operator to hunt one POTA
   activator — enter your callsign and state, then hear and send your call,
   your state, ? and 73, and work through three short scenes: a busted call
@@ -282,7 +288,8 @@ there is one target and one code base; the Mac-only code is in
   opens the user guide.
 - **The leaderboard** needs App Attest to post. Where the Mac cannot attest,
   the boards stay readable and a run says why it was not posted, as in the
-  simulator.
+  simulator; Settings shows one line in place of the Share scores switch and
+  buddy pairing explains itself (#349, `AttestationAvailability`).
 - **Listen & Learn** keeps playing in the background: a Mac app is not
   suspended when its window is not in front.
 - **Sandbox**: the Mac build is sandboxed with network-client and
