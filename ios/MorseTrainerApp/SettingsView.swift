@@ -118,7 +118,7 @@ struct SettingsView: View {
     /// its own copy of this control.)
     private static let hardwareKeyModes: Set<TrainingMode> =
         [.sending, .characters, .words, .cw77, .abbreviations, .qCodes, .prosigns,
-         .confusion, .rapidFire, .invaders, .galaga, .dungeon, .asteroids]
+         .confusion, .rapidFire, .invaders, .galaga, .dungeon, .asteroids, .brassKnuckles]
     /// Modes with a play → answer → reveal loop the Feedback section controls.
     private static let feedbackModes: Set<TrainingMode> =
         [.journey, .characters, .words, .cw77, .abbreviations, .qCodes, .prosigns,
@@ -1261,6 +1261,20 @@ struct LicensesView: View {
                 Text("The audio decoder is vendored from the Carrier Wave firmware under the MIT license.")
             }
             .listRowBackground(Theme.navyElevated)
+
+            Section {
+                Text(LicenseNotices.brassKnuckles)
+            } header: {
+                Text("Brass Knuckles Knock Out")
+            }
+            .listRowBackground(Theme.navyElevated)
+
+            Section {
+                Text(LicenseNotices.b612)
+            } header: {
+                Text("B612 Mono font")
+            }
+            .listRowBackground(Theme.navyElevated)
         }
         .scrollContentBackground(.hidden)
         .readableWidth()
@@ -1278,6 +1292,10 @@ private enum LicenseNotices {
 
     This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
     """
+
+    static let brassKnuckles = "Brass Knuckles Knock Out was created by Derick (KO6PBZ) for the HamCube PocketCW firmware by Kristen (K5MME), sponsored by The Brass Knuckle Gang, and is used here with permission under the GNU General Public License, version 3 or later. Its pixel art and rules are theirs."
+
+    static let b612 = "The game's bitmap text is drawn from B612 Mono, Copyright 2012 The B612 Project Authors (https://github.com/polarsys/b612), licensed under the SIL Open Font License, Version 1.1 (https://openfontlicense.org)."
 
     static let cwDecoderMIT = """
     MIT License
