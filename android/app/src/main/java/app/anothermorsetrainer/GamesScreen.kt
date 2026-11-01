@@ -18,6 +18,7 @@ import androidx.compose.material.icons.filled.Flight
 import androidx.compose.material.icons.filled.Leaderboard
 import androidx.compose.material.icons.filled.Pets
 import androidx.compose.material.icons.filled.RocketLaunch
+import androidx.compose.material.icons.filled.SportsMma
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.SportsEsports
 import androidx.compose.material3.Icon
@@ -52,6 +53,7 @@ fun GamesScreen(
     onPickDungeon: () -> Unit,
     onPickFrogger: () -> Unit,
     onPickAsteroids: () -> Unit,
+    onPickBrassKnuckles: () -> Unit,
     onOpenLeaderboard: () -> Unit
 ) {
     BackHandler { onBack() }
@@ -62,7 +64,8 @@ fun GamesScreen(
         HomeItem(stringResource(R.string.mode_defender), stringResource(R.string.home_arcade_callsign_copy), Icons.Filled.Shield, onPickDefender),
         HomeItem(stringResource(R.string.mode_dungeon), stringResource(R.string.home_roguelike_sending), Icons.Filled.Castle, onPickDungeon),
         HomeItem(stringResource(R.string.mode_frogger), stringResource(R.string.home_arcade_crossing), Icons.Filled.Pets, onPickFrogger),
-        HomeItem(stringResource(R.string.mode_asteroids), stringResource(R.string.home_arcade_sending), Icons.Filled.RocketLaunch, onPickAsteroids)
+        HomeItem(stringResource(R.string.mode_asteroids), stringResource(R.string.home_arcade_sending), Icons.Filled.RocketLaunch, onPickAsteroids),
+        HomeItem(stringResource(R.string.mode_brass_knuckles), stringResource(R.string.home_arcade_boxing), Icons.Filled.SportsMma, onPickBrassKnuckles)
     )
 
     Column(modifier = Modifier.fillMaxSize()) {

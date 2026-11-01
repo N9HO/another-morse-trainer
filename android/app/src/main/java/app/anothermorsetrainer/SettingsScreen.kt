@@ -1203,6 +1203,10 @@ fun SettingsScreen(
                         stringResource(R.string.licenses_cw_decoder_mit),
                         color = Brand.textSecondary, fontSize = 12.sp, fontFamily = FontFamily.Monospace
                     )
+                    Text(stringResource(R.string.licenses_brass_title), color = Brand.textPrimary, fontWeight = FontWeight.SemiBold)
+                    Text(stringResource(R.string.licenses_brass_notice), color = Brand.textSecondary, fontSize = 13.sp)
+                    Text(stringResource(R.string.licenses_b612_title), color = Brand.textPrimary, fontWeight = FontWeight.SemiBold)
+                    Text(stringResource(R.string.licenses_b612_notice), color = Brand.textSecondary, fontSize = 13.sp)
                     // The Play Integrity SDK behind the shared leaderboard
                     // (CLAUDE.md, Licensing: a dependency with a notice goes
                     // here). Not open source: Google's SDK licence and the

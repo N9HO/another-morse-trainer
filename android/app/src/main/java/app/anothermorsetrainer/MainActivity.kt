@@ -171,6 +171,7 @@ private sealed interface Route {
     data object Dungeon : Route
     data object Frogger : Route
     data object Asteroids : Route
+    data object BrassKnuckles : Route
     data object Story : Route
     data object Sending : Route
     data object SendingDrills : Route
@@ -206,7 +207,7 @@ private val Route.playsBandNoise: Boolean
         Route.Journey, is Route.Quiz, Route.Pileup, Route.Contest, Route.Exam,
         Route.Listen, Route.Cw77, Route.HeadCopy, Route.TypeIt, Route.Qrq,
         Route.RapidFire, Route.Invaders, Route.Galaga, Route.Defender,
-        Route.Dungeon, Route.Frogger, Route.Asteroids, Route.Story, Route.Sending,
+        Route.Dungeon, Route.Frogger, Route.Asteroids, Route.BrassKnuckles, Route.Story, Route.Sending,
         Route.DailyDit, Route.FirstFour, Route.OperatingProcedure -> true
         Route.Onboarding, Route.Home, Route.Games, Route.SendingDrills,
         Route.SendingAnalyzer, Route.Repeater, Route.CwDecoder, Route.Reference,
@@ -249,6 +250,7 @@ private fun routeTag(route: Route): String = when (route) {
     Route.Dungeon -> "dungeon"
     Route.Frogger -> "frogger"
     Route.Asteroids -> "asteroids"
+    Route.BrassKnuckles -> "brassknuckles"
     Route.Story -> "story"
     Route.Sending -> "sending"
     Route.SendingDrills -> "sendingDrills"
@@ -286,6 +288,7 @@ private fun routeFrom(tag: String): Route? = when (tag) {
     "dungeon" -> Route.Dungeon
     "frogger" -> Route.Frogger
     "asteroids" -> Route.Asteroids
+    "brassknuckles" -> Route.BrassKnuckles
     "story" -> Route.Story
     "sending" -> Route.Sending
     "sendingDrills" -> Route.SendingDrills
@@ -500,6 +503,7 @@ private fun AppRoot() {
             onPickDungeon = { route = Route.Dungeon },
             onPickFrogger = { route = Route.Frogger },
             onPickAsteroids = { route = Route.Asteroids },
+            onPickBrassKnuckles = { route = Route.BrassKnuckles },
             onOpenLeaderboard = { route = Route.GamesLeaderboard }
         )
         // Back from a game lands on the Games sub-menu it was picked from
@@ -510,6 +514,7 @@ private fun AppRoot() {
         Route.Dungeon -> DungeonScreen(onBack = { route = Route.Games }, onSwitchMode = { switchTo(it) })
         Route.Frogger -> FroggerScreen(onBack = { route = Route.Games }, onSwitchMode = { switchTo(it) })
         Route.Asteroids -> AsteroidsScreen(onBack = { route = Route.Games }, onSwitchMode = { switchTo(it) })
+        Route.BrassKnuckles -> BoxingScreen(onBack = { route = Route.Games })
         Route.Story -> StoryScreen(onBack = { route = Route.Home }, onSwitchMode = { switchTo(it) })
         Route.Sending -> SendingPracticeScreen(onBack = { route = Route.Home }, onSwitchMode = { switchTo(it) })
         Route.SendingDrills -> SendingDrillScreen(onBack = { route = Route.Home })

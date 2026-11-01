@@ -511,7 +511,7 @@ private fun FightView(
         Column(Modifier.fillMaxWidth().background(BK_PANEL).padding(10.dp)) {
             val shown = when {
                 f.starring() -> f.word
-                f.getUpPrompt() != null -> f.getUpPrompt()!!
+                phase == BoxingPhase.MeDown -> stringResource(R.string.bk_get_up, f.getUp.toString())
                 f.tellShown -> f.tell
                 else -> ""
             }
