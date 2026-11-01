@@ -33,6 +33,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -62,6 +63,8 @@ import app.anothermorsetrainer.morsekit.BoxingKeying
 import app.anothermorsetrainer.morsekit.BoxingOutcome
 import app.anothermorsetrainer.morsekit.BoxingPhase
 import app.anothermorsetrainer.morsekit.BoxingRules
+import app.anothermorsetrainer.morsekit.Leaderboard
+import app.anothermorsetrainer.morsekit.LeaderboardItem
 import app.anothermorsetrainer.morsekit.MorseItem
 import app.anothermorsetrainer.morsekit.MorseTiming
 import java.awt.image.BufferedImage
@@ -124,6 +127,20 @@ fun BoxingScreen(onBack: () -> Unit) {
     var keyPressed by remember { mutableStateOf(false) }
     var startedAt by remember { mutableStateOf(0L) }
     var hints by remember { mutableStateOf(career.hints) }
+    // The shared leaderboard's first-play prompt (#226): holds the fighter the
+    // player asked to fight while the dialog is up, -1 when it is not.
+    var optInPending by rememberSaveable { mutableIntStateOf(-1) }
+    // The shared leaderboard (docs/high-scores-design.md): one item per tell,
+    // each carrying the speed that tell was sent at. Punches thrown while the
+    // foe is open are not items.
+    var lbRun by remember { mutableStateOf<LeaderboardClient.RunHandle?>(null) }
+    val lbItems = remember { ArrayList<LeaderboardItem>() }
+    var lbLine by remember { mutableStateOf<String?>(null) }
+    // Desktop: unranked — LeaderboardClient.beginRun returns null, so nothing
+    // is ever submitted. The transcript is still collected, so the end card
+    // can say the fight would have been ranked on a phone.
+    var lbRanked by remember { mutableStateOf(false) }
+    var tellWpm by remember { mutableIntStateOf(Settings.characterWpm.roundToInt()) }
 
     fun clock(): Int = bkClockMs()
     fun ditMs(): Int = (1200.0 / Settings.characterWpm).roundToInt().coerceAtLeast(20)
@@ -151,9 +168,16 @@ fun BoxingScreen(onBack: () -> Unit) {
         keying.edge(down, t, ditMs())?.let { judge(it, t) }
     }
 
+    fun drainTells(f: BoxingFight) {
+        f.takeTellResults { r ->
+            lbItems.add(LeaderboardItem(r.sent, r.answered, Leaderboard.clampReaction(r.reactionMs.toLong()), tellWpm))
+        }
+    }
+
     fun finishRecord(f: BoxingFight, over: BoxingPhase.Over) {
         if (recorded) return
         recorded = true
+        drainTells(f)
         opened = career.finished(f.fighter, over.won, f.score)
         persist()
         val s = f.stats
@@ -164,6 +188,13 @@ fun BoxingScreen(onBack: () -> Unit) {
             effectiveWpm = Settings.effectiveWpmInUse.roundToInt(),
             score = f.score
         )
+        // Where the phone apps hand the finished fight's transcript to the
+        // leaderboard. Desktop: there is never a run to submit, so a fight the
+        // phone apps would have ranked ends with [DesktopCopy.UNRANKED_SHORT]
+        // on its results view in place of the rank line.
+        lbRun = null
+        if (lbRanked && lbItems.isNotEmpty()) lbLine = DesktopCopy.UNRANKED_SHORT
+        lbRanked = false
     }
 
     fun beginFight(index: Int) {
@@ -175,7 +206,20 @@ fun BoxingScreen(onBack: () -> Unit) {
         opened = false
         tellDone = false
         startedAt = System.currentTimeMillis()
+        lbItems.clear()
+        lbLine = null
+        lbRanked = true
+        lbRun = LeaderboardClient.beginRun(
+            statsMode = "Brass Knuckles",
+            characterWpm = Settings.characterWpm.roundToInt(),
+            effectiveWpm = Settings.effectiveWpmInUse.roundToInt()
+        )
         view = BkView.CARD
+    }
+
+    /** Start a fight, first asking once about sharing scores when it is on offer. */
+    fun requestFight(index: Int) {
+        if (LeaderboardOptIn.shouldOffer()) optInPending = index else beginFight(index)
     }
 
     fun playTell(text: String, f: BoxingFight) {
@@ -183,6 +227,7 @@ fun BoxingScreen(onBack: () -> Unit) {
         val base = Settings.characterWpm.roundToInt()
         val (wpm, eff) = foe.speeds(base, if (Settings.farnsworthEnabled) Settings.effectiveWpm.roundToInt() else 0)
         tellDone = false
+        tellWpm = wpm.coerceIn(5, 60)
         player.play(
             MorseItem.Playable.Text(text), Settings.sidetoneHz + foe.pitchOffsetHz,
             MorseTiming.farnsworth(wpm.toDouble(), eff.toDouble())
@@ -207,6 +252,7 @@ fun BoxingScreen(onBack: () -> Unit) {
                             f.takePlay()?.let { playTell(it, f) }
                             if (f.stop) { f.stop = false; player.stop() }
                             f.takeCopies { _, _ -> }   // fights read the letter stats, they do not write them
+                            drainTells(f)
                         }
                         val phase = f.phase
                         if (phase is BoxingPhase.Over) {
@@ -248,6 +294,8 @@ fun BoxingScreen(onBack: () -> Unit) {
 
     // Desktop: Space and [ ] key Morse while the on-screen key is up (MorseKeyboard).
     Box(Modifier.fillMaxSize().onPreviewKeyEvent { MorseKeyboard.handle(it) }) {
+        if (optInPending >= 0) LeaderboardOptInDialog(onDone = { val i = optInPending; optInPending = -1; beginFight(i) })
+
         when (view) {
             BkView.SPLASH -> {
                 BackHandler { leave() }
@@ -259,7 +307,7 @@ fun BoxingScreen(onBack: () -> Unit) {
                     career = career, pick = pick, hints = hints,
                     onHints = { hints = it; career.hints = it; persist() },
                     onPick = { pick = it },
-                    onFight = { beginFight(pick) },
+                    onFight = { requestFight(pick) },
                     onBack = { leave() },
                 )
             }
@@ -299,9 +347,9 @@ fun BoxingScreen(onBack: () -> Unit) {
                 BackHandler { view = BkView.TITLE }
                 val f = fight
                 if (f != null) ResultsView(
-                    f = f, career = career, opened = opened,
-                    onAgain = { beginFight(f.fighter) },
-                    onNext = { pick = (f.fighter + 1).coerceAtMost(BoxingRules.FIGHTERS - 1); beginFight(pick) },
+                    f = f, career = career, opened = opened, leaderboard = lbLine,
+                    onAgain = { requestFight(f.fighter) },
+                    onNext = { pick = (f.fighter + 1).coerceAtMost(BoxingRules.FIGHTERS - 1); requestFight(pick) },
                     onTitle = { view = BkView.TITLE },
                 )
             }
@@ -591,7 +639,7 @@ private fun KeyPad(
 
 @Composable
 private fun ResultsView(
-    f: BoxingFight, career: BoxingCareer, opened: Boolean,
+    f: BoxingFight, career: BoxingCareer, opened: Boolean, leaderboard: String?,
     onAgain: () -> Unit, onNext: () -> Unit, onTitle: () -> Unit,
 ) {
     val over = f.phase as? BoxingPhase.Over
@@ -620,6 +668,11 @@ private fun ResultsView(
         if (opened) {
             Spacer(Modifier.height(10.dp))
             Text(stringResource(R.string.bk_unlocked, BoxingRules.LADDER[(f.fighter + 1).coerceAtMost(BoxingRules.FIGHTERS - 1)].name), color = BK_BRASS, fontWeight = FontWeight.Bold)
+        }
+        // The shared leaderboard's reply, or why the fight was not posted; nothing when not opted in.
+        if (leaderboard != null) {
+            Spacer(Modifier.height(10.dp))
+            Text(leaderboard, color = BK_PALE.copy(alpha = 0.7f), fontSize = 12.sp)
         }
         Spacer(Modifier.height(20.dp))
         if (over?.won == true && f.fighter + 1 < BoxingRules.FIGHTERS) {
