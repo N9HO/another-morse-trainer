@@ -33,6 +33,7 @@ import androidx.compose.material.icons.filled.Flight
 import androidx.compose.material.icons.filled.Pets
 import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material.icons.filled.RocketLaunch
+import androidx.compose.material.icons.filled.SportsMma
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.SportsEsports
 import androidx.compose.material.icons.filled.IosShare
@@ -726,7 +727,8 @@ private val MODE_BESTS: List<ModeBestRow> = listOf(
     ModeBestRow("Morse Defender", R.string.mode_defender, Icons.Filled.Shield) { it.toString() },
     ModeBestRow("CW Dungeon", R.string.mode_dungeon, Icons.Filled.Castle) { it.toString() },
     ModeBestRow("CW Frogger", R.string.mode_frogger, Icons.Filled.Pets) { it.toString() },
-    ModeBestRow("CW Asteroids", R.string.mode_asteroids, Icons.Filled.RocketLaunch) { it.toString() }
+    ModeBestRow("CW Asteroids", R.string.mode_asteroids, Icons.Filled.RocketLaunch) { it.toString() },
+    ModeBestRow("Brass Knuckles", R.string.mode_brass_knuckles, Icons.Filled.SportsMma) { it.toString() }
 )
 
 @Composable
