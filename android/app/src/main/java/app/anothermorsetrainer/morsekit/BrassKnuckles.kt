@@ -324,6 +324,9 @@ class BoxingRng(seed: Int) {
     }
 }
 
+/** One tell's outcome, as the leaderboard grades it (see [BoxingFight.takeTellResults]). */
+data class BoxingTellResult(val sent: String, val answered: String, val reactionMs: Int)
+
 /** Counts for the results screen. */
 class BoxingStats {
     var tells = 0
@@ -481,6 +484,10 @@ class BoxingFight(
     /** Characters of the uppercut word keyed with timing better than bad. */
     private var starClean = 0
     private val copies = ArrayDeque<Pair<Char, Char?>>()
+    /** When the current tell finished sounding; the reply time runs from here. */
+    private var tellEndedAt = 0
+    /** One entry per tell answered, dodged or not, for the shared leaderboard. */
+    private val tellResults = ArrayDeque<BoxingTellResult>()
 
     val foe: BoxingFighter get() = BoxingRules.LADDER[fighter]
 
@@ -635,6 +642,7 @@ class BoxingFight(
         due = due?.plus(gap)
         roundEnds += gap
         since += gap
+        tellEndedAt += gap
         foeEvent = foeEvent?.let { Pair(it.first, it.second + gap) }
         meEvent = meEvent?.let { Pair(it.first, it.second + gap) }
         callout = callout?.let { Pair(it.first, it.second + gap) }
@@ -705,6 +713,7 @@ class BoxingFight(
             Duel.Window -> {
                 val t = tell
                 for (c in t.drop(answer.length)) judge(c, null)
+                tellResults.addLast(BoxingTellResult(t, answer, 0))
                 callout = Pair(BoxingCallout.TooSlow, now)
                 throwPunch(now, false)
             }
@@ -734,6 +743,7 @@ class BoxingFight(
     /** The tell finished playing at [now]: the reply window opens. */
     fun tellPlayed(now: Int) {
         if (phase != BoxingPhase.Fight || duel != Duel.Tell || pausedAt != null) return
+        tellEndedAt = now
         val keying = tell.sumOf { BoxingRules.units(it) + 3 } * myDitMs
         step(Duel.Window, now, now + foe.reactMs + keying)
     }
@@ -828,12 +838,16 @@ class BoxingFight(
         if (c != want) {
             judge(want, c)
             for (rest in tell.drop(at + 1)) judge(rest, null)
+            tellResults.addLast(BoxingTellResult(tell, answer, 0))
             callout = Pair(BoxingCallout.Wrong(c), now)
             return throwPunch(now, false)
         }
         judge(want, want)
         if (answer.length == tell.length) {
             stats.dodged += 1
+            // Keyed back before the tell ended: no wait to measure.
+            val reaction = if (duel == Duel.Tell) 0 else (now - tellEndedAt).coerceAtLeast(0)
+            tellResults.addLast(BoxingTellResult(tell, answer, reaction))
             // A dodge before the tell even ends scores more.
             score += if (duel == Duel.Tell) 80 else 50
             callout = Pair(BoxingCallout.Dodge, now)
@@ -1041,6 +1055,19 @@ class BoxingFight(
     fun takeCopies(each: (Char, Char?) -> Unit) {
         for ((sent, copied) in copies) each(sent, copied)
         copies.clear()
+    }
+
+    /**
+     * Takes the tells answered since the last call, in order, for the shared
+     * leaderboard: the tell as sent, what was keyed back ("" when nothing was),
+     * and the wait from the end of its audio to the finished answer in
+     * milliseconds (0 on a miss or a dodge keyed before the tell ended). The
+     * tell's speed is the screen's to add: it chose it. Punches thrown while
+     * the foe is open are not tells and never appear here.
+     */
+    fun takeTellResults(each: (BoxingTellResult) -> Unit) {
+        for (r in tellResults) each(r)
+        tellResults.clear()
     }
 
     private companion object {
