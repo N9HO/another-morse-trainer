@@ -24,6 +24,9 @@ struct IntroView: View {
     @State private var showingReference = false
     @State private var showingStartHere = false
     @State private var showingDailyDit = false
+    /// Daily Comprehension (#353): the card beside Daily Dit.
+    @State private var showingDailyComprehension = false
+    @ObservedObject private var dailyComprehension = DailyComprehensionStore.shared
     /// First Four (#265): the guided path to a first POTA contact.
     @State private var showingFirstFour = false
     @State private var firstFourProgress = FirstFourStore.load()
@@ -58,7 +61,10 @@ struct IntroView: View {
                         // sharing its height, so First Four is not a thin
                         // strip across the 960 pt column.
                         HStack(alignment: .top, spacing: 14) {
-                            dailyDitCard
+                            VStack(spacing: 14) {
+                                dailyDitCard
+                                dailyComprehensionCard
+                            }
                             VStack(spacing: 14) {
                                 startHereButton
                                 firstFourCard
@@ -68,6 +74,8 @@ struct IntroView: View {
                         .fixedSize(horizontal: false, vertical: true)
                     } else {
                         dailyDitCard
+
+                        dailyComprehensionCard
 
                         startHereButton
 
@@ -118,6 +126,9 @@ struct IntroView: View {
         .sheet(isPresented: $showingDailyDit) {
             DailyDitView().environmentObject(model).pageSizedSheet()
         }
+        .sheet(isPresented: $showingDailyComprehension) {
+            DailyComprehensionView().environmentObject(model).pageSizedSheet()
+        }
         .sheet(isPresented: $showingFirstFour, onDismiss: {
             firstFourProgress = FirstFourStore.load()
             operatingProgress = OperatingProcedureStore.load()
@@ -150,6 +161,7 @@ struct IntroView: View {
         }
         .onAppear {
             model.refreshDailyDit()
+            dailyComprehension.refresh()
             firstFourProgress = FirstFourStore.load()
             operatingProgress = OperatingProcedureStore.load()
             // Onboarding's "first POTA contact" button (#265) lands here.
@@ -167,7 +179,10 @@ struct IntroView: View {
         // already on screen. Without this the card would still be advertising
         // yesterday's puzzle until something else redrew it.
         .onChange(of: scenePhase) { phase in
-            if phase == .active { model.refreshDailyDit() }
+            if phase == .active {
+                model.refreshDailyDit()
+                dailyComprehension.refresh()
+            }
         }
     }
 
@@ -366,6 +381,43 @@ struct IntroView: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Daily Dit. \(dailyDitSubtitle)")
+    }
+
+    /// Daily Comprehension (#353): the day's sentence in Morse and a question
+    /// about it. Under Daily Dit, because it expires the same way.
+    private var dailyComprehensionCard: some View {
+        let game = dailyComprehension.game
+        let done = game.isFinished
+        let subtitle = done
+            ? "#\(game.puzzleNumber) \(game.isCorrect ? "answered correctly" : "answered") · \(game.listens) \(game.listens == 1 ? "listen" : "listens")"
+            : "Today's sentence in Morse, then a question about it"
+        return Button { showingDailyComprehension = true } label: {
+            HStack(spacing: 12) {
+                Image(systemName: done ? "checkmark.seal.fill" : "text.bubble")
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(done ? Theme.tealBright : Theme.teal)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("The Daily DiDaaaaahDit")
+                        .font(.subheadline.weight(.semibold))
+                    Text(subtitle)
+                        .font(.caption)
+                        .foregroundStyle(Theme.textSecondary)
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Theme.textSecondary)
+            }
+            .frame(maxHeight: .infinity)
+            .foregroundStyle(.white)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(Theme.navyElevated, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(Theme.tealBright.opacity(done ? 0.35 : 0.7), lineWidth: 1.5))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("The Daily DiDaaaaahDit. \(subtitle)")
     }
 
     private var dailyDitSubtitle: String {

@@ -141,6 +141,8 @@ object SettingsCatalog {
             listOf("iambic", "iambic a", "iambic b", "ultimatic", "keyer", "squeeze", "touch paddles"), SettingsSection.ON_SCREEN_KEY),
         e("paddleSwap", "Dah on the left",
             listOf("left handed", "lefty", "swap", "reverse", "paddles", "dit"), SettingsSection.ON_SCREEN_KEY),
+        e("continueAfterMiss", "Continue with the key after a miss",
+            listOf("next", "miss", "wrong", "retry", "acknowledge", "key", "keying", "advance"), SettingsSection.ON_SCREEN_KEY),
 
         // QSO & Pileups
         e("myCall", "Your callsign", listOf("call sign", "call", "station", "my call", "w1aw"), SettingsSection.PILEUP),

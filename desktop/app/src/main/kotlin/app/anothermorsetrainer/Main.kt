@@ -58,6 +58,7 @@ fun main() {
     PileupSettings.init()
     Stats.init()
     DailyDitStore.init()
+    DailyComprehensionStore.init()
     FirstFourStore.init()
     OperatingProcedureStore.init()
     JourneyStore.init()
@@ -215,6 +216,8 @@ private sealed interface Route {
     data object Reference : Route
     data object StartHere : Route
     data object DailyDit : Route
+    /** Daily Comprehension (#353): the day's sentence in Morse and a question about it. */
+    data object DailyComprehension : Route
     /** First Four (#265, #280): the guided path to a first POTA contact. */
     data object FirstFour : Route
     data object Settings : Route
@@ -239,7 +242,7 @@ private val Route.playsBandNoise: Boolean
         Route.Listen, Route.Cw77, Route.HeadCopy, Route.TypeIt, Route.Qrq,
         Route.RapidFire, Route.Invaders, Route.Galaga, Route.Defender,
         Route.Dungeon, Route.Frogger, Route.Asteroids, Route.Story, Route.Sending,
-        Route.DailyDit, Route.FirstFour, Route.OperatingProcedure -> true
+        Route.DailyDit, Route.DailyComprehension, Route.FirstFour, Route.OperatingProcedure -> true
         Route.Onboarding, Route.Home, Route.Games, Route.SendingDrills,
         Route.SendingAnalyzer, Route.Repeater, Route.CwDecoder, Route.Reference,
         Route.StartHere, Route.Settings, Route.Stats, Route.Leaderboard,
@@ -290,6 +293,7 @@ private fun routeTag(route: Route): String = when (route) {
     Route.Reference -> "reference"
     Route.StartHere -> "startHere"
     Route.DailyDit -> "dailyDit"
+    Route.DailyComprehension -> "dailyComprehension"
     Route.FirstFour -> "firstFour"
     Route.Settings -> "settings"
     Route.Stats -> "stats"
@@ -327,6 +331,7 @@ private fun routeFrom(tag: String): Route? = when (tag) {
     "reference" -> Route.Reference
     "startHere" -> Route.StartHere
     "dailyDit" -> Route.DailyDit
+    "dailyComprehension" -> Route.DailyComprehension
     "firstFour" -> Route.FirstFour
     "settings" -> Route.Settings
     "stats" -> Route.Stats
@@ -456,6 +461,7 @@ private fun AppRoot() {
         Route.Home -> HomeScreen(
             onPickStartHere = { route = Route.StartHere },
             onPickDailyDit = { route = Route.DailyDit },
+            onPickDailyComprehension = { route = Route.DailyComprehension },
             onPickFirstFour = { route = Route.FirstFour },
             // Journey asks about its scoring first (the iOS setup card's
             // "Misses drain the bar" toggle), so it goes through the sheet.
@@ -558,6 +564,7 @@ private fun AppRoot() {
         Route.Reference -> ReferenceScreen(onBack = { route = Route.Home })
         Route.StartHere -> StartHereScreen(onBack = { route = Route.Home })
         Route.DailyDit -> DailyDitScreen(onBack = { route = Route.Home })
+        Route.DailyComprehension -> DailyComprehensionScreen(onBack = { route = Route.Home })
         Route.FirstFour -> FirstFourScreen(onBack = { route = Route.Home })
         Route.Settings -> SettingsScreen(
             onBack = { route = Route.Home },

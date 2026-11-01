@@ -533,6 +533,9 @@
     <string name="settings_on_screen_key">On-screen key</string>
     <string name="settings_paddle_mode">Paddle mode</string>
     <string name="settings_paddle_swap">Dah on the left</string>
+    <string name="sending_key_to_continue">Key %1$s to continue</string>
+    <string name="settings_continue_after_miss">Continue with the key after a miss</string>
+    <string name="settings_continue_after_miss_hint">When a keyed answer is wrong, key the correct answer to move on instead of tapping Next. Next still works.</string>
     <string name="settings_on_screen_key_footer_straight">One hold-to-key pad: the tone sounds for as long as you hold it. Choose Paddles to key with two touch paddles and a built-in iambic keyer instead.</string>
     <string name="settings_on_screen_key_footer_paddles">Two touch paddles, dit and dah, timed at your speed. Hold one to repeat it; hold both to squeeze. Iambic A stops when you let go; Iambic B adds one more alternate element; Ultimatic repeats whichever paddle you pressed last. \"Dah on the left\" swaps them for a left-handed operator.</string>
     <string name="paddle_dit">DIT</string>
@@ -646,6 +649,24 @@
     <string name="start_here_know_title">Already know some Morse?</string>
     <string name="start_here_know_body">Open Settings › Characters &amp; Lessons › Proficiency and tell it what you already know. That sets your starting character set instead of making you re-earn A and N. Comfortable with the whole alphabet? Skip Journey and go straight to Common Words, Rapid Fire, or Pileup Runner.</string>
     <!-- Daily Dit: the shared daily puzzle (#155) -->
+    <!-- Daily Comprehension (#353) -->
+    <string name="daily_comprehension_title">The Daily DiDaaaaahDit</string>
+    <string name="daily_comprehension_home_sub_new">Today\'s sentence in Morse, then a question about it</string>
+    <string name="daily_comprehension_home_sub_correct">#%1$d answered correctly · %2$s</string>
+    <string name="daily_comprehension_home_sub_answered">#%1$d answered · %2$s</string>
+    <string name="daily_comprehension_puzzle_number">Puzzle #%1$d</string>
+    <string name="daily_comprehension_play">Play the sentence</string>
+    <string name="daily_comprehension_choose">Choose an answer</string>
+    <string name="daily_comprehension_answer">Answer %1$s</string>
+    <string name="daily_comprehension_correct">Correct</string>
+    <string name="daily_comprehension_wrong">Not quite</string>
+    <string name="daily_comprehension_as_sent">The sentence, as sent. Come back tomorrow for the next one.</string>
+    <string name="daily_comprehension_option_description">Option %1$s: %2$s</string>
+    <string name="daily_comprehension_how_it_works">Listen to the sentence as often as you like, then answer the question about it. You don\'t have to copy every letter, only understand it. You get one answer a day. It keeps your daily streak going; it isn\'t ranked on the leaderboard.</string>
+    <plurals name="daily_comprehension_listens">
+        <item quantity="one">%1$d listen</item>
+        <item quantity="other">%1$d listens</item>
+    </plurals>
     <string name="daily_dit_title">Daily Dit</string>
     <string name="daily_dit_home_sub_new">Today\'s word in Morse — your speed, up to %1$d WPM</string>
     <string name="daily_dit_home_sub_progress">#%1$d · %2$s · %3$s so far</string>
@@ -1220,8 +1241,10 @@
     <string name="settings_leaderboard_delete_confirm_body">Removes every score this install has posted to the shared leaderboard, on every mode. This cannot be undone.</string>
     <string name="settings_leaderboard_delete_done">Your scores were deleted.</string>
     <string name="settings_leaderboard_delete_failed">Couldn\'t delete: %1$s</string>
-    <string name="settings_leaderboard_footer">Off by default. When on, each finished Rapid Fire, Contest, Pileup Runner or arcade run is sent to the shared leaderboard under your display name and graded there: the board ranks server-graded copies, the speed summed over the items you copied correctly, so a game\'s board number is not its on-screen score. Only builds installed from Google Play can post; the board itself is open to everyone.</string>
+    <string name="settings_leaderboard_footer">Off by default. When on, each finished Rapid Fire, Contest, Pileup Runner or arcade run is sent to the shared leaderboard under your display name and graded there: the board ranks server-graded copies, the speed summed over the items you copied correctly, so a game\'s board number is not its on-screen score. Only builds installed from Google Play, on a device with Google Play services, can post; the board itself is open to everyone, and without Play your scores stay on the device as personal bests.</string>
     <string name="settings_leaderboard_unconfigured">The leaderboard is not enabled in this build.</string>
+    <!-- No Google Play services on this device (#349). One line; the iOS and desktop apps say the equivalent for their platforms. -->
+    <string name="settings_leaderboard_no_play">Ranked scores and buddy streaks need Google Play services, which this device does not have. Everything else works, and your scores stay on this device as personal bests.</string>
     <!-- Settings › Leaderboard &amp; Buddy › Buddy streak (docs/buddy-streak-design.md, #219, #237) -->
     <string name="settings_buddy">Buddy streak</string>
     <string name="settings_buddy_unpaired">Invite a buddy, or join with a code they send you.</string>
@@ -1260,7 +1283,7 @@
     <string name="settings_buddy_leave_confirm_body">Ends your buddy streak with %1$s, for both of you. Your other buddies are not affected, and either of you can pair again with a new code.</string>
     <string name="settings_buddy_refreshing">Checking…</string>
     <string name="settings_buddy_error">Couldn\'t do that: %1$s</string>
-    <string name="settings_buddy_footer">Pair with up to ten people and keep a separate streak with each: each day you both practice counts, and a day either of you misses resets it. One practice counts for every buddy. Your buddies see your leaderboard display name and whether you practiced each day, nothing else. Leaving a buddy ends that streak for both of you and keeps the others. Pairing works on its own; the leaderboard switch above stays yours. Only builds installed from Google Play can pair.</string>
+    <string name="settings_buddy_footer">Pair with up to ten people and keep a separate streak with each: each day you both practice counts, and a day either of you misses resets it. One practice counts for every buddy. Your buddies see your leaderboard display name and whether you practiced each day, nothing else. Leaving a buddy ends that streak for both of you and keeps the others. Pairing works on its own; the leaderboard switch above stays yours. Only builds installed from Google Play, on a device with Google Play services, can pair.</string>
     <!-- The home screen's buddy line switch (#253), under the Buddy streak section. -->
     <string name="settings_buddy_on_home">Show buddy line on home screen</string>
     <string name="settings_buddy_on_home_footer">The line under your streak on the home screen: who has practiced today and your buddy streak. It appears only while you have a buddy. Turning it off hides it there and nowhere else; the list above and the daily reminder still show your buddies.</string>

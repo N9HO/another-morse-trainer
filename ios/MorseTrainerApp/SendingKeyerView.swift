@@ -8,6 +8,10 @@ struct SendingKeyerView: View {
     @StateObject private var sender: SendingKeyer
     @State private var keyPressed = false
     @State private var showingBluetoothMIDI = false
+    /// The miss-acknowledge state (#352, #347): after a wrong keyed answer,
+    /// keying the correct one acts as Next. See `ContinueAfterMiss`.
+    @State private var acknowledge = ContinueAfterMiss()
+    @State private var debounceTask: Task<Void, Never>?
     /// A bigger key on a big iPad: two hands and a lap, not a thumb.
     @Environment(\.wideLayout) private var wide
     private var keyHeight: CGFloat { wide ? 180 : 120 }
@@ -24,6 +28,11 @@ struct SendingKeyerView: View {
     var body: some View {
         VStack(spacing: 14) {
             decodedDisplay
+            if acknowledge.isAwaiting {
+                Text("Key \(expectedAnswer) to continue")
+                    .font(.footnote.weight(.medium))
+                    .foregroundStyle(Theme.teal)
+            }
             // Straight key or paddles, as chosen in Settings (#233); the
             // paddles' keyer feeds the same sidetone and decoder.
             OnScreenKeySwitch(onKey: { down, ms in sender.touchKey(isDown: down, atMs: ms) }) {
@@ -37,7 +46,13 @@ struct SendingKeyerView: View {
         .onDisappear { sender.stop() }
         // Start each drill with a clean slate so a new answer is never appended
         // to the previous one's decoded text.
-        .onChange(of: model.drill) { _ in sender.clear() }
+        .onChange(of: model.drill) { _ in
+            acknowledge.reset()
+            debounceTask?.cancel()
+            sender.clear()
+        }
+        // A miss that holds for Next: arm the acknowledge state (#352, #347).
+        .onChange(of: model.phase) { _ in noteMissIfAny() }
         // Auto-submit once the decoded text reaches the expected answer length
         // and the operator has stopped keying.
         .onChange(of: sender.decodedText) { _ in maybeAutoSubmit() }
@@ -197,7 +212,49 @@ struct SendingKeyerView: View {
         guard !expectedAnswer.isEmpty, !sender.isKeying else { return }
         let typed = sender.decodedText.trimmingCharacters(in: .whitespaces)
         guard typed.count >= expectedAnswer.count else { return }
-        model.select(typed)
+        if acknowledge.isAwaiting {
+            acknowledgeMiss(typed)
+        } else {
+            model.select(typed)
+        }
+    }
+
+    private static func nowMs() -> Int64 {
+        Int64(ProcessInfo.processInfo.systemUptime * 1000)
+    }
+
+    /// The answer just graded wrong and the screen is holding the correction
+    /// for Next: let the key answer it. The decoder is wiped now and again when
+    /// the debounce ends, so dits still in flight when the miss landed cannot
+    /// be read as the re-key.
+    private func noteMissIfAny() {
+        guard model.showsNextButton, model.lastCorrect == false, let drill = model.drill else {
+            acknowledge.reset()
+            return
+        }
+        acknowledge.miss(target: drill.correct, atMs: Self.nowMs(),
+                         enabled: model.settings.continueAfterMiss)
+        guard acknowledge.isAwaiting else { return }
+        sender.clear()
+        debounceTask?.cancel()
+        debounceTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: UInt64(ContinueAfterMiss.debounceMs) * 1_000_000)
+            guard !Task.isCancelled, acknowledge.isAwaiting else { return }
+            sender.clear()
+        }
+    }
+
+    private func acknowledgeMiss(_ typed: String) {
+        switch acknowledge.input(typed, atMs: Self.nowMs()) {
+        case .advance:
+            Haptics.tap()
+            sender.clear()
+            model.next()
+        case .wrong, .debounced:
+            sender.clear()   // a wrong re-key is dropped: no new miss, no penalty
+        case .inactive:
+            break
+        }
     }
 }
 
