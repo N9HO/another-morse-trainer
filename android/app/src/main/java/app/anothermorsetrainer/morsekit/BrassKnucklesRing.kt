@@ -657,6 +657,26 @@ object BkRing {
         }
     }
 
+    // --- Portraits ----------------------------------------------------------------------------
+
+    /** Side of the square [portrait] buffer. */
+    const val PORTRAIT = 48
+
+    /** A fighter's head on [bg], in art pixels, [PORTRAIT] square. A locked fighter shows as a dark silhouette. */
+    fun portrait(fighter: Int, face: Int, locked: Boolean, bg: Int): IntArray {
+        val art = BrassKnucklesArt
+        val pal = art.FIGHTER_PALETTES[fighter]
+        val buf = IntArray(PORTRAIT * PORTRAIT) { bg }
+        val x = PORTRAIT / 2
+        val y = PORTRAIT - 3
+        Layer(art.HEAD[fighter], x, y, pal, tint = if (locked) rgb(0x2A2434) else null).draw(buf, PORTRAIT, PORTRAIT)
+        if (!locked) {
+            Layer(art.FACE[face], x, y, pal).draw(buf, PORTRAIT, PORTRAIT)
+            Layer(art.GEAR[fighter], x, y, pal).draw(buf, PORTRAIT, PORTRAIT)
+        }
+        return buf
+    }
+
     // --- Bitmap text --------------------------------------------------------------------------
 
     /** The 0..15 coverage of [c] at ([x], [y]) in its cell; a lowercase letter missing from the font uses its capital. */
