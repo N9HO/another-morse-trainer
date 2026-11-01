@@ -448,6 +448,7 @@ private fun AppRoot() {
             TrainingMode.DUNGEON -> route = Route.Dungeon
             TrainingMode.FROGGER -> route = Route.Frogger
             TrainingMode.ASTEROIDS -> route = Route.Asteroids
+            TrainingMode.BRASS_KNUCKLES -> route = Route.BrassKnuckles
         }
     }
 

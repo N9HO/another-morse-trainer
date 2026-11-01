@@ -59,13 +59,14 @@ enum class TrainingMode(private val quizTitle: String? = null, private val title
     DEFENDER(titleRes = R.string.mode_defender),
     DUNGEON(titleRes = R.string.mode_dungeon),
     FROGGER(titleRes = R.string.mode_frogger),
-    ASTEROIDS(titleRes = R.string.mode_asteroids);
+    ASTEROIDS(titleRes = R.string.mode_asteroids),
+    BRASS_KNUCKLES(titleRes = R.string.mode_brass_knuckles);
 
     /** The arcade games (#170): grouped under one Games entry on the home
      *  screen and in the mode switcher (#207). Mirrors iOS `TrainingMode.isGame`. */
     val isGame: Boolean
         get() = this == INVADERS || this == GALAGA || this == DEFENDER ||
-            this == DUNGEON || this == FROGGER || this == ASTEROIDS
+            this == DUNGEON || this == FROGGER || this == ASTEROIDS || this == BRASS_KNUCKLES
 
     /** The menu label — the home tile's title. */
     @Composable

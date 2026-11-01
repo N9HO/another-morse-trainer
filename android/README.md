@@ -90,6 +90,14 @@ the iOS app's navy/teal look.
   short words and callsigns that split into their characters when hit.
   Waves, lives, combos, three difficulties, a gentle speed ramp in hear-it
   mode, and every hit and miss feeds your stats
+- **Brass Knuckles Knock Out**: an arcade boxing game that teaches Morse,
+  created by Derick (KO6PBZ) for Kristen's (K5MME) HamCube PocketCW firmware
+  and sponsored by The Brass Knuckle Gang. The opponent sends a one- or
+  two-character tell; key it back before the punch lands to dodge, then every
+  character you send is a punch (dits jab, dahs hook, a mix throws a combo),
+  clean timing hits harder, and stars buy an uppercut. Eight fighters, four
+  stages, three rounds; each win unlocks the next fighter. GPL-3.0-or-later,
+  used with the authors' permission.
 - **First Four**: just enough CW for a brand-new operator to hunt one POTA
   activator — enter your callsign and state, then hear and send your call,
   your state, ? and 73, and work through three short scenes: a busted call
