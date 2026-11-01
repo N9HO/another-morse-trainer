@@ -1,5 +1,5 @@
 {
- "about": "The title a Stats session row and the session detail show for each of the 25 modes, the same on every app (gap copy-labels). 'id' is the iOS TrainingMode raw value (the sync wire id), 'title' the shown name (the iOS TrainingMode.title table, read from its source text by the Swift harness), 'kotlinMode' the string Android and desktop store in SessionRecord.mode, which SessionRecord.displayTitle maps to 'title'. Four modes are stored under a shorter name (Sending, Listen, Pileup, Stories); the stored strings must not change, they key saved records and the sync table. Read by ios MorseKitCheck, android SessionTitlesTest and desktop SessionTitlesTest.",
+ "about": "The title a Stats session row and the session detail show for each of the 26 modes, the same on every app (gap copy-labels). 'id' is the iOS TrainingMode raw value (the sync wire id), 'title' the shown name (the iOS TrainingMode.title table, read from its source text by the Swift harness), 'kotlinMode' the string Android and desktop store in SessionRecord.mode, which SessionRecord.displayTitle maps to 'title'. Four modes are stored under a shorter name (Sending, Listen, Pileup, Stories); the stored strings must not change, they key saved records and the sync table. Read by ios MorseKitCheck, android SessionTitlesTest and desktop SessionTitlesTest.",
  "modes": [
   {
    "id": "journey",
@@ -125,6 +125,11 @@
    "id": "asteroids",
    "title": "CW Asteroids",
    "kotlinMode": "CW Asteroids"
+  },
+  {
+   "id": "brassKnuckles",
+   "title": "Brass Knuckles",
+   "kotlinMode": "Brass Knuckles"
   }
  ]
 }

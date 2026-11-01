@@ -21,8 +21,8 @@ class SessionTitlesTest {
     }
 
     @Test
-    fun theFixtureListsAll25Modes() {
-        assertEquals(25, modes.size)
+    fun theFixtureListsAll26Modes() {
+        assertEquals(26, modes.size)
     }
 
     @Test

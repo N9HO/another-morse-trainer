@@ -10181,7 +10181,7 @@ if let fx = loadSessionClockFixture() {
 // so its `title` table is read from AppModel.swift's source text.
 print("\nSession row titles (fixtures/gap-docs-mode-titles.json):")
 if let tx = loadUIContractFixture("gap-docs-mode-titles.json"), let rows = tx["modes"] as? [[String: Any]] {
-    check("fixtures/gap-docs-mode-titles.json lists 25 modes", rows.count == 25)
+    check("fixtures/gap-docs-mode-titles.json lists 26 modes", rows.count == 26)
     let root = URL(fileURLWithPath: #filePath)
         .deletingLastPathComponent().deletingLastPathComponent()
         .deletingLastPathComponent().deletingLastPathComponent()
@@ -10206,7 +10206,7 @@ if let tx = loadUIContractFixture("gap-docs-mode-titles.json"), let rows = tx["m
             let id = row["id"] as? String ?? ""
             if titles[id] != (row["title"] as? String) { allMatch = false }
         }
-        check("TrainingMode.title table equals the fixture's titles for all 25 modes", allMatch && titles.count == 25)
+        check("TrainingMode.title table equals the fixture's titles for all 26 modes", allMatch && titles.count == 26)
     } else {
         check("AppModel.swift is readable for the session-title check", false)
     }
