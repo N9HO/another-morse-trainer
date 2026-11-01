@@ -36,10 +36,14 @@ struct BragSheetView: View {
                     // Android hides its share button on the same condition
                     // (`Stats.totalSessions > 0`), so a blank card can't be posted.
                     if stats.totalSessions > 0, let url = shareURL {
-                        // The caption travels with the image wherever the share
-                        // lands (Android attaches the same EXTRA_TEXT).
+                        // The card image alone, no `message:` caption: the share
+                        // sheet hands a caption to the target as a second item,
+                        // and Discord and similar targets post it as a message of
+                        // its own, so the brag arrived twice. The card already
+                        // shows the streak, total, accuracy and URL the caption
+                        // repeated. Android sends no EXTRA_TEXT for the same
+                        // reason (the Daily Dit fix, #334).
                         ShareLink(item: url,
-                                  message: Text(shareCaption),
                                   preview: SharePreview("My Morse progress", image: Image(systemName: "antenna.radiowaves.left.and.right"))) {
                             Image(systemName: "square.and.arrow.up")
                         }
@@ -302,12 +306,6 @@ struct BragSheetView: View {
     }
 
     // MARK: - Share image
-
-    /// Text attached alongside the shared card (same wording as Android).
-    private var shareCaption: String {
-        "\(stats.currentStreak)-day Morse streak — \(stats.totalAnswered) copied at "
-            + "\(Int((stats.accuracy * 100).rounded()))%. anothermorsetrainer.app"
-    }
 
     @MainActor private func renderShareImage() {
         let card = BragShareCard(stats: stats,
