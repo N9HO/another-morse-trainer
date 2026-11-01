@@ -203,6 +203,8 @@ private sealed interface Route {
     data object Dungeon : Route
     data object Frogger : Route
     data object Asteroids : Route
+    /** Brass Knuckles Knock Out: the boxing game that teaches Morse, behind the Games sub-menu. */
+    data object BrassKnuckles : Route
     /** CW Operating Procedure (#294, #295): POTA etiquette lessons, behind one home tile. */
     data object OperatingProcedure : Route
     data object Story : Route
@@ -238,7 +240,7 @@ private val Route.playsBandNoise: Boolean
         Route.Journey, is Route.Quiz, Route.Pileup, Route.Contest, Route.Exam,
         Route.Listen, Route.Cw77, Route.HeadCopy, Route.TypeIt, Route.Qrq,
         Route.RapidFire, Route.Invaders, Route.Galaga, Route.Defender,
-        Route.Dungeon, Route.Frogger, Route.Asteroids, Route.Story, Route.Sending,
+        Route.Dungeon, Route.Frogger, Route.Asteroids, Route.BrassKnuckles, Route.Story, Route.Sending,
         Route.DailyDit, Route.FirstFour, Route.OperatingProcedure -> true
         Route.Onboarding, Route.Home, Route.Games, Route.SendingDrills,
         Route.SendingAnalyzer, Route.Repeater, Route.CwDecoder, Route.Reference,
@@ -280,6 +282,7 @@ private fun routeTag(route: Route): String = when (route) {
     Route.Dungeon -> "dungeon"
     Route.Frogger -> "frogger"
     Route.Asteroids -> "asteroids"
+    Route.BrassKnuckles -> "brassknuckles"
     Route.OperatingProcedure -> "operatingProcedure"
     Route.Story -> "story"
     Route.Sending -> "sending"
@@ -317,6 +320,7 @@ private fun routeFrom(tag: String): Route? = when (tag) {
     "dungeon" -> Route.Dungeon
     "frogger" -> Route.Frogger
     "asteroids" -> Route.Asteroids
+    "brassknuckles" -> Route.BrassKnuckles
     "operatingProcedure" -> Route.OperatingProcedure
     "story" -> Route.Story
     "sending" -> Route.Sending
@@ -535,6 +539,7 @@ private fun AppRoot() {
             onPickDungeon = { route = Route.Dungeon },
             onPickFrogger = { route = Route.Frogger },
             onPickAsteroids = { route = Route.Asteroids },
+            onPickBrassKnuckles = { route = Route.BrassKnuckles },
             onOpenLeaderboard = { route = Route.GamesLeaderboard }
         )
         // Back from a game lands on the Games sub-menu it was picked from
@@ -545,6 +550,7 @@ private fun AppRoot() {
         Route.Dungeon -> DungeonScreen(onBack = { route = Route.Games }, onSwitchMode = { switchTo(it) })
         Route.Frogger -> FroggerScreen(onBack = { route = Route.Games }, onSwitchMode = { switchTo(it) })
         Route.Asteroids -> AsteroidsScreen(onBack = { route = Route.Games }, onSwitchMode = { switchTo(it) })
+        Route.BrassKnuckles -> BoxingScreen(onBack = { route = Route.Games })
         Route.OperatingProcedure -> OperatingProcedureScreen(
             onBack = { route = Route.Home },
             onOpenFirstFour = { route = Route.FirstFour }
