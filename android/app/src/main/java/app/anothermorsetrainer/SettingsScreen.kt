@@ -55,6 +55,8 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -2241,6 +2243,7 @@ private fun BandNoiseSetting() {
  * waiting for the next wake, as this used to do, meant the change did nothing
  * until the operator left the module — or, from Home, entered one.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun AdapterKeyerSetting(context: android.content.Context) {
     var mode by remember { mutableStateOf(AdapterKeyer.mode(context)) }
@@ -2253,9 +2256,13 @@ private fun AdapterKeyerSetting(context: android.content.Context) {
             )
         }
         Spacer(Modifier.height(8.dp))
-        Row(
-            modifier = Modifier.horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        // Wraps (#348): a horizontally scrolling row clipped the last four
+        // modes off the right edge with nothing to hint at them, and a mouse
+        // wheel does not scroll sideways.
+        FlowRow(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             MidiKeyOutput.KeyerMode.entries.forEach { option ->
                 val isSel = option == mode
@@ -2325,6 +2332,30 @@ private fun OnScreenKeySetting() {
                 )
             }
         }
+        // #352, #347: after a keyed miss, keying the right answer is Next.
+        Spacer(Modifier.height(6.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                stringResource(R.string.settings_continue_after_miss),
+                color = Brand.textPrimary,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.weight(1f)
+            )
+            Switch(
+                checked = Settings.continueAfterMiss,
+                onCheckedChange = { Settings.updateContinueAfterMiss(it) },
+                colors = switchColors()
+            )
+        }
+        Text(
+            stringResource(R.string.settings_continue_after_miss_hint),
+            color = Brand.textSecondary,
+            fontSize = 12.sp
+        )
     }
 }
 

@@ -34,6 +34,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -57,9 +58,11 @@ import androidx.compose.ui.unit.sp
 import app.anothermorsetrainer.morsekit.Asteroid
 import app.anothermorsetrainer.morsekit.AsteroidsEvent
 import app.anothermorsetrainer.morsekit.AsteroidsGame
+import app.anothermorsetrainer.morsekit.AsteroidsHitTest
 import app.anothermorsetrainer.morsekit.AsteroidsInput
 import app.anothermorsetrainer.morsekit.AsteroidsOutcome
 import app.anothermorsetrainer.morsekit.AsteroidsShot
+import app.anothermorsetrainer.morsekit.AsteroidsTap
 import app.anothermorsetrainer.morsekit.InvadersCharacterSet
 import app.anothermorsetrainer.morsekit.InvadersDifficulty
 import app.anothermorsetrainer.morsekit.MorseCode
@@ -72,7 +75,6 @@ import app.anothermorsetrainer.morsekit.SessionRecord
 import kotlin.math.PI
 import kotlin.math.atan2
 import kotlin.math.cos
-import kotlin.math.hypot
 import kotlin.math.roundToInt
 import kotlin.math.sin
 
@@ -84,13 +86,6 @@ private enum class AstPhase { SETUP, RUNNING, OVER }
  * in `AsteroidsView.swift`.
  */
 private val ASTEROID_LUMPS = listOf(1.0f, 0.82f, 0.95f, 0.72f, 1.0f, 0.88f, 0.76f, 1.0f, 0.9f, 0.8f)
-
-/** Drawn radius in dp for a label: single characters small, fragments smaller, words wider. */
-private fun asteroidRadiusDp(a: Asteroid): Float = when {
-    a.isFragment -> 15f
-    a.label.length == 1 -> 19f
-    else -> 16f + 6f * a.label.length
-}
 
 /**
  * CW Asteroids (#189, part of #170): labelled asteroids drift in toward the
@@ -551,6 +546,9 @@ private fun AsteroidsRun(
 ) {
     val measurer = rememberTextMeasurer()
     val density = LocalDensity.current
+    val latestField by rememberUpdatedState(field)
+    val latestOnTapAsteroid by rememberUpdatedState(onTapAsteroid)
+    val latestOnTapShip by rememberUpdatedState(onTapShip)
     Column(modifier = Modifier.fillMaxSize().widthIn(max = CONTENT_MAX_WIDTH).padding(horizontal = 16.dp)) {
         Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             TextButton(onClick = onEnd) { Text(stringResource(R.string.asteroids_end_game), color = Brand.teal) }
@@ -578,28 +576,22 @@ private fun AsteroidsRun(
                 .clip(RoundedCornerShape(Brand.cornerRadius))
                 .background(Brand.navyElevated)
                 .border(1.dp, Brand.hairline, RoundedCornerShape(Brand.cornerRadius))
-                .pointerInput(input, field) {
+                // Keyed on `input` only (#350): `field` is a new list every frame,
+                // and keying on it restarted the gesture detector every frame,
+                // cancelling a tap before its release. Read the latest field
+                // through rememberUpdatedState instead.
+                .pointerInput(input) {
                     if (input != AsteroidsInput.COPY) return@pointerInput
                     detectTapGestures { offset ->
-                        // The ship replays the cue; otherwise the nearest
-                        // asteroid within reach is the one tapped; empty
-                        // space does nothing.
-                        val cx = size.width / 2f
-                        val cy = size.height / 2f
-                        if (hypot(offset.x - cx, offset.y - cy) <= with(density) { 30.dp.toPx() }) {
-                            onTapShip()
-                            return@detectTapGestures
+                        when (val hit = AsteroidsHitTest.target(
+                            offset.x.toDouble(), offset.y.toDouble(),
+                            size.width.toDouble(), size.height.toDouble(),
+                            density.density.toDouble(), latestField
+                        )) {
+                            is AsteroidsTap.Ship -> latestOnTapShip()
+                            is AsteroidsTap.Rock -> latestOnTapAsteroid(hit.id)
+                            is AsteroidsTap.Empty -> Unit
                         }
-                        var best: Asteroid? = null
-                        var bestD = Float.MAX_VALUE
-                        for (a in field) {
-                            val px = a.x.toFloat() * size.width
-                            val py = a.y.toFloat() * size.height
-                            val d = hypot(offset.x - px, offset.y - py)
-                            val reach = with(density) { (asteroidRadiusDp(a) + 14f).dp.toPx() }
-                            if (d <= reach && d < bestD) { best = a; bestD = d }
-                        }
-                        best?.let { onTapAsteroid(it.id) }
                     }
                 }
         ) {
@@ -628,7 +620,7 @@ private fun AsteroidsRun(
             for (a in field) {
                 val px = a.x.toFloat() * size.width
                 val py = a.y.toFloat() * size.height
-                val r = asteroidRadiusDp(a).dp.toPx()
+                val r = AsteroidsHitTest.radiusDp(a).toFloat().dp.toPx()
                 val spin = (elapsed * 0.6 * (if (a.id % 2 == 0) 1 else -1)).toFloat()
                 val n = ASTEROID_LUMPS.size
                 val rock = Path().apply {
