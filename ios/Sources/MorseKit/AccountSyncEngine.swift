@@ -382,7 +382,12 @@ public actor AccountSyncEngine {
         let history = await host.localSessions()
         var saved: Set<SyncStateKey> = []
         for key in SyncStateKey.allCases {
-            if await host.stateValue(key) != nil { saved.insert(key) }
+            guard let value = await host.stateValue(key) else { continue }
+            // A setting still at its default was never chosen here: it is not
+            // queued, so the account's value fills it (fixture
+            // `settings.stamping.firstSignIn`).
+            if key.isSetting, SyncSettings.isDefault(key.rawValue, value) { continue }
+            saved.insert(key)
         }
         store.update {
             $0.beginFirstSync(account: .init(profile), ledger: ledger, history: history, savedKeys: saved)
@@ -614,11 +619,19 @@ public actor AccountSyncEngine {
         // refresh). A key with no value on this device is never sent; one
         // with a value but no stamp yet goes out at 0, so it never outranks
         // a value another device synced.
+        // A setting goes only once it has a stamp (a change made here, or a
+        // first sign-in's non-default value), and always normalised.
         let queuedKeys = store.state.stateOutbox.compactMap(SyncStateKey.init(rawValue:))
         let candidates = refreshState ? SyncStateKey.allCases : queuedKeys
+        let stamped = store.state.stateUpdatedAt
         var values: [SyncStateKey: JSONValue] = [:]
         for key in candidates {
-            if let value = await host.stateValue(key) { values[key] = value }
+            guard var value = await host.stateValue(key) else { continue }
+            if key.isSetting {
+                guard stamped[key.rawValue] != nil, let normal = SyncSettings.normalize(key.rawValue, value) else { continue }
+                value = normal
+            }
+            values[key] = value
         }
         let unsendable = Set(candidates.filter { values[$0] == nil }.map(\.rawValue))
         if !unsendable.isEmpty {
@@ -655,7 +668,14 @@ public actor AccountSyncEngine {
             guard let theirs = entries[key.rawValue] else { continue }
             let ours = store.state.stateUpdatedAt[key.rawValue]
             guard theirs.updatedAt > (ours ?? Int.min) else { continue }
-            if await host.applyState(key, value: theirs.value) {
+            // A setting from another platform is clamped into this app's
+            // range; one it cannot read leaves the local value and stamp.
+            var value = theirs.value
+            if key.isSetting {
+                guard let normal = SyncSettings.normalize(key.rawValue, value) else { continue }
+                value = normal
+            }
+            if await host.applyState(key, value: value) {
                 store.update { state in
                     // Only if no local change landed while it was applied.
                     if state.stateUpdatedAt[key.rawValue] == ours {

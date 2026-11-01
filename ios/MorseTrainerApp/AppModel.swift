@@ -277,8 +277,11 @@ final class AppModel: ObservableObject {
     enum Phase { case idle, playing, awaiting, revealed, answered }
 
     @Published var settings: AppSettings {
-        didSet { settings.save(); applySettings() }
+        didSet { settings.save(); applySettings(); noteSettingsForSync() }
     }
+    /// True while a setting from the account is written (`applySyncedSetting`):
+    /// saved, but not noted as a change of ours, so it is never restamped.
+    var applyingSyncedSettings = false
     @Published private(set) var mode: TrainingMode = .characters
     @Published private(set) var phase: Phase = .idle
     @Published private(set) var drill: Drill?
@@ -3851,7 +3854,17 @@ extension AppModel {
         case .firstFour: return AccountSync.firstFourValue(FirstFourStore.load())
         case .operatingProcedure: return AccountSync.operatingProcedureValue(OperatingProcedureStore.load())
         case .storyBookmarks: return AccountSync.storyBookmarksValue(storyBookmarks)
+        default: return syncSettingValue(key) ?? .null
         }
+    }
+
+    /// After a save: each synced setting whose wire value changed is stamped
+    /// and queued (`SyncCoordinator.noteState` compares with the last value
+    /// it saw). A value the account just handed us is not a change of ours.
+    func noteSettingsForSync() {
+        guard !applyingSyncedSettings else { return }
+        let sync = SyncCoordinator.shared
+        for (key, value) in syncSettingValues { sync.noteState(key, value: value) }
     }
 
     /// A synced key's value for the engine to push, or nil when its store
@@ -3872,6 +3885,10 @@ extension AppModel {
             guard defaults.data(forKey: OperatingProcedureStore.key) != nil else { return nil }
         case .storyBookmarks:
             guard !storyBookmarks.isEmpty else { return nil }
+        default:
+            // A setting always has a value; the engine sends it only once
+            // it has been stamped (fixture `settings.stamping`).
+            return syncSettingValue(key)
         }
         return syncStateValue(key)
     }
@@ -3939,6 +3956,8 @@ extension AppModel {
             guard let bookmarks = AccountSync.storyBookmarks(from: value) else { return false }
             storyBookmarks = bookmarks
             saveBookmarks()
+        default:
+            return applySyncedSetting(key, value: value)
         }
         return true
     }

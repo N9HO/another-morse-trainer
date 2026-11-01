@@ -256,9 +256,40 @@ public struct SyncDayBatch: Codable, Sendable, Equatable {
 
 // MARK: - Progress state
 
-/// The five progress-state keys every app syncs (README §9).
-public enum SyncStateKey: String, CaseIterable, Sendable {
-    case journey, characters, firstFour, operatingProcedure, storyBookmarks
+/// A `PUT /v1/sync/state` key (README §9): one of the five progress keys
+/// every app syncs, or one of the training settings (`SyncSettings`, one key
+/// per setting). A struct rather than an enum so the settings table can
+/// supply its own keys; `init?(rawValue:)` refuses a key this app does not
+/// know, so an unknown key from the account is ignored.
+public struct SyncStateKey: RawRepresentable, Hashable, CaseIterable, Sendable, CustomStringConvertible {
+    public let rawValue: String
+
+    public init?(rawValue: String) {
+        guard Self.known.contains(rawValue) else { return nil }
+        self.rawValue = rawValue
+    }
+
+    init(uncheckedRawValue: String) { rawValue = uncheckedRawValue }
+
+    public static let journey = SyncStateKey(uncheckedRawValue: "journey")
+    public static let characters = SyncStateKey(uncheckedRawValue: "characters")
+    public static let firstFour = SyncStateKey(uncheckedRawValue: "firstFour")
+    public static let operatingProcedure = SyncStateKey(uncheckedRawValue: "operatingProcedure")
+    public static let storyBookmarks = SyncStateKey(uncheckedRawValue: "storyBookmarks")
+
+    /// The five progress keys (fixture `state.keys`).
+    public static let progressKeys: [SyncStateKey] = [.journey, .characters, .firstFour, .operatingProcedure, .storyBookmarks]
+
+    /// Progress first, then every setting.
+    public static let allCases: [SyncStateKey] = progressKeys + SyncSettings.keys
+
+    private static let known = Set(allCases.map(\.rawValue))
+
+    /// A training setting rather than progress: never sent until stamped,
+    /// and normalised both ways (fixture `settings`).
+    public var isSetting: Bool { rawValue.hasPrefix(SyncSettings.keyPrefix) }
+
+    public var description: String { rawValue }
 }
 
 /// One key's value and when it was last changed, in epoch milliseconds.
