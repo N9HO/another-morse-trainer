@@ -438,7 +438,8 @@ Build order:
    documents, once the accounts exist and a real device can produce a
    sample to test against.
 3. ~~Step 2 clients, both apps, opt-in off by default.~~ Both apps, one PR:
-   transcript capture in the nine modes (the exact semantics are the table
+   transcript capture in the nine modes at the time (Brass Knuckles Knock Out
+   later made ten; the exact semantics are the table
    in the server README), App Attest / Play Integrity clients, opt-in with
    display name, a board screen, "Delete my scores". Keying mode in
    Invaders, Galaga and Asteroids plays no Morse, so those runs are not

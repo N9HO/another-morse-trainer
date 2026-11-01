@@ -6475,19 +6475,20 @@ if let fx = loadSharedFixture("asteroid-hit-test.json", as: AsteroidHitTestFixtu
 print("\nLeaderboard:")
 do {
     // Mode ids and the qso -> pileup mapping.
-    check("nine ranked modes", LeaderboardMode.allCases.count == 9)
+    check("ten ranked modes", LeaderboardMode.allCases.count == 10)
     check("mode ids are the server's",
           LeaderboardMode.allCases.map(\.rawValue) ==
-          ["rapidFire", "contest", "pileup", "invaders", "galaga", "defender", "dungeon", "frogger", "asteroids"])
+          ["rapidFire", "contest", "pileup", "invaders", "galaga", "defender", "dungeon", "frogger", "asteroids", "brassKnuckles"])
+    check("Brass Knuckles ranks on its own board", LeaderboardMode(trainingModeRawValue: "brassKnuckles") == .brassKnuckles)
     check("qso ranks on the pileup board", LeaderboardMode(trainingModeRawValue: "qso") == .pileup)
     check("rapidFire maps to itself", LeaderboardMode(trainingModeRawValue: "rapidFire") == .rapidFire)
     check("'pileup' is not a training mode", LeaderboardMode(trainingModeRawValue: "pileup") == nil)
     check("characters is unranked", LeaderboardMode(trainingModeRawValue: "characters") == nil)
     check("exam is unranked", LeaderboardMode(trainingModeRawValue: "exam") == nil)
     check("pileup's training mode is qso", LeaderboardMode.pileup.trainingModeRawValue == "qso")
-    check("the six games ramp, the three graded modes do not",
+    check("the seven games ramp, the three graded modes do not",
           LeaderboardMode.allCases.filter(\.ramps).map(\.rawValue) ==
-          ["invaders", "galaga", "defender", "dungeon", "frogger", "asteroids"])
+          ["invaders", "galaga", "defender", "dungeon", "frogger", "asteroids", "brassKnuckles"])
 
     // Transcript items: builders and JSON shape.
     let enc = JSONEncoder()

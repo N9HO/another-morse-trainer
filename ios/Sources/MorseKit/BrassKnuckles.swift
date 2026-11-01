@@ -431,6 +431,13 @@ private enum Duel: Equatable, Sendable {
     case stagger
 }
 
+/// One tell's outcome, as the leaderboard grades it (see `BoxingFight.takeTellResults`).
+public struct BoxingTellResult: Sendable, Equatable {
+    public var sent: String
+    public var answered: String
+    public var reactionMs: Int
+}
+
 /// One fight against a ladder fighter. Every call that moves time takes the
 /// current tick count `now` in milliseconds.
 public struct BoxingFight: Sendable {
@@ -486,6 +493,10 @@ public struct BoxingFight: Sendable {
     /// Characters of the uppercut word keyed with timing better than bad.
     private var starClean = 0
     private var copies: [(Character, Character?)] = []
+    /// When the current tell finished sounding; the reply time runs from here.
+    private var tellEndedAt: UInt32 = 0
+    /// One entry per tell answered, dodged or not, for the shared leaderboard.
+    private var tellResults: [BoxingTellResult] = []
 
     /// A fight against ladder fighter `fighter`. `myDitMs` is your keyer's dot length.
     public init(fighter: Int, seed: UInt32, hints: Bool, myDitMs: Int, callsign: String) {
@@ -670,6 +681,7 @@ public struct BoxingFight: Sendable {
         due = due.map { $0 &+ gap }
         roundEnds = roundEnds &+ gap
         since = since &+ gap
+        tellEndedAt = tellEndedAt &+ gap
         if let e = foeEvent { foeEvent = (e.0, e.1 &+ gap) }
         if let e = meEvent { meEvent = (e.0, e.1 &+ gap) }
         if let c = callout { callout = (c.0, c.1 &+ gap) }
@@ -748,6 +760,7 @@ public struct BoxingFight: Sendable {
         case .window:
             let t = Array(tell)
             for c in t.dropFirst(answer.count) { judge(c, nil) }
+            tellResults.append(BoxingTellResult(sent: tell, answered: answer, reactionMs: 0))
             callout = (.tooSlow, now)
             throwPunch(now, dodged: false)
         case .punch(let dodged):
@@ -778,6 +791,7 @@ public struct BoxingFight: Sendable {
     /// The tell finished playing at `now`: the reply window opens.
     public mutating func tellPlayed(now: UInt32) {
         if phase != .fight || duel != .tell || pausedAt != nil { return }
+        tellEndedAt = now
         let keying = tell.reduce(0) { $0 + BoxingRules.units($1) + 3 } * myDitMs
         step(.window, now, now &+ UInt32(foe.reactMs + keying))
     }
@@ -881,12 +895,16 @@ public struct BoxingFight: Sendable {
         if c != want {
             judge(want, c)
             for rest in t.dropFirst(at + 1) { judge(rest, nil) }
+            tellResults.append(BoxingTellResult(sent: tell, answered: answer, reactionMs: 0))
             callout = (.wrong(sent: c), now)
             return throwPunch(now, dodged: false)
         }
         judge(want, want)
         if answer.count == tell.count {
             stats.dodged += 1
+            // Keyed back before the tell ended: no wait to measure.
+            let reaction = duel == .tell ? 0 : Int(now &- tellEndedAt)
+            tellResults.append(BoxingTellResult(sent: tell, answered: answer, reactionMs: reaction))
             // A dodge before the tell even ends scores more.
             score += duel == .tell ? 80 : 50
             callout = (.dodge, now)
@@ -1098,6 +1116,17 @@ public struct BoxingFight: Sendable {
         let known = copied.flatMap { BoxingRules.indexOf($0) != nil ? $0 : nil }
         if copies.count == 8 { copies.removeFirst() }
         copies.append((sent, known))
+    }
+
+    /// Takes the tells answered since the last call, in order, for the shared
+    /// leaderboard: the tell as sent, what was keyed back ("" when nothing
+    /// was), and the wait from the end of its audio to the finished answer in
+    /// milliseconds (0 on a miss or a dodge keyed before the tell ended). The
+    /// tell's speed is the screen's to add: it chose it. Punches thrown while
+    /// the foe is open are not tells and never appear here.
+    public mutating func takeTellResults(_ each: (BoxingTellResult) -> Void) {
+        for r in tellResults { each(r) }
+        tellResults.removeAll()
     }
 
     /// Takes the characters judged since the last call, for the letter statistics: (sent, copied), copied nil when missed.

@@ -210,7 +210,7 @@ object LeaderboardClient {
     /**
      * Register a run, or return null when there is nothing to do: the user
      * has not opted in, the build is not configured, or the mode is not one
-     * of the nine ranked ones. Never blocks — the network work runs in the
+     * of the ten ranked ones. Never blocks — the network work runs in the
      * background and the handle resolves when it is done.
      *
      * @param statsMode the mode string the screen passes to `Stats.record`.

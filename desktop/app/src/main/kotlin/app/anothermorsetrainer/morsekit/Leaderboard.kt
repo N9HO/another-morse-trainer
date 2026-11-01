@@ -26,7 +26,7 @@ import java.security.MessageDigest
  * @property reactionMs time to respond from the end of the item's audio, >= 0;
  *   0 where the mode does not measure it.
  * @property wpm the character speed this item was sent at. Required for the
- *   six ramping arcade games (each item carries its own), forbidden for
+ *   seven ramping arcade games (each item carries its own), forbidden for
  *   Rapid Fire, Contest and Pileup Runner, which rank on the run's speed.
  */
 data class LeaderboardItem(
@@ -72,17 +72,18 @@ object Leaderboard {
         "Morse Defender" to "defender",
         "CW Dungeon" to "dungeon",
         "CW Frogger" to "frogger",
-        "CW Asteroids" to "asteroids"
+        "CW Asteroids" to "asteroids",
+        "Brass Knuckles" to "brassKnuckles"
     )
 
-    /** The nine server mode ids, in the order the board screen lists them. */
+    /** The ten server mode ids, in the order the board screen lists them. */
     val rankedModes: List<String> get() = modeIds.values.toList()
 
     /** The server mode id for a `Stats.record` mode string, or null when the mode is not ranked. */
     fun modeId(statsMode: String): String? = modeIds[statsMode]
 
     /** The modes whose items carry their own `wpm` (the server's RAMPING set). */
-    val rampingModes: Set<String> = setOf("invaders", "galaga", "defender", "dungeon", "frogger", "asteroids")
+    val rampingModes: Set<String> = setOf("invaders", "galaga", "defender", "dungeon", "frogger", "asteroids", "brassKnuckles")
 
     fun isRamping(modeId: String): Boolean = modeId in rampingModes
 

@@ -228,7 +228,8 @@ the iOS app's navy/teal look.
   by 5-WPM speed band, a shareable Brag Sheet, and personal bests including
   your best score in each arcade game, Contest, Pileup Runner and Rapid Fire
 - **Leaderboard**: an opt-in shared board across both apps for Rapid Fire,
-  Contest, Pileup Runner and the six arcade games, browsable by anyone, per
+  Contest, Pileup Runner and the seven arcade games (Brass Knuckles Knock Out
+  included: one transcript item per tell), browsable by anyone, per
   mode, from the Games sub-menu and from Progress without sharing. Off by
   default; turn it on in Settings › Leaderboard & Buddy with a display name, or from
   the one prompt offered the first time you start a game with sharing off

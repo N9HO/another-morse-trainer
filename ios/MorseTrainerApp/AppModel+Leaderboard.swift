@@ -36,11 +36,19 @@
 //                label when destroyed, "" when it struck the ship. A wrong
 //                character keyed mid-label is not an item (the asteroid is
 //                still in play and will resolve one way or the other).
+//   Brass Knuckles
+//                one per tell answered: sent = the tell (one or two
+//                characters), answered = what was keyed back ("" on a
+//                timeout), reactionMs = from the end of the tell's audio to
+//                the finished answer (0 on a miss or a dodge keyed before the
+//                tell ended), wpm = the fighter's tell speed. Punches thrown
+//                while the foe is open are not items. A session spans fights,
+//                like Play again in the other games.
 //   Games' wpm = the engine's `currentWpm`, rounded, at the item.
 //   Keying mode ("see it, key it") in Invaders, Galaga and Asteroids plays
 //   no Morse at all, so those runs are not submitted — only hear-it runs
 //   rank. Dungeon always plays the spell, Defender and Frogger always play
-//   their cues, so they always rank.
+//   their cues, and Brass Knuckles always plays the tell, so they always rank.
 //
 // Run speeds: Rapid Fire and the games send the session timing (character
 // and effective WPM); Contest and Pileup Runner have no single speed — see

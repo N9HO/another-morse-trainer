@@ -26,19 +26,20 @@ class LeaderboardTest {
         assertEquals("dungeon", Leaderboard.modeId("CW Dungeon"))
         assertEquals("frogger", Leaderboard.modeId("CW Frogger"))
         assertEquals("asteroids", Leaderboard.modeId("CW Asteroids"))
+        assertEquals("brassKnuckles", Leaderboard.modeId("Brass Knuckles"))
         assertNull(Leaderboard.modeId("Code Exam"))
         assertNull(Leaderboard.modeId("Characters"))
         assertNull(Leaderboard.modeId("Listen"))
-        assertEquals(9, Leaderboard.rankedModes.size)
+        assertEquals(10, Leaderboard.rankedModes.size)
         assertEquals(
-            listOf("rapidFire", "contest", "pileup", "invaders", "galaga", "defender", "dungeon", "frogger", "asteroids"),
+            listOf("rapidFire", "contest", "pileup", "invaders", "galaga", "defender", "dungeon", "frogger", "asteroids", "brassKnuckles"),
             Leaderboard.rankedModes
         )
     }
 
     @Test
-    fun `the six games ramp and the three graded modes do not`() {
-        for (m in listOf("invaders", "galaga", "defender", "dungeon", "frogger", "asteroids")) {
+    fun `the seven games ramp and the three graded modes do not`() {
+        for (m in listOf("invaders", "galaga", "defender", "dungeon", "frogger", "asteroids", "brassKnuckles")) {
             assertTrue(m, Leaderboard.isRamping(m))
         }
         for (m in listOf("rapidFire", "contest", "pileup")) {

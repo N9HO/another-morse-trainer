@@ -221,7 +221,8 @@ testers, bug reports and feature chat live on
   and a separate band-noise level to copy through (heard only while a mode,
   game or lesson plays, with a short sample when the level is picked)
 - **Leaderboard**: an opt-in shared board across both apps for Rapid Fire,
-  Contest, Pileup Runner and the six games. The server grades each run's
+  Contest, Pileup Runner and the seven games (Brass Knuckles Knock Out
+  included: one transcript item per tell). The server grades each run's
   transcript itself and ranks on the speed summed over correct items (so a
   game's board number is not its on-screen score); every post is attested
   with App Attest, so only the genuine app on a real device can rank. Pick a

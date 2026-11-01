@@ -13,12 +13,12 @@ import Foundation
 
 // MARK: - Modes
 
-/// The nine ranked modes, by the id the server uses. Six of them ramp their
+/// The ten ranked modes, by the id the server uses. Seven of them ramp their
 /// speed within a run, so their transcript items carry their own `wpm`; the
 /// other three run at one fixed speed known from the run token.
 public enum LeaderboardMode: String, CaseIterable, Codable, Sendable, Identifiable {
     case rapidFire, contest, pileup
-    case invaders, galaga, defender, dungeon, frogger, asteroids
+    case invaders, galaga, defender, dungeon, frogger, asteroids, brassKnuckles
 
     public var id: String { rawValue }
 
@@ -27,7 +27,7 @@ public enum LeaderboardMode: String, CaseIterable, Codable, Sendable, Identifiab
     public var ramps: Bool {
         switch self {
         case .rapidFire, .contest, .pileup: return false
-        case .invaders, .galaga, .defender, .dungeon, .frogger, .asteroids: return true
+        case .invaders, .galaga, .defender, .dungeon, .frogger, .asteroids, .brassKnuckles: return true
         }
     }
 
@@ -55,6 +55,7 @@ public enum LeaderboardMode: String, CaseIterable, Codable, Sendable, Identifiab
         case .dungeon:    return "CW Dungeon"
         case .frogger:    return "CW Frogger"
         case .asteroids:  return "CW Asteroids"
+        case .brassKnuckles: return "Brass Knuckles"
         }
     }
 }
