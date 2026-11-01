@@ -2644,6 +2644,44 @@
      }
     ]
    }
+  },
+  {
+   "id": "continueAfterMiss",
+   "name": "Continue with the key after a miss",
+   "kind": "setting",
+   "status": {
+    "ios": "present",
+    "android": "present",
+    "desktop": "present"
+   },
+   "claims": {
+    "ios": {
+     "files": [
+      "Sources/MorseKit/ContinueAfterMiss.swift"
+     ]
+    },
+    "android": {
+     "files": [
+      "morsekit/ContinueAfterMiss.kt"
+     ]
+    },
+    "desktop": {
+     "files": [
+      "morsekit/ContinueAfterMiss.kt"
+     ]
+    }
+   },
+   "readme": {
+    "ios": [
+     "Continue with the key after a miss"
+    ],
+    "android": [
+     "Continue with the key after a miss"
+    ],
+    "desktop": [
+     "Continue with the key after a miss"
+    ]
+   }
   }
  ],
  "optionLists": {

@@ -54,8 +54,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.anothermorsetrainer.morsekit.ContinueAfterMiss
 import app.anothermorsetrainer.morsekit.PaddleKeyer
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
 private val OK_GREEN = Color(0xFF2E7D32)
@@ -108,6 +110,10 @@ fun SendingPracticeScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Un
     var stageRev by remember { mutableIntStateOf(0) }
     var toneFinishedAt by remember { mutableLongStateOf(0L) }
     var keyPressed by remember { mutableStateOf(false) }
+    // A miss holds the correction for Next; keying the right answer again is
+    // Next too (#347). The decision lives in morsekit/ContinueAfterMiss.
+    val missAck = remember { ContinueAfterMiss() }
+    var ackAwaiting by remember { mutableStateOf(false) }
 
     // Saved with the instance state, so a process reclaimed mid-session still
     // records what it had on the way out; the ladder itself is in EngineStore.
@@ -153,6 +159,21 @@ fun SendingPracticeScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Un
         }
         summary = source.summary
         revealed = true
+        if (!outcome.correct) {
+            // The decoder is wiped now and again once the debounce ends, so
+            // dits still in flight when the miss landed cannot be read as the
+            // re-key.
+            missAck.miss(drill.correct, System.nanoTime() / 1_000_000, Settings.continueAfterMiss)
+            ackAwaiting = missAck.isAwaiting
+            if (ackAwaiting) {
+                keyer.clear()
+                val armedRound = round
+                scope.launch {
+                    delay(ContinueAfterMiss.DEBOUNCE_MS)
+                    if (round == armedRound && ackAwaiting) keyer.clear()
+                }
+            }
+        }
     }
 
     // Auto-submit once the decoded text is at least as long as the answer and the
@@ -171,10 +192,25 @@ fun SendingPracticeScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Un
      * stale frame flashed the next item's answer (issue #63).
      */
     fun advanceNow() {
+        missAck.reset()
+        ackAwaiting = false
         drill = source.nextDrill()
         revealed = false
         sentAnswer = ""
         round++
+    }
+
+    // While a miss is held: the right answer keyed again moves on; a wrong or
+    // too-early re-key is dropped, with no new miss and no penalty.
+    LaunchedEffect(keyer.decodedText, keyer.isKeying, revealed) {
+        if (!revealed || !ackAwaiting || keyer.isKeying) return@LaunchedEffect
+        val sent = keyer.decodedText.trim()
+        if (sent.isEmpty() || sent.length < drill.correct.length) return@LaunchedEffect
+        when (missAck.input(sent, System.nanoTime() / 1_000_000)) {
+            ContinueAfterMiss.Outcome.ADVANCE -> { keyer.clear(); advanceNow() }
+            ContinueAfterMiss.Outcome.WRONG, ContinueAfterMiss.Outcome.DEBOUNCED -> keyer.clear()
+            ContinueAfterMiss.Outcome.INACTIVE -> ackAwaiting = false
+        }
     }
 
     // After grading, pause on the result, then advance — unless it was a
@@ -215,7 +251,7 @@ fun SendingPracticeScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Un
     // root takes focus on entry so the keys work without a click first; the
     // preview handler claims Space before a focused button can treat it as a click.
     val keyboardKeying = rememberKeyboardKeying(
-        enabled = !revealed && !showSettings,
+        enabled = (!revealed || ackAwaiting) && !showSettings,
         onStraightKey = { down -> keyPressed = down; keyer.touchKey(down) },
         onPaddleKey = { down, ms -> keyer.touchKey(down, ms) }
     )
@@ -315,6 +351,14 @@ fun SendingPracticeScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Un
                     fontWeight = FontWeight.Medium
                 )
                 if (!lastCorrect) {
+                    if (ackAwaiting) {
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            stringResource(R.string.sending_key_to_continue, drill.correct),
+                            color = Brand.teal,
+                            fontSize = 13.sp
+                        )
+                    }
                     // The held correction (issue #77): re-hear the target as
                     // often as needed, move on when ready.
                     Spacer(Modifier.height(14.dp))
@@ -364,7 +408,7 @@ fun SendingPracticeScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Un
             OnScreenKeySwitch(
                 onPaddleKey = { down, ms -> keyer.touchKey(down, ms) },
                 modifier = Modifier.fillMaxWidth().height(120.dp),
-                enabled = !revealed
+                enabled = !revealed || ackAwaiting
             ) {
                 Box(
                     modifier = Modifier
@@ -377,8 +421,8 @@ fun SendingPracticeScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Un
                             color = if (keyPressed) Brand.tealBright else Brand.hairline,
                             shape = RoundedCornerShape(Brand.cornerRadius)
                         )
-                        .pointerInput(revealed) {
-                            if (revealed) return@pointerInput
+                        .pointerInput(revealed, ackAwaiting) {
+                            if (revealed && !ackAwaiting) return@pointerInput
                             detectTapGestures(
                                 onPress = {
                                     keyPressed = true
@@ -419,12 +463,15 @@ fun SendingPracticeScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Un
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedButton(
                     onClick = { keyer.clear() },
-                    enabled = !revealed,
+                    enabled = !revealed || ackAwaiting,
                     modifier = Modifier.weight(1f).heightIn(min = 48.dp)
                 ) { Text(stringResource(R.string.common_clear)) }
                 Button(
-                    onClick = { grade(keyer.submit().uppercase()) },
-                    enabled = !revealed && keyer.decodedText.isNotBlank(),
+                    onClick = {
+                        if (!revealed) grade(keyer.submit().uppercase())
+                        else if (keyer.submit().uppercase() == drill.correct.uppercase()) advanceNow()
+                    },
+                    enabled = (!revealed || ackAwaiting) && keyer.decodedText.isNotBlank(),
                     colors = ButtonDefaults.buttonColors(containerColor = Brand.teal, contentColor = Brand.navy),
                     modifier = Modifier.weight(1f).heightIn(min = 48.dp)
                 ) { Text(stringResource(R.string.common_submit), fontWeight = FontWeight.SemiBold) }
