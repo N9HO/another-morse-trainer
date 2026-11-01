@@ -8013,8 +8013,8 @@ if let fx = loadSyncWireFixture() {
 
     // Mode ids: iOS sends its TrainingMode raw value unchanged.
     let canonical = fx["modeIds"]["canonical"].arrayValue.compactMap(\.stringValue)
-    check("the fixture's canonical ids are the 25 Kotlin titles' targets",
-          canonical.count == 25 && Set(fx["modeIds"]["kotlin"].objectValue.values.compactMap(\.stringValue)) == Set(canonical))
+    check("the fixture's canonical ids are the 26 Kotlin titles' targets",
+          canonical.count == 26 && Set(fx["modeIds"]["kotlin"].objectValue.values.compactMap(\.stringValue)) == Set(canonical))
     check("the session modes go on the wire as recorded",
           ["session", "legacySession"].allSatisfy { fx[$0]["wire"]["mode"].stringValue == fx[$0]["local"]["localMode"]["ios"].stringValue })
     check("the passive modes are the fixture's",
