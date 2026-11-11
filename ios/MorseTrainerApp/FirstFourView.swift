@@ -442,8 +442,8 @@ private struct FirstFourElementStage: View {
                 Button { play() } label: { Label("Hear it", systemImage: "speaker.wave.2.fill") }
                     .buttonStyle(.bordered)
             }
-            FirstFourKeyPanel(expected: text, resetToken: keyReset, wpm: model.settings.wpm,
-                              toneHz: model.settings.toneFrequency, onSubmit: checkSend)
+            FirstFourKeyPanel(expected: text, resetToken: keyReset,
+                              keyer: model.settings.keyerSettings, onSubmit: checkSend)
             Text("\(needed) right in a row to pass this stage.")
                 .font(.caption)
                 .foregroundStyle(Theme.textSecondary)
@@ -667,8 +667,8 @@ private struct FirstFourSceneStage: View {
                     }
                     Spacer()
                 }
-                FirstFourKeyPanel(expected: beat.text, resetToken: keyReset, wpm: model.settings.wpm,
-                                  toneHz: model.settings.toneFrequency) { respond(.sent($0)) }
+                FirstFourKeyPanel(expected: beat.text, resetToken: keyReset,
+                                  keyer: model.settings.keyerSettings) { respond(.sent($0)) }
             case .wait:
                 Button { respond(.waited) } label: {
                     Label("Wait and listen", systemImage: "ear")
@@ -678,8 +678,8 @@ private struct FirstFourSceneStage: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(Theme.teal)
-                FirstFourKeyPanel(expected: call, resetToken: keyReset, wpm: model.settings.wpm,
-                                  toneHz: model.settings.toneFrequency) { respond(.sent($0)) }
+                FirstFourKeyPanel(expected: call, resetToken: keyReset,
+                                  keyer: model.settings.keyerSettings) { respond(.sent($0)) }
             }
         }
         .padding(14)
@@ -890,19 +890,20 @@ private struct FirstFourKeyPanel: View {
     let expected: String
     let resetToken: Int
     let onSubmit: (String) -> Void
+    let keyer: KeyerSettings
     @StateObject private var sender: SendingKeyer
-    @State private var keyPressed = false
     /// A bigger key on a big iPad, as Sending Practice has (Theme.swift,
     /// `wideLayout`); the column itself stays readable-width either way.
     @Environment(\.wideLayout) private var wide
     private var keyHeight: CGFloat { wide ? 150 : 100 }
 
-    init(expected: String, resetToken: Int, wpm: Double, toneHz: Double,
+    init(expected: String, resetToken: Int, keyer: KeyerSettings,
          onSubmit: @escaping (String) -> Void) {
         self.expected = expected
         self.resetToken = resetToken
+        self.keyer = keyer
         self.onSubmit = onSubmit
-        _sender = StateObject(wrappedValue: SendingKeyer(wpm: wpm, toneHz: toneHz))
+        _sender = StateObject(wrappedValue: SendingKeyer(keyer))
     }
 
     var body: some View {
@@ -920,31 +921,7 @@ private struct FirstFourKeyPanel: View {
                 .foregroundStyle(sender.decodedText.isEmpty ? Theme.textSecondary : .white)
                 .lineLimit(1).minimumScaleFactor(0.5)
                 .frame(maxWidth: .infinity, minHeight: 36)
-            OnScreenKeySwitch(onKey: { down, ms in sender.touchKey(isDown: down, atMs: ms) }) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous)
-                        .fill(keyPressed ? Theme.teal : Theme.navyRaised)
-                    RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous)
-                        .strokeBorder(keyPressed ? Theme.tealBright : Theme.hairline, lineWidth: keyPressed ? 2 : 1)
-                    Text("HOLD TO KEY")
-                        .font(.system(size: 12, weight: .bold)).tracking(1.5)
-                        .foregroundStyle(keyPressed ? Theme.navy : Theme.textSecondary)
-                }
-                .frame(height: keyHeight)
-                .contentShape(Rectangle())
-                .gesture(
-                    DragGesture(minimumDistance: 0)
-                        .onChanged { _ in
-                            if !keyPressed { keyPressed = true; sender.touchKey(isDown: true) }
-                        }
-                        .onEnded { _ in
-                            if keyPressed { keyPressed = false; sender.touchKey(isDown: false) }
-                        }
-                )
-                .accessibilityLabel("Morse key")
-                .accessibilityHint("Press and hold to send each dit and dah")
-            }
-            .frame(height: keyHeight)
+            OnScreenKey(sender: sender, height: keyHeight, hint: "Press and hold to send each dit and dah")
             HStack(spacing: 12) {
                 Button { sender.clear() } label: {
                     Label("Clear", systemImage: "delete.left").frame(maxWidth: .infinity, minHeight: 40)
@@ -963,6 +940,7 @@ private struct FirstFourKeyPanel: View {
         }
         .onAppear { sender.start() }
         .onDisappear { sender.stop() }
+        .onChange(of: keyer) { sender.applyConfig($0) }
         .onChange(of: resetToken) { _ in sender.clear() }
         .onChange(of: sender.decodedText) { _ in maybeAutoSubmit() }
         .onChange(of: sender.isKeying) { _ in maybeAutoSubmit() }

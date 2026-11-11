@@ -7,9 +7,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -51,7 +49,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -758,48 +755,13 @@ private fun SendingSection(c: SendingAnalyzerController, midi: HardwareKey, midi
         // Straight key or paddles, as chosen in Settings › Keys & Sending ›
         // On-screen key (#233). The paddles' edges carry the time their keyer
         // scheduled them for.
-        OnScreenKeySwitch(
+        OnScreenKey(
+            pressed = keyPressed,
+            onKey = { keyPressed = it; c.keyEdgeNanos(SendingAnalyzerController.KeySource.SCREEN, it, System.nanoTime()) },
             onPaddleKey = { down, ms -> c.paddleEdge(down, ms) },
-            modifier = Modifier.fillMaxWidth().height(140.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(140.dp)
-                    .clip(RoundedCornerShape(Brand.cornerRadius))
-                    .background(if (keyPressed) Brand.teal else Brand.navyRaised)
-                    .border(
-                        width = if (keyPressed) 2.dp else 1.dp,
-                        color = if (keyPressed) Brand.tealBright else Brand.hairline,
-                        shape = RoundedCornerShape(Brand.cornerRadius)
-                    )
-                    .pointerInput(Unit) {
-                        detectTapGestures(
-                            onPress = {
-                                keyPressed = true
-                                c.keyEdgeNanos(SendingAnalyzerController.KeySource.SCREEN, true, System.nanoTime())
-                                try {
-                                    tryAwaitRelease()
-                                } finally {
-                                    keyPressed = false
-                                    c.keyEdgeNanos(SendingAnalyzerController.KeySource.SCREEN, false, System.nanoTime())
-                                }
-                            }
-                        )
-                    },
-                contentAlignment = Alignment.Center
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("⠿", fontSize = 26.sp, color = if (keyPressed) Brand.navy else Brand.teal)
-                    Text(
-                        stringResource(R.string.common_hold_to_key),
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = if (keyPressed) Brand.navy else Brand.textSecondary
-                    )
-                }
-            }
-        }
+            height = 140.dp,
+            glyphSize = 26.sp
+        )
         Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
             if (midiDevice != null) {
                 Text("🎹 $midiDevice", style = MaterialTheme.typography.labelSmall, color = Brand.teal)

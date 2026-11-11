@@ -85,7 +85,7 @@ final class SendingAnalyzerModel: ObservableObject {
     /// `keyerWpm` is the app's speed setting: what a Vail adapter's own keyer
     /// sends at (paddle modes), as in every other keyed mode. The speed the
     /// attempt is *judged* against is the analyzer's own `targetWpm`.
-    init(toneHz: Double, keyerWpm: Double, studied: [Character]) {
+    init(keyer keyerSettings: KeyerSettings, studied: [Character]) {
         let d = UserDefaults.standard
         source = Source(rawValue: d.string(forKey: Self.prefix + "source") ?? "") ?? .pangram
         customText = d.string(forKey: Self.prefix + "custom") ?? ""
@@ -99,8 +99,8 @@ final class SendingAnalyzerModel: ObservableObject {
         effectiveWpm = eff >= 5 ? eff : 10
         record = Self.loadRecord()
         self.studied = studied
-        self.keyerWpm = keyerWpm
-        keyer = SendingKeyer(wpm: keyerWpm, toneHz: toneHz)
+        keyerWpm = keyerSettings.wpm
+        keyer = SendingKeyer(keyerSettings)
         keyer.onEdge = { [weak self] isDown, ms in
             guard let self, self.input == .key else { return }
             self.keyEdge(isDown: isDown, atMs: Double(ms))

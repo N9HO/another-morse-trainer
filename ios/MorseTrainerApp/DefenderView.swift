@@ -235,8 +235,7 @@ struct DefenderView: View {
                 keyboard
                     // A Vail Adapter / BLE-MIDI key types the copy too (#251),
                     // one decoded character at a time, like a key press.
-                    .hardwareKeyInput(wpm: model.settings.wpm,
-                                      toneHz: model.settings.toneFrequency,
+                    .hardwareKeyInput(keyer: model.settings.keyerSettings,
                                       onText: keyedCopy)
             }
         }

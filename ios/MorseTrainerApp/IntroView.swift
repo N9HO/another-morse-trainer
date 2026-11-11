@@ -152,8 +152,7 @@ struct IntroView: View {
             SendingDrillView().environmentObject(model).pageSizedSheet()
         }
         .sheet(isPresented: $showingSendingAnalyzer) {
-            SendingAnalyzerView(toneHz: model.settings.toneFrequency,
-                                keyerWpm: model.settings.wpm,
+            SendingAnalyzerView(keyer: model.settings.keyerSettings,
                                 studied: model.studiedCharacters)
                 .environmentObject(model)
                 .pageSizedSheet()

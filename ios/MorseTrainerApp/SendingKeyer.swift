@@ -3,6 +3,21 @@ import OSLog
 
 private let log = Logger(subsystem: "com.justinrogers.MorseTrainer", category: "sendingkeyer")
 
+/// What a keyer needs from Settings: the speed it decodes at and the
+/// sidetone. Every screen that keys builds its `SendingKeyer` from
+/// `model.settings.keyerSettings` and hands a changed one to `applyConfig`,
+/// rather than passing each field by hand.
+struct KeyerSettings: Equatable {
+    var wpm: Double
+    var toneHz: Double
+}
+
+extension AppSettings {
+    var keyerSettings: KeyerSettings {
+        KeyerSettings(wpm: wpm, toneHz: toneFrequency)
+    }
+}
+
 /// Drives "sending practice": a physical (Vail Adapter / BLE MIDI) or on-screen
 /// Morse key plays sidetone and is decoded back to text via `MorseDecoder`. The
 /// decoded text answers the current drill through `AppModel.select(_:)`.
@@ -73,10 +88,10 @@ final class SendingKeyer: ObservableObject {
     /// Vail adapter, on-screen paddles) feed it.
     var onEdge: ((_ isDown: Bool, _ atMs: Int64) -> Void)?
 
-    init(wpm: Double, toneHz: Double) {
-        decoder = MorseDecoder(wpm: wpm)
-        keyerWPM = wpm
-        toneMIDINote = Self.midiNote(forHz: toneHz)
+    init(_ settings: KeyerSettings) {
+        decoder = MorseDecoder(wpm: settings.wpm)
+        keyerWPM = settings.wpm
+        toneMIDINote = Self.midiNote(forHz: settings.toneHz)
         keyer.localTxToneMIDI = toneMIDINote
         decoder.onUpdate = { [weak self] text in
             self?.decodedText = text
@@ -169,12 +184,12 @@ final class SendingKeyer: ObservableObject {
     /// wake, i.e. not until the operator left the drill and came back. Only
     /// differences go on the wire, so calling this is cheap. Mirrors
     /// `HardwareKey.applyConfig` on Android.
-    func applyConfig(wpm: Double, toneHz: Double) {
-        keyerWPM = wpm
-        toneMIDINote = Self.midiNote(forHz: toneHz)
+    func applyConfig(_ settings: KeyerSettings) {
+        keyerWPM = settings.wpm
+        toneMIDINote = Self.midiNote(forHz: settings.toneHz)
         keyer.localTxToneMIDI = toneMIDINote
         let mode = MIDIOutput.KeyerMode(rawValue: RepeaterModel.storedKeyerMode) ?? .straightKey
-        let wpmInt = Int(wpm.rounded())
+        let wpmInt = Int(settings.wpm.rounded())
         let tone = toneMIDINote
         guard let out = midiOutput else { return }
         Task { await out.applyConfig(keyerMode: mode, wpm: wpmInt, sidetoneMIDINote: tone) }
@@ -209,9 +224,9 @@ final class SendingKeyer: ObservableObject {
         if midiDeviceNames.isEmpty { stopSidetone() } else { startSidetone() }
     }
 
-    /// On-screen key press/release. `atMs` is when the edge happened, for the
-    /// on-screen paddles (#233), whose keyer schedules each element exactly;
-    /// the straight key leaves it to "now".
+    /// On-screen key press/release. `atMs` is when the edge happened: the
+    /// touch's own time, or for the paddles (#233) when their keyer scheduled
+    /// the element. nil means "now".
     func touchKey(isDown: Bool, atMs: Int64? = nil) {
         handle(key: .straight, isDown: isDown, atMs: atMs ?? Int64(Date().timeIntervalSince1970 * 1000))
     }

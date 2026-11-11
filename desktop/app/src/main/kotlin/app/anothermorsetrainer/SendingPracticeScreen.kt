@@ -1,9 +1,6 @@
 package app.anothermorsetrainer
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.focusable
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -48,7 +45,6 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -93,7 +89,7 @@ fun SendingPracticeScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Un
     // the sending mode the one shared charLadder. A freshly seeded engine also
     // meant a pinned track stage silently did nothing here.
     val source = remember { EngineStore.characters() }
-    val keyer = remember { SendingKeyer(wpm = Settings.characterWpm, toneHz = Settings.sidetoneHz) }
+    val keyer = remember { SendingKeyer() }
     val midi = remember { HardwareKey() }
     // Push a keyer mode or speed picked in the Settings sheet to the adapter
     // now, rather than at the next wake — i.e. after leaving the module (#46).
@@ -478,50 +474,13 @@ fun SendingPracticeScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Un
 
             // Hold-to-key straight key.
             // Straight key or paddles, as chosen in Settings (#233).
-            OnScreenKeySwitch(
+            OnScreenKey(
+                pressed = keyPressed,
+                onKey = { keyPressed = it; keyer.touchKey(it) },
                 onPaddleKey = { down, ms -> keyer.touchKey(down, ms) },
-                // Live after the answer is revealed too, as on iOS (PARITY.md
-                // row 17): the held correction can be keyed along with.
-                modifier = Modifier.fillMaxWidth().height(120.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(120.dp)
-                        .clip(RoundedCornerShape(Brand.cornerRadius))
-                        .background(if (keyPressed) Brand.teal else Brand.navyRaised)
-                        .border(
-                            width = if (keyPressed) 2.dp else 1.dp,
-                            color = if (keyPressed) Brand.tealBright else Brand.hairline,
-                            shape = RoundedCornerShape(Brand.cornerRadius)
-                        )
-                        .pointerInput(Unit) {
-                            detectTapGestures(
-                                onPress = {
-                                    keyPressed = true
-                                    keyer.touchKey(true)
-                                    try {
-                                        tryAwaitRelease()
-                                    } finally {
-                                        keyPressed = false
-                                        keyer.touchKey(false)
-                                    }
-                                }
-                            )
-                        },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("⠿", fontSize = 26.sp, color = if (keyPressed) Brand.navy else Brand.teal)
-                        Text(
-                            stringResource(R.string.common_hold_to_key),
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = if (keyPressed) Brand.navy else Brand.textSecondary
-                        )
-                    }
-                }
-            }
+                height = 120.dp,
+                glyphSize = 26.sp
+            )
 
             Spacer(Modifier.height(6.dp))
             Text(

@@ -169,7 +169,7 @@ fun AdapterConfigSync(key: HardwareKey) {
  */
 @Composable
 fun HardwareKeyInput(onText: (String) -> Unit, onPause: () -> Unit = {}) {
-    val keyer = remember { SendingKeyer(wpm = Settings.characterWpm, toneHz = Settings.sidetoneHz) }
+    val keyer = remember { SendingKeyer() }
     val midi = remember { HardwareKey() }
     // A keyer mode or speed picked in the Settings sheet reaches the adapter now.
     AdapterConfigSync(midi)

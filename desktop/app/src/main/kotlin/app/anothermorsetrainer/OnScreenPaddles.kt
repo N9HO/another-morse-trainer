@@ -8,9 +8,12 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -24,9 +27,11 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
@@ -37,7 +42,10 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.anothermorsetrainer.morsekit.PaddleKeyer
@@ -384,5 +392,123 @@ fun OnScreenKeySwitch(
         // of the keyboard's own, feeding the same callback.
         val driver = rememberPaddleDriver(onPaddleKey, Settings.paddleMode, Settings.characterWpm, enabled)
         KeyboardKeying(driver, onPaddleKey, enabled) { straight() }
+    }
+}
+
+// ---- Shared key views ----
+
+/**
+ * The straight key's hold-to-key pad, lit while held. [pressed] is the
+ * screen's, so a screen that also keys from the keyboard can light it; [onKey]
+ * gets every press and release, a cancelled touch included. Mirrors iOS
+ * `StraightKeyPad`.
+ */
+@Composable
+fun StraightKeyPad(
+    pressed: Boolean,
+    onKey: (Boolean) -> Unit,
+    height: Dp,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    label: String = stringResource(R.string.common_hold_to_key),
+    labelSize: TextUnit = 12.sp,
+    /** A fixed label colour; null is navy while pressed, secondary while up. */
+    labelColor: Color? = null,
+    /** The ⠿ mark above the label, at this size; null for the label alone. */
+    glyphSize: TextUnit? = null
+) {
+    val currentOnKey by rememberUpdatedState(onKey)
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(height)
+            .clip(RoundedCornerShape(Brand.cornerRadius))
+            .background(if (pressed) Brand.teal else Brand.navyRaised)
+            .border(
+                width = if (pressed) 2.dp else 1.dp,
+                color = if (pressed) Brand.tealBright else Brand.hairline,
+                shape = RoundedCornerShape(Brand.cornerRadius)
+            )
+            .pointerInput(enabled) {
+                if (!enabled) return@pointerInput
+                detectTapGestures(onPress = {
+                    currentOnKey(true)
+                    try { tryAwaitRelease() } finally { currentOnKey(false) }
+                })
+            },
+        contentAlignment = Alignment.Center
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            glyphSize?.let { Text("⠿", fontSize = it, color = if (pressed) Brand.navy else Brand.teal) }
+            Text(
+                label,
+                fontSize = labelSize,
+                fontWeight = FontWeight.Bold,
+                color = labelColor ?: if (pressed) Brand.navy else Brand.textSecondary
+            )
+        }
+    }
+}
+
+/**
+ * The on-screen key chosen in Settings: the paddles, timed by their own keyer
+ * and handed to [onPaddleKey], or a [StraightKeyPad] keyed through [onKey].
+ * Mirrors iOS `OnScreenKey`.
+ */
+@Composable
+fun OnScreenKey(
+    pressed: Boolean,
+    onKey: (Boolean) -> Unit,
+    onPaddleKey: (Boolean, Long) -> Unit,
+    height: Dp,
+    enabled: Boolean = true,
+    label: String = stringResource(R.string.common_hold_to_key),
+    labelSize: TextUnit = 12.sp,
+    labelColor: Color? = null,
+    glyphSize: TextUnit? = null
+) {
+    // Straight key or paddles, as chosen in Settings (#233).
+    OnScreenKeySwitch(
+        onPaddleKey = onPaddleKey,
+        modifier = Modifier.fillMaxWidth().height(height),
+        enabled = enabled
+    ) {
+        StraightKeyPad(
+            pressed = pressed, onKey = onKey, height = height, enabled = enabled,
+            label = label, labelSize = labelSize, labelColor = labelColor, glyphSize = glyphSize
+        )
+    }
+}
+
+/**
+ * A keying game's prompt line: what to key, what has been keyed so far (with
+ * the Slashed zero setting), and a mark when a hardware key is connected.
+ * Mirrors iOS `KeyedTextHeader`.
+ */
+@Composable
+fun KeyedTextHeader(prompt: String, text: String, hardwareKeyConnected: Boolean) {
+    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Text(prompt, style = MaterialTheme.typography.labelSmall, color = Brand.textSecondary)
+        Spacer(Modifier.weight(1f))
+        SlashableText(text.ifEmpty { "—" }, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.SemiBold, fontSize = 22.sp, color = Brand.textPrimary)
+        if (hardwareKeyConnected) {
+            Text("  🎹", color = Brand.teal, modifier = Modifier.semantics { contentDescription = "Hardware key connected" })
+        }
+    }
+}
+
+/**
+ * For a game answered one keyed character at a time (Invaders, Galaga,
+ * Asteroids): while [active], hand each character [keyer] finishes to
+ * [onCharacter] and start the next one clean. Mirrors iOS `CharacterKeyPanel`.
+ */
+@Composable
+fun KeyedCharacters(keyer: SendingKeyer, active: Boolean, onCharacter: (Char) -> Unit) {
+    val currentOnCharacter by rememberUpdatedState(onCharacter)
+    LaunchedEffect(keyer.decodedText, keyer.isKeying, active) {
+        if (!active || keyer.isKeying) return@LaunchedEffect
+        val ch = keyer.decodedText.trim().firstOrNull() ?: return@LaunchedEffect
+        keyer.clear()
+        currentOnCharacter(ch)
     }
 }

@@ -235,7 +235,7 @@ fun DungeonScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
     val lbSubmittingText = stringResource(R.string.leaderboard_submitting)
 
     // The key: the same decoder Sending Practice uses, plus a hardware key.
-    val keyer = remember { SendingKeyer(wpm = Settings.characterWpm, toneHz = Settings.sidetoneHz) }
+    val keyer = remember { SendingKeyer() }
     val midi = remember { HardwareKey(context) }
     // One BLE-MIDI link for the whole screen: a key found on the setup page
     // must still be attached once the run starts (see BluetoothKeyButton).
@@ -732,44 +732,16 @@ private fun DungeonRun(
             }
         }
         Spacer(Modifier.height(6.dp))
-        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(stringResource(R.string.dungeon_key_the_counter), style = MaterialTheme.typography.labelSmall, color = Brand.textSecondary)
-            Spacer(Modifier.weight(1f))
-            Text(decoded.ifEmpty { "—" }, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.SemiBold, fontSize = 22.sp, color = Brand.textPrimary)
-            midiDevice?.let { Text("  🎹", color = Brand.teal) }
-        }
+        KeyedTextHeader(stringResource(R.string.dungeon_key_the_counter), decoded.ifEmpty { "—" }, hardwareKeyConnected = midiDevice != null)
         Spacer(Modifier.height(6.dp))
         // Straight key or paddles, as chosen in Settings (#233).
-        OnScreenKeySwitch(
+        OnScreenKey(
+            pressed = keyPressed,
+            onKey = onKey,
             onPaddleKey = onPaddleKey,
-            modifier = Modifier.fillMaxWidth().height(90.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(90.dp)
-                    .clip(RoundedCornerShape(Brand.cornerRadius))
-                    .background(if (keyPressed) Brand.teal else Brand.navyRaised)
-                    .border(
-                        width = if (keyPressed) 2.dp else 1.dp,
-                        color = if (keyPressed) Brand.tealBright else Brand.hairline,
-                        shape = RoundedCornerShape(Brand.cornerRadius)
-                    )
-                    .pointerInput(Unit) {
-                        detectTapGestures(onPress = {
-                            onKey(true)
-                            try { tryAwaitRelease() } finally { onKey(false) }
-                        })
-                    },
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    stringResource(R.string.common_hold_to_key),
-                    fontSize = 11.sp, fontWeight = FontWeight.Bold,
-                    color = if (keyPressed) Brand.navy else Brand.textSecondary
-                )
-            }
-        }
+            height = 90.dp,
+            labelSize = 11.sp
+        )
         Spacer(Modifier.height(12.dp))
     }
 }

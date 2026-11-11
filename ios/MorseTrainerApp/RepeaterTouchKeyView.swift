@@ -1,8 +1,9 @@
 import SwiftUI
 
-/// Big press-and-hold Morse key for the live repeater screen. A `DragGesture`
-/// with `minimumDistance: 0` gives press-down (onChanged) and release (onEnded)
-/// events — a plain TapGesture only fires on release, which can't key Morse.
+/// Big press-and-hold Morse key for the live repeater screen. `keyPress`
+/// reports the press and the release as they happen (a plain TapGesture only
+/// fires on release, which can't key Morse), even inside this screen's
+/// scroll view.
 struct RepeaterTouchKeyView: View {
     @EnvironmentObject var model: RepeaterModel
     @State private var isPressed = false
@@ -31,23 +32,13 @@ struct RepeaterTouchKeyView: View {
         }
         .scaleEffect(isPressed ? 0.98 : 1)
         .animation(.easeOut(duration: 0.06), value: isPressed)
-        .contentShape(Rectangle())
-        .gesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { _ in
-                    if !isPressed {
-                        isPressed = true
-                        Haptics.tap()
-                        model.touchKey(isDown: true)
-                    }
-                }
-                .onEnded { _ in
-                    if isPressed {
-                        isPressed = false
-                        model.touchKey(isDown: false)
-                    }
-                }
-        )
+        .keyPress { down, ms in
+            guard isPressed != down else { return }
+            isPressed = down
+            // Key first, buzz after: the tone is what has to be on time.
+            model.touchKey(isDown: down, atMs: ms)
+            if down { Haptics.tap() }
+        }
         .accessibilityLabel("Morse key")
         .accessibilityHint("Press and hold to send a tone")
     }

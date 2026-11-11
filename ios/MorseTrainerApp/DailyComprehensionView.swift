@@ -47,7 +47,7 @@ struct DailyComprehensionView: View {
             }
             // A Vail Adapter / BLE-MIDI key answers too: key A, B, C or D,
             // then stop keying to lock it in.
-            .hardwareKeyInput(wpm: model.settings.wpm, toneHz: model.settings.toneFrequency,
+            .hardwareKeyInput(keyer: model.settings.keyerSettings,
                               isEnabled: !game.isFinished,
                               onText: { chunk in
                                   guard !game.isFinished else { return }

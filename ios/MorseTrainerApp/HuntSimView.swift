@@ -253,10 +253,10 @@ final class HuntRunner: ObservableObject {
     private var lastText = ""
     private var lastKeying = false
 
-    init(config: HuntConfig, call: String, state: String, wpm: Double, toneHz: Double) {
+    init(config: HuntConfig, call: String, state: String, keyer keyerSettings: KeyerSettings) {
         self.config = config
         session = HuntSession(config: config, seed: UInt64.random(in: 0..<UInt64(1) << 53), myCall: call, myState: state)
-        keyer = SendingKeyer(wpm: wpm, toneHz: toneHz)
+        keyer = SendingKeyer(keyerSettings)
     }
 
     func start(model: AppModel) {
@@ -373,10 +373,9 @@ private struct HuntRunView: View {
     init(config: HuntConfig, call: String, state: String, onDone: @escaping (HuntSession) -> Void) {
         self.onDone = onDone
         // The model's speed and tone are read in onAppear's start; the keyer
-        // only needs them to decode, so use the saved settings directly.
-        let s = AppSettings.load()
+        // (decoding, sidetone, MIDI paddle timing) takes the saved settings.
         _runner = StateObject(wrappedValue: HuntRunner(config: config, call: call, state: state,
-                                                      wpm: s.wpm, toneHz: s.toneFrequency))
+                                                      keyer: AppSettings.load().keyerSettings))
     }
 
     var body: some View {
@@ -460,7 +459,6 @@ private struct HuntKeyPanel: View {
     @EnvironmentObject var model: AppModel
     @ObservedObject var runner: HuntRunner
     @ObservedObject var sender: SendingKeyer
-    @State private var keyPressed = false
     @Environment(\.wideLayout) private var wide
     private var keyHeight: CGFloat { wide ? 150 : 100 }
 
@@ -479,31 +477,7 @@ private struct HuntKeyPanel: View {
                 .foregroundStyle(sender.decodedText.isEmpty ? Theme.textSecondary : .white)
                 .lineLimit(1).minimumScaleFactor(0.5)
                 .frame(maxWidth: .infinity, minHeight: 36)
-            OnScreenKeySwitch(onKey: { down, ms in sender.touchKey(isDown: down, atMs: ms) }) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous)
-                        .fill(keyPressed ? Theme.teal : Theme.navyRaised)
-                    RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous)
-                        .strokeBorder(keyPressed ? Theme.tealBright : Theme.hairline, lineWidth: keyPressed ? 2 : 1)
-                    Text("HOLD TO KEY")
-                        .font(.system(size: 12, weight: .bold)).tracking(1.5)
-                        .foregroundStyle(keyPressed ? Theme.navy : Theme.textSecondary)
-                }
-                .frame(height: keyHeight)
-                .contentShape(Rectangle())
-                .gesture(
-                    DragGesture(minimumDistance: 0)
-                        .onChanged { _ in
-                            if !keyPressed { keyPressed = true; sender.touchKey(isDown: true) }
-                        }
-                        .onEnded { _ in
-                            if keyPressed { keyPressed = false; sender.touchKey(isDown: false) }
-                        }
-                )
-                .accessibilityLabel("Morse key")
-                .accessibilityHint("Press and hold to send each dit and dah")
-            }
-            .frame(height: keyHeight)
+            OnScreenKey(sender: sender, height: keyHeight, hint: "Press and hold to send each dit and dah")
             HStack(spacing: 12) {
                 Button { sender.clear() } label: {
                     Label("Clear", systemImage: "delete.left").frame(maxWidth: .infinity, minHeight: 40)
