@@ -2,6 +2,7 @@ import SwiftUI
 
 @main
 struct MorseTrainerApp: App {
+    @UIApplicationDelegateAdaptor(OrientationDelegate.self) private var orientationDelegate
     @StateObject private var model = AppModel()
     @Environment(\.scenePhase) private var scenePhase
 
@@ -63,5 +64,33 @@ struct RootView: View {
         // One measurement of the window for every screen's iPad layout
         // (Theme.swift, `wideLayout`).
         .readsWideLayout()
+    }
+}
+
+/// The app delegate, for one thing only: which orientations the app allows
+/// right now. What the app has always allowed (no upside-down on iPhone),
+/// except while a screen holds `OrientationLock` to portrait.
+final class OrientationDelegate: NSObject, UIApplicationDelegate {
+    func application(_ application: UIApplication,
+                      supportedInterfaceOrientationsFor window: UIWindow?) -> UIInterfaceOrientationMask {
+        if OrientationLock.portraitOnly { return .portrait }
+        return UIDevice.current.userInterfaceIdiom == .pad ? .all : .allButUpsideDown
+    }
+}
+
+/// Holds a phone in portrait while a screen that has no landscape layout is
+/// up (Brass Knuckles: its ring, tell panel and key pad do not fit one above
+/// another in a phone's landscape height). iPad keeps every orientation; it
+/// has the height. Android locks the same screen the same way.
+@MainActor
+enum OrientationLock {
+    static var portraitOnly = false
+
+    static func portrait(_ on: Bool) {
+        guard UIDevice.current.userInterfaceIdiom == .phone, on != portraitOnly else { return }
+        portraitOnly = on
+        guard let scene = UIApplication.shared.connectedScenes.first(where: { $0 is UIWindowScene }) as? UIWindowScene else { return }
+        scene.keyWindow?.rootViewController?.setNeedsUpdateOfSupportedInterfaceOrientations()
+        if on { scene.requestGeometryUpdate(.iOS(interfaceOrientations: .portrait)) { _ in } }
     }
 }
