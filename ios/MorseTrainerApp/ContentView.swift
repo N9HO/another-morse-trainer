@@ -132,8 +132,7 @@ struct ContentView: View {
                         voiceResponseView
                         bottomBar
                     } else if model.usesKeyingResponse {
-                        SendingKeyerView(wpm: model.settings.wpm,
-                                         toneHz: model.settings.toneFrequency)
+                        SendingKeyerView(keyer: model.settings.keyerSettings)
                         bottomBar
                     } else {
                         choiceGrid
@@ -968,7 +967,7 @@ struct ContentView: View {
         }
         // A Vail Adapter / BLE-MIDI key sends into the same box (#251): what
         // you key lands in it, and stopping keying sends it.
-        .hardwareKeyInput(wpm: model.settings.wpm, toneHz: model.settings.toneFrequency,
+        .hardwareKeyInput(keyer: model.settings.keyerSettings,
                           isEnabled: model.qsoActive,
                           onText: { qsoText = HardwareKeyInput.appending($0, to: qsoText) },
                           onPause: { qsoPrimary(keyed: true) })
@@ -1284,7 +1283,7 @@ struct ContentView: View {
         // Type It and QRQ take a hardware key too (#251): what you key is
         // typed into the box, and stopping keying submits it. The choice
         // quizzes and Rapid Fire key through their own "Key answers" panel.
-        .hardwareKeyInput(wpm: model.settings.wpm, toneHz: model.settings.toneFrequency,
+        .hardwareKeyInput(keyer: model.settings.keyerSettings,
                           isEnabled: model.mode == .typed || model.mode == .qrq,
                           onText: { chunk in
                               guard model.phase != .answered else {
@@ -1506,7 +1505,7 @@ struct ContentView: View {
         .animation(.easeInOut(duration: 0.2), value: model.phase)
         // Journey's choices take a keyboard, so they take a hardware key too
         // (#251). The choice quizzes have their own "Key answers" panel.
-        .hardwareKeyInput(wpm: model.settings.wpm, toneHz: model.settings.toneFrequency,
+        .hardwareKeyInput(keyer: model.settings.keyerSettings,
                           isEnabled: model.isJourney,
                           onText: journeyKeyedText, onPause: journeyKeyedPause)
         .onChange(of: model.drill) { _ in journeyKeyed = "" }

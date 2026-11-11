@@ -220,9 +220,10 @@ struct GalagaView: View {
                     .foregroundStyle(Theme.textSecondary)
                 keyboard
             } else {
-                GalagaKeyPanel(wpm: model.settings.wpm,
-                               toneHz: model.settings.toneFrequency,
-                               slashedZero: model.settings.slashedZero) { ch in
+                CharacterKeyPanel(prompt: "Key the diving enemy",
+                                  hint: "Press and hold to key the character on the diving enemy",
+                                  keyer: model.settings.keyerSettings,
+                                  slashedZero: model.settings.slashedZero) { ch in
                     shoot(ch)
                 }
             }
@@ -500,81 +501,5 @@ struct GalagaView: View {
             hud = next
             model.noteGameScore(g.score)   // per-mode personal best
         }
-    }
-}
-
-/// Send mode's input: the on-screen key (a hardware Vail/BLE-MIDI key feeds
-/// the same decoder). Owns its `SendingKeyer` the way `SendingKeyerView` does,
-/// so the decoder is built at the session speed; each finalised character is
-/// handed to `onCharacter` as the shot. The same panel Invaders' keying mode
-/// uses, kept with this view so neither game's file depends on the other's.
-private struct GalagaKeyPanel: View {
-    let slashedZero: Bool
-    let onCharacter: (Character) -> Void
-    @StateObject private var sender: SendingKeyer
-    @State private var keyPressed = false
-
-    init(wpm: Double, toneHz: Double, slashedZero: Bool, onCharacter: @escaping (Character) -> Void) {
-        self.slashedZero = slashedZero
-        self.onCharacter = onCharacter
-        _sender = StateObject(wrappedValue: SendingKeyer(wpm: wpm, toneHz: toneHz))
-    }
-
-    var body: some View {
-        VStack(spacing: 10) {
-            HStack {
-                Text("Key the diving enemy")
-                    .font(.caption)
-                    .foregroundStyle(Theme.textSecondary)
-                Spacer()
-                Text(sender.decodedText.isEmpty ? "—" : sender.decodedText)
-                    .font(Theme.copyFont(size: 22, weight: .semibold, monospaced: true, slashedZero: slashedZero))
-                    .foregroundStyle(.white)
-                if !sender.midiDeviceNames.isEmpty {
-                    Image(systemName: "pianokeys").foregroundStyle(Theme.teal)
-                        .accessibilityLabel("Hardware key connected")
-                }
-            }
-            // Straight key or paddles, as chosen in Settings (#233).
-            OnScreenKeySwitch(onKey: { down, ms in sender.touchKey(isDown: down, atMs: ms) }) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous)
-                        .fill(keyPressed ? Theme.teal : Theme.navyRaised)
-                    RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous)
-                        .strokeBorder(keyPressed ? Theme.tealBright : Theme.hairline, lineWidth: keyPressed ? 2 : 1)
-                    Text("HOLD TO KEY")
-                        .font(.system(size: 12, weight: .bold)).tracking(1.5)
-                        .foregroundStyle(keyPressed ? Theme.navy : Theme.textSecondary)
-                }
-                .frame(height: 90)
-                .contentShape(Rectangle())
-                .gesture(
-                    DragGesture(minimumDistance: 0)
-                        .onChanged { _ in
-                            if !keyPressed { keyPressed = true; sender.touchKey(isDown: true) }
-                        }
-                        .onEnded { _ in
-                            if keyPressed { keyPressed = false; sender.touchKey(isDown: false) }
-                        }
-                )
-                .accessibilityLabel("Morse key")
-                .accessibilityHint("Press and hold to key the character on the diving enemy")
-            }
-            .frame(height: 90)
-        }
-        .onAppear { sender.start() }
-        .onDisappear { sender.stop() }
-        // A finished character shoots at once; the decoder finalises it on
-        // the letter gap, so nothing is fired mid-character.
-        .onChange(of: sender.decodedText) { _ in keyedCharacter() }
-        .onChange(of: sender.isKeying) { _ in keyedCharacter() }
-    }
-
-    private func keyedCharacter() {
-        guard !sender.isKeying else { return }
-        let text = sender.decodedText.trimmingCharacters(in: .whitespaces)
-        guard let ch = text.first else { return }
-        sender.clear()
-        onCharacter(ch)
     }
 }

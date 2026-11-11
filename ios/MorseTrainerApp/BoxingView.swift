@@ -738,7 +738,7 @@ private struct BoxingFightView: View {
                 .tint(Theme.teal)
                 .padding(16)
             } else {
-                BoxingKeyPad(wpm: model.settings.wpm, toneHz: model.settings.toneFrequency) { down, ms in
+                BoxingKeyPad(keyer: model.settings.keyerSettings) { down, ms in
                     ctl.keyEdge(down: down, atMs: UInt32(truncatingIfNeeded: ms))
                 }
                 .padding(10)
@@ -789,44 +789,24 @@ private struct BoxingFightView: View {
 
 /// The key: the on-screen key or paddles (as chosen in Settings, #233), and a hardware Vail/BLE-MIDI key
 /// through the same `SendingKeyer`. Every edge goes to `onEdge`, which feeds the keying judge; the keyer
-/// also plays the sidetone. Owns its `SendingKeyer`, built at the session speed, the way
-/// `AsteroidsKeyPanel` does.
+/// also plays the sidetone. Owns its `SendingKeyer`, built at the session speed, as
+/// `CharacterKeyPanel` does.
 private struct BoxingKeyPad: View {
+    let keyer: KeyerSettings
     let onEdge: (Bool, Int64) -> Void
     @StateObject private var sender: SendingKeyer
-    @State private var keyPressed = false
 
-    init(wpm: Double, toneHz: Double, onEdge: @escaping (Bool, Int64) -> Void) {
+    init(keyer: KeyerSettings, onEdge: @escaping (Bool, Int64) -> Void) {
+        self.keyer = keyer
         self.onEdge = onEdge
-        _sender = StateObject(wrappedValue: SendingKeyer(wpm: wpm, toneHz: toneHz))
+        _sender = StateObject(wrappedValue: SendingKeyer(keyer))
     }
 
     var body: some View {
-        OnScreenKeySwitch(onKey: { down, ms in sender.touchKey(isDown: down, atMs: ms) }) {
-            ZStack {
-                RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous)
-                    .fill(keyPressed ? Theme.teal : Theme.navyRaised)
-                RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous)
-                    .strokeBorder(keyPressed ? Theme.tealBright : Theme.hairline, lineWidth: keyPressed ? 2 : 1)
-                Text("KEY")
-                    .font(.system(size: 14, weight: .bold)).tracking(1.5)
-                    .foregroundStyle(keyPressed ? Theme.navy : .white)
-            }
-            .frame(height: 110)
-            .contentShape(Rectangle())
-            .gesture(
-                DragGesture(minimumDistance: 0)
-                    .onChanged { _ in
-                        if !keyPressed { keyPressed = true; sender.touchKey(isDown: true) }
-                    }
-                    .onEnded { _ in
-                        if keyPressed { keyPressed = false; sender.touchKey(isDown: false) }
-                    }
-            )
-            .accessibilityLabel("Morse key")
-            .accessibilityHint("Press and hold to key the tell back, then your punches")
-        }
-        .frame(height: 110)
+        OnScreenKey(sender: sender,
+                    style: StraightKeyPad.Style(label: "KEY", labelSize: 14, idleLabelColor: .white),
+                    height: 110,
+                    hint: "Press and hold to key the tell back, then your punches")
         .onAppear {
             sender.onEdge = onEdge
             sender.start()
@@ -835,6 +815,7 @@ private struct BoxingKeyPad: View {
             sender.onEdge = nil
             sender.stop()
         }
+        .onChange(of: keyer) { sender.applyConfig($0) }
     }
 }
 

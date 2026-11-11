@@ -4,7 +4,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -58,7 +57,6 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
@@ -1014,7 +1012,7 @@ private fun cueText(beat: FirstFourBeat, activator: FirstFourStation): String = 
  */
 @Composable
 private fun FirstFourKeyPanel(expected: String, resetToken: Int, onSubmit: (String) -> Unit) {
-    val keyer = remember { SendingKeyer(wpm = Settings.characterWpm, toneHz = Settings.sidetoneHz) }
+    val keyer = remember { SendingKeyer() }
     val midi = remember { HardwareKey() }
     AdapterConfigSync(midi)
     val scope = rememberCoroutineScope()
@@ -1061,41 +1059,12 @@ private fun FirstFourKeyPanel(expected: String, resetToken: Int, onSubmit: (Stri
             modifier = Modifier.fillMaxWidth().heightIn(min = 36.dp)
         )
         // Straight key or paddles, as chosen in Settings (#233).
-        OnScreenKeySwitch(
+        OnScreenKey(
+            pressed = keyPressed,
+            onKey = { keyPressed = it; keyer.touchKey(it) },
             onPaddleKey = { down, ms -> keyer.touchKey(down, ms) },
-            modifier = Modifier.fillMaxWidth().height(100.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(100.dp)
-                    .clip(RoundedCornerShape(Brand.cornerRadius))
-                    .background(if (keyPressed) Brand.teal else Brand.navyRaised)
-                    .border(
-                        width = if (keyPressed) 2.dp else 1.dp,
-                        color = if (keyPressed) Brand.tealBright else Brand.hairline,
-                        shape = RoundedCornerShape(Brand.cornerRadius)
-                    )
-                    .pointerInput(Unit) {
-                        detectTapGestures(onPress = {
-                            keyPressed = true
-                            keyer.touchKey(true)
-                            try { tryAwaitRelease() } finally {
-                                keyPressed = false
-                                keyer.touchKey(false)
-                            }
-                        })
-                    },
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    stringResource(R.string.common_hold_to_key),
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = if (keyPressed) Brand.navy else Brand.textSecondary
-                )
-            }
-        }
+            height = 100.dp
+        )
         Text(
             DesktopCopy.KEYBOARD_KEY_HINT,
             style = MaterialTheme.typography.labelSmall,

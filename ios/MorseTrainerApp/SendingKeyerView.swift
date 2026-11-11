@@ -6,7 +6,6 @@ import SwiftUI
 struct SendingKeyerView: View {
     @EnvironmentObject var model: AppModel
     @StateObject private var sender: SendingKeyer
-    @State private var keyPressed = false
     @State private var showingBluetoothMIDI = false
     /// The miss-acknowledge state (#352, #347): after a wrong keyed answer,
     /// keying the correct one acts as Next. See `ContinueAfterMiss`.
@@ -21,8 +20,8 @@ struct SendingKeyerView: View {
     @AppStorage(RepeaterModel.keyerModeDefaultsKey) private var adapterKeyerMode: Int =
         MIDIOutput.KeyerMode.straightKey.rawValue
 
-    init(wpm: Double, toneHz: Double) {
-        _sender = StateObject(wrappedValue: SendingKeyer(wpm: wpm, toneHz: toneHz))
+    init(keyer: KeyerSettings) {
+        _sender = StateObject(wrappedValue: SendingKeyer(keyer))
     }
 
     var body: some View {
@@ -33,12 +32,10 @@ struct SendingKeyerView: View {
                     .font(.footnote.weight(.medium))
                     .foregroundStyle(Theme.teal)
             }
-            // Straight key or paddles, as chosen in Settings (#233); the
-            // paddles' keyer feeds the same sidetone and decoder.
-            OnScreenKeySwitch(onKey: { down, ms in sender.touchKey(isDown: down, atMs: ms) }) {
-                keyButton
-            }
-            .frame(height: keyHeight)
+            OnScreenKey(sender: sender,
+                        style: StraightKeyPad.Style(systemImage: "dot.radiowaves.left.and.right", squeezes: true),
+                        height: keyHeight,
+                        hint: "Press and hold to send each dit and dah of your answer")
             controls
             midiStatus
         }
@@ -67,7 +64,7 @@ struct SendingKeyerView: View {
     }
 
     private func applyAdapterConfig() {
-        sender.applyConfig(wpm: model.settings.wpm, toneHz: model.settings.toneFrequency)
+        sender.applyConfig(model.settings.keyerSettings)
     }
 
     // MARK: - Display
@@ -87,39 +84,6 @@ struct SendingKeyerView: View {
         .padding(.vertical, 10)
         .frame(maxWidth: .infinity)
         .brandCard()
-    }
-
-    private var keyButton: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous)
-                .fill(keyPressed ? Theme.teal : Theme.navyRaised)
-            RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous)
-                .strokeBorder(keyPressed ? Theme.tealBright : Theme.hairline,
-                              lineWidth: keyPressed ? 2 : 1)
-            VStack(spacing: 4) {
-                Image(systemName: "dot.radiowaves.left.and.right")
-                    .font(.system(size: 26, weight: .semibold))
-                    .foregroundStyle(keyPressed ? Theme.navy : Theme.teal)
-                Text("HOLD TO KEY")
-                    .font(.system(size: 12, weight: .bold)).tracking(1.5)
-                    .foregroundStyle(keyPressed ? Theme.navy : Theme.textSecondary)
-            }
-        }
-        .frame(height: keyHeight)
-        .scaleEffect(keyPressed ? 0.98 : 1)
-        .animation(.easeOut(duration: 0.06), value: keyPressed)
-        .contentShape(Rectangle())
-        .gesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { _ in
-                    if !keyPressed { keyPressed = true; sender.touchKey(isDown: true) }
-                }
-                .onEnded { _ in
-                    if keyPressed { keyPressed = false; sender.touchKey(isDown: false) }
-                }
-        )
-        .accessibilityLabel("Morse key")
-        .accessibilityHint("Press and hold to send each dit and dah of your answer")
     }
 
     private var controls: some View {
@@ -275,8 +239,7 @@ struct SendingKeyerView: View {
 /// keying. Typing still works alongside it. Twin of the Kotlin
 /// `HardwareKeyInput` composable in HardwareKey.kt.
 struct HardwareKeyInput: ViewModifier {
-    let wpm: Double
-    let toneHz: Double
+    let keyer: KeyerSettings
     let isEnabled: Bool
     let onText: (String) -> Void
     let onPause: () -> Void
@@ -291,14 +254,13 @@ struct HardwareKeyInput: ViewModifier {
     @AppStorage(RepeaterModel.keyerModeDefaultsKey) private var adapterKeyerMode: Int =
         MIDIOutput.KeyerMode.straightKey.rawValue
 
-    init(wpm: Double, toneHz: Double, isEnabled: Bool,
+    init(keyer: KeyerSettings, isEnabled: Bool,
          onText: @escaping (String) -> Void, onPause: @escaping () -> Void) {
-        self.wpm = wpm
-        self.toneHz = toneHz
+        self.keyer = keyer
         self.isEnabled = isEnabled
         self.onText = onText
         self.onPause = onPause
-        _sender = StateObject(wrappedValue: SendingKeyer(wpm: wpm, toneHz: toneHz))
+        _sender = StateObject(wrappedValue: SendingKeyer(keyer))
     }
 
     func body(content: Content) -> some View {
@@ -316,8 +278,7 @@ struct HardwareKeyInput: ViewModifier {
                 if running, !sender.isKeying { schedulePause() }
             }
             .onChange(of: adapterKeyerMode) { _ in applyConfig() }
-            .onChange(of: wpm) { _ in applyConfig() }
-            .onChange(of: toneHz) { _ in applyConfig() }
+            .onChange(of: keyer) { _ in applyConfig() }
     }
 
     /// Append a decoded run to a text box: no leading space into an empty box
@@ -334,7 +295,7 @@ struct HardwareKeyInput: ViewModifier {
         if on {
             // The keyer was built with the settings of the first render; wake
             // the adapter with the ones in force now.
-            sender.applyConfig(wpm: wpm, toneHz: toneHz)
+            sender.applyConfig(keyer)
             sender.start(sidetoneOnDemand: true)
         } else {
             pauseTask?.cancel()
@@ -347,7 +308,7 @@ struct HardwareKeyInput: ViewModifier {
 
     private func applyConfig() {
         guard running else { return }
-        sender.applyConfig(wpm: wpm, toneHz: toneHz)
+        sender.applyConfig(keyer)
     }
 
     private func feed(_ decoded: String) {
@@ -376,10 +337,10 @@ struct HardwareKeyInput: ViewModifier {
 
 extension View {
     /// Feed a hardware Morse key into this screen (#251); see `HardwareKeyInput`.
-    func hardwareKeyInput(wpm: Double, toneHz: Double, isEnabled: Bool = true,
+    func hardwareKeyInput(keyer: KeyerSettings, isEnabled: Bool = true,
                           onText: @escaping (String) -> Void,
                           onPause: @escaping () -> Void = {}) -> some View {
-        modifier(HardwareKeyInput(wpm: wpm, toneHz: toneHz, isEnabled: isEnabled,
+        modifier(HardwareKeyInput(keyer: keyer, isEnabled: isEnabled,
                                   onText: onText, onPause: onPause))
     }
 }

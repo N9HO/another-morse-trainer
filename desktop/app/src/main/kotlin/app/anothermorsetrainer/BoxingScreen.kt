@@ -4,7 +4,6 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -46,13 +45,13 @@ import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.input.key.onPreviewKeyEvent
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.sp
 import app.anothermorsetrainer.morsekit.BkRing
 import app.anothermorsetrainer.morsekit.BoxingCallout
@@ -106,7 +105,7 @@ private val BK_PALE = Color(0xFFF4EEE0)
 fun BoxingScreen(onBack: () -> Unit) {
     val prefs = remember { Prefs.open("amt_boxing") }
     val player = remember { MorsePlayer() }
-    val keyer = remember { SendingKeyer(wpm = Settings.characterWpm, toneHz = Settings.sidetoneHz) }
+    val keyer = remember { SendingKeyer() }
     val midi = remember { HardwareKey() }
     AdapterConfigSync(midi)
     val scope = rememberCoroutineScope()
@@ -616,25 +615,15 @@ private fun FightView(
 private fun KeyPad(
     pressed: Boolean, onDown: () -> Unit, onUp: () -> Unit, onPaddle: (Boolean, Long) -> Unit,
 ) {
-    OnScreenKeySwitch(onPaddleKey = onPaddle, modifier = Modifier.fillMaxWidth().height(120.dp)) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(120.dp)
-                .clip(RoundedCornerShape(Brand.cornerRadius))
-                .background(if (pressed) Brand.teal else Brand.navyRaised)
-                .border(if (pressed) 2.dp else 1.dp, if (pressed) Brand.tealBright else Brand.hairline, RoundedCornerShape(Brand.cornerRadius))
-                .pointerInput(Unit) {
-                    detectTapGestures(onPress = {
-                        onDown()
-                        try { tryAwaitRelease() } finally { onUp() }
-                    })
-                },
-            contentAlignment = Alignment.Center
-        ) {
-            Text(stringResource(R.string.bk_key), color = Brand.textPrimary, fontWeight = FontWeight.Bold)
-        }
-    }
+    OnScreenKey(
+        pressed = pressed,
+        onKey = { if (it) onDown() else onUp() },
+        onPaddleKey = onPaddle,
+        height = 120.dp,
+        label = stringResource(R.string.bk_key),
+        labelSize = TextUnit.Unspecified,
+        labelColor = Brand.textPrimary
+    )
 }
 
 @Composable

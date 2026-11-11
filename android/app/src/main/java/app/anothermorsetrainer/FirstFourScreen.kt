@@ -4,7 +4,6 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -47,7 +46,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.pluralStringResource
@@ -915,7 +913,7 @@ private fun cueText(beat: FirstFourBeat, activator: FirstFourStation): String = 
 @Composable
 private fun FirstFourKeyPanel(expected: String, resetToken: Int, onSubmit: (String) -> Unit) {
     val context = LocalContext.current
-    val keyer = remember { SendingKeyer(wpm = Settings.characterWpm, toneHz = Settings.sidetoneHz) }
+    val keyer = remember { SendingKeyer() }
     val midi = remember { HardwareKey(context) }
     AdapterConfigSync(midi)
     val scope = rememberCoroutineScope()
@@ -962,41 +960,12 @@ private fun FirstFourKeyPanel(expected: String, resetToken: Int, onSubmit: (Stri
             modifier = Modifier.fillMaxWidth().heightIn(min = 36.dp)
         )
         // Straight key or paddles, as chosen in Settings (#233).
-        OnScreenKeySwitch(
+        OnScreenKey(
+            pressed = keyPressed,
+            onKey = { keyPressed = it; keyer.touchKey(it) },
             onPaddleKey = { down, ms -> keyer.touchKey(down, ms) },
-            modifier = Modifier.fillMaxWidth().height(100.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(100.dp)
-                    .clip(RoundedCornerShape(Brand.cornerRadius))
-                    .background(if (keyPressed) Brand.teal else Brand.navyRaised)
-                    .border(
-                        width = if (keyPressed) 2.dp else 1.dp,
-                        color = if (keyPressed) Brand.tealBright else Brand.hairline,
-                        shape = RoundedCornerShape(Brand.cornerRadius)
-                    )
-                    .pointerInput(Unit) {
-                        detectTapGestures(onPress = {
-                            keyPressed = true
-                            keyer.touchKey(true)
-                            try { tryAwaitRelease() } finally {
-                                keyPressed = false
-                                keyer.touchKey(false)
-                            }
-                        })
-                    },
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    stringResource(R.string.common_hold_to_key),
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = if (keyPressed) Brand.navy else Brand.textSecondary
-                )
-            }
-        }
+            height = 100.dp
+        )
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             OutlinedButton(onClick = { keyer.clear() }, modifier = Modifier.weight(1f)) {
                 Text(stringResource(R.string.first_four_clear), color = Brand.textSecondary)

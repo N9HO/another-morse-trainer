@@ -21,7 +21,7 @@ import kotlinx.coroutines.launch
  *
  * Translated from MorseTrainerApp/SendingKeyer.swift.
  */
-class SendingKeyer(wpm: Double, toneHz: Double) {
+class SendingKeyer(wpm: Double = Settings.characterWpm, toneHz: Double = Settings.sidetoneHz) {
 
     /** Decoded text so far (finalized characters; in-progress appears on gap). */
     var decodedText by mutableStateOf("")
