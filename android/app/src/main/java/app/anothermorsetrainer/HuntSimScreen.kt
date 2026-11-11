@@ -244,7 +244,7 @@ private fun HuntRun(config: HuntConfig, call: String, state: String, onDone: (Hu
     val keyer = remember { SendingKeyer() }
     val context = LocalContext.current
     val midi = remember { HardwareKey(context) }
-    AdapterConfigSync(midi)
+    AdapterConfigSync(midi, keyer)
     val scope = rememberCoroutineScope()
     val responses = remember { Channel<HuntYouSend?>(Channel.CONFLATED) }
 

@@ -3,6 +3,7 @@ package app.anothermorsetrainer
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.random.Random
@@ -106,5 +107,29 @@ class SidetoneSynthTest {
             assertTrue("sample louder than its envelope at $i", abs(buf[0]) <= g * (1f + 1e-5f))
             previous = g
         }
+    }
+
+    /** The pitch follows a change made mid-tone, and the wave carries on instead of jumping. */
+    @Test
+    fun aPitchChangeTakesEffectWithoutAJump() {
+        val s = synth()
+        step(s, keyDown = true, samples = rampSamples)
+        fun crossingsInOneSecond(): Int {
+            val buf = FloatArray(sampleRate)
+            s.render(buf, buf.size, keyDown = true)
+            return buf.toList().zipWithNext().count { (a, b) -> (a < 0f) != (b < 0f) }
+        }
+        assertEquals("600 Hz crosses zero 1200 times a second", 1200.0, crossingsInOneSecond().toDouble(), 2.0)
+
+        val buf = FloatArray(1)
+        s.render(buf, 1, keyDown = true)
+        val before = buf[0]
+        s.frequencyHz = 550.0
+        s.render(buf, 1, keyDown = true)
+        // One sample of a sine moves at most amplitude × omega; anything more is a click.
+        val maxStep = amplitude * 2 * PI * 600.0 / sampleRate
+        assertTrue("no jump at the change", abs(buf[0] - before) <= maxStep * 1.01)
+
+        assertEquals("550 Hz crosses zero 1100 times a second", 1100.0, crossingsInOneSecond().toDouble(), 2.0)
     }
 }

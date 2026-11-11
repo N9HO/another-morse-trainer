@@ -235,7 +235,7 @@ fun DungeonScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
     // The key: the same decoder Sending Practice uses, plus a hardware key.
     val keyer = remember { SendingKeyer() }
     val midi = remember { HardwareKey() }
-    AdapterConfigSync(midi)
+    AdapterConfigSync(midi, keyer)
     val scope = rememberCoroutineScope()
     var keyPressed by remember { mutableStateOf(false) }
     var midiDevice by remember { mutableStateOf<String?>(null) }

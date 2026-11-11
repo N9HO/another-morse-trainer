@@ -915,7 +915,7 @@ private fun FirstFourKeyPanel(expected: String, resetToken: Int, onSubmit: (Stri
     val context = LocalContext.current
     val keyer = remember { SendingKeyer() }
     val midi = remember { HardwareKey(context) }
-    AdapterConfigSync(midi)
+    AdapterConfigSync(midi, keyer)
     val scope = rememberCoroutineScope()
     var keyPressed by remember { mutableStateOf(false) }
     var midiDevice by remember { mutableStateOf<String?>(null) }
