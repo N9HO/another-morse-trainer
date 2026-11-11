@@ -428,6 +428,8 @@ struct SettingsView: View {
                       range: InputRules.sidetoneMin...InputRules.sidetoneMax,
                       step: InputRules.sidetoneStep,
                       format: { "\(Int($0)) Hz" })
+            // Not mid-session (`activeMode` is set): the preview played over
+            // the session's own sound, and the session's next sound cut it.
             Button {
                 model.previewTone()
             } label: {
@@ -734,7 +736,7 @@ struct SettingsView: View {
         } header: {
             Text("Hardware key")
         } footer: {
-            Text("How the Vail Adapter should read your key. Straight Key is the default; pick an iambic mode for a paddle. This describes your key rather than a drill, so it applies in Sending Practice and on the Vail screen alike.")
+            Text("How the Vail Adapter should read your key. Straight Key is the default; pick an iambic mode for a paddle. This describes your key rather than a drill, so it applies in Sending Practice and on the Vail screen alike. A MIDI paddle with no keyer of its own, such as the N6ARA TinyMIDI (or a Vail Adapter in Passthrough), is timed by the app instead, in the Paddle mode under On-screen key.")
         }
         .listRowBackground(rowBackground(.hardwareKey))
     }
@@ -749,12 +751,14 @@ struct SettingsView: View {
                     Text(kind.label).tag(kind)
                 }
             }
-            if model.settings.onScreenKey == .paddles {
-                Picker("Paddle mode", selection: $model.settings.paddleMode) {
-                    ForEach(PaddleKeyer.Mode.allCases) { mode in
-                        Text(mode.label).tag(mode)
-                    }
+            // Shown with either key: it also times a MIDI paddle that leaves
+            // the keying to the app (the TinyMIDI), whatever is on screen.
+            Picker("Paddle mode", selection: $model.settings.paddleMode) {
+                ForEach(PaddleKeyer.Mode.allCases) { mode in
+                    Text(mode.label).tag(mode)
                 }
+            }
+            if model.settings.onScreenKey == .paddles {
                 Toggle("Dah on the left", isOn: $model.settings.paddleSwap)
             }
             Toggle("Continue with the key after a miss", isOn: $model.settings.continueAfterMiss)
@@ -762,8 +766,9 @@ struct SettingsView: View {
             Text("On-screen key")
         } footer: {
             Text(model.settings.onScreenKey == .paddles
-                 ? "Two touch paddles, dit and dah, timed at your speed. Hold one to repeat it; hold both to squeeze. Iambic A stops when you let go; Iambic B adds one more alternate element; Ultimatic repeats whichever paddle you pressed last. \"Dah on the left\" swaps them for a left-handed operator."
+                 ? "Two touch paddles, dit and dah, timed at your speed. Hold one to repeat it; hold both to squeeze. \"Dah on the left\" swaps them for a left-handed operator."
                  : "One hold-to-key pad: the tone sounds for as long as you hold it. Choose Paddles to key with two touch paddles and a built-in iambic keyer instead.")
+            + Text(" Paddle mode is how the app's keyer times the touch paddles and a MIDI paddle such as the TinyMIDI: Iambic A stops when you let go; Iambic B adds one more alternate element; Ultimatic repeats whichever paddle you pressed last.")
             + Text(" \"Continue with the key after a miss\": when a keyed answer is wrong, key the correct answer to move on, instead of tapping Next. Next still works.")
         }
         .listRowBackground(rowBackground(.onScreenKey))

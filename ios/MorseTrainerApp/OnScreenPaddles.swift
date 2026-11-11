@@ -26,65 +26,87 @@ extension PaddleKeyer.Mode: Identifiable {
     }
 }
 
-/// Runs a `PaddleKeyer` against the wall clock and hands each key edge to
-/// `onKey` — the same `(isDown, atMs)` a straight key's press and release
-/// would produce, so whatever the straight key feeds (sidetone, the sending
-/// decoder, the Vail repeater) is fed the keyer's elements instead.
+/// Runs a `MIDIKeyer` against the wall clock and hands each key edge to
+/// `onKey` as `(isDown, atMs, timedByApp)`. It serves both keys the app
+/// times: the on-screen paddles (`paddle(_:isDown:)`, dit and dah only)
+/// and a MIDI key (`contact(_:isDown:atMs:)`). MorseKitCheck proves
+/// `MIDIKeyer` with only dit and dah times exactly as `PaddleKeyer`.
 ///
-/// Main-actor throughout: paddle presses arrive from gestures, and the sleeps
-/// between deadlines resume here. Each edge carries the time the keyer
-/// scheduled it for, not the moment the sleep woke, so a late wake-up shifts
-/// when the tone is heard but never the element lengths a consumer measures.
+/// Main-actor throughout. Each edge carries the time the keyer scheduled it
+/// for, not when the sleep woke, so a late wake-up delays the tone but never
+/// changes the element lengths a consumer measures.
 @MainActor
-final class PaddleKeyerDriver: ObservableObject {
+final class KeyerDriver: ObservableObject {
     @Published private(set) var ditHeld = false
     @Published private(set) var dahHeld = false
 
-    var onKey: ((Bool, Int64) -> Void)?
+    /// (isDown, atMs in wall-clock ms, timedByApp).
+    var onKey: ((Bool, Int64, Bool) -> Void)?
 
-    private var keyer: PaddleKeyer
-    /// A mode or speed change made while keying, applied once the keyer is idle
-    /// so an element in flight is never re-timed.
-    private var pending: (mode: PaddleKeyer.Mode, wpm: Double)?
+    private var keyer: MIDIKeyer
     private var tick: Task<Void, Never>?
 
     init(mode: PaddleKeyer.Mode, wpm: Double) {
-        keyer = PaddleKeyer(mode: mode, wpm: wpm)
+        keyer = MIDIKeyer(mode: mode, wpm: wpm)
     }
 
+    /// A new mode or speed. `MIDIKeyer` holds it until the keyer is idle, so
+    /// an element in flight is never re-timed (`fixtures/midi-keyer.json`).
     func configure(mode: PaddleKeyer.Mode, wpm: Double) {
-        pending = (mode, wpm)
-        applyPendingIfIdle()
+        emit(keyer.configure(mode: mode, wpm: wpm, atMs: Self.nowMs()))
+        schedule()
     }
 
     func isHeld(_ element: PaddleKeyer.Element) -> Bool {
         element == .dit ? ditHeld : dahHeld
     }
 
+    /// An on-screen paddle went down or up.
     func paddle(_ element: PaddleKeyer.Element, isDown: Bool) {
-        guard isHeld(element) != isDown else { return }
-        if element == .dit { ditHeld = isDown } else { dahHeld = isDown }
-        emit(keyer.paddle(element, isDown: isDown, atMs: Self.nowMs()))
+        contact(element == .dit ? .dit : .dah, isDown: isDown, atMs: nil)
+    }
+
+    /// One contact of the key. `atMs` is the event's own time; nil means now.
+    /// A contact keyed as it comes (the straight key, or a dit or dah the
+    /// keyer doesn't time: `timed`, see `MIDIKeyer.timesNote`) is stamped with
+    /// it. A timed paddle contact is timed from now, because its element is
+    /// scheduled from the moment the keyer hears it.
+    func contact(_ key: MIDIKeyPaddle, isDown: Bool, atMs: Int64?, timed: Bool = true) {
+        switch key {
+        case .dit:
+            guard ditHeld != isDown else { return }
+            ditHeld = isDown
+        case .dah:
+            guard dahHeld != isDown else { return }
+            dahHeld = isDown
+        case .straight:
+            break
+        }
+        let now = Self.nowMs()
+        let t = key == .straight || !timed ? atMs.map(Double.init) ?? now : now
+        emit(keyer.contact(key, isDown: isDown, atMs: t, timed: timed))
         schedule()
     }
 
-    /// The screen is going away: let go of both paddles and cut any tone.
+    /// The screen is going away: let go of every contact and cut any tone.
     func stop() {
+        releaseAll()
+    }
+
+    /// The key went away (unplugged): let go of every contact and cut any
+    /// tone, as Android's `MidiKeyInput.disconnect` does.
+    func releaseAll() {
         tick?.cancel()
         tick = nil
         ditHeld = false
         dahHeld = false
         emit(keyer.releaseAll(atMs: Self.nowMs()))
-        applyPendingIfIdle()
     }
 
     private func schedule() {
         tick?.cancel()
         tick = nil
-        guard let deadline = keyer.nextDeadlineMs else {
-            applyPendingIfIdle()
-            return
-        }
+        guard let deadline = keyer.nextDeadlineMs else { return }
         let delayMs = max(0, deadline - Self.nowMs())
         tick = Task { [weak self] in
             // Zero tolerance: the default lets the system coalesce the wake-up,
@@ -97,17 +119,9 @@ final class PaddleKeyerDriver: ObservableObject {
         }
     }
 
-    private func applyPendingIfIdle() {
-        guard let p = pending, !keyer.isBusy, !ditHeld, !dahHeld else { return }
-        pending = nil
-        if p.mode != keyer.mode || abs(1200 / max(1, p.wpm) - keyer.unitMs) > 1e-9 {
-            keyer = PaddleKeyer(mode: p.mode, wpm: p.wpm)
-        }
-    }
-
-    private func emit(_ edges: [PaddleKeyer.Edge]) {
+    private func emit(_ edges: [MIDIKeyer.Edge]) {
         for edge in edges {
-            onKey?(edge.isDown, Int64(edge.atMs.rounded()))
+            onKey?(edge.isDown, Int64(edge.atMs.rounded()), edge.timedByApp)
         }
     }
 
@@ -271,7 +285,7 @@ struct OnScreenPaddlesView: View {
     let wpm: Double
     let swapped: Bool
     let onKey: (Bool, Int64) -> Void
-    @StateObject private var driver: PaddleKeyerDriver
+    @StateObject private var driver: KeyerDriver
 
     init(mode: PaddleKeyer.Mode, wpm: Double, swapped: Bool,
          onKey: @escaping (Bool, Int64) -> Void) {
@@ -279,7 +293,7 @@ struct OnScreenPaddlesView: View {
         self.wpm = wpm
         self.swapped = swapped
         self.onKey = onKey
-        _driver = StateObject(wrappedValue: PaddleKeyerDriver(mode: mode, wpm: wpm))
+        _driver = StateObject(wrappedValue: KeyerDriver(mode: mode, wpm: wpm))
     }
 
     var body: some View {
@@ -288,7 +302,7 @@ struct OnScreenPaddlesView: View {
             paddle(swapped ? .dit : .dah)
         }
         .onAppear {
-            driver.onKey = onKey
+            driver.onKey = { [onKey] isDown, atMs, _ in onKey(isDown, atMs) }
             driver.configure(mode: mode, wpm: wpm)
         }
         .onDisappear { driver.stop() }

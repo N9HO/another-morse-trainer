@@ -12,6 +12,7 @@ import app.anothermorsetrainer.MidiKeyInput
 import app.anothermorsetrainer.MidiKeyOutput
 import app.anothermorsetrainer.Prefs
 import app.anothermorsetrainer.SidetoneGenerator
+import app.anothermorsetrainer.morsekit.PaddleKeyer
 import kotlin.math.pow
 import kotlin.math.roundToInt
 import kotlin.random.Random
@@ -137,7 +138,7 @@ class VailRepeater {
         client.onEvent = { handleEvent(it) }
         sidetone = newSidetone(txTone)
         midi.start(
-            onKey = { down -> touchKey(down) },
+            onKey = { down, ms -> touchKey(down, ms) },
             onConnected = { midiDevice = it }
         )
         // Drive the adapter's piezo/keyer: wake it into MIDI mode, push the keyer
@@ -151,6 +152,9 @@ class VailRepeater {
             if (midiDevice == null) midiDevice = name
         }
     }
+
+    /** The paddle mode and speed a MIDI paddle is timed at, pushed by the repeater screen. */
+    fun configureHardwareKeyer(mode: PaddleKeyer.Mode, wpm: Double) = midi.configure(mode, wpm)
 
     fun stop() {
         main.removeCallbacks(stuckKey)

@@ -65,16 +65,16 @@ class HardwareKey {
 
     /**
      * Begin listening. [onKey] fires (on the main thread) with `true` on
-     * key-down and `false` on key-up; [onConnected] reports the connected key's
+     * key-down and `false` on key-up, and the edge's wall-clock ms; [onConnected] reports the connected key's
      * name — null when none is attached yet, and again when the last unplugs.
      *
      * The adapter is woken with the user's current sidetone and speed so its
      * own piezo and internal keyer match what the app is playing.
      */
     fun start(
-        onKey: (Boolean) -> Unit,
+        onKey: (isDown: Boolean, atMs: Long) -> Unit,
         onConnected: (String?) -> Unit,
-        onKeyTimed: ((isDown: Boolean, atNanos: Long) -> Unit)? = null
+        onKeyTimed: ((isDown: Boolean, atNanos: Long, timedByApp: Boolean) -> Unit)? = null
     ) {
         output.configure(
             keyerMode = storedKeyerMode,
@@ -90,6 +90,7 @@ class HardwareKey {
         // answer to "what is keying?" and are deliberately dropped. The name in
         // the UI comes from the input side, which is the half actually keying.
         output.start { }
+        input.configure(Settings.paddleMode, Settings.characterWpm)
         input.onKeyTimed = onKeyTimed
         input.start(onKey = onKey, onConnected = onConnected)
     }
@@ -115,6 +116,7 @@ class HardwareKey {
      * wire, so calling this is cheap.
      */
     fun applyConfig() {
+        input.configure(Settings.paddleMode, Settings.characterWpm)
         output.applyConfig(
             keyerMode = storedKeyerMode,
             wpm = Settings.characterWpm.roundToInt(),
@@ -139,15 +141,17 @@ class HardwareKey {
  * open — no second client racing for the device's input port, which is the
  * reason the setting used to only store itself and wait (issue #46).
  *
- * A new tone goes to [keyer] too, so its sidetone follows the Settings sheet
- * mid-session. iOS does the same through `SendingKeyer.applyConfig`.
+ * The same changes go to the keyers (the MIDI keyer's mode and speed, and
+ * [keyer]'s pitch), so neither reads Settings on a key press. iOS does the
+ * same through `SendingKeyer.applyConfig`.
  */
 @Composable
 fun AdapterConfigSync(key: HardwareKey, keyer: SendingKeyer? = null) {
     val mode = AdapterKeyer.mode()
     val wpm = Settings.characterWpm
     val sidetoneHz = Settings.sidetoneHz
-    LaunchedEffect(mode, wpm, sidetoneHz) {
+    val paddleMode = Settings.paddleMode
+    LaunchedEffect(mode, wpm, sidetoneHz, paddleMode) {
         key.applyConfig()
         keyer?.applyConfig(sidetoneHz)
     }
@@ -194,9 +198,9 @@ fun HardwareKeyInput(onText: (String) -> Unit, onPause: () -> Unit = {}) {
     DisposableEffect(Unit) {
         keyer.scope = scope
         midi.start(
-            onKey = { down ->
+            onKey = { down, ms ->
                 if (down) keyer.start()
-                keyer.touchKey(down)
+                keyer.touchKey(down, ms)
             },
             onConnected = { name -> if (name != null) keyer.start() else keyer.stopSidetone() }
         )

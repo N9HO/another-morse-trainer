@@ -32,8 +32,10 @@ object MidiKeyParser {
      * Output set to MIDI and its keyer in Straight Key mode, #351); dit paddle
      * = 1 (Vail Adapter in Passthrough), 20 (N6ARA TinyMIDI, the Pocket) or 61;
      * dah paddle = 2 (Vail Adapter in Passthrough), 21 (N6ARA TinyMIDI, the
-     * Pocket) or 62. Notes 1, 2, 20 and 21 are raw paddle contacts: the device
-     * does no timing and expects the host to. 61 and 62 are older mappings
+     * Pocket) or 62. Notes 20 and 21 are raw paddle contacts: the device does
+     * no timing and expects the host to. So are 1 and 2 in Passthrough; in a
+     * Vail Adapter's keyer modes, firmware 4.4 and later sends its own timed
+     * elements on them ([MidiKeyer.timesNote]). 61 and 62 are older mappings
      * with no known device source, kept as existing behaviour. Every other
      * note is unmapped: we listen to every MIDI device, so an unrelated synth
      * must never register as keying. Pinned by fixtures/midi-key-notes.json.

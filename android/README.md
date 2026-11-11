@@ -185,7 +185,10 @@ the iOS app's navy/teal look.
   MIDI key input *and* output (keyer modes, speed, sidetone, RX piezo buzz),
   unplug detection, chat, and a signal timeline
 - **Bluetooth LE MIDI keys**: found by an in-app scan and paired from inside
-  the app, no system sheet needed (iOS pairs through the system MIDI sheet)
+  the app, no system sheet needed (iOS pairs through the system MIDI sheet).
+  A MIDI paddle with no keyer of its own, such as the N6ARA TinyMIDI (or a
+  Vail Adapter in Passthrough), is timed by the app's keyer in the on-screen
+  paddles' Paddle mode, wherever a key works
 - **Bluetooth keep-alive and band noise**: a near-silent floor (on by
   default) that stops Bluetooth earbuds sleeping through the first character,
   and a separate band-noise level to copy through (heard only while a mode,

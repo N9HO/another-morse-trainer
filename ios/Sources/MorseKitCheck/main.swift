@@ -3044,22 +3044,22 @@ do {
     let burst: [UInt8] = [0x90, 0x00, 0x7F, 0x80, 0x00, 0x00]
     let pair = MIDIKeyParser.messages(in: burst)
     check("both events in one packet are decoded",
-          pair == [MIDIKeyMessage(paddle: .straight, isDown: true),
-                   MIDIKeyMessage(paddle: .straight, isDown: false)])
+          pair == [MIDIKeyMessage(paddle: .straight, note: 0, isDown: true),
+                   MIDIKeyMessage(paddle: .straight, note: 0, isDown: false)])
 
     // Running status: the second message drops its repeated 0x90 status byte.
     let running: [UInt8] = [0x90, 0x01, 0x7F, 0x01, 0x00]
     check("running status continues the previous message",
-          MIDIKeyParser.messages(in: running) == [MIDIKeyMessage(paddle: .dit, isDown: true),
-                                                  MIDIKeyMessage(paddle: .dit, isDown: false)])
+          MIDIKeyParser.messages(in: running) == [MIDIKeyMessage(paddle: .dit, note: 1, isDown: true),
+                                                  MIDIKeyMessage(paddle: .dit, note: 1, isDown: false)])
 
     check("note on with velocity 0 is a release",
-          MIDIKeyParser.messages(in: [0x90, 0x02, 0x00]) == [MIDIKeyMessage(paddle: .dah, isDown: false)])
+          MIDIKeyParser.messages(in: [0x90, 0x02, 0x00]) == [MIDIKeyMessage(paddle: .dah, note: 2, isDown: false)])
 
     // Real-time bytes may land between the bytes of another message.
     let interleaved: [UInt8] = [0x90, 0xF8, 0x02, 0x7F]
     check("an interleaved clock byte doesn't break the message",
-          MIDIKeyParser.messages(in: interleaved) == [MIDIKeyMessage(paddle: .dah, isDown: true)])
+          MIDIKeyParser.messages(in: interleaved) == [MIDIKeyMessage(paddle: .dah, note: 2, isDown: true)])
 
     // We connect to every source, so an unrelated instrument must stay silent.
     check("an unmapped note is ignored", MIDIKeyParser.messages(in: [0x90, 0x40, 0x7F]).isEmpty)
@@ -3068,11 +3068,11 @@ do {
     // A one-byte Program Change ahead of a key event must not eat its bytes.
     check("a program change doesn't swallow the next message",
           MIDIKeyParser.messages(in: [0xC0, 0x01, 0x90, 0x00, 0x7F])
-            == [MIDIKeyMessage(paddle: .straight, isDown: true)])
+            == [MIDIKeyMessage(paddle: .straight, note: 0, isDown: true)])
 
     check("a truncated trailing message is dropped, not guessed",
           MIDIKeyParser.messages(in: [0x90, 0x00, 0x7F, 0x90, 0x01])
-            == [MIDIKeyMessage(paddle: .straight, isDown: true)])
+            == [MIDIKeyMessage(paddle: .straight, note: 0, isDown: true)])
 
     check("passthrough paddle notes map to dit and dah",
           MIDIKeyParser.paddle(forNote: 61) == .dit && MIDIKeyParser.paddle(forNote: 62) == .dah)
@@ -3085,12 +3085,12 @@ do {
 do {
     check("a Pocket straight-key note 30 on/off is a straight press and release",
           MIDIKeyParser.messages(in: [0x90, 30, 0x7F, 0x80, 30, 0x00])
-            == [MIDIKeyMessage(paddle: .straight, isDown: true),
-                MIDIKeyMessage(paddle: .straight, isDown: false)])
+            == [MIDIKeyMessage(paddle: .straight, note: 30, isDown: true),
+                MIDIKeyMessage(paddle: .straight, note: 30, isDown: false)])
     check("a Pocket dit (20) and dah (21) with running status keep their paddles",
           MIDIKeyParser.messages(in: [0x90, 20, 0x7F, 21, 0x7F, 20, 0x00, 21, 0x00])
-            == [MIDIKeyMessage(paddle: .dit, isDown: true), MIDIKeyMessage(paddle: .dah, isDown: true),
-                MIDIKeyMessage(paddle: .dit, isDown: false), MIDIKeyMessage(paddle: .dah, isDown: false)])
+            == [MIDIKeyMessage(paddle: .dit, note: 20, isDown: true), MIDIKeyMessage(paddle: .dah, note: 21, isDown: true),
+                MIDIKeyMessage(paddle: .dit, note: 20, isDown: false), MIDIKeyMessage(paddle: .dah, note: 21, isDown: false)])
 }
 
 // fixtures/midi-key-notes.json: the note table, shared with both Kotlin ports.
@@ -7344,6 +7344,102 @@ if let data = try? Data(contentsOf: URL(fileURLWithPath: #filePath)
           cut == [PaddleKeyer.Edge(isDown: false, atMs: 50, element: .dah)] && !k.isBusy && k.advance(toMs: 5000).isEmpty)
 } else {
     check("fixtures/paddle-keyer.json loads and decodes", false)
+}
+
+// MARK: - MIDI keyer (TinyMIDI, Vail Passthrough)
+//
+// fixtures/midi-keyer.json — read by this harness AND by MidiKeyerTest on
+// android and desktop. Scripts of MIDI notes, through the parser's note map,
+// and every change of the logical key they make, worked out by hand.
+struct MIDIKeyerFixture: Decodable {
+    struct Case: Decodable {
+        let name: String
+        let mode: String
+        let wpm: Double
+        let untilMs: Double
+        /// The app's setting for a Vail Adapter's keyer mode; absent means Passthrough.
+        let adapterPassthrough: Bool?
+        let events: [[PaddleKeyerFixture.Slot]]
+        let expected: [[PaddleKeyerFixture.Slot]]
+    }
+    let cases: [Case]
+}
+
+print("\nMIDI keyer, against fixtures/midi-keyer.json:")
+if let data = try? Data(contentsOf: URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent()
+        .deletingLastPathComponent().deletingLastPathComponent()
+        .appendingPathComponent("fixtures/midi-keyer.json")),
+   let fx = try? JSONDecoder().decode(MIDIKeyerFixture.self, from: data) {
+    check("fixture carries cases", !fx.cases.isEmpty)
+    for c in fx.cases {
+        guard let mode = PaddleKeyer.Mode(rawValue: c.mode) else {
+            check("\(c.name): mode \(c.mode) is a PaddleKeyer mode", false)
+            continue
+        }
+        var keyer = MIDIKeyer(mode: mode, wpm: c.wpm)
+        var edges: [MIDIKeyer.Edge] = []
+        for e in c.events {
+            if e[0].text == "unplug" {
+                edges += keyer.releaseAll(atMs: e[1].number)
+            } else if e[0].text == "config" {
+                guard let newMode = PaddleKeyer.Mode(rawValue: e[1].text) else {
+                    check("\(c.name): config mode \(e[1].text) is a PaddleKeyer mode", false)
+                    continue
+                }
+                edges += keyer.configure(mode: newMode, wpm: e[2].number, atMs: e[3].number)
+            } else if UInt8(exactly: e[0].number) == nil {
+                check("\(c.name): event \(e) is a note, \"unplug\" or \"config\"", false)
+            } else if let paddle = MIDIKeyParser.paddle(forNote: UInt8(e[0].number)) {
+                let timed = MIDIKeyer.timesNote(UInt8(e[0].number), adapterPassthrough: c.adapterPassthrough ?? true)
+                edges += keyer.contact(paddle, isDown: e[1].text == "down", atMs: e[2].number, timed: timed)
+            }
+        }
+        edges += keyer.advance(toMs: c.untilMs)
+        let got = edges.map { "\($0.isDown ? "down" : "up") \(Int($0.atMs)) \($0.timedByApp ? "keyer" : "straight")" }
+        let want = c.expected.map { "\($0[0].text) \(Int($0[1].number)) \($0[2].text)" }
+        check(c.name, got == want)
+        if got != want { print("      ↳ got \(got), fixture says \(want)") }
+        check("\(c.name) — idle afterwards", !keyer.isBusy)
+    }
+    // The on-screen paddles run on MIDIKeyer too (`KeyerDriver`), pressing
+    // only dit and dah. That is safe only if MIDIKeyer then times exactly as
+    // PaddleKeyer does: every paddle-keyer.json script, in every mode, must
+    // give the same key-down and key-up instants through both.
+    if let pdata = try? Data(contentsOf: URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("fixtures/paddle-keyer.json")),
+       let pfx = try? JSONDecoder().decode(PaddleKeyerFixture.self, from: pdata) {
+        var same = !pfx.cases.isEmpty
+        var compared = 0
+        for c in pfx.cases {
+            for mode in PaddleKeyer.Mode.allCases {
+                var paddles = PaddleKeyer(mode: mode, wpm: c.wpm)
+                var midi = MIDIKeyer(mode: mode, wpm: c.wpm)
+                var a: [String] = [], b: [String] = []
+                for e in c.events {
+                    let element: PaddleKeyer.Element = e[0].text == "dah" ? .dah : .dit
+                    let down = e[1].text == "down"
+                    a += paddles.paddle(element, isDown: down, atMs: e[2].number).map { "\($0.isDown) \($0.atMs)" }
+                    b += midi.contact(element == .dah ? .dah : .dit, isDown: down, atMs: e[2].number)
+                        .map { "\($0.isDown) \($0.atMs)" }
+                }
+                a += paddles.advance(toMs: c.untilMs).map { "\($0.isDown) \($0.atMs)" }
+                b += midi.advance(toMs: c.untilMs).map { "\($0.isDown) \($0.atMs)" }
+                compared += 1
+                if a != b {
+                    same = false
+                    print("      ↳ \(mode.rawValue): \(c.name): PaddleKeyer \(a), MIDIKeyer \(b)")
+                }
+            }
+        }
+        check("with only dit and dah, MIDIKeyer times as PaddleKeyer (\(compared) scripts × modes)", same)
+    } else {
+        check("fixtures/paddle-keyer.json loads for the MIDIKeyer equivalence check", false)
+    }
+} else {
+    check("fixtures/midi-keyer.json loads and decodes", false)
 }
 
 // Sending Analyzer (#241, #234, #235), against fixtures/sending-analysis.json —

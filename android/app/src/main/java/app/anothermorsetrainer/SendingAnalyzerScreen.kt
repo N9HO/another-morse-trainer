@@ -174,17 +174,17 @@ class SendingAnalyzerController(private val context: Context) {
         private set
 
     /**
-     * Whether this attempt was keyed on the on-screen paddles (#233). Their
-     * keyer times every element at the app's Settings speed, so the attempt is
-     * judged as paddles whatever the key picker says; the picker is for the
-     * key the operator brings (a Vail adapter, a MIDI key, the microphone).
+     * Whether the app's keyer timed any of this attempt: the on-screen paddles
+     * (#233) or a MIDI paddle such as the TinyMIDI. It times every element at
+     * the Settings speed, so the attempt is judged as paddles whatever the key
+     * picker says. Mirrors iOS `appKeyerUsed`.
      */
-    var onScreenPaddlesUsed by mutableStateOf(false)
+    var appKeyerUsed by mutableStateOf(false)
         private set
 
     /** The key type the attempt is judged as. Mirrors iOS `judgedKeyType`. */
     val judgedKeyType: SendingKeyType
-        get() = if (onScreenPaddlesUsed) SendingKeyType.KEYER else keyType
+        get() = if (appKeyerUsed) SendingKeyType.KEYER else keyType
 
     val mic = SendingMicInput()
     val sidetone = SidetoneGenerator(Settings.sidetoneHz)
@@ -293,15 +293,20 @@ class SendingAnalyzerController(private val context: Context) {
         if (!canStart) return
         finishJob?.cancel()
         recorder.reset()
-        onScreenPaddlesUsed = false
+        appKeyerUsed = false
         liveText = ""
         analysis = null
         phase = Phase.SENDING
         if (input == AnalyzerInput.MICROPHONE && !mic.isListening) applyInput()
     }
 
-    /** An on-screen or MIDI key edge, in [System.nanoTime] terms. */
-    fun keyEdgeNanos(source: KeySource, down: Boolean, atNanos: Long) {
+    /**
+     * An on-screen or MIDI key edge, in [System.nanoTime] terms. [timedByApp]:
+     * the app's keyer timed it from a MIDI paddle (the TinyMIDI), so the
+     * attempt is judged as a keyer, as with the on-screen paddles.
+     */
+    fun keyEdgeNanos(source: KeySource, down: Boolean, atNanos: Long, timedByApp: Boolean = false) {
+        if (timedByApp && input == AnalyzerInput.KEY && phase == Phase.SENDING) appKeyerUsed = true
         sourceEdge(source, down, atNanos / 1_000_000.0)
     }
 
@@ -325,7 +330,7 @@ class SendingAnalyzerController(private val context: Context) {
      */
     fun paddleEdge(down: Boolean, atWallMs: Long) {
         if (input != AnalyzerInput.KEY) return
-        if (phase == Phase.SENDING) onScreenPaddlesUsed = true
+        if (phase == Phase.SENDING) appKeyerUsed = true
         val offsetMs = System.nanoTime() / 1_000_000.0 - System.currentTimeMillis()
         sourceEdge(KeySource.PADDLES, down, atWallMs + offsetMs)
     }
@@ -360,7 +365,7 @@ class SendingAnalyzerController(private val context: Context) {
      * Mirrors iOS `analyse()`.
      */
     private fun analyse(): SendingAnalysis {
-        val characterWpm = if (onScreenPaddlesUsed) Settings.characterWpm else targetWpm.toDouble()
+        val characterWpm = if (appKeyerUsed) Settings.characterWpm else targetWpm.toDouble()
         return SendingAnalysis(
             recorder.marks, target, judgedKeyType, characterWpm,
             if (farnsworth) minOf(effectiveWpm.toDouble(), characterWpm) else characterWpm
@@ -383,7 +388,7 @@ class SendingAnalyzerController(private val context: Context) {
     fun cancelSending() {
         finishJob?.cancel()
         recorder.reset()
-        onScreenPaddlesUsed = false
+        appKeyerUsed = false
         liveText = ""
         phase = Phase.SETUP
     }
@@ -443,9 +448,11 @@ fun SendingAnalyzerScreen(onBack: () -> Unit) {
             midiOpen = true
             midi.start(
                 // The sidetone follows the merged key in the controller.
-                onKey = { },
+                onKey = { _, _ -> },
                 onConnected = { name -> midiDevice = name },
-                onKeyTimed = { down, nanos -> controller.keyEdgeNanos(SendingAnalyzerController.KeySource.MIDI, down, nanos) }
+                onKeyTimed = { down, nanos, timedByApp ->
+                    controller.keyEdgeNanos(SendingAnalyzerController.KeySource.MIDI, down, nanos, timedByApp)
+                }
             )
         } else if (controller.input == AnalyzerInput.MICROPHONE && midiOpen) {
             midiOpen = false

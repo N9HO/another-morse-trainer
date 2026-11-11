@@ -3,10 +3,10 @@
 // parity audit).
 //
 // The key is down while ANY source is held and up only when the last held
-// source is released. This is the rule `SendingKeyer.handle` applies to its
-// paddles and the on-screen key; it lives here as pure logic so that
-// `fixtures/gap-analyzer-merge.json` pins it, and the Kotlin ports (Android and
-// desktop) read the same file. No clock, no sidetone: the caller stamps
+// source is released. This is the rule `SendingKeyer.handle` applies to the
+// hardware and on-screen keys, and `MIDIKeyer` to a MIDI key's contacts; it
+// lives here as pure logic so that `fixtures/gap-analyzer-merge.json` pins it,
+// and the Kotlin ports (Android and desktop) read the same file. No clock, no sidetone: the caller stamps
 // whatever edge this reports.
 
 import Foundation

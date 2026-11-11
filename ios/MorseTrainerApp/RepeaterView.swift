@@ -6,6 +6,9 @@ import SwiftUI
 /// full-screen from the intro screen's antenna button.
 struct RepeaterView: View {
     @EnvironmentObject var model: RepeaterModel
+    /// The app's Settings: the on-screen key reads them directly, and the
+    /// hardware key's paddle mode and speed are pushed into `model`.
+    @EnvironmentObject var app: AppModel
     @Environment(\.dismiss) private var dismiss
     /// A bigger key on a big iPad; the column itself is capped either way.
     @Environment(\.wideLayout) private var wide
@@ -96,8 +99,12 @@ struct RepeaterView: View {
             }
         }
         .tint(Theme.teal)
-        .onAppear { model.start() }
+        .onAppear {
+            model.configureHardwareKeyer(app.settings.keyerSettings)
+            model.start()
+        }
         .onDisappear { model.stop() }
+        .onChange(of: app.settings.keyerSettings) { model.configureHardwareKeyer($0) }
     }
 
     // MARK: - Status

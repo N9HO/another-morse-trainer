@@ -54,11 +54,11 @@ final class SendingAnalyzerModel: ObservableObject {
     @Published private(set) var liveText = ""
     @Published private(set) var analysis: SendingAnalysis?
     @Published private(set) var record: SendingRecord
-    /// Whether this attempt was keyed on the on-screen paddles (#233). Their
-    /// keyer times every element at the app's Settings speed, so the attempt
-    /// is judged as paddles whatever the key picker says — the picker is for
-    /// the key the operator brings (a Vail adapter, a MIDI key, the mic).
-    @Published private(set) var onScreenPaddlesUsed = false
+    /// Whether the app's keyer timed any of this attempt: the on-screen paddles
+    /// (#233) or a MIDI paddle such as the TinyMIDI. It times every element at
+    /// the Settings speed, so the attempt is judged as paddles whatever the key
+    /// picker says.
+    @Published private(set) var appKeyerUsed = false
 
     @Published var source: Source { didSet { save(); if source != oldValue { newTarget() } } }
     @Published var customText: String { didSet { save(); if source == .custom { newTarget() } } }
@@ -101,8 +101,11 @@ final class SendingAnalyzerModel: ObservableObject {
         self.studied = studied
         keyerWpm = keyerSettings.wpm
         keyer = SendingKeyer(keyerSettings)
-        keyer.onEdge = { [weak self] isDown, ms in
+        keyer.onEdge = { [weak self] isDown, ms, timedByApp in
             guard let self, self.input == .key else { return }
+            // A MIDI paddle timed by the app's keyer is judged as a keyer,
+            // like the on-screen paddles.
+            if timedByApp, self.phase == .sending { self.appKeyerUsed = true }
             self.keyEdge(isDown: isDown, atMs: Double(ms))
         }
         mic.onEdge = { [weak self] isDown, ms in
@@ -188,13 +191,13 @@ final class SendingAnalyzerModel: ObservableObject {
     // MARK: Sending
 
     /// The key type the attempt is judged as: paddles when any of it came
-    /// from the on-screen paddles, otherwise the picker's choice.
-    var judgedKeyType: SendingKeyType { onScreenPaddlesUsed ? .keyer : keyType }
+    /// from the app's keyer, otherwise the picker's choice.
+    var judgedKeyType: SendingKeyType { appKeyerUsed ? .keyer : keyType }
 
     func startSending() {
         guard canStart else { return }
         recorder.reset()
-        onScreenPaddlesUsed = false
+        appKeyerUsed = false
         liveText = ""
         analysis = nil
         phase = .sending
@@ -208,7 +211,7 @@ final class SendingAnalyzerModel: ObservableObject {
     /// main actor's wake-up jitter.
     func onScreenPaddleEdge(isDown: Bool, atMs ms: Int64) {
         guard input == .key else { return }
-        if phase == .sending { onScreenPaddlesUsed = true }
+        if phase == .sending { appKeyerUsed = true }
         keyer.touchKey(isDown: isDown, atMs: ms)
     }
 
@@ -241,7 +244,7 @@ final class SendingAnalyzerModel: ObservableObject {
     /// (it decides dit from dah when a text is all one kind, like "5" or "E").
     /// Speed is not judged for a keyer, so nothing is marked down for it.
     private func analyse() -> SendingAnalysis {
-        let characterWpm = onScreenPaddlesUsed ? keyerWpm : targetWpm
+        let characterWpm = appKeyerUsed ? keyerWpm : targetWpm
         return SendingAnalysis(marks: recorder.marks, target: target, keyType: judgedKeyType,
                                characterWpm: characterWpm,
                                effectiveWpm: farnsworth ? min(effectiveWpm, characterWpm) : characterWpm)
@@ -266,7 +269,7 @@ final class SendingAnalyzerModel: ObservableObject {
     func cancelSending() {
         finishTask?.cancel()
         recorder.reset()
-        onScreenPaddlesUsed = false
+        appKeyerUsed = false
         liveText = ""
         phase = .setup
     }

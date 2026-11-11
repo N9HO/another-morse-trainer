@@ -262,7 +262,7 @@ private fun HuntRun(config: HuntConfig, call: String, state: String, onDone: (Hu
     DisposableEffect(Unit) {
         keyer.scope = scope
         keyer.start()
-        midi.start(onKey = { down -> keyer.touchKey(down) }, onConnected = { midiDevice = it })
+        midi.start(onKey = { down, ms -> keyer.touchKey(down, ms) }, onConnected = { midiDevice = it })
         onDispose {
             midi.stop()
             keyer.stop()

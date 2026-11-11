@@ -196,7 +196,9 @@ paddles.
   also works in the Pileup Runner and Contest (what you key goes in the box
   and is sent when you stop keying; key CQ to call CQ), Type It, QRQ Speed,
   Daily Dit, Journey and Morse Defender's typed copy, decoded as you key
-  with sidetone
+  with sidetone. A MIDI paddle with no keyer of its own (a Vail Adapter in
+  Passthrough) is timed by the app's keyer in the on-screen paddles' Paddle
+  mode
 - **Vail repeater**: live CW over the [Vail](https://vail.woozle.org) network
   with a server picker and private-channel option, plus Vail Adapter support:
   MIDI key input *and* output (keyer modes, speed, sidetone, RX piezo buzz)

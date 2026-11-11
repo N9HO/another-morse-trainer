@@ -800,7 +800,7 @@ private struct BoxingKeyPad: View {
                     height: 110,
                     hint: "Press and hold to key the tell back, then your punches")
         .onAppear {
-            sender.onEdge = onEdge
+            sender.onEdge = { [onEdge] isDown, atMs, _ in onEdge(isDown, atMs) }
             sender.start()
         }
         .onDisappear {

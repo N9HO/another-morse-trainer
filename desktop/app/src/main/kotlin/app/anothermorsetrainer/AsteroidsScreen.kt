@@ -189,7 +189,7 @@ fun AsteroidsScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {
         if (phase == AstPhase.RUNNING && input == AsteroidsInput.SEND) {
             keyer.scope = scope
             keyer.start()
-            midi.start(onKey = { down -> keyer.touchKey(down) }, onConnected = { midiDevice = it })
+            midi.start(onKey = { down, ms -> keyer.touchKey(down, ms) }, onConnected = { midiDevice = it })
         }
         onDispose { midi.stop(); keyer.stop() }
     }

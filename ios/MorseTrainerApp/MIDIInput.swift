@@ -8,9 +8,14 @@
 //              in Straight Key mode)
 //   dit      = 1 (Vail Passthrough), 20 (N6ARA TinyMIDI, Pocket), or 61
 //   dah      = 2 (Vail Passthrough), 21 (N6ARA TinyMIDI, Pocket), or 62
-// Notes 1/2/20/21 are raw paddle contacts that the device does not time;
-// 61/62 are older mappings with no known source. Every note still maps to the
-// one logical key, so raw paddles are not iambic-timed here (a known gap).
+// Notes 20/21 are raw paddle contacts that the device does not time, and so
+// are 1/2 in Passthrough; in a Vail Adapter's keyer modes, firmware 4.4 and
+// later sends its own timed elements on 1/2. 61/62 are older mappings with no
+// known source.
+//
+// This class only reports contacts, with their notes; `KeyerDriver` times the
+// raw dit and dah in the on-screen paddles' mode and speed and keys the rest
+// as they come (see `MIDIKeyer.timesNote`).
 //
 // MIDIPacket.timeStamp is in mach_absolute_time units — use this for accurate
 // key event timing (sub-millisecond), not the host's Date().
@@ -39,6 +44,13 @@ public final class MIDIInput {
         public let machTimestamp: UInt64
         /// Same event as wall-clock ms since Unix epoch.
         public let timestampMs: Int64
+        /// The note it came on (`MIDIKeyer.timesNote`); nil on the key-ups an
+        /// unplug sends.
+        public var note: UInt8?
+        /// A key-up sent for a key left held when its source went away. The key
+        /// was unplugged, not released, so a keyer should let go of everything
+        /// (`KeyerDriver.releaseAll`) rather than finish its element.
+        public var sourceLost = false
     }
 
     /// Fired from a CoreMIDI thread for every key edge.
@@ -169,7 +181,7 @@ public final class MIDIInput {
             let mach = mach_absolute_time()
             let ms = Int64(Date().timeIntervalSince1970 * 1000)
             for key in released {
-                handler(Event(key: key, isDown: false, machTimestamp: mach, timestampMs: ms))
+                handler(Event(key: key, isDown: false, machTimestamp: mach, timestampMs: ms, sourceLost: true))
             }
         }
     }
@@ -234,7 +246,8 @@ public final class MIDIInput {
                 key: message.paddle,
                 isDown: message.isDown,
                 machTimestamp: packet.timeStamp,
-                timestampMs: timestampMs
+                timestampMs: timestampMs,
+                note: message.note
             ))
         }
     }

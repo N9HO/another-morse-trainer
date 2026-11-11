@@ -1,0 +1,178 @@
+{
+  "_comment": [
+    "A MIDI key's contacts turned into the one logical key, pinned for all three",
+    "ports: MIDIKeyer in ios/Sources/MorseKit/MIDIKeyer.swift and MidiKeyer.kt",
+    "in android/.../morsekit/ and desktop/.../morsekit/. Read by",
+    "ios/Sources/MorseKitCheck/main.swift and by MidiKeyerTest.kt in the",
+    "android and desktop test trees.",
+    "",
+    "It exists for MIDI paddles with no keyer of their own: the N6ARA TinyMIDI",
+    "(BLE MIDI, note 20 = dit, note 21 = dah, raw paddle contacts, per its",
+    "Rev A user manual) and a Vail Adapter in Passthrough (notes 1 and 2).",
+    "Those used to be keyed as straight-key contacts, so holding dit sounded",
+    "one long tone and a squeeze one tone for as long as either was held.",
+    "",
+    "Each case feeds `events` to a fresh keyer in time order, then runs the",
+    "clock on to `untilMs`. An event is [note, \"down\" | \"up\", ms]; the note",
+    "goes through the ports' own MIDI note map first, and an unmapped note is",
+    "dropped there. [\"unplug\", ms] is the key going away (releaseAll).",
+    "[\"config\", mode, wpm, ms] is the app pushing a new paddle mode and speed",
+    "(configure): the Settings sheet is drawn over a running session.",
+    "`expected` is every change of the logical key as [\"down\" | \"up\", ms,",
+    "\"keyer\" | \"straight\"]: \"keyer\" when the app's keyer timed the edge,",
+    "\"straight\" when a contact keyed it as it came (the straight key, or a",
+    "Vail Adapter's own timed notes 1 and 2 outside Passthrough). A case's",
+    "`adapterPassthrough` is the app's setting for a Vail Adapter's keyer mode",
+    "(true when absent; see derivation.adapter). Every",
+    "value was worked out by hand from `derivation` and",
+    "fixtures/paddle-keyer.json's rules, not captured from any port."
+  ],
+  "derivation": {
+    "notes": "Notes 0 and 30 are the straight-key contact. Notes 1, 20 and 61 are the dit paddle; 2, 21 and 62 the dah paddle. Every other note is not a key (MIDIKeyParser.paddle(forNote:); fixtures/midi-key-notes.json pins the map).",
+    "straight": "The straight-key contact keys the logical key as it comes, at the event's own time. It is a straight key, or elements a Vail Adapter's own keyer has already timed, which is the only way a Vail Adapter outside Passthrough sends them.",
+    "paddles": "Dit and dah contacts come only from a paddle that leaves the timing to the host, so they are fed to PaddleKeyer (fixtures/paddle-keyer.json) in the case's mode and speed, and its tone is the keyer's half of the logical key.",
+    "merge": "The logical key is down while a contact keyed as it comes is held or the keyer's tone sounds; only a change of it is an edge (KeyMerge, fixtures/gap-analyzer-merge.json). Each contact keyed as it comes is held separately. An edge is labelled by the half that changed it.",
+    "adapter": "A Vail Adapter sends raw paddle contacts on notes 1 and 2 only in Passthrough. In its keyer modes, firmware 4.4 (2025-10) and later sends its own keyer-timed dits and dahs on notes 1 and 2 (Vail-CW/vail-adapter commit 5448935, VailAdapter::BeginTx(relay); up to 4.3 every keyer element went out on note 0, which docs/MIDI_INTEGRATION_SPEC.md still says), as #387 found. So the app's keyer times notes 1 and 2 only when the app's setting for the adapter's keyer mode is Passthrough; otherwise they key as they come. Notes 20/21 (the TinyMIDI, the Pocket) and 61/62 come from devices the app sets no keyer mode on, and are always timed.",
+    "unplug": "The key going away lets go of every contact and cuts the keyer's tone at that instant.",
+    "timing": "One unit is 1200 / wpm ms. A dit sounds 1 unit, a dah 3, each followed by 1 unit of silence.",
+    "config": "A new mode and speed take effect once the keyer is idle: no element and no trailing silence in progress, and nothing due next. The instant between one element's silence and the next element is not idle while a paddle is held or remembered (latched), so a string of elements finishes at the old timing, and the first element after that uses the new one. A change made while idle takes effect at once, and of several changes made while busy the last wins. Letting go of everything (unplug) leaves the keyer idle, so a waiting change takes effect then. Only the keyer is swapped: a straight contact held alongside does not hold a change back."
+  },
+  "cases": [
+    {
+      "name": "TinyMIDI: holding the dit pad (note 20) sends a string of dits",
+      "mode": "iambicA", "wpm": 20, "untilMs": 1000,
+      "events": [[20, "down", 0], [20, "up", 250]],
+      "expected": [["down", 0, "keyer"], ["up", 60, "keyer"], ["down", 120, "keyer"], ["up", 180, "keyer"],
+                   ["down", 240, "keyer"], ["up", 300, "keyer"]]
+    },
+    {
+      "name": "TinyMIDI: holding the dah pad (note 21) sends a string of dahs",
+      "mode": "iambicB", "wpm": 20, "untilMs": 2000,
+      "events": [[21, "down", 0], [21, "up", 500]],
+      "expected": [["down", 0, "keyer"], ["up", 180, "keyer"], ["down", 240, "keyer"], ["up", 420, "keyer"],
+                   ["down", 480, "keyer"], ["up", 660, "keyer"]]
+    },
+    {
+      "name": "TinyMIDI: a squeeze, dit first, let go during the third element (Iambic B adds one)",
+      "mode": "iambicB", "wpm": 20, "untilMs": 2000,
+      "events": [[20, "down", 0], [21, "down", 20], [20, "up", 400], [21, "up", 400]],
+      "expected": [["down", 0, "keyer"], ["up", 60, "keyer"], ["down", 120, "keyer"], ["up", 300, "keyer"],
+                   ["down", 360, "keyer"], ["up", 420, "keyer"], ["down", 480, "keyer"], ["up", 660, "keyer"]]
+    },
+    {
+      "name": "Vail Adapter in Passthrough: a dit tap (note 1) sends one whole dit",
+      "mode": "ultimatic", "wpm": 25, "untilMs": 1000,
+      "events": [[1, "down", 0], [1, "up", 10]],
+      "expected": [["down", 0, "keyer"], ["up", 48, "keyer"]]
+    },
+    {
+      "name": "Passthrough's D4 and C#4 (notes 62, 61) are dah and dit",
+      "mode": "iambicA", "wpm": 20, "untilMs": 1000,
+      "events": [[62, "down", 0], [62, "up", 100], [61, "down", 300], [61, "up", 310]],
+      "expected": [["down", 0, "keyer"], ["up", 180, "keyer"], ["down", 300, "keyer"], ["up", 360, "keyer"]]
+    },
+    {
+      "name": "The straight-key note (0) is keyed as it comes",
+      "mode": "iambicA", "wpm": 20, "untilMs": 1000,
+      "events": [[0, "down", 100], [0, "up", 350]],
+      "expected": [["down", 100, "straight"], ["up", 350, "straight"]]
+    },
+    {
+      "name": "A straight key held over a keyer element keeps the key down until both let go",
+      "mode": "iambicA", "wpm": 20, "untilMs": 1000,
+      "events": [[0, "down", 0], [20, "down", 10], [20, "up", 20], [0, "up", 30]],
+      "expected": [["down", 0, "straight"], ["up", 70, "keyer"]]
+    },
+    {
+      "name": "Notes no key sends are ignored (an unrelated instrument on the bus)",
+      "mode": "iambicA", "wpm": 20, "untilMs": 1000,
+      "events": [[64, "down", 0], [64, "up", 100], [60, "down", 200], [60, "up", 300]],
+      "expected": []
+    },
+    {
+      "name": "Unplugging mid-element cuts the keyer's tone",
+      "mode": "iambicA", "wpm": 20, "untilMs": 2000,
+      "events": [[21, "down", 0], ["unplug", 100]],
+      "expected": [["down", 0, "keyer"], ["up", 100, "keyer"]]
+    },
+    {
+      "name": "Unplugging with the straight key down lets it up",
+      "mode": "iambicA", "wpm": 20, "untilMs": 1000,
+      "events": [[0, "down", 0], ["unplug", 50]],
+      "expected": [["down", 0, "straight"], ["up", 50, "straight"]]
+    },
+    {
+      "name": "A speed change while the dit pad is held waits until the keyer is idle",
+      "mode": "iambicA", "wpm": 20, "untilMs": 1000,
+      "events": [[20, "down", 0], ["config", "iambicA", 30, 70], [20, "up", 250], [20, "down", 500], [20, "up", 510]],
+      "expected": [["down", 0, "keyer"], ["up", 60, "keyer"], ["down", 120, "keyer"], ["up", 180, "keyer"],
+                   ["down", 240, "keyer"], ["up", 300, "keyer"], ["down", 500, "keyer"], ["up", 540, "keyer"]]
+    },
+    {
+      "name": "A speed change made while idle takes effect at once",
+      "mode": "iambicA", "wpm": 20, "untilMs": 1000,
+      "events": [["config", "iambicA", 30, 0], [21, "down", 100], [21, "up", 110]],
+      "expected": [["down", 100, "keyer"], ["up", 220, "keyer"]]
+    },
+    {
+      "name": "A mode change mid-squeeze waits for the squeeze to end (Iambic A, then B)",
+      "mode": "iambicA", "wpm": 20, "untilMs": 2500,
+      "events": [[20, "down", 0], [21, "down", 20], ["config", "iambicB", 20, 30], [20, "up", 400], [21, "up", 400],
+                 [20, "down", 1000], [21, "down", 1020], [20, "up", 1400], [21, "up", 1400]],
+      "expected": [["down", 0, "keyer"], ["up", 60, "keyer"], ["down", 120, "keyer"], ["up", 300, "keyer"],
+                   ["down", 360, "keyer"], ["up", 420, "keyer"],
+                   ["down", 1000, "keyer"], ["up", 1060, "keyer"], ["down", 1120, "keyer"], ["up", 1300, "keyer"],
+                   ["down", 1360, "keyer"], ["up", 1420, "keyer"], ["down", 1480, "keyer"], ["up", 1660, "keyer"]]
+    },
+    {
+      "name": "Of two changes made while busy, the last takes effect",
+      "mode": "iambicA", "wpm": 20, "untilMs": 1000,
+      "events": [[21, "down", 0], ["config", "iambicA", 30, 50], ["config", "iambicA", 15, 100], [21, "up", 150],
+                 [20, "down", 500], [20, "up", 510]],
+      "expected": [["down", 0, "keyer"], ["up", 180, "keyer"], ["down", 500, "keyer"], ["up", 580, "keyer"]]
+    },
+    {
+      "name": "A change waiting on a held paddle takes effect when the key is unplugged",
+      "mode": "iambicA", "wpm": 20, "untilMs": 1000,
+      "events": [[21, "down", 0], ["config", "iambicA", 30, 50], ["unplug", 100], [20, "down", 300], [20, "up", 310]],
+      "expected": [["down", 0, "keyer"], ["up", 100, "keyer"], ["down", 300, "keyer"], ["up", 340, "keyer"]]
+    },
+    {
+      "name": "A straight key held alongside does not hold a change back",
+      "mode": "iambicA", "wpm": 20, "untilMs": 1000,
+      "events": [[0, "down", 0], ["config", "iambicA", 30, 10], [20, "down", 20], [20, "up", 30], [0, "up", 50]],
+      "expected": [["down", 0, "straight"], ["up", 60, "keyer"]]
+    },
+    {
+      "name": "A Vail Adapter in a keyer mode sends its own timed dits and dahs on notes 1 and 2: they key as they come",
+      "mode": "iambicA", "wpm": 20, "untilMs": 1000, "adapterPassthrough": false,
+      "events": [[1, "down", 0], [1, "up", 60], [2, "down", 120], [2, "up", 300]],
+      "expected": [["down", 0, "straight"], ["up", 60, "straight"], ["down", 120, "straight"], ["up", 300, "straight"]]
+    },
+    {
+      "name": "In a keyer mode, a dit's note-off arriving after the next space is not a second dit",
+      "mode": "iambicA", "wpm": 20, "untilMs": 1000, "adapterPassthrough": false,
+      "events": [[1, "down", 0], [1, "up", 125]],
+      "expected": [["down", 0, "straight"], ["up", 125, "straight"]]
+    },
+    {
+      "name": "In Passthrough the same contact is a raw paddle held past the space: two dits",
+      "mode": "iambicA", "wpm": 20, "untilMs": 1000,
+      "events": [[1, "down", 0], [1, "up", 125]],
+      "expected": [["down", 0, "keyer"], ["up", 60, "keyer"], ["down", 120, "keyer"], ["up", 180, "keyer"]]
+    },
+    {
+      "name": "In a keyer mode, notes 1 and 2 held together keep the key down until both let go",
+      "mode": "iambicA", "wpm": 20, "untilMs": 1000, "adapterPassthrough": false,
+      "events": [[1, "down", 0], [2, "down", 30], [1, "up", 60], [2, "up", 120]],
+      "expected": [["down", 0, "straight"], ["up", 120, "straight"]]
+    },
+    {
+      "name": "In a keyer mode, the TinyMIDI's notes 20 and 21 are still timed by the app",
+      "mode": "iambicA", "wpm": 20, "untilMs": 1000, "adapterPassthrough": false,
+      "events": [[20, "down", 0], [20, "up", 250]],
+      "expected": [["down", 0, "keyer"], ["up", 60, "keyer"], ["down", 120, "keyer"], ["up", 180, "keyer"],
+                   ["down", 240, "keyer"], ["up", 300, "keyer"]]
+    }
+  ]
+}

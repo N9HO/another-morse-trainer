@@ -24,7 +24,8 @@ package app.anothermorsetrainer.morsekit
  * - A deadline at the same instant as a paddle event is processed first.
  *
  * Not the Vail Adapter's keyer (`MidiKeyOutput.KeyerMode`), which times a
- * *hardware* paddle inside the adapter; this one times the touch paddles.
+ * *hardware* paddle inside the adapter; this one times the touch paddles and
+ * a MIDI paddle with no keyer of its own ([MidiKeyer]).
  * Mirrors iOS `PaddleKeyer` (ios/Sources/MorseKit/PaddleKeyer.swift).
  */
 class PaddleKeyer(val mode: Mode, wpm: Double) {

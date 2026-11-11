@@ -22,10 +22,15 @@ public enum MIDIKeyPaddle: Sendable, Hashable, CaseIterable {
 /// One key-down or key-up decoded from a MIDI stream.
 public struct MIDIKeyMessage: Sendable, Hashable {
     public let paddle: MIDIKeyPaddle
+    /// The note it came on. A dit or dah from a Vail Adapter's notes 1 and 2
+    /// is keyed differently by mode (`MIDIKeyer.timesNote`). Kotlin's
+    /// `MidiKeyMessage` carries it too.
+    public let note: UInt8
     public let isDown: Bool
 
-    public init(paddle: MIDIKeyPaddle, isDown: Bool) {
+    public init(paddle: MIDIKeyPaddle, note: UInt8, isDown: Bool) {
         self.paddle = paddle
+        self.note = note
         self.isDown = isDown
     }
 }
@@ -41,8 +46,10 @@ public enum MIDIKeyParser {
     ///   dah paddle   = 2 (Vail Adapter in Passthrough), 21 (N6ARA TinyMIDI,
     ///                  the Pocket), or 62 (D4)
     ///
-    /// Notes 1, 2, 20 and 21 are raw paddle contacts: the device does no
-    /// timing and expects the host to. 61 and 62 are older mappings with no
+    /// Notes 20 and 21 are raw paddle contacts: the device does no timing and
+    /// expects the host to. So are 1 and 2 in Passthrough; in a Vail Adapter's
+    /// keyer modes, firmware 4.4 and later sends its own timed elements on
+    /// them (`MIDIKeyer.timesNote`). 61 and 62 are older mappings with no
     /// known device source, kept as existing behaviour. Every other note is
     /// unmapped: we listen to *all* MIDI sources, so an unrelated synth must
     /// never register as keying. Pinned by fixtures/midi-key-notes.json.
@@ -113,7 +120,7 @@ public enum MIDIKeyParser {
             guard kind == 0x80 || kind == 0x90 else { continue }
             guard let paddle = paddle(forNote: data[0]) else { continue }
             // Note On with velocity 0 is the conventional Note Off.
-            messages.append(MIDIKeyMessage(paddle: paddle, isDown: kind == 0x90 && data[1] > 0))
+            messages.append(MIDIKeyMessage(paddle: paddle, note: data[0], isDown: kind == 0x90 && data[1] > 0))
         }
 
         return messages

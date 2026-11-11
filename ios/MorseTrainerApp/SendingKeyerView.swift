@@ -55,15 +55,14 @@ struct SendingKeyerView: View {
         .onChange(of: sender.decodedText) { _ in maybeAutoSubmit() }
         .onChange(of: sender.isKeying) { _ in maybeAutoSubmit() }
         // The Settings sheet is drawn *over* this drill, so the keyer mode,
-        // speed and tone can all move while the adapter is awake. Push each
-        // change down the output we already hold rather than waiting for the
-        // next wake (Android `AdapterConfigSync`).
-        .onChange(of: adapterKeyerMode) { _ in applyAdapterConfig() }
-        .onChange(of: model.settings.wpm) { _ in applyAdapterConfig() }
-        .onChange(of: model.settings.toneFrequency) { _ in applyAdapterConfig() }
+        // speed, tone and paddle mode can all move while the key is live.
+        // Push each change down to the keyer and the adapter we already hold
+        // rather than waiting for the next wake (Android `AdapterConfigSync`).
+        .onChange(of: adapterKeyerMode) { _ in applyKeyerConfig() }
+        .onChange(of: model.settings.keyerSettings) { _ in applyKeyerConfig() }
     }
 
-    private func applyAdapterConfig() {
+    private func applyKeyerConfig() {
         sender.applyConfig(model.settings.keyerSettings)
     }
 

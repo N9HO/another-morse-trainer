@@ -23,7 +23,8 @@ import Foundation
 /// - A deadline at the same instant as a paddle event is processed first.
 ///
 /// This is not the Vail Adapter's keyer (`MIDIOutput.KeyerMode`), which times
-/// a *hardware* paddle inside the adapter; this one times the touch paddles.
+/// a *hardware* paddle inside the adapter; this one times the touch paddles and
+/// a MIDI paddle with no keyer of its own (`MIDIKeyer`).
 public struct PaddleKeyer: Sendable {
     public enum Mode: String, CaseIterable, Sendable, Codable {
         case iambicA, iambicB, ultimatic

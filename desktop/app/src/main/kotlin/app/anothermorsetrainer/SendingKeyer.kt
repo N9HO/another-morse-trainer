@@ -15,9 +15,10 @@ import kotlinx.coroutines.launch
  * decoded back to text via [MorseDecoder]. The decoded text answers the current
  * drill. Exposes [decodedText] / [isKeying] as Compose snapshot state.
  *
- * Port of the iOS `SendingKeyer`, minus the MIDI input path (hardware keying is
- * the separate MIDI parity item) — the on-screen key works identically. The
- * idle-finalize timer uses a coroutine on a scope supplied by the screen.
+ * Port of the iOS `SendingKeyer`. A hardware key reaches it through
+ * [HardwareKeyInput] and [MidiKeyInput] rather than from inside, as on iOS;
+ * the on-screen key works identically. The idle-finalize timer uses a
+ * coroutine on a scope supplied by the screen.
  *
  * Translated from MorseTrainerApp/SendingKeyer.swift.
  *

@@ -279,7 +279,7 @@ fun SettingsScreen(
     val homeKey = if (scope == null && midiSupported) remember { HardwareKey() } else null
     if (homeKey != null) {
         DisposableEffect(homeKey) {
-            homeKey.start(onKey = {}, onConnected = {})
+            homeKey.start(onKey = { _, _ -> }, onConnected = {})
             onDispose { homeKey.stop() }
         }
         AdapterConfigSync(homeKey)
@@ -875,10 +875,11 @@ fun SettingsScreen(
                             SectionHeader(stringResource(R.string.settings_on_screen_key))
                             SettingsGroup { OnScreenKeySetting() }
                             SectionFooter(
-                                if (Settings.onScreenKey == OnScreenKeyType.PADDLES)
+                                (if (Settings.onScreenKey == OnScreenKeyType.PADDLES)
                                     stringResource(R.string.settings_on_screen_key_footer_paddles)
                                 else
-                                    stringResource(R.string.settings_on_screen_key_footer_straight)
+                                    stringResource(R.string.settings_on_screen_key_footer_straight))
+                                    + " " + stringResource(R.string.settings_paddle_mode_footer)
                             )
                         }
                         SettingsSection.YOUR_STATION -> {
@@ -1542,15 +1543,17 @@ private fun OnScreenKeySetting() {
             name = { it.label },
             onPick = { Settings.updateOnScreenKey(it) }
         )
+        // Shown with either key: it also times a MIDI paddle that leaves the
+        // keying to the app, whatever is on screen (MidiKeyInput).
+        Spacer(Modifier.height(14.dp))
+        ChipPicker(
+            label = stringResource(R.string.settings_paddle_mode),
+            options = PaddleKeyer.Mode.entries,
+            selected = Settings.paddleMode,
+            name = { it.label },
+            onPick = { Settings.updatePaddleMode(it) }
+        )
         if (Settings.onScreenKey == OnScreenKeyType.PADDLES) {
-            Spacer(Modifier.height(14.dp))
-            ChipPicker(
-                label = stringResource(R.string.settings_paddle_mode),
-                options = PaddleKeyer.Mode.entries,
-                selected = Settings.paddleMode,
-                name = { it.label },
-                onPick = { Settings.updatePaddleMode(it) }
-            )
             Spacer(Modifier.height(6.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),

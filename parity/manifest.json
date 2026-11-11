@@ -2040,20 +2040,23 @@
     "ios": {
      "files": [
       "MorseTrainerApp/MIDIInput.swift",
-      "MorseTrainerApp/MIDIOutput.swift"
+      "MorseTrainerApp/MIDIOutput.swift",
+      "Sources/MorseKit/MIDIKeyer.swift"
      ]
     },
     "android": {
      "files": [
       "MidiKeyInput.kt",
-      "MidiKeyOutput.kt"
+      "MidiKeyOutput.kt",
+      "morsekit/MidiKeyer.kt"
      ]
     },
     "desktop": {
      "files": [
       "MidiKeyInput.kt",
       "MidiKeyOutput.kt",
-      "MidiPorts.kt"
+      "MidiPorts.kt",
+      "morsekit/MidiKeyer.kt"
      ]
     }
    },

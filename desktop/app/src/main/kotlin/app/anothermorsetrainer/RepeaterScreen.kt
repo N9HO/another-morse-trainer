@@ -90,6 +90,12 @@ fun RepeaterScreen(onBack: () -> Unit) {
     var serverField by remember { mutableStateOf(repeater.serverUrl) }
     var keyPressed by remember { mutableStateOf(false) }
 
+    // A MIDI paddle with no keyer of its own is timed at the on-screen
+    // paddles' mode and speed; follow them while the screen is up.
+    val paddleMode = Settings.paddleMode
+    val paddleWpm = Settings.characterWpm
+    LaunchedEffect(paddleMode, paddleWpm) { repeater.configureHardwareKeyer(paddleMode, paddleWpm) }
+
     DisposableEffect(Unit) {
         repeater.start()
         onDispose {

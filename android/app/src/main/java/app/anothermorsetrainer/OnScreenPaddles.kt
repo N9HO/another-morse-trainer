@@ -38,18 +38,20 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.anothermorsetrainer.morsekit.MidiKeyPaddle
+import app.anothermorsetrainer.morsekit.MidiKeyer
 import app.anothermorsetrainer.morsekit.PaddleKeyer
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.roundToLong
 
 /**
- * Runs a [PaddleKeyer] against the wall clock and hands each key edge to
+ * Runs a [MidiKeyer] against the wall clock, pressing only its dit and dah
+ * contacts, and hands each key edge to
  * [onKey] — the same `(isDown, atMs)` a straight key's press and release would
  * produce, so whatever the straight key feeds (sidetone, the sending decoder,
  * the Vail repeater) is fed the keyer's elements instead.
@@ -58,7 +60,10 @@ import kotlin.math.roundToLong
  * between deadlines resume on [Dispatchers.Main]. Each edge carries the time
  * the keyer scheduled it for, not the moment the wait ended, so a late wake-up
  * shifts when the tone is heard but never the element lengths a consumer
- * measures. Mirrors iOS `PaddleKeyerDriver` (OnScreenPaddles.swift).
+ * measures. Mirrors iOS `KeyerDriver` (OnScreenPaddles.swift).
+ *
+ * A settings change made while keying waits for idle by [MidiKeyer.configure];
+ * `MidiKeyerTest` proves [MidiKeyer] times dit and dah exactly as [PaddleKeyer].
  */
 class PaddleKeyerDriver(mode: PaddleKeyer.Mode, wpm: Double, private val scope: CoroutineScope) {
 
@@ -69,14 +74,13 @@ class PaddleKeyerDriver(mode: PaddleKeyer.Mode, wpm: Double, private val scope: 
 
     var onKey: ((Boolean, Long) -> Unit)? = null
 
-    private var keyer = PaddleKeyer(mode, wpm)
-    /** A mode or speed change made while keying, applied once the keyer is idle. */
-    private var pending: Pair<PaddleKeyer.Mode, Double>? = null
+    private val keyer = MidiKeyer(mode, wpm)
     private var tick: Job? = null
 
+    /** A new mode or speed, taken up once the keyer is idle ([MidiKeyer.configure]). */
     fun configure(mode: PaddleKeyer.Mode, wpm: Double) {
-        pending = mode to wpm
-        applyPendingIfIdle()
+        emit(keyer.configure(mode, wpm, nowMs()))
+        schedule()
     }
 
     fun isHeld(element: PaddleKeyer.Element) =
@@ -85,7 +89,8 @@ class PaddleKeyerDriver(mode: PaddleKeyer.Mode, wpm: Double, private val scope: 
     fun paddle(element: PaddleKeyer.Element, isDown: Boolean) {
         if (isHeld(element) == isDown) return
         if (element == PaddleKeyer.Element.DIT) ditHeld = isDown else dahHeld = isDown
-        emit(keyer.paddle(element, isDown, nowMs()))
+        val contact = if (element == PaddleKeyer.Element.DIT) MidiKeyPaddle.DIT else MidiKeyPaddle.DAH
+        emit(keyer.contact(contact, isDown, nowMs()))
         schedule()
     }
 
@@ -96,13 +101,12 @@ class PaddleKeyerDriver(mode: PaddleKeyer.Mode, wpm: Double, private val scope: 
         ditHeld = false
         dahHeld = false
         emit(keyer.releaseAll(nowMs()))
-        applyPendingIfIdle()
     }
 
     private fun schedule() {
         tick?.cancel()
         tick = null
-        val deadline = keyer.nextDeadlineMs ?: run { applyPendingIfIdle(); return }
+        val deadline = keyer.nextDeadlineMs ?: return
         val delayMs = ceil((deadline - nowMs()).coerceAtLeast(0.0)).toLong()
         tick = scope.launch(Dispatchers.Main) {
             delay(delayMs)
@@ -112,16 +116,7 @@ class PaddleKeyerDriver(mode: PaddleKeyer.Mode, wpm: Double, private val scope: 
         }
     }
 
-    private fun applyPendingIfIdle() {
-        val (mode, wpm) = pending ?: return
-        if (keyer.isBusy || ditHeld || dahHeld) return
-        pending = null
-        if (mode != keyer.mode || abs(1200.0 / wpm.coerceAtLeast(1.0) - keyer.unitMs) > 1e-9) {
-            keyer = PaddleKeyer(mode, wpm)
-        }
-    }
-
-    private fun emit(edges: List<PaddleKeyer.Edge>) {
+    private fun emit(edges: List<MidiKeyer.Edge>) {
         for (edge in edges) onKey?.invoke(edge.isDown, edge.atMs.roundToLong())
     }
 

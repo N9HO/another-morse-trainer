@@ -222,7 +222,9 @@ testers, bug reports and feature chat live on
 - **Bluetooth LE MIDI keys**: paired from inside the app via the system MIDI
   sheet, which is the only thing on iOS that makes a BLE key visible to apps
   (on the Mac, connected once in Audio MIDI Setup, which the same button
-  explains)
+  explains). A MIDI paddle with no keyer of its own, such as the N6ARA
+  TinyMIDI (or a Vail Adapter in Passthrough), is timed by the app's keyer in
+  the on-screen paddles' Paddle mode, wherever a key works
 - **Bluetooth keep-alive and band noise**: a near-silent floor (on by
   default) that stops Bluetooth earbuds sleeping through the first character,
   and a separate band-noise level to copy through (heard only while a mode,

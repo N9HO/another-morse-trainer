@@ -272,7 +272,12 @@ fun BoxingScreen(onBack: () -> Unit) {
         if (view == BkView.FIGHT) {
             keyer.scope = scope
             keyer.start()
-            midi.start(onKey = { down -> keyer.touchKey(down); keyEdge(down) }, onConnected = { })
+            midi.start(onKey = { down, ms ->
+                // At the edge's own time, as the paddles below: the keyer
+                // scheduled it, and it reaches us a handler hop later.
+                val lag = (System.currentTimeMillis() - ms).toInt().coerceAtLeast(0)
+                keyer.touchKey(down, ms); keyEdge(down, clock() - lag)
+            }, onConnected = { })
         }
         onDispose { midi.stop(); keyer.stop() }
     }
