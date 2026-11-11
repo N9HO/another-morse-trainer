@@ -2128,8 +2128,9 @@ final class AppModel: ObservableObject {
 
     /// Resume a frozen countdown from the time that was left when it paused.
     private func resumeSessionTimer() {
+        // A countdown left is what makes a session timed: one started from
+        // the timer menu on an "Until I stop" session resumes too.
         guard !sessionEnded, sessionEndDate == nil, sessionTimer == nil,
-              settings.practiceDuration.seconds != nil,
               let remaining = sessionRemaining, remaining > 0 else { return }
         sessionEndDate = Date().addingTimeInterval(remaining)
         let timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
@@ -2154,6 +2155,12 @@ final class AppModel: ObservableObject {
     /// or start one if the session was open-ended.
     func addSessionTime(_ seconds: TimeInterval) {
         guard !sessionEnded, seconds > 0 else { return }
+        if listenPaused, sessionTimer == nil {
+            // Paused (Listen & Learn): the time left grows, and the countdown
+            // stays frozen until Resume, which starts it from there.
+            sessionRemaining = SessionClock.added(sessionRemaining, by: seconds)
+            return
+        }
         if let end = sessionEndDate {
             // The arithmetic is SessionClock's, pinned by
             // fixtures/gap-timers-session-clock.json (Android and desktop
@@ -2169,6 +2176,13 @@ final class AppModel: ObservableObject {
     /// Mid-session timer control (issue #41): shorten the running countdown.
     /// Ends the session if that takes the remaining time to zero.
     func reduceSessionTime(_ seconds: TimeInterval) {
+        if listenPaused, sessionTimer == nil, !sessionEnded, seconds > 0, sessionRemaining != nil {
+            // Paused (Listen & Learn): the frozen time left shrinks.
+            let remaining = SessionClock.reduced(sessionRemaining, by: seconds) ?? 0
+            if remaining <= 0 { sessionRemaining = 0; endSession(); return }
+            sessionRemaining = remaining
+            return
+        }
         guard !sessionEnded, seconds > 0, let end = sessionEndDate else { return }
         let remaining = SessionClock.reduced(end.timeIntervalSinceNow, by: seconds) ?? 0
         if remaining <= 0 { sessionRemaining = 0; endSession(); return }
