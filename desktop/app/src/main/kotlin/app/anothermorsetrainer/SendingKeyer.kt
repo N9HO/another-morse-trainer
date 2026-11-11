@@ -20,6 +20,9 @@ import kotlinx.coroutines.launch
  * idle-finalize timer uses a coroutine on a scope supplied by the screen.
  *
  * Translated from MorseTrainerApp/SendingKeyer.swift.
+ *
+ * Built from Settings by default (`SendingKeyer()`); a tone changed mid-drill
+ * arrives through [applyConfig]. Mirrors iOS `SendingKeyer(KeyerSettings)`.
  */
 class SendingKeyer(wpm: Double = Settings.characterWpm, toneHz: Double = Settings.sidetoneHz) {
 
@@ -52,6 +55,14 @@ class SendingKeyer(wpm: Double = Settings.characterWpm, toneHz: Double = Setting
     }
 
     fun start() = sidetone.start()
+
+    /**
+     * Follow a sidetone change made in the Settings sheet, which is drawn over
+     * a running session; [AdapterConfigSync] calls this.
+     */
+    fun applyConfig(toneHz: Double) {
+        sidetone.frequencyHz = toneHz
+    }
 
     /**
      * Silence the sidetone only (#251): a key unplugged mid-character still

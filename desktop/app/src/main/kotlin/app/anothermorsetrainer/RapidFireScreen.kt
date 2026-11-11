@@ -164,7 +164,7 @@ fun RapidFireScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {
     val midi = remember { HardwareKey() }
     // Push a keyer mode or speed picked in the Settings sheet to the adapter
     // now, rather than at the next wake — i.e. after leaving the module (#46).
-    AdapterConfigSync(midi)
+    AdapterConfigSync(midi, keyer)
     val scope = rememberCoroutineScope()
     var keyPressed by remember { mutableStateOf(false) }
     var midiDevice by remember { mutableStateOf<String?>(null) }

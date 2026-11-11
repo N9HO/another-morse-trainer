@@ -93,7 +93,7 @@ fun SendingPracticeScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Un
     val midi = remember { HardwareKey() }
     // Push a keyer mode or speed picked in the Settings sheet to the adapter
     // now, rather than at the next wake — i.e. after leaving the module (#46).
-    AdapterConfigSync(midi)
+    AdapterConfigSync(midi, keyer)
     val scope = rememberCoroutineScope()
 
     var midiDevice by remember { mutableStateOf<String?>(null) }

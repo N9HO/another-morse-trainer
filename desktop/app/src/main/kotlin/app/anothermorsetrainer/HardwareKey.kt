@@ -138,13 +138,19 @@ class HardwareKey {
  * subscribes to them, and every change pushes down the port that is already
  * open — no second client racing for the device's input port, which is the
  * reason the setting used to only store itself and wait (issue #46).
+ *
+ * A new tone goes to [keyer] too, so its sidetone follows the Settings sheet
+ * mid-session. iOS does the same through `SendingKeyer.applyConfig`.
  */
 @Composable
-fun AdapterConfigSync(key: HardwareKey) {
+fun AdapterConfigSync(key: HardwareKey, keyer: SendingKeyer? = null) {
     val mode = AdapterKeyer.mode()
     val wpm = Settings.characterWpm
     val sidetoneHz = Settings.sidetoneHz
-    LaunchedEffect(mode, wpm, sidetoneHz) { key.applyConfig() }
+    LaunchedEffect(mode, wpm, sidetoneHz) {
+        key.applyConfig()
+        keyer?.applyConfig(sidetoneHz)
+    }
 }
 
 /**
@@ -172,7 +178,7 @@ fun HardwareKeyInput(onText: (String) -> Unit, onPause: () -> Unit = {}) {
     val keyer = remember { SendingKeyer() }
     val midi = remember { HardwareKey() }
     // A keyer mode or speed picked in the Settings sheet reaches the adapter now.
-    AdapterConfigSync(midi)
+    AdapterConfigSync(midi, keyer)
     val scope = rememberCoroutineScope()
     val currentOnText by rememberUpdatedState(onText)
     val currentOnPause by rememberUpdatedState(onPause)

@@ -115,6 +115,15 @@ object AudioFocus {
     }
 
     /**
+     * The output's own sample rate and burst size, which [SidetoneGenerator]'s
+     * low-latency track matches. Null before [init] or when the device doesn't say.
+     */
+    val outputSampleRate: Int?
+        get() = audioManager?.getProperty(AudioManager.PROPERTY_OUTPUT_SAMPLE_RATE)?.toIntOrNull()?.takeIf { it > 0 }
+    val outputFramesPerBurst: Int?
+        get() = audioManager?.getProperty(AudioManager.PROPERTY_OUTPUT_FRAMES_PER_BUFFER)?.toIntOrNull()?.takeIf { it > 0 }
+
+    /**
      * Say that [owner] is about to make sound. Idempotent per owner. Returns
      * whether focus is currently held — callers may play regardless (a denied
      * request is not a reason to break practice), but it is worth logging.

@@ -91,8 +91,10 @@ final class SendingKeyer: ObservableObject {
     init(_ settings: KeyerSettings) {
         decoder = MorseDecoder(wpm: settings.wpm)
         keyerWPM = settings.wpm
-        toneMIDINote = Self.midiNote(forHz: settings.toneHz)
-        keyer.localTxToneMIDI = toneMIDINote
+        toneMIDINote = midiNote(forHz: settings.toneHz)
+        // The exact setting, not `toneMIDINote`: that note is for the adapter's
+        // piezo, and rounding the sidetone to it put it off the app's playback.
+        keyer.localTxFrequency = settings.toneHz
         decoder.onUpdate = { [weak self] text in
             self?.decodedText = text
         }
@@ -186,8 +188,8 @@ final class SendingKeyer: ObservableObject {
     /// `HardwareKey.applyConfig` on Android.
     func applyConfig(_ settings: KeyerSettings) {
         keyerWPM = settings.wpm
-        toneMIDINote = Self.midiNote(forHz: settings.toneHz)
-        keyer.localTxToneMIDI = toneMIDINote
+        toneMIDINote = midiNote(forHz: settings.toneHz)
+        keyer.localTxFrequency = settings.toneHz
         let mode = MIDIOutput.KeyerMode(rawValue: RepeaterModel.storedKeyerMode) ?? .straightKey
         let wpmInt = Int(settings.wpm.rounded())
         let tone = toneMIDINote
@@ -286,15 +288,6 @@ final class SendingKeyer: ObservableObject {
             self.decoder.ingestGap(self.decoder.wordGapMs)
         }
     }
-
-    // MARK: - Helpers
-
-    /// Nearest MIDI note to a frequency in Hz (A4 = 69 = 440 Hz), so the
-    /// sidetone roughly matches the user's chosen tone frequency.
-    private static func midiNote(forHz hz: Double) -> Int {
-        guard hz > 0 else { return 72 }
-        return Int((69 + 12 * log2(hz / 440)).rounded())
-    }
 }
 
 /// Keeps a connected adapter in step with Settings when no keyer screen is
@@ -323,7 +316,7 @@ final class AdapterSettingsSync: ObservableObject {
     func apply(keyerMode: Int, wpm: Double, toneHz: Double) {
         let mode = MIDIOutput.KeyerMode(rawValue: keyerMode) ?? .straightKey
         let wpmInt = Int(wpm.rounded())
-        let tone = Self.midiNote(forHz: toneHz)
+        let tone = midiNote(forHz: toneHz)
         if let out = output {
             Task { await out.applyConfig(keyerMode: mode, wpm: wpmInt, sidetoneMIDINote: tone) }
             return
@@ -341,9 +334,11 @@ final class AdapterSettingsSync: ObservableObject {
             log.error("MIDIOutput init failed for Settings adapter sync: \(error.localizedDescription)")
         }
     }
+}
 
-    private static func midiNote(forHz hz: Double) -> Int {
-        guard hz > 0 else { return 72 }
-        return Int((69 + 12 * log2(hz / 440)).rounded())
-    }
+/// Nearest MIDI note to `hz` (A4 = 69 = 440 Hz), in 0...127, for the Vail
+/// Adapter's piezo. The app's own sidetone plays the exact frequency.
+private func midiNote(forHz hz: Double) -> Int {
+    guard hz > 0 else { return 72 }
+    return min(127, max(0, Int((69 + 12 * log2(hz / 440)).rounded())))
 }

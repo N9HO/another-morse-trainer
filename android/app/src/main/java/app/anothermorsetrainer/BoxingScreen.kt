@@ -103,7 +103,7 @@ fun BoxingScreen(onBack: () -> Unit) {
     val player = remember { MorsePlayer() }
     val keyer = remember { SendingKeyer() }
     val midi = remember { HardwareKey(context) }
-    AdapterConfigSync(midi)
+    AdapterConfigSync(midi, keyer)
     val scope = rememberCoroutineScope()
     val keying = remember { BoxingKeying() }
 
