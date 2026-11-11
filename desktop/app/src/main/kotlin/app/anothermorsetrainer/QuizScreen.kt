@@ -825,7 +825,7 @@ fun QuizScreen(
                     Spacer(Modifier.height(6.dp))
                 }
                 KeyedAnswerPanel(
-                    decoded = keyer.decodedText,
+                    decoded = keyer.shownText,
                     keyPressed = keyPressed,
                     enabled = !revealed || ackAwaiting,
                     midiDevice = midiDevice,

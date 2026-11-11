@@ -472,9 +472,9 @@ private struct HuntKeyPanel: View {
                         .font(.caption).foregroundStyle(Theme.teal).lineLimit(1)
                 }
             }
-            Text(sender.decodedText.isEmpty ? "—" : sender.decodedText)
+            Text(sender.shownText.isEmpty ? "—" : sender.shownText)
                 .font(Theme.copyFont(size: 26, weight: .semibold, monospaced: true, slashedZero: model.settings.slashedZero))
-                .foregroundStyle(sender.decodedText.isEmpty ? Theme.textSecondary : .white)
+                .foregroundStyle(sender.shownText.isEmpty ? Theme.textSecondary : .white)
                 .lineLimit(1).minimumScaleFactor(0.5)
                 .frame(maxWidth: .infinity, minHeight: 36)
             OnScreenKey(sender: sender, height: keyHeight, hint: "Press and hold to send each dit and dah")
