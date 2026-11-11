@@ -29,6 +29,10 @@ final class SendingKeyer: ObservableObject {
     /// Decoded text so far (finalized characters; trailing in-progress character
     /// appears once its letter gap elapses).
     @Published private(set) var decodedText = ""
+    /// `decodedText` as a readout shows it: without the space the decoder
+    /// appends once a word gap passes, which shifted a centred readout half a
+    /// character left a moment after each word. Mirrors Kotlin `shownText`.
+    var shownText: String { decodedText.droppingTrailingSpaces }
     /// True while a key is held down (drives the on-screen key's pressed look).
     @Published private(set) var isKeying = false
     /// Names of the connected hardware keys (Vail Adapter / BLE-MIDI), live
@@ -361,4 +365,14 @@ final class AdapterSettingsSync: ObservableObject {
 private func midiNote(forHz hz: Double) -> Int {
     guard hz > 0 else { return 72 }
     return min(127, max(0, Int((69 + 12 * log2(hz / 440)).rounded())))
+}
+
+extension String {
+    /// Without its trailing spaces, as a keyed readout shows the decoder's
+    /// text (`SendingKeyer.shownText`, `KeyedTextHeader`).
+    var droppingTrailingSpaces: String {
+        var text = self
+        while text.last == " " { text.removeLast() }
+        return text
+    }
 }

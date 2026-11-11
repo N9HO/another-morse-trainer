@@ -459,7 +459,7 @@ fun SendingPracticeScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Un
             ) {
                 Text(stringResource(R.string.common_you_sent), fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Brand.textSecondary)
                 Spacer(Modifier.height(4.dp))
-                val decoded = keyer.decodedText
+                val decoded = keyer.shownText
                 Text(
                     text = if (decoded.isEmpty()) "—" else decoded,
                     fontSize = 32.sp,

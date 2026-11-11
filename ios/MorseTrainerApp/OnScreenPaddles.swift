@@ -507,7 +507,9 @@ struct KeyedTextHeader: View {
                 .font(.caption)
                 .foregroundStyle(Theme.textSecondary)
             Spacer()
-            Text(text.isEmpty ? "—" : text)
+            // Never the decoder's trailing word space: it shifted the text left.
+            // A text that is only the decoder's word space shows the placeholder.
+            Text(text.droppingTrailingSpaces.isEmpty ? "—" : text.droppingTrailingSpaces)
                 .font(Theme.copyFont(size: 22, weight: .semibold, monospaced: true, slashedZero: slashedZero))
                 .foregroundStyle(.white)
             if hardwareKeyConnected {

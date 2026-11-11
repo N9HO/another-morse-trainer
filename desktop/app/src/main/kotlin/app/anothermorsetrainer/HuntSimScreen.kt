@@ -369,11 +369,11 @@ private fun HuntRun(config: HuntConfig, call: String, state: String, onDone: (Hu
         HuntCard {
             HuntEyebrow(stringResource(R.string.hunt_you_sent))
             Text(
-                keyer.decodedText.ifEmpty { "—" },
+                keyer.shownText.ifEmpty { "—" },
                 fontFamily = FontFamily.Monospace,
                 fontWeight = FontWeight.SemiBold,
                 fontSize = 26.sp,
-                color = if (keyer.decodedText.isEmpty()) Brand.textSecondary else Brand.textPrimary,
+                color = if (keyer.shownText.isEmpty()) Brand.textSecondary else Brand.textPrimary,
                 textAlign = TextAlign.Center,
                 maxLines = 1,
                 modifier = Modifier.fillMaxWidth().heightIn(min = 36.dp)

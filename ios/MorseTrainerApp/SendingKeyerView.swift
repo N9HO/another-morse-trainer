@@ -74,10 +74,10 @@ struct SendingKeyerView: View {
             Text("YOU SENT")
                 .font(.system(size: 10, weight: .bold)).tracking(1.5)
                 .foregroundStyle(Theme.textSecondary)
-            Text(sender.decodedText.isEmpty ? "—" : sender.decodedText)
+            Text(sender.shownText.isEmpty ? "—" : sender.shownText)
                 .font(Theme.copyFont(size: 34, weight: .semibold, monospaced: true,
                                      slashedZero: model.settings.slashedZero))
-                .foregroundStyle(sender.decodedText.isEmpty ? Theme.textSecondary : .white)
+                .foregroundStyle(sender.shownText.isEmpty ? Theme.textSecondary : .white)
                 .lineLimit(1).minimumScaleFactor(0.5)
                 .frame(maxWidth: .infinity, minHeight: 50)
         }

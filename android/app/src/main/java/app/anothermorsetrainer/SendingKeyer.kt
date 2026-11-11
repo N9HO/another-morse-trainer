@@ -30,6 +30,13 @@ class SendingKeyer(wpm: Double = Settings.characterWpm, toneHz: Double = Setting
     var decodedText by mutableStateOf("")
         private set
 
+    /**
+     * [decodedText] as a readout shows it: without the space the decoder
+     * appends once a word gap passes, which shifted a centred readout half a
+     * character left a moment after each word. Mirrors iOS `shownText`.
+     */
+    val shownText: String get() = decodedText.trimEnd()
+
     /** True while the key is held down (drives the pressed look). */
     var isKeying by mutableStateOf(false)
         private set

@@ -1049,11 +1049,11 @@ private fun FirstFourKeyPanel(expected: String, resetToken: Int, onSubmit: (Stri
             midiDevice?.let { Text("🎹 $it", fontSize = 12.sp, color = Brand.teal, maxLines = 1) }
         }
         Text(
-            keyer.decodedText.ifEmpty { "—" },
+            keyer.shownText.ifEmpty { "—" },
             fontFamily = FontFamily.Monospace,
             fontWeight = FontWeight.SemiBold,
             fontSize = 26.sp,
-            color = if (keyer.decodedText.isEmpty()) Brand.textSecondary else Brand.textPrimary,
+            color = if (keyer.shownText.isEmpty()) Brand.textSecondary else Brand.textPrimary,
             textAlign = TextAlign.Center,
             maxLines = 1,
             modifier = Modifier.fillMaxWidth().heightIn(min = 36.dp)
