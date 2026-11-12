@@ -90,10 +90,19 @@ final class BoxingController: ObservableObject {
     private static let splashMs = 7000
 
     @Published private(set) var screen = Screen.splash
-    /// Bumped each frame so the views redraw.
+    /// Bumped at most `artFrameMs` apart so the views redraw. The rules run
+    /// every frame; the ring is re-painted in software, so redrawing it on
+    /// every frame (up to 120 a second) made the game stutter, and 30 a
+    /// second is plenty for pixel art.
     @Published private(set) var tick = 0
+    /// The last `artFrameMs` slot a redraw was published for.
+    private var lastArtFrame: UInt32 = .max
+    static let artFrameMs: UInt32 = 33
     @Published var pick = 0
-    @Published private(set) var fight: BoxingFight?
+    /// Not published: a fight changes every frame, and the throttled `tick`
+    /// is what redraws it. Every other change to it comes with a published
+    /// one (`screen`, or the next tick).
+    private(set) var fight: BoxingFight?
     @Published private(set) var career: BoxingCareer
     @Published private(set) var stage = 0
     @Published private(set) var opened = false
@@ -250,7 +259,11 @@ final class BoxingController: ObservableObject {
         default:
             break
         }
-        tick &+= 1
+        let artFrame = now / Self.artFrameMs
+        if artFrame != lastArtFrame {
+            lastArtFrame = artFrame
+            tick &+= 1
+        }
     }
 
     private func stepFight(_ now: UInt32) {

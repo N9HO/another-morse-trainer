@@ -60,6 +60,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.sp
 import app.anothermorsetrainer.morsekit.InvadersCharacterSet
 import app.anothermorsetrainer.morsekit.InvadersDifficulty
@@ -414,12 +415,15 @@ fun InvadersScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
             }
             InvPhase.RUNNING -> {
                 BackHandler { abandonRun() }
+                // Built once a game, not every frame: a fresh list each frame
+                // rebuilt the whole keyboard 120 times a second.
+                val runPool = remember(game) { characterPool() }
                 InvadersRun(
                     input = input,
-                    field = field,
+                    field = { field },
                     score = score, wave = wave, lives = lives, multiplier = multiplier, wpm = wpm,
                     flash = flash,
-                    pool = characterPool(),
+                    pool = runPool,
                     decoded = keyer.decodedText,
                     keyPressed = keyPressed,
                     midiDevice = midiDevice,
@@ -507,7 +511,9 @@ private fun InvadersSetup(
 @Composable
 private fun InvadersRun(
     input: InvadersInput,
-    field: List<Invader>,
+    // Read only while drawing, so a frame that moves the invaders redraws the
+    // field without recomposing the screen (that cost about 6 ms a frame).
+    field: () -> List<Invader>,
     score: Int, wave: Int, lives: Int, multiplier: Int, wpm: Int,
     flash: Pair<String, Long>?,
     pool: List<Char>,
@@ -522,6 +528,11 @@ private fun InvadersRun(
     onSwitchMode: (TrainingMode) -> Unit
 ) {
     val measurer = rememberTextMeasurer()
+    // The alien (#179), drawn once into a bitmap and stamped per invader:
+    // painting its 46 squares one by one for every invader, every frame, made
+    // the field slow to draw.
+    val density = LocalDensity.current
+    val sprite = remember(density) { pixelSprite(INVADER_SPRITE, with(density) { 3.dp.toPx() }, Brand.tealBright) }
     Column(modifier = Modifier.fillMaxSize().widthIn(max = CONTENT_MAX_WIDTH).padding(horizontal = 16.dp)) {
         Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             TextButton(onClick = onEnd) { Text(stringResource(R.string.invaders_end_game), color = Brand.teal) }
@@ -565,17 +576,10 @@ private fun InvadersRun(
             val reach = 18.dp.toPx()
             // The alien (#179) instead of a "?", which read as a literal
             // character: 3 dp a pixel, 33×24 dp, about what the glyph took.
-            val px = 3.dp.toPx()
             fun drawSprite(cx: Float, cy: Float) {
-                val ox = cx - INVADER_SPRITE[0].length * px / 2
-                val oy = cy - INVADER_SPRITE.size * px / 2
-                INVADER_SPRITE.forEachIndexed { r, row ->
-                    row.forEachIndexed { c, cell ->
-                        if (cell == '#') drawRect(Brand.tealBright, Offset(ox + c * px, oy + r * px), Size(px, px))
-                    }
-                }
+                drawImage(sprite, topLeft = Offset(cx - sprite.width / 2f, cy - sprite.height / 2f))
             }
-            for (inv in field) {
+            for (inv in field()) {
                 val x = (inv.column + 0.5f) * colWidth
                 val y = top + inv.progress.toFloat() * (ground - top - reach)
                 // ICR keeps the character to the ear; keying shows it directly

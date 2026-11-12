@@ -1,5 +1,7 @@
 package app.anothermorsetrainer
 
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.platform.LocalDensity
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -417,13 +419,16 @@ fun GalagaScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) 
             }
             GalPhase.RUNNING -> {
                 BackHandler { abandonRun() }
+                // Built once a game, not every frame: a fresh list each frame
+                // rebuilt the whole keyboard 60-120 times a second.
+                val runPool = remember(game) { characterPool() }
                 GalagaRun(
                     input = input,
-                    field = field,
+                    field = { field },
                     columns = columns,
                     score = score, wave = wave, lives = lives, multiplier = multiplier, wpm = wpm,
                     flash = flash,
-                    pool = characterPool(),
+                    pool = runPool,
                     decoded = keyer.decodedText,
                     keyPressed = keyPressed,
                     midiDevice = midiDevice,
@@ -529,7 +534,9 @@ private fun GalagaSetup(
 @Composable
 private fun GalagaRun(
     input: InvadersInput,
-    field: List<GalagaEnemy>,
+    // Read only while drawing (and by the tap handler), so a frame that moves
+    // the enemies redraws the field without recomposing the screen.
+    field: () -> List<GalagaEnemy>,
     columns: Int,
     score: Int, wave: Int, lives: Int, multiplier: Int, wpm: Int,
     flash: Pair<String, Long>?,
@@ -545,6 +552,16 @@ private fun GalagaRun(
     onSwitchMode: (TrainingMode) -> Unit
 ) {
     val measurer = rememberTextMeasurer()
+    // The sprite drawn once per tint into a bitmap and stamped per enemy:
+    // painting its squares one by one for up to 24 enemies, every frame, made
+    // the field slow to draw. Send mode's labels are measured once per
+    // character for the same reason.
+    val density = LocalDensity.current
+    val sprites = remember(density) {
+        val px = with(density) { 3.dp.toPx() }
+        pixelSprite(GALAGA_SPRITE, px, Brand.teal) to pixelSprite(GALAGA_SPRITE, px, Brand.tealBright)
+    }
+    val labels = remember(density) { HashMap<Char, TextLayoutResult>() }
     // The tap handler reads the field as it is now without restarting on
     // every frame, which would cancel a tap in progress.
     val latestField = rememberUpdatedState(field)
@@ -589,7 +606,7 @@ private fun GalagaRun(
                         val top = 18.dp.toPx()
                         val bottom = size.height - 36.dp.toPx()
                         val cols = latestColumns.value
-                        val nearest = latestField.value.minByOrNull { e ->
+                        val nearest = latestField.value().minByOrNull { e ->
                             val p = canvasPoint(GalagaPath.position(e, cols), size.width.toFloat(), size.height.toFloat(), inset, top, bottom)
                             hypot(p.x - offset.x, p.y - offset.y)
                         }
@@ -614,24 +631,18 @@ private fun GalagaRun(
             val top = (if (input == InvadersInput.KEYING) 30.dp else 18.dp).toPx()
             val bottom = size.height - 36.dp.toPx()
             // The sprite: 3 dp a pixel, 33×24 dp, the Invaders sprite's size.
-            val px = 3.dp.toPx()
             fun drawSprite(cx: Float, cy: Float, tint: androidx.compose.ui.graphics.Color) {
-                val ox = cx - GALAGA_SPRITE[0].length * px / 2
-                val oy = cy - GALAGA_SPRITE.size * px / 2
-                GALAGA_SPRITE.forEachIndexed { r, row ->
-                    row.forEachIndexed { c, cell ->
-                        if (cell == '#') drawRect(tint, Offset(ox + c * px, oy + r * px), Size(px, px))
-                    }
-                }
+                val sprite = if (tint == Brand.tealBright) sprites.second else sprites.first
+                drawImage(sprite, topLeft = Offset(cx - sprite.width / 2f, cy - sprite.height / 2f))
             }
-            for (enemy in field) {
+            for (enemy in field()) {
                 val p = canvasPoint(GalagaPath.position(enemy, columns), size.width, size.height, inset, top, bottom)
                 val tint = if (enemy.state == GalagaEnemyState.DIVING) Brand.tealBright else Brand.teal
                 // Copy mode keeps the character to the ear; send mode shows
                 // it directly above the sprite to key.
                 if (input == InvadersInput.KEYING) {
                     drawSprite(p.x, p.y + 6.dp.toPx(), tint)
-                    val measured = measurer.measure(enemy.character.toString(), labelStyle)
+                    val measured = labels.getOrPut(enemy.character) { measurer.measure(enemy.character.toString(), labelStyle) }
                     drawText(measured, topLeft = Offset(p.x - measured.size.width / 2, p.y - 14.dp.toPx() - measured.size.height / 2))
                 } else {
                     drawSprite(p.x, p.y, tint)

@@ -1,5 +1,8 @@
 package app.anothermorsetrainer
 
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -478,15 +481,19 @@ fun DefenderScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
                         chunk.uppercase().filter { it in pool }.forEach { typedKey(it) }
                     })
                 }
+                // Built once a game, not every frame: the keyboard's alphabet was
+                // a fresh list on every recomposition, so the keys could never
+                // be skipped.
+                val runPool = remember(game) { game?.keyboardPool.orEmpty() }
                 DefenderRun(
                     input = input,
-                    attackers = attackers,
+                    attackers = { attackers },
                     assets = assets,
                     score = score, wave = wave, live = live, total = total, multiplier = multiplier, wpm = wpm,
                     flash = flash,
                     struck = struck,
                     typed = typed,
-                    pool = game?.keyboardPool ?: emptyList(),
+                    pool = runPool,
                     onRoute = { routeTo(it) },
                     onType = { typedKey(it) },
                     onBackspace = { if (typed.isNotEmpty()) typed = typed.dropLast(1) },
@@ -582,7 +589,9 @@ private fun DefenderSetup(
 @Composable
 private fun DefenderRun(
     input: DefenderInput,
-    attackers: List<DefenderAttacker>,
+    // Read only while drawing, so a frame that moves the attackers redraws
+    // the field without recomposing the screen.
+    attackers: () -> List<DefenderAttacker>,
     assets: List<DefenderAsset>,
     score: Int, wave: Int, live: Int, total: Int, multiplier: Int, wpm: Int,
     flash: Pair<String, Long>?,
@@ -596,6 +605,16 @@ private fun DefenderRun(
     onEnd: () -> Unit,
     onSwitchMode: (TrainingMode) -> Unit
 ) {
+    // Each sprite drawn once into a bitmap and stamped, and each callsign
+    // measured once: drawing every square and measuring every label on every
+    // frame made the field slow to draw.
+    val density = LocalDensity.current
+    val sprites = remember(density) {
+        val px = with(density) { 3.dp.toPx() }
+        pixelSprite(DEFENDER_CITY_SPRITE, px, Brand.tealBright) to
+            pixelSprite(DEFENDER_ATTACKER_SPRITE, px, DEFENDER_ATTACKER_COLOR)
+    }
+    val labels = remember(density) { HashMap<Pair<String, Boolean>, TextLayoutResult>() }
     val measurer = rememberTextMeasurer()
     val columns = DefenderGame.defaultColumns
     Column(modifier = Modifier.fillMaxSize().widthIn(max = CONTENT_MAX_WIDTH).padding(horizontal = 16.dp)) {
@@ -643,15 +662,8 @@ private fun DefenderRun(
         ) {
             val rowTop = size.height - DEFENDER_ASSET_ROW.toPx()
             drawLine(Brand.teal.copy(alpha = 0.4f), Offset(0f, rowTop), Offset(size.width, rowTop), strokeWidth = 1.dp.toPx())
-            val px = 3.dp.toPx()
-            fun drawSprite(sprite: List<String>, cx: Float, cy: Float, color: Color) {
-                val ox = cx - sprite[0].length * px / 2
-                val oy = cy - sprite.size * px / 2
-                sprite.forEachIndexed { r, row ->
-                    row.forEachIndexed { c, cell ->
-                        if (cell == '#') drawRect(color, Offset(ox + c * px, oy + r * px), Size(px, px))
-                    }
-                }
+            fun drawSprite(sprite: ImageBitmap, cx: Float, cy: Float) {
+                drawImage(sprite, topLeft = Offset(cx - sprite.width / 2f, cy - sprite.height / 2f))
             }
             // Assets along the bottom, evenly spaced; rubble stays in place.
             val now = System.currentTimeMillis()
@@ -659,12 +671,12 @@ private fun DefenderRun(
             assets.forEachIndexed { i, asset ->
                 val x = (i + 0.5f) * slot
                 if (asset.isAlive) {
-                    drawSprite(DEFENDER_CITY_SPRITE, x, rowTop + 16.dp.toPx(), Brand.tealBright)
-                    val measured = measurer.measure(asset.callsign, callStyle)
+                    drawSprite(sprites.first, x, rowTop + 16.dp.toPx())
+                    val measured = labels.getOrPut(asset.callsign to true) { measurer.measure(asset.callsign, callStyle) }
                     drawText(measured, topLeft = Offset(x - measured.size.width / 2, rowTop + 40.dp.toPx() - measured.size.height / 2))
                 } else {
                     drawRect(Brand.textSecondary.copy(alpha = 0.4f), Offset(x - 12.dp.toPx(), rowTop + 22.dp.toPx()), Size(24.dp.toPx(), 6.dp.toPx()))
-                    val measured = measurer.measure(asset.callsign, rubbleStyle)
+                    val measured = labels.getOrPut(asset.callsign to false) { measurer.measure(asset.callsign, rubbleStyle) }
                     drawText(measured, topLeft = Offset(x - measured.size.width / 2, rowTop + 40.dp.toPx() - measured.size.height / 2))
                 }
                 if (struck != null && struck.first == asset.id && struck.second > now) {
@@ -675,10 +687,10 @@ private fun DefenderRun(
             // each is heading — only the callsign it sent does.
             val colWidth = size.width / columns
             val top = 18.dp.toPx()
-            for (a in attackers) {
+            for (a in attackers()) {
                 val x = (a.column + 0.5f) * colWidth
                 val y = top + a.progress.toFloat() * (rowTop - top - 14.dp.toPx())
-                drawSprite(DEFENDER_ATTACKER_SPRITE, x, y, DEFENDER_ATTACKER_COLOR)
+                drawSprite(sprites.second, x, y)
             }
             if (flash != null && flash.second > now) {
                 val measured = measurer.measure(flash.first, flashStyle)

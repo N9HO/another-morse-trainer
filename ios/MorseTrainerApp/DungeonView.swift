@@ -22,10 +22,15 @@ struct DungeonView: View {
     /// Play again while sharing is off and unanswered, never mid-game.
     @State private var optInPrompt = false
     @State private var game: DungeonGame?
-    /// A snapshot of the room for drawing; refreshed every frame from `game`.
+    /// A snapshot of the room for drawing, refreshed when it changes. The
+    /// attack window's drain is read straight from `game` while drawing, so a
+    /// frame that only drains it re-renders nothing else.
     @State private var scene = Scene()
     @State private var hud = HUD()
-    @State private var lastFrame: Date?
+    /// What every frame touches (`ArcadeFrame`), in a reference so writing
+    /// it does not re-render the view.
+    @State private var loop = ArcadeFrame()
+
     /// A flash of feedback on the room: the last counter's points, or what hit you.
     @State private var flashText = ""
     @State private var flashUntil = Date.distantPast
@@ -42,8 +47,6 @@ struct DungeonView: View {
         var casterId: Int?
         /// True while the spell is still sounding.
         var sending = false
-        /// The attack window left, 0…1, once the spell has sounded.
-        var windowFraction: Double?
     }
 
     private struct HUD: Equatable {
@@ -175,7 +178,7 @@ struct DungeonView: View {
             hudBar
             GeometryReader { geo in
                 TimelineView(.animation) { context in
-                    canvas(size: geo.size)
+                    canvas(size: geo.size, now: context.date)
                         // The frame clock: every tick moves the game on by the
                         // real time elapsed, so a dropped frame costs no time.
                         .onChange(of: context.date) { now in step(now: now) }
@@ -239,8 +242,12 @@ struct DungeonView: View {
         }
     }
 
-    private func canvas(size: CGSize) -> some View {
+    /// `now` is the frame's time, and the drawing reads it: that is what makes
+    /// each tick a new canvas to SwiftUI. The window's drain comes from
+    /// `game`, which a frame changes without touching any state.
+    private func canvas(size: CGSize, now: Date) -> some View {
         Canvas { context, size in
+            let windowFraction = game.flatMap(Self.windowFraction)
             // The floor: a tile grid inside a wall.
             let tile: CGFloat = 28
             var grid = Path()
@@ -278,7 +285,7 @@ struct DungeonView: View {
                     if scene.sending {
                         context.draw(Text("· · ·").font(.headline).foregroundColor(Theme.tealBright),
                                      at: CGPoint(x: cx, y: monsterY - 48))
-                    } else if let f = scene.windowFraction {
+                    } else if let f = windowFraction {
                         // The attack window, draining under the caster.
                         let barWidth: CGFloat = 60
                         let bar = CGRect(x: cx - barWidth / 2, y: monsterY + 40, width: barWidth, height: 6)
@@ -294,7 +301,7 @@ struct DungeonView: View {
             context.fill(DungeonSprites.path(for: nil, centre: CGPoint(x: size.width / 2, y: size.height - 44)),
                          with: .color(Theme.teal))
 
-            if flashUntil > Date() {
+            if flashUntil > now {
                 context.draw(Text(flashText).font(.headline).foregroundColor(Theme.tealBright),
                              at: CGPoint(x: size.width / 2, y: size.height / 2 + 24))
             }
@@ -364,7 +371,7 @@ struct DungeonView: View {
         let g = DungeonGame(config: config)
         game = g
         flashUntil = .distantPast
-        lastFrame = nil
+        loop.reset()
         keyedSoFar = ""
         keyReset += 1
         syncScene(g)
@@ -374,11 +381,7 @@ struct DungeonView: View {
 
     private func step(now: Date) {
         guard phase == .playing, let game else { return }
-        defer { lastFrame = now }
-        guard let last = lastFrame else { return }
-        // Cap a long gap (the app was backgrounded) so a whole window does
-        // not close in one step.
-        let dt = min(0.1, now.timeIntervalSince(last))
+        guard let dt = loop.step(to: now) else { return }
         for event in game.advance(by: dt) {
             switch event {
             case .cast(let cast):
@@ -438,13 +441,15 @@ struct DungeonView: View {
     }
 
     private func syncScene(_ g: DungeonGame) {
-        var fraction: Double?
-        if let cast = g.pendingCast, !g.isSending {
-            fraction = max(0, min(1, (g.windowRemaining ?? 0) / max(0.001, cast.window)))
-        }
         let next = Scene(room: g.room, monsters: g.monsters, casterId: g.pendingCast?.monsterId,
-                         sending: g.isSending, windowFraction: fraction)
+                         sending: g.isSending)
         if next != scene { scene = next }
+    }
+
+    /// The attack window left, 0…1, once the spell has sounded; nil otherwise.
+    private static func windowFraction(_ g: DungeonGame) -> Double? {
+        guard let cast = g.pendingCast, !g.isSending else { return nil }
+        return max(0, min(1, (g.windowRemaining ?? 0) / max(0.001, cast.window)))
     }
 
     private func syncHUD(_ g: DungeonGame) {

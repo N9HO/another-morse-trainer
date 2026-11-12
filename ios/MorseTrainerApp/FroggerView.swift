@@ -24,10 +24,14 @@ struct FroggerView: View {
     /// Play again while sharing is off and unanswered, never mid-game.
     @State private var optInPrompt = false
     @State private var game: FroggerGame?
-    /// A snapshot of the board for drawing; refreshed every frame from `game`.
+    /// What the board shows that changes only on a hop, a cue or a stage:
+    /// the canvas draws the traffic and the frog's position straight from
+    /// `game`, so a frame that only moves them re-renders nothing else.
     @State private var board = Board()
     @State private var hud = HUD()
-    @State private var lastFrame: Date?
+    /// What every frame touches (`ArcadeFrame`), in a reference so writing
+    /// it does not re-render the view.
+    @State private var loop = ArcadeFrame()
     /// When each lane's cue finished sounding, by row, so a decision's
     /// time-to-recognize runs from the end of the tone.
     @State private var cueToneEnd: [Int: Date] = [:]
@@ -40,8 +44,7 @@ struct FroggerView: View {
     @State private var flashUntil = Date.distantPast
 
     private struct Board: Equatable {
-        var objects: [FroggerObject] = []
-        var frog = FroggerFrog(row: 0, x: 0.5)
+        var frogRow = 0
         var visibleRows: Set<Int> = []
         var nextCueRow: Int?
     }
@@ -164,7 +167,7 @@ struct FroggerView: View {
             hudBar
             GeometryReader { _ in
                 TimelineView(.animation) { context in
-                    canvas
+                    canvas(now: context.date)
                         // The frame clock: every tick moves the game on by the
                         // real time elapsed, so a dropped frame costs no distance.
                         .onChange(of: context.date) { now in step(now: now) }
@@ -223,8 +226,13 @@ struct FroggerView: View {
         }
     }
 
-    private var canvas: some View {
+    /// `now` is the frame's time, and the drawing reads it: that is what makes
+    /// each tick a new canvas to SwiftUI. The traffic and the frog come from
+    /// `game`, which a frame changes without touching any state.
+    private func canvas(now: Date) -> some View {
         Canvas { context, size in
+            let objects = game?.objects ?? []
+            let frog = game?.frog ?? FroggerFrog(row: 0, x: 0.5)
             let rowHeight = size.height / CGFloat(FroggerGame.rows)
             let font = Theme.copyFont(size: min(20, rowHeight * 0.5), weight: .bold, monospaced: true,
                                       slashedZero: model.settings.slashedZero)
@@ -257,7 +265,7 @@ struct FroggerView: View {
             }
 
             // Vehicles and logs, drawn twice where they straddle an edge.
-            for object in board.objects {
+            for object in objects {
                 let w = CGFloat(object.width) * size.width
                 let h = rowHeight * (object.kind == .road ? 0.58 : 0.5)
                 let y = top(of: object.row) + (rowHeight - h) / 2
@@ -276,8 +284,8 @@ struct FroggerView: View {
 
             // The frog.
             let frogSize = min(rowHeight * 0.62, size.width * CGFloat(FroggerGame.hop) * 0.8)
-            let fx = CGFloat(board.frog.x) * size.width
-            let fy = top(of: board.frog.row) + rowHeight / 2
+            let fx = CGFloat(frog.x) * size.width
+            let fy = top(of: frog.row) + rowHeight / 2
             let frogRect = CGRect(x: fx - frogSize / 2, y: fy - frogSize / 2, width: frogSize, height: frogSize)
             context.fill(Path(roundedRect: frogRect, cornerRadius: frogSize * 0.35), with: .color(Self.frogColor))
             let eye = frogSize * 0.16
@@ -286,7 +294,7 @@ struct FroggerView: View {
                 context.fill(Path(ellipseIn: e), with: .color(Theme.navy))
             }
 
-            if flashUntil > Date() {
+            if flashUntil > now {
                 context.draw(Text(flashText).font(.headline).foregroundColor(Theme.tealBright),
                              at: CGPoint(x: size.width / 2, y: rowHeight / 2))
             }
@@ -297,7 +305,7 @@ struct FroggerView: View {
             .strokeBorder(Theme.hairline, lineWidth: 1))
         .contentShape(Rectangle())
         .onTapGesture { replayCue() }
-        .accessibilityLabel("Board: frog on row \(board.frog.row) of \(FroggerGame.rows - 1)")
+        .accessibilityLabel("Board: frog on row \(board.frogRow) of \(FroggerGame.rows - 1)")
     }
 
     /// Hear the next lane's cue again.
@@ -384,7 +392,7 @@ struct FroggerView: View {
         soundQueue = []
         soundBusyUntil = .distantPast
         flashUntil = .distantPast
-        lastFrame = nil
+        loop.reset()
         syncBoard(g)
         syncHUD(g)
         phase = .playing
@@ -394,11 +402,7 @@ struct FroggerView: View {
 
     private func step(now: Date) {
         guard phase == .playing, let game else { return }
-        defer { lastFrame = now }
-        guard let last = lastFrame else { return }
-        // Cap a long gap (the app was backgrounded) so the traffic does not
-        // sweep the board in one step.
-        let dt = min(0.1, now.timeIntervalSince(last))
+        guard let dt = loop.step(to: now) else { return }
         handle(game.advance(by: dt), game: game, now: now)
         if now >= soundBusyUntil, !soundQueue.isEmpty {
             let next = soundQueue.removeFirst()
@@ -481,7 +485,7 @@ struct FroggerView: View {
     }
 
     private func syncBoard(_ g: FroggerGame) {
-        let next = Board(objects: g.objects, frog: g.frog,
+        let next = Board(frogRow: g.frog.row,
                          visibleRows: Set(FroggerGame.lanes.map(\.row).filter { g.isLabelVisible(row: $0) }),
                          nextCueRow: g.nextCueRow)
         if next != board { board = next }

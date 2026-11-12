@@ -25,11 +25,15 @@ struct AsteroidsView: View {
     /// Play again while sharing is off and unanswered, never mid-game.
     @State private var optInPrompt = false
     @State private var game: AsteroidsGame?
-    /// A snapshot of the field for drawing; refreshed every frame from `game`.
+    /// Who is on the field, for the accessibility count: refreshed when a
+    /// rock arrives or leaves. The canvas draws positions and spin straight
+    /// from `game`, so a frame that only moves rocks re-renders nothing else.
     @State private var field: [Asteroid] = []
-    @State private var elapsed = 0.0
     @State private var hud = HUD()
-    @State private var lastFrame: Date?
+    /// What every frame touches (`ArcadeFrame`), in a reference so writing
+    /// it does not re-render the view.
+    @State private var loop = ArcadeFrame()
+
     /// Copy mode: when the armed label finished sounding, so a hit's
     /// time-to-recognize runs from the end of the tone.
     @State private var cueEnd: Date?
@@ -156,7 +160,7 @@ struct AsteroidsView: View {
             hudBar
             GeometryReader { geo in
                 TimelineView(.animation) { context in
-                    canvas(size: geo.size)
+                    canvas(size: geo.size, now: context.date)
                         // The frame clock: every tick moves the game on by the
                         // real time elapsed, so a dropped frame costs no distance.
                         .onChange(of: context.date) { now in step(now: now) }
@@ -253,8 +257,13 @@ struct AsteroidsView: View {
         CGPoint(x: CGFloat(a.x) * size.width, y: CGFloat(a.y) * size.height)
     }
 
-    private func canvas(size: CGSize) -> some View {
+    /// `now` is the frame's time, and the drawing reads it: that is what makes
+    /// each tick a new canvas to SwiftUI. The rocks and the clock come from
+    /// `game`, which a frame changes without touching any state.
+    private func canvas(size: CGSize, now: Date) -> some View {
         Canvas { context, size in
+            let field = game?.asteroids ?? []
+            let elapsed = game?.elapsed ?? 0
             let centre = CGPoint(x: size.width / 2, y: size.height / 2)
             let font = Theme.copyFont(size: 17, weight: .bold, monospaced: true,
                                       slashedZero: model.settings.slashedZero)
@@ -286,7 +295,7 @@ struct AsteroidsView: View {
                 context.stroke(rock, with: .color(Theme.tealBright), lineWidth: a.isFragment ? 1 : 1.5)
                 context.draw(Text(a.label).font(font).foregroundColor(.white), at: p)
             }
-            if flashUntil > Date() {
+            if flashUntil > now {
                 context.draw(Text(flashText).font(.headline).foregroundColor(Theme.tealBright),
                              at: CGPoint(x: size.width / 2, y: 14))
             }
@@ -312,7 +321,7 @@ struct AsteroidsView: View {
         guard case .rock(let id) = AsteroidsHitTest.target(
             x: Double(location.x), y: Double(location.y),
             width: Double(size.width), height: Double(size.height),
-            density: 1, field: field) else { return }
+            density: 1, field: game.asteroids) else { return }
         let now = Date()
         let shot = game.tap(id)
         resolve(shot, now: now)
@@ -372,22 +381,17 @@ struct AsteroidsView: View {
         // timing bound to measure: only hear-it runs are ranked (#leaderboard).
         if input == .send { model.leaderboardCancelRun() }
         field = []
-        elapsed = 0
         cueEnd = nil
         sendBuffer = ""
         flashUntil = .distantPast
-        lastFrame = nil
+        loop.reset()
         syncHUD(g)
         phase = .playing
     }
 
     private func step(now: Date) {
         guard phase == .playing, let game else { return }
-        defer { lastFrame = now }
-        guard let last = lastFrame else { return }
-        // Cap a long gap (the app was backgrounded) so the field does not
-        // empty onto the ship in one step.
-        let dt = min(0.1, now.timeIntervalSince(last))
+        guard let dt = loop.step(to: now) else { return }
         for event in game.advance(by: dt) {
             switch event {
             case .spawned:
@@ -454,8 +458,7 @@ struct AsteroidsView: View {
     }
 
     private func sync(_ g: AsteroidsGame) {
-        field = g.asteroids
-        elapsed = g.elapsed
+        if field.map(\.id) != g.asteroids.map(\.id) { field = g.asteroids }
         if sendBuffer != g.sendBuffer { sendBuffer = g.sendBuffer }
         syncHUD(g)
     }
