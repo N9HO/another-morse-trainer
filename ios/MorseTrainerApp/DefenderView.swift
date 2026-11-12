@@ -35,9 +35,6 @@ struct DefenderView: View {
     /// What every frame touches (`ArcadeFrame`), in a reference so writing
     /// it does not re-render the view.
     @State private var loop = ArcadeFrame()
-    /// When each attacker's callsign finished sounding, keyed by attacker id,
-    /// so a hit's time-to-recognize runs from the end of the tone.
-    @State private var toneEnd: [Int: Date] = [:]
 
     /// The callsign typed so far (typed input).
     @State private var typed = ""
@@ -348,7 +345,8 @@ struct DefenderView: View {
         } else {
             let column = Int(location.x / max(1, size.width) * CGFloat(columns))
             guard let nearest = game.attackers.min(by: { abs($0.column - column) < abs($1.column - column) }) else { return }
-            model.playDefenderCallsign(nearest.callsign, wpm: game.currentWpm)
+            loop.announcer.replay(nearest.callsign)
+            announce(now: Date())
         }
     }
 
@@ -454,7 +452,6 @@ struct DefenderView: View {
         game = g
         attackers = []
         assets = g.assets
-        toneEnd = [:]
         typed = ""
         flashUntil = .distantPast
         struckId = nil
@@ -469,12 +466,10 @@ struct DefenderView: View {
         for event in game.advance(by: dt) {
             switch event {
             case .launched(let a):
-                // At the ramp's current speed, which the hits and strikes in
-                // this same step may just have moved.
-                let duration = model.playDefenderCallsign(a.callsign, wpm: game.currentWpm)
-                toneEnd[a.id] = now.addingTimeInterval(duration)
+                loop.announcer.arrived(id: a.id, text: a.callsign)
             case .struck(let a, let asset):
-                toneEnd[a.id] = nil
+                loop.toneEnd[a.id] = nil
+                loop.announcer.forget(id: a.id)
                 model.noteDefenderStrike(callsign: a.callsign, wpm: game.currentWpm)
                 Haptics.error()
                 struckId = asset.id
@@ -486,9 +481,23 @@ struct DefenderView: View {
                 phase = .over
             }
         }
+        announce(now: now)
         if attackers.map(\.id) != game.attackers.map(\.id) { attackers = game.attackers }
         if assets != game.assets { assets = game.assets }
         syncHUD(game)
+    }
+
+    /// Start the sound the channel has waiting, if it is free: a new
+    /// attacker's callsign, or a tapped replay (`GameAnnouncer`).
+    private func announce(now: Date) {
+        guard phase == .playing, let game else { return }
+        let timing = DefenderGame.sendTiming(wpm: game.currentWpm,
+                                             farnsworthWpm: model.settings.farnsworth ? model.settings.effectiveWpm : nil)
+        // At the ramp's current speed, which the hits and strikes in this
+        // same step may just have moved.
+        loop.announce(at: now, wordGap: timing.wordGap) { text in
+            model.playDefenderCallsign(text, wpm: game.currentWpm)
+        }
     }
 
     /// Tap input: the defence goes to `asset`.
@@ -525,8 +534,9 @@ struct DefenderView: View {
         guard let game else { return }
         let now = Date()
         if let hit = result.attacker {
-            let ttr = toneEnd[hit.id].map { max(0, now.timeIntervalSince($0)) } ?? 0
-            toneEnd[hit.id] = nil
+            let ttr = loop.toneEnd[hit.id].map { max(0, now.timeIntervalSince($0)) } ?? 0
+            loop.toneEnd[hit.id] = nil
+            loop.announcer.forget(id: hit.id)
             model.noteDefenderRoute(target: hit.callsign, chosen: hit.callsign, ttr: ttr, wpm: game.currentWpm)
             Haptics.success()
             if let fresh = result.reinforced {

@@ -180,6 +180,9 @@ fun FroggerScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
     // Characters waiting to be sent (the traffic announcing itself in the
     // hidden stage), played one after another behind whatever is sounding.
     val soundQueue = remember { ArrayList<Char>() }
+    // A cue that came while a traffic character was still sounding: it waits
+    // out the gap (soundBusyUntil), then goes first.
+    val pendingCue = remember { ArrayList<Pair<Char, Int>>(1) }
     var soundBusyUntil by remember { mutableLongStateOf(0L) }
     val charResults = remember { HashMap<Char, IntArray>() }   // attempts, correct
     // The shared leaderboard (docs/high-scores-design.md, step 2): the run's
@@ -253,13 +256,33 @@ fun FroggerScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
         Stats.recordChar(ch.toString(), correct, null)
     }
 
-    /** Send a lane's cue now, ahead of anything queued. */
-    fun playCue(character: Char, row: Int, wpmNow: Double) {
-        soundQueue.clear()
+    fun sendCue(character: Char, row: Int, wpmNow: Double) {
         val secs = player.replaySound(MorseItem.Playable.Text(character.toString()), Settings.sidetoneHz, MorseTiming(wpmNow))
         val now = System.currentTimeMillis()
         soundBusyUntil = now + (secs * 1000).toLong() + 350
         cueToneEnd[row] = now + (secs * 1000).toLong()
+    }
+
+    /**
+     * Send a lane's cue ahead of anything queued: now, or, if a sound is still
+     * playing or its gap has not passed, once the gap is over (a sound still
+     * playing is cut), so the fragment and the cue do not run together.
+     */
+    fun playCue(character: Char, row: Int, wpmNow: Double) {
+        soundQueue.clear()
+        pendingCue.clear()
+        val now = System.currentTimeMillis()
+        if (now < soundBusyUntil) {
+            // Still sounding, or inside the gap after a sound: a sound still
+            // playing is cut, and the cue goes once the gap has passed.
+            if (player.isSounding) {
+                player.stop()
+                soundBusyUntil = now + 350
+            }
+            pendingCue.add(character to row)
+            return
+        }
+        sendCue(character, row, wpmNow)
     }
 
     fun startGame() {
@@ -269,6 +292,7 @@ fun FroggerScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
         game = g
         cueToneEnd.clear()
         soundQueue.clear()
+        pendingCue.clear()
         soundBusyUntil = 0L
         charResults.clear()
         flash = null
@@ -418,7 +442,10 @@ fun FroggerScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
             last = nanos
             val over = handle(g.advance(dt), g)
             val now = System.currentTimeMillis()
-            if (now >= soundBusyUntil && soundQueue.isNotEmpty()) {
+            if (now >= soundBusyUntil && pendingCue.isNotEmpty()) {
+                val (ch, row) = pendingCue.removeAt(0)
+                sendCue(ch, row, g.currentWpm)
+            } else if (now >= soundBusyUntil && soundQueue.isNotEmpty()) {
                 val next = soundQueue.removeAt(0)
                 val secs = player.replaySound(MorseItem.Playable.Text(next.toString()), Settings.sidetoneHz, MorseTiming(g.currentWpm))
                 soundBusyUntil = now + (secs * 1000).toLong() + 350

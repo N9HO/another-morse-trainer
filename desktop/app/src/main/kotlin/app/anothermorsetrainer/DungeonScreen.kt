@@ -443,6 +443,9 @@ fun DungeonScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
                         )
                     }
                     is DungeonEvent.Attacked -> {
+                        // The window has closed: a replay still sounding stops
+                        // here, so the next monster's spell does not cut into it.
+                        player.stop()
                         // Late: whatever was keyed is graded against the
                         // counter, and the rest of it is missed.
                         noteOutcomes(DungeonGame.characterOutcomes(event.cast.spell.counter, keyer.decodedText.trim()))

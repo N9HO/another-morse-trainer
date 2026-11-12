@@ -3,6 +3,7 @@ package app.anothermorsetrainer
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.platform.LocalDensity
+import app.anothermorsetrainer.morsekit.GameAnnouncer
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -178,6 +179,9 @@ fun DefenderScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
     // When each attacker's callsign finished sounding, by id, so a hit's
     // time-to-recognize runs from the end of the tone.
     val toneEnd = remember { HashMap<Int, Long>() }
+    // The one sound channel: a new attacker's callsign and a tapped replay
+    // take turns instead of cutting into each other.
+    val announcer = remember { GameAnnouncer() }
     val charResults = remember { HashMap<Char, IntArray>() }   // attempts, correct
     // The shared leaderboard (docs/high-scores-design.md, step 2): the run's
     // registration and one item per shot or decision, each carrying the
@@ -270,11 +274,17 @@ fun DefenderScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
         }
     }
 
-    fun sendCallsign(g: DefenderGame, callsign: String): Double {
+    /**
+     * Start the sound the channel has waiting, if it is free: a new attacker's
+     * callsign, or a tapped replay ([GameAnnouncer]).
+     */
+    fun announce() {
+        val g = game ?: return
+        if (phase != DefPhase.RUNNING) return
         // At the ramp's current speed, with Farnsworth spacing honoured when
         // the switch is on: a callsign has gaps to stretch.
         val timing = DefenderGame.sendTiming(g.currentWpm, if (Settings.farnsworthEnabled) Settings.effectiveWpm else null)
-        return player.replaySound(MorseItem.Playable.Text(callsign), Settings.sidetoneHz, timing)
+        announcer.playNext(player, timing, toneEnd)
     }
 
     fun startGame() {
@@ -286,6 +296,7 @@ fun DefenderScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
         attackers = emptyList()
         assets = g.assets
         toneEnd.clear()
+        announcer.reset()
         charResults.clear()
         typed = ""
         flash = null
@@ -306,6 +317,7 @@ fun DefenderScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
     fun finishGame() {
         val g = game ?: return
         player.stop()
+        announcer.reset()
         syncHud(g)
         recordRun(g.hits + g.misses, g.hits, ((System.currentTimeMillis() - startedAtMs) / 1000L).toInt())
         EngineStore.save()
@@ -316,6 +328,7 @@ fun DefenderScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
     fun abandonRun() {
         val g = game
         player.stop()
+        announcer.reset()
         if (g != null && phase == DefPhase.RUNNING) {
             recordRun(g.hits + g.misses, g.hits, ((System.currentTimeMillis() - startedAtMs) / 1000L).toInt())
             EngineStore.save()
@@ -345,6 +358,7 @@ fun DefenderScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
         val hit = result.attacker
         if (hit != null) {
             val end = toneEnd.remove(hit.id)
+            announcer.forget(hit.id)
             val ttr = if (end != null) ((now - end).coerceAtLeast(0)) / 1000.0 else 0.0
             noteRoute(hit.callsign, hit.callsign, ttr)
             lbItems.add(LeaderboardItem(hit.callsign, hit.callsign, Leaderboard.clampReaction((ttr * 1000).toLong()), wpm))
@@ -409,12 +423,10 @@ fun DefenderScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
             var over = false
             for (event in g.advance(dt)) {
                 when (event) {
-                    is DefenderEvent.Launched -> {
-                        val secs = sendCallsign(g, event.attacker.callsign)
-                        toneEnd[event.attacker.id] = System.currentTimeMillis() + (secs * 1000).toLong()
-                    }
+                    is DefenderEvent.Launched -> announcer.arrived(event.attacker.id, event.attacker.callsign)
                     is DefenderEvent.Struck -> {
                         toneEnd.remove(event.attacker.id)
+                        announcer.forget(event.attacker.id)
                         noteStrike(event.attacker.callsign)
                         lbItems.add(LeaderboardItem(event.attacker.callsign, "", 0, wpm))
                         if (Settings.hapticsEnabled) haptics.error()
@@ -425,6 +437,7 @@ fun DefenderScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
                     DefenderEvent.GameOver -> over = true
                 }
             }
+            announce()
             attackers = g.attackers
             assets = g.assets
             syncHud(g)
@@ -500,7 +513,8 @@ fun DefenderScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
                     onReplay = { column ->
                         val g = game ?: return@DefenderRun
                         val nearest = g.attackers.minByOrNull { abs(it.column - column) } ?: return@DefenderRun
-                        sendCallsign(g, nearest.callsign)
+                        announcer.replay(nearest.callsign)
+                        announce()
                     },
                     onEnd = { abandonRun() },
                     onSwitchMode = ::switchTo

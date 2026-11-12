@@ -31,9 +31,6 @@ struct InvadersView: View {
     /// What every frame touches (`ArcadeFrame`), in a reference so writing
     /// it does not re-render the view.
     @State private var loop = ArcadeFrame()
-    /// When each invader's Morse finished sounding (ICR), keyed by invader id,
-    /// so a hit's time-to-recognize runs from the end of the tone.
-    @State private var toneEnd: [Int: Date] = [:]
     /// A flash of feedback on the field: the last hit's points, or "miss".
     @State private var flashText = ""
     @State private var flashUntil = Date.distantPast
@@ -298,7 +295,8 @@ struct InvadersView: View {
         guard input == .icr, let game else { return }
         let column = Int(location.x / max(1, width) * CGFloat(columns))
         guard let nearest = game.invaders.min(by: { abs($0.column - column) < abs($1.column - column) }) else { return }
-        model.playInvader(nearest.character, wpm: game.currentWpm)
+        loop.announcer.replay(String(nearest.character))
+        announce(now: Date())
     }
 
     /// ICR: a QWERTY keyboard (#178) — `InvadersKeyboard.rows` lays it out: a
@@ -399,7 +397,6 @@ struct InvadersView: View {
         // timing bound to measure: only hear-it runs are ranked (#leaderboard).
         if input == .keying { model.leaderboardCancelRun() }
         field = []
-        toneEnd = [:]
         flashUntil = .distantPast
         loop.reset()
         syncHUD(g)
@@ -412,14 +409,10 @@ struct InvadersView: View {
         for event in game.advance(by: dt) {
             switch event {
             case .spawned(let inv):
-                if input == .icr {
-                    // At the ramp's current speed (#178), which the hits and
-                    // landings in this same step may just have moved.
-                    let duration = model.playInvader(inv.character, wpm: game.currentWpm)
-                    toneEnd[inv.id] = now.addingTimeInterval(duration)
-                }
+                if input == .icr { loop.announcer.arrived(id: inv.id, text: String(inv.character)) }
             case .escaped(let inv):
-                toneEnd[inv.id] = nil
+                loop.toneEnd[inv.id] = nil
+                loop.announcer.forget(id: inv.id)
                 model.noteInvadersEscape(target: inv.character, wpm: game.currentWpm)
                 Haptics.error()
                 flash("\(inv.character) got through", for: 1.0)
@@ -429,8 +422,20 @@ struct InvadersView: View {
                 phase = .over
             }
         }
+        announce(now: now)
         if field.map(\.id) != game.invaders.map(\.id) { field = game.invaders }
         syncHUD(game)
+    }
+
+    /// Start the sound the channel has waiting, if it is free: a new invader's
+    /// character, or a tapped replay (`GameAnnouncer`).
+    private func announce(now: Date) {
+        guard input == .icr, phase == .playing, let game else { return }
+        // At the ramp's current speed (#178), which the hits and landings in
+        // this same step may just have moved.
+        loop.announce(at: now, wordGap: MorseTiming(wpm: game.currentWpm).wordGap) { text in
+            model.playInvader(Character(text), wpm: game.currentWpm)
+        }
     }
 
     private func shoot(_ character: Character) {
@@ -439,8 +444,9 @@ struct InvadersView: View {
         let lowest = game.lowest
         let shot = game.shoot(character)
         if let hit = shot.invader {
-            let ttr = toneEnd[hit.id].map { max(0, now.timeIntervalSince($0)) } ?? 0
-            toneEnd[hit.id] = nil
+            let ttr = loop.toneEnd[hit.id].map { max(0, now.timeIntervalSince($0)) } ?? 0
+            loop.toneEnd[hit.id] = nil
+            loop.announcer.forget(id: hit.id)
             model.noteInvadersShot(target: hit.character, chosen: hit.character, ttr: ttr, wpm: game.currentWpm)
             Haptics.success()
             flash(shot.waveCleared ? "Wave \(game.wave)!" : "+\(shot.points)", for: 0.8)

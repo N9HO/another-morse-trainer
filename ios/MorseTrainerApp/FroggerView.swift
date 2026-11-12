@@ -31,7 +31,14 @@ struct FroggerView: View {
     @State private var hud = HUD()
     /// What every frame touches (`ArcadeFrame`), in a reference so writing
     /// it does not re-render the view.
-    @State private var loop = ArcadeFrame()
+    @State private var loop = FroggerFrame()
+
+    /// Frogger's frame state: `ArcadeFrame`, plus a cue that came while a
+    /// sound was still playing; it waits out the gap (`soundBusyUntil`), then
+    /// goes first.
+    private final class FroggerFrame: ArcadeFrame {
+        var pendingCue: (character: Character, row: Int)?
+    }
     /// When each lane's cue finished sounding, by row, so a decision's
     /// time-to-recognize runs from the end of the tone.
     @State private var cueToneEnd: [Int: Date] = [:]
@@ -390,6 +397,7 @@ struct FroggerView: View {
         game = g
         cueToneEnd = [:]
         soundQueue = []
+        loop.pendingCue = nil
         soundBusyUntil = .distantPast
         flashUntil = .distantPast
         loop.reset()
@@ -404,10 +412,16 @@ struct FroggerView: View {
         guard phase == .playing, let game else { return }
         guard let dt = loop.step(to: now) else { return }
         handle(game.advance(by: dt), game: game, now: now)
-        if now >= soundBusyUntil, !soundQueue.isEmpty {
-            let next = soundQueue.removeFirst()
-            let duration = model.playFroggerCue(next, wpm: game.currentWpm)
-            soundBusyUntil = now.addingTimeInterval(duration + 0.35)
+        // Nothing more sounds once the game is over (the Game Over card).
+        if phase == .playing, now >= soundBusyUntil {
+            if let cue = loop.pendingCue {
+                loop.pendingCue = nil
+                sendCue(cue.character, row: cue.row, now: now)
+            } else if !soundQueue.isEmpty {
+                let next = soundQueue.removeFirst()
+                let duration = model.playFroggerCue(next, wpm: game.currentWpm)
+                soundBusyUntil = now.addingTimeInterval(duration + 0.35)
+            }
         }
         syncBoard(game)
         syncHUD(game)
@@ -471,9 +485,26 @@ struct FroggerView: View {
         }
     }
 
-    /// Send a lane's cue now, ahead of anything queued.
+    /// Send a lane's cue ahead of anything queued: now, or, if a sound is still
+    /// playing or its gap has not passed, once the gap is over (a sound still
+    /// playing is cut), so the fragment and the cue do not run together.
     private func playCue(_ character: Character, row: Int, now: Date) {
         soundQueue = []
+        if now < soundBusyUntil {
+            // Still sounding, or inside the gap after a sound: a sound still
+            // playing is cut, and the cue goes once the gap has passed.
+            if model.player.isSounding {
+                model.stopFrogger()
+                soundBusyUntil = now.addingTimeInterval(0.35)
+            }
+            loop.pendingCue = (character, row)
+            return
+        }
+        loop.pendingCue = nil
+        sendCue(character, row: row, now: now)
+    }
+
+    private func sendCue(_ character: Character, row: Int, now: Date) {
         let duration = model.playFroggerCue(character, wpm: game?.currentWpm ?? model.settings.wpm)
         soundBusyUntil = now.addingTimeInterval(duration + 0.35)
         cueToneEnd[row] = now.addingTimeInterval(duration)

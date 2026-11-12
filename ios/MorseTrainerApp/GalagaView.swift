@@ -36,9 +36,6 @@ struct GalagaView: View {
     /// What every frame touches (`ArcadeFrame`), in a reference so writing
     /// it does not re-render the view.
     @State private var loop = ArcadeFrame()
-    /// When each enemy's Morse finished sounding (copy mode), keyed by enemy
-    /// id, so a hit's time-to-recognize runs from the end of the tone.
-    @State private var toneEnd: [Int: Date] = [:]
 
     /// A flash of feedback on the field: the last hit's points, or "miss".
     @State private var flashText = ""
@@ -331,7 +328,8 @@ struct GalagaView: View {
             return hypot(pa.x - location.x, pa.y - location.y) < hypot(pb.x - location.x, pb.y - location.y)
         }
         guard let nearest else { return }
-        model.playGalaga(nearest.character, wpm: game.currentWpm)
+        loop.announcer.replay(String(nearest.character))
+        announce(now: Date())
     }
 
     /// Copy mode: the arcade games' QWERTY keyboard — `InvadersKeyboard.rows`
@@ -432,7 +430,6 @@ struct GalagaView: View {
         if input == .keying { model.leaderboardCancelRun() }
         field = []
         columns = g.formation.columns
-        toneEnd = [:]
         flashUntil = .distantPast
         loop.reset()
         syncHUD(g)
@@ -445,14 +442,10 @@ struct GalagaView: View {
         for event in game.advance(by: dt) {
             switch event {
             case .entered(let enemy), .dived(let enemy):
-                if input == .icr {
-                    // At the ramp's current speed, which the hits and
-                    // landings in this same step may just have moved.
-                    let duration = model.playGalaga(enemy.character, wpm: game.currentWpm)
-                    toneEnd[enemy.id] = now.addingTimeInterval(duration)
-                }
+                if input == .icr { loop.announcer.arrived(id: enemy.id, text: String(enemy.character)) }
             case .landed(let enemy):
-                toneEnd[enemy.id] = nil
+                loop.toneEnd[enemy.id] = nil
+                loop.announcer.forget(id: enemy.id)
                 model.noteGalagaLanding(target: enemy.character, wpm: game.currentWpm)
                 Haptics.error()
                 flash("\(enemy.character) got through", for: 1.0)
@@ -462,9 +455,21 @@ struct GalagaView: View {
                 phase = .over
             }
         }
+        announce(now: now)
         if field.map(\.id) != game.enemies.map(\.id) { field = game.enemies }
         if columns != game.formation.columns { columns = game.formation.columns }
         syncHUD(game)
+    }
+
+    /// Start the sound the channel has waiting, if it is free: an enemy's
+    /// character on entry or dive, or a tapped replay (`GameAnnouncer`).
+    private func announce(now: Date) {
+        guard input == .icr, phase == .playing, let game else { return }
+        // At the ramp's current speed, which the hits and landings in this
+        // same step may just have moved.
+        loop.announce(at: now, wordGap: MorseTiming(wpm: game.currentWpm).wordGap) { text in
+            model.playGalaga(Character(text), wpm: game.currentWpm)
+        }
     }
 
     private func shoot(_ character: Character) {
@@ -473,8 +478,9 @@ struct GalagaView: View {
         let threat = game.mostThreatening
         let shot = game.shoot(character)
         if let hit = shot.enemy {
-            let ttr = toneEnd[hit.id].map { max(0, now.timeIntervalSince($0)) } ?? 0
-            toneEnd[hit.id] = nil
+            let ttr = loop.toneEnd[hit.id].map { max(0, now.timeIntervalSince($0)) } ?? 0
+            loop.toneEnd[hit.id] = nil
+            loop.announcer.forget(id: hit.id)
             model.noteGalagaShot(target: hit.character, chosen: hit.character, ttr: ttr, wpm: game.currentWpm)
             Haptics.success()
             flash(shot.waveCleared ? "Wave \(game.wave)!" : "+\(shot.points)", for: 0.8)
