@@ -389,6 +389,9 @@ struct DungeonView: View {
                 keyedSoFar = ""
                 model.playDungeonSpell(cast.spell.spell, timing: cast.timing)
             case .attacked(let cast):
+                // The window has closed: a replay still sounding stops here,
+                // so the next monster's spell does not cut into it.
+                model.stopDungeon()
                 // Late: whatever was keyed is graded against the counter,
                 // and the rest of it is missed.
                 model.noteDungeonCast(spell: cast.spell.spell, expected: cast.spell.counter, keyed: keyedSoFar,

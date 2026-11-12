@@ -7,6 +7,11 @@ import Foundation
 /// changes) and reads it from its `TimelineView` step.
 class ArcadeFrame {
     private var lastFrame: Date?
+    /// The one sound channel, for the games that announce (`GameAnnouncer`).
+    var announcer = GameAnnouncer()
+    /// When each enemy's sound finished, by id, so a hit's reaction time runs
+    /// from the end of its sound.
+    var toneEnd: [Int: Date] = [:]
 
     /// Seconds since the last frame, capped at 0.1 so a long gap (the app was
     /// backgrounded) does not move the game on in one step; nil on a run's
@@ -20,5 +25,18 @@ class ArcadeFrame {
     /// A new run, or the end of one.
     func reset() {
         lastFrame = nil
+        announcer.reset()
+        toneEnd = [:]
+    }
+
+    /// Plays what the channel has waiting, if it is free: `send` sounds the
+    /// text and returns its length, and the channel is free again `wordGap`
+    /// after it ends. An arrival's end goes to `toneEnd`.
+    func announce(at now: Date, wordGap: TimeInterval, send: (String) -> TimeInterval) {
+        let clock = now.timeIntervalSinceReferenceDate
+        guard let sound = announcer.next(at: clock) else { return }
+        let duration = send(sound.text)
+        if case .arrival(let id, _) = sound { toneEnd[id] = now.addingTimeInterval(duration) }
+        announcer.started(at: clock, duration: duration, wordGap: wordGap)
     }
 }

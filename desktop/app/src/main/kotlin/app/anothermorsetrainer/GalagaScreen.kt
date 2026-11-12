@@ -2,6 +2,7 @@ package app.anothermorsetrainer
 
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.platform.LocalDensity
+import app.anothermorsetrainer.morsekit.GameAnnouncer
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -172,6 +173,9 @@ fun GalagaScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) 
     // When each enemy's Morse finished sounding (copy mode), by id, so a
     // hit's time-to-recognize runs from the end of the tone.
     val toneEnd = remember { HashMap<Int, Long>() }
+    // The one sound channel (copy mode): an entry, a dive and a tapped replay
+    // take turns instead of cutting into each other.
+    val announcer = remember { GameAnnouncer() }
     val charResults = remember { HashMap<Char, IntArray>() }   // attempts, correct
     // The shared leaderboard (docs/high-scores-design.md, step 2): the run's
     // registration and one item per shot or decision, each carrying the
@@ -261,6 +265,7 @@ fun GalagaScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) 
         game = g
         field = emptyList()
         toneEnd.clear()
+        announcer.reset()
         charResults.clear()
         flash = null
         startedAtMs = System.currentTimeMillis()
@@ -281,6 +286,7 @@ fun GalagaScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) 
     fun finishGame() {
         val g = game ?: return
         player.stop()
+        announcer.reset()
         syncHud(g)
         recordRun(g.hits + g.misses, g.hits, ((System.currentTimeMillis() - startedAtMs) / 1000L).toInt())
         EngineStore.save()
@@ -291,6 +297,7 @@ fun GalagaScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) 
     fun abandonRun() {
         val g = game
         player.stop()
+        announcer.reset()
         if (g != null && phase == GalPhase.RUNNING) {
             recordRun(g.hits + g.misses, g.hits, ((System.currentTimeMillis() - startedAtMs) / 1000L).toInt())
             EngineStore.save()
@@ -315,6 +322,19 @@ fun GalagaScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) 
         if (phase != GalPhase.SETUP) phase = GalPhase.SETUP
     }
 
+    /**
+     * Start the sound the channel has waiting, if it is free: an enemy's
+     * character on entry or dive, or a tapped replay ([GameAnnouncer]).
+     */
+    fun announce() {
+        val g = game ?: return
+        if (phase != GalPhase.RUNNING || input != InvadersInput.ICR) return
+        // At the ramp's current speed, not the session timing: a single
+        // character has no gaps for Farnsworth to stretch.
+        val timing = MorseTiming(g.currentWpm)
+        announcer.playNext(player, timing, toneEnd)
+    }
+
     fun shoot(character: Char) {
         val g = game ?: return
         if (phase != GalPhase.RUNNING) return
@@ -324,6 +344,7 @@ fun GalagaScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) 
         val hit = shot.enemy
         if (hit != null) {
             val end = toneEnd.remove(hit.id)
+            announcer.forget(hit.id)
             val ttr = if (end != null) ((now - end).coerceAtLeast(0)) / 1000.0 else 0.0
             engine.noteAttempt(hit.character, hit.character, ttr)
             tally(hit.character, true)
@@ -359,10 +380,13 @@ fun GalagaScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) 
             var over = false
             for (event in g.advance(dt)) {
                 when (event) {
-                    is GalagaEvent.Entered -> sendEnemy(player, event.enemy, g, input, toneEnd)
-                    is GalagaEvent.Dived -> sendEnemy(player, event.enemy, g, input, toneEnd)
+                    is GalagaEvent.Entered, is GalagaEvent.Dived -> if (input == InvadersInput.ICR) {
+                        val enemy = if (event is GalagaEvent.Entered) event.enemy else (event as GalagaEvent.Dived).enemy
+                        announcer.arrived(enemy.id, enemy.character.toString())
+                    }
                     is GalagaEvent.Landed -> {
                         toneEnd.remove(event.enemy.id)
+                        announcer.forget(event.enemy.id)
                         engine.noteMiss(event.enemy.character)
                         tally(event.enemy.character, false)
                         lbItems.add(LeaderboardItem(event.enemy.character.toString(), "", 0, wpm))
@@ -372,6 +396,7 @@ fun GalagaScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) 
                     GalagaEvent.GameOver -> over = true
                 }
             }
+            announce()
             field = g.enemies
             syncHud(g)
             if (over) { finishGame(); return@LaunchedEffect }
@@ -435,7 +460,8 @@ fun GalagaScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) 
                     onShoot = { shoot(it) },
                     onReplay = { enemy ->
                         val g = game ?: return@GalagaRun
-                        player.replaySound(MorseItem.Playable.Text(enemy.character.toString()), Settings.sidetoneHz, MorseTiming(g.currentWpm))
+                        announcer.replay(enemy.character.toString())
+                        announce()
                     },
                     onEnd = { abandonRun() },
                     onSwitchMode = ::switchTo
@@ -454,21 +480,6 @@ fun GalagaScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) 
             }
         }
     }
-}
-
-/**
- * Copy mode sends an enemy's character as it enters and again as it dives,
- * at the ramp's current speed, not the session timing: a single character
- * has no gaps for Farnsworth to stretch. Dates the tone's end for the
- * time-to-recognize clock.
- */
-private fun sendEnemy(player: MorsePlayer, enemy: GalagaEnemy, g: GalagaGame, input: InvadersInput, toneEnd: HashMap<Int, Long>) {
-    if (input != InvadersInput.ICR) return
-    val secs = player.replaySound(
-        MorseItem.Playable.Text(enemy.character.toString()),
-        Settings.sidetoneHz, MorseTiming(g.currentWpm)
-    )
-    toneEnd[enemy.id] = System.currentTimeMillis() + (secs * 1000).toLong()
 }
 
 @Composable

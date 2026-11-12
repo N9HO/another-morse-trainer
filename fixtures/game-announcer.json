@@ -1,0 +1,164 @@
+{
+  "$comment": "The hear-it arcade games' one sound channel (Morse Invaders, CW Galaga, Morse Defender), consumed by the iOS MorseKitCheck harness, android GameAnnouncerTest and desktop GameAnnouncerTest. Data, not code - see CLAUDE.md's separate-ports rule. Expected plays are derived from the rules in `derivation`, not captured from any implementation.",
+  "derivation": {
+    "problem": "a new enemy's sound (an invader's or Galaga enemy's character, a Defender callsign) and a tapped replay each replaced whatever was sounding, so one cut into the other mid-character and the two ran together",
+    "channel": "one sound at a time: a sound asked for while another plays waits until that one has ended and a word space (at the game's speed) has passed; on a free channel it starts at once",
+    "arrivals": "new enemies are announced in the order they arrived; one already waiting is not queued twice (a Galaga enemy can dive before its entry has been heard)",
+    "replay": "a tap queues one replay, heard after any arrival already waiting; a later tap replaces a replay still waiting",
+    "forget": "an enemy shot, destroyed or landed before its turn is never announced; one already sounding plays out",
+    "reset": "a new game, or the end of one, drops everything waiting and frees the channel",
+    "runner": "apply each step in order; after each one, if the announcer has a sound to start at that step's time, record it and report it started there, lasting `durations[text]`, followed by `wordGap`. `plays` lists every start, in order. Times are seconds, chosen to be exact in binary."
+  },
+  "durations": {
+    "E": 0.25,
+    "T": 0.375,
+    "K": 0.5,
+    "Q": 0.75,
+    "CQ": 1.5
+  },
+  "wordGap": 0.5,
+  "scenarios": [
+    {
+      "name": "an arrival on a free channel is announced at once",
+      "steps": [
+        { "at": 0, "do": "arrive", "id": 1, "text": "K" }
+      ],
+      "plays": [
+        { "at": 0, "sound": "arrival 1 K" }
+      ]
+    },
+    {
+      "name": "a tap during an announcement waits for it and a word space",
+      "steps": [
+        { "at": 0, "do": "arrive", "id": 1, "text": "K" },
+        { "at": 0.25, "do": "replay", "text": "E" },
+        { "at": 0.875, "do": "tick" },
+        { "at": 1.0, "do": "tick" }
+      ],
+      "plays": [
+        { "at": 0, "sound": "arrival 1 K" },
+        { "at": 1.0, "sound": "replay E" }
+      ]
+    },
+    {
+      "name": "an arrival during a replay waits instead of cutting it",
+      "steps": [
+        { "at": 0, "do": "replay", "text": "T" },
+        { "at": 0.125, "do": "arrive", "id": 2, "text": "Q" },
+        { "at": 0.75, "do": "tick" },
+        { "at": 0.875, "do": "tick" }
+      ],
+      "plays": [
+        { "at": 0, "sound": "replay T" },
+        { "at": 0.875, "sound": "arrival 2 Q" }
+      ]
+    },
+    {
+      "name": "arrivals are announced in order, ahead of a waiting replay",
+      "steps": [
+        { "at": 0, "do": "arrive", "id": 1, "text": "K" },
+        { "at": 0.125, "do": "replay", "text": "E" },
+        { "at": 0.25, "do": "arrive", "id": 2, "text": "T" },
+        { "at": 1.0, "do": "tick" },
+        { "at": 1.875, "do": "tick" }
+      ],
+      "plays": [
+        { "at": 0, "sound": "arrival 1 K" },
+        { "at": 1.0, "sound": "arrival 2 T" },
+        { "at": 1.875, "sound": "replay E" }
+      ]
+    },
+    {
+      "name": "a later tap replaces a replay still waiting",
+      "steps": [
+        { "at": 0, "do": "arrive", "id": 1, "text": "K" },
+        { "at": 0.125, "do": "replay", "text": "E" },
+        { "at": 0.25, "do": "replay", "text": "T" },
+        { "at": 1.0, "do": "tick" },
+        { "at": 2.0, "do": "tick" }
+      ],
+      "plays": [
+        { "at": 0, "sound": "arrival 1 K" },
+        { "at": 1.0, "sound": "replay T" }
+      ]
+    },
+    {
+      "name": "an enemy shot before its turn is never announced",
+      "steps": [
+        { "at": 0, "do": "arrive", "id": 1, "text": "K" },
+        { "at": 0.125, "do": "arrive", "id": 2, "text": "Q" },
+        { "at": 0.5, "do": "forget", "id": 2 },
+        { "at": 1.0, "do": "tick" }
+      ],
+      "plays": [
+        { "at": 0, "sound": "arrival 1 K" }
+      ]
+    },
+    {
+      "name": "an enemy shot while it sounds plays out, and the channel stays busy until then",
+      "steps": [
+        { "at": 0, "do": "arrive", "id": 1, "text": "K" },
+        { "at": 0.25, "do": "forget", "id": 1 },
+        { "at": 0.375, "do": "replay", "text": "E" },
+        { "at": 0.875, "do": "tick" },
+        { "at": 1.0, "do": "tick" }
+      ],
+      "plays": [
+        { "at": 0, "sound": "arrival 1 K" },
+        { "at": 1.0, "sound": "replay E" }
+      ]
+    },
+    {
+      "name": "the channel is free again exactly when the word space ends",
+      "steps": [
+        { "at": 0, "do": "arrive", "id": 1, "text": "E" },
+        { "at": 0.75, "do": "arrive", "id": 2, "text": "T" }
+      ],
+      "plays": [
+        { "at": 0, "sound": "arrival 1 E" },
+        { "at": 0.75, "sound": "arrival 2 T" }
+      ]
+    },
+    {
+      "name": "a new game drops what was waiting and frees the channel",
+      "steps": [
+        { "at": 0, "do": "arrive", "id": 1, "text": "K" },
+        { "at": 0.125, "do": "arrive", "id": 2, "text": "Q" },
+        { "at": 0.25, "do": "reset" },
+        { "at": 0.25, "do": "arrive", "id": 3, "text": "E" },
+        { "at": 2.0, "do": "tick" }
+      ],
+      "plays": [
+        { "at": 0, "sound": "arrival 1 K" },
+        { "at": 0.25, "sound": "arrival 3 E" }
+      ]
+    },
+    {
+      "name": "an enemy already waiting is not queued twice",
+      "steps": [
+        { "at": 0, "do": "arrive", "id": 1, "text": "K" },
+        { "at": 0.125, "do": "arrive", "id": 2, "text": "T" },
+        { "at": 0.25, "do": "arrive", "id": 2, "text": "T" },
+        { "at": 1.0, "do": "tick" },
+        { "at": 1.875, "do": "tick" }
+      ],
+      "plays": [
+        { "at": 0, "sound": "arrival 1 K" },
+        { "at": 1.0, "sound": "arrival 2 T" }
+      ]
+    },
+    {
+      "name": "a whole callsign is one sound",
+      "steps": [
+        { "at": 0, "do": "arrive", "id": 7, "text": "CQ" },
+        { "at": 0.5, "do": "replay", "text": "E" },
+        { "at": 1.875, "do": "tick" },
+        { "at": 2.0, "do": "tick" }
+      ],
+      "plays": [
+        { "at": 0, "sound": "arrival 7 CQ" },
+        { "at": 2.0, "sound": "replay E" }
+      ]
+    }
+  ]
+}

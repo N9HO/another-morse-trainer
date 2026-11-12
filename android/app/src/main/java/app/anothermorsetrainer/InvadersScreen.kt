@@ -64,6 +64,7 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.sp
+import app.anothermorsetrainer.morsekit.GameAnnouncer
 import app.anothermorsetrainer.morsekit.InvadersCharacterSet
 import app.anothermorsetrainer.morsekit.InvadersDifficulty
 import app.anothermorsetrainer.morsekit.InvadersEvent
@@ -166,6 +167,9 @@ fun InvadersScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
     // When each invader's Morse finished sounding (ICR), by id, so a hit's
     // time-to-recognize runs from the end of the tone.
     val toneEnd = remember { HashMap<Int, Long>() }
+    // The one sound channel (ICR): an arrival and a tapped replay take turns
+    // instead of cutting into each other.
+    val announcer = remember { GameAnnouncer() }
     val charResults = remember { HashMap<Char, IntArray>() }   // attempts, correct
     // The shared leaderboard (docs/high-scores-design.md, step 2): the run's
     // registration and one item per shot or decision, each carrying the
@@ -255,6 +259,7 @@ fun InvadersScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
         game = g
         field = emptyList()
         toneEnd.clear()
+        announcer.reset()
         charResults.clear()
         flash = null
         startedAtMs = System.currentTimeMillis()
@@ -274,6 +279,7 @@ fun InvadersScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
     fun finishGame() {
         val g = game ?: return
         player.stop()
+        announcer.reset()
         syncHud(g)
         recordRun(g.hits + g.misses, g.hits, ((System.currentTimeMillis() - startedAtMs) / 1000L).toInt())
         EngineStore.save()
@@ -284,6 +290,7 @@ fun InvadersScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
     fun abandonRun() {
         val g = game
         player.stop()
+        announcer.reset()
         if (g != null && phase == InvPhase.RUNNING) {
             recordRun(g.hits + g.misses, g.hits, ((System.currentTimeMillis() - startedAtMs) / 1000L).toInt())
             EngineStore.save()
@@ -308,6 +315,19 @@ fun InvadersScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
         if (phase != InvPhase.SETUP) phase = InvPhase.SETUP
     }
 
+    /**
+     * Start the sound the channel has waiting, if it is free: a new invader's
+     * character, or a tapped replay ([GameAnnouncer]).
+     */
+    fun announce() {
+        val g = game ?: return
+        if (phase != InvPhase.RUNNING || input != InvadersInput.ICR) return
+        // At the ramp's current speed (#178), not the session timing: a
+        // single character has no gaps for Farnsworth to stretch.
+        val timing = MorseTiming(g.currentWpm)
+        announcer.playNext(player, timing, toneEnd)
+    }
+
     fun shoot(character: Char) {
         val g = game ?: return
         if (phase != InvPhase.RUNNING) return
@@ -317,6 +337,7 @@ fun InvadersScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
         val hit = shot.invader
         if (hit != null) {
             val end = toneEnd.remove(hit.id)
+            announcer.forget(hit.id)
             val ttr = if (end != null) ((now - end).coerceAtLeast(0)) / 1000.0 else 0.0
             engine.noteAttempt(hit.character, hit.character, ttr)
             tally(hit.character, true)
@@ -353,17 +374,11 @@ fun InvadersScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
             for (event in g.advance(dt)) {
                 when (event) {
                     is InvadersEvent.Spawned -> if (input == InvadersInput.ICR) {
-                        // At the ramp's current speed (#178), not the session
-                        // timing: a single character has no gaps for
-                        // Farnsworth to stretch.
-                        val secs = player.replaySound(
-                            MorseItem.Playable.Text(event.invader.character.toString()),
-                            Settings.sidetoneHz, MorseTiming(g.currentWpm)
-                        )
-                        toneEnd[event.invader.id] = System.currentTimeMillis() + (secs * 1000).toLong()
+                        announcer.arrived(event.invader.id, event.invader.character.toString())
                     }
                     is InvadersEvent.Escaped -> {
                         toneEnd.remove(event.invader.id)
+                        announcer.forget(event.invader.id)
                         engine.noteMiss(event.invader.character)
                         tally(event.invader.character, false)
                         lbItems.add(LeaderboardItem(event.invader.character.toString(), "", 0, wpm))
@@ -373,6 +388,7 @@ fun InvadersScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
                     InvadersEvent.GameOver -> over = true
                 }
             }
+            announce()
             field = g.invaders
             syncHud(g)
             if (over) { finishGame(); return@LaunchedEffect }
@@ -435,7 +451,8 @@ fun InvadersScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
                     onReplay = { column ->
                         val g = game ?: return@InvadersRun
                         val nearest = g.invaders.minByOrNull { abs(it.column - column) } ?: return@InvadersRun
-                        player.replaySound(MorseItem.Playable.Text(nearest.character.toString()), Settings.sidetoneHz, MorseTiming(g.currentWpm))
+                        announcer.replay(nearest.character.toString())
+                        announce()
                     },
                     onEnd = { abandonRun() },
                     onSwitchMode = ::switchTo
