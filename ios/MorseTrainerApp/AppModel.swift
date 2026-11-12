@@ -367,6 +367,9 @@ final class AppModel: ObservableObject {
     var operatingGeneration = 0
     /// …and for the pieces of one clip (an error plays as its own piece).
     var operatingClipGeneration = 0
+    /// Clears the highlight of a demo transcript still running
+    /// (`AppModel+OperatingProcedure.swift`); nil when none is.
+    var operatingLinesEnded: (() -> Void)?
     private let speech = SpeechPlayer()
     private var toneEndDate: Date?
     private var advanceGeneration = 0
@@ -1855,6 +1858,10 @@ final class AppModel: ObservableObject {
         listenPaused = true
         listenGeneration += 1   // cancel the in-flight chain
         speech.stop()
+        // The item sounding stops too, as on Android and desktop: left to
+        // play, it ran on through the pause and was cut mid-character by the
+        // next item on resume.
+        player.stop()
         phase = .idle
         pauseSessionTimer()     // freeze the countdown while paused (issue #37)
         updateNowPlaying()
@@ -2678,12 +2685,13 @@ final class AppModel: ObservableObject {
             // A miss already holds the correction until Next — after a beat,
             // re-send the item so the learner re-hears the sound they got
             // wrong while the answer shows (issue #77). Advancing first
-            // (phase leaves .answered) cancels it.
+            // (phase leaves .answered) cancels it, and so does a Replay the
+            // learner pressed in that beat: the re-send would cut into it.
             advanceGeneration += 1
             let token = advanceGeneration
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { [weak self] in
                 guard let self, self.advanceGeneration == token,
-                      self.phase == .answered else { return }
+                      self.phase == .answered, !self.player.isSounding else { return }
                 _ = self.replay()
             }
         }

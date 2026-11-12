@@ -499,6 +499,7 @@
     <string name="settings_sidetone_pitch">Sidetone pitch</string>
     <string name="settings_preview_tone">Preview tone</string>
     <string name="settings_play_button">" Play"</string>
+    <string name="settings_preview_in_session">Off during a session: it would play over the session\'s own sound. The next item plays at the new pitch.</string>
     <string name="settings_sound_footer">The frequency of the practice tone you hear.</string>
     <string name="settings_learning">Learning</string>
     <string name="settings_answer_choices">Answer choices</string>

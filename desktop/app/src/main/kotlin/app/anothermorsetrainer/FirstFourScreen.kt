@@ -1,5 +1,6 @@
 package app.anothermorsetrainer
 
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -489,6 +490,10 @@ private fun FirstFourElementStage(
     play: (String) -> Double,
     onNext: () -> Unit
 ) {
+    // When the last play ends, so the automatic next play after a right
+    // answer does not cut a Play the learner pressed in the meantime.
+    var soundingUntil by remember { mutableLongStateOf(0L) }
+    val sound: (String) -> Unit = { t -> soundingUntil = System.currentTimeMillis() + (play(t) * 1000).toLong() }
     val haptics = remember { Haptics() }
     val scope = rememberCoroutineScope()
     val focusRoot = LocalFirstFourFocusRoot.current
@@ -501,7 +506,7 @@ private fun FirstFourElementStage(
 
     val resources = LocalResources.current
 
-    LaunchedEffect(Unit) { if (phase == FirstFourPhase.COPY) play(text) }
+    LaunchedEffect(Unit) { if (phase == FirstFourPhase.COPY) sound(text) }
 
     fun record(correct: Boolean, heard: String) {
         practised()
@@ -519,7 +524,7 @@ private fun FirstFourElementStage(
             }
             correct -> {
                 feedback = resources.getString(R.string.first_four_right, progress.streak, needed) to true
-                if (phase == FirstFourPhase.COPY) scope.launch { delay(600); play(text) }
+                if (phase == FirstFourPhase.COPY) scope.launch { delay(600); if (System.currentTimeMillis() >= soundingUntil) sound(text) }
             }
             else -> {
                 val shown = if (FirstFour.compact(heard).isEmpty()) {
@@ -577,7 +582,7 @@ private fun FirstFourElementStage(
                 stagePassed = false
                 feedback = null
                 phase = FirstFourPhase.COPY
-                play(text)
+                sound(text)
             }) { Text(stringResource(R.string.first_four_practice_again), color = Brand.teal) }
         }
         phase == FirstFourPhase.COPY -> Column(
@@ -585,7 +590,7 @@ private fun FirstFourElementStage(
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Button(
-                onClick = { play(text) },
+                onClick = { sound(text) },
                 colors = ButtonDefaults.buttonColors(containerColor = Brand.teal, contentColor = Brand.navy),
                 modifier = Modifier.fillMaxWidth().height(48.dp)
             ) { Text(stringResource(R.string.first_four_play), fontWeight = FontWeight.Bold) }
@@ -624,7 +629,7 @@ private fun FirstFourElementStage(
                     Text(stringResource(R.string.first_four_send_label), fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Brand.textSecondary)
                     Text(text, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 30.sp, color = Brand.textPrimary)
                 }
-                OutlinedButton(onClick = { play(text) }) { Text(stringResource(R.string.first_four_hear_it), color = Brand.teal) }
+                OutlinedButton(onClick = { sound(text) }) { Text(stringResource(R.string.first_four_hear_it), color = Brand.teal) }
             }
             FirstFourKeyPanel(expected = text, resetToken = keyReset) { sent ->
                 record(FirstFour.sendMatches(sent, text), sent)
