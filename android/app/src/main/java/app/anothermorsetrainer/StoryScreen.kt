@@ -364,7 +364,7 @@ fun StoryScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) {
                         SessionTimerMenu(
                             remaining = remaining,
                             onAddSeconds = { remaining = (remaining ?: 0) + it },
-                            onSubtractSeconds = { remaining = SessionClock.reduced(remaining, it) },
+                            onSubtractSeconds = { remaining = SessionClock.reduced(remaining, it); if (remaining == 0) endSession() },
                             onRemoveLimit = { remaining = null }
                         )
                         SessionSettingsButton { showSettings = true }

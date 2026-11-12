@@ -219,7 +219,9 @@ fun RapidFireScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {
             effectiveWpm = Settings.effectiveWpmInUse.roundToInt()
         )
         phase = RfPhase.RUNNING
-        step = 1
+        // A new value every run, so the play effect runs even when the last
+        // run ended on its first item.
+        step += 1
     }
 
     /** Hand the finished run's transcript to the leaderboard; the summary shows the reply when it lands. */
