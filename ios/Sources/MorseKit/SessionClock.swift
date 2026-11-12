@@ -12,6 +12,11 @@ public enum SessionClock {
     /// was waiting (`timeUp.graceSeconds` in the fixture).
     public static let timeUpGraceSeconds: TimeInterval = 15
 
+    /// Once a session's screen has arrived, how long its first sound waits
+    /// more, so it does not land the instant the screen settles
+    /// (`firstSoundBeat` in the fixture).
+    public static let firstSoundBeat: TimeInterval = 0.4
+
     /// Whether a session whose countdown ran out `overdue` seconds ago ends
     /// now. `held` is whether the run-out found a drill sent and waiting for
     /// its answer: that drill may still be answered, and answering it ends the

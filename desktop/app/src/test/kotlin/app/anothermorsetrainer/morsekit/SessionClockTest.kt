@@ -40,6 +40,12 @@ class SessionClockTest {
     fun `subtracting time follows the fixture`() = check(fixture.getJSONArray("subtract")) { r, s -> SessionClock.reduced(r, s) }
 
     @Test
+    fun `the first sound's beat after the screen arrives is the fixture's`() {
+        val seconds = fixture.getJSONObject("firstSoundBeat").getDouble("seconds")
+        assertEquals((seconds * 1000).toLong(), SessionClock.FIRST_SOUND_BEAT_MS)
+    }
+
+    @Test
     fun `a run-out countdown ends or holds as the fixture says`() {
         val timeUp = fixture.getJSONObject("timeUp")
         assertEquals("grace", timeUp.getInt("graceSeconds"), SessionClock.TIME_UP_GRACE_SECONDS)

@@ -17,6 +17,13 @@ object SessionClock {
     const val TIME_UP_GRACE_SECONDS = 15
 
     /**
+     * Once a session's screen has arrived, how long its first sound waits
+     * more, so it does not land the instant the screen settles
+     * (`firstSoundBeat` in the fixture).
+     */
+    const val FIRST_SOUND_BEAT_MS = 400L
+
+    /**
      * Whether a session whose countdown ran out [overdueSeconds] ago ends now.
      * [held] is whether the run-out found a drill sent and waiting for its
      * answer: that drill may still be answered, and answering it ends the

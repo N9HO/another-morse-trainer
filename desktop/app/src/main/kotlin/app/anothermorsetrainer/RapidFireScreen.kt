@@ -115,6 +115,10 @@ fun RapidFireScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {
     // correct count - so a run of any length is posted and recorded the same way.
     val remainingState = rememberSaveable(stateSaver = OptionalIntSaver) { mutableStateOf<Int?>(null) }
     var remaining by remainingState
+    // The run's first sound waits until the screen has drawn its first frame,
+    // then SessionClock.FIRST_SOUND_BEAT_MS more: Start used to sound it
+    // before the drill screen had arrived.
+    var leadIn by remember { mutableStateOf(true) }
     // The countdown ran out with a drill still waiting for its answer: the
     // session is held for that answer, and moving on ends it (SessionClock).
     val heldState = rememberSaveable { mutableStateOf(false) }
@@ -211,6 +215,7 @@ fun RapidFireScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {
         toneEndedStep = -1
         revealBox = response == RapidFireResponse.TYPE
         startedAtMs = System.currentTimeMillis()
+        leadIn = true
         remaining = Settings.practiceDuration.seconds
         timeUpHeld = false
         runAttempts = 0
@@ -329,6 +334,7 @@ fun RapidFireScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {
         if (phase != RfPhase.RUNNING || step <= 0) return@LaunchedEffect
         val d = drill ?: return@LaunchedEffect
         revealBox = response == RapidFireResponse.TYPE
+        if (leadIn) { leadIn = false; awaitScreenThenBeat() }
         player.play(d.playable, Settings.sidetoneHz, Settings.timing()) {
             toneEndedAtMs = System.currentTimeMillis()
             toneEndedStep = step
