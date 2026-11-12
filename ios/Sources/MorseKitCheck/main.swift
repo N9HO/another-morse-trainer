@@ -10497,9 +10497,11 @@ struct SessionClockFixture: Decodable {
         let graceSeconds: Int
         let cases: [Case]
     }
+    struct Beat: Decodable { let seconds: Double }
     let add: [Case]
     let subtract: [Case]
     let timeUp: TimeUp
+    let firstSoundBeat: Beat
 }
 
 func loadSessionClockFixture() -> SessionClockFixture? {
@@ -10672,6 +10674,8 @@ if let fx = loadSessionClockFixture() {
         print("      ↳ subtract \(c.seconds) from \(String(describing: c.remaining)): fixture says \(String(describing: c.expected))")
     }
     check("subtracting time follows the fixture (\(fx.subtract.count) cases)", subOK)
+    check("the first sound's beat after the screen arrives is the fixture's (\(fx.firstSoundBeat.seconds) s)",
+          SessionClock.firstSoundBeat == fx.firstSoundBeat.seconds)
     check("the run-out hold lasts the fixture's grace (\(fx.timeUp.graceSeconds) s)",
           SessionClock.timeUpGraceSeconds == TimeInterval(fx.timeUp.graceSeconds))
     var upOK = !fx.timeUp.cases.isEmpty

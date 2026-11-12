@@ -6,13 +6,14 @@ import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.withFrameNanos
 import app.anothermorsetrainer.morsekit.SessionClock
 import kotlinx.coroutines.delay
 
 // The pieces every drill screen's session shares: the countdown, what reaching
-// zero does, and the timer menu's actions. The rules are SessionClock's,
-// pinned by fixtures/gap-timers-session-clock.json; iOS keeps the same flow in
-// AppModel.
+// zero does, the timer menu's actions, and the wait before a session's first
+// sound. The rules are SessionClock's, pinned by
+// fixtures/gap-timers-session-clock.json; iOS keeps the same flow in AppModel.
 
 /**
  * Counts [remaining] down a second at a time while [running] and time is left.
@@ -95,4 +96,14 @@ class SessionTimerActions(
     }
 }
 
+/**
+ * What a session's first sound waits for: the screen's first frame drawn, then
+ * [SessionClock.FIRST_SOUND_BEAT_MS] more. Start used to sound it before the
+ * drill screen had arrived.
+ */
+suspend fun awaitScreenThenBeat() {
+    withFrameNanos { }
+    withFrameNanos { }
+    delay(SessionClock.FIRST_SOUND_BEAT_MS)
+}
 

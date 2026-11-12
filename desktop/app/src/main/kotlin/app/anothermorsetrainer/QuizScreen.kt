@@ -220,6 +220,10 @@ fun QuizScreen(
         mutableStateOf<Int?>(Settings.practiceDuration.seconds)
     }
     var remaining by remainingState
+    // The run's first sound waits until the screen has drawn its first frame,
+    // then SessionClock.FIRST_SOUND_BEAT_MS more: Start used to sound it
+    // before the drill screen had arrived.
+    var leadIn by remember { mutableStateOf(true) }
     // The countdown ran out with a drill still waiting for its answer: the
     // session is held for that answer, and moving on ends it (SessionClock).
     val heldState = rememberSaveable { mutableStateOf(false) }
@@ -343,6 +347,7 @@ fun QuizScreen(
 
     /** Start a fresh session from the summary screen. */
     fun practiceAgain() {
+        leadIn = true
         tally = Tally()
         recorded = false
         milestone = null
@@ -358,6 +363,7 @@ fun QuizScreen(
         toneFinishedAt = 0L
         unlockedNote = null
         keyer.clear()
+        if (leadIn) { leadIn = false; awaitScreenThenBeat() }
         val introducing = intro
         if (introducing != null) {
             // The new item on its own; the drill plays once it is started.

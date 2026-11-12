@@ -122,6 +122,10 @@ fun JourneyScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
         mutableStateOf<Int?>(Settings.practiceDuration.seconds)
     }
     var remaining by remainingState
+    // The run's first sound waits until the screen has drawn its first frame,
+    // then SessionClock.FIRST_SOUND_BEAT_MS more: Start used to sound it
+    // before the drill screen had arrived.
+    var leadIn by remember { mutableStateOf(true) }
     // The countdown ran out with a drill still waiting for its answer: the
     // session is held for that answer, and moving on ends it (SessionClock).
     val heldState = rememberSaveable { mutableStateOf(false) }
@@ -178,6 +182,7 @@ fun JourneyScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
         chosen = null
         toneFinishedAt = 0L
         clearedLabel = null
+        if (leadIn) { leadIn = false; awaitScreenThenBeat() }
         player.play(drill.playable, Settings.sidetoneHz, Settings.timing()) { toneFinishedAt = System.nanoTime() }
     }
 
@@ -255,6 +260,7 @@ fun JourneyScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
 
     /** Start a fresh session from the summary screen. */
     fun practiceAgain() {
+        leadIn = true
         tally = Tally()
         recorded = false
         milestone = null

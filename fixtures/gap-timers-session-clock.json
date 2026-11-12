@@ -6,8 +6,10 @@
     "subtract": "the timer menu's 'Subtract 1 minute', offered only while the session is timed: what is left drops by the seconds, never below 0, and reaching 0 ends the session; an open-ended session has nothing to subtract from and stays open-ended; a seconds value of zero or less changes nothing",
     "remove": "'Remove time limit' makes any session open-ended (remaining becomes null)",
     "timeUp": "when the countdown runs out while a drill has been sent and is waiting for its answer, the session is held: that drill can still be answered, and answering it ends the session where the next drill would have started. A hold lasts at most graceSeconds, so an abandoned session still ends. With nothing waiting it ends at once. `held` is whether the run-out found a drill waiting; `overdue` is the whole seconds since the countdown ran out; `expected` is whether the session ends now",
+    "firstSoundBeat": "a session's first sound waits for its screen to arrive (an event, platform by platform), then `firstSoundBeat.seconds` more, so it does not land the instant the screen settles",
     "note": "Derived from these rules directly, independently of any implementation."
   },
+  "firstSoundBeat": { "seconds": 0.4 },
   "add": [
     { "remaining": null, "seconds": 300, "expected": 300 },
     { "remaining": null, "seconds": 60, "expected": 60 },
