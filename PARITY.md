@@ -143,6 +143,15 @@ missing feature.
   window is resizable and uses the Android rule and thresholds
   (`isWideLayout()` in its own `Responsive.kt`).
 
+- <a id="idiom-portrait-lock"></a>**Brass Knuckles holds a phone in
+  portrait.** Its ring, tell panel and key pad stack, and in a phone's
+  landscape height they do not fit, so iOS (`OrientationLock` in
+  `MorseTrainerApp.swift`) and Android (`requestedOrientation` in
+  `BoxingScreen.kt`) keep a phone in portrait while the screen is up; a
+  tablet (iPad, 600 dp and up) keeps every orientation. A desktop window
+  has no orientation to hold: it is resized, and the ring keeps the
+  picture's shape at any size.
+
 - **The hunt simulator's key (#313).** You key the simulator with the
   on-screen key (straight or paddles), the keyboard on desktop, or a Vail /
   MIDI key, through the same `SendingKeyer` First Four uses. iOS pairs a BLE
