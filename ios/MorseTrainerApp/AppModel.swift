@@ -321,6 +321,10 @@ final class AppModel: ObservableObject {
     /// (the configured duration under-counted: "Until I stop" logged zero).
     private var sessionStartDate: Date?
     private var sessionTimer: Timer?
+    /// When the countdown ran out with a drill still waiting for its answer:
+    /// the session is held for that answer (`SessionClock.endsAfterTimeUp`),
+    /// and the next drill ends it instead of starting. Nil otherwise.
+    private var sessionTimeUpDate: Date?
     private var sessionAttempts = 0
     private var sessionCorrect = 0
     private var sessionFastest: TimeInterval?
@@ -2079,6 +2083,7 @@ final class AppModel: ObservableObject {
         newMilestone = nil
         sessionTimer?.invalidate()
         sessionTimer = nil
+        sessionTimeUpDate = nil
 
         // Contest mode runs its own clock (the real one-hour event or a sprint);
         // every other mode uses the generic practice-duration picker.
@@ -2110,13 +2115,38 @@ final class AppModel: ObservableObject {
     }
 
     private func sessionTick() {
+        if let timeUp = sessionTimeUpDate {
+            // Held for the drill that was waiting: answering it ends the
+            // session (newDrill); this only enforces the grace.
+            if SessionClock.endsAfterTimeUp(held: true, overdue: -timeUp.timeIntervalSinceNow) { endSession() }
+            return
+        }
         guard let end = sessionEndDate else { return }
         let remaining = end.timeIntervalSinceNow
         if remaining <= 0 {
             sessionRemaining = 0
-            endSession()
+            if SessionClock.endsAfterTimeUp(held: drillAwaitsAnswer, overdue: 0) {
+                endSession()
+            } else {
+                sessionTimeUpDate = Date()
+            }
         } else {
             sessionRemaining = remaining
+        }
+    }
+
+    /// A drill has been sent, or is being sent, and waits for its answer:
+    /// what holds a timed session open past its last second. Only the modes
+    /// that hand out drills one at a time (`newDrill`); Listen, the stories,
+    /// the exam, the pileups, Rapid Fire's review stream and the games run
+    /// on their own.
+    private var drillAwaitsAnswer: Bool {
+        guard drill != nil, introduction == nil, !mode.isGame, !isListen, !isStory,
+              !isExam, !usesPileup, !isRapidFireReview else { return false }
+        switch phase {
+        case .playing, .awaiting: return true
+        case .revealed: return isHeadCopy   // shown, waiting to be self-graded
+        case .idle, .answered: return false
         }
     }
 
@@ -2169,8 +2199,11 @@ final class AppModel: ObservableObject {
         if let end = sessionEndDate {
             // The arithmetic is SessionClock's, pinned by
             // fixtures/gap-timers-session-clock.json (Android and desktop
-            // run the same rule in their own SessionClock).
-            let remaining = SessionClock.added(end.timeIntervalSinceNow, by: seconds) ?? seconds
+            // run the same rule in their own SessionClock). A held session
+            // has 0 left, and the added time lifts the hold.
+            let left = sessionTimeUpDate == nil ? end.timeIntervalSinceNow : 0
+            sessionTimeUpDate = nil
+            let remaining = SessionClock.added(left, by: seconds) ?? seconds
             sessionEndDate = Date().addingTimeInterval(remaining)
             sessionRemaining = remaining
         } else {
@@ -2189,7 +2222,8 @@ final class AppModel: ObservableObject {
             return
         }
         guard !sessionEnded, seconds > 0, let end = sessionEndDate else { return }
-        let remaining = SessionClock.reduced(end.timeIntervalSinceNow, by: seconds) ?? 0
+        let left = sessionTimeUpDate == nil ? end.timeIntervalSinceNow : 0
+        let remaining = SessionClock.reduced(left, by: seconds) ?? 0
         if remaining <= 0 { sessionRemaining = 0; endSession(); return }
         sessionEndDate = Date().addingTimeInterval(remaining)
         sessionRemaining = remaining
@@ -2201,6 +2235,7 @@ final class AppModel: ObservableObject {
         guard !sessionEnded else { return }
         sessionTimer?.invalidate()
         sessionTimer = nil
+        sessionTimeUpDate = nil
         sessionEndDate = nil
         sessionRemaining = nil
     }
@@ -2216,6 +2251,7 @@ final class AppModel: ObservableObject {
         guard !sessionEnded else { return }
         sessionTimer?.invalidate()
         sessionTimer = nil
+        sessionTimeUpDate = nil
         sessionEndDate = nil
         advanceGeneration += 1   // cancel any pending auto-advance
         cancelHeadCopyAuto()     // cancel any pending head-copy repeat/reveal
@@ -2411,6 +2447,12 @@ final class AppModel: ObservableObject {
     }
 
     private func newDrill() {
+        // The countdown ran out while the last drill waited: that drill has
+        // now been answered, so the session ends here instead.
+        if sessionTimeUpDate != nil {
+            endSession()
+            return
+        }
         advanceGeneration += 1   // cancel any pending auto-advance
         cancelHeadCopyAuto()     // cancel any pending repeat/reveal from the last item
         resetVoiceRound()

@@ -1,10 +1,11 @@
 {
-  "$comment": "Shared session-clock fixture (parity audit row-03), consumed by the iOS MorseKitCheck harness, android SessionClockTest and desktop SessionClockTest. Data, not code - see CLAUDE.md's separate-ports rule. Expected values are derived from the rules in `derivation` (the iOS timer menu's documented behaviour, issue #41), not captured from any implementation.",
+  "$comment": "Shared session-clock fixture (parity audit row-03), consumed by the iOS MorseKitCheck harness, android SessionClockTest and desktop SessionClockTest. Data, not code - see CLAUDE.md's separate-ports rule. Expected values are derived from the rules in `derivation` (the iOS timer menu's documented behaviour, issue #41, and the run-out rule under `timeUp`), not captured from any implementation.",
   "derivation": {
-    "remaining": "seconds left on the session countdown, or null for an open-ended session; 0 means the clock has run out and the session ends",
+    "remaining": "seconds left on the session countdown, or null for an open-ended session; 0 means the clock has run out and the session ends, or is held (see timeUp)",
     "add": "the timer menu's 'Add 5 minutes' / 'Add 1 minute': on a timed session the seconds are added to what is left; on an open-ended one they start a countdown of exactly that many seconds; a seconds value of zero or less changes nothing",
     "subtract": "the timer menu's 'Subtract 1 minute', offered only while the session is timed: what is left drops by the seconds, never below 0, and reaching 0 ends the session; an open-ended session has nothing to subtract from and stays open-ended; a seconds value of zero or less changes nothing",
     "remove": "'Remove time limit' makes any session open-ended (remaining becomes null)",
+    "timeUp": "when the countdown runs out while a drill has been sent and is waiting for its answer, the session is held: that drill can still be answered, and answering it ends the session where the next drill would have started. A hold lasts at most graceSeconds, so an abandoned session still ends. With nothing waiting it ends at once. `held` is whether the run-out found a drill waiting; `overdue` is the whole seconds since the countdown ran out; `expected` is whether the session ends now",
     "note": "Derived from these rules directly, independently of any implementation."
   },
   "add": [
@@ -16,6 +17,17 @@
     { "remaining": null, "seconds": 0, "expected": null },
     { "remaining": 120, "seconds": -60, "expected": 120 }
   ],
+  "timeUp": {
+    "graceSeconds": 15,
+    "cases": [
+      { "held": false, "overdue": 0, "expected": true },
+      { "held": false, "overdue": 5, "expected": true },
+      { "held": true, "overdue": 0, "expected": false },
+      { "held": true, "overdue": 14, "expected": false },
+      { "held": true, "overdue": 15, "expected": true },
+      { "held": true, "overdue": 60, "expected": true }
+    ]
+  },
   "subtract": [
     { "remaining": 300, "seconds": 60, "expected": 240 },
     { "remaining": 61, "seconds": 60, "expected": 1 },

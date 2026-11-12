@@ -10492,8 +10492,14 @@ func loadGapLbFixture(_ name: String) -> [String: Any]? {
 // subtract arithmetic, derived from the documented menu rules.
 struct SessionClockFixture: Decodable {
     struct Case: Decodable { let remaining: Int?; let seconds: Int; let expected: Int? }
+    struct TimeUp: Decodable {
+        struct Case: Decodable { let held: Bool; let overdue: Int; let expected: Bool }
+        let graceSeconds: Int
+        let cases: [Case]
+    }
     let add: [Case]
     let subtract: [Case]
+    let timeUp: TimeUp
 }
 
 func loadSessionClockFixture() -> SessionClockFixture? {
@@ -10644,7 +10650,7 @@ if let fx = loadGapFixtureObject("gap-analyzer-mic-state.json"),
     check("fixtures/gap-analyzer-mic-state.json loads and decodes", false)
 }
 
-print("\nSession clock (timer menu add / subtract), against fixtures/gap-timers-session-clock.json:")
+print("\nSession clock (timer menu add / subtract, run-out hold), against fixtures/gap-timers-session-clock.json:")
 if let fx = loadSessionClockFixture() {
     func intOrNil(_ v: TimeInterval?) -> Int? {
         guard let v else { return nil }
@@ -10666,6 +10672,15 @@ if let fx = loadSessionClockFixture() {
         print("      ↳ subtract \(c.seconds) from \(String(describing: c.remaining)): fixture says \(String(describing: c.expected))")
     }
     check("subtracting time follows the fixture (\(fx.subtract.count) cases)", subOK)
+    check("the run-out hold lasts the fixture's grace (\(fx.timeUp.graceSeconds) s)",
+          SessionClock.timeUpGraceSeconds == TimeInterval(fx.timeUp.graceSeconds))
+    var upOK = !fx.timeUp.cases.isEmpty
+    for c in fx.timeUp.cases
+    where SessionClock.endsAfterTimeUp(held: c.held, overdue: TimeInterval(c.overdue)) != c.expected {
+        upOK = false
+        print("      ↳ run out, held \(c.held), \(c.overdue) s overdue: fixture says ends = \(c.expected)")
+    }
+    check("a run-out countdown ends or holds as the fixture says (\(fx.timeUp.cases.count) cases)", upOK)
 } else {
     check("fixtures/gap-timers-session-clock.json loads and decodes", false)
 }
