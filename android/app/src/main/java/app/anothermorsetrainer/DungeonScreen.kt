@@ -495,11 +495,14 @@ fun DungeonScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
             }
             DgnPhase.RUNNING -> {
                 BackHandler { abandonRun() }
+                // Built once a game, not on every recomposition: the pool is
+                // re-sorted and the spells re-filtered each time.
+                val runSpells = remember(game) { spellPool().spells }
                 DungeonRun(
-                    monsters = monsters, casterId = casterId, sending = sending, windowFraction = windowFraction,
+                    monsters = monsters, casterId = casterId, sending = sending, windowFraction = { windowFraction },
                     room = room, score = score, lives = lives, maxLives = maxLives, multiplier = multiplier, wpm = wpm,
                     flash = flash,
-                    spells = spellPool().spells,
+                    spells = runSpells,
                     decoded = keyer.decodedText,
                     keyPressed = keyPressed,
                     midiDevice = midiDevice,
@@ -607,7 +610,10 @@ private fun DungeonSpellBook(spells: List<DungeonSpell>) {
 
 @Composable
 private fun DungeonRun(
-    monsters: List<DungeonMonster>, casterId: Int?, sending: Boolean, windowFraction: Float?,
+    monsters: List<DungeonMonster>, casterId: Int?, sending: Boolean,
+    // Read only while drawing: it drains every frame while a spell's window
+    // is open, and recomposing the screen for it stuttered the game.
+    windowFraction: () -> Float?,
     room: Int, score: Int, lives: Int, maxLives: Int, multiplier: Int, wpm: Int,
     flash: Pair<String, Long>?,
     spells: List<DungeonSpell>,
@@ -652,6 +658,7 @@ private fun DungeonRun(
                 .border(1.dp, Brand.hairline, RoundedCornerShape(Brand.cornerRadius))
                 .pointerInput(Unit) { detectTapGestures { onReplay() } }
         ) {
+            val window = windowFraction()
             // The floor: a tile grid inside a wall.
             val tile = 28.dp.toPx()
             val gridColour = Color.White.copy(alpha = 0.04f)
@@ -699,14 +706,14 @@ private fun DungeonRun(
                     if (sending) {
                         val dots = measurer.measure("· · ·", dotsStyle)
                         drawText(dots, topLeft = Offset(cx - dots.size.width / 2, monsterY - 48.dp.toPx() - dots.size.height / 2))
-                    } else if (windowFraction != null) {
+                    } else if (window != null) {
                         // The attack window, draining under the caster.
                         val barWidth = 60.dp.toPx()
                         val barHeight = 6.dp.toPx()
                         val top = monsterY + 40.dp.toPx()
                         drawRoundRect(Brand.navyRaised, Offset(cx - barWidth / 2, top), Size(barWidth, barHeight), CornerRadius(3.dp.toPx()))
-                        val colour = if (windowFraction > 0.4f) Brand.teal else Color.Red
-                        drawRoundRect(colour, Offset(cx - barWidth / 2, top), Size(barWidth * windowFraction, barHeight), CornerRadius(3.dp.toPx()))
+                        val colour = if (window > 0.4f) Brand.teal else Color.Red
+                        drawRoundRect(colour, Offset(cx - barWidth / 2, top), Size(barWidth * window, barHeight), CornerRadius(3.dp.toPx()))
                     }
                 }
             }

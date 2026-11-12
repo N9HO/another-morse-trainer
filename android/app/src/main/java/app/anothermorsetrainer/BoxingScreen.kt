@@ -245,8 +245,13 @@ fun BoxingScreen(onBack: () -> Unit) {
     }
 
     // The frame clock: runs the rules, the tell, the keying judge and the splash.
+    // The rules run every frame; `tick`, which redraws the screen, moves at
+    // most every BK_ART_FRAME_MS. The ring is re-painted in software, and
+    // doing that on every frame (up to 120 a second) made the game stutter;
+    // 30 a second is plenty for pixel art.
     LaunchedEffect(Unit) {
         goSplash()
+        var lastArtFrame = -1
         while (true) {
             withFrameNanos { }
             val now = clock()
@@ -274,7 +279,11 @@ fun BoxingScreen(onBack: () -> Unit) {
                 }
                 else -> {}
             }
-            tick += 1
+            val artFrame = now / BK_ART_FRAME_MS
+            if (artFrame != lastArtFrame) {
+                lastArtFrame = artFrame
+                tick += 1
+            }
         }
     }
 
@@ -372,6 +381,9 @@ fun BoxingScreen(onBack: () -> Unit) {
         }
     }
 }
+
+/** The longest gap between redraws of the boxing screens (30 a second). Twin of iOS `artFrameMs`. */
+private const val BK_ART_FRAME_MS = 33
 
 // ---- Drawing helpers --------------------------------------------------------------------------
 

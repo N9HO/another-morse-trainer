@@ -23,10 +23,14 @@ struct InvadersView: View {
     /// Play again while sharing is off and unanswered, never mid-game.
     @State private var optInPrompt = false
     @State private var game: InvadersGame?
-    /// A snapshot of the field for drawing; refreshed every frame from `game`.
+    /// Who is on the field, for the accessibility count: refreshed when an
+    /// invader arrives or leaves. The canvas draws positions straight from
+    /// `game`, so a frame that only moves invaders re-renders nothing else.
     @State private var field: [Invader] = []
     @State private var hud = HUD()
-    @State private var lastFrame: Date?
+    /// What every frame touches (`ArcadeFrame`), in a reference so writing
+    /// it does not re-render the view.
+    @State private var loop = ArcadeFrame()
     /// When each invader's Morse finished sounding (ICR), keyed by invader id,
     /// so a hit's time-to-recognize runs from the end of the tone.
     @State private var toneEnd: [Int: Date] = [:]
@@ -185,7 +189,7 @@ struct InvadersView: View {
             hudBar
             GeometryReader { geo in
                 TimelineView(.animation) { context in
-                    canvas(width: geo.size.width)
+                    canvas(width: geo.size.width, now: context.date)
                         // The frame clock: every tick moves the game on by the
                         // real time elapsed, so a dropped frame costs no distance.
                         .onChange(of: context.date) { now in step(now: now) }
@@ -243,7 +247,10 @@ struct InvadersView: View {
         }
     }
 
-    private func canvas(width: CGFloat) -> some View {
+    /// `now` is the frame's time, and the drawing reads it: that is what
+    /// makes each tick a new canvas to SwiftUI. The positions themselves come
+    /// from `game`, which a frame changes without touching any state.
+    private func canvas(width: CGFloat, now: Date) -> some View {
         Canvas { context, size in
             let ground = size.height - 18
             var line = Path()
@@ -257,7 +264,7 @@ struct InvadersView: View {
             // Keying shows the character above its sprite, so the field
             // starts lower to leave the label room at the top.
             let top: CGFloat = input == .keying ? 30 : 18
-            for inv in field {
+            for inv in game?.invaders ?? [] {
                 let x = (CGFloat(inv.column) + 0.5) * colWidth
                 let y = top + CGFloat(inv.progress) * (ground - top - 18)
                 // The alien (#179) instead of a "?", which read as a literal
@@ -273,7 +280,7 @@ struct InvadersView: View {
                                  with: .color(Theme.tealBright))
                 }
             }
-            if flashUntil > Date() {
+            if flashUntil > now {
                 context.draw(Text(flashText).font(.headline).foregroundColor(Theme.tealBright),
                              at: CGPoint(x: size.width / 2, y: 14))
             }
@@ -394,18 +401,14 @@ struct InvadersView: View {
         field = []
         toneEnd = [:]
         flashUntil = .distantPast
-        lastFrame = nil
+        loop.reset()
         syncHUD(g)
         phase = .playing
     }
 
     private func step(now: Date) {
         guard phase == .playing, let game else { return }
-        defer { lastFrame = now }
-        guard let last = lastFrame else { return }
-        // Cap a long gap (the app was backgrounded) so the field does not
-        // empty onto the ground in one step.
-        let dt = min(0.1, now.timeIntervalSince(last))
+        guard let dt = loop.step(to: now) else { return }
         for event in game.advance(by: dt) {
             switch event {
             case .spawned(let inv):
@@ -422,10 +425,11 @@ struct InvadersView: View {
                 flash("\(inv.character) got through", for: 1.0)
             case .gameOver:
                 model.stopInvaders()
+                loop.reset()
                 phase = .over
             }
         }
-        field = game.invaders
+        if field.map(\.id) != game.invaders.map(\.id) { field = game.invaders }
         syncHUD(game)
     }
 

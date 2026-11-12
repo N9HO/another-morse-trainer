@@ -1,5 +1,6 @@
 package app.anothermorsetrainer
 
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -438,8 +439,8 @@ fun AsteroidsScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {
                 BackHandler { abandonRun() }
                 AsteroidsRun(
                     input = input,
-                    field = field,
-                    elapsed = elapsed,
+                    field = { field },
+                    elapsed = { elapsed },
                     score = score, wave = wave, lives = lives, multiplier = multiplier, wpm = wpm,
                     flash = flash,
                     buffer = sendBuffer,
@@ -525,8 +526,11 @@ private fun AsteroidsSetup(
 @Composable
 private fun AsteroidsRun(
     input: AsteroidsInput,
-    field: List<Asteroid>,
-    elapsed: Double,
+    // The rocks and the clock are read only while drawing (and by the tap
+    // handler), so a frame that moves them redraws the field without
+    // recomposing the screen.
+    field: () -> List<Asteroid>,
+    elapsed: () -> Double,
     score: Int, wave: Int, lives: Int, multiplier: Int, wpm: Int,
     flash: Pair<String, Long>?,
     buffer: String,
@@ -542,6 +546,9 @@ private fun AsteroidsRun(
     val measurer = rememberTextMeasurer()
     val density = LocalDensity.current
     val latestField by rememberUpdatedState(field)
+    // Each label measured once, not every frame: with fragments and words
+    // there are more than the measurer's own cache holds.
+    val labels = remember { HashMap<String, TextLayoutResult>() }
     val latestOnTapAsteroid by rememberUpdatedState(onTapAsteroid)
     val latestOnTapShip by rememberUpdatedState(onTapShip)
     Column(modifier = Modifier.fillMaxSize().widthIn(max = CONTENT_MAX_WIDTH).padding(horizontal = 16.dp)) {
@@ -581,7 +588,7 @@ private fun AsteroidsRun(
                         when (val hit = AsteroidsHitTest.target(
                             offset.x.toDouble(), offset.y.toDouble(),
                             size.width.toDouble(), size.height.toDouble(),
-                            density.density.toDouble(), latestField
+                            density.density.toDouble(), latestField()
                         )) {
                             is AsteroidsTap.Ship -> latestOnTapShip()
                             is AsteroidsTap.Rock -> latestOnTapAsteroid(hit.id)
@@ -594,7 +601,9 @@ private fun AsteroidsRun(
             val cy = size.height / 2f
             // The ship: a small triangle facing the nearest asteroid, inside
             // a faint shield ring.
-            val nearest = field.maxByOrNull { it.progress }
+            val rocks = field()
+            val now = elapsed()
+            val nearest = rocks.maxByOrNull { it.progress }
             val facing = if (nearest != null) {
                 atan2(nearest.y.toFloat() * size.height - cy, nearest.x.toFloat() * size.width - cx)
             } else {
@@ -612,11 +621,11 @@ private fun AsteroidsRun(
             }
             drawPath(ship, Brand.teal)
 
-            for (a in field) {
+            for (a in rocks) {
                 val px = a.x.toFloat() * size.width
                 val py = a.y.toFloat() * size.height
                 val r = AsteroidsHitTest.radiusDp(a).toFloat().dp.toPx()
-                val spin = (elapsed * 0.6 * (if (a.id % 2 == 0) 1 else -1)).toFloat()
+                val spin = (now * 0.6 * (if (a.id % 2 == 0) 1 else -1)).toFloat()
                 val n = ASTEROID_LUMPS.size
                 val rock = Path().apply {
                     for (k in 0 until n) {
@@ -630,7 +639,7 @@ private fun AsteroidsRun(
                 }
                 drawPath(rock, Brand.navyRaised)
                 drawPath(rock, Brand.tealBright, style = Stroke((if (a.isFragment) 1.dp else 1.5.dp).toPx()))
-                val measured = measurer.measure(a.label, labelStyle)
+                val measured = labels.getOrPut(a.label) { measurer.measure(a.label, labelStyle) }
                 drawText(measured, topLeft = Offset(px - measured.size.width / 2, py - measured.size.height / 2))
             }
             if (flash != null && flash.second > System.currentTimeMillis()) {
