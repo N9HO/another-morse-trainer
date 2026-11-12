@@ -121,9 +121,14 @@ fun SendingPracticeScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Un
     // Session length (iOS usesSessionLength): the countdown the Session Length
     // picker set and the timer menu adjusts; expiry shows the summary.
     var phase by rememberSaveable { mutableStateOf(SpPhase.RUNNING) }
-    var remaining by rememberSaveable(stateSaver = OptionalIntSaver) {
+    val remainingState = rememberSaveable(stateSaver = OptionalIntSaver) {
         mutableStateOf<Int?>(Settings.practiceDuration.seconds)
     }
+    var remaining by remainingState
+    // The countdown ran out with a drill still waiting for its answer: the
+    // session is held for that answer, and moving on ends it (SessionClock).
+    val heldState = rememberSaveable { mutableStateOf(false) }
+    var timeUpHeld by heldState
     var recorded by rememberSaveable { mutableStateOf(false) }
     var milestone by remember { mutableStateOf<Int?>(null) }
 
@@ -194,12 +199,37 @@ fun SendingPracticeScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Un
         }
     }
 
+    /** Persist the session once (the summary's entry or an early Back, whichever first). */
+    fun recordRun(): Int? {
+        if (recorded) return null
+        recorded = true
+        return Stats.record(
+            mode = "Sending", attempts = tally.attempts, correct = tally.correct,
+            bestTtrMs = null, durationSeconds = tally.elapsedSeconds(),
+            characterWpm = Settings.characterWpm.roundToInt(),
+            effectiveWpm = Settings.effectiveWpmInUse.roundToInt()
+        )
+    }
+
+    /** The timer ran out or End was tapped: record the session and show the summary. */
+    fun endSession() {
+        if (phase == SpPhase.SUMMARY) return
+        timeUpHeld = false
+        player.stop()
+        keyer.clear()
+        milestone = recordRun()
+        phase = SpPhase.SUMMARY
+    }
+
     /**
      * Next drill, clearing the reveal state in the same recomposition as the
      * new drill — LaunchedEffect(round) resets it a frame later, and that
      * stale frame flashed the next item's answer (issue #63).
      */
     fun advanceNow() {
+        // The countdown ran out while this drill waited for its answer: it
+        // has been answered, so the session ends here (SessionClock).
+        if (timeUpHeld) { endSession(); return }
         missAck.reset()
         ackAwaiting = false
         drill = source.nextDrill()
@@ -215,7 +245,7 @@ fun SendingPracticeScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Un
         val sent = keyer.decodedText.trim()
         if (sent.isEmpty() || sent.length < drill.correct.length) return@LaunchedEffect
         when (missAck.input(sent, System.nanoTime() / 1_000_000)) {
-            ContinueAfterMiss.Outcome.ADVANCE -> { keyer.clear(); advanceNow() }
+            ContinueAfterMiss.Outcome.ADVANCE -> { keyer.clear(); if (phase == SpPhase.RUNNING) advanceNow() }
             ContinueAfterMiss.Outcome.WRONG, ContinueAfterMiss.Outcome.DEBOUNCED -> keyer.clear()
             ContinueAfterMiss.Outcome.INACTIVE -> ackAwaiting = false
         }
@@ -237,27 +267,6 @@ fun SendingPracticeScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Un
         }
     }
 
-    /** Persist the session once (the summary's entry or an early Back, whichever first). */
-    fun recordRun(): Int? {
-        if (recorded) return null
-        recorded = true
-        return Stats.record(
-            mode = "Sending", attempts = tally.attempts, correct = tally.correct,
-            bestTtrMs = null, durationSeconds = tally.elapsedSeconds(),
-            characterWpm = Settings.characterWpm.roundToInt(),
-            effectiveWpm = Settings.effectiveWpmInUse.roundToInt()
-        )
-    }
-
-    /** The timer ran out or End was tapped: record the session and show the summary. */
-    fun endSession() {
-        if (phase == SpPhase.SUMMARY) return
-        player.stop()
-        keyer.clear()
-        milestone = recordRun()
-        phase = SpPhase.SUMMARY
-    }
-
     fun finish() {
         recordRun()
         onBack()
@@ -274,22 +283,14 @@ fun SendingPracticeScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Un
     }
     BackHandler { if (phase == SpPhase.SUMMARY) onBack() else finish() }
 
-    // Session countdown; also keyed on whether a limit exists, so the timer
-    // menu starting a countdown on an open-ended run (or dropping one)
-    // restarts the loop. Reaching zero (or subtracting the last minute) ends it.
-    LaunchedEffect(phase, remaining == null) {
-        if (phase != SpPhase.RUNNING) return@LaunchedEffect
-        while (true) {
-            val r = remaining ?: return@LaunchedEffect
-            if (r <= 0) return@LaunchedEffect
-            delay(1000)
-            remaining = remaining?.minus(1)
-        }
-    }
-    LaunchedEffect(phase, remaining) {
-        val r = remaining
-        if (phase == SpPhase.RUNNING && r != null && r <= 0) endSession()
-    }
+    // The session countdown (SessionKit); what reaching zero does is
+    // rememberSessionTimeUp, below.
+    SessionTick(running = phase == SpPhase.RUNNING, remaining = remainingState)
+    // At zero: end, or hold for the drill waiting on its answer (SessionKit).
+    val timer = rememberSessionTimeUp(
+        running = phase == SpPhase.RUNNING, remaining = remainingState, held = heldState,
+        awaitingAnswer = { !revealed }, onEnd = { endSession() }
+    )
 
     // Mid-session Settings, drawn over the session so its state lives on.
     var showSettings by remember { mutableStateOf(false) }
@@ -322,9 +323,9 @@ fun SendingPracticeScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Un
                 if (phase == SpPhase.RUNNING) {
                     SessionTimerMenu(
                         remaining = remaining,
-                        onAddSeconds = { remaining = (remaining ?: 0) + it },
-                        onSubtractSeconds = { remaining = SessionClock.reduced(remaining, it) },
-                        onRemoveLimit = { remaining = null }
+                        onAddSeconds = timer::add,
+                        onSubtractSeconds = timer::subtract,
+                        onRemoveLimit = timer::removeLimit
                     )
                 }
                 // Switching records the run the way Back does, then lands on
@@ -370,7 +371,9 @@ fun SendingPracticeScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Un
                     EngineStore.save()
                     summary = source.summary
                     stageRev++
-                    advanceNow()
+                    // Not while the run-out holds the session for the drill on screen:
+                    // a new drill there would end it (iOS draws none on a pin).
+                    if (!timeUpHeld) advanceNow()
                 }
             }
             Spacer(Modifier.height(2.dp))

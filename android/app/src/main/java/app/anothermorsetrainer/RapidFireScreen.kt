@@ -104,7 +104,12 @@ fun RapidFireScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {
     // ranked, and iOS ranks it with no length adjustment - the board's number is
     // the server-graded run however long it ran, and the personal best is the
     // correct count - so a run of any length is posted and recorded the same way.
-    var remaining by rememberSaveable(stateSaver = OptionalIntSaver) { mutableStateOf<Int?>(null) }
+    val remainingState = rememberSaveable(stateSaver = OptionalIntSaver) { mutableStateOf<Int?>(null) }
+    var remaining by remainingState
+    // The countdown ran out with a drill still waiting for its answer: the
+    // session is held for that answer, and moving on ends it (SessionClock).
+    val heldState = rememberSaveable { mutableStateOf(false) }
+    var timeUpHeld by heldState
 
     // Setup selections persist across launches in Settings, field for field
     // with the iOS RapidFireSettings — so a reclaimed process and the next
@@ -199,6 +204,7 @@ fun RapidFireScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {
         revealBox = response == RapidFireResponse.TYPE
         startedAtMs = System.currentTimeMillis()
         remaining = Settings.practiceDuration.seconds
+        timeUpHeld = false
         runAttempts = 0
         runCorrect = 0
         lastSeenMs = startedAtMs
@@ -244,6 +250,7 @@ fun RapidFireScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {
     }
 
     fun finishRun() {
+        timeUpHeld = false
         recordRun()
         phase = RfPhase.SUMMARY
     }
@@ -299,6 +306,9 @@ fun RapidFireScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {
         runAttempts = transcript.count { it.correct != null }
         runCorrect = transcript.count { it.correct == true }
         lastSeenMs = System.currentTimeMillis()
+        // The countdown ran out while this drill waited for its answer: it
+        // has been answered, so the session ends here (SessionClock).
+        if (timeUpHeld) { finishRun(); return }
         drill = q.nextDrill()
         typed = ""
         keyer.clear()
@@ -337,23 +347,14 @@ fun RapidFireScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {
         if (sent.isNotEmpty() && sent.length >= d.correct.length) advance()
     }
 
-    // Session countdown; also keyed on whether a limit exists, so the timer
-    // menu starting a countdown on an open-ended run (or dropping one)
-    // restarts the loop. Reaching zero (or subtracting the last minute) ends
-    // the run as Done does.
-    LaunchedEffect(phase, remaining == null) {
-        if (phase != RfPhase.RUNNING) return@LaunchedEffect
-        while (true) {
-            val r = remaining ?: return@LaunchedEffect
-            if (r <= 0) return@LaunchedEffect
-            delay(1000)
-            remaining = remaining?.minus(1)
-        }
-    }
-    LaunchedEffect(phase, remaining) {
-        val r = remaining
-        if (phase == RfPhase.RUNNING && r != null && r <= 0) finishRun()
-    }
+    // The session countdown (SessionKit); what reaching zero does is
+    // rememberSessionTimeUp, below.
+    SessionTick(running = phase == RfPhase.RUNNING, remaining = remainingState)
+    // At zero: end, or hold for the drill waiting on its answer (SessionKit).
+    val timer = rememberSessionTimeUp(
+        running = phase == RfPhase.RUNNING, remaining = remainingState, held = heldState,
+        awaitingAnswer = { drill != null && response != RapidFireResponse.REVIEW }, onEnd = { finishRun() }
+    )
 
     // Mid-session Settings, drawn over the run so the stream lives on.
     var showSettings by remember { mutableStateOf(false) }
@@ -391,9 +392,9 @@ fun RapidFireScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {
                 timerBar = {
                     SessionTimerBar(
                         remaining = remaining,
-                        onAddSeconds = { remaining = (remaining ?: 0) + it },
-                        onSubtractSeconds = { remaining = SessionClock.reduced(remaining, it) },
-                        onRemoveLimit = { remaining = null }
+                        onAddSeconds = timer::add,
+                        onSubtractSeconds = timer::subtract,
+                        onRemoveLimit = timer::removeLimit
                     )
                 },
                 response = response,

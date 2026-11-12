@@ -8,7 +8,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * The session timer menu's arithmetic (add, subtract), pinned against
+ * The session timer menu's arithmetic (add, subtract) and the run-out hold, pinned against
  * `fixtures/gap-timers-session-clock.json` at the repo root - the same file
  * the iOS `MorseKitCheck` harness and the other Kotlin tree read. The expected
  * values come from the documented menu rules, not from running either port.
@@ -38,4 +38,18 @@ class SessionClockTest {
 
     @Test
     fun `subtracting time follows the fixture`() = check(fixture.getJSONArray("subtract")) { r, s -> SessionClock.reduced(r, s) }
+
+    @Test
+    fun `a run-out countdown ends or holds as the fixture says`() {
+        val timeUp = fixture.getJSONObject("timeUp")
+        assertEquals("grace", timeUp.getInt("graceSeconds"), SessionClock.TIME_UP_GRACE_SECONDS)
+        val cases = timeUp.getJSONArray("cases")
+        assertTrue("fixture has no cases", cases.length() > 0)
+        for (i in 0 until cases.length()) {
+            val c = cases.getJSONObject(i)
+            val held = c.getBoolean("held")
+            val overdue = c.getInt("overdue")
+            assertEquals("held=$held overdue=$overdue", c.getBoolean("expected"), SessionClock.endsAfterTimeUp(held, overdue))
+        }
+    }
 }

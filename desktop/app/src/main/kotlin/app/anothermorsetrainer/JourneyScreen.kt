@@ -114,18 +114,17 @@ fun JourneyScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
     // picker set, the timer menu adjusts, and expiry turns into the summary.
     // Declared above the map so the clock keeps running while the map is up.
     var phase by rememberSaveable { mutableStateOf(JyPhase.RUNNING) }
-    var remaining by rememberSaveable(stateSaver = OptionalIntSaver) {
+    val remainingState = rememberSaveable(stateSaver = OptionalIntSaver) {
         mutableStateOf<Int?>(Settings.practiceDuration.seconds)
     }
-    LaunchedEffect(phase, remaining == null) {
-        if (phase != JyPhase.RUNNING) return@LaunchedEffect
-        while (true) {
-            val r = remaining ?: return@LaunchedEffect
-            if (r <= 0) return@LaunchedEffect
-            delay(1000)
-            remaining = remaining?.minus(1)
-        }
-    }
+    var remaining by remainingState
+    // The countdown ran out with a drill still waiting for its answer: the
+    // session is held for that answer, and moving on ends it (SessionClock).
+    val heldState = rememberSaveable { mutableStateOf(false) }
+    var timeUpHeld by heldState
+    // The session countdown (SessionKit); what reaching zero does is
+    // rememberSessionTimeUp, below.
+    SessionTick(running = phase == JyPhase.RUNNING, remaining = remainingState)
 
     if (showMap) {
         BackHandler { showMap = false }
@@ -184,11 +183,41 @@ fun JourneyScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
     var ackAwaiting by remember { mutableStateOf(false) }
 
     /**
+     * Close the session out — save the level, record the tally — without
+     * leaving. Once per session: the summary's entry or an early Back, whichever
+     * comes first.
+     */
+    fun close(): Int? {
+        if (recorded) return null
+        recorded = true
+        progress.currentLevel = quiz.levelNumber
+        JourneyStore.save(progress)
+        return Stats.record(
+            mode = "Journey", attempts = tally.attempts, correct = tally.correct,
+            bestTtrMs = tally.bestMs, durationSeconds = tally.elapsedSeconds(),
+            characterWpm = Settings.characterWpm.roundToInt(), medianTtrMs = tally.medianMs(),
+            effectiveWpm = Settings.effectiveWpmInUse.roundToInt()
+        )
+    }
+
+    /** The timer ran out or End was tapped: record the session and show the summary. */
+    fun endSession() {
+        if (phase == JyPhase.SUMMARY) return
+        timeUpHeld = false
+        player.stop()
+        milestone = close()
+        phase = JyPhase.SUMMARY
+    }
+
+    /**
      * Next drill, clearing the reveal state in the same recomposition as the
      * new drill — LaunchedEffect(round) resets it a frame later, and that
      * stale frame flashed the new answer in red (issue #63).
      */
     fun advanceNow() {
+        // The countdown ran out while this drill waited for its answer: it
+        // has been answered, so the session ends here (SessionClock).
+        if (timeUpHeld) { endSession(); return }
         missAck.reset()
         ackAwaiting = false
         drill = quiz.nextDrill()
@@ -215,32 +244,6 @@ fun JourneyScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
 
     DisposableEffect(Unit) { onDispose { player.release() } }
 
-    /**
-     * Close the session out — save the level, record the tally — without
-     * leaving. Once per session: the summary's entry or an early Back, whichever
-     * comes first.
-     */
-    fun close(): Int? {
-        if (recorded) return null
-        recorded = true
-        progress.currentLevel = quiz.levelNumber
-        JourneyStore.save(progress)
-        return Stats.record(
-            mode = "Journey", attempts = tally.attempts, correct = tally.correct,
-            bestTtrMs = tally.bestMs, durationSeconds = tally.elapsedSeconds(),
-            characterWpm = Settings.characterWpm.roundToInt(), medianTtrMs = tally.medianMs(),
-            effectiveWpm = Settings.effectiveWpmInUse.roundToInt()
-        )
-    }
-
-    /** The timer ran out or End was tapped: record the session and show the summary. */
-    fun endSession() {
-        if (phase == JyPhase.SUMMARY) return
-        player.stop()
-        milestone = close()
-        phase = JyPhase.SUMMARY
-    }
-
     fun finish() {
         close()
         onBack()
@@ -256,11 +259,11 @@ fun JourneyScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
         advanceNow()
     }
 
-    // The countdown reached zero (or the menu subtracted the last minute).
-    LaunchedEffect(phase, remaining) {
-        val r = remaining
-        if (phase == JyPhase.RUNNING && r != null && r <= 0) endSession()
-    }
+    // At zero: end, or hold for the drill waiting on its answer (SessionKit).
+    val timer = rememberSessionTimeUp(
+        running = phase == JyPhase.RUNNING, remaining = remainingState, held = heldState,
+        awaitingAnswer = { !revealed }, onEnd = { endSession() }
+    )
 
     BackHandler { if (phase == JyPhase.SUMMARY) onBack() else finish() }
 
@@ -442,9 +445,9 @@ fun JourneyScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
         // The iOS session bar: the countdown (a menu) and End.
         SessionTimerBar(
             remaining = remaining,
-            onAddSeconds = { remaining = (remaining ?: 0) + it },
-            onSubtractSeconds = { remaining = SessionClock.reduced(remaining, it) },
-            onRemoveLimit = { remaining = null }
+            onAddSeconds = timer::add,
+            onSubtractSeconds = timer::subtract,
+            onRemoveLimit = timer::removeLimit
         ) {
             TextButton(onClick = { endSession() }) { Text(stringResource(R.string.common_end)) }
         }
