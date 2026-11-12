@@ -43,9 +43,27 @@ enum OperatingProcedureStore {
 
 extension AppModel {
     /// One transmission at the learner's own speed and tone. Returns its
-    /// length in seconds.
+    /// length in seconds. A clip of its own (a scenario's, a replay) ends a
+    /// demo transcript still running, as Kotlin's `OpAudio.play` does: the
+    /// transcript's next line used to cut into it.
     @discardableResult
     func playOperating(_ text: String) -> TimeInterval {
+        endOperatingLines()
+        return soundOperating(text)
+    }
+
+    /// Ends a demo transcript still running: its next line never comes, and
+    /// its highlight goes at once (left set, the line stayed lit after a clip
+    /// cut it short).
+    private func endOperatingLines() {
+        operatingGeneration += 1
+        let ended = operatingLinesEnded
+        operatingLinesEnded = nil
+        ended?()
+    }
+
+    /// `playOperating` without ending a transcript: the transcript's own lines.
+    private func soundOperating(_ text: String) -> TimeInterval {
         let parts = OperatingProcedure.clipParts(text)
         guard !parts.isEmpty else { return 0 }
         // An error (`<ERR>`) is sounded in its own shape — a run of 5–8 dits,
@@ -92,13 +110,18 @@ extension AppModel {
     /// line is sounding (nil once it has all played). Returns a token: a newer
     /// call (or `stopOperating`) cancels the rest.
     func playOperatingLines(_ lines: [OpDemo.Line], onLine: @escaping @MainActor (Int?) -> Void) {
-        operatingGeneration += 1
+        endOperatingLines()
         let gen = operatingGeneration
+        operatingLinesEnded = { onLine(nil) }
         func step(_ i: Int) {
             guard gen == operatingGeneration else { return }
-            guard i < lines.count else { onLine(nil); return }
+            guard i < lines.count else {
+                operatingLinesEnded = nil
+                onLine(nil)
+                return
+            }
             onLine(i)
-            let seconds = playOperating(lines[i].text)
+            let seconds = soundOperating(lines[i].text)
             DispatchQueue.main.asyncAfter(deadline: .now() + seconds + 0.6) { step(i + 1) }
         }
         step(0)
@@ -106,7 +129,7 @@ extension AppModel {
 
     /// One pass of the pileup demo, through the Pileup Runner's own mixer.
     func playOperatingPileup(_ voices: [OpPileupVoice], onFinished: @escaping @MainActor () -> Void) {
-        operatingGeneration += 1
+        endOperatingLines()
         operatingClipGeneration += 1
         player.playPileup(voices.map { v in
             MorsePlayer.PileupVoice(text: v.text, frequency: v.pitch, timing: MorseTiming(wpm: v.wpm),
@@ -117,7 +140,7 @@ extension AppModel {
     /// The drill and the RIT demo: a station at `pitch`; with `sidetone`, your
     /// own sidetone sounding with it, so the beat between them can be heard.
     func playOperatingTone(text: String, pitch: Double, sidetone: Double? = nil) {
-        operatingGeneration += 1
+        endOperatingLines()
         operatingClipGeneration += 1
         let t = timing
         var voices = [MorsePlayer.PileupVoice(text: text, frequency: OperatingProcedure.audible(pitch), timing: t,
@@ -130,7 +153,7 @@ extension AppModel {
     }
 
     func stopOperating() {
-        operatingGeneration += 1
+        endOperatingLines()
         operatingClipGeneration += 1
         player.stop()
     }

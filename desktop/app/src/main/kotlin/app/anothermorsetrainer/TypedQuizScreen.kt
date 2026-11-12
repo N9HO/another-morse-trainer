@@ -191,8 +191,7 @@ fun TypedQuizScreen(
         } else {
             // The held correction repeats what was sent after a beat, so you
             // re-hear the sound you got wrong while the answer shows (#77).
-            delay(450)
-            player.replaySound(drill.playable, Settings.sidetoneHz, timing())
+            player.resendAfterMiss(drill.playable, Settings.sidetoneHz, timing()) { phase == TqPhase.RUNNING }
         }
     }
 

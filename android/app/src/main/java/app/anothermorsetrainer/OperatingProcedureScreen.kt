@@ -309,16 +309,23 @@ private class OpAudio(private val player: MorsePlayer, private val scope: Corout
         job = scope.launch { sound(text) }
     }
 
-    /** A demo's lines in turn; [onLine] is told which is sounding, then null once all have played. */
+    /**
+     * A demo's lines in turn; [onLine] is told which is sounding, then null
+     * once all have played or the demo was cut short (a clip, another demo),
+     * as on desktop: cut short, the line used to stay highlighted.
+     */
     fun lines(lines: List<OpDemo.Line>, onLine: (Int?) -> Unit) {
         job?.cancel()
         job = scope.launch {
-            for (i in lines.indices) {
-                onLine(i)
-                sound(lines[i].text)
-                delay((OP_LINE_GAP_SECONDS * 1000).toLong())
+            try {
+                for (i in lines.indices) {
+                    onLine(i)
+                    sound(lines[i].text)
+                    delay((OP_LINE_GAP_SECONDS * 1000).toLong())
+                }
+            } finally {
+                onLine(null)
             }
-            onLine(null)
         }
     }
 

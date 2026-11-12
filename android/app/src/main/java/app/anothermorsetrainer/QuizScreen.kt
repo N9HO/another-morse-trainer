@@ -416,8 +416,7 @@ fun QuizScreen(
                 // A miss holds the correction until Next is pressed (issue
                 // #77) — and after a beat repeats what was actually sent, so
                 // you re-hear the sound you got wrong while the answer shows.
-                delay(450)
-                player.replaySound(drill.playable, Settings.sidetoneHz, Settings.timing())
+                player.resendAfterMiss(drill.playable, Settings.sidetoneHz, Settings.timing()) { phase == QuizPhase.RUNNING }
                 return@LaunchedEffect
             }
             // A promotion up the answer-entry ladder is held until Next,

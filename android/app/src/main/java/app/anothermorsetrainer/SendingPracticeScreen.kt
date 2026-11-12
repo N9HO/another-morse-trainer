@@ -250,8 +250,7 @@ fun SendingPracticeScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Un
     LaunchedEffect(revealed) {
         if (revealed) {
             if (!lastCorrect) {
-                delay(450)
-                if (phase == SpPhase.RUNNING) player.replaySound(drill.playable, Settings.sidetoneHz, Settings.timing())
+                player.resendAfterMiss(drill.playable, Settings.sidetoneHz, Settings.timing()) { phase == SpPhase.RUNNING }
                 return@LaunchedEffect
             }
             delay(1200)

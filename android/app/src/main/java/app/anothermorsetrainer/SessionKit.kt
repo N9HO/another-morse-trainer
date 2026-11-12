@@ -7,12 +7,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.withFrameNanos
+import app.anothermorsetrainer.morsekit.MorseItem
+import app.anothermorsetrainer.morsekit.MorseTiming
 import app.anothermorsetrainer.morsekit.SessionClock
 import kotlinx.coroutines.delay
 
 // The pieces every drill screen's session shares: the countdown, what reaching
-// zero does, the timer menu's actions, and the wait before a session's first
-// sound. The rules are SessionClock's, pinned by
+// zero does, the timer menu's actions, the wait before a session's first
+// sound, and the re-send after a miss. The rules are SessionClock's, pinned by
 // fixtures/gap-timers-session-clock.json; iOS keeps the same flow in AppModel.
 
 /**
@@ -107,3 +109,15 @@ suspend fun awaitScreenThenBeat() {
     delay(SessionClock.FIRST_SOUND_BEAT_MS)
 }
 
+/**
+ * After a miss, re-send what was sent so the learner re-hears the sound they
+ * got wrong while the answer shows (#77). Whatever still sounds is stopped
+ * first: answers are taken mid-prompt, and the re-send must not splice onto
+ * it. After a beat it plays, unless [stillOn] says the session moved on or a
+ * Replay the learner pressed is playing.
+ */
+suspend fun MorsePlayer.resendAfterMiss(playable: MorseItem.Playable, hz: Double, timing: MorseTiming, stillOn: () -> Boolean) {
+    stop()
+    delay(450)
+    if (stillOn() && !isSounding) replaySound(playable, hz, timing)
+}

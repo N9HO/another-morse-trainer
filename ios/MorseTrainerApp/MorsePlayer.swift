@@ -74,6 +74,15 @@ final class MorsePlayer {
     /// Distinguishes completion callbacks so a previous tone's timer can't
     /// fire for the current one.
     private var generation = 0
+    /// When what was last started (`play` or `replaySound`) finishes sounding;
+    /// `stop()` clears it. Read through `isSounding`.
+    private var soundingUntil = Date.distantPast
+
+    /// True while a sound this player started with `play` or `replaySound` is
+    /// still playing (pileups are not tracked): so an automatic sound (the
+    /// replay after a miss) can wait its turn instead of cutting one the
+    /// learner asked for.
+    var isSounding: Bool { Date() < soundingUntil }
     /// Held from `activate()` — a session starting, or any sound — until
     /// `releaseSession()` at the session's end. While it is held other apps'
     /// audio is paused; releasing it is what lets that audio resume (#134).
@@ -226,6 +235,7 @@ final class MorsePlayer {
     }
 
     func stop() {
+        soundingUntil = .distantPast
         state.withLock { play in
             play.synth = MorseSynth.silent
             play.cursor = MorseSynth.Cursor()
@@ -295,6 +305,7 @@ final class MorsePlayer {
         setSynth(synth)
 
         let duration = Double(synth.totalSamples) / sampleRate
+        soundingUntil = Date().addingTimeInterval(duration)
         DispatchQueue.main.asyncAfter(deadline: .now() + duration) { [weak self] in
             guard let self, self.generation == token else { return }
             onFinished()
@@ -313,7 +324,9 @@ final class MorsePlayer {
         let synth = makeSynth(playable: playable, timing: timing, frequency: frequency)
         guard synth.totalSamples > 0 else { return 0 }
         setSynth(synth)
-        return Double(synth.totalSamples) / sampleRate
+        let duration = Double(synth.totalSamples) / sampleRate
+        soundingUntil = Date().addingTimeInterval(duration)
+        return duration
     }
 
     // MARK: - Pileup (multiple simultaneous transmissions)

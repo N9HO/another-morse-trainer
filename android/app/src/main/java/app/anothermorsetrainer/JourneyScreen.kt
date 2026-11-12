@@ -242,8 +242,7 @@ fun JourneyScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
                 // A miss holds the correction until Next is pressed (issue
                 // #77) — and after a beat repeats what was sent, so you
                 // re-hear the sound you got wrong while the answer shows.
-                delay(450)
-                if (phase == JyPhase.RUNNING) player.replaySound(drill.playable, Settings.sidetoneHz, Settings.timing())
+                player.resendAfterMiss(drill.playable, Settings.sidetoneHz, Settings.timing()) { phase == JyPhase.RUNNING }
                 return@LaunchedEffect
             }
             delay(1100)

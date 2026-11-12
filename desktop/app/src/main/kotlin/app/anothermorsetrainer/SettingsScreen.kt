@@ -416,7 +416,10 @@ fun SettingsScreen(
                                     horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
                                     Text(stringResource(R.string.settings_preview_tone), color = Brand.textPrimary, fontWeight = FontWeight.Medium)
-                                    OutlinedButton(onClick = {
+                                    // Not mid-session (a scope is set): the preview
+                                    // played over the session's own sound, and the
+                                    // session's next sound cut it.
+                                    OutlinedButton(enabled = scope == null, onClick = {
                                         player.play(
                                             previewItem?.invoke() ?: MorseItem.Playable.Text("PARIS"),
                                             Settings.sidetoneHz, Settings.timing()
@@ -425,6 +428,13 @@ fun SettingsScreen(
                                         Icon(Icons.Filled.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
                                         Text(stringResource(R.string.settings_play_button))
                                     }
+                                }
+                                if (scope != null) {
+                                    Text(
+                                        stringResource(R.string.settings_preview_in_session),
+                                        color = Brand.textSecondary, fontSize = 12.sp,
+                                        modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp)
+                                    )
                                 }
                                 GroupDivider()
                                 Row(
