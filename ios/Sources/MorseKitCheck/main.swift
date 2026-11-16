@@ -3949,6 +3949,25 @@ struct DailyDitFixture: Decodable {
     let guessSpeeds: [GuessSpeed]
     let solvedSpeeds: [SolvedSpeed]
     let quietWarnings: [QuietWarning]
+    struct History: Decodable {
+        struct Window: Decodable {
+            let year, month, day, todayPuzzle, count, newest, oldest: Int
+            let firstOutside: Int?
+        }
+        struct Day: Decodable { let year, month, day: Int }
+        struct PastDay: Decodable {
+            let daysBack, year, month, day, puzzleNumber, answerIndex: Int
+            let answer: String
+            let inHistory: Bool
+        }
+        struct PuzzleDate: Decodable { let puzzleNumber, year, month, day: Int }
+        let days: Int
+        let windows: [Window]
+        let pastDaysFrom: Day
+        let pastDays: [PastDay]
+        let dates: [PuzzleDate]
+    }
+    let history: History
 }
 
 func loadDailyDitFixture() -> DailyDitFixture? {
@@ -4147,6 +4166,66 @@ if let fx = loadDailyDitFixture() {
         }
     }
     check("guess rows carry the speed last heard, matching the headline, across \(fx.guessSpeeds.count) scripts", guessSpeedOK)
+
+    // History (#333): which days are listed, and which word each one is.
+    let h = fx.history
+    check("the history lists \(h.days) days", DailyDit.historyDays == h.days)
+    var windowOK = true
+    for w in h.windows {
+        let today = DailyDit.puzzleNumber(year: w.year, month: w.month, day: w.day)
+        let list = DailyDit.historyPuzzles(today: today)
+        let consecutive = zip(list, list.dropFirst()).allSatisfy { $0 - 1 == $1 }
+        var ok = today == w.todayPuzzle && list.count == w.count
+            && list.first == w.newest && list.last == w.oldest && consecutive
+            && list.allSatisfy { DailyDit.isInHistory($0, today: today) }
+        if let outside = w.firstOutside {
+            ok = ok && !list.contains(outside) && !DailyDit.isInHistory(outside, today: today)
+        }
+        // Tomorrow's puzzle is never in the list.
+        ok = ok && !DailyDit.isInHistory(today + 1, today: today)
+        if !ok {
+            windowOK = false
+            print("      ↳ \(w.year)-\(w.month)-\(w.day): today #\(today), \(list.count) days #\(list.first ?? 0)…#\(list.last ?? 0)")
+        }
+    }
+    check("the history window matches the fixture across \(h.windows.count) todays (epoch edge included)", windowOK)
+
+    let from = DailyDit.daysFromCivil(year: h.pastDaysFrom.year, month: h.pastDaysFrom.month,
+                                      day: h.pastDaysFrom.day)
+    let fromPuzzle = DailyDit.puzzleNumber(year: h.pastDaysFrom.year, month: h.pastDaysFrom.month,
+                                           day: h.pastDaysFrom.day)
+    var pastOK = true
+    for p in h.pastDays {
+        let date = DailyDit.civilFromDays(from - p.daysBack)
+        let number = DailyDit.puzzleNumber(year: date.year, month: date.month, day: date.day)
+        let game = DailyDitGame.forPuzzle(number, startingWpm: 40)
+        if date != (p.year, p.month, p.day) || number != p.puzzleNumber
+            || game.answer != p.answer || game.answer != MorseData.dailyDitAnswers[p.answerIndex]
+            || DailyDit.isInHistory(number, today: fromPuzzle) != p.inHistory
+            || DailyDit.historyPuzzles(today: fromPuzzle).contains(number) != p.inHistory {
+            pastOK = false
+            print("      ↳ \(p.daysBack) days back: \(date) #\(number) \(game.answer), fixture \(p.year)-\(p.month)-\(p.day) #\(p.puzzleNumber) \(p.answer)")
+        }
+    }
+    check("a past day is the puzzle and word its own date got, across \(h.pastDays.count) days back", pastOK)
+
+    var datesOK = true
+    for d in h.dates {
+        let date = DailyDit.civilDate(forPuzzle: d.puzzleNumber)
+        if date != (d.year, d.month, d.day)
+            || DailyDit.puzzleNumber(year: date.year, month: date.month, day: date.day) != d.puzzleNumber {
+            datesOK = false
+            print("      ↳ puzzle #\(d.puzzleNumber) dated \(date), fixture \(d.year)-\(d.month)-\(d.day)")
+        }
+    }
+    check("each puzzle is labelled with its own date across \(h.dates.count) puzzles (leap days included)", datesOK)
+    var roundTrip = true
+    for days in stride(from: -800_000, through: 800_000, by: 997) {
+        let c = DailyDit.civilFromDays(days)
+        if DailyDit.daysFromCivil(year: c.year, month: c.month, day: c.day) != days { roundTrip = false; break }
+    }
+    check("civil_from_days inverts days_from_civil", roundTrip)
+    check("a fresh past game has nothing started", !DailyDitGame.forPuzzle(252, startingWpm: 40).hasStarted)
 
     // The reported speed is the slowest the word was *heard* at, not the speed
     // at the winning guess. The dial can be raised before the first guess, so
@@ -8068,7 +8147,7 @@ if let fx = loadSyncWireFixture() {
     // Progress state, the five keys both ways.
     let wireState = fx["state"]["wire"]["entries"]
     check("the synced state keys are the fixture's",
-          SyncStateKey.allCases.map(\.rawValue) == fx["state"]["keys"].arrayValue.compactMap(\.stringValue))
+          SyncStateKey.progressKeys.map(\.rawValue) == fx["state"]["keys"].arrayValue.compactMap(\.stringValue))
     let journey = AccountSync.journeyProgress(from: wireState["journey"]["value"])
     check("journey decodes", journey == JourneyProgress(unlockedThrough: 5, currentLevel: 4, completed: [1, 2, 3]))
     check("journey encodes with completed ascending",
@@ -8884,6 +8963,228 @@ do {
     state.noteStateChange(.firstFour, now: 123)
     check("signed in, a save that changes a key stamps it now and queues it",
           state.stateUpdatedAt["firstFour"] == 123 && state.stateOutbox.last == "firstFour")
+}
+
+// MARK: - Settings sync (fixtures/sync-wire.json `settings`)
+
+// The training settings all three apps share, one state key each: the table
+// (kinds, bounds, defaults), the normalising rule against every worked case,
+// the default test, and the stamping rules driven through AccountSyncEngine
+// with the fake transport. Android and desktop read the same section.
+print("\nSettings sync (fixtures/sync-wire.json settings):")
+/// A `SyncSettingKind` in the fixture's words, to compare with its table.
+func syncSettingKindJSON(_ kind: SyncSettingKind) -> [String: JSONValue] {
+    switch kind {
+    case .bool: return ["kind": .string("bool")]
+    case let .int(lo, hi): return ["kind": .string("int"), "min": .int(lo), "max": .int(hi)]
+    case let .tenths(lo, hi): return ["kind": .string("number"), "min": .double(lo), "max": .double(hi), "step": .double(0.1)]
+    case .enumeration(let values): return ["kind": .string("enum"), "values": .array(values.map(JSONValue.string))]
+    case .intChoice(let values): return ["kind": .string("intChoice"), "values": .array(values.map(JSONValue.int))]
+    case let .members(values, minCount):
+        return ["kind": .string("members"), "values": .array(values.map(JSONValue.string)), "minCount": .int(minCount)]
+    case let .text(maxLength, transform):
+        return ["kind": .string("text"), "maxLength": .int(maxLength), "transform": .string(transform.rawValue)]
+    case let .words(maxCount, maxLength): return ["kind": .string("words"), "maxCount": .int(maxCount), "maxLength": .int(maxLength)]
+    case let .range(lo, hi, whole):
+        return ["kind": .string("range"), "min": .array([.double(lo.lowerBound), .double(lo.upperBound)]),
+                "max": .array([.double(hi.lowerBound), .double(hi.upperBound)]), "whole": .bool(whole)]
+    case .speed: return ["kind": .string("speed")]
+    }
+}
+/// The fake transport's server: per key, the stored entry wins a tie (the
+/// Worker's rule), and the reply carries the winner of every key sent.
+final class SettingsServer: @unchecked Sendable {
+    private let lock = NSLock()
+    private var stored: [String: JSONValue]
+    init(_ stored: [String: JSONValue]) { self.stored = stored }
+    func put(_ entries: [String: JSONValue]) -> JSONValue {
+        lock.withLock {
+            var winners: [String: JSONValue] = [:]
+            for (key, entry) in entries {
+                if let mine = stored[key], (mine["updatedAt"].intValue ?? 0) >= (entry["updatedAt"].intValue ?? 0) {
+                    winners[key] = mine
+                } else {
+                    stored[key] = entry
+                    winners[key] = entry
+                }
+            }
+            return .object(["entries": .object(winners), "rejected": .array([])])
+        }
+    }
+    var state: [String: JSONValue] { lock.withLock { stored } }
+}
+
+if let fx = loadSyncWireFixture() {
+    let st = fx["settings"]
+    let table = st["keys"].objectValue
+    check("settings: every key is the fixture's, and only those",
+          Set(SyncSettings.keys.map(\.rawValue)) == Set(table.keys) && SyncSettings.keys.count == table.count)
+    check("settings: each key starts with the prefix and is a state key",
+          SyncSettings.keys.allSatisfy { $0.isSetting && SyncStateKey(rawValue: $0.rawValue) == $0 }
+            && st["keyPrefix"].stringValue == SyncSettings.keyPrefix)
+    let kindMismatches = SyncSettings.specs.filter { spec in
+        var expected = table[spec.key.rawValue]?.objectValue ?? [:]
+        expected["default"] = nil
+        expected["kotlin"] = nil
+        return JSONValue.object(syncSettingKindJSON(spec.kind)) != .object(expected)
+    }.map(\.key.rawValue)
+    check("settings: each key's kind and bounds are the fixture's\(kindMismatches.isEmpty ? "" : " — \(kindMismatches)")",
+          kindMismatches.isEmpty)
+    let defaultMismatches = SyncSettings.specs.filter { $0.defaultValue != table[$0.key.rawValue]?["default"] }.map(\.key.rawValue)
+    check("settings: each key's default is the fixture's\(defaultMismatches.isEmpty ? "" : " — \(defaultMismatches)")",
+          defaultMismatches.isEmpty)
+    check("settings: every default is already normalised",
+          SyncSettings.specs.allSatisfy { SyncSettings.normalize($0.key.rawValue, $0.defaultValue) == $0.defaultValue })
+    check("settings: no progress key is a setting, and the state keys are progress then settings",
+          !SyncStateKey.progressKeys.contains(where: \.isSetting)
+            && SyncStateKey.allCases == SyncStateKey.progressKeys + SyncSettings.keys)
+    check("settings: a key this app does not know is not a state key", SyncStateKey(rawValue: "setting.volume") == nil)
+
+    // Every worked case: normalised, or nil for unusable.
+    let cases = st["normalize"]["cases"].arrayValue
+    var normalizeFailures: [String] = []
+    for c in cases {
+        let key = c["key"].stringValue ?? ""
+        let got = SyncSettings.normalize(key, c["in"])
+        let want: JSONValue? = c["out"] == .null ? nil : c["out"]
+        if got != want { normalizeFailures.append("\(key) \(c["in"]) → \(String(describing: got))") }
+    }
+    check("settings: normalising gives the fixture's \(cases.count) results\(normalizeFailures.isEmpty ? "" : " — \(normalizeFailures)")",
+          cases.count > 40 && normalizeFailures.isEmpty)
+    let defaultCases = st["isDefault"]["cases"].arrayValue
+    check("settings: the default test agrees with the fixture's \(defaultCases.count) cases",
+          !defaultCases.isEmpty && defaultCases.allSatisfy {
+              SyncSettings.isDefault($0["key"].stringValue ?? "", $0["value"]) == ($0["default"] == .bool(true))
+          })
+
+    // The MorseKit enums whose raw values are the wire values.
+    let enumValues: [(String, [String])] = [
+        ("setting.answerEntry", AnswerEntryMode.allCases.map(\.rawValue)),
+        ("setting.cw77Style", CW77Style.allCases.map(\.rawValue)),
+        ("setting.examSpeed", ExamSpeed.allCases.map(\.rawValue)),
+        ("setting.contestType", ContestType.allCases.map(\.rawValue)),
+        ("setting.rapidFireContent", RapidFireContent.allCases.map(\.rawValue)),
+        ("setting.pileupMode", QSOContestMode.allCases.map(\.rawValue)),
+        ("setting.pileupBust", BustBehavior.allCases.map(\.rawValue)),
+        ("setting.pileupMissedCallerFeedback", MissedCallerFeedback.allCases.map(\.rawValue)),
+        ("setting.rapidFireFormats", CallsignFormat.allCases.map(\.rawValue)),
+        ("setting.pileupFormats", CallsignFormat.allCases.map(\.rawValue)),
+        ("setting.punctuation", MorseCode.pickablePunctuation.map(String.init)),
+        ("setting.pileupCutDigits", CutNumbers.cuttableDigits.map(String.init)),
+    ]
+    let enumMismatches = enumValues.filter { table[$0.0]?["values"].arrayValue.compactMap(\.stringValue) != $0.1 }.map(\.0)
+    check("settings: the MorseKit enums' raw values are the wire values, in order\(enumMismatches.isEmpty ? "" : " — \(enumMismatches)")",
+          enumMismatches.isEmpty)
+
+    // Stamping, through the engine.
+    let stamping = st["stamping"]
+    let first = stamping["firstSignIn"]
+    var localValues: [SyncStateKey: JSONValue] = [:]
+    for (k, v) in first["local"].objectValue { if let key = SyncStateKey(rawValue: k) { localValues[key] = v } }
+    var initial = AccountSyncState()
+    initial.stateUpdatedAt = (try? first["stampsBefore"].decode(as: [String: Int].self)) ?? [:]
+    let store = AccountSyncStore(state: initial) { _ in }
+    let host = FakeSyncHost(store: store, values: localValues)
+    let server = SettingsServer(first["snapshot"].objectValue)
+    let transport = FakeAccountTransport { request in
+        switch (request.method, request.path) {
+        case ("PUT", "v1/sync/state"):
+            return syncJSONResponse(server.put(syncRequestBody(request)["entries"].objectValue))
+        case ("GET", "v1/sync/snapshot"):
+            return syncJSONResponse(.object(["stats": syncStatsJSON(sessions: 0), "sessions": .array([]),
+                                             "days": .object([:]), "state": .object(server.state), "seq": .int(0)]))
+        case ("GET", "v1/sync/sessions"):
+            return syncJSONResponse(.object(["sessions": .array([]), "nextSince": .int(0), "hasMore": .bool(false)]))
+        case ("GET", "v1/me/stats"):
+            return syncJSONResponse(syncStatsJSON(sessions: 0))
+        default:
+            return AccountResponse(status: 404)
+        }
+    }
+    let client = AccountClient(transport: transport, tokenStore: MemoryTokenStore(AccountTokens(access: "a2", refresh: "r2", expiresIn: 900)))
+    let engine = AccountSyncEngine(client: client, store: store, host: host, autoRetry: false,
+                                   calendar: syncUTCCalendar(), now: { syncTestNow() })
+    let profile = try? syncTestAccount().decode(as: AccountProfile.self)
+    let outcome = runBlocking { () -> AccountSyncOutcome? in
+        guard let profile else { return nil }
+        return await engine.signedIn(profile)
+    }
+    let firstPut = transport.requests.first { $0.method == "PUT" }.map(syncRequestBody)?["entries"].objectValue ?? [:]
+    let sentStamps = firstPut.mapValues { $0["updatedAt"] }
+    check("settings first sign-in: a changed setting goes at 0, a stamped one with its stamp",
+          outcome == .done && JSONValue.object(sentStamps) == first["expectedSent"])
+    check("settings first sign-in: a never-stamped setting at its default is not sent",
+          first["expectedNotSent"].arrayValue.compactMap(\.stringValue).allSatisfy { firstPut[$0] == nil })
+    check("settings first sign-in: what goes is normalised",
+          firstPut.allSatisfy { SyncSettings.normalize($0.key, $0.value["value"]) == $0.value["value"] })
+    let after = runBlocking { await host.values }
+    var afterJSON: [String: JSONValue] = [:]
+    for (k, v) in after { afterJSON[k.rawValue] = v }
+    check("settings first sign-in: the account fills a setting never chosen here; a tie keeps this device's",
+          JSONValue.object(afterJSON) == first["expectedAfter"])
+    check("settings first sign-in: the stamps after it are the fixture's",
+          (try? first["expectedStamps"].decode(as: [String: Int].self)) == store.state.stateUpdatedAt)
+
+    // A change of ours restamps only its key.
+    let change = stamping["userChange"]
+    let nowMs = change["now"].intValue ?? -1
+    for (k, _) in change["change"].objectValue {
+        if let key = SyncStateKey(rawValue: k) { store.update { $0.noteStateChange(key, now: nowMs) } }
+    }
+    check("settings: a change while signed in restamps only that setting",
+          (try? change["expectedStamps"].decode(as: [String: Int].self)) == store.state.stateUpdatedAt)
+
+    // A newer value out of range is clamped; one this app cannot read is
+    // ignored, local value and stamp kept; a rejected key leaves the queue.
+    func receive(_ scenario: JSONValue, rejected: JSONValue = .array([])) -> (JSONValue?, Int?, [String], AccountSyncOutcome) {
+        var state = syncSignedInState(cursor: 0)
+        var values: [SyncStateKey: JSONValue] = [:]
+        for (k, e) in scenario["local"].objectValue {
+            state.stateUpdatedAt[k] = e["updatedAt"].intValue
+            state.stateOutbox.append(k)
+            if let key = SyncStateKey(rawValue: k) { values[key] = e["value"] }
+        }
+        let store = AccountSyncStore(state: state) { _ in }
+        let host = FakeSyncHost(store: store, values: values)
+        let reply = scenario["reply"]
+        let transport = FakeAccountTransport { request in
+            switch (request.method, request.path) {
+            case ("PUT", "v1/sync/state"):
+                return syncJSONResponse(reply["entries"] != .null ? reply : .object(["entries": reply, "rejected": rejected]))
+            case ("GET", "v1/sync/sessions"):
+                return syncJSONResponse(.object(["sessions": .array([]), "nextSince": .int(0), "hasMore": .bool(false)]))
+            case ("GET", "v1/me/stats"):
+                return syncJSONResponse(syncStatsJSON(sessions: 0))
+            default:
+                return AccountResponse(status: 404)
+            }
+        }
+        let client = AccountClient(transport: transport, tokenStore: MemoryTokenStore(AccountTokens(access: "a2", refresh: "r2", expiresIn: 900)))
+        let engine = AccountSyncEngine(client: client, store: store, host: host, autoRetry: false,
+                                       calendar: syncUTCCalendar(), now: { syncTestNow() })
+        let outcome = runBlocking { await engine.sync() }
+        let key = scenario["local"].objectValue.keys.first.flatMap(SyncStateKey.init(rawValue:))
+        let value = runBlocking { await host.values }[key ?? .journey]
+        return (value, key.flatMap { store.state.stateUpdatedAt[$0.rawValue] }, store.state.stateOutbox, outcome)
+    }
+    let clamp = stamping["outOfRangeReceived"]
+    let clamped = receive(clamp)
+    check("settings: a newer value out of this app's range is clamped, applied, and takes the received stamp",
+          clamped.0 == clamp["expectedValue"] && clamped.1 == clamp["expectedUpdatedAt"].intValue)
+    let unusable = stamping["unusableReceived"]
+    let ignored = receive(unusable)
+    check("settings: a newer value this app cannot read keeps the local value and stamp",
+          ignored.0 == unusable["expectedValue"] && ignored.1 == unusable["expectedUpdatedAt"].intValue)
+    let rejected = stamping["rejectedUntilDeployed"]
+    let pending: JSONValue = .object(["local": .object([
+        "setting.tonePitch": .object(["value": rejected["expectedValue"], "updatedAt": rejected["expectedUpdatedAt"]]),
+    ]), "reply": rejected["reply"]])
+    let refused = receive(pending)
+    check("settings: a key the Worker does not know yet leaves the queue, keeps its value and stamp, and nothing backs off",
+          refused.3 == .done && refused.2 == rejected["expectedQueueAfter"].arrayValue.compactMap(\.stringValue)
+            && refused.0 == rejected["expectedValue"] && refused.1 == rejected["expectedUpdatedAt"].intValue)
+} else {
+    check("fixtures/sync-wire.json loads (settings)", false)
 }
 
 // fixtures/sync-wire.json `merge.refreshRetry`: one request answered 401,

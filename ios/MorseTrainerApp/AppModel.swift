@@ -285,8 +285,11 @@ final class AppModel: ObservableObject {
     enum Phase { case idle, playing, awaiting, revealed, answered }
 
     @Published var settings: AppSettings {
-        didSet { settings.save(); applySettings() }
+        didSet { settings.save(); applySettings(); noteSettingsForSync() }
     }
+    /// True while a setting from the account is written (`applySyncedSetting`):
+    /// saved, but not noted as a change of ours, so it is never restamped.
+    var applyingSyncedSettings = false
     @Published private(set) var mode: TrainingMode = .characters
     @Published private(set) var phase: Phase = .idle
     @Published private(set) var drill: Drill?
@@ -3326,13 +3329,31 @@ final class AppModel: ObservableObject {
     @Published private(set) var dailyDit = DailyDitGame(puzzleNumber: 0, answer: "", startingWpm: 40)
     private static let dailyDitKey = "MorseTrainer.dailyDit"
 
+    /// The days the history remembers (#333): every Daily Dit started in the
+    /// last `DailyDit.historyDays` days, by puzzle number, exactly as it was
+    /// left — today's included. Written only from today's game (`saveDailyDit`),
+    /// never from a practice game, so practising a day can't change its result.
+    /// Pruned to the window on every write. Kept by a progress reset, like
+    /// today's game.
+    @Published private(set) var dailyDitHistory: [Int: DailyDitGame] = AppModel.loadDailyDitHistory()
+    private static let dailyDitHistoryKey = "MorseTrainer.dailyDitHistory"
+
+    /// A past day being played from the history (#333). Practice only, and
+    /// deliberately kept apart from `dailyDit`: it is never saved, never
+    /// archived, and none of its paths call `markPracticedToday` — so no
+    /// practice streak, no account day record or sync outbox entry, no buddy
+    /// report, no reminder refresh. Daily Dit has no leaderboard board and no
+    /// session record, so there is nothing else to bypass. Lost on relaunch.
+    @Published private(set) var dailyDitPractice: DailyDitGame?
+
     /// Bring `dailyDit` up to date with the calendar: restore today's saved
     /// game, or start a fresh one.
     ///
     /// Called on launch *and* every time the screen appears, because the app
     /// can sit open across midnight — coming back to yesterday's finished grid
-    /// at breakfast is the bug this prevents. Yesterday's game is not migrated:
-    /// the day's word is gone, and a share text belongs to the day it was won.
+    /// at breakfast is the bug this prevents. Yesterday's game is not carried
+    /// forward: it stays yesterday's, in `dailyDitHistory` (#333), where it can
+    /// only be replayed as practice.
     func refreshDailyDit(now: Date = Date()) {
         // Same midnight problem, other feature: this is the app's "the day may
         // have changed" hook (launch, and every return to the foreground), so
@@ -3341,9 +3362,14 @@ final class AppModel: ObservableObject {
         refreshReminderIfStreakChanged(now: now)
         let number = DailyDit.puzzleNumber(for: now)
         guard dailyDit.puzzleNumber != number else { return }
-        if let saved = AppModel.loadDailyDit(), saved.puzzleNumber == number {
+        let saved = AppModel.loadDailyDit()
+        if let saved, saved.puzzleNumber == number {
             dailyDit = saved
         } else {
+            // A game left from an earlier day (the app wasn't opened since, or
+            // was last saved by a version without the history) joins the
+            // history before today's replaces it.
+            if let saved { archiveDailyDit(saved, today: number) }
             dailyDit = DailyDitGame.today(startingWpm: settings.dailyDitStartingWpm,
                                           hideReference: settings.dailyDitHideReference,
                                           date: now)
@@ -3396,10 +3422,58 @@ final class AppModel: ObservableObject {
     }
 
     /// Whether playing the word now should ask "play anyway?" first (#252):
-    /// the play would spend a listen and the device is muted or all but.
-    var dailyDitPlayNeedsVolumeConfirmation: Bool {
+    /// the play would spend a listen and the device is muted or all but. Asked
+    /// of whichever game is on screen — today's or a practice one.
+    func dailyDitPlayNeedsVolumeConfirmation(for game: DailyDitGame) -> Bool {
         DailyDit.warnsBeforeListen(volumeFraction: AudioSession.shared.outputVolume,
-                                   isFinished: dailyDit.isFinished)
+                                   isFinished: game.isFinished)
+    }
+
+    // MARK: Daily Dit history and practice (#333)
+
+    /// Open a past day from the history as a fresh practice game. Only a day
+    /// the history lists and *before* today: practising today's puzzle would
+    /// hand out today's word without the day being played.
+    func startDailyDitPractice(puzzle number: Int, now: Date = Date()) {
+        let today = DailyDit.puzzleNumber(for: now)
+        guard number < today, DailyDit.isInHistory(number, today: today) else { return }
+        dailyDitPractice = DailyDitGame.forPuzzle(number,
+                                                  startingWpm: settings.dailyDitStartingWpm,
+                                                  hideReference: settings.dailyDitHideReference)
+    }
+
+    /// The practice game's starting speed and chart. Practice never writes the
+    /// preference — only today's game does — and, as for today's, it stops
+    /// re-basing once a guess is made.
+    func configureDailyDitPractice(startingWpm: Double, hideReference: Bool) {
+        guard let game = dailyDitPractice, game.guessesUsed == 0 else { return }
+        dailyDitPractice = DailyDitGame(puzzleNumber: game.puzzleNumber,
+                                        answer: game.answer,
+                                        startingWpm: startingWpm,
+                                        hideReference: hideReference,
+                                        heard: game.heard)
+    }
+
+    /// Send the practice word. The listen is counted in the practice game, as
+    /// in a real one, and nowhere else.
+    @discardableResult
+    func playDailyDitPractice() -> TimeInterval {
+        guard var game = dailyDitPractice, !game.answer.isEmpty else { return 0 }
+        let wpm = game.listen()
+        dailyDitPractice = game
+        return player.replaySound(playable: .text(game.answer),
+                                  frequency: settings.toneFrequency,
+                                  timing: MorseTiming(wpm: wpm))
+    }
+
+    /// A practice guess. Unlike `submitDailyDit` this neither saves nor marks
+    /// the day practised: a past day is practice only.
+    @discardableResult
+    func submitDailyDitPractice(_ word: String) -> DailyDitSubmission {
+        guard var game = dailyDitPractice else { return .rejected(.finished) }
+        let result = game.submit(word)
+        if case .scored = result { dailyDitPractice = game }
+        return result
     }
 
     func stopDailyDit() { player.stop() }
@@ -3725,6 +3799,28 @@ final class AppModel: ObservableObject {
         if let data = try? JSONEncoder().encode(dailyDit) {
             UserDefaults.standard.set(data, forKey: Self.dailyDitKey)
         }
+        archiveDailyDit(dailyDit, today: DailyDit.puzzleNumber(for: Date()))
+    }
+
+    /// File a game in the history, as it stands, and drop what has aged out
+    /// of the window. A game never started is not a result and is left out,
+    /// so the history reads it as missed.
+    private func archiveDailyDit(_ game: DailyDitGame, today: Int) {
+        var history = dailyDitHistory.filter { DailyDit.isInHistory($0.key, today: today) }
+        if game.hasStarted, DailyDit.isInHistory(game.puzzleNumber, today: today) {
+            history[game.puzzleNumber] = game
+        }
+        guard history != dailyDitHistory else { return }
+        dailyDitHistory = history
+        if let data = try? JSONEncoder().encode(Array(history.values)) {
+            UserDefaults.standard.set(data, forKey: Self.dailyDitHistoryKey)
+        }
+    }
+
+    private static func loadDailyDitHistory() -> [Int: DailyDitGame] {
+        guard let data = UserDefaults.standard.data(forKey: dailyDitHistoryKey),
+              let games = try? JSONDecoder().decode([DailyDitGame].self, from: data) else { return [:] }
+        return Dictionary(games.map { ($0.puzzleNumber, $0) }, uniquingKeysWith: { _, last in last })
     }
 
     private static func loadDailyDit() -> DailyDitGame? {
@@ -3906,7 +4002,17 @@ extension AppModel {
         case .firstFour: return AccountSync.firstFourValue(FirstFourStore.load())
         case .operatingProcedure: return AccountSync.operatingProcedureValue(OperatingProcedureStore.load())
         case .storyBookmarks: return AccountSync.storyBookmarksValue(storyBookmarks)
+        default: return syncSettingValue(key) ?? .null
         }
+    }
+
+    /// After a save: each synced setting whose wire value changed is stamped
+    /// and queued (`SyncCoordinator.noteState` compares with the last value
+    /// it saw). A value the account just handed us is not a change of ours.
+    func noteSettingsForSync() {
+        guard !applyingSyncedSettings else { return }
+        let sync = SyncCoordinator.shared
+        for (key, value) in syncSettingValues { sync.noteState(key, value: value) }
     }
 
     /// A synced key's value for the engine to push, or nil when its store
@@ -3927,6 +4033,10 @@ extension AppModel {
             guard defaults.data(forKey: OperatingProcedureStore.key) != nil else { return nil }
         case .storyBookmarks:
             guard !storyBookmarks.isEmpty else { return nil }
+        default:
+            // A setting always has a value; the engine sends it only once
+            // it has been stamped (fixture `settings.stamping`).
+            return syncSettingValue(key)
         }
         return syncStateValue(key)
     }
@@ -3994,6 +4104,8 @@ extension AppModel {
             guard let bookmarks = AccountSync.storyBookmarks(from: value) else { return false }
             storyBookmarks = bookmarks
             saveBookmarks()
+        default:
+            return applySyncedSetting(key, value: value)
         }
         return true
     }
