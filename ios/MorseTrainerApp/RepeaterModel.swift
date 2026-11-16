@@ -178,6 +178,11 @@ public final class RepeaterModel: ObservableObject {
         .midi: KeyState(),
     ]
     private var midiRouter: MIDIKeyRouter?
+    /// Between `start()` and `stop()`. An on-screen key edge outside that
+    /// window is ignored: `keyPress` releases a key torn out mid-press just
+    /// after the view goes (#386), which lands after `stop()`, and with
+    /// break-in on it would key the tone and queue a transmit.
+    private var isRunning = false
 
     /// True while any source is down. The per-source states above are the
     /// edges; this is the one logical key they aggregate into (Android
@@ -291,6 +296,7 @@ public final class RepeaterModel: ObservableObject {
     // MARK: - Lifecycle
 
     public func start() {
+        isRunning = true
         do {
             try keyer.start()
         } catch {
@@ -380,6 +386,10 @@ public final class RepeaterModel: ObservableObject {
         midiRouter?.onKey = nil
         midiRouter = nil
         midi = nil
+        // The on-screen key likewise: one held as the screen closes is let go
+        // here, and its own late key-up is then ignored (`isRunning`).
+        handleKeyEdge(.screen, isDown: false, atMs: Int64(Date().timeIntervalSince1970 * 1000))
+        isRunning = false
         keyer.stop()
     }
 
@@ -530,6 +540,7 @@ public final class RepeaterModel: ObservableObject {
     /// for the on-screen paddles (#233), whose keyer times each element
     /// exactly; the straight key leaves it to "now".
     public func touchKey(isDown: Bool, atMs: Int64? = nil) {
+        guard isRunning else { return }
         let nowMs = atMs ?? Int64(Date().timeIntervalSince1970 * 1000)
         handleKeyEdge(.screen, isDown: isDown, atMs: nowMs)
     }
