@@ -3047,6 +3047,49 @@ do {
           MIDIKeyParser.paddle(forNote: 20) == .dit && MIDIKeyParser.paddle(forNote: 21) == .dah)
 }
 
+// Morserino-32 Pocket, USB Output = MIDI (#351): straight key is note 30, a
+// straight-key press and release like note 0.
+do {
+    check("a Pocket straight-key note 30 on/off is a straight press and release",
+          MIDIKeyParser.messages(in: [0x90, 30, 0x7F, 0x80, 30, 0x00])
+            == [MIDIKeyMessage(paddle: .straight, isDown: true),
+                MIDIKeyMessage(paddle: .straight, isDown: false)])
+    check("a Pocket dit (20) and dah (21) with running status keep their paddles",
+          MIDIKeyParser.messages(in: [0x90, 20, 0x7F, 21, 0x7F, 20, 0x00, 21, 0x00])
+            == [MIDIKeyMessage(paddle: .dit, isDown: true), MIDIKeyMessage(paddle: .dah, isDown: true),
+                MIDIKeyMessage(paddle: .dit, isDown: false), MIDIKeyMessage(paddle: .dah, isDown: false)])
+}
+
+// fixtures/midi-key-notes.json: the note table, shared with both Kotlin ports.
+if let fx = loadUIContractFixture("midi-key-notes.json"),
+   let mapped = fx["mapped"] as? [[String: Any]],
+   let unmapped = fx["unmapped"] as? [Int] {
+    func contact(_ name: String?) -> MIDIKeyPaddle? {
+        switch name {
+        case "straight": return .straight
+        case "dit": return .dit
+        case "dah": return .dah
+        default: return nil
+        }
+    }
+    check("the fixture lists mapped and unmapped notes", !mapped.isEmpty && !unmapped.isEmpty)
+    check("every fixture note maps to the contact the fixture names",
+          mapped.allSatisfy { row in
+              guard let note = row["note"] as? Int, note >= 0, note <= 127,
+                    let want = contact(row["contact"] as? String) else { return false }
+              return MIDIKeyParser.paddle(forNote: UInt8(note)) == want
+          })
+    check("every fixture unmapped note stays silent",
+          unmapped.allSatisfy { $0 >= 0 && $0 <= 127 && MIDIKeyParser.paddle(forNote: UInt8($0)) == nil })
+    let mappedNotes = Set(mapped.compactMap { $0["note"] as? Int })
+    check("no note outside the fixture's mapped list keys",
+          (0...127).allSatisfy { note in
+              mappedNotes.contains(note) || MIDIKeyParser.paddle(forNote: UInt8(note)) == nil
+          })
+} else {
+    check("fixtures/midi-key-notes.json is readable", false)
+}
+
 // MARK: - Shared timing fixture
 //
 // fixtures/timing.json at the repo root, consumed by this harness AND by

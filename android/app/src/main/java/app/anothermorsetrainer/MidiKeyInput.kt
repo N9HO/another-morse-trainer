@@ -15,11 +15,15 @@ import app.anothermorsetrainer.morsekit.MidiKeyParser
  * Listens for key events from a MIDI keyer (the Vail Adapter or a BLE-MIDI key)
  * and reports each as a simple key-down/up, for hardware sending practice.
  *
- * The Vail Adapter sends MIDI note-on/off on channel 1: note 0 = straight key,
- * 1/20/61 = dit paddle, 2/21/62 = dah paddle; velocity > 0 = pressed. The adapter
- * does any iambic timing itself, so — exactly like the iOS `MIDIInput` →
- * `SendingKeyer` path — every keyer note maps to a single logical key and
- * [MorseDecoder] times it. Each note's state is tracked separately, though, so
+ * Supported keys send MIDI note-on/off; velocity > 0 = pressed. Straight = note
+ * 0 (the Vail Adapter's straight key, and every element its keyer modes send,
+ * already timed) or 30 (Morserino-32 Pocket, keyer in Straight Key mode); dit =
+ * 1/20/61, dah = 2/21/62 (see [MidiKeyParser.paddleForNote]). Only note 0 from a
+ * Vail keyer mode arrives already timed: 1/2 (Vail Passthrough) and 20/21 (N6ARA
+ * TinyMIDI, the Pocket) are raw paddle contacts. Even so — exactly like the iOS
+ * `MIDIInput` → `SendingKeyer` path — every note maps to a single logical key
+ * and [MorseDecoder] times it, so raw paddles are not iambic-timed (a known
+ * gap, #351). Each note's state is tracked separately, though, so
  * overlapping paddle presses hold the key: it goes down on the first press and
  * up only when the last paddle is released.
  *

@@ -27,14 +27,19 @@ object MidiKeyParser {
 
     /**
      * Note numbers the supported keys send, across firmwares and keyer modes:
-     * straight key = 0; dit paddle = 1, 20, or (passthrough) 61; dah paddle =
-     * 2, 21, or (passthrough) 62. This matches the Vail web repeater's full set
-     * so paddle input works regardless of mode. Every other note is unmapped:
-     * we listen to every MIDI device, so an unrelated synth must never register
-     * as keying.
+     * straight key = 0 (Vail Adapter: the straight key, and every element its
+     * keyer modes send, already timed) or 30 (Morserino-32 Pocket with USB
+     * Output set to MIDI and its keyer in Straight Key mode, #351); dit paddle
+     * = 1 (Vail Adapter in Passthrough), 20 (N6ARA TinyMIDI, the Pocket) or 61;
+     * dah paddle = 2 (Vail Adapter in Passthrough), 21 (N6ARA TinyMIDI, the
+     * Pocket) or 62. Notes 1, 2, 20 and 21 are raw paddle contacts: the device
+     * does no timing and expects the host to. 61 and 62 are older mappings
+     * with no known device source, kept as existing behaviour. Every other
+     * note is unmapped: we listen to every MIDI device, so an unrelated synth
+     * must never register as keying. Pinned by fixtures/midi-key-notes.json.
      */
     fun paddleForNote(note: Int): MidiKeyPaddle? = when (note) {
-        0 -> MidiKeyPaddle.STRAIGHT
+        0, 30 -> MidiKeyPaddle.STRAIGHT
         1, 20, 61 -> MidiKeyPaddle.DIT
         2, 21, 62 -> MidiKeyPaddle.DAH
         else -> null

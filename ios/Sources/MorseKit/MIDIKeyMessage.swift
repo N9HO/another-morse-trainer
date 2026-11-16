@@ -32,16 +32,23 @@ public struct MIDIKeyMessage: Sendable, Hashable {
 
 public enum MIDIKeyParser {
     /// Note numbers the supported keys send, across firmwares and keyer modes:
-    ///   straight key = 0
-    ///   dit paddle   = 1, 20, or (passthrough) 61 (C#4)
-    ///   dah paddle   = 2, 21, or (passthrough) 62 (D4)
+    ///   straight key = 0 (Vail Adapter: the straight key, and every element
+    ///                  its keyer modes send, already timed), or 30
+    ///                  (Morserino-32 Pocket, USB Output = MIDI, keyer in
+    ///                  Straight Key mode)
+    ///   dit paddle   = 1 (Vail Adapter in Passthrough), 20 (N6ARA TinyMIDI,
+    ///                  the Pocket), or 61 (C#4)
+    ///   dah paddle   = 2 (Vail Adapter in Passthrough), 21 (N6ARA TinyMIDI,
+    ///                  the Pocket), or 62 (D4)
     ///
-    /// This matches the Vail web repeater's full set so paddle input works
-    /// regardless of mode. Every other note is unmapped: we listen to *all*
-    /// MIDI sources, so an unrelated synth must never register as keying.
+    /// Notes 1, 2, 20 and 21 are raw paddle contacts: the device does no
+    /// timing and expects the host to. 61 and 62 are older mappings with no
+    /// known device source, kept as existing behaviour. Every other note is
+    /// unmapped: we listen to *all* MIDI sources, so an unrelated synth must
+    /// never register as keying. Pinned by fixtures/midi-key-notes.json.
     public static func paddle(forNote note: UInt8) -> MIDIKeyPaddle? {
         switch note {
-        case 0: return .straight
+        case 0, 30: return .straight
         case 1, 20, 61: return .dit
         case 2, 21, 62: return .dah
         default: return nil

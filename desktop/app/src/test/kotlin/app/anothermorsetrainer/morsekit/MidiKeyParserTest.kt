@@ -95,4 +95,28 @@ class MidiKeyParserTest {
         assertEquals(MidiKeyPaddle.DAH, MidiKeyParser.paddleForNote(21))
         assertEquals(MidiKeyPaddle.DAH, MidiKeyParser.paddleForNote(62))
     }
+
+    /**
+     * Morserino-32 Pocket, USB Output = MIDI (#351): the straight key is note 30
+     * and behaves like note 0, a straight press and release.
+     */
+    @Test
+    fun `a pocket straight key note 30 is a straight press and release`() {
+        assertEquals(MidiKeyPaddle.STRAIGHT, MidiKeyParser.paddleForNote(30))
+        assertEquals(
+            listOf(down(MidiKeyPaddle.STRAIGHT, 30), up(MidiKeyPaddle.STRAIGHT, 30)),
+            MidiKeyParser.messages(bytes(0x90, 30, 0x7F, 0x80, 30, 0x00))
+        )
+    }
+
+    @Test
+    fun `a pocket dit and dah with running status keep their paddles`() {
+        assertEquals(
+            listOf(
+                down(MidiKeyPaddle.DIT, 20), down(MidiKeyPaddle.DAH, 21),
+                up(MidiKeyPaddle.DIT, 20), up(MidiKeyPaddle.DAH, 21)
+            ),
+            MidiKeyParser.messages(bytes(0x90, 20, 0x7F, 21, 0x7F, 20, 0x00, 21, 0x00))
+        )
+    }
 }

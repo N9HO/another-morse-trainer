@@ -1,8 +1,7 @@
 # Morserino-32 Pocket input (#351)
 
-Status: researched, **not built**. Nobody on the project has the hardware, and
-the one interface that would carry paddle timing does not exist on the device.
-This note records what the Morserino-32 Pocket ("M32P") actually exposes, why
+Status: researched; only the MIDI note-30 mapping is built (see the update
+below). Nobody on the project has the hardware. This note records what the Morserino-32 Pocket ("M32P") actually exposes, why
 it does not fit the hardware-key abstraction as it stands, and the smallest
 piece worth building if the maintainer wants it.
 
@@ -15,6 +14,87 @@ the repository's `Documentation/Protocol Description` folder (not reachable
 from the research environment; the manual and the bench scripts point to it).
 Everything below about the JSON half of the protocol is therefore second-hand.
 
+## Update 2026-11-15: USB MIDI exists (supersedes parts of sections 1, 2 and 5)
+
+The sections below were written from the V9.x manual and say the Pocket has
+**no MIDI**. That predates `oe1wkl/Morserino-32` **PR #224, "M32 Pocket: USB
+Output"** (merged 2026-10-29), which adds a *USB Output* preference to the CW
+Keyer options: Off (charge) / VBand / MIDI (default).
+
+- **MIDI mode**: the Pocket enumerates as a USB composite device (CDC serial,
+  HID keyboard, MIDI). **Channel 1; dit = note 20, dah = note 21, straight key
+  = note 30** (the Lynovation CTR2-MIDI convention). Paddles, straight key and
+  keyer memories are sent, with Paddle Polarity applied first. Note 30 is sent
+  only with the Pocket's keyer set to **Straight Key mode** ("Straight Key mode
+  sends note 30 and nothing on 20 or 21"); in its paddle keyer modes it sends
+  only the raw contacts on 20 and 21. Only active in CW Keyer mode. Serial
+  stays active alongside.
+- **VBand mode**: a USB keyboard that sends **Left Ctrl** while keyed. Not
+  supported here (a single already-keyer-timed contact on a modifier key that
+  the desktop handlers ignore and iOS/Android treat as a shortcut modifier).
+- **No BLE MIDI.** The older BLE-MIDI PR (#189) is stalled. Over Bluetooth the
+  Pocket still offers only the BLE keyboard and BLE serial described below, so
+  the Generic Kbd advice in section 5 stays for Bluetooth users.
+
+What is built (#351): note 30 maps to the straight contact in all three
+parsers (`MIDIKeyParser` in Swift, `MidiKeyParser` in the Android and desktop
+Kotlin trees), pinned by `fixtures/midi-key-notes.json`. Notes 20 and 21
+already mapped to dit and dah, and every tree already opens any class-compliant
+MIDI device, so a Pocket in MIDI mode should be seen and its notes parsed over
+USB. That is the whole change: no setting, no new screen.
+
+Caveats, all open:
+
+- **Unverified on real hardware.** Nobody on the project has seen a Pocket
+  enumerate, on Android, WinMM, ALSA or CoreMIDI; whether the MIDI interface of
+  a CDC+HID+MIDI composite is exposed on each is an assumption. The note
+  numbers come from the PR page, not the manual, and released firmware may
+  differ.
+- **Firmware availability: none released yet.** PR #224 adds USB Output to
+  the **firmware 10.0** changelog and builds it only in new `*-usbio`
+  environments (`pocketwroom-usbio`, `pocketwroom-lora-usbio`), so even a
+  10.0 release may ship it as a separate build. The releases page (read
+  2026-11-15) shows **V8.2** as Latest and **V9.0-beta.1 to beta.3** as
+  pre-releases, no 10.x: no released firmware has USB Output. The PR author
+  tested on V9.1 hardware; the V10 branch was built but not flashed at
+  submission. Today a Pocket user has to self-flash master or VK1HF's
+  unofficial "V9.1 + USB Output" build; a Pocket on stock firmware has no
+  MIDI.
+- **Raw paddles still collapse into one key, and that is a pre-existing bug,
+  not a Pocket one.** `MidiKeyInput` (and iOS `MIDIInput`) holds the key while
+  *any* note is down and does no iambic timing. That is right only for note 0,
+  which is all a Vail Adapter sends in its keyer modes (every element, already
+  timed). Notes 1/2 and 20/21 are raw paddle contacts that expect the host to
+  time them: a Vail Adapter in **Passthrough** (a keyer mode AMT itself offers
+  on all three apps) sends 1/2, an N6ARA TinyMIDI sends 20/21, and so does the
+  Pocket in its paddle modes. For all of them today a single paddle behaves
+  like a straight key, a squeeze is one long tone, and keyer-memory taps may be
+  too short to read. So on the Pocket only the straight key (note 30, in
+  Straight Key mode) works properly today.
+- **Not built, deferred pending hardware**: routing raw DIT/DAH edges into
+  `PaddleKeyerDriver` (the on-screen paddle keyer). It changes key input on
+  every keyed screen in three trees, and its correctness test is a physical
+  squeeze, though any paddle on a Vail Adapter in Passthrough will do, not only
+  a Pocket. Because the bug is not Pocket-specific, the fix belongs to
+  raw-paddle notes generally. The options: route 1/2/20/21 into the keyer
+  unconditionally (no new setting; right if no supported device sends
+  already-timed elements on those notes, which matches the current Vail spec;
+  older Vail firmware and the origin of 61/62 still to check); tie it to
+  `AdapterKeyer`'s Passthrough mode, which already means "the app does the
+  timing"; a default-off Settings choice; or a device-name match (needs the
+  Pocket's real USB product string, not known).
+- A synth sending note 30 now keys. The parser was already this permissive for
+  notes 0, 1, 2, 20, 21, 61 and 62.
+- The wake sequence (Vail CCs) is sent to every MIDI output device, including a
+  Pocket; the effect is unknown and expected to be ignored.
+
+Guide wording (the guide is outside this repo): "Morserino-32 Pocket: with
+firmware that has *USB Output* (not in any released firmware yet; slated for
+10.0), set it to MIDI in the CW Keyer options, set the keyer to Straight Key
+mode, and use a USB cable. A straight key should then work; in the paddle
+keyer modes the paddles are not iambic-timed by the app yet. Untested by the
+project."
+
 ## 1. What the device exposes
 
 | Interface | What it carries | Setting on the device |
@@ -22,7 +102,7 @@ Everything below about the JSON half of the protocol is therefore second-hand.
 | USB-C, serial (115200 baud) | A text stream: keyed characters (output of the device's own iambic keyer), decoded characters, generated characters, selected by *Serial Output*; plus the **M32 Serial Protocol**, a two-way line protocol (`PUT`/`GET` lines in, JSON objects out) for settings, menus and sending text to be keyed. | *Serial Output*: Nothing / Keyer / Decoded / Keyed+Decoded / Generated / All (default All). For the protocol: a client sends `PUT device/protocol/on`. |
 | BLE "serial" (Nordic UART service `6E400001-B5A3-F393-E0A9-E50E24DCCA9E`; RX `...0002...` write, TX `...0003...` notify; advertises as `Morserino-32`) | The same stream and protocol as USB, over BLE. Notifications carry JSON objects interleaved with raw character echo. | *Bluetooth Use* = **BLE Serial**, then return to the main menu. Needs consent on the device: after `PUT device/protocol/on` the M32 shows "Allow connect? FN = yes", only at the main menu, 20 s timeout, a client back within 60 s is admitted unasked. Not available while WiFi modes are active. |
 | BLE HID keyboard | Decoded characters typed as a US-layout keyboard. Accents are dropped (ä → ae). `<KA>` is Enter and `<HH>` Backspace in Generic Kbd mode. | *Bluetooth Use* = VBand Kbd / Decoded output / VBand+Decoded / Generic Kbd. **Only active in CW Keyer mode.** Cannot coexist with BLE Serial. |
-| MIDI | **None.** The manual and the firmware notes mention no MIDI interface, USB or BLE. | — |
+| MIDI | **None in the V9.x manual and the firmware it describes.** USB MIDI was added by PR #224 (see the update above); BLE MIDI does not exist. | *USB Output* = MIDI |
 
 The classic Morserino-32 and the Pocket share the protocol. Which USB-serial
 chip the Pocket uses (and so whether Windows needs a driver and Android sees it
