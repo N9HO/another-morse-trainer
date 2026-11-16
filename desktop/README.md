@@ -181,7 +181,8 @@ paddles.
   paddles (click, or `[` and `]` on the keyboard) with a built-in Iambic A / Iambic B / Ultimatic keyer, dit and
   dah memory, and a left-handed swap — wherever you key on screen
 - **Continue with the key after a miss**: in the keyed-answer modes
-  (Characters with "Key answers", Sending Practice), keying the correct
+  (Characters with "Key answers", Sending Practice) and the modes a hardware
+  key types into (Journey, Type It, QRQ Speed), keying the correct
   answer again after a miss acts as Next, so you never leave the key; a wrong
   re-key is ignored. Next still works, and Settings › Keys & Sending can turn
   it off

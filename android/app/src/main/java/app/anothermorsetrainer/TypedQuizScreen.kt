@@ -49,6 +49,7 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.anothermorsetrainer.morsekit.ContinueAfterMiss
 import app.anothermorsetrainer.morsekit.MorseData
 import app.anothermorsetrainer.morsekit.MorseTiming
 import app.anothermorsetrainer.morsekit.PhraseQuiz
@@ -123,12 +124,22 @@ fun TypedQuizScreen(
         player.play(drill.playable, Settings.sidetoneHz, timing()) { toneFinishedAt = System.nanoTime() }
     }
 
+    // A miss holds the correction for Next; keying the right answer again is
+    // Next too (#355, after #352). The decision lives in morsekit/ContinueAfterMiss.
+    val missAck = remember { ContinueAfterMiss() }
+    var ackAwaiting by remember { mutableStateOf(false) }
+    // What the hardware key has sent since the miss (the box itself is locked).
+    var ackKeyed by remember { mutableStateOf("") }
+
     // Correct answers keep the rhythm going; a miss waits for the Next tap so the
     // learner can compare what they typed against the answer.
     // Clear the reveal state in the same recomposition as the new drill —
     // LaunchedEffect(round) also resets it, but a frame later, and that stale
     // frame flashed the next answer's comparison view (issue #63).
     fun advance() {
+        missAck.reset()
+        ackAwaiting = false
+        ackKeyed = ""
         drill = source.nextDrill()
         revealed = false
         input = ""
@@ -221,6 +232,21 @@ fun TypedQuizScreen(
             if (outcome.correct) haptics.success() else haptics.error()
         }
         revealed = true
+        if (!outcome.correct) {
+            ackKeyed = ""
+            missAck.miss(drill.correct, System.nanoTime() / 1_000_000, Settings.continueAfterMiss)
+            ackAwaiting = missAck.isAwaiting
+        }
+    }
+
+    /** One keyed re-key while a miss is held: the right answer moves on, anything else is dropped. */
+    fun acknowledgeKeyed(sent: String) {
+        ackKeyed = ""
+        when (missAck.input(sent, System.nanoTime() / 1_000_000)) {
+            ContinueAfterMiss.Outcome.ADVANCE -> if (phase == TqPhase.RUNNING) advance()
+            ContinueAfterMiss.Outcome.WRONG, ContinueAfterMiss.Outcome.DEBOUNCED -> Unit
+            ContinueAfterMiss.Outcome.INACTIVE -> ackAwaiting = false
+        }
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -272,8 +298,22 @@ fun TypedQuizScreen(
         // A Vail Adapter / BLE-MIDI key types the answer too (#251): what you
         // key lands in the box, and stopping keying checks it.
         HardwareKeyInput(
-            onText = { if (!revealed) input = appendKeyed(input, it) },
-            onPause = { if (input.isNotBlank()) submit() }
+            onText = {
+                if (!revealed) {
+                    input = appendKeyed(input, it)
+                } else if (ackAwaiting) {
+                    ackKeyed = appendKeyed(ackKeyed, it)
+                    val sent = ackKeyed.trim()
+                    if (sent.length >= drill.correct.length) acknowledgeKeyed(sent)
+                }
+            },
+            onPause = {
+                if (revealed) {
+                    val sent = ackKeyed.trim()
+                    ackKeyed = ""
+                    if (ackAwaiting && sent.isNotEmpty()) acknowledgeKeyed(sent)
+                } else if (input.isNotBlank()) submit()
+            }
         )
         // The app targets SDK 36, so it is always edge-to-edge and the window
         // does not resize when the IME opens; AppBackground insets for the
@@ -353,6 +393,14 @@ fun TypedQuizScreen(
 
             if (revealed) {
                 if (!lastCorrect) {
+                    if (ackAwaiting) {
+                        Text(
+                            stringResource(R.string.sending_key_to_continue, drill.correct),
+                            color = Brand.teal,
+                            fontSize = 13.sp
+                        )
+                        Spacer(Modifier.height(8.dp))
+                    }
                     // The held correction (issue #77): re-hear it as often as
                     // needed, move on when ready.
                     OutlinedButton(

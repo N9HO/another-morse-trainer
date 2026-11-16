@@ -62,6 +62,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.anothermorsetrainer.morsekit.AnswerKeys
+import app.anothermorsetrainer.morsekit.ContinueAfterMiss
 import app.anothermorsetrainer.morsekit.JourneyCurriculum
 import app.anothermorsetrainer.morsekit.JourneyLevel
 import app.anothermorsetrainer.morsekit.JourneyProgress
@@ -177,12 +178,19 @@ fun JourneyScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
         player.play(drill.playable, Settings.sidetoneHz, Settings.timing()) { toneFinishedAt = System.nanoTime() }
     }
 
+    // A miss holds the correction for Next; keying the right answer again is
+    // Next too (#355, after #352). The decision lives in morsekit/ContinueAfterMiss.
+    val missAck = remember { ContinueAfterMiss() }
+    var ackAwaiting by remember { mutableStateOf(false) }
+
     /**
      * Next drill, clearing the reveal state in the same recomposition as the
      * new drill — LaunchedEffect(round) resets it a frame later, and that
      * stale frame flashed the new answer in red (issue #63).
      */
     fun advanceNow() {
+        missAck.reset()
+        ackAwaiting = false
         drill = quiz.nextDrill()
         revealed = false
         chosen = null
@@ -288,6 +296,12 @@ fun JourneyScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
             clearedLabel = outcome.unlocked
         }
         revealed = true
+        // A keyed-answer miss: key it again to continue (#355). A meaning drill
+        // cannot be keyed back, so it keeps Next.
+        if (!outcome.correct && drill.isKeyable) {
+            missAck.miss(drill.correct, System.nanoTime() / 1_000_000, Settings.continueAfterMiss)
+            ackAwaiting = missAck.isAwaiting
+        }
     }
 
     // A hardware key (#251). Journey's choices take a keyboard, so they take
@@ -298,8 +312,25 @@ fun JourneyScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
     // iOS `journeyKeyedText`.
     var keyed by remember { mutableStateOf("") }
     LaunchedEffect(round) { keyed = "" }
+    // While a miss is held: the right answer keyed again moves on; a wrong or
+    // too-early re-key is dropped, with no new miss and no penalty (#355).
+    fun acknowledgeKeyed(sent: String) {
+        keyed = ""
+        when (missAck.input(sent, System.nanoTime() / 1_000_000)) {
+            ContinueAfterMiss.Outcome.ADVANCE -> advanceNow()
+            ContinueAfterMiss.Outcome.WRONG, ContinueAfterMiss.Outcome.DEBOUNCED -> Unit
+            ContinueAfterMiss.Outcome.INACTIVE -> ackAwaiting = false
+        }
+    }
     fun keyedText(chunk: String) {
-        if (revealed || phase != JyPhase.RUNNING) { keyed = ""; return }
+        if (phase != JyPhase.RUNNING) { keyed = ""; return }
+        if (revealed) {
+            if (!ackAwaiting) { keyed = ""; return }
+            keyed = appendKeyed(keyed, chunk)
+            val sent = keyed.trim()
+            if (sent.length >= drill.correct.length) acknowledgeKeyed(sent)
+            return
+        }
         keyed = appendKeyed(keyed, chunk)
         val sent = keyed.trim()
         if (drill.isKeyable) {
@@ -315,7 +346,11 @@ fun JourneyScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
     fun keyedPause() {
         val sent = keyed.trim()
         keyed = ""
-        if (revealed || phase != JyPhase.RUNNING || !drill.isKeyable || sent.isEmpty()) return
+        if (revealed) {
+            if (ackAwaiting && phase == JyPhase.RUNNING && sent.isNotEmpty()) acknowledgeKeyed(sent)
+            return
+        }
+        if (phase != JyPhase.RUNNING || !drill.isKeyable || sent.isEmpty()) return
         answer(sent)
     }
     HardwareKeyInput(onText = { keyedText(it) }, onPause = { keyedPause() })
@@ -471,6 +506,14 @@ fun JourneyScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
                         )
                     }
                     if (!ok) {
+                        if (ackAwaiting) {
+                            Spacer(Modifier.height(6.dp))
+                            Text(
+                                stringResource(R.string.sending_key_to_continue, drill.correct),
+                                color = Brand.teal,
+                                fontSize = 13.sp
+                            )
+                        }
                         // The held correction (issue #77): re-hear it as often
                         // as needed, move on when ready.
                         Spacer(Modifier.height(18.dp))
