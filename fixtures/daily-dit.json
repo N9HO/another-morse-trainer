@@ -524,14 +524,38 @@
       "hideReference": false,
       "guessWpmAtStart": 40.0,
       "plays": [
-        {"action": "listen", "guessWpm": 40.0},
-        {"action": "guess", "word": "CRANE", "guessWpm": 40.0},
-        {"action": "listen", "guessWpm": 40.0},
-        {"action": "listen", "guessWpm": 40.0},
-        {"action": "guess", "word": "SPEND", "guessWpm": 40.0}
+        {
+          "action": "listen",
+          "guessWpm": 40.0
+        },
+        {
+          "action": "guess",
+          "word": "CRANE",
+          "guessWpm": 40.0
+        },
+        {
+          "action": "listen",
+          "guessWpm": 40.0
+        },
+        {
+          "action": "listen",
+          "guessWpm": 35.0
+        },
+        {
+          "action": "guess",
+          "word": "SPEND",
+          "guessWpm": 40.0
+        }
       ],
-      "heard": [40.0, 40.0, 40.0],
-      "roundWpms": [40.0, 40.0],
+      "heard": [
+        40.0,
+        40.0,
+        40.0
+      ],
+      "roundWpms": [
+        40.0,
+        40.0
+      ],
       "solvedWpm": 40.0
     },
     {
@@ -542,13 +566,34 @@
       "hideReference": false,
       "guessWpmAtStart": 40.0,
       "plays": [
-        {"action": "guess", "word": "CRANE", "guessWpm": 40.0},
-        {"action": "guess", "word": "MOUND", "guessWpm": 40.0},
-        {"action": "guess", "word": "ATLAS", "guessWpm": 35.0},
-        {"action": "guess", "word": "SPEND", "guessWpm": 35.0}
+        {
+          "action": "guess",
+          "word": "CRANE",
+          "guessWpm": 40.0
+        },
+        {
+          "action": "guess",
+          "word": "MOUND",
+          "guessWpm": 40.0
+        },
+        {
+          "action": "guess",
+          "word": "ATLAS",
+          "guessWpm": 35.0
+        },
+        {
+          "action": "guess",
+          "word": "SPEND",
+          "guessWpm": 35.0
+        }
       ],
       "heard": [],
-      "roundWpms": [40.0, 40.0, 40.0, 35.0],
+      "roundWpms": [
+        40.0,
+        40.0,
+        40.0,
+        35.0
+      ],
       "solvedWpm": 35.0
     }
   ],
