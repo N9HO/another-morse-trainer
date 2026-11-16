@@ -437,4 +437,76 @@ class DailyDitTest {
         assertEquals(40.0, game.solvedWpm!!, 0.0)
         assertEquals("Daily Dit #1 — 40 WPM · 1 guess · 0 listens", game.headline)
     }
+
+    // ---- History (#333) ----
+
+    private val history: JSONObject get() = fixture.getJSONObject("history")
+
+    @Test
+    fun historyListsTheFixturesNumberOfDays() {
+        assertEquals(history.getInt("days"), DailyDit.HISTORY_DAYS)
+    }
+
+    @Test
+    fun historyWindowMatchesTheFixture() {
+        val windows = history.getJSONArray("windows")
+        for (i in 0 until windows.length()) {
+            val w = windows.getJSONObject(i)
+            val label = "${w.getInt("year")}-${w.getInt("month")}-${w.getInt("day")}"
+            val today = DailyDit.puzzleNumber(LocalDate.of(w.getInt("year"), w.getInt("month"), w.getInt("day")))
+            assertEquals("today's puzzle on $label", w.getInt("todayPuzzle"), today)
+            val list = DailyDit.historyPuzzles(today)
+            assertEquals("days listed on $label", w.getInt("count"), list.size)
+            assertEquals("newest on $label", w.getInt("newest"), list.first())
+            assertEquals("oldest on $label", w.getInt("oldest"), list.last())
+            assertTrue("consecutive, newest first, on $label", list.zipWithNext().all { (a, b) -> a - 1 == b })
+            assertTrue("every listed day is in the history on $label", list.all { DailyDit.isInHistory(it, today) })
+            if (w.has("firstOutside")) {
+                val outside = w.getInt("firstOutside")
+                assertTrue("#$outside is not listed on $label", outside !in list && !DailyDit.isInHistory(outside, today))
+            }
+            assertTrue("tomorrow is never listed on $label", !DailyDit.isInHistory(today + 1, today))
+        }
+    }
+
+    /** A missed day is the word everyone got that day: same derivation as today's. */
+    @Test
+    fun aPastDayIsThePuzzleAndWordItsOwnDateGot() {
+        val from = history.getJSONObject("pastDaysFrom")
+        val today = LocalDate.of(from.getInt("year"), from.getInt("month"), from.getInt("day"))
+        val todayPuzzle = DailyDit.puzzleNumber(today)
+        val days = history.getJSONArray("pastDays")
+        for (i in 0 until days.length()) {
+            val d = days.getJSONObject(i)
+            val back = d.getInt("daysBack")
+            val date = today.minusDays(back.toLong())
+            assertEquals("date $back days back", LocalDate.of(d.getInt("year"), d.getInt("month"), d.getInt("day")), date)
+            val number = DailyDit.puzzleNumber(date)
+            assertEquals("puzzle $back days back", d.getInt("puzzleNumber"), number)
+            val game = DailyDitGame.forPuzzle(number, 40.0)
+            assertEquals("word $back days back", d.getString("answer"), game.answer)
+            assertEquals("answer index $back days back", MorseData.dailyDitAnswers[d.getInt("answerIndex")], game.answer)
+            assertEquals("listed $back days back", d.getBoolean("inHistory"), DailyDit.isInHistory(number, todayPuzzle))
+            assertEquals("listed $back days back", d.getBoolean("inHistory"), number in DailyDit.historyPuzzles(todayPuzzle))
+        }
+    }
+
+    @Test
+    fun eachPuzzleIsLabelledWithItsOwnDate() {
+        val dates = history.getJSONArray("dates")
+        for (i in 0 until dates.length()) {
+            val d = dates.getJSONObject(i)
+            val n = d.getInt("puzzleNumber")
+            val expected = LocalDate.of(d.getInt("year"), d.getInt("month"), d.getInt("day"))
+            assertEquals("date of puzzle #$n", expected, DailyDit.date(n))
+            assertEquals("puzzle number of $expected", n, DailyDit.puzzleNumber(DailyDit.date(n)))
+        }
+    }
+
+    @Test
+    fun aFreshPastGameHasNothingStarted() {
+        val game = DailyDitGame.forPuzzle(252, 40.0)
+        assertTrue(!game.hasStarted)
+        assertTrue(game.listen().game.hasStarted)
+    }
 }

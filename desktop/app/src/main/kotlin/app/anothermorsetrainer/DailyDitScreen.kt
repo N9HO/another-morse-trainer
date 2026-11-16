@@ -38,6 +38,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -91,7 +92,21 @@ private val TILE_PRESENT = Color(0xFFCAA033)
  * [DailyDitStore] rather than on an `AppModel`.
  */
 @Composable
-fun DailyDitScreen(onBack: () -> Unit) {
+fun DailyDitScreen(
+    onBack: () -> Unit,
+    /** Opens Past puzzles (#333). */
+    onOpenHistory: () -> Unit = {},
+    /**
+     * Null plays today's puzzle. A number plays that past day from the history
+     * as practice (#333): the game is held here, never handed to
+     * [DailyDitStore], so nothing is saved or archived and
+     * [Stats.recordPracticeDay] is never reached — no streak, no account day
+     * record or sync, no buddy report. Daily Dit has no leaderboard board and
+     * no session record, so there is nothing else to bypass. There is no
+     * Share or Copy: a practice result is not that day's result.
+     */
+    practicePuzzle: Int? = null
+) {
     val resources = LocalResources.current
     BackHandler { onBack() }
 
@@ -126,7 +141,44 @@ fun DailyDitScreen(onBack: () -> Unit) {
         }
     }
 
-    val game = DailyDitStore.game
+    val isPractice = practicePuzzle != null
+    // The practice game, saveable like the typed guess (as on Android) through
+    // the store's own JSON codec. Unused (and never consulted) for today.
+    var practiceGame by rememberSaveable(practicePuzzle, stateSaver = PracticeGameSaver) {
+        mutableStateOf(
+            DailyDitGame.forPuzzle(practicePuzzle ?: 1, DailyDitStore.startingWpm, DailyDitStore.hideReference)
+        )
+    }
+    val game = if (isPractice) practiceGame else DailyDitStore.game
+    // Every way the screen changes the game goes through these three, so the
+    // practice path cannot reach the store.
+    val listen: () -> Double = {
+        if (isPractice) {
+            val play = practiceGame.listen()
+            practiceGame = play.game
+            play.wpm
+        } else {
+            DailyDitStore.listen()
+        }
+    }
+    val offer: (String) -> DailyDitSubmission = { word ->
+        if (isPractice) {
+            practiceGame.submit(word).also { if (it is DailyDitSubmission.Scored) practiceGame = it.game }
+        } else {
+            DailyDitStore.submit(word)
+        }
+    }
+    val configure: (Double, Boolean) -> Unit = { wpm, hide ->
+        if (isPractice) {
+            // Practice never writes the preference, and, as for today's, stops
+            // re-basing once a guess is made.
+            if (practiceGame.guessesUsed == 0) {
+                practiceGame = practiceGame.copy(startingWpm = wpm, hideReference = hide)
+            }
+        } else {
+            DailyDitStore.configure(wpm, hide)
+        }
+    }
     val scroll = rememberScrollState()
     val entryFocus = remember { FocusRequester() }
     LaunchedEffect(game.isFinished) {
@@ -140,7 +192,7 @@ fun DailyDitScreen(onBack: () -> Unit) {
     // won) and hands back the speed to send it at.
     val playWord: () -> Unit = {
         if (game.answer.isNotEmpty()) {
-            val wpm = DailyDitStore.listen()
+            val wpm = listen()
             player.replaySound(
                 MorseItem.Playable.Text(game.answer),
                 Settings.sidetoneHz,
@@ -159,13 +211,13 @@ fun DailyDitScreen(onBack: () -> Unit) {
             }
             Spacer(Modifier.weight(1f))
             Text(
-                stringResource(R.string.daily_dit_title),
+                stringResource(if (isPractice) R.string.daily_dit_practice_title else R.string.daily_dit_title),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
                 color = Brand.textPrimary
             )
             Spacer(Modifier.weight(1f))
-            if (game.isFinished) {
+            if (game.isFinished && !isPractice) {
                 ShareImageMenu(game = game, title = shareTitle, onNote = { shareNote = it }) { open ->
                     TextButton(onClick = open) {
                         Text(stringResource(R.string.drills_share), color = Brand.teal)
@@ -184,6 +236,25 @@ fun DailyDitScreen(onBack: () -> Unit) {
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(18.dp)
         ) {
+            if (isPractice) {
+                Column(
+                    modifier = Modifier.fillMaxWidth().brandCard(cornerRadius = 12.dp).padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        stringResource(R.string.daily_dit_practice_title),
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Brand.tealBright
+                    )
+                    Text(
+                        stringResource(R.string.daily_dit_practice_banner, dailyDitDateLabel(game.puzzleNumber)),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = Brand.textSecondary
+                    )
+                }
+            }
+
             // Header
             Column(
                 modifier = Modifier.fillMaxWidth(),
@@ -236,7 +307,20 @@ fun DailyDitScreen(onBack: () -> Unit) {
                 )
             }
 
-            if (game.isFinished) {
+            if (game.isFinished && isPractice) {
+                PracticeResultCard(
+                    answer = game.answer,
+                    lowestWpm = game.solvedWpm?.let { DailyDit.formatWpm(it) } ?: "—",
+                    guesses = game.guessesUsed,
+                    listens = game.listens,
+                    onPlayAgain = {
+                        if (Settings.hapticsEnabled) haptics.selection()
+                        practiceGame = DailyDitGame.forPuzzle(
+                            game.puzzleNumber, DailyDitStore.startingWpm, DailyDitStore.hideReference
+                        )
+                    }
+                )
+            } else if (game.isFinished) {
                 ResultCard(
                     shareText = game.shareText,
                     answer = game.answer,
@@ -276,7 +360,7 @@ fun DailyDitScreen(onBack: () -> Unit) {
                     },
                     onPause = {
                         if (entry.length == DailyDit.WORD_LENGTH) {
-                            message = submit(entry, haptics) { entry = "" }
+                            message = submit(entry, haptics, offer) { entry = "" }
                             if (message != null) entry = ""
                         }
                     }
@@ -301,7 +385,7 @@ fun DailyDitScreen(onBack: () -> Unit) {
                             imeAction = ImeAction.Done
                         ),
                         keyboardActions = KeyboardActions(onDone = {
-                            message = submit(entry, haptics) { entry = "" }
+                            message = submit(entry, haptics, offer) { entry = "" }
                         }),
                         // Desktop: the guess box has the keyboard from the
                         // start, and Return guesses (taken in the preview
@@ -319,14 +403,14 @@ fun DailyDitScreen(onBack: () -> Unit) {
                             .onPreviewKeyEvent { event ->
                                 if (event.key == Key.Enter || event.key == Key.NumPadEnter) {
                                     if (event.type == KeyEventType.KeyDown) {
-                                        message = submit(entry, haptics) { entry = "" }
+                                        message = submit(entry, haptics, offer) { entry = "" }
                                     }
                                     true
                                 } else false
                             }
                     )
                     Button(
-                        onClick = { message = submit(entry, haptics) { entry = "" } },
+                        onClick = { message = submit(entry, haptics, offer) { entry = "" } },
                         enabled = entry.length == DailyDit.WORD_LENGTH,
                         colors = ButtonDefaults.buttonColors(
                             containerColor = Brand.tealBright,
@@ -389,7 +473,7 @@ fun DailyDitScreen(onBack: () -> Unit) {
             }
 
             if (game.guessesUsed == 0) {
-                SetupCard()
+                SetupCard(game, isPractice, configure)
             } else {
                 Text(
                     stringResource(
@@ -451,6 +535,32 @@ fun DailyDitScreen(onBack: () -> Unit) {
                 }
             }
 
+            if (!isPractice) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .brandCard(cornerRadius = Brand.cornerRadius)
+                        .clickable { onOpenHistory() }
+                        .padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            stringResource(R.string.daily_dit_history_link),
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Brand.textPrimary
+                        )
+                        Text(
+                            stringResource(R.string.daily_dit_history_link_sub, DailyDit.HISTORY_DAYS),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = Brand.textSecondary
+                        )
+                    }
+                    Text("›", fontSize = 22.sp, color = Brand.textSecondary)
+                }
+            }
+
             Text(
                 stringResource(
                     R.string.daily_dit_how_it_works,
@@ -466,8 +576,13 @@ fun DailyDitScreen(onBack: () -> Unit) {
 }
 
 /** Offer a guess; returns the message to show, or null when it was accepted. */
-private fun submit(entry: String, haptics: Haptics, onAccepted: () -> Unit): String? =
-    when (val result = DailyDitStore.submit(entry)) {
+private fun submit(
+    entry: String,
+    haptics: Haptics,
+    offer: (String) -> DailyDitSubmission,
+    onAccepted: () -> Unit
+): String? =
+    when (val result = offer(entry)) {
         is DailyDitSubmission.Scored -> {
             onAccepted()
             if (Settings.hapticsEnabled) haptics.selection()
@@ -551,7 +666,7 @@ private fun SpeedTag(wpm: Double) {
 }
 
 @Composable
-private fun SetupCard() {
+private fun SetupCard(game: DailyDitGame, isPractice: Boolean, configure: (Double, Boolean) -> Unit) {
     val haptics = remember { Haptics() }
     Column(
         modifier = Modifier.fillMaxWidth().brandCard(cornerRadius = Brand.cornerRadius).padding(16.dp),
@@ -583,7 +698,7 @@ private fun SetupCard() {
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     for (speed in row) {
-                        val selected = DailyDitStore.game.startingWpm == speed
+                        val selected = game.startingWpm == speed
                         Box(
                             modifier = Modifier
                                 .weight(1f)
@@ -591,7 +706,7 @@ private fun SetupCard() {
                                 .background(if (selected) Brand.teal else Brand.navyRaised)
                                 .clickable {
                                     if (Settings.hapticsEnabled) haptics.selection()
-                                    DailyDitStore.configure(speed, DailyDitStore.game.hideReference)
+                                    configure(speed, game.hideReference)
                                 }
                                 .padding(vertical = 8.dp),
                             contentAlignment = Alignment.Center
@@ -619,16 +734,16 @@ private fun SetupCard() {
                     color = Brand.textPrimary
                 )
                 Text(
-                    stringResource(R.string.daily_dit_hide_chart_sub),
+                    stringResource(
+                        if (isPractice) R.string.daily_dit_hide_chart_sub_practice else R.string.daily_dit_hide_chart_sub
+                    ),
                     style = MaterialTheme.typography.labelMedium,
                     color = Brand.textSecondary
                 )
             }
             Switch(
-                checked = DailyDitStore.game.hideReference,
-                onCheckedChange = {
-                    DailyDitStore.configure(DailyDitStore.game.startingWpm, it)
-                },
+                checked = game.hideReference,
+                onCheckedChange = { configure(game.startingWpm, it) },
                 colors = SwitchDefaults.colors(checkedTrackColor = Brand.teal)
             )
         }
@@ -747,5 +862,62 @@ private fun ShareImageMenu(
                 }
             )
         }
+    }
+}
+
+/** The practice game, through [DailyDitStore]'s JSON codec (#333). */
+private val PracticeGameSaver: Saver<DailyDitGame, String> = Saver(
+    save = { DailyDitStore.encode(it) },
+    restore = { runCatching { DailyDitStore.decode(it) }.getOrNull() }
+)
+
+/**
+ * A practice result (#333): the word and its three numbers, then Play it
+ * again. No share text, Copy or Share — it isn't that day's result, and a
+ * share card would read as if it were.
+ */
+@Composable
+private fun PracticeResultCard(
+    answer: String,
+    lowestWpm: String,
+    guesses: Int,
+    listens: Int,
+    onPlayAgain: () -> Unit
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth().brandCard(cornerRadius = Brand.cornerRadius).padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            stringResource(R.string.daily_dit_solid_copy),
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = Brand.textPrimary
+        )
+        Text(answer, fontSize = 30.sp, fontWeight = FontWeight.Bold, color = Brand.tealBright)
+        Row(modifier = Modifier.fillMaxWidth()) {
+            ResultStat(lowestWpm, stringResource(R.string.daily_dit_result_lowest), Modifier.weight(1f))
+            ResultStat(
+                guesses.toString(),
+                pluralStringResource(R.plurals.daily_dit_result_guess_label, guesses),
+                Modifier.weight(1f)
+            )
+            ResultStat(
+                listens.toString(),
+                pluralStringResource(R.plurals.daily_dit_result_listen_label, listens),
+                Modifier.weight(1f)
+            )
+        }
+        Button(
+            onClick = onPlayAgain,
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.buttonColors(containerColor = Brand.teal, contentColor = Brand.navy)
+        ) { Text(stringResource(R.string.daily_dit_practice_again)) }
+        Text(
+            stringResource(R.string.daily_dit_practice_note),
+            style = MaterialTheme.typography.labelMedium,
+            color = Brand.textSecondary
+        )
     }
 }

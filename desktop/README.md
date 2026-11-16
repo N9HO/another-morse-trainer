@@ -66,7 +66,10 @@ paddles.
   (right place, wrong place, not in the word); the code starts at the speed
   you chose (up to 75 WPM) and steps down 5 WPM for every three listens and
   every three wrong guesses, and your brag is the slowest speed you heard it
-  at before you got it
+  at before you got it. **Past puzzles** lists the last 30 days — copied,
+  not solved or missed — and opens any past day as practice, to catch up on
+  one you missed or replay one you copied; practice counts toward no streak
+  and never changes that day's result
 - **Games**: the six arcade games below sit behind one Games tile on the
   home screen (and under a Games heading in the mid-session mode switcher),
   so the main menu stays short as more games are added
