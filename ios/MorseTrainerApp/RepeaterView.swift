@@ -13,6 +13,11 @@ struct RepeaterView: View {
     @State private var showingSettings = false
     @State private var showingChat = false
     @State private var showingBluetoothMIDI = false
+    /// Which of the connection card's fields has the keyboard, if any. On an
+    /// iPhone the pinned key steps aside while one does (see `body`).
+    @FocusState private var editingField: Field?
+    private enum Field: Hashable { case callsign, channel }
+    @Environment(\.horizontalSizeClass) private var sizeClass
 
     var body: some View {
         NavigationStack {
@@ -24,6 +29,27 @@ struct RepeaterView: View {
                         connectionCard
                         statRow
                         RepeaterSignalTimelineView()
+                        breakInCard
+                        adapterCard
+                        rosterCard
+                    }
+                    .padding(18)
+                    // Full screen on an iPad would otherwise stretch every
+                    // card edge to edge.
+                    .readableWidth()
+                }
+                // The on-screen key sits *outside* the ScrollView, pinned under
+                // it, as the Sending Analyzer's does (#363). Inside one, UIKit's
+                // scroll view holds a touch back until it knows the touch is
+                // not a scroll, so a press reached the key late and a tap
+                // shorter than that delay arrived as a down and an up in the
+                // same instant. On an iPhone it steps aside while a connection
+                // field has the keyboard: riding up on top of the keyboard it
+                // would leave almost no room for the field. An iPad has the
+                // height, and on a Mac (or with a hardware keyboard) a field
+                // can keep focus after typing, which would hide the key.
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    if !(sizeClass == .compact && editingField != nil) {
                         // Straight key or paddles, as chosen in Settings
                         // (#233). The paddles' elements go out exactly as
                         // straight-key presses would: sidetone always, and
@@ -32,14 +58,13 @@ struct RepeaterView: View {
                             RepeaterTouchKeyView()
                         }
                         .frame(height: wide ? 200 : 150)
-                        breakInCard
-                        adapterCard
-                        rosterCard
+                        .padding(.horizontal, 18)
+                        .padding(.vertical, 10)
+                        // Capped like the column above, so a full-screen iPad
+                        // doesn't stretch the key edge to edge.
+                        .readableWidth()
+                        .background(Theme.navy)
                     }
-                    .padding(18)
-                    // Full screen on an iPad would otherwise stretch every
-                    // card, and the key, edge to edge.
-                    .readableWidth()
                 }
             }
             .navigationTitle("On the Air")
@@ -118,10 +143,10 @@ struct RepeaterView: View {
             labeledField("Callsign", text: Binding(
                 get: { model.callsign },
                 set: { model.setCallsign($0) }
-            ), placeholder: "W1AW", autocaps: true)
+            ), placeholder: "W1AW", autocaps: true, field: .callsign)
 
             labeledField("Channel", text: $model.channel,
-                         placeholder: "General", autocaps: false)
+                         placeholder: "General", autocaps: false, field: .channel)
 
             let connected = model.connectionState == .connected
                 || model.connectionState == .connecting
@@ -144,7 +169,7 @@ struct RepeaterView: View {
     }
 
     private func labeledField(_ label: String, text: Binding<String>,
-                              placeholder: String, autocaps: Bool) -> some View {
+                              placeholder: String, autocaps: Bool, field: Field) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(label.uppercased())
                 .font(.system(size: 10, weight: .bold)).tracking(1)
@@ -153,6 +178,7 @@ struct RepeaterView: View {
                 .textFieldStyle(.plain)
                 .textInputAutocapitalization(autocaps ? .characters : .never)
                 .autocorrectionDisabled()
+                .focused($editingField, equals: field)
                 .padding(10)
                 .background(Theme.navyRaised, in: RoundedRectangle(cornerRadius: 10))
                 .foregroundStyle(.white)
