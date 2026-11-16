@@ -173,8 +173,8 @@ fun GalagaScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) 
     // When each enemy's Morse finished sounding (copy mode), by id, so a
     // hit's time-to-recognize runs from the end of the tone.
     val toneEnd = remember { HashMap<Int, Long>() }
-    // When each enemy appeared: a hit's reaction time runs from there while
-    // its sound is still waiting its turn, so no hit counts as 0 ms.
+    // When each enemy appeared: a hit while its sound is still waiting its
+    // turn is timed from there, not posted as 0 ms.
     val appeared = remember { HashMap<Int, Long>() }
     // The one sound channel (copy mode): an entry, a dive and a tapped replay
     // take turns instead of cutting into each other.
@@ -347,8 +347,8 @@ fun GalagaScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) 
         val shot = g.shoot(character)
         val hit = shot.enemy
         if (hit != null) {
-            // From the end of its sound; one hit while its sound still waits its
-            // turn counts from when it appeared, never 0.
+            // From the end of its sound (0 while it is still playing); a hit
+            // before its sound plays counts from when it appeared.
             val end = toneEnd.remove(hit.id) ?: appeared[hit.id]
             appeared.remove(hit.id)
             announcer.forget(hit.id)

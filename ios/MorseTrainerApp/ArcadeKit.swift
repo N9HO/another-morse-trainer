@@ -12,8 +12,8 @@ class ArcadeFrame {
     /// When each enemy's sound finished, by id, so a hit's reaction time runs
     /// from the end of its sound.
     var toneEnd: [Int: Date] = [:]
-    /// When each enemy appeared, by id: a hit's reaction time runs from there
-    /// while its sound is still waiting its turn, so no hit counts as 0 ms.
+    /// When each enemy appeared, by id: a hit while its sound is still
+    /// waiting its turn is timed from there, not posted as 0 ms.
     var appeared: [Int: Date] = [:]
 
     /// Seconds since the last frame, capped at 0.1 so a long gap (the app was
@@ -49,8 +49,9 @@ class ArcadeFrame {
     }
 
     /// The reaction time of a hit on `id` at `now`, then forgets it: from the
-    /// end of its sound, or, if its sound hasn't played yet (it was waiting
-    /// its turn), from when it appeared.
+    /// end of its sound (0 while it is still playing, as before), or, if its
+    /// sound hasn't played yet (it was waiting its turn), from when it
+    /// appeared.
     func reactionTime(hit id: Int, at now: Date) -> TimeInterval {
         defer { forget(id: id) }
         guard let from = toneEnd[id] ?? appeared[id] else { return 0 }
