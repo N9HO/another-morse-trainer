@@ -521,7 +521,7 @@ fun SendingPracticeScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Un
         }
 
         if (showSettings) {
-            SessionSettingsOverlay(scope = SettingsMode.SENDING, onClose = { showSettings = false }, previewItem = { drill.playable })
+            SessionSettingsOverlay(scope = SettingsMode.SENDING, onClose = { showSettings = false })
         }
     }
 }
