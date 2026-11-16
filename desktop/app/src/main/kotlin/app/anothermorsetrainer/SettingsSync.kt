@@ -143,6 +143,7 @@ object SettingsSync {
             "setting.rapidFireWordLength" -> JSONObject().put("min", s.rapidFireWordMin).put("max", s.rapidFireWordMax)
             "setting.rapidFireNumberCount" -> s.rapidFireNumberCount
             "setting.rapidFireUsOnly" -> s.rapidFireUsOnly
+            "setting.rapidFireShortOnly" -> s.rapidFireShortOnly
             "setting.rapidFireFormats" -> strings(s.rapidFireFormats.map { it.code })
             "setting.rapidFireStatesSections" -> s.rapidFireSections
             "setting.rapidFireSerialCut" -> s.rapidFireSerialCut
@@ -164,6 +165,7 @@ object SettingsSync {
             "setting.pileupGiveUp" -> p.giveUpEnabled
             "setting.pileupFormats" -> strings(p.formats.map { it.code })
             "setting.pileupUsOnly" -> p.usOnly
+            "setting.pileupShortOnly" -> p.shortOnly
             "setting.pileupKeepPartialCall" -> p.keepPartialCall
             "setting.pileupMissedCallerFeedback" -> wireOf(key, p.missedCallerFeedback)
             "setting.pileupKeyMySide" -> p.keyMySide
@@ -245,6 +247,7 @@ object SettingsSync {
             }
             "setting.rapidFireNumberCount" -> set(int(value)) { s.updateRapidFireNumberCount(it) }
             "setting.rapidFireUsOnly" -> set(value as? Boolean) { s.updateRapidFireUsOnly(it) }
+            "setting.rapidFireShortOnly" -> set(value as? Boolean) { s.updateRapidFireShortOnly(it) }
             "setting.rapidFireFormats" ->
                 set(list(value)?.let { l -> CallsignFormat.entries.filter { it.code in l }.toSet() }?.ifEmpty { null }) { s.updateRapidFireFormats(it) }
             "setting.rapidFireStatesSections" -> set(value as? Boolean) { s.updateRapidFireSections(it) }
@@ -282,6 +285,7 @@ object SettingsSync {
             "setting.pileupFormats" ->
                 set(list(value)?.let { l -> CallsignFormat.entries.filter { it.code in l }.toSet() }?.ifEmpty { null }) { p.updateFormats(it) }
             "setting.pileupUsOnly" -> set(value as? Boolean) { p.updateUsOnly(it) }
+            "setting.pileupShortOnly" -> set(value as? Boolean) { p.updateShortOnly(it) }
             "setting.pileupKeepPartialCall" -> set(value as? Boolean) { p.updateKeepPartialCall(it) }
             "setting.pileupMissedCallerFeedback" -> set(localOf<MissedCallerFeedback>(key, value)) { p.updateMissedCallerFeedback(it) }
             "setting.pileupKeyMySide" -> set(value as? Boolean) { p.updateKeyMySide(it) }
