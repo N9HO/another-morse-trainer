@@ -529,7 +529,7 @@
         {"action": "guess", "word": "SPEND"}
       ],
       "heard": [40.0, 40.0, 40.0],
-      "roundWpms": [40.0, 45.0],
+      "roundWpms": [40.0, 40.0],
       "solvedWpm": 40.0
     },
     {
