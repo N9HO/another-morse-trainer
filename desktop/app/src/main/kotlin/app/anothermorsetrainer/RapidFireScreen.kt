@@ -177,7 +177,7 @@ fun RapidFireScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {
             keyer.start()
             // A hardware key (Vail Adapter or another USB MIDI key) drives the same decoder.
             midi.start(
-                onKey = { down -> keyer.touchKey(down) },
+                onKey = { down, ms -> keyer.touchKey(down, ms) },
                 onConnected = { name -> midiDevice = name }
             )
         }

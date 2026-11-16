@@ -49,7 +49,7 @@ class MidiKeyInput(private val context: Context) {
     private class Open(val id: Int, val name: String?, val device: MidiDevice, val port: MidiOutputPort)
 
     private val open = mutableListOf<Open>()
-    private var onKey: ((Boolean) -> Unit)? = null
+    private var onKey: ((isDown: Boolean, atMs: Long) -> Unit)? = null
     private var onConnected: ((String?) -> Unit)? = null
 
     /**
@@ -108,14 +108,14 @@ class MidiKeyInput(private val context: Context) {
 
     /**
      * Begin listening. [onKey] fires (on the main thread) with `true` on key-down
-     * and `false` on key-up; [onConnected] reports the connected device's name —
+     * and `false` on key-up, and `atMs`, the edge's own wall-clock time; [onConnected] reports the connected device's name —
      * null when none is attached yet, and again when the last one unplugs.
      */
     // getDevices + the Handler-based registerDeviceCallback are deprecated in API
     // 33 in favor of transport/executor variants that need API 33 — the older
     // forms are the correct cross-version choice at minSdk 24.
     @Suppress("DEPRECATION")
-    fun start(onKey: (Boolean) -> Unit, onConnected: (String?) -> Unit) {
+    fun start(onKey: (isDown: Boolean, atMs: Long) -> Unit, onConnected: (String?) -> Unit) {
         this.onKey = onKey
         this.onConnected = onConnected
         startKeyer()
@@ -251,7 +251,10 @@ class MidiKeyInput(private val context: Context) {
         val now = heldNotes.isNotEmpty() || keyerDown
         if (now == reported) return
         reported = now
-        onKey?.invoke(now)
+        // The edge's own time in wall-clock ms (the packet's, or when the
+        // keyer scheduled the element), so a late main-thread hop can't
+        // change an element's length. iOS passes `atMs` the same way.
+        onKey?.invoke(now, System.currentTimeMillis() - (System.nanoTime() - atNanos) / 1_000_000L)
         onKeyTimed?.invoke(now, atNanos)
     }
 

@@ -133,7 +133,7 @@ fun SendingPracticeScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Un
         // Hardware key (Vail Adapter or another USB MIDI key): route note on/off through the
         // same keyer as the on-screen key.
         midi.start(
-            onKey = { down -> keyer.touchKey(down) },
+            onKey = { down, ms -> keyer.touchKey(down, ms) },
             onConnected = { name -> midiDevice = name }
         )
         onDispose { midi.stop(); keyer.stop(); player.release() }

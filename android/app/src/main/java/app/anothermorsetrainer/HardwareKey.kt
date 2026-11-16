@@ -65,7 +65,7 @@ class HardwareKey(context: Context) {
 
     /**
      * Begin listening. [onKey] fires (on the main thread) with `true` on
-     * key-down and `false` on key-up; [onConnected] reports the connected key's
+     * key-down and `false` on key-up, and the edge's wall-clock ms; [onConnected] reports the connected key's
      * name — null when none is attached yet, and again when the last unplugs.
      *
      * The adapter is woken with the user's current sidetone and speed so its
@@ -74,7 +74,7 @@ class HardwareKey(context: Context) {
      * keyer rather than the key's (see [MidiKeyInput.onAppKeyer], #380).
      */
     fun start(
-        onKey: (Boolean) -> Unit,
+        onKey: (isDown: Boolean, atMs: Long) -> Unit,
         onConnected: (String?) -> Unit,
         onKeyTimed: ((isDown: Boolean, atNanos: Long) -> Unit)? = null,
         onAppKeyer: (() -> Unit)? = null
@@ -194,9 +194,9 @@ fun HardwareKeyInput(onText: (String) -> Unit, onPause: () -> Unit = {}) {
     DisposableEffect(Unit) {
         keyer.scope = scope
         midi.start(
-            onKey = { down ->
+            onKey = { down, ms ->
                 if (down) keyer.start()
-                keyer.touchKey(down)
+                keyer.touchKey(down, ms)
             },
             onConnected = { name -> if (name != null) keyer.start() else keyer.stopSidetone() }
         )

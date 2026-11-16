@@ -279,7 +279,7 @@ fun SettingsScreen(
     val homeKey = if (scope == null && midiSupported) remember { HardwareKey() } else null
     if (homeKey != null) {
         DisposableEffect(homeKey) {
-            homeKey.start(onKey = {}, onConnected = {})
+            homeKey.start(onKey = { _, _ -> }, onConnected = {})
             onDispose { homeKey.stop() }
         }
         AdapterConfigSync(homeKey)
