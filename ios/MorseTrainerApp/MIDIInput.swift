@@ -1,9 +1,16 @@
 // MIDIInput.swift
 // CoreMIDI client for the Vail Adapter and BLE MIDI keyers.
 //
-// The Vail Adapter sends MIDI on channel 1 with these mappings:
-//   Note 0 = straight key, Note 1 = dit paddle, Note 2 = dah paddle
-//   Velocity > 0 = pressed, Velocity = 0 (or Note Off status) = released
+// Supported keys send MIDI note-on/off; velocity > 0 = pressed, velocity 0
+// (or Note Off status) = released. The note map (MorseKit's MIDIKeyParser):
+//   straight = 0 (Vail Adapter: straight key, and every element its keyer
+//              modes send, already timed) or 30 (Morserino-32 Pocket, keyer
+//              in Straight Key mode)
+//   dit      = 1 (Vail Passthrough), 20 (N6ARA TinyMIDI, Pocket), or 61
+//   dah      = 2 (Vail Passthrough), 21 (N6ARA TinyMIDI, Pocket), or 62
+// Notes 1/2/20/21 are raw paddle contacts that the device does not time;
+// 61/62 are older mappings with no known source. Every note still maps to the
+// one logical key, so raw paddles are not iambic-timed here (a known gap).
 //
 // MIDIPacket.timeStamp is in mach_absolute_time units — use this for accurate
 // key event timing (sub-millisecond), not the host's Date().

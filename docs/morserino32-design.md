@@ -24,8 +24,11 @@ Keyer options: Off (charge) / VBand / MIDI (default).
 - **MIDI mode**: the Pocket enumerates as a USB composite device (CDC serial,
   HID keyboard, MIDI). **Channel 1; dit = note 20, dah = note 21, straight key
   = note 30** (the Lynovation CTR2-MIDI convention). Paddles, straight key and
-  keyer memories are sent, with Paddle Polarity applied first. Only active in
-  CW Keyer mode. Serial stays active alongside.
+  keyer memories are sent, with Paddle Polarity applied first. Note 30 is sent
+  only with the Pocket's keyer set to **Straight Key mode** ("Straight Key mode
+  sends note 30 and nothing on 20 or 21"); in its paddle keyer modes it sends
+  only the raw contacts on 20 and 21. Only active in CW Keyer mode. Serial
+  stays active alongside.
 - **VBand mode**: a USB keyboard that sends **Left Ctrl** while keyed. Not
   supported here (a single already-keyer-timed contact on a modifier key that
   the desktop handlers ignore and iOS/Android treat as a shortcut modifier).
@@ -47,31 +50,50 @@ Caveats, all open:
   a CDC+HID+MIDI composite is exposed on each is an assumption. The note
   numbers come from the PR page, not the manual, and released firmware may
   differ.
-- **Firmware availability.** Whether any *released* firmware (as opposed to
-  master or VK1HF's unofficial "V9.1 + USB Output" build) contains USB Output
-  was not established. A Pocket on stock firmware has no MIDI.
-- **Raw paddles still collapse into one key.** `MidiKeyInput` holds the key
-  while *any* note is down and does no iambic timing, which is right for the
-  Vail but wrong for the Pocket, which forwards raw paddle contacts without its
-  own keyer. A single paddle behaves like a straight key, a squeeze is one long
-  tone, and keyer-memory taps may be too short to read. So the Pocket's
-  straight key (note 30) is the one contact that works properly today.
+- **Firmware availability: none released yet.** PR #224 adds USB Output to
+  the **firmware 10.0** changelog and builds it only in new `*-usbio`
+  environments (`pocketwroom-usbio`, `pocketwroom-lora-usbio`), so even a
+  10.0 release may ship it as a separate build. The releases page (read
+  2026-11-15) shows **V8.2** as Latest and **V9.0-beta.1 to beta.3** as
+  pre-releases, no 10.x: no released firmware has USB Output. The PR author
+  tested on V9.1 hardware; the V10 branch was built but not flashed at
+  submission. Today a Pocket user has to self-flash master or VK1HF's
+  unofficial "V9.1 + USB Output" build; a Pocket on stock firmware has no
+  MIDI.
+- **Raw paddles still collapse into one key, and that is a pre-existing bug,
+  not a Pocket one.** `MidiKeyInput` (and iOS `MIDIInput`) holds the key while
+  *any* note is down and does no iambic timing. That is right only for note 0,
+  which is all a Vail Adapter sends in its keyer modes (every element, already
+  timed). Notes 1/2 and 20/21 are raw paddle contacts that expect the host to
+  time them: a Vail Adapter in **Passthrough** (a keyer mode AMT itself offers
+  on all three apps) sends 1/2, an N6ARA TinyMIDI sends 20/21, and so does the
+  Pocket in its paddle modes. For all of them today a single paddle behaves
+  like a straight key, a squeeze is one long tone, and keyer-memory taps may be
+  too short to read. So on the Pocket only the straight key (note 30, in
+  Straight Key mode) works properly today.
 - **Not built, deferred pending hardware**: routing raw DIT/DAH edges into
-  `PaddleKeyerDriver` (the on-screen paddle keyer) behind a default-off
-  setting. It changes key input on every keyed screen in three trees and its
-  correctness test is a physical squeeze on a Pocket. The options for telling a
-  raw-paddle device apart are a Settings choice (preferred; default off, so
-  Vail behaviour is unchanged), a device-name match (needs the Pocket's real USB
-  product string, not known), or reusing `AdapterKeyer`'s mode (mixes meanings).
+  `PaddleKeyerDriver` (the on-screen paddle keyer). It changes key input on
+  every keyed screen in three trees, and its correctness test is a physical
+  squeeze, though any paddle on a Vail Adapter in Passthrough will do, not only
+  a Pocket. Because the bug is not Pocket-specific, the fix belongs to
+  raw-paddle notes generally. The options: route 1/2/20/21 into the keyer
+  unconditionally (no new setting; right if no supported device sends
+  already-timed elements on those notes, which matches the current Vail spec;
+  older Vail firmware and the origin of 61/62 still to check); tie it to
+  `AdapterKeyer`'s Passthrough mode, which already means "the app does the
+  timing"; a default-off Settings choice; or a device-name match (needs the
+  Pocket's real USB product string, not known).
 - A synth sending note 30 now keys. The parser was already this permissive for
   notes 0, 1, 2, 20, 21, 61 and 62.
 - The wake sequence (Vail CCs) is sent to every MIDI output device, including a
   Pocket; the effect is unknown and expected to be ignored.
 
 Guide wording (the guide is outside this repo): "Morserino-32 Pocket: with
-firmware that has *USB Output*, set it to MIDI in the CW Keyer options and use
-a USB cable. The straight key should work; paddles are not iambic-timed by the
-app yet. Untested by the project."
+firmware that has *USB Output* (not in any released firmware yet; slated for
+10.0), set it to MIDI in the CW Keyer options, set the keyer to Straight Key
+mode, and use a USB cable. A straight key should then work; in the paddle
+keyer modes the paddles are not iambic-timed by the app yet. Untested by the
+project."
 
 ## 1. What the device exposes
 
