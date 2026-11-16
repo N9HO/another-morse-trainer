@@ -3044,22 +3044,22 @@ do {
     let burst: [UInt8] = [0x90, 0x00, 0x7F, 0x80, 0x00, 0x00]
     let pair = MIDIKeyParser.messages(in: burst)
     check("both events in one packet are decoded",
-          pair == [MIDIKeyMessage(paddle: .straight, isDown: true),
-                   MIDIKeyMessage(paddle: .straight, isDown: false)])
+          pair == [MIDIKeyMessage(paddle: .straight, note: 0, isDown: true),
+                   MIDIKeyMessage(paddle: .straight, note: 0, isDown: false)])
 
     // Running status: the second message drops its repeated 0x90 status byte.
     let running: [UInt8] = [0x90, 0x01, 0x7F, 0x01, 0x00]
     check("running status continues the previous message",
-          MIDIKeyParser.messages(in: running) == [MIDIKeyMessage(paddle: .dit, isDown: true),
-                                                  MIDIKeyMessage(paddle: .dit, isDown: false)])
+          MIDIKeyParser.messages(in: running) == [MIDIKeyMessage(paddle: .dit, note: 1, isDown: true),
+                                                  MIDIKeyMessage(paddle: .dit, note: 1, isDown: false)])
 
     check("note on with velocity 0 is a release",
-          MIDIKeyParser.messages(in: [0x90, 0x02, 0x00]) == [MIDIKeyMessage(paddle: .dah, isDown: false)])
+          MIDIKeyParser.messages(in: [0x90, 0x02, 0x00]) == [MIDIKeyMessage(paddle: .dah, note: 2, isDown: false)])
 
     // Real-time bytes may land between the bytes of another message.
     let interleaved: [UInt8] = [0x90, 0xF8, 0x02, 0x7F]
     check("an interleaved clock byte doesn't break the message",
-          MIDIKeyParser.messages(in: interleaved) == [MIDIKeyMessage(paddle: .dah, isDown: true)])
+          MIDIKeyParser.messages(in: interleaved) == [MIDIKeyMessage(paddle: .dah, note: 2, isDown: true)])
 
     // We connect to every source, so an unrelated instrument must stay silent.
     check("an unmapped note is ignored", MIDIKeyParser.messages(in: [0x90, 0x40, 0x7F]).isEmpty)
@@ -3068,11 +3068,11 @@ do {
     // A one-byte Program Change ahead of a key event must not eat its bytes.
     check("a program change doesn't swallow the next message",
           MIDIKeyParser.messages(in: [0xC0, 0x01, 0x90, 0x00, 0x7F])
-            == [MIDIKeyMessage(paddle: .straight, isDown: true)])
+            == [MIDIKeyMessage(paddle: .straight, note: 0, isDown: true)])
 
     check("a truncated trailing message is dropped, not guessed",
           MIDIKeyParser.messages(in: [0x90, 0x00, 0x7F, 0x90, 0x01])
-            == [MIDIKeyMessage(paddle: .straight, isDown: true)])
+            == [MIDIKeyMessage(paddle: .straight, note: 0, isDown: true)])
 
     check("passthrough paddle notes map to dit and dah",
           MIDIKeyParser.paddle(forNote: 61) == .dit && MIDIKeyParser.paddle(forNote: 62) == .dah)
@@ -3085,12 +3085,12 @@ do {
 do {
     check("a Pocket straight-key note 30 on/off is a straight press and release",
           MIDIKeyParser.messages(in: [0x90, 30, 0x7F, 0x80, 30, 0x00])
-            == [MIDIKeyMessage(paddle: .straight, isDown: true),
-                MIDIKeyMessage(paddle: .straight, isDown: false)])
+            == [MIDIKeyMessage(paddle: .straight, note: 30, isDown: true),
+                MIDIKeyMessage(paddle: .straight, note: 30, isDown: false)])
     check("a Pocket dit (20) and dah (21) with running status keep their paddles",
           MIDIKeyParser.messages(in: [0x90, 20, 0x7F, 21, 0x7F, 20, 0x00, 21, 0x00])
-            == [MIDIKeyMessage(paddle: .dit, isDown: true), MIDIKeyMessage(paddle: .dah, isDown: true),
-                MIDIKeyMessage(paddle: .dit, isDown: false), MIDIKeyMessage(paddle: .dah, isDown: false)])
+            == [MIDIKeyMessage(paddle: .dit, note: 20, isDown: true), MIDIKeyMessage(paddle: .dah, note: 21, isDown: true),
+                MIDIKeyMessage(paddle: .dit, note: 20, isDown: false), MIDIKeyMessage(paddle: .dah, note: 21, isDown: false)])
 }
 
 // fixtures/midi-key-notes.json: the note table, shared with both Kotlin ports.
@@ -3121,6 +3121,51 @@ if let fx = loadUIContractFixture("midi-key-notes.json"),
           })
 } else {
     check("fixtures/midi-key-notes.json is readable", false)
+}
+
+// fixtures/midi-key-routing.json (#380): which notes hold the key and which go
+// into the app's paddle keyer, in Passthrough and in every other adapter mode.
+// Shared with both Kotlin ports.
+if let fx = loadUIContractFixture("midi-key-routing.json"),
+   let routes = fx["routes"] as? [[String: Any]],
+   let unrouted = fx["unrouted"] as? [Int],
+   let rawModes = fx["rawPaddleModes"] as? [String] {
+    func route(_ name: String?) -> MIDIKeyRoute? {
+        switch name {
+        case "held": return .held
+        case "keyerDit": return .keyerDit
+        case "keyerDah": return .keyerDah
+        default: return nil
+        }
+    }
+    check("the routing fixture lists routes, unrouted notes and raw-paddle modes",
+          !routes.isEmpty && !unrouted.isEmpty && !rawModes.isEmpty)
+    check("every fixture note takes the fixture's route in Passthrough",
+          routes.allSatisfy { row in
+              guard let note = row["note"] as? Int, note >= 0, note <= 127,
+                    let want = route(row["passthrough"] as? String) else { return false }
+              return MIDIKeyParser.route(forNote: UInt8(note), adapterSendsRawPaddles: true) == want
+          })
+    check("every fixture note takes the fixture's route in every other adapter mode",
+          routes.allSatisfy { row in
+              guard let note = row["note"] as? Int, note >= 0, note <= 127,
+                    let want = route(row["otherModes"] as? String) else { return false }
+              return MIDIKeyParser.route(forNote: UInt8(note), adapterSendsRawPaddles: false) == want
+          })
+    check("every fixture unrouted note goes nowhere",
+          unrouted.allSatisfy { $0 >= 0 && $0 <= 127
+              && MIDIKeyParser.route(forNote: UInt8($0), adapterSendsRawPaddles: true) == nil
+              && MIDIKeyParser.route(forNote: UInt8($0), adapterSendsRawPaddles: false) == nil })
+    check("a note is routed exactly when it keys at all",
+          (0...127).allSatisfy { note in
+              let keys = MIDIKeyParser.paddle(forNote: UInt8(note)) != nil
+              return keys == (MIDIKeyParser.route(forNote: UInt8(note), adapterSendsRawPaddles: true) != nil)
+                  && keys == (MIDIKeyParser.route(forNote: UInt8(note), adapterSendsRawPaddles: false) != nil)
+          })
+    check("only the fixture's adapter modes send raw paddles",
+          VailKeyerMode.allCases.allSatisfy { $0.sendsRawPaddles == rawModes.contains($0.displayName) })
+} else {
+    check("fixtures/midi-key-routing.json is readable", false)
 }
 
 // MARK: - Shared timing fixture

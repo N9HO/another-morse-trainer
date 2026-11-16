@@ -165,7 +165,9 @@ the iOS app's navy/teal look.
   always-on replay, and a connected-MIDI-key readout
 - **On-screen paddles**: the on-screen key can be a straight key or a pair of
   touch paddles with a built-in Iambic A / Iambic B / Ultimatic keyer, dit and
-  dah memory, and a left-handed swap — wherever you key on screen
+  dah memory, and a left-handed swap — wherever you key on screen. The same
+  keyer times a hardware paddle's raw contacts (a Vail Adapter in Passthrough,
+  an N6ARA TinyMIDI, a Morserino-32 Pocket), so a squeeze is iambic keying
 - **Continue with the key after a miss**: in the keyed-answer modes
   (Characters with "Key answers", Sending Practice) and the modes a hardware
   key types into (Journey, Type It, QRQ Speed), keying the correct

@@ -54,13 +54,23 @@ final class SendingKeyer: ObservableObject {
     private var keyerWPM: Double
     private var toneMIDINote: Int
 
-    /// Paddles currently held. The key is "down" while *any* of them is: a
-    /// dit and dah squeezed together, or a release that overlaps the next
-    /// press, must not cut the tone short on the first note-off (Android
-    /// `MidiKeyInput.updateHeld`). The on-screen key counts as `.straight`.
-    /// The merge rule is MorseKit's `KeyMerge`, pinned by
+    /// Where a key edge comes from: the on-screen key, or the hardware key's
+    /// one logical key out of `midiRouter`.
+    private enum KeySource: Hashable, Sendable { case screen, midi }
+    /// Sources currently held. The key is "down" while *any* of them is, so
+    /// the on-screen key and a hardware key overlapping don't cut each other
+    /// short (Android `MidiKeyInput.report`); the router already merges the
+    /// hardware key's own notes (a squeeze, an overlapping release). The
+    /// merge rule is MorseKit's `KeyMerge`, pinned by
     /// `fixtures/gap-analyzer-merge.json` (row-23 of the parity audit).
-    private var keyMerge = KeyMerge<MIDIInput.Key>()
+    private var keyMerge = KeyMerge<KeySource>()
+    /// The hardware key's notes into one logical key: held notes as they
+    /// are, raw paddle contacts through the app's paddle keyer (#380).
+    private var midiRouter: MIDIKeyRouter?
+    /// Fired when a raw paddle press from the hardware key goes to the app's
+    /// keyer (`MIDIKeyRouter.onAppKeyer`); the Sending Analyzer judges what
+    /// follows as paddles through a keyer.
+    var onAppKeyer: (() -> Void)?
     /// When the first of the held paddles went down; the burst is timed from
     /// here to the release of the last one.
     private var keyDownAtMs: Int64?
@@ -91,15 +101,22 @@ final class SendingKeyer: ObservableObject {
         if !sidetoneOnDemand { startSidetone() }
         do {
             let input = try MIDIInput()
+            let router = MIDIKeyRouter()
+            router.onKey = { [weak self] isDown, ms in
+                guard let self, self.midi != nil else { return }
+                self.handle(source: .midi, isDown: isDown, atMs: ms)
+            }
+            router.onAppKeyer = { [weak self] in self?.onAppKeyer?() }
+            midiRouter = router
             input.onEvent = { [weak self] event in
-                // Straight key, dit, and dah paddles are all measured as bursts;
-                // the adapter does any iambic timing, so we just time key-down.
+                // Held notes are timed as bursts; raw paddle contacts are
+                // timed by the router's keyer first (#380).
                 Task { @MainActor in
                     // An event queued before `stop()` must not reach `handle`,
                     // whose key-down would restart the sidetone and re-claim
                     // the audio session with nothing left to release it (#251).
                     guard let self, self.midi != nil else { return }
-                    self.handle(key: event.key, isDown: event.isDown, atMs: event.timestampMs)
+                    self.midiRouter?.handle(event)
                 }
             }
             input.onSourcesChanged = { [weak self] names in
@@ -185,6 +202,9 @@ final class SendingKeyer: ObservableObject {
         idleTask = nil
         midi = nil
         midiOutput = nil
+        midiRouter?.onKey = nil
+        midiRouter?.releaseAll()
+        midiRouter = nil
         keyMerge.releaseAll()
         keyDownAtMs = nil
         stopSidetone()
@@ -213,7 +233,7 @@ final class SendingKeyer: ObservableObject {
     /// on-screen paddles (#233), whose keyer schedules each element exactly;
     /// the straight key leaves it to "now".
     func touchKey(isDown: Bool, atMs: Int64? = nil) {
-        handle(key: .straight, isDown: isDown, atMs: atMs ?? Int64(Date().timeIntervalSince1970 * 1000))
+        handle(source: .screen, isDown: isDown, atMs: atMs ?? Int64(Date().timeIntervalSince1970 * 1000))
     }
 
     func clear() {
@@ -231,10 +251,10 @@ final class SendingKeyer: ObservableObject {
 
     // MARK: - Key handling
 
-    private func handle(key: MIDIInput.Key, isDown: Bool, atMs ms: Int64) {
-        // Aggregate per-paddle state into one logical key: down while ANY
-        // paddle is held, up only when the last one releases.
-        guard let nowHeld = keyMerge.update(key, isDown: isDown) else { return }
+    private func handle(source: KeySource, isDown: Bool, atMs ms: Int64) {
+        // Aggregate the sources into one logical key: down while ANY is
+        // held, up only when the last one releases.
+        guard let nowHeld = keyMerge.update(source, isDown: isDown) else { return }
         edgeCount &+= 1
         onEdge?(nowHeld, ms)
         if nowHeld {

@@ -71,4 +71,15 @@ object AdapterKeyer {
      */
     fun adapterTimesSending(mode: MidiKeyOutput.KeyerMode): Boolean =
         mode != MidiKeyOutput.KeyerMode.STRAIGHT_KEY && mode != MidiKeyOutput.KeyerMode.PASSTHROUGH
+
+    /**
+     * Whether the adapter sends its dit and dah paddle contacts raw, on notes
+     * 1 and 2, for [mode] (#380). Only Passthrough: the app's own paddle
+     * keyer then times them ([MidiKeyInput], `MidiKeyParser.routeForNote`).
+     * In every other mode notes 1/2 are already timed by the adapter
+     * (firmware v4.4 on) or keyed straight, and stay held keys. Pinned by
+     * fixtures/midi-key-routing.json (`rawPaddleModes`).
+     */
+    fun sendsRawPaddles(mode: MidiKeyOutput.KeyerMode): Boolean =
+        mode == MidiKeyOutput.KeyerMode.PASSTHROUGH
 }

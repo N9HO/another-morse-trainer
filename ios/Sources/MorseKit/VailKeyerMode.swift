@@ -31,4 +31,13 @@ public enum VailKeyerMode: Int, CaseIterable, Sendable {
         case .keyahead: "Keyahead"
         }
     }
+
+    /// Whether the adapter sends its dit and dah paddle contacts raw, on
+    /// notes 1 and 2, in this mode (#380). Only Passthrough: the app's own
+    /// paddle keyer then times them (`MIDIKeyParser.route`). In every other
+    /// mode notes 1/2 are already timed by the adapter (firmware v4.4 on) or
+    /// keyed straight, and stay held keys. Mirrors
+    /// `AdapterKeyer.sendsRawPaddles` on Android and desktop. Pinned by
+    /// fixtures/midi-key-routing.json (`rawPaddleModes`).
+    public var sendsRawPaddles: Bool { self == .passthrough }
 }

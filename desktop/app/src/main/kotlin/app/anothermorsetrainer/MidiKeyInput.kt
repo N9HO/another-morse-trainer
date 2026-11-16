@@ -1,6 +1,11 @@
 package app.anothermorsetrainer
 
 import app.anothermorsetrainer.morsekit.MidiKeyParser
+import app.anothermorsetrainer.morsekit.MidiKeyRoute
+import app.anothermorsetrainer.morsekit.PaddleKeyer
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.cancel
 import javax.sound.midi.MidiDevice
 import javax.sound.midi.MidiMessage
 import javax.sound.midi.MidiSystem
@@ -12,22 +17,29 @@ import javax.sound.midi.Transmitter
  * as a simple key-down/up, for hardware sending practice.
  *
  * Supported keys send MIDI note-on/off; velocity > 0 = pressed. Straight = note
- * 0 (the Vail Adapter's straight key, and every element its keyer modes send,
- * already timed) or 30 (Morserino-32 Pocket, keyer in Straight Key mode); dit =
- * 1/20/61, dah = 2/21/62 (see [MidiKeyParser.paddleForNote]). Only note 0 from a
- * Vail keyer mode arrives already timed: 1/2 (Vail Passthrough) and 20/21 (N6ARA
- * TinyMIDI, the Pocket) are raw paddle contacts. Even so — exactly like the iOS
- * `MIDIInput` → `SendingKeyer` path — every note maps to a single logical key
- * and [MorseDecoder] times it, so raw paddles are not iambic-timed (a known
- * gap, #351). Each note's state is tracked separately, though, so
- * overlapping paddle presses hold the key: it goes down on the first press and
- * up only when the last paddle is released.
+ * 0 (the Vail Adapter's straight key) or 30 (Morserino-32 Pocket, keyer in
+ * Straight Key mode); dit = 1/20/61, dah = 2/21/62 (see
+ * [MidiKeyParser.paddleForNote]). Everything comes out as one logical key, the
+ * way a Vail Adapter in a keyer mode sends it, built from two kinds of note
+ * ([MidiKeyParser.routeForNote], #380):
+ *
+ * - Held notes key for as long as they are held: the straight keys, and 1/2
+ *   while the adapter Keyer mode is anything but Passthrough (there the
+ *   adapter has already timed each element, or the paddle is a straight key).
+ *   Each note's state is tracked separately, so overlapping presses hold the
+ *   key: down on the first press, up only when the last is released.
+ * - Raw paddle contacts — 1/2 from a Vail Adapter in Passthrough, 20/21 from
+ *   an N6ARA TinyMIDI or a Morserino-32 Pocket, 61/62 — go into a
+ *   [PaddleKeyerDriver], the on-screen paddles' keyer, at the Settings paddle
+ *   mode and character speed, so a squeeze is iambic keying rather than one
+ *   long tone. Its elements key the same logical key.
  *
  * Desktop port of the Android `MidiKeyInput` (`android.media.midi` →
  * `javax.sound.midi`). Java Sound has no device-added callback, so
  * [MidiPorts.Watch] polls for hot-plug; everything else — the per-note hold,
- * the stuck-key release on unplug, the parser — is the Android code. Callbacks
- * are marshaled to the UI thread so they can drive Compose state.
+ * the stuck-key release on unplug, the raw-paddle keyer, the parser — is the
+ * Android code. Callbacks are marshaled to the UI thread so they can drive
+ * Compose state.
  */
 class MidiKeyInput {
 
@@ -50,8 +62,30 @@ class MidiKeyInput {
      */
     var onKeyTimed: ((isDown: Boolean, atNanos: Long) -> Unit)? = null
 
-    /** Per-paddle key state: the keyer notes currently held down. */
+    /**
+     * Fired (on the UI thread) when a raw paddle press goes to the app's
+     * keyer: the elements that follow are the app's, made at the Settings
+     * speed, which the Sending Analyzer judges as paddles through a keyer.
+     * Set before [start]; cleared by [stop].
+     */
+    var onAppKeyer: (() -> Unit)? = null
+
+    /** Per-note key state: the held (straight-routed) notes currently down. */
     private val heldNotes = mutableSetOf<Int>()
+
+    /**
+     * Raw paddle notes currently down, by the keyer paddle each was routed to
+     * when it went down — so its release goes the same way even if the keyer
+     * mode changed while it was held, and two notes on one paddle (1 and 20)
+     * hold it until both are up.
+     */
+    private val keyedNotes = mutableMapOf<Int, PaddleKeyer.Element>()
+    private var keyerScope: CoroutineScope? = null
+    private var paddles: PaddleKeyerDriver? = null
+    /** Whether the app keyer's tone is on. */
+    private var keyerDown = false
+    /** The logical key as last reported. */
+    private var reported = false
 
     /** Java Sound always carries a MIDI system on Windows and Linux. */
     val isSupported: Boolean get() = !MidiPorts.isUnavailable
@@ -71,6 +105,7 @@ class MidiKeyInput {
     fun start(onKey: (Boolean) -> Unit, onConnected: (String?) -> Unit) {
         this.onKey = onKey
         this.onConnected = onConnected
+        startKeyer()
         if (!isSupported) { onConnected(null); return }
         onConnected(null)
         val w = MidiPorts.Watch(
@@ -94,7 +129,27 @@ class MidiKeyInput {
                 runCatching { it.device.close() }
             }
         }
-        onKey = null; onConnected = null; onKeyTimed = null
+        stopKeyer()
+        reported = false
+        onKey = null; onConnected = null; onKeyTimed = null; onAppKeyer = null
+    }
+
+    private fun startKeyer() {
+        if (paddles != null) return
+        val scope = MainScope()
+        keyerScope = scope
+        paddles = PaddleKeyerDriver(Settings.paddleMode, Settings.characterWpm, scope).also {
+            it.onKey = { down, atMs -> keyerEdge(down, atMs) }
+        }
+    }
+
+    private fun stopKeyer() {
+        paddles?.let { it.onKey = null; it.stop() }
+        paddles = null
+        keyerScope?.cancel()
+        keyerScope = null
+        keyedNotes.clear()
+        keyerDown = false
     }
 
     /** On the MIDI worker thread: open the port, then hand it to the UI thread. */
@@ -130,24 +185,74 @@ class MidiKeyInput {
             runCatching { gone.transmitter.close() }
             runCatching { gone.device.close() }
         }
-        // The unplugged key can't send its note-offs any more.
-        if (heldNotes.isNotEmpty()) {
-            heldNotes.clear()
-            onKey?.invoke(false)
-            onKeyTimed?.invoke(false, System.nanoTime())
+        // The unplugged key can't send its note-offs any more: let go of its
+        // held notes and of the keyer's paddles (which ends any tone at once).
+        heldNotes.clear()
+        if (keyedNotes.isNotEmpty()) {
+            keyedNotes.clear()
+            paddles?.stop()
         }
+        report(System.nanoTime())
         onConnected?.invoke(open.lastOrNull()?.name)
     }
 
-    /** Aggregate per-note state into one logical key: down while ANY note is held. */
-    private fun updateHeld(note: Int, isDown: Boolean, atNanos: Long) {
-        val wasHeld = heldNotes.isNotEmpty()
-        if (isDown) heldNotes.add(note) else heldNotes.remove(note)
-        val nowHeld = heldNotes.isNotEmpty()
-        if (nowHeld != wasHeld) {
-            onKey?.invoke(nowHeld)
-            onKeyTimed?.invoke(nowHeld, atNanos)
+    /**
+     * One note went down or up: hold it as a key, or hand it to the app's
+     * paddle keyer, as [MidiKeyParser.routeForNote] says for the adapter Keyer
+     * mode in use when it went down (#380).
+     */
+    private fun handleNote(note: Int, isDown: Boolean, atNanos: Long) {
+        if (!isDown) {
+            val element = keyedNotes.remove(note)
+            if (element != null) {
+                paddles?.paddle(element, keyedNotes.containsValue(element))
+            } else if (heldNotes.remove(note)) {
+                report(atNanos)
+            }
+            return
         }
+        val raw = AdapterKeyer.sendsRawPaddles(AdapterKeyer.mode())
+        when (MidiKeyParser.routeForNote(note, raw)) {
+            null -> return
+            MidiKeyRoute.HELD -> {
+                heldNotes.add(note)
+                report(atNanos)
+            }
+            MidiKeyRoute.KEYER_DIT -> keyerPress(note, PaddleKeyer.Element.DIT)
+            MidiKeyRoute.KEYER_DAH -> keyerPress(note, PaddleKeyer.Element.DAH)
+        }
+    }
+
+    private fun keyerPress(note: Int, element: PaddleKeyer.Element) {
+        val driver = paddles ?: return
+        // Follow Settings, as the on-screen paddles do; the driver applies a
+        // change only once it is idle, so an element in flight keeps its timing.
+        driver.configure(Settings.paddleMode, Settings.characterWpm)
+        keyedNotes[note] = element
+        onAppKeyer?.invoke()
+        driver.paddle(element, true)
+    }
+
+    /**
+     * An edge from the app's keyer, at the time it scheduled it
+     * ([System.currentTimeMillis] terms, as [PaddleKeyerDriver] keeps it),
+     * moved onto the [System.nanoTime] clock [onKeyTimed] reports in.
+     */
+    private fun keyerEdge(isDown: Boolean, atWallMs: Long) {
+        keyerDown = isDown
+        report(System.nanoTime() - (System.currentTimeMillis() - atWallMs) * 1_000_000L)
+    }
+
+    /**
+     * Aggregate into one logical key: down while any held note is down or the
+     * keyer's tone is on, reported only when that changes.
+     */
+    private fun report(atNanos: Long) {
+        val now = heldNotes.isNotEmpty() || keyerDown
+        if (now == reported) return
+        reported = now
+        onKey?.invoke(now)
+        onKeyTimed?.invoke(now, atNanos)
     }
 
     /**
@@ -161,7 +266,7 @@ class MidiKeyInput {
             val bytes = message.message ?: return
             val events = MidiKeyParser.messages(bytes, 0, message.length)
             if (events.isEmpty()) return
-            main.post { events.forEach { updateHeld(it.note, it.isDown, at) } }
+            main.post { events.forEach { handleNote(it.note, it.isDown, at) } }
         }
 
         override fun close() {}

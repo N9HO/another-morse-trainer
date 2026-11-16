@@ -54,11 +54,14 @@ final class SendingAnalyzerModel: ObservableObject {
     @Published private(set) var liveText = ""
     @Published private(set) var analysis: SendingAnalysis?
     @Published private(set) var record: SendingRecord
-    /// Whether this attempt was keyed on the on-screen paddles (#233). Their
-    /// keyer times every element at the app's Settings speed, so the attempt
-    /// is judged as paddles whatever the key picker says — the picker is for
-    /// the key the operator brings (a Vail adapter, a MIDI key, the mic).
-    @Published private(set) var onScreenPaddlesUsed = false
+    /// Whether this attempt was keyed through the app's own paddle keyer: the
+    /// on-screen paddles (#233), or raw paddle contacts from a MIDI key (#380:
+    /// a Vail Adapter in Passthrough, an N6ARA TinyMIDI, a Morserino-32
+    /// Pocket). That keyer times every element at the app's Settings speed,
+    /// so the attempt is judged as paddles whatever the key picker says — the
+    /// picker is for the key the operator brings (a Vail adapter in a keyer
+    /// mode, a straight MIDI key, the mic).
+    @Published private(set) var appKeyerUsed = false
 
     @Published var source: Source { didSet { save(); if source != oldValue { newTarget() } } }
     @Published var customText: String { didSet { save(); if source == .custom { newTarget() } } }
@@ -104,6 +107,10 @@ final class SendingAnalyzerModel: ObservableObject {
         keyer.onEdge = { [weak self] isDown, ms in
             guard let self, self.input == .key else { return }
             self.keyEdge(isDown: isDown, atMs: Double(ms))
+        }
+        keyer.onAppKeyer = { [weak self] in
+            guard let self, self.input == .key, self.phase == .sending else { return }
+            self.appKeyerUsed = true
         }
         mic.onEdge = { [weak self] isDown, ms in
             guard let self, self.input == .microphone else { return }
@@ -188,13 +195,14 @@ final class SendingAnalyzerModel: ObservableObject {
     // MARK: Sending
 
     /// The key type the attempt is judged as: paddles when any of it came
-    /// from the on-screen paddles, otherwise the picker's choice.
-    var judgedKeyType: SendingKeyType { onScreenPaddlesUsed ? .keyer : keyType }
+    /// from the app's keyer (on-screen or raw MIDI paddles), otherwise the
+    /// picker's choice.
+    var judgedKeyType: SendingKeyType { appKeyerUsed ? .keyer : keyType }
 
     func startSending() {
         guard canStart else { return }
         recorder.reset()
-        onScreenPaddlesUsed = false
+        appKeyerUsed = false
         liveText = ""
         analysis = nil
         phase = .sending
@@ -208,7 +216,7 @@ final class SendingAnalyzerModel: ObservableObject {
     /// main actor's wake-up jitter.
     func onScreenPaddleEdge(isDown: Bool, atMs ms: Int64) {
         guard input == .key else { return }
-        if phase == .sending { onScreenPaddlesUsed = true }
+        if phase == .sending { appKeyerUsed = true }
         keyer.touchKey(isDown: isDown, atMs: ms)
     }
 
@@ -236,12 +244,13 @@ final class SendingAnalyzerModel: ObservableObject {
         }
     }
 
-    /// On the on-screen paddles the elements are the keyer's, made at the
+    /// Through the app's keyer (on-screen or raw MIDI paddles) the elements
+    /// are its, made at the
     /// Settings speed, so that is the character speed they are read against
     /// (it decides dit from dah when a text is all one kind, like "5" or "E").
     /// Speed is not judged for a keyer, so nothing is marked down for it.
     private func analyse() -> SendingAnalysis {
-        let characterWpm = onScreenPaddlesUsed ? keyerWpm : targetWpm
+        let characterWpm = appKeyerUsed ? keyerWpm : targetWpm
         return SendingAnalysis(marks: recorder.marks, target: target, keyType: judgedKeyType,
                                characterWpm: characterWpm,
                                effectiveWpm: farnsworth ? min(effectiveWpm, characterWpm) : characterWpm)
@@ -266,7 +275,7 @@ final class SendingAnalyzerModel: ObservableObject {
     func cancelSending() {
         finishTask?.cancel()
         recorder.reset()
-        onScreenPaddlesUsed = false
+        appKeyerUsed = false
         liveText = ""
         phase = .setup
     }

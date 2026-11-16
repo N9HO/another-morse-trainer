@@ -70,11 +70,14 @@ class HardwareKey {
      *
      * The adapter is woken with the user's current sidetone and speed so its
      * own piezo and internal keyer match what the app is playing.
+     * [onAppKeyer] fires when a raw paddle press is timed by the app's own
+     * keyer rather than the key's (see [MidiKeyInput.onAppKeyer], #380).
      */
     fun start(
         onKey: (Boolean) -> Unit,
         onConnected: (String?) -> Unit,
-        onKeyTimed: ((isDown: Boolean, atNanos: Long) -> Unit)? = null
+        onKeyTimed: ((isDown: Boolean, atNanos: Long) -> Unit)? = null,
+        onAppKeyer: (() -> Unit)? = null
     ) {
         output.configure(
             keyerMode = storedKeyerMode,
@@ -91,6 +94,7 @@ class HardwareKey {
         // the UI comes from the input side, which is the half actually keying.
         output.start { }
         input.onKeyTimed = onKeyTimed
+        input.onAppKeyer = onAppKeyer
         input.start(onKey = onKey, onConnected = onConnected)
     }
 

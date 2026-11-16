@@ -1,7 +1,7 @@
 # Morserino-32 Pocket input (#351)
 
-Status: researched; only the MIDI note-30 mapping is built (see the update
-below). Nobody on the project has the hardware. This note records what the Morserino-32 Pocket ("M32P") actually exposes, why
+Status: researched; the MIDI note-30 mapping and app-timed raw paddles
+(#380) are built (see the update below). Nobody on the project has the hardware. This note records what the Morserino-32 Pocket ("M32P") actually exposes, why
 it does not fit the hardware-key abstraction as it stands, and the smallest
 piece worth building if the maintainer wants it.
 
@@ -60,29 +60,20 @@ Caveats, all open:
   submission. Today a Pocket user has to self-flash master or VK1HF's
   unofficial "V9.1 + USB Output" build; a Pocket on stock firmware has no
   MIDI.
-- **Raw paddles still collapse into one key, and that is a pre-existing bug,
-  not a Pocket one.** `MidiKeyInput` (and iOS `MIDIInput`) holds the key while
-  *any* note is down and does no iambic timing. That is right only for note 0,
-  which is all a Vail Adapter sends in its keyer modes (every element, already
-  timed). Notes 1/2 and 20/21 are raw paddle contacts that expect the host to
-  time them: a Vail Adapter in **Passthrough** (a keyer mode AMT itself offers
-  on all three apps) sends 1/2, an N6ARA TinyMIDI sends 20/21, and so does the
-  Pocket in its paddle modes. For all of them today a single paddle behaves
-  like a straight key, a squeeze is one long tone, and keyer-memory taps may be
-  too short to read. So on the Pocket only the straight key (note 30, in
-  Straight Key mode) works properly today.
-- **Not built, deferred pending hardware**: routing raw DIT/DAH edges into
-  `PaddleKeyerDriver` (the on-screen paddle keyer). It changes key input on
-  every keyed screen in three trees, and its correctness test is a physical
-  squeeze, though any paddle on a Vail Adapter in Passthrough will do, not only
-  a Pocket. Because the bug is not Pocket-specific, the fix belongs to
-  raw-paddle notes generally. The options: route 1/2/20/21 into the keyer
-  unconditionally (no new setting; right if no supported device sends
-  already-timed elements on those notes, which matches the current Vail spec;
-  older Vail firmware and the origin of 61/62 still to check); tie it to
-  `AdapterKeyer`'s Passthrough mode, which already means "the app does the
-  timing"; a default-off Settings choice; or a device-name match (needs the
-  Pocket's real USB product string, not known).
+- **Raw paddles are iambic-timed by the app (#380).** `MidiKeyInput` (and
+  iOS `MIDIKeyRouter`) used to hold one key while *any* note was down, so a
+  raw paddle keyed like a straight key and a squeeze was one long tone. Raw
+  dit/dah contacts now go into `PaddleKeyerDriver` (the on-screen paddles'
+  keyer) at the Settings paddle mode and speed; the routing is
+  `MidiKeyParser.routeForNote` / `MIDIKeyParser.route`, pinned by
+  `fixtures/midi-key-routing.json`. 20/21 (TinyMIDI, Pocket) and 61/62 always
+  route to the keyer. 1/2 route to it **only with the adapter Keyer mode set
+  to Passthrough**: Vail Adapter firmware from v4.4 (commit 5448935,
+  2025-09-23) sends its own keyer-timed elements on notes 1 (dit) and 2 (dah)
+  rather than note 0 (the MIDI spec still says 0), so in a keyer mode 1/2
+  stay held keys, exactly as before. Pocket keyer-memory playback on 20/21 is
+  re-timed by the app's keyer; at a much faster app speed than the Pocket's a
+  memory dah can come out as two. Untested on hardware.
 - A synth sending note 30 now keys. The parser was already this permissive for
   notes 0, 1, 2, 20, 21, 61 and 62.
 - The wake sequence (Vail CCs) is sent to every MIDI output device, including a
@@ -91,8 +82,9 @@ Caveats, all open:
 Guide wording (the guide is outside this repo): "Morserino-32 Pocket: with
 firmware that has *USB Output* (not in any released firmware yet; slated for
 10.0), set it to MIDI in the CW Keyer options, set the keyer to Straight Key
-mode, and use a USB cable. A straight key should then work; in the paddle
-keyer modes the paddles are not iambic-timed by the app yet. Untested by the
+mode for a straight key, or a paddle keyer mode for a paddle, and use a USB
+cable. A paddle's contacts are timed by the app's own keyer, in the Paddle
+mode under Settings › On-screen key, at your practice speed. Untested by the
 project."
 
 ## 1. What the device exposes

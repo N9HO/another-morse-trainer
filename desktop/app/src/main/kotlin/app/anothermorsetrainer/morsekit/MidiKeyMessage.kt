@@ -12,13 +12,21 @@ package app.anothermorsetrainer.morsekit
  * dropped (running status). Reading only the first three bytes therefore loses
  * events, and the one most often lost is a key-up that arrived in the same
  * radio burst as its key-down — which leaves the key held down until the next
- * press, because [MidiKeyInput] holds the key while any note is down.
+ * press, because [MidiKeyInput] holds the key while a held note is down.
  *
  * Twin of `Sources/MorseKit/MIDIKeyMessage.swift` in the iOS repo.
  */
 
 /** Which contact of a Morse key an event came from. */
 enum class MidiKeyPaddle { STRAIGHT, DIT, DAH }
+
+/**
+ * Where a key note goes (#380): [HELD] holds the one logical key down for as
+ * long as the note is held; [KEYER_DIT] and [KEYER_DAH] are raw paddle
+ * contacts, which go into the app's own paddle keyer (the on-screen paddles'
+ * `PaddleKeyerDriver`) to be timed at the Settings paddle mode and speed.
+ */
+enum class MidiKeyRoute { HELD, KEYER_DIT, KEYER_DAH }
 
 /** One key-down or key-up decoded from a MIDI stream. */
 data class MidiKeyMessage(val paddle: MidiKeyPaddle, val note: Int, val isDown: Boolean)
@@ -27,21 +35,47 @@ object MidiKeyParser {
 
     /**
      * Note numbers the supported keys send, across firmwares and keyer modes:
-     * straight key = 0 (Vail Adapter: the straight key, and every element its
-     * keyer modes send, already timed) or 30 (Morserino-32 Pocket with USB
-     * Output set to MIDI and its keyer in Straight Key mode, #351); dit paddle
-     * = 1 (Vail Adapter in Passthrough), 20 (N6ARA TinyMIDI, the Pocket) or 61;
-     * dah paddle = 2 (Vail Adapter in Passthrough), 21 (N6ARA TinyMIDI, the
-     * Pocket) or 62. Notes 1, 2, 20 and 21 are raw paddle contacts: the device
-     * does no timing and expects the host to. 61 and 62 are older mappings
-     * with no known device source, kept as existing behaviour. Every other
-     * note is unmapped: we listen to every MIDI device, so an unrelated synth
-     * must never register as keying. Pinned by fixtures/midi-key-notes.json.
+     * straight key = 0 (Vail Adapter: the straight key, and on firmware before
+     * v4.4 every element its keyer modes send, already timed) or 30
+     * (Morserino-32 Pocket with USB Output set to MIDI and its keyer in
+     * Straight Key mode, #351); dit paddle = 1 (Vail Adapter), 20 (N6ARA
+     * TinyMIDI, the Pocket) or 61; dah paddle = 2 (Vail Adapter), 21 (N6ARA
+     * TinyMIDI, the Pocket) or 62. Notes 20 and 21, and 1 and 2 from a Vail
+     * Adapter in Passthrough, are raw paddle contacts the device does not
+     * time (see [routeForNote]). 61 and 62 are older mappings with no known
+     * device source, kept as existing behaviour. Every other note is
+     * unmapped: we listen to every MIDI device, so an unrelated synth must
+     * never register as keying. Pinned by fixtures/midi-key-notes.json.
      */
     fun paddleForNote(note: Int): MidiKeyPaddle? = when (note) {
         0, 30 -> MidiKeyPaddle.STRAIGHT
         1, 20, 61 -> MidiKeyPaddle.DIT
         2, 21, 62 -> MidiKeyPaddle.DAH
+        else -> null
+    }
+
+    /**
+     * Where [note] goes (#380), given whether the Vail Adapter is in a keyer
+     * mode that sends raw paddle contacts ([adapterSendsRawPaddles]: the app's
+     * adapter Keyer mode is Passthrough). Pinned by fixtures/midi-key-routing.json.
+     *
+     * - 0 and 30 (straight keys) are always [MidiKeyRoute.HELD].
+     * - 1 and 2 are the Vail Adapter's dit and dah. In Passthrough they are
+     *   the raw contacts and go to the app's keyer. In every other mode they
+     *   stay held keys, as before: from firmware v4.4 the adapter's own keyer
+     *   sends each element it has already timed on 1 (dit) or 2 (dah), and
+     *   earlier firmware sends those on note 0, so a keyer mode never needs
+     *   the app to time them.
+     * - 20/21 (N6ARA TinyMIDI, Morserino-32 Pocket) and 61/62 are raw
+     *   contacts from keys with no keyer mode the app sets: always the keyer.
+     * - Every other note: null, as [paddleForNote].
+     */
+    fun routeForNote(note: Int, adapterSendsRawPaddles: Boolean): MidiKeyRoute? = when (note) {
+        0, 30 -> MidiKeyRoute.HELD
+        1 -> if (adapterSendsRawPaddles) MidiKeyRoute.KEYER_DIT else MidiKeyRoute.HELD
+        2 -> if (adapterSendsRawPaddles) MidiKeyRoute.KEYER_DAH else MidiKeyRoute.HELD
+        20, 61 -> MidiKeyRoute.KEYER_DIT
+        21, 62 -> MidiKeyRoute.KEYER_DAH
         else -> null
     }
 
