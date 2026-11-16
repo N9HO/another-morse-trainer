@@ -937,6 +937,12 @@ object Settings {
         persist()
     }
 
+    /** Replace the opted-in punctuation (account sync); anything not pickable is dropped. */
+    fun updatePunctuation(chars: Set<Char>) {
+        punctuationChars = chars.filter { it in MorseCode.pickablePunctuation }.toSet()
+        persist()
+    }
+
     /** The ladder's introduction order: the Koch core plus opted-in punctuation at the end. */
     fun studyOrder(): List<Char> = MorseCode.studyOrder(punctuationChars)
 
@@ -1221,6 +1227,13 @@ object Settings {
         }
     }
 
+    /** Replace the call-sign shapes (account sync); an empty set is refused, as the toggle refuses it. */
+    fun updateRapidFireFormats(formats: Set<CallsignFormat>) {
+        if (formats.isEmpty()) return
+        rapidFireFormats = formats
+        persistModeSetup()
+    }
+
     /**
      * The mode-setup keys, written on their own so a setup change never
      * rewrites the app-wide preferences [persist] owns (and vice versa).
@@ -1245,6 +1258,7 @@ object Settings {
             putBoolean("rfSections", rapidFireSections)
             putBoolean("rfSerialCut", rapidFireSerialCut)
         }
+        SyncCoordinator.settingsChanged()
     }
 
     private fun persist() {
@@ -1299,6 +1313,7 @@ object Settings {
             putInt("reminderHour", reminderHour)
             putInt("reminderMinute", reminderMinute)
         }
+        SyncCoordinator.settingsChanged()
     }
 }
 

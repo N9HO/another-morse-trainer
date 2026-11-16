@@ -4,6 +4,7 @@ import app.anothermorsetrainer.morsekit.AccountRules
 import app.anothermorsetrainer.morsekit.PracticeStreak
 import app.anothermorsetrainer.morsekit.SessionRecord
 import app.anothermorsetrainer.morsekit.SyncMerge
+import app.anothermorsetrainer.morsekit.SyncSettings
 import app.anothermorsetrainer.morsekit.SyncState
 import app.anothermorsetrainer.morsekit.SyncWire
 import kotlinx.coroutines.runBlocking
@@ -92,6 +93,8 @@ class SyncEngineTest {
         var totals = SyncMerge.LifetimeTotals(0, 0, 0, 0.0, null, emptyMap())
         var streak = PracticeStreak()
         val state = LinkedHashMap<String, JSONObject>()
+        /** The training settings, by state key, in their wire shape. */
+        val settings = LinkedHashMap<String, Any>()
         var failSave = false
         var clock = 1_000L
 
@@ -106,9 +109,9 @@ class SyncEngineTest {
         override fun saveTotals(totals: SyncMerge.LifetimeTotals) { this.totals = totals }
         override fun streak() = streak
         override fun saveStreak(streak: PracticeStreak) { this.streak = streak }
-        override fun stateValue(key: String): JSONObject? = state[key]
-        override fun applyState(key: String, value: JSONObject) {
-            state[key] = value
+        override fun stateValue(key: String): Any? = if (SyncSettings.isSetting(key)) settings[key] else state[key]
+        override fun applyState(key: String, value: Any) {
+            if (SyncSettings.isSetting(key)) settings[key] = value else state[key] = value as JSONObject
             engine?.stateChanged(key)   // the store's save hook fires, as in the app
         }
         override fun today(): LocalDate = LocalDate.of(2026, 10, 5)
@@ -657,5 +660,133 @@ class SyncEngineTest {
         assertEquals("the other device's newer Journey applied", 7, h.state[SyncState.JOURNEY]!!.getInt("currentLevel"))
         assertEquals(9_000L, rig.engine.stamps[SyncState.JOURNEY]!!.updatedAt)
         assertTrue(rig.engine.pendingState.isEmpty())
+    }
+
+    // ---- fixtures/sync-wire.json settings.stamping ----
+
+    private val settingsStamping: JSONObject get() = fixture.getJSONObject("settings").getJSONObject("stamping")
+
+    private fun stampsJson(stamps: Map<String, SyncEngine.Stamp>, keys: Iterable<String>): JSONObject {
+        val o = JSONObject()
+        for (k in keys) stamps[k]?.let { o.put(k, it.updatedAt) }
+        return o
+    }
+
+    @Test
+    fun `settings at first sign-in - a changed one goes at 0, a default one stays home and takes the account's`() = runBlocking {
+        val first = settingsStamping.getJSONObject("firstSignIn")
+        val rig = Rig(signedIn = false)
+        val h = rig.host
+        val local = first.getJSONObject("local")
+        for (k in local.keys()) h.settings[k] = local.get(k)
+        val before = first.getJSONObject("stampsBefore")
+        val seeded = JSONObject()
+        for (k in before.keys()) seeded.put(k, JSONObject().put("updatedAt", before.getLong(k)).put("sig", local.get(k).toString()))
+        rig.kv.put(SyncEngine.K_STAMPS, seeded.toString())
+        rig.tokens.refresh = "r1"; rig.tokens.access = "a1"
+
+        // The Worker, in memory: per key the stored entry wins a tie.
+        val stored = LinkedHashMap<String, JSONObject>()
+        val snap = first.getJSONObject("snapshot")
+        for (k in snap.keys()) stored[k] = snap.getJSONObject(k)
+        rig.t.replies.getOrPut("PUT /v1/sync/state") { ArrayDeque() }.addLast {
+            val entries = rig.t.bodies.last()!!.getJSONObject("entries")
+            val winners = JSONObject()
+            for (k in entries.keys()) {
+                val sent = entries.getJSONObject(k)
+                val mine = stored[k]
+                if (mine != null && mine.getLong("updatedAt") >= sent.getLong("updatedAt")) winners.put(k, mine)
+                else { stored[k] = sent; winners.put(k, sent) }
+            }
+            AccountReply(200, JSONObject().put("entries", winners).put("rejected", JSONArray()))
+        }
+        rig.t.replies.getOrPut("GET /v1/sync/snapshot") { ArrayDeque() }.addLast {
+            val state = JSONObject()
+            for ((k, v) in stored) state.put(k, v)
+            AccountReply(200, JSONObject().put("state", state).put("seq", 1))
+        }
+
+        assertEquals(SyncOutcome.OK, rig.engine.signedIn(AccountInfo("acc-1", null, null, null)))
+
+        val sent = rig.t.bodyOf("PUT /v1/sync/state").getJSONObject("entries")
+        val sentStamps = JSONObject()
+        for (k in sent.keys()) sentStamps.put(k, sent.getJSONObject(k).getLong("updatedAt"))
+        assertTrue("sent $sentStamps", SyncSettings.jsonEquals(first.getJSONObject("expectedSent"), sentStamps))
+        val notSent = first.getJSONArray("expectedNotSent")
+        for (i in 0 until notSent.length()) assertFalse(sent.has(notSent.getString(i)))
+        for (k in sent.keys()) {
+            val v = sent.getJSONObject(k).get("value")
+            assertTrue("$k goes normalised", SyncSettings.jsonEquals(SyncSettings.normalize(k, v), v))
+        }
+        val after = first.getJSONObject("expectedAfter")
+        for (k in after.keys()) assertTrue("$k: ${h.settings[k]}", SyncSettings.jsonEquals(after.get(k), h.settings[k]))
+        val expectedStamps = first.getJSONObject("expectedStamps")
+        assertTrue(SyncSettings.jsonEquals(expectedStamps, stampsJson(rig.engine.stamps, expectedStamps.keys().asSequence().toList())))
+
+        // A change of ours restamps only its setting.
+        val change = settingsStamping.getJSONObject("userChange")
+        h.clock = change.getLong("now")
+        val changed = change.getJSONObject("change")
+        for (k in changed.keys()) {
+            h.settings[k] = changed.get(k)
+            rig.engine.stateChanged(k)
+        }
+        rig.engine.stateChanged("setting.speed")   // saved, unchanged
+        val restamped = change.getJSONObject("expectedStamps")
+        assertTrue(SyncSettings.jsonEquals(restamped, stampsJson(rig.engine.stamps, restamped.keys().asSequence().toList())))
+    }
+
+    /** A signed-in sync where each setting in [scenario]'s `local` is stamped, against a canned state reply. */
+    private fun settingsRig(scenario: JSONObject, reply: JSONObject): Rig {
+        val rig = Rig(signedIn = true)
+        val local = scenario.getJSONObject("local")
+        val stamps = JSONObject()
+        for (k in local.keys()) {
+            val e = local.getJSONObject(k)
+            rig.host.settings[k] = e.get("value")
+            stamps.put(k, JSONObject().put("updatedAt", e.getLong("updatedAt")).put("sig", e.get("value").toString()))
+        }
+        rig.kv.put(SyncEngine.K_STAMPS, stamps.toString())
+        rig.kv.put(SyncEngine.K_PENDING_STATE, JSONArray(local.keys().asSequence().toList()).toString())
+        rig.t.on("PUT", "/v1/sync/state", 200, reply)
+        rig.emptyPull()
+        return rig
+    }
+
+    @Test
+    fun `a newer setting out of range is clamped and applied, one this app cannot read is ignored`() = runBlocking {
+        for (name in listOf("outOfRangeReceived", "unusableReceived")) {
+            val s = settingsStamping.getJSONObject(name)
+            val rig = settingsRig(s, JSONObject().put("entries", s.getJSONObject("reply")).put("rejected", JSONArray()))
+            assertEquals(SyncOutcome.OK, rig.engine.sync())
+            val key = s.getJSONObject("local").keys().next()
+            assertTrue("$name: ${rig.host.settings[key]}", SyncSettings.jsonEquals(s.get("expectedValue"), rig.host.settings[key]))
+            assertEquals(name, s.getLong("expectedUpdatedAt"), rig.engine.stamps[key]!!.updatedAt)
+        }
+    }
+
+    @Test
+    fun `a setting the Worker does not know yet leaves the queue and keeps its value and stamp`() = runBlocking {
+        val r = settingsStamping.getJSONObject("rejectedUntilDeployed")
+        val scenario = JSONObject().put("local", JSONObject().put("setting.tonePitch",
+            JSONObject().put("value", r.get("expectedValue")).put("updatedAt", r.getLong("expectedUpdatedAt"))))
+        val rig = settingsRig(scenario, r.getJSONObject("reply"))
+        assertEquals(SyncOutcome.OK, rig.engine.sync())
+        assertEquals(0, rig.engine.failures)
+        assertTrue(rig.engine.pendingState.isEmpty())
+        assertEquals(r.getLong("expectedUpdatedAt"), rig.engine.stamps["setting.tonePitch"]!!.updatedAt)
+        assertTrue(SyncSettings.jsonEquals(r.get("expectedValue"), rig.host.settings["setting.tonePitch"]))
+    }
+
+    @Test
+    fun `an unstamped setting is never sent, whatever its value`() = runBlocking {
+        val rig = Rig(signedIn = true)
+        rig.host.settings["setting.tonePitch"] = 750
+        rig.host.state[SyncState.JOURNEY] = JSONObject().put("currentLevel", 2)
+        rig.t.on("PUT", "/v1/sync/state", 200, JSONObject().put("entries", JSONObject()))
+        rig.emptyPull()
+        assertEquals(SyncOutcome.OK, rig.engine.sync())
+        val sent = rig.t.bodyOf("PUT /v1/sync/state").getJSONObject("entries")
+        assertEquals(setOf(SyncState.JOURNEY), sent.keys().asSequence().toSet())
     }
 }
