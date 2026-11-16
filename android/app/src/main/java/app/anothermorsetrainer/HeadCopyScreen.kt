@@ -220,17 +220,19 @@ fun HeadCopyScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
     // Session countdown: ticks only while running and only when a length is set.
     // Also keyed on whether a limit exists, so the timer menu starting a
     // countdown on an open-ended run (or dropping one) restarts the loop.
+    // Reaching zero (or subtracting the last minute) ends it.
     LaunchedEffect(phase, remaining == null) {
         if (phase != HcPhase.RUNNING) return@LaunchedEffect
         while (true) {
             val r = remaining ?: return@LaunchedEffect
-            if (r <= 0) {
-                endSession()
-                return@LaunchedEffect
-            }
+            if (r <= 0) return@LaunchedEffect
             delay(1000)
             remaining = remaining?.minus(1)
         }
+    }
+    LaunchedEffect(phase, remaining) {
+        val r = remaining
+        if (phase == HcPhase.RUNNING && r != null && r <= 0) endSession()
     }
 
     BackHandler { if (phase == HcPhase.SUMMARY) onBack() else finish() }
