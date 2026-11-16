@@ -1,0 +1,29 @@
+{
+  "$comment": [
+    "MIDI note number -> key contact, for the hardware-key parser (#351), pinned for all three",
+    "ports: MIDIKeyParser.paddle(forNote:) in ios/Sources/MorseKit/MIDIKeyMessage.swift and",
+    "MidiKeyParser.paddleForNote in android/.../morsekit/MidiKeyMessage.kt and the desktop copy.",
+    "Read by ios/Sources/MorseKitCheck/main.swift and MidiKeyNotesFixtureTest.kt (android, desktop).",
+    "",
+    "Sources, not captured from either port: the Vail web repeater's note set (straight 0;",
+    "dit 1, 20, 61; dah 2, 21, 62) and the Morserino-32 Pocket 'USB Output = MIDI' mode added by",
+    "oe1wkl/Morserino-32 PR #224 (merged 2026-10-29): channel 1, dit 20, dah 21, straight key 30",
+    "(Lynovation CTR2-MIDI convention). Unverified on real Pocket hardware.",
+    "",
+    "'mapped' lists every note that keys; 'unmapped' lists notes that must stay silent because the",
+    "app listens to every MIDI source and an unrelated synth must never register as keying (the",
+    "neighbours of each mapped note, middle C, and the extremes). A note moving between the lists",
+    "is a behaviour change: say so in the commit. Do not regenerate to make a failing test pass."
+  ],
+  "mapped": [
+    { "note": 0,  "contact": "straight", "source": "Vail" },
+    { "note": 1,  "contact": "dit",      "source": "Vail keyer" },
+    { "note": 2,  "contact": "dah",      "source": "Vail keyer" },
+    { "note": 20, "contact": "dit",      "source": "Vail keyer, Morserino-32 Pocket MIDI" },
+    { "note": 21, "contact": "dah",      "source": "Vail keyer, Morserino-32 Pocket MIDI" },
+    { "note": 30, "contact": "straight", "source": "Morserino-32 Pocket MIDI (PR #224)" },
+    { "note": 61, "contact": "dit",      "source": "Vail passthrough" },
+    { "note": 62, "contact": "dah",      "source": "Vail passthrough" }
+  ],
+  "unmapped": [3, 19, 22, 29, 31, 60, 63, 64, 127]
+}

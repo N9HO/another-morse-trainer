@@ -27,14 +27,15 @@ object MidiKeyParser {
 
     /**
      * Note numbers the supported keys send, across firmwares and keyer modes:
-     * straight key = 0; dit paddle = 1, 20, or (passthrough) 61; dah paddle =
-     * 2, 21, or (passthrough) 62. This matches the Vail web repeater's full set
-     * so paddle input works regardless of mode. Every other note is unmapped:
+     * straight key = 0 or 30; dit paddle = 1, 20, or (passthrough) 61; dah
+     * paddle = 2, 21, or (passthrough) 62. This matches the Vail web repeater's
+     * full set so paddle input works regardless of mode; 20, 21 and 30 are also
+     * what a Morserino-32 Pocket sends with USB Output set to MIDI (#351). Every other note is unmapped:
      * we listen to every MIDI device, so an unrelated synth must never register
      * as keying.
      */
     fun paddleForNote(note: Int): MidiKeyPaddle? = when (note) {
-        0 -> MidiKeyPaddle.STRAIGHT
+        0, 30 -> MidiKeyPaddle.STRAIGHT
         1, 20, 61 -> MidiKeyPaddle.DIT
         2, 21, 62 -> MidiKeyPaddle.DAH
         else -> null
