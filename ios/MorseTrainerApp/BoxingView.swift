@@ -370,9 +370,17 @@ struct BoxingView: View {
             }
             .allowsHitTesting(false)
         )
-        .onAppear { ctl.attach(model) }
+        .onAppear {
+            // Portrait on a phone: in landscape the ring, the tell panel and
+            // the key pad do not fit one above another.
+            OrientationLock.portrait(true)
+            ctl.attach(model)
+        }
         .leaderboardOptInPrompt(isPresented: $ctl.optInPrompt) { ctl.beginFight(ctl.pendingFighter) }
-        .onDisappear { ctl.leave() }
+        .onDisappear {
+            OrientationLock.portrait(false)
+            ctl.leave()
+        }
         // Leaving the app pauses the fight; the player comes back to the pause card.
         .onChange(of: scenePhase) { phase in
             if phase != .active { ctl.pauseFight() }

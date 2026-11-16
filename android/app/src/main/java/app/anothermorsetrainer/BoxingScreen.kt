@@ -1,5 +1,10 @@
 package app.anothermorsetrainer
 
+import androidx.compose.ui.platform.LocalConfiguration
+import android.content.pm.ActivityInfo
+import android.content.ContextWrapper
+import android.app.Activity
+import androidx.compose.foundation.layout.aspectRatio
 import android.graphics.Bitmap
 import android.os.SystemClock
 import androidx.activity.compose.BackHandler
@@ -100,6 +105,17 @@ private val BK_PALE = Color(0xFFF4EEE0)
 @Composable
 fun BoxingScreen(onBack: () -> Unit) {
     val context = LocalContext.current
+    // Portrait on a phone: in landscape the ring, the tell panel and the key
+    // pad do not fit one above another. A tablet (600 dp and up) keeps every
+    // orientation; it has the height. iOS locks the same screen the same way.
+    // Keyed on the width, so a foldable opened on this screen unlocks.
+    val smallestWidthDp = LocalConfiguration.current.smallestScreenWidthDp
+    DisposableEffect(smallestWidthDp) {
+        val activity = context.findActivity()
+        val before = activity?.requestedOrientation
+        if (smallestWidthDp < 600) activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+        onDispose { if (activity != null && before != null) activity.requestedOrientation = before }
+    }
     val prefs = remember { context.getSharedPreferences("amt_boxing", android.content.Context.MODE_PRIVATE) }
     val player = remember { MorsePlayer() }
     val keyer = remember { SendingKeyer(wpm = Settings.characterWpm, toneHz = Settings.sidetoneHz) }
@@ -361,10 +377,15 @@ private fun bitmapOf(pixels: IntArray, w: Int, h: Int): ImageBitmap {
     return bmp.asImageBitmap()
 }
 
-/** Draws [image] scaled up without smoothing, filling the width of the canvas. */
+/**
+ * Draws [image] scaled up without smoothing, filling the width of the canvas.
+ * The canvas takes the picture's own shape, as on desktop, as large as the space
+ * it is given allows: given a width and no height it measured zero tall, so the
+ * ring painted past its bottom edge and the tell panel was laid over the fight.
+ */
 @Composable
 private fun PixelImage(image: ImageBitmap, modifier: Modifier, srcTop: Int = 0, srcRows: Int = image.height) {
-    Canvas(modifier) {
+    Canvas(modifier.aspectRatio(image.width.toFloat() / srcRows)) {
         val scale = size.width / image.width
         drawImage(
             image = image,
@@ -386,7 +407,7 @@ private fun SplashView(t: Int, seed: Int, frame: Int, onContinue: () -> Unit) {
         Modifier.fillMaxSize().background(Color(0xFF0A0306)).clickable { onContinue() },
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        PixelImage(image, Modifier.fillMaxWidth().height((BkRing.SCREEN_H * 1.0).dp))
+        PixelImage(image, Modifier.weight(1f, fill = false))
         Text(stringResource(R.string.bk_sponsored), color = BK_BRASS, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(6.dp))
         Text(stringResource(R.string.bk_created_by), color = BK_PALE, fontSize = 15.sp, fontWeight = FontWeight.Bold)
@@ -532,49 +553,59 @@ private fun FightView(
     }
     val image = remember(frame) { bitmapOf(pixels, BkRing.ART_W, BkRing.ART_H) }
     Column(Modifier.fillMaxSize().background(BK_BG)) {
-        // Scoreboard.
-        Row(Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text(stringResource(R.string.bk_you), color = BK_PALE, fontSize = 11.sp)
-                Bar(f.myHp / BoxingRules.PLAYER_HP.toFloat(), Color(0xFF30C860), Modifier.fillMaxWidth())
+        // Everything above the key, in the height the key leaves: what the
+        // ring doesn't use falls below the tell panel, so the key stays at
+        // the bottom on a tall phone.
+        Column(Modifier.fillMaxWidth().weight(1f)) {
+            // Scoreboard.
+            Row(Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(stringResource(R.string.bk_you), color = BK_PALE, fontSize = 11.sp)
+                    Bar(f.myHp / BoxingRules.PLAYER_HP.toFloat(), Color(0xFF30C860), Modifier.fillMaxWidth())
+                }
+                Column(Modifier.padding(horizontal = 10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(stringResource(R.string.bk_round_of, f.round, BoxingRules.ROUNDS), color = BK_BRASS, fontSize = 11.sp)
+                    Text(mmss(f.clockMs(now)), color = BK_PALE, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
+                }
+                Column(Modifier.weight(1f)) {
+                    Text(f.foe.name, color = BK_PALE, fontSize = 11.sp, maxLines = 1)
+                    Bar(f.foeHp / f.foe.hp.toFloat(), BK_RED, Modifier.fillMaxWidth())
+                }
             }
-            Column(Modifier.padding(horizontal = 10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(stringResource(R.string.bk_round_of, f.round, BoxingRules.ROUNDS), color = BK_BRASS, fontSize = 11.sp)
-                Text(mmss(f.clockMs(now)), color = BK_PALE, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
-            }
-            Column(Modifier.weight(1f)) {
-                Text(f.foe.name, color = BK_PALE, fontSize = 11.sp, maxLines = 1)
-                Bar(f.foeHp / f.foe.hp.toFloat(), BK_RED, Modifier.fillMaxWidth())
-            }
-        }
-        PixelImage(image, Modifier.fillMaxWidth(), srcTop = BkRing.STAGE_Y, srcRows = BkRing.ART_H - BkRing.STAGE_Y)
-        Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("★".repeat(f.stars) + "☆".repeat(BoxingRules.MAX_STARS - f.stars), color = BK_BRASS, fontSize = 18.sp)
-            Spacer(Modifier.weight(1f))
-            Text(f.score.toString(), color = BK_PALE, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
-            TextButton(onClick = onPause) { Text(stringResource(R.string.bk_pause), color = Brand.teal) }
-        }
-        // The tell and your keying.
-        Column(Modifier.fillMaxWidth().background(BK_PANEL).padding(10.dp)) {
-            val shown = when {
-                f.starring() -> f.word
-                phase == BoxingPhase.MeDown -> stringResource(R.string.bk_get_up, f.getUp.toString())
-                f.tellShown -> f.tell
-                else -> ""
-            }
-            Text(
-                shown.ifEmpty { if (f.telling()) "· · ·" else " " },
-                color = BK_BRASS, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 26.sp
+            // Takes the height the panels and the key leave, up to the picture's
+            // own shape, rather than filling the width and pushing the key pad off
+            // a short screen.
+            PixelImage(
+                image, Modifier.weight(1f, fill = false).align(Alignment.CenterHorizontally),
+                srcTop = BkRing.STAGE_Y, srcRows = BkRing.ART_H - BkRing.STAGE_Y
             )
-            val typed = if (f.starring()) f.typed else f.answer
-            Text(
-                typed + (if (marks.isNotEmpty()) "  $marks" else ""),
-                color = BK_PALE, fontFamily = FontFamily.Monospace, fontSize = 18.sp, maxLines = 1
-            )
-            f.window(now)?.let { (left, whole) -> Bar(left / whole.coerceAtLeast(1).toFloat(), BK_BRASS, Modifier.fillMaxWidth().padding(top = 4.dp)) }
-            f.callout?.let { (c, _) -> Text(calloutText(c), color = BK_RED, fontWeight = FontWeight.Bold, fontSize = 13.sp) }
+            Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("★".repeat(f.stars) + "☆".repeat(BoxingRules.MAX_STARS - f.stars), color = BK_BRASS, fontSize = 18.sp)
+                Spacer(Modifier.weight(1f))
+                Text(f.score.toString(), color = BK_PALE, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
+                TextButton(onClick = onPause) { Text(stringResource(R.string.bk_pause), color = Brand.teal) }
+            }
+            // The tell and your keying.
+            Column(Modifier.fillMaxWidth().background(BK_PANEL).padding(10.dp)) {
+                val shown = when {
+                    f.starring() -> f.word
+                    phase == BoxingPhase.MeDown -> stringResource(R.string.bk_get_up, f.getUp.toString())
+                    f.tellShown -> f.tell
+                    else -> ""
+                }
+                Text(
+                    shown.ifEmpty { if (f.telling()) "· · ·" else " " },
+                    color = BK_BRASS, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 26.sp
+                )
+                val typed = if (f.starring()) f.typed else f.answer
+                Text(
+                    typed + (if (marks.isNotEmpty()) "  $marks" else ""),
+                    color = BK_PALE, fontFamily = FontFamily.Monospace, fontSize = 18.sp, maxLines = 1
+                )
+                f.window(now)?.let { (left, whole) -> Bar(left / whole.coerceAtLeast(1).toFloat(), BK_BRASS, Modifier.fillMaxWidth().padding(top = 4.dp)) }
+                f.callout?.let { (c, _) -> Text(calloutText(c), color = BK_RED, fontWeight = FontWeight.Bold, fontSize = 13.sp) }
+            }
         }
-        Spacer(Modifier.weight(1f))
         if (f.paused()) {
             Column(Modifier.fillMaxWidth().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(stringResource(R.string.bk_paused), color = BK_PALE, fontWeight = FontWeight.Bold)
@@ -684,4 +715,11 @@ private fun saveCareer(prefs: android.content.SharedPreferences, c: BoxingCareer
         .putString("best", c.best.joinToString(","))
         .putString("wins", c.wins.joinToString(","))
         .apply()
+}
+
+/** The activity behind a composable's context, through any wrappers. */
+private tailrec fun android.content.Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
 }
