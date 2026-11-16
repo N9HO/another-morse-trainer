@@ -268,7 +268,11 @@ fun JourneyScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
 
     BackHandler { if (phase == JyPhase.SUMMARY) onBack() else finish() }
 
-    fun answer(choice: String) {
+    /**
+     * Grade [choice]. [byKey]: it came from the hardware key, the only case in
+     * which a miss arms key-to-continue (a tapped or typed miss keeps Next alone).
+     */
+    fun answer(choice: String, byKey: Boolean = false) {
         if (revealed || phase != JyPhase.RUNNING) return
         val ttr = if (toneFinishedAt == 0L) 0.0 else (System.nanoTime() - toneFinishedAt) / 1_000_000_000.0
         lastTtr = ttr
@@ -300,9 +304,10 @@ fun JourneyScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
             clearedLabel = outcome.unlocked
         }
         revealed = true
-        // A keyed-answer miss: key it again to continue (#355). A meaning drill
-        // cannot be keyed back, so it keeps Next.
-        if (!outcome.correct && drill.isKeyable) {
+        // A keyed-answer miss: key it again to continue (#355). Only when the
+        // answer came from the hardware key; a meaning drill cannot be keyed
+        // back, so it keeps Next.
+        if (!outcome.correct && byKey && drill.isKeyable) {
             missAck.miss(drill.correct, System.nanoTime() / 1_000_000, Settings.continueAfterMiss)
             ackAwaiting = missAck.isAwaiting
         }
@@ -318,21 +323,20 @@ fun JourneyScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
     LaunchedEffect(round) { keyed = "" }
     // While a miss is held: the right answer keyed again moves on; a wrong or
     // too-early re-key is dropped, with no new miss and no penalty (#355).
-    fun acknowledgeKeyed(sent: String) {
-        keyed = ""
-        when (missAck.input(sent, System.nanoTime() / 1_000_000)) {
+    // ContinueAfterMiss keeps the run since the miss, drops anything inside
+    // the debounce and judges at the answer's length or at the pause.
+    fun acknowledge(outcome: ContinueAfterMiss.Outcome?) {
+        when (outcome) {
             ContinueAfterMiss.Outcome.ADVANCE -> advanceNow()
-            ContinueAfterMiss.Outcome.WRONG, ContinueAfterMiss.Outcome.DEBOUNCED -> Unit
             ContinueAfterMiss.Outcome.INACTIVE -> ackAwaiting = false
+            else -> Unit   // wrong, debounced or still collecting
         }
     }
     fun keyedText(chunk: String) {
         if (phase != JyPhase.RUNNING) { keyed = ""; return }
         if (revealed) {
-            if (!ackAwaiting) { keyed = ""; return }
-            keyed = appendKeyed(keyed, chunk)
-            val sent = keyed.trim()
-            if (sent.length >= drill.correct.length) acknowledgeKeyed(sent)
+            keyed = ""
+            if (ackAwaiting) acknowledge(missAck.keyed(chunk, System.nanoTime() / 1_000_000))
             return
         }
         keyed = appendKeyed(keyed, chunk)
@@ -340,22 +344,24 @@ fun JourneyScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
         if (drill.isKeyable) {
             if (sent.length < drill.correct.length) return
             keyed = ""
-            answer(sent)
+            answer(sent, byKey = true)
         } else if (sent.length == 1) {
             val index = AnswerKeys.optionFor(sent[0], drill.options) ?: return
             keyed = ""
-            answer(drill.options[index])
+            answer(drill.options[index], byKey = true)
         }
     }
     fun keyedPause() {
         val sent = keyed.trim()
         keyed = ""
         if (revealed) {
-            if (ackAwaiting && phase == JyPhase.RUNNING && sent.isNotEmpty()) acknowledgeKeyed(sent)
+            if (ackAwaiting && phase == JyPhase.RUNNING) {
+                acknowledge(missAck.paused(System.nanoTime() / 1_000_000))
+            }
             return
         }
         if (phase != JyPhase.RUNNING || !drill.isKeyable || sent.isEmpty()) return
-        answer(sent)
+        answer(sent, byKey = true)
     }
     HardwareKeyInput(onText = { keyedText(it) }, onPause = { keyedPause() })
 
@@ -541,7 +547,7 @@ fun JourneyScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
                 }
             }
 
-            JourneyOptionsGrid(drill = drill, revealed = revealed, chosen = chosen, onPick = ::answer)
+            JourneyOptionsGrid(drill = drill, revealed = revealed, chosen = chosen, onPick = { answer(it) })
             Spacer(Modifier.height(24.dp))
         }
     }

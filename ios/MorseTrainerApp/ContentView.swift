@@ -20,10 +20,13 @@ struct ContentView: View {
     @State private var journeyKeyed = ""
     /// The miss-acknowledge state for Journey, Type It and QRQ Speed (#355,
     /// after #352): after a wrong answer, keying the correct one on a hardware
-    /// key acts as Next. See `ContinueAfterMiss`.
+    /// key acts as Next. See `ContinueAfterMiss`, which also keeps what the
+    /// key has sent since the miss.
     @State private var acknowledge = ContinueAfterMiss()
-    /// What the hardware key has sent since the miss.
-    @State private var ackKeyed = ""
+    /// The answer being graded came from the hardware key. Only then does a
+    /// miss arm key-to-continue (and show its hint): a tapped or typed miss
+    /// keeps Next alone, as before #355.
+    @State private var answeredByKey = false
     /// Learner aid: reveal who's calling / the expected copy (Android parity).
     @State private var qsoHintShown = false
     @FocusState private var typedFocused: Bool
@@ -204,7 +207,7 @@ struct ContentView: View {
             .onChange(of: model.phase) { _ in noteMissIfAny() }
             .onChange(of: model.drill) { _ in
                 acknowledge.reset()
-                ackKeyed = ""
+                answeredByKey = false
             }
             .onAppear {
                 if model.drill == nil && !model.sessionEnded
@@ -1294,6 +1297,7 @@ struct ContentView: View {
                               if model.phase == .answered { acknowledgeKeyedPause(); return }
                               guard model.phase == .awaiting,
                                     !typedAnswer.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+                              answeredByKey = true
                               submitTyped()
                           })
     }
@@ -1520,10 +1524,12 @@ struct ContentView: View {
         if drill.isKeyable {
             guard sent.count >= drill.correct.count else { return }
             journeyKeyed = ""
+            answeredByKey = true
             model.select(sent)
         } else if sent.count == 1, let ch = sent.first,
                   let index = AnswerKeys.option(for: ch, in: drill.options) {
             journeyKeyed = ""
+            answeredByKey = true
             model.select(drill.options[index])
         }
     }
@@ -1535,6 +1541,7 @@ struct ContentView: View {
         journeyKeyed = ""
         guard model.phase == .awaiting, let drill = model.drill, drill.isKeyable,
               !sent.isEmpty else { return }
+        answeredByKey = true
         model.select(sent)
     }
 
@@ -1545,11 +1552,14 @@ struct ContentView: View {
     }
 
     /// The answer just graded wrong and the screen is holding the correction for
-    /// Next: let the hardware key answer it. Journey, Type It and QRQ Speed only;
-    /// a meaning drill cannot be keyed back, so it keeps Next.
+    /// Next: let the hardware key answer it. Journey, Type It and QRQ Speed only,
+    /// and only when the graded answer was keyed: a tapped or typed miss keeps
+    /// Next alone. A meaning drill cannot be keyed back, so it keeps Next too.
     private func noteMissIfAny() {
-        ackKeyed = ""
-        guard model.showsNextButton, model.lastCorrect == false, let drill = model.drill,
+        // Consumed on every phase change, so it never outlives the answer it marked.
+        let byKey = answeredByKey
+        answeredByKey = false
+        guard byKey, model.showsNextButton, model.lastCorrect == false, let drill = model.drill,
               model.isJourney || model.mode == .typed || model.mode == .qrq,
               drill.isKeyable else {
             acknowledge.reset()
@@ -1559,34 +1569,22 @@ struct ContentView: View {
                          enabled: model.settings.continueAfterMiss)
     }
 
-    /// A keyed run while a miss is held: collect it until it is as long as the answer.
+    /// A keyed run while a miss is held. `ContinueAfterMiss` keeps the run,
+    /// drops anything inside the debounce and judges it at the answer's length.
     private func acknowledgeKeyedText(_ chunk: String) {
-        guard acknowledge.isAwaiting, let drill = model.drill else { ackKeyed = ""; return }
-        ackKeyed = HardwareKeyInput.appending(chunk, to: ackKeyed)
-        let sent = ackKeyed.trimmingCharacters(in: .whitespaces)
-        guard sent.count >= drill.correct.count else { return }
-        acknowledgeKeyed(sent)
+        acknowledgeOutcome(acknowledge.keyed(chunk, atMs: Self.nowMs()))
     }
 
-    /// Stopped keying short of the answer's length: judge what was sent.
+    /// Stopped keying short of the answer's length: judge what was kept.
     private func acknowledgeKeyedPause() {
-        let sent = ackKeyed.trimmingCharacters(in: .whitespaces)
-        ackKeyed = ""
-        guard acknowledge.isAwaiting, !sent.isEmpty else { return }
-        acknowledgeKeyed(sent)
+        acknowledgeOutcome(acknowledge.paused(atMs: Self.nowMs()))
     }
 
-    private func acknowledgeKeyed(_ sent: String) {
-        ackKeyed = ""
-        switch acknowledge.input(sent, atMs: Self.nowMs()) {
-        case .advance:
-            Haptics.tap()
-            model.next()
-        case .wrong, .debounced:
-            break   // dropped: no new miss, no penalty
-        case .inactive:
-            break
-        }
+    private func acknowledgeOutcome(_ outcome: ContinueAfterMiss.Outcome?) {
+        // Wrong, debounced or still collecting: dropped, no new miss, no penalty.
+        guard outcome == .advance else { return }
+        Haptics.tap()
+        model.next()
     }
 
     /// Big monospaced for short tokens, smaller for word-y meanings. Digits

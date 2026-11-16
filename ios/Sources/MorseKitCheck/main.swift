@@ -10221,6 +10221,7 @@ struct ContinueAfterMissFixture: Decodable {
         let op: String
         let target: String?
         let text: String?
+        let chunk: String?
         let atMs: Int64?
         let expect: String?
         let awaiting: Bool
@@ -10232,6 +10233,8 @@ struct ContinueAfterMissFixture: Decodable {
     }
     let debounceMs: Int64
     let cases: [Case]
+    /// The hardware-key screens' runs and pauses (#355): `keyed`/`paused`.
+    let keyedCases: [Case]
 }
 func loadContinueAfterMissFixture() -> ContinueAfterMissFixture? {
     let root = URL(fileURLWithPath: #filePath)
@@ -10258,6 +10261,26 @@ if let fx = loadContinueAfterMissFixture() {
             if machine.isAwaiting != s.awaiting { ok = false }
         }
         check("continue after miss: \(c.name)", ok)
+    }
+    // "pending" in the fixture is a nil outcome: still collecting the run.
+    let ackLabel: (ContinueAfterMiss.Outcome?) -> String = { $0?.rawValue ?? "pending" }
+    check("fixture has keyed cases", !fx.keyedCases.isEmpty)
+    for c in fx.keyedCases {
+        var machine = ContinueAfterMiss()
+        var ok = true
+        for s in c.steps {
+            switch s.op {
+            case "miss": machine.miss(target: s.target ?? "", atMs: s.atMs ?? 0, enabled: c.enabled)
+            case "keyed":
+                if ackLabel(machine.keyed(s.chunk ?? "", atMs: s.atMs ?? 0)) != s.expect { ok = false }
+            case "paused":
+                if ackLabel(machine.paused(atMs: s.atMs ?? 0)) != s.expect { ok = false }
+            case "reset": machine.reset()
+            default: ok = false
+            }
+            if machine.isAwaiting != s.awaiting { ok = false }
+        }
+        check("continue after miss, keyed: \(c.name)", ok)
     }
 } else {
     check("fixtures/continue-after-miss.json loads and decodes", false)

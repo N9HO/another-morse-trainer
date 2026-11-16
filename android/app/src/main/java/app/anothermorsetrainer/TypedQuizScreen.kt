@@ -128,8 +128,6 @@ fun TypedQuizScreen(
     // Next too (#355, after #352). The decision lives in morsekit/ContinueAfterMiss.
     val missAck = remember { ContinueAfterMiss() }
     var ackAwaiting by remember { mutableStateOf(false) }
-    // What the hardware key has sent since the miss (the box itself is locked).
-    var ackKeyed by remember { mutableStateOf("") }
 
     // Correct answers keep the rhythm going; a miss waits for the Next tap so the
     // learner can compare what they typed against the answer.
@@ -139,7 +137,6 @@ fun TypedQuizScreen(
     fun advance() {
         missAck.reset()
         ackAwaiting = false
-        ackKeyed = ""
         drill = source.nextDrill()
         revealed = false
         input = ""
@@ -214,7 +211,11 @@ fun TypedQuizScreen(
 
     BackHandler { if (phase == TqPhase.SUMMARY) onBack() else finish() }
 
-    fun submit() {
+    /**
+     * Grade the box. [byKey]: the hardware key's pause submitted it, the only
+     * case in which a miss arms key-to-continue (a typed miss keeps Next alone).
+     */
+    fun submit(byKey: Boolean = false) {
         if (revealed || phase != TqPhase.RUNNING) return
         val normalized = input.trim().uppercase()
         if (normalized.isEmpty()) return
@@ -232,20 +233,22 @@ fun TypedQuizScreen(
             if (outcome.correct) haptics.success() else haptics.error()
         }
         revealed = true
-        if (!outcome.correct) {
-            ackKeyed = ""
+        if (!outcome.correct && byKey) {
             missAck.miss(drill.correct, System.nanoTime() / 1_000_000, Settings.continueAfterMiss)
             ackAwaiting = missAck.isAwaiting
         }
     }
 
-    /** One keyed re-key while a miss is held: the right answer moves on, anything else is dropped. */
-    fun acknowledgeKeyed(sent: String) {
-        ackKeyed = ""
-        when (missAck.input(sent, System.nanoTime() / 1_000_000)) {
+    /**
+     * The key while a miss is held: the right answer moves on, anything else is
+     * dropped. ContinueAfterMiss keeps the run since the miss (the box itself is
+     * locked), drops anything inside the debounce and judges it.
+     */
+    fun acknowledge(outcome: ContinueAfterMiss.Outcome?) {
+        when (outcome) {
             ContinueAfterMiss.Outcome.ADVANCE -> if (phase == TqPhase.RUNNING) advance()
-            ContinueAfterMiss.Outcome.WRONG, ContinueAfterMiss.Outcome.DEBOUNCED -> Unit
             ContinueAfterMiss.Outcome.INACTIVE -> ackAwaiting = false
+            else -> Unit   // wrong, debounced or still collecting
         }
     }
 
@@ -302,17 +305,13 @@ fun TypedQuizScreen(
                 if (!revealed) {
                     input = appendKeyed(input, it)
                 } else if (ackAwaiting) {
-                    ackKeyed = appendKeyed(ackKeyed, it)
-                    val sent = ackKeyed.trim()
-                    if (sent.length >= drill.correct.length) acknowledgeKeyed(sent)
+                    acknowledge(missAck.keyed(it, System.nanoTime() / 1_000_000))
                 }
             },
             onPause = {
                 if (revealed) {
-                    val sent = ackKeyed.trim()
-                    ackKeyed = ""
-                    if (ackAwaiting && sent.isNotEmpty()) acknowledgeKeyed(sent)
-                } else if (input.isNotBlank()) submit()
+                    if (ackAwaiting) acknowledge(missAck.paused(System.nanoTime() / 1_000_000))
+                } else if (input.isNotBlank()) submit(byKey = true)
             }
         )
         // The app targets SDK 36, so it is always edge-to-edge and the window

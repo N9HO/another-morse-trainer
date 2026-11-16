@@ -55,4 +55,44 @@ class ContinueAfterMissTest {
         }
         assertTrue("fixture steps never ran", steps > 20)
     }
+
+    /** "pending" in the fixture is a null outcome: still collecting the run. */
+    private fun outcomeName(outcome: ContinueAfterMiss.Outcome?): String =
+        outcome?.name?.lowercase() ?: "pending"
+
+    @Test
+    fun `every hardware-key run and pause plays out as the shared fixture says`() {
+        val cases = fixture.getJSONArray("keyedCases")
+        assertTrue("fixture has no keyed cases", cases.length() > 0)
+        var steps = 0
+        for (i in 0 until cases.length()) {
+            val case = cases.getJSONObject(i)
+            val name = case.getString("name")
+            val enabled = case.getBoolean("enabled")
+            val machine = ContinueAfterMiss()
+            val list = case.getJSONArray("steps")
+            for (j in 0 until list.length()) {
+                val step = list.getJSONObject(j)
+                val label = "$name, step ${j + 1}"
+                when (val op = step.getString("op")) {
+                    "miss" -> machine.miss(step.getString("target"), step.getLong("atMs"), enabled)
+                    "keyed" -> assertEquals(
+                        label,
+                        step.getString("expect"),
+                        outcomeName(machine.keyed(step.getString("chunk"), step.getLong("atMs")))
+                    )
+                    "paused" -> assertEquals(
+                        label,
+                        step.getString("expect"),
+                        outcomeName(machine.paused(step.getLong("atMs")))
+                    )
+                    "reset" -> machine.reset()
+                    else -> throw AssertionError("$label: unknown op $op")
+                }
+                assertEquals("$label: awaiting", step.getBoolean("awaiting"), machine.isAwaiting)
+                steps++
+            }
+        }
+        assertTrue("fixture keyed steps never ran", steps > 30)
+    }
 }

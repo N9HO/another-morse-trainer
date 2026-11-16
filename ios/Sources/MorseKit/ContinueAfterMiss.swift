@@ -24,6 +24,18 @@ import Foundation
 /// non-`.advance` result so a wrong attempt does not stay in the decoder and
 /// spoil the next one.
 ///
+/// The hardware-key screens (#355: Journey, Type It, QRQ Speed). There the
+/// decoder belongs to `HardwareKeyInput`, which the screen cannot clear, so
+/// the decoded runs come here through `keyed(_:atMs:)` and `paused(atMs:)`,
+/// and this type owns the run keyed since the miss. A run that arrives inside
+/// the debounce window is dropped, not kept, so a stray dit from the wrong
+/// answer cannot glue itself onto the learner's real re-key. Outside the
+/// window runs are appended (no leading space into an empty run) and judged
+/// once the run, trimmed, is as long as the answer, or at the pause the key
+/// input reports when the learner stops short. The screen only maps
+/// `.advance` to Next. The Characters and Sending Practice screens own their
+/// keyer and keep calling `input(_:atMs:)` directly.
+///
 /// Pure: no clock, no keyer, no settings. The caller passes times in and applies
 /// the outcome. Pinned by `fixtures/continue-after-miss.json`. Twin of
 /// ContinueAfterMiss.kt in the android and desktop trees — keep in step.
@@ -45,6 +57,8 @@ public struct ContinueAfterMiss: Equatable, Sendable {
 
     private var target: String?
     private var missAtMs: Int64 = 0
+    /// What the hardware key has sent since the miss (`keyed`/`paused` only).
+    private var keyedRun = ""
 
     public init() {}
 
@@ -56,6 +70,7 @@ public struct ContinueAfterMiss: Equatable, Sendable {
     /// (left) idle.
     public mutating func miss(target: String, atMs: Int64, enabled: Bool) {
         let wanted = Self.normalize(target)
+        keyedRun = ""
         guard enabled, !wanted.isEmpty else {
             self.target = nil
             return
@@ -75,10 +90,59 @@ public struct ContinueAfterMiss: Equatable, Sendable {
         return .wrong
     }
 
+    /// A run decoded from the hardware key at `atMs`. Idle: `.inactive`.
+    /// Inside the debounce window: `.debounced`, and the run is dropped, not
+    /// kept. Otherwise it is appended to the run since the miss; once that,
+    /// trimmed, is as long as the answer it is judged (`.advance` or `.wrong`,
+    /// and the run starts again), and until then the result is `nil`: still
+    /// collecting.
+    public mutating func keyed(_ chunk: String, atMs: Int64) -> Outcome? {
+        guard let wanted = target else {
+            keyedRun = ""
+            return .inactive
+        }
+        if atMs - missAtMs < Self.debounceMs { return .debounced }
+        keyedRun = Self.appending(chunk, to: keyedRun)
+        let sent = Self.trimmed(keyedRun)
+        guard sent.count >= wanted.count else { return nil }
+        keyedRun = ""
+        return input(sent, atMs: atMs)
+    }
+
+    /// The key input reports that the learner stopped keying, at `atMs`.
+    /// Idle: `.inactive`. A run short of the answer's length is judged now
+    /// (`.advance` or `.wrong`) and cleared; with nothing kept the result is
+    /// `nil` and nothing changes.
+    public mutating func paused(atMs: Int64) -> Outcome? {
+        guard target != nil else {
+            keyedRun = ""
+            return .inactive
+        }
+        let sent = Self.trimmed(keyedRun)
+        keyedRun = ""
+        guard !sent.isEmpty else { return nil }
+        return input(sent, atMs: atMs)
+    }
+
     /// Next was pressed by hand, or a new drill began.
-    public mutating func reset() { target = nil }
+    public mutating func reset() {
+        target = nil
+        keyedRun = ""
+    }
 
     private static func normalize(_ s: String) -> String {
-        s.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        trimmed(s).uppercased()
+    }
+
+    private static func trimmed(_ s: String) -> String {
+        s.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// Append a decoded run: no leading space into an empty run or after one
+    /// that already ends in a space (the rule `HardwareKeyInput.appending` uses).
+    private static func appending(_ chunk: String, to text: String) -> String {
+        var add = Substring(chunk)
+        if text.isEmpty || text.hasSuffix(" ") { add = add.drop { $0 == " " } }
+        return text + add
     }
 }
