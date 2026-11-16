@@ -406,6 +406,18 @@ data class DailyDitGame(
     val currentWpm: Double get() = DailyDit.wpm(startingWpm, listens, wrongGuesses)
 
     /**
+     * The speed a guess made now is labelled with: the speed the word was last
+     * *heard* at, not the ladder's next step. The third listen is heard at the
+     * old speed, so a guess made right after it was made on code that was never
+     * sent at the stepped-down speed, and labelling it so disagreed with the
+     * headline's slowest-heard speed (#367). With no listen yet there is nothing
+     * heard, so it falls back to the ladder's current speed. Both [submit] and
+     * the row being typed read this, so the row's tag can't change when it is
+     * submitted.
+     */
+    val guessWpm: Double get() = heard.lastOrNull() ?: currentWpm
+
+    /**
      * What the brag sheet reports: the slowest speed the word was heard at
      * before the right guess. A word guessed without ever being played falls
      * back to the speed the winning guess was made at.
@@ -443,13 +455,9 @@ data class DailyDitGame(
         if (!DailyDit.isAllowedGuess(word)) {
             return DailyDitSubmission.Rejected(DailyDitRejection.NOT_A_WORD)
         }
-        // The row's speed is the speed the word was last *heard* at, not the
-        // ladder's next step: the third listen is heard at the old speed, so a
-        // guess made right after it was made on code that was never sent at the
-        // stepped-down speed, and labelling it so disagreed with the headline's
-        // slowest-heard speed (#367). With no listen yet there is nothing heard,
-        // so it falls back to the ladder's current speed.
-        val round = DailyDitRound(word, DailyDit.score(word, answer), heard.lastOrNull() ?: currentWpm)
+        // Labelled with the speed last heard, not the ladder's next step (#367);
+        // see [guessWpm].
+        val round = DailyDitRound(word, DailyDit.score(word, answer), guessWpm)
         return DailyDitSubmission.Scored(copy(rounds = rounds + round), round)
     }
 

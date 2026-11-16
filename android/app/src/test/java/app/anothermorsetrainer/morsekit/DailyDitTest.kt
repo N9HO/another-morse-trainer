@@ -285,6 +285,44 @@ class DailyDitTest {
         }
     }
 
+    /**
+     * #367: the row being typed is tagged with [DailyDitGame.guessWpm], the
+     * same value submit() records, so it is pinned before the first play and
+     * after every one, not only where a row was made. After the third listen
+     * the ladder is a step lower but nothing has been heard there, so
+     * guessWpm stays at the speed last heard.
+     */
+    @Test
+    fun theRowBeingTypedCarriesTheSpeedLastHeardAsTheFixtureSays() {
+        val cases = fixture.getJSONArray("guessSpeeds")
+        assertTrue(cases.length() > 0)
+        for (i in 0 until cases.length()) {
+            val c = cases.getJSONObject(i)
+            val name = c.getString("name")
+            var game = DailyDitGame(
+                puzzleNumber = c.getInt("puzzleNumber"),
+                answer = c.getString("answer"),
+                startingWpm = c.getDouble("startingWpm"),
+                hideReference = c.getBoolean("hideReference")
+            )
+            assertEquals("$name: at the start", c.getDouble("guessWpmAtStart"), game.guessWpm, 0.0)
+            val plays = c.getJSONArray("plays")
+            for (j in 0 until plays.length()) {
+                val p = plays.getJSONObject(j)
+                when (p.getString("action")) {
+                    "listen" -> game = game.listen().game
+                    "guess" -> {
+                        val result = game.submit(p.getString("word"))
+                        assertTrue("$name: ${p.getString("word")} should be accepted", result is DailyDitSubmission.Scored)
+                        game = (result as DailyDitSubmission.Scored).game
+                    }
+                    else -> throw AssertionError("unknown play ${p.getString("action")}")
+                }
+                assertEquals("$name: after play ${j + 1}", p.getDouble("guessWpm"), game.guessWpm, 0.0)
+            }
+        }
+    }
+
     @Test
     fun headlinesMatchTheFixture() {
         val miss = List(DailyDit.WORD_LENGTH) { DailyDitTile.ABSENT }

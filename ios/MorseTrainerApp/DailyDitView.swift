@@ -347,13 +347,15 @@ struct DailyDitView: View {
             }
             if !game.isFinished {
                 // The live row: what's in the box, so the typing lands in the
-                // grid rather than somewhere off to the side of it.
+                // grid rather than somewhere off to the side of it. Tagged with
+                // the speed the guess will be recorded at (last heard, #367),
+                // not the ladder's next step, so the tag can't change on submit.
                 let typed = Array(DailyDit.normalize(entry).prefix(DailyDit.wordLength))
                 HStack(spacing: 6) {
                     ForEach(0..<DailyDit.wordLength, id: \.self) { i in
                         tile(letter: i < typed.count ? typed[i] : nil, tile: nil)
                     }
-                    speedTag(game.currentWpm).opacity(0.55)
+                    speedTag(game.guessWpm).opacity(0.55)
                 }
             }
         }

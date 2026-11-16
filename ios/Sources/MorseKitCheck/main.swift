@@ -3907,7 +3907,12 @@ struct DailyDitFixture: Decodable {
         let listens, wrongGuesses: Int
         let wpm: Double
     }
-    struct Play: Decodable { let action: String; let word: String? }
+    struct Play: Decodable {
+        let action: String
+        let word: String?
+        /// guessSpeeds only: `DailyDitGame.guessWpm` after this play.
+        let guessWpm: Double?
+    }
     struct Share: Decodable {
         let puzzleNumber: Int
         let answer: String
@@ -3933,6 +3938,7 @@ struct DailyDitFixture: Decodable {
         let answer: String
         let startingWpm: Double
         let hideReference: Bool
+        let guessWpmAtStart: Double
         let plays: [Play]
         let heard, roundWpms: [Double]
         let solvedWpm: Double
@@ -4153,11 +4159,21 @@ if let fx = loadDailyDitFixture() {
     for c in fx.guessSpeeds {
         var g = DailyDitGame(puzzleNumber: c.puzzleNumber, answer: c.answer,
                              startingWpm: c.startingWpm, hideReference: c.hideReference)
-        for p in c.plays {
+        // The row being typed is tagged with guessWpm, so it is pinned before
+        // the first play and after every one, not just where a row was made.
+        if g.guessWpm != c.guessWpmAtStart {
+            guessSpeedOK = false
+            print("      ↳ \(c.name): guessWpm \(g.guessWpm) at the start")
+        }
+        for (i, p) in c.plays.enumerated() {
             switch p.action {
             case "listen": g.listen()
             case "guess": if case .rejected = g.submit(p.word ?? "") { guessSpeedOK = false }
             default: guessSpeedOK = false
+            }
+            if p.guessWpm == nil || g.guessWpm != p.guessWpm {
+                guessSpeedOK = false
+                print("      ↳ \(c.name): guessWpm \(g.guessWpm) after play \(i + 1), fixture \(String(describing: p.guessWpm))")
             }
         }
         if g.heard != c.heard || g.rounds.map(\.wpm) != c.roundWpms || g.solvedWpm != c.solvedWpm {
@@ -4165,7 +4181,7 @@ if let fx = loadDailyDitFixture() {
             print("      ↳ \(c.name): heard \(g.heard), rows \(g.rounds.map(\.wpm)), solved \(String(describing: g.solvedWpm))")
         }
     }
-    check("guess rows carry the speed last heard, matching the headline, across \(fx.guessSpeeds.count) scripts", guessSpeedOK)
+    check("guess rows and the row being typed carry the speed last heard, matching the headline, across \(fx.guessSpeeds.count) scripts", guessSpeedOK)
 
     // History (#333): which days are listed, and which word each one is.
     let h = fx.history
