@@ -3773,7 +3773,7 @@ struct QSORunFixture: Decodable {
         let maxStations: Int
         let minWPM, maxWPM, toneSpread, minDelay, maxDelay: Double
         let minVolume, maxVolume, qrnLevel: Float
-        let qsbEnabled, cutNumbersEnabled, rstRequired, giveUpEnabled, usOnly: Bool
+        let qsbEnabled, cutNumbersEnabled, rstRequired, giveUpEnabled, usOnly, shortOnly: Bool
         let cutDigits, bustBehavior: String
     }
     struct ContestCase: Decodable {
@@ -3814,12 +3814,14 @@ do {
         base.cutNumbersEnabled = r.cutNumbersEnabled; base.cutDigits = Set(r.cutDigits)
         base.rstRequired = r.rstRequired; base.giveUpEnabled = r.giveUpEnabled
         base.usOnly = r.usOnly
+        base.shortOnly = r.shortOnly
         let carriedFields: [String: (PileupConfig) -> AnyHashable] = [
             "toneSpread": { $0.toneSpread }, "minVolume": { $0.minVolume }, "maxVolume": { $0.maxVolume },
             "minDelay": { $0.minDelay }, "maxDelay": { $0.maxDelay }, "qsbEnabled": { $0.qsbEnabled },
             "qrnLevel": { $0.qrnLevel }, "cutNumbersEnabled": { $0.cutNumbersEnabled },
             "cutDigits": { $0.cutDigits }, "bustBehavior": { $0.bustBehavior },
             "giveUpEnabled": { $0.giveUpEnabled }, "usOnly": { $0.usOnly },
+            "shortOnly": { $0.shortOnly },
         ]
         for c in fx.contestConfig.cases {
             guard let type = ContestType(rawValue: c.contest) else {

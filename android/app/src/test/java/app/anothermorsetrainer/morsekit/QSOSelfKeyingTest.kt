@@ -83,6 +83,7 @@ class QSOSelfKeyingTest {
         "bustBehavior" -> c.bustBehavior
         "giveUpEnabled" -> c.giveUpEnabled
         "usOnly" -> c.usOnly
+        "shortOnly" -> c.shortOnly
         else -> throw AssertionError("unknown carried field $field")
     }
 
@@ -107,7 +108,8 @@ class QSOSelfKeyingTest {
             rstRequired = r.getBoolean("rstRequired"),
             bustBehavior = BustBehavior.entries.first { it.code == r.getString("bustBehavior") },
             giveUpEnabled = r.getBoolean("giveUpEnabled"),
-            usOnly = r.getBoolean("usOnly")
+            usOnly = r.getBoolean("usOnly"),
+            shortOnly = r.getBoolean("shortOnly")
         )
         val fields = section.getJSONArray("carried")
         val cases = section.getJSONArray("cases")
