@@ -256,7 +256,9 @@ data class PileupConfig(
     var giveUpMin: Int = 3,
     var giveUpMax: Int = 6,
     var formats: List<CallsignFormat> = CallsignFormat.commonDefaults,
-    var usOnly: Boolean = true
+    var usOnly: Boolean = true,
+    /** Hold every caller's call to four characters (#371). */
+    var shortOnly: Boolean = false
 )
 
 // MARK: - Engine
@@ -1014,7 +1016,7 @@ class PileupEngine(
         do {
             call = CallsignGenerator.generate(
                 formats = if (config.formats.isEmpty()) CallsignFormat.commonDefaults else config.formats,
-                usOnly = config.usOnly, rng = rng
+                usOnly = config.usOnly, rng = rng, shortOnly = config.shortOnly
             )
         } while (existing.any { it.call == call })
         val exch = ExchangeSpec.build(

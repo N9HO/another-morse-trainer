@@ -732,6 +732,7 @@ internal fun PileupCallsignOptions() {
         }
     }
     PuToggle(stringResource(R.string.common_us_calls_only), PileupSettings.usOnly) { PileupSettings.updateUsOnly(it) }
+    PuToggle(stringResource(R.string.common_short_calls_only), PileupSettings.shortOnly) { PileupSettings.updateShortOnly(it) }
 }
 
 /**

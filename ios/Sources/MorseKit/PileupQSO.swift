@@ -219,6 +219,8 @@ public struct PileupConfig: Sendable, Equatable {
     public var giveUpMax: Int = 6
     public var formats: [CallsignFormat] = CallsignFormat.commonDefaults
     public var usOnly: Bool = true
+    /// Hold every caller's call to four characters (#371).
+    public var shortOnly: Bool = false
 
     public init() {}
 }
@@ -829,7 +831,8 @@ public final class PileupEngine {
         var call = ""
         repeat {
             call = CallsignGenerator.generate(formats: config.formats.isEmpty ? CallsignFormat.commonDefaults : config.formats,
-                                              usOnly: config.usOnly, using: &rng)
+                                              usOnly: config.usOnly,
+                                              shortOnly: config.shortOnly, using: &rng)
         } while stations.contains(where: { $0.call == call })
         let exch = ExchangeSpec.build(mode: config.mode,
                                       cutEnabled: config.cutNumbersEnabled,

@@ -38,6 +38,12 @@ public enum CallsignFormat: String, Codable, CaseIterable, Identifiable, Sendabl
         }
     }
 
+    /// Characters in the whole call: prefix, region digit, suffix.
+    public var length: Int { prefixLen + 1 + suffixLen }
+
+    /// The call length "short callsigns only" holds to (#371): 1×2 and 2×1.
+    public static let shortLength = 4
+
     /// A sensible default set: the everyday formats on, the rare ones off.
     public static let commonDefaults: [CallsignFormat] = [.oneByTwo, .twoByOne, .oneByThree, .twoByTwo]
 }
@@ -56,17 +62,26 @@ public enum CallsignGenerator {
                                      "VK","ZL","VE","SP","OK","LZ","YO","UR","RA","UA","9A","OZ","EI"]
 
     /// One random callsign in one of the allowed `formats`. `usOnly` restricts
-    /// to US-style calls; otherwise DX prefixes are mixed in.
+    /// to US-style calls; otherwise DX prefixes are mixed in. `shortOnly`
+    /// (#371) holds every call to `CallsignFormat.shortLength` characters, US
+    /// and DX alike: only the allowed formats of that length are drawn, and
+    /// when none of them is that short it falls back to 1×2 and 2×1.
     public static func generate<R: RandomNumberGenerator>(
         formats: [CallsignFormat],
         usOnly: Bool,
+        shortOnly: Bool = false,
         using rng: inout R
     ) -> String {
-        let fmt = formats.randomElement(using: &rng) ?? .oneByTwo
+        var pool = formats
+        if shortOnly {
+            pool = formats.filter { $0.length == CallsignFormat.shortLength }
+            if pool.isEmpty { pool = [.oneByTwo, .twoByOne] }
+        }
+        let fmt = pool.randomElement(using: &rng) ?? .oneByTwo
         if usOnly || Bool.random(using: &rng) {
             return usCall(fmt, using: &rng)
         } else {
-            return dxCall(fmt, using: &rng)
+            return dxCall(fmt, exact: shortOnly, using: &rng)
         }
     }
 
@@ -87,12 +102,15 @@ public enum CallsignGenerator {
         return s
     }
 
-    private static func dxCall<R: RandomNumberGenerator>(_ fmt: CallsignFormat, using rng: inout R) -> String {
-        let prefix = dxPrefixes.randomElement(using: &rng)!
+    private static func dxCall<R: RandomNumberGenerator>(_ fmt: CallsignFormat, exact: Bool, using rng: inout R) -> String {
+        // `exact` (short calls): a prefix and suffix of the format's own
+        // lengths, so the whole call is the length the format promises.
+        let prefixes = exact ? dxPrefixes.filter { $0.count == fmt.prefixLen } : dxPrefixes
+        let prefix = prefixes.randomElement(using: &rng)!
         var s = prefix
         s.append(digits.randomElement(using: &rng)!)
         // DX suffixes run 1–3 letters; reuse the format's suffix length.
-        for _ in 0..<max(2, fmt.suffixLen) { s.append(letters.randomElement(using: &rng)!) }
+        for _ in 0..<(exact ? fmt.suffixLen : max(2, fmt.suffixLen)) { s.append(letters.randomElement(using: &rng)!) }
         return s
     }
 }

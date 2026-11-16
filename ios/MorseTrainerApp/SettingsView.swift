@@ -887,13 +887,14 @@ struct SettingsView: View {
     private var qsoCallsignsSection: some View {
         Section {
             Toggle("US callsigns only", isOn: $model.settings.qso.usOnly)
+            Toggle("Short callsigns only (4 characters)", isOn: $model.settings.qso.shortOnly)
             ForEach(CallsignFormat.allCases) { f in
                 Toggle(f.label, isOn: formatBinding(f))
             }
         } header: {
             Text("QSO · Callsigns")
         } footer: {
-            Text("Which callsign shapes appear in pileups. Turn off US-only to mix in DX prefixes.")
+            Text("Which callsign shapes appear in pileups. Turn off US-only to mix in DX prefixes. Short callsigns only keeps every call to four characters (1×2 and 2×1), US or DX, whatever shapes are on.")
         }
         .listRowBackground(rowBackground(.qsoCallsigns))
     }

@@ -174,6 +174,7 @@ public enum SettingsCatalog {
         .init("cutNumbers", "Cut numbers", ["cut", "abbreviated numbers", "digits", "t for 0", "n for 9"], .qsoRealism),
         .init("usOnly", "US callsigns only", ["dx", "prefix", "foreign", "us", "usa"], .qsoCallsigns),
         .init("callsignFormats", "Callsign formats", ["shape", "1x1", "1x2", "2x3", "format", "prefix"], .qsoCallsigns),
+        .init("shortOnly", "Short callsigns only (4 characters)", ["easy", "short", "four", "4 characters", "length", "beginner", "simple"], .qsoCallsigns),
 
         // Reminders
         .init("dailyReminder", "Daily reminder", ["notification", "nudge", "alert", "streak", "reminder"], .reminders),

@@ -88,6 +88,7 @@
     <string name="common_run_again">Run again</string>
     <string name="common_send">Send</string>
     <string name="common_us_calls_only">US calls only</string>
+    <string name="common_short_calls_only">Short calls only (4 characters)</string>
     <string name="common_start">Start</string>
     <string name="common_bluetooth_permission_needed">Bluetooth permission is needed to find a key.</string>
     <string name="common_find_bluetooth_key">Find Bluetooth key</string>

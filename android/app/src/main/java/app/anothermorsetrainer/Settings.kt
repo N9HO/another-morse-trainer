@@ -351,6 +351,9 @@ object Settings {
         private set
     var rapidFireUsOnly by mutableStateOf(true)
         private set
+    /** Hold every Rapid Fire call sign to four characters (iOS callsignShortOnly, #371). */
+    var rapidFireShortOnly by mutableStateOf(false)
+        private set
     /** Call-sign shapes Rapid Fire draws from; never empty (iOS callsignFormats). */
     var rapidFireFormats by mutableStateOf(CallsignFormat.commonDefaults.toSet())
         private set
@@ -613,6 +616,7 @@ object Settings {
         rapidFireWordMax = prefs.getInt("rfWordMax", 6).coerceIn(rapidFireWordMin, RAPID_FIRE_WORD_LENGTH_MAX)
         rapidFireNumberCount = prefs.getInt("rfNumberCount", 5).coerceIn(RAPID_FIRE_NUMBER_COUNT_MIN, RAPID_FIRE_NUMBER_COUNT_MAX)
         rapidFireUsOnly = prefs.getBoolean("rfUsOnly", true)
+        rapidFireShortOnly = prefs.getBoolean("rfShortOnly", false)
         prefs.getStringSet("rfFormats", null)?.let { stored ->
             rapidFireFormats = CallsignFormat.entries.filter { it.code in stored }.toSet()
                 .ifEmpty { CallsignFormat.commonDefaults.toSet() }
@@ -1219,6 +1223,11 @@ object Settings {
         persistModeSetup()
     }
 
+    fun updateRapidFireShortOnly(value: Boolean) {
+        rapidFireShortOnly = value
+        persistModeSetup()
+    }
+
     fun updateRapidFireSections(value: Boolean) {
         rapidFireSections = value
         persistModeSetup()
@@ -1258,6 +1267,7 @@ object Settings {
             putInt("rfWordMax", rapidFireWordMax)
             putInt("rfNumberCount", rapidFireNumberCount)
             putBoolean("rfUsOnly", rapidFireUsOnly)
+            putBoolean("rfShortOnly", rapidFireShortOnly)
             putStringSet("rfFormats", rapidFireFormats.map { it.code }.toSet())
             putBoolean("rfSections", rapidFireSections)
             putBoolean("rfSerialCut", rapidFireSerialCut)

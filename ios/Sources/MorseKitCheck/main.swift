@@ -832,6 +832,31 @@ do {
     }
     check("1×2 US callsigns have the shape L D L L", allGood)
 
+    // "Short callsigns only" (#371): every call is four characters, US or DX,
+    // whatever shapes are on; with no four-character shape on it falls back to
+    // 1×2 / 2×1; off, a 1×3 call is five characters as before.
+    var shortRNG = SeededRNG(seed: 371)
+    var shortOK = true, fallbackOK = true, offOK = true, sawDX = false
+    for _ in 0..<400 {
+        let usCall = CallsignGenerator.generate(formats: CallsignFormat.allCases, usOnly: true,
+                                                shortOnly: true, using: &shortRNG)
+        let anyCall = CallsignGenerator.generate(formats: CallsignFormat.allCases, usOnly: false,
+                                                 shortOnly: true, using: &shortRNG)
+        let longOnly = CallsignGenerator.generate(formats: [.oneByThree], usOnly: false,
+                                                  shortOnly: true, using: &shortRNG)
+        let off = CallsignGenerator.generate(formats: [.oneByThree], usOnly: true, using: &shortRNG)
+        if usCall.count != 4 || anyCall.count != 4 { shortOK = false }
+        if longOnly.count != 4 { fallbackOK = false }
+        if off.count != 5 { offOK = false }
+        if anyCall.first.map({ !"KNWA".contains($0) }) ?? false { sawDX = true }
+    }
+    check("short callsigns are four characters, US and DX", shortOK)
+    check("short callsigns still mix in DX prefixes", sawDX)
+    check("short callsigns fall back to 1×2/2×1 when only long shapes are on", fallbackOK)
+    check("short off leaves a 1×3 call five characters", offOK)
+    check("only 1×2 and 2×1 are four characters long",
+          CallsignFormat.allCases.filter { $0.length == CallsignFormat.shortLength } == [.oneByTwo, .twoByOne])
+
     // CQ produces a pileup whose voice count matches the active stations.
     var cfg = PileupConfig()
     cfg.mode = .pota
@@ -2401,6 +2426,14 @@ do {
     let call = Array(cQ.nextDrill().correct)
     check("2×1 US call sign has shape L L D L",
           call.count == 4 && call[0].isLetter && call[1].isLetter && call[2].isNumber && call[3].isLetter)
+
+    // Short call signs only (#371): every drill is four characters.
+    let shortQ = RapidFireQuiz(config: .init(content: .callsigns,
+                                             callsignFormats: [.twoByThree, .oneByThree],
+                                             callsignUSOnly: false, callsignShortOnly: true),
+                               rng: SeededRNG(seed: 371))
+    check("Rapid Fire short call signs are four characters",
+          (0..<100).allSatisfy { _ in shortQ.nextDrill().correct.count == 4 })
 
     // Grading is case- and space-insensitive.
     let gQ = RapidFireQuiz(config: .init(content: .states), rng: SeededRNG(seed: 7))

@@ -25,7 +25,13 @@ enum class CallsignFormat(
 
     val id: String get() = code
 
+    /** Characters in the whole call: prefix, region digit, suffix. */
+    val length: Int get() = prefixLen + 1 + suffixLen
+
     companion object {
+        /** The call length "short callsigns only" holds to (#371): 1×2 and 2×1. */
+        const val SHORT_LENGTH = 4
+
         /** A sensible default set: the everyday formats on, the rare ones off. */
         val commonDefaults: List<CallsignFormat> = listOf(OneByTwo, TwoByOne, OneByThree, TwoByTwo)
     }
@@ -53,11 +59,18 @@ object CallsignGenerator {
 
     /**
      * One random callsign in one of the allowed [formats]. [usOnly] restricts
-     * to US-style calls; otherwise DX prefixes are mixed in.
+     * to US-style calls; otherwise DX prefixes are mixed in. [shortOnly] (#371)
+     * holds every call to [CallsignFormat.SHORT_LENGTH] characters, US and DX
+     * alike: only the allowed formats of that length are drawn, and when none of
+     * them is that short it falls back to 1×2 and 2×1.
      */
-    fun generate(formats: List<CallsignFormat>, usOnly: Boolean, rng: Random): String {
-        val fmt = formats.randomOrNull(rng) ?: CallsignFormat.OneByTwo
-        return if (usOnly || rng.nextBoolean()) usCall(fmt, rng) else dxCall(fmt, rng)
+    fun generate(formats: List<CallsignFormat>, usOnly: Boolean, rng: Random, shortOnly: Boolean = false): String {
+        val pool = if (shortOnly) {
+            formats.filter { it.length == CallsignFormat.SHORT_LENGTH }
+                .ifEmpty { listOf(CallsignFormat.OneByTwo, CallsignFormat.TwoByOne) }
+        } else formats
+        val fmt = pool.randomOrNull(rng) ?: CallsignFormat.OneByTwo
+        return if (usOnly || rng.nextBoolean()) usCall(fmt, rng) else dxCall(fmt, rng, shortOnly)
     }
 
     private fun usCall(fmt: CallsignFormat, rng: Random): String {
@@ -76,11 +89,14 @@ object CallsignGenerator {
         return s.toString()
     }
 
-    private fun dxCall(fmt: CallsignFormat, rng: Random): String {
-        val s = StringBuilder(dxPrefixes.random(rng))
+    private fun dxCall(fmt: CallsignFormat, rng: Random, exact: Boolean = false): String {
+        // [exact] (short calls): a prefix and suffix of the format's own
+        // lengths, so the whole call is the length the format promises.
+        val prefixes = if (exact) dxPrefixes.filter { it.length == fmt.prefixLen } else dxPrefixes
+        val s = StringBuilder(prefixes.random(rng))
         s.append(digits.random(rng))
         // DX suffixes run 1–3 letters; reuse the format's suffix length.
-        repeat(maxOf(2, fmt.suffixLen)) { s.append(letters.random(rng)) }
+        repeat(if (exact) fmt.suffixLen else maxOf(2, fmt.suffixLen)) { s.append(letters.random(rng)) }
         return s.toString()
     }
 }

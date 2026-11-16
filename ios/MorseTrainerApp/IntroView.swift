@@ -773,6 +773,11 @@ private struct ModeOptionsCard: View {
                 set: { model.settings.rapidFire.callsignUSOnly = $0 })
     }
 
+    private var rapidFireShortOnlyBinding: Binding<Bool> {
+        Binding(get: { model.settings.rapidFire.callsignShortOnly },
+                set: { model.settings.rapidFire.callsignShortOnly = $0 })
+    }
+
     private var rapidFireSectionsBinding: Binding<Bool> {
         Binding(get: { model.settings.rapidFire.statesIncludeSections },
                 set: { model.settings.rapidFire.statesIncludeSections = $0 })
@@ -1075,6 +1080,10 @@ private struct ModeOptionsCard: View {
             }
             if content == .callsigns || content == .mixed {
                 Toggle("US call signs only", isOn: rapidFireUSOnlyBinding)
+                    .font(.subheadline)
+                    .tint(Theme.teal)
+                // Easy mode for learners (#371): only the 4-character shapes.
+                Toggle("Short call signs only (4 characters)", isOn: rapidFireShortOnlyBinding)
                     .font(.subheadline)
                     .tint(Theme.teal)
                 VStack(alignment: .leading, spacing: 6) {

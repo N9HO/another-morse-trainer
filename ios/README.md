@@ -189,6 +189,9 @@ testers, bug reports and feature chat live on
   answer again after a miss acts as Next, so you never leave the key; a wrong
   re-key is ignored. Next still works, and Settings › Keys & Sending can turn
   it off
+- **Short callsigns only**: an easy setting for learners. Pileup Runner,
+  Contest (Settings › QSO · Callsigns) and Rapid Fire call signs can be held
+  to four characters (1×2 and 2×1 shapes), US or DX, instead of the usual mix
 - **A hardware key wherever you type**: a Vail Adapter or other MIDI key
   also works in the Pileup Runner and Contest (what you key goes in the box
   and is sent when you stop keying; key CQ to call CQ), Type It, QRQ Speed,
