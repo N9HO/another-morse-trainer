@@ -246,7 +246,7 @@ fun DungeonScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
         if (phase == DgnPhase.RUNNING) {
             keyer.scope = scope
             keyer.start()
-            midi.start(onKey = { down -> keyer.touchKey(down) }, onConnected = { midiDevice = it })
+            midi.start(onKey = { down, ms -> keyer.touchKey(down, ms) }, onConnected = { midiDevice = it })
         }
         onDispose { midi.stop(); keyer.stop() }
     }

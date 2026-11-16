@@ -139,7 +139,7 @@ class VailRepeater(context: Context) {
         client.onEvent = { handleEvent(it) }
         sidetone = newSidetone(txTone)
         midi.start(
-            onKey = { down -> touchKey(down) },
+            onKey = { down, ms -> touchKey(down, ms) },
             onConnected = { midiDevice = it }
         )
         // Drive the adapter's piezo/keyer: wake it into MIDI mode, push the keyer

@@ -247,7 +247,7 @@ fun QuizScreen(
             keyer.start()
             // A hardware key (Vail Adapter / USB MIDI) drives the same decoder.
             midi.start(
-                onKey = { down -> keyer.touchKey(down) },
+                onKey = { down, ms -> keyer.touchKey(down, ms) },
                 onConnected = { name -> midiDevice = name }
             )
         }

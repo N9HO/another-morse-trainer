@@ -457,7 +457,7 @@ fun SendingAnalyzerScreen(onBack: () -> Unit) {
             midiOpen = true
             midi.start(
                 // The sidetone follows the merged key in the controller.
-                onKey = { },
+                onKey = { _, _ -> },
                 onConnected = { name -> midiDevice = name },
                 onKeyTimed = { down, nanos -> controller.keyEdgeNanos(SendingAnalyzerController.KeySource.MIDI, down, nanos) },
                 onAppKeyer = { controller.midiAppKeyerUsed() }

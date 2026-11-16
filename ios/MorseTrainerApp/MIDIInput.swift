@@ -41,6 +41,11 @@ public final class MIDIInput {
         public let machTimestamp: UInt64
         /// Same event as wall-clock ms since Unix epoch.
         public let timestampMs: Int64
+        /// A key-up sent for a note left held when its source went away. The
+        /// key was unplugged, not released, so a keyer should let go of
+        /// everything and cut its tone (`MIDIKeyRouter.releaseAll`) rather
+        /// than finish the element.
+        public var sourceLost = false
     }
 
     /// Fired from a CoreMIDI thread for every key edge.
@@ -172,7 +177,8 @@ public final class MIDIInput {
             let ms = Int64(Date().timeIntervalSince1970 * 1000)
             for note in released {
                 guard let key = MIDIKeyParser.paddle(forNote: note) else { continue }
-                handler(Event(key: key, note: note, isDown: false, machTimestamp: mach, timestampMs: ms))
+                handler(Event(key: key, note: note, isDown: false, machTimestamp: mach, timestampMs: ms,
+                              sourceLost: true))
             }
         }
     }
@@ -328,6 +334,13 @@ final class MIDIKeyRouter {
     }
 
     func handle(_ event: MIDIInput.Event) {
+        // Unplugged mid-element: cut the tone now, as Android and desktop's
+        // `MidiKeyInput.disconnect` does, rather than let the keyer finish
+        // the element for a paddle that can no longer be let go of.
+        if event.sourceLost {
+            releaseAll()
+            return
+        }
         let note = event.note
         if !event.isDown {
             if let element = keyedNotes.removeValue(forKey: note) {

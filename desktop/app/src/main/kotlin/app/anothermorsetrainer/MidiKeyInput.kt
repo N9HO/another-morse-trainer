@@ -49,7 +49,7 @@ class MidiKeyInput {
 
     // Touched only on the UI thread (connect/disconnect post there).
     private val open = mutableListOf<Open>()
-    private var onKey: ((Boolean) -> Unit)? = null
+    private var onKey: ((isDown: Boolean, atMs: Long) -> Unit)? = null
     private var onConnected: ((String?) -> Unit)? = null
     private var watch: MidiPorts.Watch? = null
 
@@ -99,10 +99,11 @@ class MidiKeyInput {
 
     /**
      * Begin listening. [onKey] fires (on the UI thread) with `true` on key-down
-     * and `false` on key-up; [onConnected] reports the connected device's name —
+     * and `false` on key-up, and `atMs`, the edge's own wall-clock time;
+     * [onConnected] reports the connected device's name —
      * null when none is attached yet, and again when the last one unplugs.
      */
-    fun start(onKey: (Boolean) -> Unit, onConnected: (String?) -> Unit) {
+    fun start(onKey: (isDown: Boolean, atMs: Long) -> Unit, onConnected: (String?) -> Unit) {
         this.onKey = onKey
         this.onConnected = onConnected
         startKeyer()
@@ -251,7 +252,10 @@ class MidiKeyInput {
         val now = heldNotes.isNotEmpty() || keyerDown
         if (now == reported) return
         reported = now
-        onKey?.invoke(now)
+        // The edge's own time in wall-clock ms (the packet's, or when the
+        // keyer scheduled the element), so a late main-thread hop can't
+        // change an element's length. iOS passes `atMs` the same way.
+        onKey?.invoke(now, System.currentTimeMillis() - (System.nanoTime() - atNanos) / 1_000_000L)
         onKeyTimed?.invoke(now, atNanos)
     }
 

@@ -374,6 +374,12 @@ public final class RepeaterModel: ObservableObject {
         // Let go of a squeeze the app's keyer is still timing (#380); its
         // key-up goes through like any other, before the engine stops.
         midiRouter?.releaseAll()
+        // Then stop hearing the key, as `SendingKeyer.stop` does: after this
+        // the key belongs to whatever screen is up now, and an edge here would
+        // key this repeater's tone and, with break-in on, put it on the air.
+        midiRouter?.onKey = nil
+        midiRouter = nil
+        midi = nil
         keyer.stop()
     }
 
