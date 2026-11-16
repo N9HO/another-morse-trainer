@@ -2,9 +2,7 @@ package app.anothermorsetrainer
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -55,7 +53,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
@@ -155,7 +152,7 @@ fun RapidFireScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {
     var lastSeenMs by rememberSaveable { mutableLongStateOf(0L) }
 
     // "Key each one": the straight key + decoder, live only during a keyed run.
-    val keyer = remember { SendingKeyer(wpm = Settings.characterWpm, toneHz = Settings.sidetoneHz) }
+    val keyer = remember { SendingKeyer() }
     val midi = remember { HardwareKey(context) }
     // Push a keyer mode or speed picked in the Settings sheet to the adapter
     // now, rather than at the next wake — i.e. after leaving the module (#46).
@@ -644,48 +641,15 @@ private fun RapidFireRun(
                 }
                 Spacer(Modifier.height(14.dp))
                 // Straight key or paddles, as chosen in Settings (#233).
-                OnScreenKeySwitch(
+                OnScreenKey(
+                    pressed = keyPressed,
+                    onKey = onKey,
                     onPaddleKey = onPaddleKey,
                     // Live before the item has finished and after it, as on iOS
                     // (PARITY.md row 17): key along with the tone if you can.
-                    modifier = Modifier.fillMaxWidth().height(110.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(110.dp)
-                            .clip(RoundedCornerShape(Brand.cornerRadius))
-                            .background(if (keyPressed) Brand.teal else Brand.navyRaised)
-                            .border(
-                                width = if (keyPressed) 2.dp else 1.dp,
-                                color = if (keyPressed) Brand.tealBright else Brand.hairline,
-                                shape = RoundedCornerShape(Brand.cornerRadius)
-                            )
-                            .pointerInput(Unit) {
-                                detectTapGestures(
-                                    onPress = {
-                                        onKey(true)
-                                        try {
-                                            tryAwaitRelease()
-                                        } finally {
-                                            onKey(false)
-                                        }
-                                    }
-                                )
-                            },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("⠿", fontSize = 24.sp, color = if (keyPressed) Brand.navy else Brand.teal)
-                            Text(
-                                stringResource(R.string.common_hold_to_key),
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = if (keyPressed) Brand.navy else Brand.textSecondary
-                            )
-                        }
-                    }
-                }
+                    height = 110.dp,
+                    glyphSize = 24.sp
+                )
             } else if (response != RapidFireResponse.REVIEW && revealBox) {
                 Spacer(Modifier.height(12.dp))
                 OutlinedTextField(

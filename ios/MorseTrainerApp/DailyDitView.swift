@@ -293,7 +293,7 @@ struct DailyDitView: View {
             }
         }
         // A Vail Adapter / BLE-MIDI key types the guess too (#251).
-        .hardwareKeyInput(wpm: model.settings.wpm, toneHz: model.settings.toneFrequency,
+        .hardwareKeyInput(keyer: model.settings.keyerSettings,
                           // Letters only, and no more than five — a sixth keyed
                           // letter is dropped, the same on Android.
                           onText: {

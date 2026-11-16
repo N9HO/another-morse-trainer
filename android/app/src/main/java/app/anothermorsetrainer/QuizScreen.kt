@@ -7,10 +7,8 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -65,7 +63,6 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.key.utf16CodePoint
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
@@ -261,7 +258,7 @@ fun QuizScreen(
 
     // Optional keyed answers: the straight key + decoder, live while the toggle
     // is on (the iOS "answer by keying" panel).
-    val keyer = remember { SendingKeyer(wpm = Settings.characterWpm, toneHz = Settings.sidetoneHz) }
+    val keyer = remember { SendingKeyer() }
     val midi = remember { HardwareKey(context) }
     // Push a keyer mode or speed picked in the Settings sheet to the adapter
     // now, rather than at the next wake — i.e. after leaving the module (#46).
@@ -1179,48 +1176,15 @@ private fun KeyedAnswerPanel(
         }
         Spacer(Modifier.height(12.dp))
         // Straight key or paddles, as chosen in Settings (#233).
-        OnScreenKeySwitch(
+        OnScreenKey(
+            pressed = keyPressed,
+            onKey = onKey,
             onPaddleKey = onPaddleKey,
-            modifier = Modifier.fillMaxWidth().height(100.dp),
-            enabled = enabled
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(100.dp)
-                    .clip(RoundedCornerShape(Brand.cornerRadius))
-                    .background(if (keyPressed) Brand.teal else Brand.navyRaised)
-                    .border(
-                        width = if (keyPressed) 2.dp else 1.dp,
-                        color = if (keyPressed) Brand.tealBright else Brand.hairline,
-                        shape = RoundedCornerShape(Brand.cornerRadius)
-                    )
-                    .pointerInput(enabled) {
-                        if (!enabled) return@pointerInput
-                        detectTapGestures(
-                            onPress = {
-                                onKey(true)
-                                try {
-                                    tryAwaitRelease()
-                                } finally {
-                                    onKey(false)
-                                }
-                            }
-                        )
-                    },
-                contentAlignment = Alignment.Center
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("⠿", fontSize = 22.sp, color = if (keyPressed) Brand.navy else Brand.teal)
-                    Text(
-                        stringResource(R.string.common_hold_to_key),
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = if (keyPressed) Brand.navy else Brand.textSecondary
-                    )
-                }
-            }
-        }
+            height = 100.dp,
+            enabled = enabled,
+            labelSize = 11.sp,
+            glyphSize = 22.sp
+        )
         Spacer(Modifier.height(12.dp))
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             OutlinedButton(

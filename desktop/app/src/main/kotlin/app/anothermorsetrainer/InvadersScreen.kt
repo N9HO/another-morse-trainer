@@ -177,7 +177,7 @@ fun InvadersScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
     var lbRanked by remember { mutableStateOf(false) }
 
     // Keying mode: the same decoder Sending Practice uses, plus a hardware key.
-    val keyer = remember { SendingKeyer(wpm = Settings.characterWpm, toneHz = Settings.sidetoneHz) }
+    val keyer = remember { SendingKeyer() }
     val midi = remember { HardwareKey() }
     AdapterConfigSync(midi)
     val scope = rememberCoroutineScope()
@@ -376,12 +376,7 @@ fun InvadersScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
     }
 
     // Keying: the first finalised character is the shot.
-    LaunchedEffect(keyer.decodedText, keyer.isKeying, phase) {
-        if (phase != InvPhase.RUNNING || input != InvadersInput.KEYING || keyer.isKeying) return@LaunchedEffect
-        val ch = keyer.decodedText.trim().firstOrNull() ?: return@LaunchedEffect
-        keyer.clear()
-        shoot(ch)
-    }
+    KeyedCharacters(keyer, active = phase == InvPhase.RUNNING && input == InvadersInput.KEYING) { ch -> shoot(ch) }
 
     // Hardware keyboard (ICR): the character key is the shot.
     val hwFocus = remember { FocusRequester() }
@@ -604,44 +599,16 @@ private fun InvadersRun(
             Spacer(Modifier.height(6.dp))
             InvadersKeyRows(pool = pool, onShoot = onShoot)
         } else {
-            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text(stringResource(R.string.invaders_key_the_lowest), style = MaterialTheme.typography.labelSmall, color = Brand.textSecondary)
-                Spacer(Modifier.weight(1f))
-                Text(decoded.ifEmpty { "—" }, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.SemiBold, fontSize = 22.sp, color = Brand.textPrimary)
-                midiDevice?.let { Text("  🎹", color = Brand.teal) }
-            }
+            KeyedTextHeader(stringResource(R.string.invaders_key_the_lowest), decoded.ifEmpty { "—" }, hardwareKeyConnected = midiDevice != null)
             Spacer(Modifier.height(6.dp))
             // Straight key or paddles, as chosen in Settings (#233).
-            OnScreenKeySwitch(
+            OnScreenKey(
+                pressed = keyPressed,
+                onKey = onKey,
                 onPaddleKey = onPaddleKey,
-                modifier = Modifier.fillMaxWidth().height(90.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(90.dp)
-                        .clip(RoundedCornerShape(Brand.cornerRadius))
-                        .background(if (keyPressed) Brand.teal else Brand.navyRaised)
-                        .border(
-                            width = if (keyPressed) 2.dp else 1.dp,
-                            color = if (keyPressed) Brand.tealBright else Brand.hairline,
-                            shape = RoundedCornerShape(Brand.cornerRadius)
-                        )
-                        .pointerInput(Unit) {
-                            detectTapGestures(onPress = {
-                                onKey(true)
-                                try { tryAwaitRelease() } finally { onKey(false) }
-                            })
-                        },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        stringResource(R.string.common_hold_to_key),
-                        fontSize = 11.sp, fontWeight = FontWeight.Bold,
-                        color = if (keyPressed) Brand.navy else Brand.textSecondary
-                    )
-                }
-            }
+                height = 90.dp,
+                labelSize = 11.sp
+            )
             // Desktop: the keyboard keys too.
             Text(DesktopCopy.KEYBOARD_KEY_HINT, style = MaterialTheme.typography.labelSmall, color = Brand.textSecondary)
         }

@@ -180,10 +180,11 @@ struct AsteroidsView: View {
                 }
                 .padding(.horizontal, 4)
             } else {
-                AsteroidsKeyPanel(wpm: model.settings.wpm,
-                                  toneHz: model.settings.toneFrequency,
+                CharacterKeyPanel(prompt: "Key an asteroid's label",
+                                  hint: "Press and hold to key the label on an asteroid",
+                                  keyer: model.settings.keyerSettings,
                                   slashedZero: model.settings.slashedZero,
-                                  buffer: sendBuffer) { ch in
+                                  display: sendBuffer.isEmpty ? "—" : sendBuffer + "_") { ch in
                     send(ch)
                 }
             }
@@ -467,84 +468,5 @@ struct AsteroidsView: View {
             hud = next
             model.noteGameScore(g.score)   // per-mode personal best
         }
-    }
-}
-
-/// Send mode's input: the on-screen key (a hardware Vail/BLE-MIDI key feeds
-/// the same decoder). Owns its `SendingKeyer` the way `SendingKeyerView`
-/// does, so the decoder is built at the session speed; each finalised
-/// character is handed to `onCharacter`, and `buffer` shows what has been
-/// sent toward a label so far.
-private struct AsteroidsKeyPanel: View {
-    let slashedZero: Bool
-    let buffer: String
-    let onCharacter: (Character) -> Void
-    @StateObject private var sender: SendingKeyer
-    @State private var keyPressed = false
-
-    init(wpm: Double, toneHz: Double, slashedZero: Bool, buffer: String,
-         onCharacter: @escaping (Character) -> Void) {
-        self.slashedZero = slashedZero
-        self.buffer = buffer
-        self.onCharacter = onCharacter
-        _sender = StateObject(wrappedValue: SendingKeyer(wpm: wpm, toneHz: toneHz))
-    }
-
-    var body: some View {
-        VStack(spacing: 10) {
-            HStack {
-                Text("Key an asteroid's label")
-                    .font(.caption)
-                    .foregroundStyle(Theme.textSecondary)
-                Spacer()
-                Text(buffer.isEmpty ? "—" : buffer + "_")
-                    .font(Theme.copyFont(size: 22, weight: .semibold, monospaced: true, slashedZero: slashedZero))
-                    .foregroundStyle(.white)
-                if !sender.midiDeviceNames.isEmpty {
-                    Image(systemName: "pianokeys").foregroundStyle(Theme.teal)
-                        .accessibilityLabel("Hardware key connected")
-                }
-            }
-            // Straight key or paddles, as chosen in Settings (#233).
-            OnScreenKeySwitch(onKey: { down, ms in sender.touchKey(isDown: down, atMs: ms) }) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous)
-                        .fill(keyPressed ? Theme.teal : Theme.navyRaised)
-                    RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous)
-                        .strokeBorder(keyPressed ? Theme.tealBright : Theme.hairline, lineWidth: keyPressed ? 2 : 1)
-                    Text("HOLD TO KEY")
-                        .font(.system(size: 12, weight: .bold)).tracking(1.5)
-                        .foregroundStyle(keyPressed ? Theme.navy : Theme.textSecondary)
-                }
-                .frame(height: 90)
-                .contentShape(Rectangle())
-                .gesture(
-                    DragGesture(minimumDistance: 0)
-                        .onChanged { _ in
-                            if !keyPressed { keyPressed = true; sender.touchKey(isDown: true) }
-                        }
-                        .onEnded { _ in
-                            if keyPressed { keyPressed = false; sender.touchKey(isDown: false) }
-                        }
-                )
-                .accessibilityLabel("Morse key")
-                .accessibilityHint("Press and hold to key the label on an asteroid")
-            }
-            .frame(height: 90)
-        }
-        .onAppear { sender.start() }
-        .onDisappear { sender.stop() }
-        // A finished character is sent at once; the decoder finalises it on
-        // the letter gap, so nothing is fired mid-character.
-        .onChange(of: sender.decodedText) { _ in keyedCharacter() }
-        .onChange(of: sender.isKeying) { _ in keyedCharacter() }
-    }
-
-    private func keyedCharacter() {
-        guard !sender.isKeying else { return }
-        let text = sender.decodedText.trimmingCharacters(in: .whitespaces)
-        guard let ch = text.first else { return }
-        sender.clear()
-        onCharacter(ch)
     }
 }

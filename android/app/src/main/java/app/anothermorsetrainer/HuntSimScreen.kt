@@ -1,8 +1,6 @@
 package app.anothermorsetrainer
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -34,7 +32,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
@@ -244,7 +241,7 @@ private fun signedHz(v: Double): String {
 private fun HuntRun(config: HuntConfig, call: String, state: String, onDone: (HuntSession) -> Unit) {
     val session = remember { HuntSession(config, Random.nextLong(), call, state) }
     val audio = remember { HuntAudio() }
-    val keyer = remember { SendingKeyer(wpm = Settings.characterWpm, toneHz = Settings.sidetoneHz) }
+    val keyer = remember { SendingKeyer() }
     val context = LocalContext.current
     val midi = remember { HardwareKey(context) }
     AdapterConfigSync(midi)
@@ -383,41 +380,13 @@ private fun HuntRun(config: HuntConfig, call: String, state: String, onDone: (Hu
                 maxLines = 1,
                 modifier = Modifier.fillMaxWidth().heightIn(min = 36.dp)
             )
-            OnScreenKeySwitch(
+            OnScreenKey(
+                pressed = keyPressed,
+                onKey = { keyPressed = it; keyer.touchKey(it) },
                 onPaddleKey = { down, ms -> keyer.touchKey(down, ms) },
-                modifier = Modifier.fillMaxWidth().height(100.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(100.dp)
-                        .clip(RoundedCornerShape(Brand.cornerRadius))
-                        .background(if (keyPressed) Brand.teal else Brand.navyRaised)
-                        .border(
-                            width = if (keyPressed) 2.dp else 1.dp,
-                            color = if (keyPressed) Brand.tealBright else Brand.hairline,
-                            shape = RoundedCornerShape(Brand.cornerRadius)
-                        )
-                        .pointerInput(Unit) {
-                            detectTapGestures(onPress = {
-                                keyPressed = true
-                                keyer.touchKey(true)
-                                try { tryAwaitRelease() } finally {
-                                    keyPressed = false
-                                    keyer.touchKey(false)
-                                }
-                            })
-                        },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        stringResource(R.string.hunt_hold_to_key),
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = if (keyPressed) Brand.navy else Brand.textSecondary
-                    )
-                }
-            }
+                height = 100.dp,
+                label = stringResource(R.string.hunt_hold_to_key)
+            )
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedButton(onClick = { keyer.clear() }, modifier = Modifier.weight(1f)) {
                     Text(stringResource(R.string.hunt_clear), color = Brand.textSecondary)

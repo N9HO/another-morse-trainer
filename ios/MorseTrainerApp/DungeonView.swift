@@ -199,8 +199,7 @@ struct DungeonView: View {
             .accessibilityLabel("Spell book")
             DungeonKeyPanel(expected: game?.pendingCast?.spell.counter,
                             resetToken: keyReset,
-                            wpm: model.settings.wpm,
-                            toneHz: model.settings.toneFrequency,
+                            keyer: model.settings.keyerSettings,
                             slashedZero: model.settings.slashedZero,
                             onText: { keyedSoFar = $0 },
                             onWord: { castWord($0) })
@@ -567,66 +566,34 @@ private enum DungeonSprites {
 private struct DungeonKeyPanel: View {
     let expected: String?
     let resetToken: Int
+    let keyer: KeyerSettings
     let slashedZero: Bool
     let onText: (String) -> Void
     let onWord: (String) -> Void
     @StateObject private var sender: SendingKeyer
-    @State private var keyPressed = false
 
-    init(expected: String?, resetToken: Int, wpm: Double, toneHz: Double, slashedZero: Bool,
+    init(expected: String?, resetToken: Int, keyer: KeyerSettings, slashedZero: Bool,
          onText: @escaping (String) -> Void, onWord: @escaping (String) -> Void) {
         self.expected = expected
         self.resetToken = resetToken
+        self.keyer = keyer
         self.slashedZero = slashedZero
         self.onText = onText
         self.onWord = onWord
-        _sender = StateObject(wrappedValue: SendingKeyer(wpm: wpm, toneHz: toneHz))
+        _sender = StateObject(wrappedValue: SendingKeyer(keyer))
     }
 
     var body: some View {
         VStack(spacing: 10) {
-            HStack {
-                Text("Key the counter-spell")
-                    .font(.caption)
-                    .foregroundStyle(Theme.textSecondary)
-                Spacer()
-                Text(sender.decodedText.isEmpty ? "—" : sender.decodedText)
-                    .font(Theme.copyFont(size: 22, weight: .semibold, monospaced: true, slashedZero: slashedZero))
-                    .foregroundStyle(.white)
-                if !sender.midiDeviceNames.isEmpty {
-                    Image(systemName: "pianokeys").foregroundStyle(Theme.teal)
-                        .accessibilityLabel("Hardware key connected")
-                }
-            }
-            // Straight key or paddles, as chosen in Settings (#233).
-            OnScreenKeySwitch(onKey: { down, ms in sender.touchKey(isDown: down, atMs: ms) }) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous)
-                        .fill(keyPressed ? Theme.teal : Theme.navyRaised)
-                    RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous)
-                        .strokeBorder(keyPressed ? Theme.tealBright : Theme.hairline, lineWidth: keyPressed ? 2 : 1)
-                    Text("HOLD TO KEY")
-                        .font(.system(size: 12, weight: .bold)).tracking(1.5)
-                        .foregroundStyle(keyPressed ? Theme.navy : Theme.textSecondary)
-                }
-                .frame(height: 90)
-                .contentShape(Rectangle())
-                .gesture(
-                    DragGesture(minimumDistance: 0)
-                        .onChanged { _ in
-                            if !keyPressed { keyPressed = true; sender.touchKey(isDown: true) }
-                        }
-                        .onEnded { _ in
-                            if keyPressed { keyPressed = false; sender.touchKey(isDown: false) }
-                        }
-                )
-                .accessibilityLabel("Morse key")
-                .accessibilityHint("Press and hold to key the counter-spell")
-            }
-            .frame(height: 90)
+            KeyedTextHeader(prompt: "Key the counter-spell",
+                            text: sender.decodedText.isEmpty ? "—" : sender.decodedText,
+                            slashedZero: slashedZero,
+                            hardwareKeyConnected: !sender.midiDeviceNames.isEmpty)
+            OnScreenKey(sender: sender, height: 90, hint: "Press and hold to key the counter-spell")
         }
         .onAppear { sender.start() }
         .onDisappear { sender.stop() }
+        .onChange(of: keyer) { sender.applyConfig($0) }
         .onChange(of: sender.decodedText) { text in keyed(text) }
         .onChange(of: resetToken) { _ in sender.clear() }
     }

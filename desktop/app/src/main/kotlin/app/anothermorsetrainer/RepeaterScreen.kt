@@ -2,10 +2,8 @@ package app.anothermorsetrainer
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -57,7 +55,6 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -281,43 +278,13 @@ fun RepeaterScreen(onBack: () -> Unit) {
                 // Hold-to-key straight key (always sounds local sidetone; transmits
                 // only when break-in is on).
                 // Straight key or paddles, as chosen in Settings (#233).
-                OnScreenKeySwitch(
+                OnScreenKey(
+                    pressed = keyPressed,
+                    onKey = { keyPressed = it; repeater.touchKey(it) },
                     onPaddleKey = { down, ms -> repeater.touchKey(down, ms) },
-                    modifier = Modifier.fillMaxWidth().height(110.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(110.dp)
-                            .background(if (keyPressed) Brand.teal else Brand.navyRaised, RoundedCornerShape(Brand.cornerRadius))
-                            .border(
-                                width = if (keyPressed) 2.dp else 1.dp,
-                                color = if (keyPressed) Brand.tealBright else Brand.hairline,
-                                shape = RoundedCornerShape(Brand.cornerRadius)
-                            )
-                            .pointerInput(Unit) {
-                                detectTapGestures(onPress = {
-                                    keyPressed = true
-                                    repeater.touchKey(true)
-                                    try { tryAwaitRelease() } finally {
-                                        keyPressed = false
-                                        repeater.touchKey(false)
-                                    }
-                                })
-                            },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("⠿", fontSize = 24.sp, color = if (keyPressed) Brand.navy else Brand.teal)
-                            Text(
-                                stringResource(R.string.common_hold_to_key),
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = if (keyPressed) Brand.navy else Brand.textSecondary
-                            )
-                        }
-                    }
-                }
+                    height = 110.dp,
+                    glyphSize = 24.sp
+                )
                 Spacer(Modifier.height(6.dp))
                 Text(DesktopCopy.KEYBOARD_KEY_HINT, color = Brand.textSecondary, fontSize = 12.sp)
 

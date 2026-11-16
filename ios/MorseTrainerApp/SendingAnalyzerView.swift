@@ -9,9 +9,8 @@ struct SendingAnalyzerView: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var analyzer: SendingAnalyzerModel
 
-    init(toneHz: Double, keyerWpm: Double, studied: [Character]) {
-        _analyzer = StateObject(wrappedValue: SendingAnalyzerModel(toneHz: toneHz, keyerWpm: keyerWpm,
-                                                                   studied: studied))
+    init(keyer: KeyerSettings, studied: [Character]) {
+        _analyzer = StateObject(wrappedValue: SendingAnalyzerModel(keyer: keyer, studied: studied))
     }
 
     var body: some View {
@@ -43,6 +42,8 @@ struct SendingAnalyzerView: View {
                 // were late (#363). The games' play screens and Sending Keyer
                 // have no ScrollView around their key, and the repeater's and
                 // First Four's stage keys (#382) are pinned the same way.
+                // `keyPress` (`KeyPressRecognizer`) also takes a touch from a
+                // scroll view as it lands, so a key left inside one keys on time.
                 .safeAreaInset(edge: .bottom, spacing: 0) {
                     if analyzer.phase == .sending && analyzer.input == .key {
                         SendingKeyPad(analyzer: analyzer, keyer: analyzer.keyer)
@@ -294,43 +295,17 @@ private struct LevelMeter: View {
 private struct SendingKeyPad: View {
     @ObservedObject var analyzer: SendingAnalyzerModel
     @ObservedObject var keyer: SendingKeyer
-    @State private var keyPressed = false
 
     var body: some View {
         OnScreenKeySwitch(onKey: { down, ms in analyzer.onScreenPaddleEdge(isDown: down, atMs: ms) }) {
-            keyButton
-        }
-        .frame(height: 140)
-    }
-
-    private var keyButton: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous)
-                .fill(keyPressed || keyer.isKeying ? Theme.teal : Theme.navyRaised)
-            RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous)
-                .strokeBorder(keyPressed ? Theme.tealBright : Theme.hairline, lineWidth: keyPressed ? 2 : 1)
-            VStack(spacing: 4) {
-                Image(systemName: "dot.radiowaves.left.and.right")
-                    .font(.system(size: 26, weight: .semibold))
-                    .foregroundStyle(keyPressed || keyer.isKeying ? Theme.navy : Theme.teal)
-                Text("HOLD TO KEY")
-                    .font(.system(size: 12, weight: .bold)).tracking(1.5)
-                    .foregroundStyle(keyPressed || keyer.isKeying ? Theme.navy : Theme.textSecondary)
+            // Lit for the merged key, so a hardware key shows here too.
+            StraightKeyPad(style: .radio, height: 140,
+                           hint: "Press and hold to send each dit and dah",
+                           lit: keyer.isKeying) { down, ms in
+                keyer.touchKey(isDown: down, atMs: ms)
             }
         }
         .frame(height: 140)
-        .contentShape(Rectangle())
-        .gesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { _ in
-                    if !keyPressed { keyPressed = true; keyer.touchKey(isDown: true) }
-                }
-                .onEnded { _ in
-                    if keyPressed { keyPressed = false; keyer.touchKey(isDown: false) }
-                }
-        )
-        .accessibilityLabel("Morse key")
-        .accessibilityHint("Press and hold to send each dit and dah")
     }
 }
 
