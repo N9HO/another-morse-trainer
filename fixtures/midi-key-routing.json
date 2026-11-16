@@ -34,16 +34,60 @@
     "A note changing route is a behaviour change: say so in the commit. Do not regenerate to make",
     "a failing test pass."
   ],
-  "rawPaddleModes": ["Passthrough"],
-  "routes": [
-    { "note": 0,  "passthrough": "held",     "otherModes": "held" },
-    { "note": 1,  "passthrough": "keyerDit", "otherModes": "held" },
-    { "note": 2,  "passthrough": "keyerDah", "otherModes": "held" },
-    { "note": 20, "passthrough": "keyerDit", "otherModes": "keyerDit" },
-    { "note": 21, "passthrough": "keyerDah", "otherModes": "keyerDah" },
-    { "note": 30, "passthrough": "held",     "otherModes": "held" },
-    { "note": 61, "passthrough": "keyerDit", "otherModes": "keyerDit" },
-    { "note": 62, "passthrough": "keyerDah", "otherModes": "keyerDah" }
+  "rawPaddleModes": [
+    "Passthrough"
   ],
-  "unrouted": [3, 19, 22, 29, 31, 60, 63, 64, 127]
+  "routes": [
+    {
+      "note": 0,
+      "passthrough": "held",
+      "otherModes": "held"
+    },
+    {
+      "note": 1,
+      "passthrough": "keyerDit",
+      "otherModes": "keyerDit"
+    },
+    {
+      "note": 2,
+      "passthrough": "keyerDah",
+      "otherModes": "held"
+    },
+    {
+      "note": 20,
+      "passthrough": "keyerDit",
+      "otherModes": "keyerDit"
+    },
+    {
+      "note": 21,
+      "passthrough": "keyerDah",
+      "otherModes": "keyerDah"
+    },
+    {
+      "note": 30,
+      "passthrough": "held",
+      "otherModes": "held"
+    },
+    {
+      "note": 61,
+      "passthrough": "keyerDit",
+      "otherModes": "keyerDit"
+    },
+    {
+      "note": 62,
+      "passthrough": "keyerDah",
+      "otherModes": "keyerDah"
+    }
+  ],
+  "unrouted": [
+    3,
+    19,
+    22,
+    29,
+    31,
+    60,
+    63,
+    64,
+    127
+  ]
 }
