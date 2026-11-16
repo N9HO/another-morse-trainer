@@ -36,11 +36,19 @@
 //                label when destroyed, "" when it struck the ship. A wrong
 //                character keyed mid-label is not an item (the asteroid is
 //                still in play and will resolve one way or the other).
+//   Brass Knuckles
+//                one per tell answered: sent = the tell (one or two
+//                characters), answered = what was keyed back ("" on a
+//                timeout), reactionMs = from the end of the tell's audio to
+//                the finished answer (0 on a miss or a dodge keyed before the
+//                tell ended), wpm = the fighter's tell speed. Punches thrown
+//                while the foe is open are not items. A session spans fights,
+//                like Play again in the other games.
 //   Games' wpm = the engine's `currentWpm`, rounded, at the item.
 //   Keying mode ("see it, key it") in Invaders, Galaga and Asteroids plays
 //   no Morse at all, so those runs are not submitted — only hear-it runs
 //   rank. Dungeon always plays the spell, Defender and Frogger always play
-//   their cues, so they always rank.
+//   their cues, and Brass Knuckles always plays the tell, so they always rank.
 //
 // Run speeds: Rapid Fire and the games send the session timing (character
 // and effective WPM); Contest and Pileup Runner have no single speed — see
@@ -66,6 +74,35 @@ enum LeaderboardStatus: Equatable {
 }
 
 extension AppModel {
+    /// Whether this device can attest, and so rank runs and pair buddies
+    /// (#349). App Attest is unsupported on the simulator and on a Mac
+    /// without it; nothing else in the app depends on it.
+    var attestationState: AttestationState {
+        AttestationAvailability.appleState(isSupported: leaderboard.canAttest)
+    }
+
+    /// What each ranked feature does in `attestationState`
+    /// (`fixtures/attestation-availability.json`).
+    var attestationFeatures: AttestationFeatures {
+        AttestationAvailability.features(for: attestationState)
+    }
+
+    /// The one line that stands in for the Share scores switch when this
+    /// device cannot attest, or nil when it can. The Android and desktop
+    /// apps say the same thing for their platforms.
+    var attestationNote: String? {
+        switch attestationFeatures.note {
+        case .none:
+            return nil
+        default:
+            #if targetEnvironment(macCatalyst)
+            return "This Mac cannot attest, so ranked scores and buddy streaks are off. Everything else works, and your scores stay on this Mac as personal bests."
+            #else
+            return "This device cannot attest (the simulator never can), so ranked scores and buddy streaks are off. Everything else works, and your scores stay on this device as personal bests."
+            #endif
+        }
+    }
+
     /// The board the running mode ranks on, or nil for an unranked mode.
     var leaderboardMode: LeaderboardMode? {
         LeaderboardMode(trainingModeRawValue: mode.rawValue)
@@ -97,12 +134,14 @@ extension AppModel {
         guard settings.leaderboard.shareScores, let board = leaderboardMode else { return }
         // Rapid Fire's review response plays without grading: nothing to rank.
         if board == .rapidFire && settings.rapidFire.response == .review { return }
-        guard LeaderboardDisplayName.isValid(settings.leaderboard.displayName) else {
-            leaderboardStatus = .unavailable("Pick a display name in Settings › Leaderboard & Buddy to post scores.")
+        // Attestation first (#349): a device that cannot attest is told so,
+        // not asked for a display name it could never use.
+        guard attestationFeatures.runsRanked else {
+            leaderboardStatus = .unavailable(LeaderboardError.unsupported.message)
             return
         }
-        guard leaderboard.canAttest else {
-            leaderboardStatus = .unavailable(LeaderboardError.unsupported.message)
+        guard LeaderboardDisplayName.isValid(settings.leaderboard.displayName) else {
+            leaderboardStatus = .unavailable("Pick a display name in Settings › Leaderboard & Buddy to post scores.")
             return
         }
         let speeds = leaderboardRunSpeeds(for: board)

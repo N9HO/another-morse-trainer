@@ -206,6 +206,38 @@ maintainer's code-signing identity, and the server's own clock.
 - **Passive modes** (`listen`, `story`) and Code Exam (pass/fail) are not
   leaderboard material.
 
+### 3a. When the device cannot attest (#349)
+
+Attestation is needed for exactly three things: submitting a ranked run,
+"Delete my scores", and buddy pairing. Nothing else depends on it, so a device
+that cannot attest must lose those three and nothing more.
+
+| State | Where | What the user sees |
+|---|---|---|
+| `available` | any | Everything on offer. |
+| `notConfigured` | Android | A build with no Cloud project number: as below, with the "not enabled in this build" line. |
+| `noPlayServices` | Android | LineageOS without GApps, a degoogled device installed via Aurora, Play Store or Play services missing or disabled. |
+| `deviceUnsupported` | iOS, Mac | App Attest unsupported: the simulator, a Mac without it. |
+| `noPlatformAttestation` | desktop | Always: neither Windows nor Linux offers one to an open-source app. |
+
+In every state but `available`: the app launches and every training mode runs;
+scores are kept as local personal bests; the public boards stay readable (a
+read needs no attestation); the Share scores switch, the display-name field,
+"Delete my scores" and the first-play opt-in prompt are not offered, replaced
+by **one line** saying why; buddy Invite and Join stay tappable and answer with
+the same line (#335); and nothing prompts the user to install or sign in to
+anything. The rule is pure (`AttestationAvailability` in each tree's
+`morsekit`) and pinned by `fixtures/attestation-availability.json`.
+
+Android detects Play by asking the package manager whether `com.android.vending`
+and `com.google.android.gms` are present and enabled; it does not start Play or
+call Play Integrity to find out. The Play Integrity client is created on the
+first attested call, inside a `try`, and a failure there downgrades the process
+to `noPlayServices`. A device that has both packages but cannot attest
+(microG, no signed-in account, a failed integrity verdict) passes the probe and
+fails per run with the existing "device attestation failed" line; that is
+deliberately not treated as a permanent state, since it may be transient.
+
 ---
 
 ## 4. Server design (own repository)
@@ -406,7 +438,8 @@ Build order:
    documents, once the accounts exist and a real device can produce a
    sample to test against.
 3. ~~Step 2 clients, both apps, opt-in off by default.~~ Both apps, one PR:
-   transcript capture in the nine modes (the exact semantics are the table
+   transcript capture in the nine modes at the time (Brass Knuckles Knock Out
+   later made ten; the exact semantics are the table
    in the server README), App Attest / Play Integrity clients, opt-in with
    display name, a board screen, "Delete my scores". Keying mode in
    Invaders, Galaga and Asteroids plays no Morse, so those runs are not

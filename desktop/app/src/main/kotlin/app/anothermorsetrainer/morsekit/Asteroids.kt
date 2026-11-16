@@ -428,3 +428,45 @@ class AsteroidsGame(
             list.minWithOrNull(compareByDescending<Asteroid> { it.progress }.thenBy { it.id })
     }
 }
+
+/** What a tap on the Asteroids play field landed on (Copy mode). */
+sealed class AsteroidsTap {
+    /** The ship at the centre: replay the cue. */
+    object Ship : AsteroidsTap()
+    /** The asteroid with this id. */
+    data class Rock(val id: Int) : AsteroidsTap()
+    /** Empty space: nothing happens. */
+    object Empty : AsteroidsTap()
+}
+
+/**
+ * Where a tap lands on the play field (#350), as pure geometry so a test can
+ * pin it. Distances are in dp; [target] takes the screen density to scale
+ * them. The ship wins inside [shipReachDp]; otherwise the nearest asteroid
+ * whose centre is within its drawn radius + [reachPaddingDp] is tapped (the
+ * first in field order on an exact tie); empty space is [AsteroidsTap.Empty].
+ * Pinned by `fixtures/asteroid-hit-test.json`.
+ */
+object AsteroidsHitTest {
+    const val shipReachDp = 30.0
+    const val reachPaddingDp = 14.0
+
+    /** Drawn radius in dp for a label: single characters small, fragments smaller, words wider. */
+    fun radiusDp(a: Asteroid): Double = when {
+        a.isFragment -> 15.0
+        a.label.length == 1 -> 19.0
+        else -> 16.0 + 6.0 * a.label.length
+    }
+
+    /** [x], [y] in pixels within a [width] x [height] pixel field; [density] is pixels per dp. */
+    fun target(x: Double, y: Double, width: Double, height: Double, density: Double, field: List<Asteroid>): AsteroidsTap {
+        if (kotlin.math.hypot(x - width / 2, y - height / 2) <= shipReachDp * density) return AsteroidsTap.Ship
+        var best: Asteroid? = null
+        var bestD = Double.MAX_VALUE
+        for (a in field) {
+            val d = kotlin.math.hypot(x - a.x * width, y - a.y * height)
+            if (d <= (radiusDp(a) + reachPaddingDp) * density && d < bestD) { best = a; bestD = d }
+        }
+        return best?.let { AsteroidsTap.Rock(it.id) } ?: AsteroidsTap.Empty
+    }
+}

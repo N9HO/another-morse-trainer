@@ -181,6 +181,10 @@ fun InvadersScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
     // Keying mode: the same decoder Sending Practice uses, plus a hardware key.
     val keyer = remember { SendingKeyer(wpm = Settings.characterWpm, toneHz = Settings.sidetoneHz) }
     val midi = remember { HardwareKey(context) }
+    // One BLE-MIDI link for the whole screen: a key found on the setup page
+    // must still be attached once the run starts (see BluetoothKeyButton).
+    val ble = remember { BleMidi(context) }
+    DisposableEffect(Unit) { onDispose { ble.release() } }
     AdapterConfigSync(midi)
     val scope = rememberCoroutineScope()
     var keyPressed by remember { mutableStateOf(false) }
@@ -411,6 +415,7 @@ fun InvadersScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
                     difficulty = difficulty, onDifficulty = { difficulty = it },
                     onStart = { if (LeaderboardOptIn.shouldOffer()) optInPending = true else startGame() },
                     onBack = onBack,
+                    ble = ble,
                     onSwitchMode = ::switchTo
                 )
             }
@@ -459,7 +464,8 @@ private fun InvadersSetup(
     pool: List<Char>,
     difficulty: InvadersDifficulty, onDifficulty: (InvadersDifficulty) -> Unit,
     onStart: () -> Unit, onBack: () -> Unit,
-    onSwitchMode: (TrainingMode) -> Unit
+    onSwitchMode: (TrainingMode) -> Unit,
+    ble: BleMidi
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         Row(modifier = Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -476,6 +482,7 @@ private fun InvadersSetup(
             InvLabel(stringResource(R.string.invaders_how_to_answer))
             InvPills(InvadersInput.entries.map { it to it.label }, input, onInput)
             Text(input.blurb, style = MaterialTheme.typography.bodySmall, color = Brand.textSecondary)
+            if (input == InvadersInput.KEYING) BluetoothKeyButton(ownedBleMidi = ble)
             InvLabel(stringResource(R.string.invaders_characters))
             InvPills(InvadersCharacterSet.entries.map { it to it.label }, characterSet, onCharacterSet)
             Text(pool.joinToString(" "), fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall, color = Brand.textSecondary)

@@ -1688,6 +1688,67 @@ if let fx = loadChartAxisFixture(), !fx.cases.isEmpty {
     check("fixtures/chart-axis.json loads and decodes", false)
 }
 
+// What the leaderboard and buddy streak do when the device cannot attest
+// (#349), against fixtures/attestation-availability.json — the same file the
+// Kotlin AttestationAvailabilityTest reads on Android and desktop.
+print("\nAttestation availability (fixtures/attestation-availability.json):")
+struct AttestationFixture: Decodable {
+    struct StateRow: Decodable {
+        let state: String
+        let shareSwitchVisible: Bool
+        let optInPromptOffered: Bool
+        let runsRanked: Bool
+        let deleteScoresOffered: Bool
+        let buddyActionsEnabled: Bool
+        let boardReadable: Bool
+        let personalBestsKept: Bool
+        let trainingModesWork: Bool
+        let noteKey: String
+    }
+    struct AppleCase: Decodable { let supported: Bool; let expect: String }
+    struct AppleProbe: Decodable { let cases: [AppleCase] }
+    let states: [StateRow]
+    let appleProbe: AppleProbe
+}
+func loadAttestationFixture() -> AttestationFixture? {
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent()
+        .deletingLastPathComponent().deletingLastPathComponent()
+    guard let data = try? Data(contentsOf: root.appendingPathComponent("fixtures/attestation-availability.json")) else { return nil }
+    return try? JSONDecoder().decode(AttestationFixture.self, from: data)
+}
+if let fx = loadAttestationFixture(), !fx.states.isEmpty {
+    check("the fixture lists every state", fx.states.count == AttestationState.allCases.count)
+    for row in fx.states {
+        guard let state = AttestationState(rawValue: row.state), let note = AttestationNote(rawValue: row.noteKey) else {
+            check("fixture state \(row.state) and note \(row.noteKey) are known", false)
+            continue
+        }
+        let f = AttestationAvailability.features(for: state)
+        check("\(row.state): switch, prompt, ranking, delete, buddy, board, bests, training, note",
+              f.shareSwitchVisible == row.shareSwitchVisible
+                && f.optInPromptOffered == row.optInPromptOffered
+                && f.runsRanked == row.runsRanked
+                && f.deleteScoresOffered == row.deleteScoresOffered
+                && f.buddyActionsEnabled == row.buddyActionsEnabled
+                && f.boardReadable == row.boardReadable
+                && f.personalBestsKept == row.personalBestsKept
+                && f.trainingModesWork == row.trainingModesWork
+                && f.note == note)
+    }
+    check("training and personal bests never depend on attestation",
+          AttestationState.allCases.allSatisfy {
+              let f = AttestationAvailability.features(for: $0)
+              return f.trainingModesWork && f.personalBestsKept && f.boardReadable
+          })
+    for c in fx.appleProbe.cases {
+        check("App Attest supported=\(c.supported) is \(c.expect)",
+              AttestationAvailability.appleState(isSupported: c.supported).rawValue == c.expect)
+    }
+} else {
+    check("fixtures/attestation-availability.json loads and decodes", false)
+}
+
 // Per-mode personal bests (docs/high-scores-design.md, step 1), against
 // fixtures/mode-bests.json — the same file the Kotlin ModeBestsTest reads.
 print("\nPer-mode personal bests (fixtures/mode-bests.json):")
@@ -3341,6 +3402,73 @@ if let fx = loadLadderFixture() {
     check("opting in adds the mark to the active set at once, as the fixture says for all \(fx.optInCases.count) cases", optInOK)
 } else {
     check("fixtures/ladder.json loads and decodes", false)
+}
+
+// MARK: - Studied characters fixture (row-15)
+//
+// fixtures/gap-stats-studied.json, read by this harness and by the android and
+// desktop StudiedCharactersTest. The studied set is the Koch active set.
+struct StudiedFixture: Decodable {
+    struct Case: Decodable {
+        let name: String
+        let proficiency: String
+        let unlocks: Int
+        let selectedPunctuation: String
+        let optedOut: String
+        let statsOnly: String
+        let studied: String
+    }
+    let cases: [Case]
+}
+
+print("\nStudied characters (fixtures/gap-stats-studied.json):")
+do {
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent()
+        .deletingLastPathComponent().deletingLastPathComponent()
+    let url = root.appendingPathComponent("fixtures/gap-stats-studied.json")
+    if let data = try? Data(contentsOf: url),
+       let fx = try? JSONDecoder().decode(StudiedFixture.self, from: data) {
+        var allOK = true
+        for c in fx.cases {
+            let koch = Array(MorseCode.kochOrder)
+            let letters = koch.filter { $0.isLetter }
+            let seed: [Character]
+            switch c.proficiency {
+            case "none": seed = Array(koch.prefix(2))
+            case "someLetters": seed = Array(letters.prefix(13))
+            case "allLetters": seed = letters
+            default: seed = koch
+            }
+            let eng = TrainerEngine(seedCount: 2, rng: SeededRNG(seed: 9))
+            eng.setActiveCharacters(seed)
+            // Opt in (appended at once), then unlock from the ladder.
+            let order = MorseCode.studyOrder(withPunctuation: Set(c.selectedPunctuation))
+            _ = eng.applyStudyOrder(order)
+            for _ in 0..<c.unlocks {
+                if let next = eng.studyOrder.first(where: { !eng.activeCharacters.contains($0) }) {
+                    eng.addActiveCharacter(next)
+                }
+            }
+            if !c.optedOut.isEmpty {
+                let remaining = Set(c.selectedPunctuation).subtracting(Set(c.optedOut))
+                _ = eng.applyStudyOrder(MorseCode.studyOrder(withPunctuation: remaining))
+            }
+            // Stats-only characters: recorded data but never part of the set.
+            for ch in c.statsOnly where !eng.activeCharacters.contains(ch) {
+                eng.addActiveCharacter(ch)
+                eng.removeActiveCharacter(ch)
+            }
+            let got = String(SendingDrill.studiedCharacters(of: eng))
+            if got != c.studied {
+                print("      ↳ \(c.name): got '\(got)', fixture says '\(c.studied)'")
+                allOK = false
+            }
+        }
+        check("studied characters are the Koch active set for all \(fx.cases.count) fixture cases", allOK)
+    } else {
+        check("fixtures/gap-stats-studied.json loads and decodes", false)
+    }
 }
 
 // An opted-in mark is on the ladder's tail as well as in the active set, so
@@ -6343,22 +6471,103 @@ if let fx = loadAsteroidsFixture() {
 // Shared leaderboard (docs/high-scores-design.md, step 2): the pure rules the
 // app applies before talking to the server, each pinned to the server's own
 // (src/modes.ts, src/grade.ts, src/names.ts in the leaderboard repository).
+// MARK: - Keyer modes and Asteroids tap hit-testing (#348, #350)
+// fixtures/keyer-modes.json and fixtures/asteroid-hit-test.json, consumed by this
+// harness AND by the Kotlin KeyerModesTest / AsteroidHitTestTest.
+
+struct KeyerModesFixture: Decodable {
+    struct Mode: Decodable { let code: Int; let name: String; let adapterTimesSending: Bool }
+    let modes: [Mode]
+}
+
+struct AsteroidHitTestFixture: Decodable {
+    struct Rock: Decodable {
+        let id: Int; let label: String; let angleOverPi: Double; let progress: Double
+        let fragment: Bool; let at: [Double]; let radiusDp: Double
+    }
+    struct Tap: Decodable { let x: Double; let y: Double; let density: Double; let expect: String; let note: String }
+    let shipReachDp: Double
+    let reachPaddingDp: Double
+    let width: Double
+    let height: Double
+    let asteroids: [Rock]
+    let taps: [Tap]
+}
+
+func loadSharedFixture<T: Decodable>(_ name: String, as type: T.Type) -> T? {
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+    guard let data = try? Data(contentsOf: root.appendingPathComponent("fixtures/\(name)")) else { return nil }
+    return try? JSONDecoder().decode(T.self, from: data)
+}
+
+print("\nKeyer modes (fixtures/keyer-modes.json):")
+if let fx = loadSharedFixture("keyer-modes.json", as: KeyerModesFixture.self) {
+    let all = VailKeyerMode.allCases
+    check("keyer modes: the list is as long as the fixture's", all.count == fx.modes.count)
+    check("keyer modes: names and codes are the fixture's, in its order",
+          all.count == fx.modes.count
+          && zip(all, fx.modes).allSatisfy { $0.displayName == $1.name && $0.rawValue == $1.code })
+    check("keyer modes: adapterTimesSending is the fixture's",
+          all.count == fx.modes.count
+          && zip(all, fx.modes).allSatisfy { ($0 != .straightKey && $0 != .passthrough) == $1.adapterTimesSending })
+} else {
+    check("keyer modes fixture loads", false)
+}
+
+print("\nAsteroids tap hit-testing (fixtures/asteroid-hit-test.json):")
+if let fx = loadSharedFixture("asteroid-hit-test.json", as: AsteroidHitTestFixture.self) {
+    check("hit-test constants are the fixture's",
+          AsteroidsHitTest.shipReachDp == fx.shipReachDp && AsteroidsHitTest.reachPaddingDp == fx.reachPaddingDp)
+    let field = fx.asteroids.map {
+        Asteroid(id: $0.id, label: $0.label, angle: $0.angleOverPi * Double.pi, progress: $0.progress,
+                 approachTime: 10, isFragment: $0.fragment)
+    }
+    check("hit-test radii are the fixture's",
+          zip(field, fx.asteroids).allSatisfy { AsteroidsHitTest.radiusDp($0) == $1.radiusDp })
+    check("hit-test asteroids sit where the fixture says",
+          zip(field, fx.asteroids).allSatisfy {
+              abs($0.x * fx.width - $1.at[0]) < 1e-6 && abs($0.y * fx.height - $1.at[1]) < 1e-6
+          })
+    func describe(_ t: AsteroidsTap) -> String {
+        switch t {
+        case .ship: return "ship"
+        case .rock(let id): return "rock:\(id)"
+        case .empty: return "none"
+        }
+    }
+    for (i, t) in fx.taps.enumerated() {
+        let got = AsteroidsHitTest.target(x: t.x, y: t.y, width: fx.width, height: fx.height,
+                                          density: t.density, field: field)
+        check("hit-test tap \(i + 1) (\(t.note)) is \(t.expect)", describe(got) == t.expect)
+    }
+    check("hit-test: an empty field has nothing to tap",
+          describe(AsteroidsHitTest.target(x: 500, y: 600, width: fx.width, height: fx.height,
+                                           density: 1, field: [])) == "none")
+} else {
+    check("asteroid hit-test fixture loads", false)
+}
+
 print("\nLeaderboard:")
 do {
     // Mode ids and the qso -> pileup mapping.
-    check("nine ranked modes", LeaderboardMode.allCases.count == 9)
+    check("ten ranked modes", LeaderboardMode.allCases.count == 10)
     check("mode ids are the server's",
           LeaderboardMode.allCases.map(\.rawValue) ==
-          ["rapidFire", "contest", "pileup", "invaders", "galaga", "defender", "dungeon", "frogger", "asteroids"])
+          ["rapidFire", "contest", "pileup", "invaders", "galaga", "defender", "dungeon", "frogger", "asteroids", "brassKnuckles"])
+    check("Brass Knuckles ranks on its own board", LeaderboardMode(trainingModeRawValue: "brassKnuckles") == .brassKnuckles)
     check("qso ranks on the pileup board", LeaderboardMode(trainingModeRawValue: "qso") == .pileup)
     check("rapidFire maps to itself", LeaderboardMode(trainingModeRawValue: "rapidFire") == .rapidFire)
     check("'pileup' is not a training mode", LeaderboardMode(trainingModeRawValue: "pileup") == nil)
     check("characters is unranked", LeaderboardMode(trainingModeRawValue: "characters") == nil)
     check("exam is unranked", LeaderboardMode(trainingModeRawValue: "exam") == nil)
     check("pileup's training mode is qso", LeaderboardMode.pileup.trainingModeRawValue == "qso")
-    check("the six games ramp, the three graded modes do not",
+    check("the seven games ramp, the three graded modes do not",
           LeaderboardMode.allCases.filter(\.ramps).map(\.rawValue) ==
-          ["invaders", "galaga", "defender", "dungeon", "frogger", "asteroids"])
+          ["invaders", "galaga", "defender", "dungeon", "frogger", "asteroids", "brassKnuckles"])
 
     // Transcript items: builders and JSON shape.
     let enc = JSONEncoder()
@@ -6648,7 +6857,8 @@ if let fx = loadBuddyListFixture(),
 // phone.
 struct SettingsCatalogFixture: Decodable {
     struct Category: Decodable { let id: String; let title: String }
-    struct Entry: Decodable { let id: String; let category: String }
+    struct Entry: Decodable { let id: String; let title: String; let section: String; let category: String }
+    struct Section: Decodable { let id: String; let category: String }
     struct Query: Decodable {
         let name: String
         let query: String
@@ -6658,6 +6868,7 @@ struct SettingsCatalogFixture: Decodable {
         let first: String?
     }
     let categories: [Category]
+    let sections: [Section]
     let entries: [Entry]
     let queries: [Query]
 }
@@ -6683,6 +6894,23 @@ if let fx = loadSettingsCatalogFixture() {
         print("      ↳ \(e.id): catalog has \(byId[e.id]?.category.rawValue ?? "nothing"), fixture says \(e.category)")
     }
     check("every shared setting is in the fixture's category (\(fx.entries.count))", sharedOK)
+    var titlesOK = true
+    for e in fx.entries where byId[e.id]?.title != e.title {
+        titlesOK = false
+        print("      ↳ \(e.id): catalog titles it \"\(byId[e.id]?.title ?? "nothing")\", fixture says \"\(e.title)\"")
+    }
+    check("every shared setting has the fixture's title, the same on every app (\(fx.entries.count))", titlesOK)
+    check("sections match the fixture, in order, each in its category",
+          SettingsSection.allCases.map { "\($0.rawValue)=\($0.category.rawValue)" } == fx.sections.map { "\($0.id)=\($0.category)" })
+    var sectionsOK = true
+    for e in fx.entries where byId[e.id]?.section.rawValue != e.section {
+        sectionsOK = false
+        print("      ↳ \(e.id): catalog has \(byId[e.id]?.section.rawValue ?? "nothing"), fixture says \(e.section)")
+    }
+    check("every shared setting is in the fixture's section (\(fx.entries.count))", sectionsOK)
+    let sharedIds = fx.entries.map(\.id)
+    check("shared settings are in the fixture's order (Reveal after Show right / wrong, Devices before Delete account)",
+          SettingsCatalog.entries.map(\.id).filter(sharedIds.contains) == sharedIds)
     check("catalog ids are unique", byId.count == SettingsCatalog.entries.count)
     check("every category has a section and a searchable setting",
           SettingsCategory.allCases.allSatisfy { c in
@@ -6706,6 +6934,103 @@ if let fx = loadSettingsCatalogFixture() {
     check("search answers match the fixture across \(fx.queries.count) queries", queriesOK)
 } else {
     check("fixtures/settings-catalog.json loads and decodes", false)
+}
+
+// MARK: - Input settings rules (parity rows 18-20)
+//
+// fixtures/gap-input-settings-rules.json — read by this harness AND by android
+// and desktop InputRulesFixtureTest. Side tone / tone spread slider shape,
+// pileup speed and wait ranges, and the validated callsign input.
+func loadInputRulesFixture() -> [String: Any]? {
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+    guard let data = try? Data(contentsOf: root.appendingPathComponent("fixtures/gap-input-settings-rules.json")),
+          let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+    return obj
+}
+
+print("\nInput settings rules (fixtures/gap-input-settings-rules.json):")
+if let fx = loadInputRulesFixture(),
+   let sidetone = fx["sidetone"] as? [String: Any],
+   let spread = fx["toneSpread"] as? [String: Any],
+   let pileup = fx["pileupRanges"] as? [String: Any],
+   let callsign = fx["callsign"] as? [String: Any] {
+    func num(_ v: Any?) -> Double { (v as? NSNumber)?.doubleValue ?? .nan }
+    func near(_ a: Double, _ b: Double) -> Bool { abs(a - b) < 1e-12 }
+
+    check("side tone slider runs \(Int(InputRules.sidetoneMin))...\(Int(InputRules.sidetoneMax)) in \(Int(InputRules.sidetoneStep)) Hz steps",
+          near(InputRules.sidetoneMin, num(sidetone["min"])) && near(InputRules.sidetoneMax, num(sidetone["max"]))
+          && near(InputRules.sidetoneStep, num(sidetone["step"])))
+    let sideLoad = sidetone["load"] as? [[String: Any]] ?? []
+    check("a stored side tone is clamped on load (\(sideLoad.count) cases)",
+          !sideLoad.isEmpty && sideLoad.allSatisfy { near(InputRules.clampSidetone(num($0["stored"])), num($0["value"])) })
+
+    check("tone spread slider runs 0...500 in 10 Hz steps",
+          near(InputRules.toneSpreadMin, num(spread["min"])) && near(InputRules.toneSpreadMax, num(spread["max"]))
+          && near(InputRules.toneSpreadStep, num(spread["step"])))
+    let labels = spread["labels"] as? [[String: Any]] ?? []
+    check("tone spread reads Zero-beat below one step and ±N Hz otherwise (\(labels.count) cases)",
+          !labels.isEmpty && labels.allSatisfy { c in
+              let v = num(c["value"])
+              guard InputRules.isZeroBeat(v) == (c["zeroBeat"] as? Bool) else { return false }
+              if let label = c["label"] as? String { return InputRules.toneSpreadLabel(v) == label }
+              return InputRules.toneSpreadLabel(v) == "Zero-beat"
+          })
+    let spreadLoad = spread["load"] as? [[String: Any]] ?? []
+    check("a stored tone spread is clamped on load (\(spreadLoad.count) cases)",
+          !spreadLoad.isEmpty && spreadLoad.allSatisfy { near(InputRules.clampToneSpread(num($0["stored"])), num($0["value"])) })
+
+    let speed = pileup["speed"] as? [String: Any] ?? [:]
+    let minWait = pileup["minWait"] as? [String: Any] ?? [:]
+    let maxWait = pileup["maxWait"] as? [String: Any] ?? [:]
+    check("pileup speed and wait ranges match the fixture",
+          near(InputRules.callerWpmMin, num(speed["min"])) && near(InputRules.callerWpmMax, num(speed["max"]))
+          && near(InputRules.minWaitMax, num(minWait["max"])) && near(InputRules.maxWaitMax, num(maxWait["max"])))
+    let clampCases = pileup["clamp"] as? [[String: Any]] ?? []
+    check("each pileup setting clamps to its own range only (\(clampCases.count) cases)",
+          !clampCases.isEmpty && clampCases.allSatisfy { c in
+              let input = num(c["input"])
+              let got: Double
+              switch c["field"] as? String {
+              case "minSpeed", "maxSpeed": got = InputRules.clampCallerWpm(input)
+              case "minWait": got = InputRules.clampMinWait(input)
+              case "maxWait": got = InputRules.clampMaxWait(input)
+              default: return false
+              }
+              return near(got, num(c["value"]))
+          })
+    let effSpeed = pileup["effectiveSpeed"] as? [[String: Any]] ?? []
+    check("effective caller speed band is the sorted pair (\(effSpeed.count) cases)",
+          !effSpeed.isEmpty && effSpeed.allSatisfy { c in
+              let r = InputRules.effectiveSpeedRange(min: num(c["min"]), max: num(c["max"]))
+              return near(r.lo, num(c["lo"])) && near(r.hi, num(c["hi"]))
+          })
+    let effWait = pileup["effectiveWait"] as? [[String: Any]] ?? []
+    check("effective reply wait collapses onto min when min is above max (\(effWait.count) cases)",
+          !effWait.isEmpty && effWait.allSatisfy { c in
+              let r = InputRules.effectiveWaitRange(min: num(c["min"]), max: num(c["max"]))
+              return near(r.lo, num(c["lo"])) && near(r.hi, num(c["hi"]))
+          })
+
+    check("callsign placeholder and limit match the fixture",
+          InputRules.callsignPlaceholder == (callsign["placeholder"] as? String)
+          && InputRules.callsignMaxLength == (callsign["maxLength"] as? Int))
+    let callCases = callsign["cases"] as? [[String: Any]] ?? []
+    var callOK = !callCases.isEmpty
+    for c in callCases {
+        let input = c["input"] as? String ?? ""
+        let got = InputRules.storedCallsign(input)
+        if got != (c["stored"] as? String) {
+            callOK = false
+            print("      ↳ \"\(input)\" stored as \"\(got)\", fixture says \"\(c["stored"] as? String ?? "?")\"")
+        }
+    }
+    check("callsign input becomes the stored value (\(callCases.count) cases)", callOK)
+} else {
+    check("fixtures/gap-input-settings-rules.json loads and decodes", false)
 }
 
 // ---------------------------------------------------------------------------
@@ -7768,8 +8093,8 @@ if let fx = loadSyncWireFixture() {
 
     // Mode ids: iOS sends its TrainingMode raw value unchanged.
     let canonical = fx["modeIds"]["canonical"].arrayValue.compactMap(\.stringValue)
-    check("the fixture's canonical ids are the 25 Kotlin titles' targets",
-          canonical.count == 25 && Set(fx["modeIds"]["kotlin"].objectValue.values.compactMap(\.stringValue)) == Set(canonical))
+    check("the fixture's canonical ids are the 26 Kotlin titles' targets",
+          canonical.count == 26 && Set(fx["modeIds"]["kotlin"].objectValue.values.compactMap(\.stringValue)) == Set(canonical))
     check("the session modes go on the wire as recorded",
           ["session", "legacySession"].allSatisfy { fx[$0]["wire"]["mode"].stringValue == fx[$0]["local"]["localMode"]["ios"].stringValue })
     check("the passive modes are the fixture's",
@@ -8816,6 +9141,1158 @@ check("a name is trimmed; 2–24 printable characters", AccountSync.profileDispl
 check("an email needs one @ and a dotted domain",
       AccountSync.isPlausibleEmail(" learner@example.org ") && !AccountSync.isPlausibleEmail("learner@example")
         && !AccountSync.isPlausibleEmail("learner example.org") && !AccountSync.isPlausibleEmail("a@b@c.org"))
+
+// MARK: - Brass Knuckles Knock Out
+//
+// fixtures/brass-knuckles.json, consumed by this harness AND by the Kotlin
+// BrassKnucklesTest (Android and desktop). Shared data, never shared code. The
+// expected values come from the game's own reference implementation, not from
+// either port (see the fixture's comment): the ladder, speeds, punch and damage
+// tables, the xorshift generator, tells and words, the career rules, and a
+// scripted snapshot trace for each of eleven fights.
+func loadBrassKnucklesFixture() -> [String: Any]? {
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+    guard let data = try? Data(contentsOf: root.appendingPathComponent("fixtures/brass-knuckles.json")) else { return nil }
+    return (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+}
+
+func boxingSideName(_ s: BoxingSide) -> String { s.rawValue }
+
+func boxingFoeName(_ p: BoxingFoe) -> String {
+    switch p {
+    case .idle: return "Idle"
+    case .windup(let s): return "Windup(\(boxingSideName(s)))"
+    case .punch(let s): return "Punch(\(boxingSideName(s)))"
+    case .whiff(let s): return "Whiff(\(boxingSideName(s)))"
+    case .open: return "Open"
+    case .hurt(let s): return "Hurt(\(boxingSideName(s)))"
+    case .block: return "Block"
+    case .stunned: return "Stunned"
+    case .down: return "Down"
+    case .out: return "Out"
+    case .rise: return "Rise"
+    case .victory: return "Victory"
+    }
+}
+
+func boxingMeName(_ p: BoxingMe) -> String {
+    switch p {
+    case .idle: return "Idle"
+    case .dodge(let s): return "Dodge(\(boxingSideName(s)))"
+    case .jab(let s): return "Jab(\(boxingSideName(s)))"
+    case .hook(let s): return "Hook(\(boxingSideName(s)))"
+    case .combo(let n): return "Combo(\(n))"
+    case .uppercut: return "Uppercut"
+    case .blocked(let s): return "Blocked(\(boxingSideName(s)))"
+    case .miss: return "Miss"
+    case .hurt: return "Hurt"
+    case .down: return "Down"
+    case .rise: return "Rise"
+    case .victory: return "Victory"
+    }
+}
+
+func boxingPhaseName(_ p: BoxingPhase) -> String {
+    switch p {
+    case .intro: return "Intro"
+    case .roundStart: return "RoundStart"
+    case .fight: return "Fight"
+    case .foeDown: return "FoeDown"
+    case .meDown: return "MeDown"
+    case .roundEnd: return "RoundEnd"
+    case .over(let won, let how): return "Over:\(won):\(how.rawValue)"
+    }
+}
+
+func boxingCalloutName(_ c: BoxingCallout?) -> String {
+    guard let c else { return "-" }
+    switch c {
+    case .dodge: return "Dodge"
+    case .wrong(let sent): return "Wrong:\(sent)"
+    case .tooSlow: return "TooSlow"
+    case .clean: return "Clean"
+    case .star: return "Star"
+    case .uppercut: return "Uppercut"
+    case .blocked: return "Blocked"
+    case .missed: return "Missed"
+    case .down: return "Down"
+    case .up: return "Up"
+    }
+}
+
+func boxingSnapshot(_ f: BoxingFight, _ now: UInt32, _ played: String?) -> String {
+    let s = f.stats
+    let parts: [String] = [
+        boxingPhaseName(f.phase),
+        f.duelName,
+        "hp \(f.foeHp) \(f.myHp)",
+        "st \(f.stars) run \(f.cleanRun)",
+        "sc \(f.score)",
+        "rd \(f.round)",
+        "now \(now)",
+        "dl \(f.deadline.map { String($0) } ?? "-")",
+        "tell \(f.tell)",
+        "ans \(f.answer)",
+        "word \(f.word)",
+        "typed \(f.typed)",
+        "cnt \(f.count)",
+        "up \(f.getUp)",
+        "play \(played ?? "-")",
+        "stats \(s.tells),\(s.dodged),\(s.punches),\(s.clean),\(s.damage),\(s.taken),\(s.uppercuts),\(s.knockdowns),\(s.knocked)",
+        "foe \(boxingFoeName(f.foePose(now: now).0))",
+        "me \(boxingMeName(f.mePose(now: now).0))",
+        "call \(boxingCalloutName(f.callout?.0))",
+        "stop \(f.stop)",
+    ]
+    return parts.joined(separator: "|")
+}
+
+func boxingQuality(_ s: String) -> BoxingQuality {
+    switch s {
+    case "good": return .good
+    case "off": return .off
+    default: return .bad
+    }
+}
+
+/// Runs one scripted op; returns the new clock.
+@MainActor
+func boxingRun(_ f: inout BoxingFight, _ op: [String], _ nowIn: UInt32) -> UInt32 {
+    var now = nowIn
+    func n(_ i: Int) -> UInt32 { i < op.count ? UInt32(truncatingIfNeeded: Int(op[i]) ?? 0) : 0 }
+    switch op[0] {
+    case "start": if !f.start(now: now) { print("  start refused"); failures += 1 }
+    case "startFalse": if f.start(now: now) { print("  start should be refused"); failures += 1 }
+    case "advance": if let d = f.deadline { now = d; f.update(now: now) }
+    case "update": now = now &+ n(1); f.update(now: now)
+    case "tellPlayed": now = now &+ n(1); f.tellPlayed(now: now)
+    case "answer":
+        now = now &+ n(2)
+        for c in f.tell { f.key(c, quality: boxingQuality(op[1]), now: now) }
+    case "key": now = now &+ n(3); f.key(Character(op[1]), quality: boxingQuality(op[2]), now: now)
+    case "keyUnknown": now = now &+ n(1); f.keyUnknown(now: now)
+    case "getUp": now = now &+ n(2); f.key(f.getUp, quality: boxingQuality(op[1]), now: now)
+    case "star": now = now &+ n(1); f.star(now: now)
+    case "word":
+        now = now &+ n(2)
+        for c in f.word { f.key(c, quality: boxingQuality(op[1]), now: now) }
+    case "pause": now = now &+ n(1); f.pause(now: now)
+    case "resume": now = now &+ n(1); f.resume(now: now)
+    case "setFoeHp": f.foeHp = Int(n(1))
+    case "setMyHp": f.myHp = Int(n(1))
+    case "setStars": f.stars = Int(n(1))
+    case "wait": now = now &+ n(1)
+    default: print("  unknown op \(op[0])"); failures += 1
+    }
+    return now
+}
+
+print("\nBrass Knuckles Knock Out (fixtures/brass-knuckles.json):")
+if let bk = loadBrassKnucklesFixture() {
+    // The ladder.
+    var ladderOK = true
+    if let rows = bk["ladder"] as? [[Any]], rows.count == BoxingRules.fighters {
+        for (i, r) in rows.enumerated() {
+            let f = BoxingRules.ladder[i]
+            let got: [Any] = [f.name, f.from, f.blurb, f.koch, f.speedBump, f.spacingPct, f.hint, f.noise, f.fading,
+                              f.maxTell, f.hp, f.power, f.reactMs, f.restLeastMs, f.restExtraMs, f.openMs, f.pitchOffsetHz, f.fist]
+            if r.count != got.count { ladderOK = false; continue }
+            for (a, b) in zip(r, got) {
+                if let sa = a as? String, let sb = b as? String { if sa != sb { ladderOK = false } }
+                else if let ba = a as? Bool, let bb = b as? Bool { if ba != bb { ladderOK = false } }
+                else if let ia = a as? Int, let ib = b as? Int { if ia != ib { ladderOK = false } }
+                else { ladderOK = false }
+            }
+        }
+    } else { ladderOK = false }
+    check("the eight fighters are the fixture's", ladderOK)
+
+    var speedsOK = true
+    for row in (bk["speeds"] as? [[Int]]) ?? [] {
+        let (w, e) = BoxingRules.ladder[row[0]].speeds(baseWpm: row[1], farnsworth: row[2])
+        if w != row[3] || e != row[4] { speedsOK = false }
+    }
+    check("tell speeds are the fixture's", speedsOK && !((bk["speeds"] as? [[Int]]) ?? []).isEmpty)
+
+    var charsOK = true
+    var order = ""
+    let charRows = (bk["characters"] as? [[Any]]) ?? []
+    for r in charRows {
+        guard let cs = r[0] as? String, let c = cs.first, let kind = r[1] as? String,
+              let units = r[2] as? Int, let g = r[3] as? Int, let o = r[4] as? Int, let b = r[5] as? Int else { charsOK = false; continue }
+        order.append(c)
+        let got: String
+        switch BoxingRules.punchOf(c) {
+        case .jab: got = "jab"
+        case .hook: got = "hook"
+        case .combo(let n): got = "combo\(n)"
+        case nil: got = "none"
+        }
+        if got != kind || BoxingRules.units(c) != units || BoxingRules.damage(c, .good) != g
+            || BoxingRules.damage(c, .off) != o || BoxingRules.damage(c, .bad) != b { charsOK = false }
+    }
+    check("punches, damage and dot units of the 41 characters are the fixture's",
+          charsOK && charRows.count == 41 && order == String(BoxingRules.koch))
+    check("a character with no code throws nothing",
+          BoxingRules.punchOf("#") == nil && BoxingRules.damage("#", .good) == 0)
+    var allChars = ""
+    for (i, f) in BoxingRules.ladder.enumerated() { allChars += String(f.newChars(index: i)) }
+    check("the ladder adds Koch characters in order", allChars == String(BoxingRules.koch))
+
+    // The generator, tells and words.
+    if let rng = bk["rng"] as? [String: Any] {
+        var a = BoxingRng(seed: 1)
+        check("the generator follows the fixture (seed 1)", (rng["seed1Below100"] as? [Int]) == (0..<16).map { _ in Int(a.below(100)) })
+        var b = BoxingRng(seed: 0xDEADBEEF)
+        check("the generator follows the fixture (seed DEADBEEF)",
+              (rng["seedDEADBEEFBelow1000"] as? [Int]) == (0..<16).map { _ in Int(b.below(1000)) })
+        var c = BoxingRng(seed: 1)
+        check("US calls follow the fixture", (rng["usCallsSeed1"] as? [String]) == (0..<24).map { c.usCall(digit: $0 % 10) })
+    } else { check("the generator section loads", false) }
+
+    var tellsOK = true
+    let tw = (bk["tellsAndWords"] as? [[String: Any]]) ?? []
+    for row in tw {
+        guard let k = row["fighter"] as? Int, let tells = row["tells"] as? [String], let words = row["words"] as? [String] else { tellsOK = false; continue }
+        var f = BoxingFight(fighter: k, seed: 12345, hints: true, myDitMs: 60, callsign: "K5MME")
+        if tells != (0..<12).map({ _ in f.pickTell() }) { tellsOK = false }
+        var g = BoxingFight(fighter: k, seed: 777, hints: true, myDitMs: 60, callsign: "K5MME")
+        if words != (0..<10).map({ _ in g.pickWord() }) { tellsOK = false }
+    }
+    check("tells and uppercut words are the fixture's", tellsOK && tw.count == BoxingRules.fighters)
+
+    // Career.
+    var careerOK = true
+    var career = BoxingCareer()
+    for row in (bk["career"] as? [[Any]]) ?? [] {
+        guard let fi = row[0] as? Int, let won = row[1] as? Bool, let sc = row[2] as? Int, let opens = row[3] as? Bool,
+              let unlocked = row[4] as? Int, let best = row[5] as? Int, let wins = row[6] as? Int else { careerOK = false; continue }
+        let o = career.finished(fighter: fi, won: won, score: sc)
+        if o != opens || career.unlocked != unlocked || career.bestScore(fi) != best || career.wins[fi] != wins { careerOK = false }
+    }
+    var champ = BoxingCareer(unlocked: BoxingRules.fighters)
+    let champOpens = champ.finished(fighter: BoxingRules.fighters - 1, won: true, score: 10)
+    check("the career opens fighters as the fixture says", careerOK && !career.champion && !champOpens && champ.champion)
+
+    var stats = BoxingStats()
+    stats.count("K", right: true); stats.count("K", right: true); stats.count("M", right: false)
+    stats.count("R", right: true); stats.count("R", right: false)
+    let want = (bk["worst"] as? [[Any]]) ?? []
+    let got = stats.worst()
+    var worstOK = want.count == got.count
+    if worstOK {
+        for (w, g) in zip(want, got) {
+            if (w[0] as? String) != String(g.0) || (w[1] as? Int) != g.1 || (w[2] as? Int) != g.2 { worstOK = false }
+        }
+    }
+    check("the worst characters come first", worstOK)
+
+    // The scripted fights.
+    let fights = (bk["fights"] as? [[String: Any]]) ?? []
+    check("the fixture has its scripted fights", fights.count >= 10)
+    for fx in fights {
+        let name = fx["name"] as? String ?? "?"
+        guard let fighter = fx["fighter"] as? Int, let seed = fx["seed"] as? Int, let hints = fx["hints"] as? Bool,
+              let dit = fx["ditMs"] as? Int, let call = fx["callsign"] as? String,
+              let ops = fx["ops"] as? [[String]], let expect = fx["expect"] as? [String], ops.count == expect.count else {
+            check("fight \(name) is well formed", false); continue
+        }
+        var f = BoxingFight(fighter: fighter, seed: UInt32(seed), hints: hints, myDitMs: dit, callsign: call)
+        var now: UInt32 = 1000
+        var firstBad: String?
+        for (i, op) in ops.enumerated() {
+            now = boxingRun(&f, op, now)
+            let played = f.takePlay()
+            var line = boxingSnapshot(f, now, played)
+            var copies: [String] = []
+            f.takeCopies { sent, copied in copies.append("\(sent)\(copied.map { String($0) } ?? "_")") }
+            line += "|copies \(copies.joined(separator: ","))"
+            if line != expect[i] && firstBad == nil {
+                firstBad = "step \(i) \(op)\n      want \(expect[i])\n      got  \(line)"
+            }
+        }
+        check("fight \(name) plays out as the fixture says", firstBad == nil)
+        if let bad = firstBad { print("    \(bad)") }
+    }
+} else {
+    check("fixtures/brass-knuckles.json loads", false)
+}
+
+// MARK: - Brass Knuckles Knock Out: the keying judge
+//
+// fixtures/brass-knuckles-keying.json, read here and by the Kotlin BrassKnucklesTest (Android
+// and desktop). Derived by hand from the game's timing rules, not from either port.
+print("\nBrass Knuckles Knock Out keying judge (fixtures/brass-knuckles-keying.json):")
+@MainActor
+func checkBrassKnucklesKeying() {
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent()
+        .deletingLastPathComponent().deletingLastPathComponent()
+    guard let data = try? Data(contentsOf: root.appendingPathComponent("fixtures/brass-knuckles-keying.json")),
+          let fx = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+          let table = fx["quality"] as? [[Any]], let cases = fx["keying"] as? [[String: Any]] else {
+        check("fixtures/brass-knuckles-keying.json loads", false)
+        return
+    }
+    func quality(_ s: String) -> BoxingQuality { s == "good" ? .good : s == "off" ? .off : .bad }
+    var bad: [String] = []
+    for row in table {
+        let kind: BoxingKind
+        switch row[0] as? String ?? "" {
+        case "dit": kind = .dit
+        case "dah": kind = .dah
+        case "elementGap": kind = .elementGap
+        case "charGap": kind = .charGap
+        default: kind = .wordGap
+        }
+        let units = (row[1] as? NSNumber)?.doubleValue ?? -1
+        if BoxingTiming.quality(kind, units) != quality(row[2] as? String ?? "") { bad.append("\(row[0]) \(units)") }
+    }
+    check("timing quality matches the fixture (\(table.count) rows)", bad.isEmpty)
+    if !bad.isEmpty { print("    differs: \(bad)") }
+    var firstBad: String?
+    for c in cases {
+        let name = c["name"] as? String ?? "?"
+        let dit = (c["dit"] as? NSNumber)?.intValue ?? 60
+        let ops = c["ops"] as? [[Any]] ?? []
+        let want = c["expect"] as? [String] ?? []
+        var k = BoxingKeying()
+        for (n, op) in ops.enumerated() {
+            let at = UInt32(bitPattern: Int32(truncatingIfNeeded: (op[1] as? NSNumber)?.intValue ?? 0))
+            let got: BoxingJudged?
+            switch op[0] as? String ?? "" {
+            case "down": got = k.edge(down: true, atMs: at, ditMs: dit)
+            case "up": got = k.edge(down: false, atMs: at, ditMs: dit)
+            default: got = k.poll(nowMs: at, ditMs: dit)
+            }
+            var text = ""
+            if let g = got {
+                let q = g.quality == .good ? "good" : g.quality == .off ? "off" : "bad"
+                text = "\(g.char.map { String($0) } ?? "?"):\(q)"
+            }
+            if n >= want.count || text != want[n], firstBad == nil {
+                firstBad = "\(name), step \(n): want \(n < want.count ? want[n] : "-") got \(text)"
+            }
+        }
+    }
+    check("keying is judged as the fixture says (\(cases.count) cases)", firstBad == nil)
+    if let b = firstBad { print("    \(b)") }
+}
+checkBrassKnucklesKeying()
+
+// MARK: - Brass Knuckles Knock Out: the ring renderer
+//
+// BkRing (Sources/MorseKit/BrassKnucklesRing.swift) is the pixel renderer under the fight screen.
+// There is nothing to compare its pixels with except the other ports, so this checks what must hold
+// for any pixels: buffer sizes, the art tables, the colour maths, the banner width maths, and that
+// every pose on every stage draws without trapping.
+print("\nBrass Knuckles Knock Out ring renderer:")
+@MainActor
+func checkBrassKnucklesRing() {
+    let problems = BkRing.artProblems()
+    check("every sprite is w*h digits and every table lines up (\(problems.count) problems)", problems.isEmpty)
+    for p in problems.prefix(5) { print("    \(p)") }
+
+    check("the art is 160 x 120 and the screen is double that",
+          BkRing.artW == 160 && BkRing.artH == 120 && BkRing.screenW == 320 && BkRing.screenH == 240)
+    check("there are four stages with names", BkRing.stages.count == 4 && BkRing.stages.allSatisfy { !$0.name.isEmpty })
+
+    // Colour: RGB565 rounding, opaque, and mixing that hits both ends.
+    check("white and black survive the RGB565 rounding", BkRing.rgb(0xFFFFFF) == 0xFFFFFFFF && BkRing.rgb(0x000000) == 0xFF000000)
+    check("0x1A1426 rounds to 0xFF181421", BkRing.rgb(0x1A1426) == 0xFF181421)
+    let ca = BkRing.rgb(0xD83A3A), cb = BkRing.rgb(0x3A5AD8)
+    check("mix at 0% and 100% gives the ends", BkRing.mix(ca, cb, 0) == ca && BkRing.mix(ca, cb, 100) == cb)
+    check("mix keeps the colour opaque", BkRing.mix(ca, cb, 37) >> 24 == 0xFF)
+
+    // Banners.
+    let edge = BkRing.rgb(0x3A0A0C)
+    let round = BkRing.Banner("ROUND 3", color: BkRing.rgb(0xE8B020), y: 36, px: 3, edge: edge)
+    let gang = BkRing.Banner("GANG", color: BkRing.rgb(0xFFE030), y: 77, px: 2, edge: edge)
+    check("a banner is six blocks a letter less the gap (ROUND 3 at 3 px = 123, GANG at 2 px = 46)",
+          round.width == 7 * 6 * 3 - 3 && round.width == 123 && gang.width == 4 * 6 * 2 - 2 && gang.width == 46)
+
+    // The ring: every pose, on every stage, at several moments, with and without a banner.
+    var foes: [BoxingFoe] = [.idle, .open, .block, .stunned, .down, .out, .rise, .victory]
+    for s in [BoxingSide.left, .right] { foes += [.windup(s), .punch(s), .whiff(s), .hurt(s)] }
+    var mes: [BoxingMe] = [.idle, .uppercut, .miss, .hurt, .down, .rise, .victory]
+    for s in [BoxingSide.left, .right] { mes += [.dodge(s), .jab(s), .hook(s), .blocked(s)] }
+    for n in 1...4 { mes.append(.combo(n)) }
+    let nows: [UInt32] = [0, 1000, 0xFFFF_FF00]
+    let ages: [UInt32] = [0, 60, 130, 250, 450, 900, 5000]
+    var sizesOK = true
+    var drawn = 0
+    for stage in 0..<BkRing.stages.count {
+        for fighter in 0..<BoxingRules.fighters {
+            for (i, foe) in foes.enumerated() {
+                let me = mes[i % mes.count]
+                for now in nows {
+                    let age = ages[(i + fighter) % ages.count]
+                    let banner: BkRing.Banner? = (i + stage) % 3 == 0 ? round : nil
+                    let buf = BkRing.ring(fighter: fighter, foe: (foe, now &- age), me: (me, now &- age),
+                                          hurting: i % 2 == 0, now: now, stage: stage, banner: banner)
+                    if buf.count != BkRing.artW * BkRing.artH { sizesOK = false }
+                    if buf.contains(where: { $0 >> 24 != 0xFF }) { sizesOK = false }
+                    drawn += 1
+                }
+            }
+        }
+    }
+    check("ring() draws every foe pose against every stage and fighter, 160 x 120 and opaque (\(drawn) frames)", sizesOK && drawn > 0)
+    var posesOK = true
+    for me in mes {
+        for foe in foes {
+            let buf = BkRing.ring(fighter: 7, foe: (foe, 1000), me: (me, 1000), hurting: false, now: 1050, stage: 3)
+            if buf.count != 19_200 { posesOK = false }
+        }
+    }
+    check("ring() draws every pairing of your poses and the foe's (\(mes.count) x \(foes.count))", posesOK)
+    let a = BkRing.ring(fighter: 2, foe: (.windup(.left), 1000), me: (.idle, 0), hurting: false, now: 1200, stage: 0)
+    let b = BkRing.ring(fighter: 2, foe: (.windup(.left), 1000), me: (.idle, 0), hurting: false, now: 1200, stage: 0)
+    let c = BkRing.ring(fighter: 2, foe: (.punch(.left), 1000), me: (.idle, 0), hurting: false, now: 1200, stage: 0)
+    check("ring() is deterministic and a different pose draws differently", a == b && a != c)
+    let withBanner = BkRing.ring(fighter: 2, foe: (.idle, 0), me: (.idle, 0), hurting: false, now: 500, stage: 1, banner: round)
+    let without = BkRing.ring(fighter: 2, foe: (.idle, 0), me: (.idle, 0), hurting: false, now: 500, stage: 1)
+    var boxOK = withBanner != without
+    for i in 0..<withBanner.count where withBanner[i] != without[i] {
+        let row = i / BkRing.artW
+        let col = i % BkRing.artW
+        let inside = row >= 35 && row < 60 && col >= 17 && col < 144
+        if !inside { boxOK = false }
+    }
+    check("a banner changes only pixels inside its box", boxOK)
+
+    // The splash.
+    var splashOK = true
+    for t in [0, 100, 399, 400, 650, 700, 900, 1200, 1499, 1500, 2100, 3000, 7000] {
+        if BkRing.splash(t: t, seed: 0x5BD1E995).count != BkRing.screenW * BkRing.screenH { splashOK = false }
+    }
+    check("splash() is a 320 x 240 buffer at every moment, before and after the motto", splashOK)
+    check("splash() is the same for the same seed and differs for another once the stars start",
+          BkRing.splash(t: 1000, seed: 1) == BkRing.splash(t: 1000, seed: 1)
+            && BkRing.splash(t: 1000, seed: 1) != BkRing.splash(t: 1000, seed: 2))
+    check("the motto band appears at 1.5 s", BkRing.splash(t: 1499, seed: 1)[BkRing.mottoY * BkRing.screenW + 3]
+            != BkRing.splash(t: 1500, seed: 1)[BkRing.mottoY * BkRing.screenW + 3])
+    check("slam() is true for 90 ms as each title line lands",
+          BkRing.slam(650) && BkRing.slam(739) && !BkRing.slam(740) && BkRing.slam(900) && BkRing.slam(1150)
+            && !BkRing.slam(0) && !BkRing.slam(5000))
+    check("the prompt row sits under the motto, inside the screen",
+          BkRing.promptY == BkRing.mottoY + BkRing.mottoH + 2 && BkRing.mottoY + BkRing.mottoH <= BkRing.screenH)
+
+    // Portraits.
+    var portraitsOK = true
+    var silhouetteOK = true
+    let bg = BkRing.rgb(0x120E1C)
+    let tint = BkRing.rgb(0x2A2434)
+    for f in 0..<BoxingRules.fighters {
+        for face in 0..<6 {
+            let open = BkRing.portrait(fighter: f, face: face, locked: false, bg: bg)
+            let shut = BkRing.portrait(fighter: f, face: face, locked: true, bg: bg)
+            if open.count != BkRing.portraitSize * BkRing.portraitSize || shut.count != open.count { portraitsOK = false }
+            if open == shut { silhouetteOK = false }
+            if !shut.allSatisfy({ $0 == bg || $0 == tint }) { silhouetteOK = false }
+        }
+    }
+    check("portraits are 48 x 48 for every fighter and face", portraitsOK && BkRing.portraitSize == 48)
+    check("a locked portrait is a one-colour silhouette that differs from the open one", silhouetteOK)
+
+    let doubled = BkRing.doubled(a)
+    check("doubled() turns every art pixel into a 2 x 2 block",
+          doubled.count == BkRing.screenW * BkRing.screenH
+            && doubled[0] == a[0] && doubled[1] == a[0] && doubled[BkRing.screenW] == a[0]
+            && doubled[BkRing.screenW * 5 + 7] == a[2 * BkRing.artW + 3]
+            && doubled[doubled.count - 1] == a[a.count - 1])
+}
+checkBrassKnucklesRing()
+
+// MARK: - Hunt simulator (#313)
+
+// fixtures/hunt-model.json and fixtures/hunt-sessions.json, read by this
+// harness AND by the Kotlin HuntSimTest in android/ and desktop/: the RNG, the
+// copy model, the query rules, the hunters, the grader, and whole scripted
+// sessions turn by turn. Worked from docs/operating-procedure-design.md by a
+// reference script, not captured from a port.
+print("\nHunt simulator (fixtures/hunt-model.json, hunt-sessions.json):")
+func loadHuntFixture(_ name: String) -> [String: Any]? {
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent()
+        .deletingLastPathComponent().deletingLastPathComponent()
+    guard let data = try? Data(contentsOf: root.appendingPathComponent("fixtures/\(name)")) else { return nil }
+    return (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+}
+func hNum(_ v: Any?) -> Double { (v as? NSNumber)?.doubleValue ?? .nan }
+func hInt(_ v: Any?) -> Int { (v as? NSNumber)?.intValue ?? -9999 }
+func hBool(_ v: Any?) -> Bool { (v as? NSNumber)?.boolValue ?? false }
+func hStr(_ v: Any?) -> String { v as? String ?? "<missing>" }
+func hRows(_ v: Any?) -> [[String: Any]] { v as? [[String: Any]] ?? [] }
+func hDoubles(_ v: Any?) -> [Double] { ((v as? [NSNumber]) ?? []).map(\.doubleValue) }
+func hClose(_ a: Double, _ b: Double) -> Bool { abs(a - b) <= 1e-9 }
+func hConfig(_ o: [String: Any]?) -> HuntConfig {
+    var c = HuntConfig()
+    guard let o = o else { return c }
+    c.pileupSize = hInt(o["pileupSize"]); c.wpmMin = hNum(o["wpmMin"]); c.wpmMax = hNum(o["wpmMax"])
+    c.activatorWpm = hNum(o["activatorWpm"]); c.qsb = hBool(o["qsb"]); c.qrn = hNum(o["qrn"])
+    c.inaudiblePercent = hNum(o["inaudiblePercent"]); c.bustRate = hNum(o["bustRate"])
+    c.toneSpread = hNum(o["toneSpread"]); c.youLevel = hNum(o["youLevel"])
+    return c
+}
+func hHeard(_ rows: [[String: Any]]) -> [String] {
+    rows.map { "\(($0["who"] as? NSNumber)?.stringValue ?? ($0["who"] as? String) ?? "?")|\(hStr($0["sent"]))|\(hStr($0["decoded"]))" }
+}
+func hPolicy(_ name: String, _ s: HuntSession) -> HuntYouSend? {
+    let t = s.turn
+    let me = s.myCall
+    func y(_ text: String, _ delay: Double, _ off: Double) -> HuntYouSend { HuntYouSend(text: text, wpm: 20, delay: delay, offsetHz: off) }
+    switch name {
+    case "good":
+        switch t.kind {
+        case .calling: return y(me, 0.6, 60)
+        case .query: return HuntModel.answers(t.query, call: me) ? y(me, 0.5, 60) : nil
+        case .exchange: return s.pickedCall == me ? y("5NN \(s.myState) 73", 0.4, 0) : nil
+        case .close: return y("73 E E", 0.3, 0)
+        case .as: return nil
+        }
+    case "pushy":
+        switch t.kind {
+        case .calling: return y("\(me) \(me)", 0.1, 0)
+        case .query: return y(me, 0.1, 0)
+        case .exchange: return s.pickedCall == me ? y("TNX FER CALL UR 5NN \(s.myState)", 0.2, 0) : y(me, 0.1, 150)
+        case .as: return y(me, 0.1, 0)
+        case .close: return nil
+        }
+    default:
+        return nil
+    }
+}
+if let fx = loadHuntFixture("hunt-model.json"), let sx = loadHuntFixture("hunt-sessions.json") {
+    let c = fx["constants"] as? [String: Any] ?? [:]
+    check("hunt: constants",
+          hNum(c["noiseFloor"]) == HuntModel.noiseFloor && hNum(c["maxOdds"]) == HuntModel.maxOdds
+          && hNum(c["maskWeight"]) == HuntModel.maskWeight && hNum(c["zeroBeatHz"]) == HuntModel.zeroBeatHz
+          && HuntModel.zeroBeatHz == OperatingProcedure.zeroBeatToleranceHz
+          && hNum(c["sepFarStart"]) == HuntModel.sepFarStart && hNum(c["sepSlope"]) == HuntModel.sepSlope
+          && hNum(c["sepMin"]) == HuntModel.sepMin && hNum(c["qsbFactor"]) == HuntModel.qsbFactor
+          && hNum(c["doubtOdds"]) == HuntModel.doubtOdds && hNum(c["listenSeconds"]) == HuntModel.listenSeconds
+          && hNum(c["asProb"]) == HuntModel.asProb && hInt(c["sriAfter"]) == HuntModel.sriAfter
+          && hInt(c["maxExchangeTries"]) == HuntModel.maxExchangeTries && hInt(c["maxQueries"]) == HuntModel.maxQueries
+          && hInt(c["maxRounds"]) == HuntModel.maxRounds && hNum(c["callProb"]) == HuntModel.callProb
+          && hNum(c["pickJitter"]) == HuntModel.pickJitter && hInt(c["pileupMin"]) == HuntModel.pileupMin
+          && hNum(c["offsetMinHz"]) == HuntModel.offsetMinHz && hNum(c["offsetMaxHz"]) == HuntModel.offsetMaxHz)
+    check("hunt: prefixes and states", (fx["prefixes"] as? [String]) == HuntModel.prefixes && (fx["states"] as? [String]) == HuntModel.states)
+    check("hunt: type weights",
+          hRows(fx["typeWeights"]).map { "\(hStr($0["type"]))=\(hInt($0["weight"]))" }
+          == HuntType.allCases.map { "\($0.rawValue)=\($0.weight)" })
+    let presets = fx["presets"] as? [String: Any] ?? [:]
+    check("hunt: defaults and presets",
+          hConfig(fx["defaults"] as? [String: Any]) == HuntConfig()
+          && hConfig(presets["easy"] as? [String: Any]) == HuntConfig.easy
+          && hConfig(presets["medium"] as? [String: Any]) == HuntConfig.medium
+          && hConfig(presets["hard"] as? [String: Any]) == HuntConfig.hard)
+
+    var rngU64OK = true, rngDoublesOK = true, rngIntsOK = true, rngRangesOK = true
+    // Integers and ints are compared exactly. The doubles are derived from the
+    // exact 64-bit words, so a wrong generator moves them by far more than the
+    // 1e-12 allowed here, which only absorbs how Foundation parses long decimals.
+    func hNear(_ a: Double, _ b: Double) -> Bool { abs(a - b) <= 1e-12 * max(1.0, abs(b)) }
+    for r in hRows(fx["rng"]) {
+        let seed = UInt64(hInt(r["seed"]))
+        var g = HuntRandom(seed: seed)
+        let u = (0..<3).map { _ in String(g.next64()) }
+        if u != (r["u64"] as? [String] ?? []) { rngU64OK = false }
+        var d = HuntRandom(seed: seed)
+        let wantD = hDoubles(r["doubles"])
+        let gotD = wantD.map { _ in d.nextDouble() }
+        if wantD.isEmpty || !zip(gotD, wantD).allSatisfy({ hNear($0, $1) }) { rngDoublesOK = false }
+        var n = HuntRandom(seed: seed)
+        let ints = (0..<5).map { _ in n.nextInt(0, 9) }
+        if ints != ((r["ints0to9"] as? [NSNumber]) ?? []).map(\.intValue) { rngIntsOK = false }
+        var rg = HuntRandom(seed: seed)
+        let wantR = hDoubles(r["ranges"])
+        let gotR = wantR.map { _ in rg.range(-250, 250) }
+        if wantR.isEmpty || !zip(gotR, wantR).allSatisfy({ hNear($0, $1) }) { rngRangesOK = false }
+    }
+    check("hunt: SplitMix64 64-bit words", rngU64OK)
+    check("hunt: random source doubles", rngDoublesOK)
+    check("hunt: random source ints 0...9", rngIntsOK)
+    check("hunt: random source ranges", rngRangesOK)
+
+    var spansOK = true
+    for s in hRows(fx["spans"]) {
+        let text = hStr(s["text"])
+        let spans = HuntModel.charSpans(text, wpm: hNum(s["wpm"]), start: hNum(s["start"]))
+        let starts = hDoubles(s["starts"]), ends = hDoubles(s["ends"])
+        if spans.map({ String($0.ch) }).joined() != (s["chars"] as? [String] ?? []).joined() { spansOK = false }
+        for (i, sp) in spans.enumerated() where i < starts.count {
+            if !hClose(sp.start, starts[i]) || !hClose(sp.end, ends[i]) { spansOK = false }
+        }
+        if !hClose(HuntModel.txEnd(text, wpm: hNum(s["wpm"]), start: hNum(s["start"])), hNum(s["end"])) { spansOK = false }
+    }
+    check("hunt: character timing", spansOK)
+    check("hunt: pitch separation", hRows(fx["sep"]).allSatisfy { hClose(HuntModel.sep(hNum($0["diffHz"])), hNum($0["sep"])) })
+    check("hunt: copy odds", hRows(fx["odds"]).allSatisfy { o in
+        let others = hRows(o["others"]).map { HuntModel.Other(overlap: hNum($0["overlap"]), level: hNum($0["level"]), diffHz: hNum($0["diffHz"])) }
+        return hClose(HuntModel.oddsFor(level: hNum(o["level"]), qrn: hNum(o["qrn"]), others: others), hNum(o["odds"]))
+    })
+    var decodeOK = true
+    for d in hRows(fx["decode"]) {
+        let txs = hRows(d["txs"]).enumerated().map { (i, t) in
+            HuntTx(who: i, text: hStr(t["text"]), wpm: hNum(t["wpm"]), start: hNum(t["start"]), level: hNum(t["level"]), pitch: hNum(t["pitch"]))
+        }
+        var rng = HuntRandom(seed: UInt64(hInt(d["seed"])))
+        let want = d["decoded"] as? [String] ?? []
+        let mins = hDoubles(d["minOdds"])
+        for i in 0..<txs.count {
+            let got = HuntModel.decode(i, txs, qrn: hNum(d["qrn"]), bust: hNum(d["bust"]), rng: &rng)
+            if got.text != want[i] || !hClose(got.minOdds, mins[i]) { decodeOK = false }
+        }
+    }
+    check("hunt: decoding with a seed", decodeOK)
+    check("hunt: merged copies", hRows(fx["merge"]).allSatisfy {
+        HuntModel.mergeCopies($0["copies"] as? [String] ?? []) == hStr($0["merged"]) })
+    check("hunt: candidates and runs", hRows(fx["candidates"]).allSatisfy {
+        let m = HuntModel.candidateOf(hStr($0["decoded"]))
+        return m == hStr($0["merged"]) && HuntModel.isCandidate(m) == hBool($0["isCandidate"]) && HuntModel.longestRun(m) == hStr($0["run"])
+    })
+    check("hunt: who answers a query", hRows(fx["queries"]).allSatisfy {
+        let q = hStr($0["query"]), call = hStr($0["call"])
+        return HuntModel.answers(q, call: call) == hBool($0["answers"])
+            && OperatingProcedure.partialMatches(q, call: call) == hBool($0["partial"])
+            && HuntModel.nearMissQuery(q, call: call) == hBool($0["nearMiss"])
+            && HuntModel.looseMatch(q, call: call) == hBool($0["loose"])
+    })
+    check("hunt: exchange and sign-off forms", hRows(fx["exchangeForms"]).allSatisfy {
+        let t = hStr($0["text"]), st = hStr($0["state"])
+        return HuntModel.exchangeForm(t, state: st, myCall: hStr($0["call"]), actCall: hStr($0["activator"])).rawValue == hStr($0["form"])
+            && HuntModel.exchangeAccepts(t, state: st) == hBool($0["accepts"])
+            && HuntModel.signoffForm(t, myCall: hStr($0["call"])) == hBool($0["signoff"])
+    })
+    var huntersOK = true
+    for h in hRows(fx["hunters"]) {
+        let cfg = hConfig(h["config"] as? [String: Any])
+        var rng = HuntRandom(seed: UInt64(hInt(h["seed"])))
+        var taken = [hStr(h["myCall"])]
+        for w in hRows(h["hunters"]) {
+            let got = HuntModel.makeHunter(cfg, &rng, id: hInt(w["id"]), taken: taken)
+            taken.append(got.call)
+            if got.call != hStr(w["call"]) || got.type.rawValue != hStr(w["type"]) || got.state != hStr(w["state"])
+                || !hClose(got.wpm, hNum(w["wpm"])) || !hClose(got.offset, hNum(w["offset"]))
+                || !hClose(got.levelAct, hNum(w["levelAct"])) || !hClose(got.levelYou, hNum(w["levelYou"]))
+                || got.qsb != hBool(w["qsb"]) || got.repeats != hInt(w["repeats"]) { huntersOK = false }
+        }
+    }
+    check("hunt: hunters are generated from the seed", huntersOK)
+    var gradeOK = true
+    for g in hRows(fx["grades"]) {
+        let c = g["ctx"] as? [String: Any] ?? [:]
+        let ctx = HuntGradeContext(
+            kind: HuntKind(rawValue: hStr(c["kind"])) ?? .calling, query: hStr(c["query"]),
+            queryForYou: hBool(c["queryForYou"]), pickedIsYou: hBool(c["pickedIsYou"]), pileup: hBool(c["pileup"]),
+            myCall: hStr(c["myCall"]), myState: hStr(c["myState"]), actCall: hStr(c["actCall"]),
+            pickedCall: c["pickedCall"] as? String, activatorText: hStr(c["activatorText"]))
+        var you: HuntGradeSend?
+        if let y = g["you"] as? [String: Any] {
+            you = HuntGradeSend(text: hStr(y["text"]), delay: hNum(y["delay"]), offsetHz: hNum(y["offsetHz"]), late: hBool(y["late"]))
+        }
+        let want = hRows(g["expected"]).map { "\(hStr($0["code"]))|\(hBool($0["good"]))|\(hStr($0["lesson"]))" }
+        let points = HuntModel.grade(ctx, you)
+        let got = points.map { "\($0.code)|\($0.good)|\($0.lesson.rawValue)" }
+        if got != want { gradeOK = false; print("    grade case failed: \(hStr(g["name"]))") }
+    }
+    check("hunt: the grader", gradeOK)
+
+    for f in hRows(sx["sessions"]) {
+        let name = hStr(f["name"])
+        let s = HuntSession(config: hConfig(f["config"] as? [String: Any]), seed: UInt64(hInt(f["seed"])),
+                            myCall: hStr(f["myCall"]), myState: hStr(f["myState"]))
+        let turns = hRows(f["turns"]), records = hRows(f["records"])
+        var ok = true
+        var i = 0
+        while !s.ended && i < turns.count {
+            let want = turns[i]["turn"] as? [String: Any] ?? [:]
+            let t = s.turn
+            let wv = hRows(want["voices"])
+            if t.kind.rawValue != hStr(want["kind"]) || t.text != hStr(want["text"]) || t.query != hStr(want["query"])
+                || t.round != hInt(want["round"]) || !hClose(t.wpm, hNum(want["wpm"])) || t.voices.count != wv.count {
+                ok = false; print("    \(name) window \(i): turn differs"); break
+            }
+            for (k, w) in wv.enumerated() {
+                let v = t.voices[k]
+                if v.id != hInt(w["id"]) || v.call != hStr(w["call"]) || v.type.rawValue != hStr(w["type"]) || v.text != hStr(w["text"])
+                    || !hClose(v.wpm, hNum(w["wpm"])) || !hClose(v.offsetHz, hNum(w["offsetHz"]))
+                    || !hClose(v.levelAct, hNum(w["levelAct"])) || !hClose(v.levelYou, hNum(w["levelYou"]))
+                    || v.qsb != hBool(w["qsb"]) || !hClose(v.delay, hNum(w["delay"])) { ok = false }
+            }
+            let you = hPolicy(hStr(f["policy"]), s)
+            let wantYou = (turns[i]["you"] as? [String: Any])?["text"] as? String
+            if wantYou != you?.text { ok = false }
+            s.respond(you)
+            let r = records[i]
+            let rec = s.records[i]
+            if hHeard(hRows(r["activatorHeard"])) != rec.activatorHeard.map({ "\($0.who)|\($0.sent)|\($0.decoded)" })
+                || hHeard(hRows(r["youHeard"])) != rec.youHeard.map({ "\($0.who)|\($0.sent)|\($0.decoded)" })
+                || hRows(r["grade"]).map({ "\(hStr($0["code"]))|\(hBool($0["good"]))|\(hStr($0["lesson"]))" })
+                    != rec.grade.map({ "\($0.code)|\($0.good)|\($0.lesson.rawValue)" }) {
+                ok = false; print("    \(name) window \(i): record differs")
+            }
+            if !ok { break }
+            i += 1
+        }
+        check("hunt: session '\(name)' plays out as pinned",
+              ok && i == turns.count && s.ended && s.round == hInt(f["rounds"]) && s.outcome?.rawValue == hStr(f["outcome"]))
+    }
+    let quit = HuntSession(config: .easy, seed: 22, myCall: "W1AW", myState: "WI")
+    quit.quit()
+    quit.respond(HuntYouSend(text: "W1AW", wpm: 20, delay: 0.5, offsetHz: 60))
+    check("hunt: an ended session ignores further sends", quit.ended && quit.records.isEmpty && quit.outcome == .quit)
+} else {
+    check("hunt: fixtures load", false)
+}
+
+// MARK: - Daily Comprehension (#353)
+//
+// fixtures/comprehension-bank.json and fixtures/comprehension-selection.json,
+// read by this harness AND by the android and desktop tests. The bank is
+// mirrored into ComprehensionBank.swift by tools/gen_comprehension_bank.py;
+// the first block below is what fails when the copy and the fixture drift.
+struct ComprehensionBankFixture: Decodable {
+    struct Item: Decodable {
+        let id, sentence, question, answer: String
+        let distractors: [String]
+        let kochLevel: Int
+    }
+    let items: [Item]
+}
+struct ComprehensionSelectionFixture: Decodable {
+    struct Rules: Decodable { let selectionStride, itemCount, optionCount: Int }
+    struct Case: Decodable {
+        struct Date: Decodable { let year, month, day: Int }
+        let date: Date
+        let puzzleNumber, itemIndex: Int
+        let itemId: String
+        let optionOrder: [Int]
+        let correctPosition: Int
+    }
+    struct Shuffle: Decodable { let puzzleNumber: Int; let optionOrder: [Int] }
+    let rules: Rules
+    let cases: [Case]
+    let shuffles: [Shuffle]
+    let cycle: [Int]
+}
+
+func loadFixtureData(_ name: String) -> Data? {
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+    return try? Data(contentsOf: root.appendingPathComponent("fixtures/\(name)"))
+}
+
+print("\nDaily Comprehension, against fixtures/comprehension-*.json:")
+if let data = loadFixtureData("comprehension-bank.json"),
+   let bank = try? JSONDecoder().decode(ComprehensionBankFixture.self, from: data) {
+    let mine = ComprehensionBank.items
+    check("the bundled bank equals fixtures/comprehension-bank.json (\(bank.items.count) items, same order)",
+          mine.count == bank.items.count
+            && zip(mine, bank.items).allSatisfy { m, f in
+                m.id == f.id && m.sentence == f.sentence && m.question == f.question
+                    && m.answer == f.answer && m.distractors == f.distractors && m.kochLevel == f.kochLevel
+            })
+    check("at least 120 items, ids unique, four distinct options each",
+          mine.count >= 120 && Set(mine.map(\.id)).count == mine.count
+            && mine.allSatisfy { Set([$0.answer] + $0.distractors).count == DailyComprehension.optionCount })
+    check("every sentence is upper-case letters and single spaces, and four to nine words",
+          mine.allSatisfy { item in
+              item.sentence.allSatisfy { ($0 >= "A" && $0 <= "Z") || $0 == " " }
+                && !item.sentence.contains("  ")
+                && (4...9).contains(item.sentence.split(separator: " ").count)
+          })
+    check("each kochLevel is 1 + the highest MorseCode.kochOrder position of a letter in the sentence",
+          mine.allSatisfy { item in
+              item.kochLevel == 1 + (item.sentence.filter { $0 != " " }
+                  .compactMap { MorseCode.kochOrder.firstIndex(of: $0) }.max() ?? -1)
+          })
+} else {
+    check("fixtures/comprehension-bank.json loads and decodes", false)
+}
+if let data = loadFixtureData("comprehension-selection.json"),
+   let fx = try? JSONDecoder().decode(ComprehensionSelectionFixture.self, from: data) {
+    check("rule constants match the fixture",
+          DailyComprehension.selectionStride == fx.rules.selectionStride
+            && DailyComprehension.optionCount == fx.rules.optionCount
+            && ComprehensionBank.items.count == fx.rules.itemCount)
+    check("the stride is coprime with the bank size: one full cycle visits every item once",
+          Set(fx.cycle).count == ComprehensionBank.items.count
+            && fx.cycle == (1...ComprehensionBank.items.count).map {
+                DailyComprehension.itemIndex(forPuzzle: $0, itemCount: ComprehensionBank.items.count)
+            })
+    var casesOK = !fx.cases.isEmpty
+    for c in fx.cases {
+        let n = DailyDit.puzzleNumber(year: c.date.year, month: c.date.month, day: c.date.day)
+        let index = DailyComprehension.itemIndex(forPuzzle: n, itemCount: ComprehensionBank.items.count)
+        let order = DailyComprehension.optionOrder(forPuzzle: n)
+        if n != c.puzzleNumber || index != c.itemIndex
+            || DailyComprehension.item(forPuzzle: n).id != c.itemId
+            || order != c.optionOrder
+            || DailyComprehension.options(forPuzzle: n).correctPosition != c.correctPosition {
+            casesOK = false
+            print("    mismatch for \(c.date.year)-\(c.date.month)-\(c.date.day)")
+        }
+    }
+    check("date -> puzzle -> item -> option order matches the fixture (\(fx.cases.count) dates)", casesOK)
+    check("option shuffles match the fixture (\(fx.shuffles.count) seeds)",
+          !fx.shuffles.isEmpty && fx.shuffles.allSatisfy { DailyComprehension.optionOrder(forPuzzle: $0.puzzleNumber) == $0.optionOrder })
+    var g = DailyComprehensionGame(puzzleNumber: 2)
+    g.noteListen(); g.noteListen()
+    let wrong = (g.correctPosition + 1) % DailyComprehension.optionCount
+    let tookWrong = g.choose(wrong)
+    let tookSecond = g.choose(g.correctPosition)
+    g.noteListen()
+    check("a game counts listens until answered, takes one answer, and then is closed",
+          tookWrong && !tookSecond && g.listens == 2 && g.isFinished && !g.isCorrect)
+} else {
+    check("fixtures/comprehension-selection.json loads and decodes", false)
+}
+
+// ---------------------------------------------------------------------------
+// Continue with the key after a miss (#352, #347), against
+// fixtures/continue-after-miss.json — read by this harness and by the android
+// and desktop ContinueAfterMissTest.
+struct ContinueAfterMissFixture: Decodable {
+    struct Step: Decodable {
+        let op: String
+        let target: String?
+        let text: String?
+        let atMs: Int64?
+        let expect: String?
+        let awaiting: Bool
+    }
+    struct Case: Decodable {
+        let name: String
+        let enabled: Bool
+        let steps: [Step]
+    }
+    let debounceMs: Int64
+    let cases: [Case]
+}
+func loadContinueAfterMissFixture() -> ContinueAfterMissFixture? {
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent()
+        .deletingLastPathComponent().deletingLastPathComponent()
+    guard let data = try? Data(contentsOf: root.appendingPathComponent("fixtures/continue-after-miss.json")) else { return nil }
+    return try? JSONDecoder().decode(ContinueAfterMissFixture.self, from: data)
+}
+print("\nContinue with the key after a miss (fixtures/continue-after-miss.json):")
+if let fx = loadContinueAfterMissFixture() {
+    check("debounce is \(fx.debounceMs) ms", ContinueAfterMiss.debounceMs == fx.debounceMs)
+    check("fixture has cases", !fx.cases.isEmpty)
+    for c in fx.cases {
+        var machine = ContinueAfterMiss()
+        var ok = true
+        for s in c.steps {
+            switch s.op {
+            case "miss": machine.miss(target: s.target ?? "", atMs: s.atMs ?? 0, enabled: c.enabled)
+            case "input":
+                if machine.input(s.text ?? "", atMs: s.atMs ?? 0).rawValue != s.expect { ok = false }
+            case "reset": machine.reset()
+            default: ok = false
+            }
+            if machine.isAwaiting != s.awaiting { ok = false }
+        }
+        check("continue after miss: \(c.name)", ok)
+    }
+} else {
+    check("fixtures/continue-after-miss.json loads and decodes", false)
+}
+
+// MARK: - UI contract: option lists
+//
+// Every enumerated option list the user picks from is the same, in the same
+// order, on every app. fixtures/keyer-modes.json (#348) and
+// fixtures/option-lists.json are read here, by the Kotlin
+// OptionListsFixtureTest on android and desktop, and by parity/check.py.
+// The harness can only see MorseKit; the app-target enums (
+// RevealMode, PracticeDuration ...) are checked statically by
+// parity/check.py; the Vail keyer modes live in MorseKit (VailKeyerMode, #348),
+// so their names are compared with the fixture here directly.
+print("\nOption lists (fixtures/keyer-modes.json, fixtures/option-lists.json):")
+func loadUIContractFixture(_ name: String) -> [String: Any]? {
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent()
+        .deletingLastPathComponent().deletingLastPathComponent()
+    guard let data = try? Data(contentsOf: root.appendingPathComponent("fixtures/" + name)) else { return nil }
+    return (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+}
+/// Lowercase letters and digits only: iambicA, IAMBIC_A and "Iambic A" agree.
+func foldOptionName(_ s: String) -> String {
+    String(s.lowercased().filter { $0.isLetter || $0.isNumber })
+}
+@MainActor
+func checkOptionList(_ fixture: [String: Any], _ key: String, _ cases: [String]) {
+    let want = ((fixture[key] as? [String]) ?? []).map(foldOptionName)
+    check("option list \(key) equals the fixture, in order",
+          !want.isEmpty && want == cases.map(foldOptionName))
+}
+if let fx = loadUIContractFixture("option-lists.json") {
+    checkOptionList(fx, "paddleModes", PaddleKeyer.Mode.allCases.map { String(describing: $0) })
+    checkOptionList(fx, "answerEntryModes", AnswerEntryMode.allCases.map { String(describing: $0) })
+    checkOptionList(fx, "answerEntryTiers", AnswerEntryTier.allCases.map { String(describing: $0) })
+    checkOptionList(fx, "qsoExchangeModes", QSOContestMode.allCases.map { String(describing: $0) })
+} else {
+    check("fixtures/option-lists.json loads and decodes", false)
+}
+if let kx = loadUIContractFixture("keyer-modes.json"), let want = kx["keyerModes"] as? [String] {
+    check("fixtures/keyer-modes.json lists the ten Vail keyer modes", want.count == 10)
+    // VailKeyerMode lives in MorseKit (#348), so the picker's own list is visible here.
+    check("VailKeyerMode displayNames equal the keyer-mode fixture, in order",
+          VailKeyerMode.allCases.map { $0.displayName } == want)
+} else {
+    check("fixtures/keyer-modes.json loads and decodes", false)
+}
+
+// ---------------------------------------------------------------------------
+// Leaderboard parity group (gap-lb-*): fixtures/gap-lb-*.json, read by this
+// harness AND by android and desktop JUnit. Data, not code.
+// ---------------------------------------------------------------------------
+
+func loadGapLbFixture(_ name: String) -> [String: Any]? {
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+    guard let data = try? Data(contentsOf: root.appendingPathComponent("fixtures/\(name)")),
+          let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+    return obj
+}
+
+// MARK: - Session clock fixture (parity audit row-03)
+//
+// fixtures/gap-timers-session-clock.json, consumed by this harness AND by the
+// android and desktop SessionClockTest. Shared *data*: the timer menu's add and
+// subtract arithmetic, derived from the documented menu rules.
+struct SessionClockFixture: Decodable {
+    struct Case: Decodable { let remaining: Int?; let seconds: Int; let expected: Int? }
+    let add: [Case]
+    let subtract: [Case]
+}
+
+func loadSessionClockFixture() -> SessionClockFixture? {
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+    let url = root.appendingPathComponent("fixtures/gap-timers-session-clock.json")
+    guard let data = try? Data(contentsOf: url) else { return nil }
+    return try? JSONDecoder().decode(SessionClockFixture.self, from: data)
+}
+
+print("\nHome Daily Dit card, against fixtures/gap-lb-daily-dit-card.json:")
+if let fx = loadGapLbFixture("gap-lb-daily-dit-card.json"), let cases = fx["cases"] as? [[String: Any]] {
+    check("daily-dit card fixture has 6 cases", cases.count == 6)
+    for c in cases {
+        let outcome: DailyDitOutcome = (c["outcome"] as? String) == "solved" ? .solved : .playing
+        let wpm = c["solvedWpm"] as? Double
+        let text = DailyDit.homeSubtitle(outcome: outcome,
+                                         puzzleNumber: c["puzzleNumber"] as? Int ?? -1,
+                                         solvedWpm: wpm,
+                                         guessesUsed: c["guessesUsed"] as? Int ?? -1,
+                                         listens: c["listens"] as? Int ?? -1)
+        check("daily-dit card: \(c["name"] as? String ?? "?")", text == c["expected"] as? String)
+    }
+} else {
+    check("fixtures/gap-lb-daily-dit-card.json loads and decodes", false)
+}
+
+print("\nLeaderboard display-name rule, against fixtures/gap-lb-display-name.json:")
+if let fx = loadGapLbFixture("gap-lb-display-name.json"), let cases = fx["cases"] as? [[String: Any]] {
+    check("display-name fixture has 23 cases", cases.count == 23)
+    for c in cases {
+        let raw = c["raw"] as? String ?? "?"
+        let problem = c["problem"] as? String
+        check("display-name problem: '\(raw)'", LeaderboardDisplayName.problem(with: raw) == problem)
+        check("display-name valid: '\(raw)'", LeaderboardDisplayName.isValid(raw) == (problem == nil))
+        if let want = c["normalized"] as? String {
+            check("display-name normalized: '\(raw)'", LeaderboardDisplayName.normalize(raw) == want)
+        }
+    }
+} else {
+    check("fixtures/gap-lb-display-name.json loads and decodes", false)
+}
+
+print("\nLeaderboard metric display, against fixtures/gap-lb-metric.json:")
+if let fx = loadGapLbFixture("gap-lb-metric.json"), let cases = fx["cases"] as? [[String: Any]] {
+    check("metric fixture has 8 cases", cases.count == 8)
+    for c in cases {
+        let metric = (c["metric"] as? NSNumber)?.doubleValue ?? -1
+        let body: [String: Any] = ["rank": 1, "displayName": "X", "metric": metric, "platform": "ios", "date": "2026-01-01"]
+        if let data = try? JSONSerialization.data(withJSONObject: body),
+           let row = try? JSONDecoder().decode(LeaderboardBoardRow.self, from: data) {
+            check("metric label \(metric)", row.metricLabel == c["expected"] as? String)
+        } else {
+            check("metric row decodes for \(metric)", false)
+        }
+    }
+} else {
+    check("fixtures/gap-lb-metric.json loads and decodes", false)
+}
+
+print("\nLeaderboard post-run line, against fixtures/gap-lb-result-line.json:")
+if let fx = loadGapLbFixture("gap-lb-result-line.json"), let cases = fx["cases"] as? [[String: Any]] {
+    check("result-line fixture has 6 cases", cases.count == 6)
+    for c in cases {
+        let reason = c["reason"] as? String ?? ""
+        let line: (headline: String, detail: String?)
+        switch c["kind"] as? String ?? "" {
+        case "pending": line = LeaderboardResultLine.pending()
+        case "posted":
+            // The model rounds the server's metric before it reaches the card.
+            let metric = Int(((c["metric"] as? NSNumber)?.doubleValue ?? 0).rounded())
+            line = LeaderboardResultLine.posted(rank: (c["rank"] as? NSNumber)?.intValue ?? -1, metric: metric,
+                                                correct: (c["correct"] as? NSNumber)?.intValue ?? -1,
+                                                total: (c["total"] as? NSNumber)?.intValue ?? -1,
+                                                personalBest: (c["personalBest"] as? NSNumber)?.boolValue ?? false)
+        case "refused": line = LeaderboardResultLine.refused(reason)
+        default: line = LeaderboardResultLine.unavailable(reason)
+        }
+        let name = c["name"] as? String ?? "?"
+        check("result line headline: \(name)", line.headline == c["headline"] as? String)
+        check("result line detail: \(name)", line.detail == c["detail"] as? String)
+    }
+} else {
+    check("fixtures/gap-lb-result-line.json loads and decodes", false)
+}
+
+// The Sending Analyzer's key merge and microphone state (parity rows 22-24),
+// against fixtures/gap-analyzer-merge.json and gap-analyzer-mic-state.json —
+// the same files the Kotlin GapAnalyzerTest reads on Android and desktop.
+print("\nSending Analyzer key merge and mic state (fixtures/gap-analyzer-*.json):")
+func loadGapFixtureObject(_ name: String) -> [String: Any]? {
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent()
+        .deletingLastPathComponent().deletingLastPathComponent()
+    guard let data = try? Data(contentsOf: root.appendingPathComponent("fixtures/\(name)")) else { return nil }
+    return (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+}
+if let fx = loadGapFixtureObject("gap-analyzer-merge.json"),
+   let cases = fx["cases"] as? [[String: Any]], !cases.isEmpty {
+    for c in cases {
+        let name = c["name"] as? String ?? "?"
+        let steps = c["steps"] as? [[String]] ?? []
+        let expect = c["expect"] as? [Any] ?? []
+        var merge = KeyMerge<String>()
+        var ok = !steps.isEmpty && steps.count == expect.count
+        if ok {
+            for (i, step) in steps.enumerated() where step.count == 2 {
+                let got: Bool?
+                switch step[1] {
+                case "down": got = merge.update(step[0], isDown: true)
+                case "up": got = merge.update(step[0], isDown: false)
+                case "releaseAll": got = merge.releaseAll()
+                default: got = nil; ok = false
+                }
+                let gotText: String? = got.map { $0 ? "down" : "up" }
+                let wantText = expect[i] as? String   // NSNull -> nil
+                if gotText != wantText { ok = false }
+            }
+        }
+        check("key merge: \(name)", ok)
+    }
+} else {
+    check("fixtures/gap-analyzer-merge.json loads and decodes", false)
+}
+if let fx = loadGapFixtureObject("gap-analyzer-mic-state.json"),
+   let cases = fx["cases"] as? [[String: Any]], !cases.isEmpty {
+    for c in cases {
+        let name = c["name"] as? String ?? "?"
+        let steps = c["steps"] as? [String] ?? []
+        let expect = c["expect"] as? [[Bool]] ?? []
+        var state = MicInputState()
+        var ok = !steps.isEmpty && steps.count == expect.count
+        if ok {
+            for (i, code) in steps.enumerated() {
+                guard let event = MicEvent(rawValue: code) else { ok = false; break }
+                state = state.after(event)
+                if expect[i].count != 2 || state.isListening != expect[i][0] || state.micDenied != expect[i][1] {
+                    ok = false
+                }
+            }
+        }
+        check("mic state: \(name)", ok)
+    }
+} else {
+    check("fixtures/gap-analyzer-mic-state.json loads and decodes", false)
+}
+
+print("\nSession clock (timer menu add / subtract), against fixtures/gap-timers-session-clock.json:")
+if let fx = loadSessionClockFixture() {
+    func intOrNil(_ v: TimeInterval?) -> Int? {
+        guard let v else { return nil }
+        return Int(v)
+    }
+    func secs(_ v: Int?) -> TimeInterval? {
+        guard let v else { return nil }
+        return TimeInterval(v)
+    }
+    var addOK = !fx.add.isEmpty
+    for c in fx.add where intOrNil(SessionClock.added(secs(c.remaining), by: TimeInterval(c.seconds))) != c.expected {
+        addOK = false
+        print("      ↳ add \(c.seconds) to \(String(describing: c.remaining)): fixture says \(String(describing: c.expected))")
+    }
+    check("adding time follows the fixture (\(fx.add.count) cases)", addOK)
+    var subOK = !fx.subtract.isEmpty
+    for c in fx.subtract where intOrNil(SessionClock.reduced(secs(c.remaining), by: TimeInterval(c.seconds))) != c.expected {
+        subOK = false
+        print("      ↳ subtract \(c.seconds) from \(String(describing: c.remaining)): fixture says \(String(describing: c.expected))")
+    }
+    check("subtracting time follows the fixture (\(fx.subtract.count) cases)", subOK)
+} else {
+    check("fixtures/gap-timers-session-clock.json loads and decodes", false)
+}
+
+// MARK: - Session row titles (gap copy-labels)
+//
+// fixtures/gap-docs-mode-titles.json: the title a Stats session row shows for
+// each mode. TrainingMode lives in the app target, out of the harness's reach,
+// so its `title` table is read from AppModel.swift's source text.
+print("\nSession row titles (fixtures/gap-docs-mode-titles.json):")
+if let tx = loadUIContractFixture("gap-docs-mode-titles.json"), let rows = tx["modes"] as? [[String: Any]] {
+    check("fixtures/gap-docs-mode-titles.json lists 26 modes", rows.count == 26)
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent()
+        .deletingLastPathComponent().deletingLastPathComponent()
+    if let text = try? String(contentsOf: root.appendingPathComponent("ios/MorseTrainerApp/AppModel.swift"),
+                              encoding: .utf8) {
+        var titles: [String: String] = [:]
+        var inTable = false
+        for line in text.split(separator: "\n", omittingEmptySubsequences: false) {
+            let t = line.trimmingCharacters(in: .whitespaces)
+            if t.hasPrefix("var title: String") { inTable = true; continue }
+            guard inTable else { continue }
+            if t.hasPrefix("var icon") { break }
+            if t.hasPrefix("case ."), let colon = t.firstIndex(of: ":"), let open = t.firstIndex(of: "\"") {
+                let rest = t[t.index(after: open)...]
+                guard let close = rest.firstIndex(of: "\"") else { continue }
+                let name = String(t[t.index(t.startIndex, offsetBy: 6)..<colon])
+                titles[name] = String(rest[..<close])
+            }
+        }
+        var allMatch = !titles.isEmpty
+        for row in rows {
+            let id = row["id"] as? String ?? ""
+            if titles[id] != (row["title"] as? String) { allMatch = false }
+        }
+        check("TrainingMode.title table equals the fixture's titles for all 26 modes", allMatch && titles.count == 26)
+    } else {
+        check("AppModel.swift is readable for the session-title check", false)
+    }
+} else {
+    check("fixtures/gap-docs-mode-titles.json loads and decodes", false)
+}
 
 print("\n────────────────────────────")
 if failures == 0 {

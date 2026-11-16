@@ -1,0 +1,87 @@
+{
+  "about": "Pure input/settings rules that must be the same on every app (parity gap rows 18, 19, 20). Derived from the stated rules, not captured from any implementation. Read by the Swift harness (MorseKitCheck) and by InputRulesFixtureTest on android and desktop.",
+
+  "sidetone": {
+    "about": "Row 18. The Side tone slider runs 300...1000 Hz in 10 Hz steps. A stored value outside the range is clamped into it on load; an in-range value is kept as stored.",
+    "min": 300, "max": 1000, "step": 10, "composeSteps": 69,
+    "load": [
+      { "stored": 600,  "value": 600 },
+      { "stored": 300,  "value": 300 },
+      { "stored": 1000, "value": 1000 },
+      { "stored": 299,  "value": 300 },
+      { "stored": 0,    "value": 300 },
+      { "stored": -50,  "value": 300 },
+      { "stored": 1001, "value": 1000 },
+      { "stored": 5000, "value": 1000 },
+      { "stored": 655,  "value": 655 }
+    ]
+  },
+
+  "toneSpread": {
+    "about": "Row 18. The Tone spread slider runs 0...500 Hz in 10 Hz steps; anything below 10 Hz reads 'Zero-beat', otherwise the label is the plus-or-minus width.",
+    "min": 0, "max": 500, "step": 10, "composeSteps": 49,
+    "labels": [
+      { "value": 0,    "zeroBeat": true },
+      { "value": 5,    "zeroBeat": true },
+      { "value": 9.9,  "zeroBeat": true },
+      { "value": 10,   "zeroBeat": false, "label": "±10 Hz" },
+      { "value": 250,  "zeroBeat": false, "label": "±250 Hz" },
+      { "value": 500,  "zeroBeat": false, "label": "±500 Hz" }
+    ],
+    "load": [
+      { "stored": 250,  "value": 250 },
+      { "stored": -10,  "value": 0 },
+      { "stored": 900,  "value": 500 }
+    ]
+  },
+
+  "pileupRanges": {
+    "about": "Row 19. Min speed, max speed, min wait and max wait are four independent settings: setting one never moves another, and a stored pair is loaded as stored (each value clamped to its own range only). When min is above max the engine uses the pair in sorted order (speed) or collapses the wait window onto min (wait).",
+    "speed": { "min": 12, "max": 60 },
+    "minWait": { "min": 0, "max": 3 },
+    "maxWait": { "min": 0, "max": 4 },
+    "clamp": [
+      { "field": "minSpeed", "input": 5,    "value": 12 },
+      { "field": "minSpeed", "input": 33,   "value": 33 },
+      { "field": "minSpeed", "input": 99,   "value": 60 },
+      { "field": "maxSpeed", "input": 5,    "value": 12 },
+      { "field": "maxSpeed", "input": 60,   "value": 60 },
+      { "field": "minWait",  "input": -1,   "value": 0 },
+      { "field": "minWait",  "input": 2.5,  "value": 2.5 },
+      { "field": "minWait",  "input": 3.5,  "value": 3 },
+      { "field": "maxWait",  "input": 4.5,  "value": 4 },
+      { "field": "maxWait",  "input": 0.5,  "value": 0.5 }
+    ],
+    "effectiveSpeed": [
+      { "min": 18, "max": 28, "lo": 18, "hi": 28 },
+      { "min": 50, "max": 28, "lo": 28, "hi": 50 },
+      { "min": 40, "max": 40, "lo": 40, "hi": 40 }
+    ],
+    "effectiveWait": [
+      { "min": 0.2, "max": 1.5, "lo": 0.2, "hi": 1.5 },
+      { "min": 2.5, "max": 1.0, "lo": 2.5, "hi": 2.5 },
+      { "min": 0,   "max": 0,   "lo": 0,   "hi": 0 }
+    ]
+  },
+
+  "callsign": {
+    "about": "Row 20. 'Your callsign' input is validated everywhere: upper-cased, only letters A-Z, digits and '/' kept, at most 12 characters, and a blank result is stored as W1AW.",
+    "placeholder": "W1AW",
+    "maxLength": 12,
+    "cases": [
+      { "input": "n9ho",             "stored": "N9HO" },
+      { "input": "  k1abc ",         "stored": "K1ABC" },
+      { "input": "W1AW/4",           "stored": "W1AW/4" },
+      { "input": "dl/n9ho/p",        "stored": "DL/N9HO/P" },
+      { "input": "a-b.c_d e!f",      "stored": "ABCDEF" },
+      { "input": "abcdefghijklmnop", "stored": "ABCDEFGHIJKL" },
+      { "input": "K1ABC/QRP/MM/9X",  "stored": "K1ABC/QRP/MM" },
+      { "input": "",                 "stored": "W1AW" },
+      { "input": "   ",              "stored": "W1AW" },
+      { "input": "!!!",              "stored": "W1AW" },
+      { "input": "é",                "stored": "W1AW" },
+      { "input": "n9hó",             "stored": "N9H" },
+      { "input": "w1aw",             "stored": "W1AW" }
+    ]
+  }
+}

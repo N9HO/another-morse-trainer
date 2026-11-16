@@ -35,10 +35,10 @@ enum PracticeReminders {
         center.removePendingNotificationRequests(withIdentifiers: [identifier])
 
         let content = UNMutableNotificationContent()
-        content.title = "Keep your streak alive"
+        content.title = "Time to practice Morse"
         var body = streak > 0
             ? "Keep your \(streak)-day streak alive — a few minutes of CW is all it takes."
-            : "A quick Morse session today keeps your practice streak going."
+            : "A few minutes of code practice keeps your ear sharp. Tap to start."
         if let buddySentence { body += " \(buddySentence)." }
         content.body = body
         content.sound = .default

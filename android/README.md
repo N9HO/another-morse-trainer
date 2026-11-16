@@ -36,14 +36,24 @@ the iOS app's navy/teal look.
   one-tap 40 WPM, no-Farnsworth preset sit on its setup sheet, and it
   remembers the style you last chose
 - **Confusion Drill**: targeted review of the pairs you mix up
-- **Head Copy**, **Type It**, **QRQ Speed**: copy in your head with
-  auto-repeats and a timed reveal, free-recall typing, and high-speed copy at
-  35 / 40 / 50 / 60 WPM on its own setting
+- **Head Copy**: copy in your head with auto-repeats and a timed reveal
+- **Type It / QRQ Speed**: free-recall typing, plus high-speed copy at
+  35 / 40 / 50 / 60 WPM on its own speed setting
 - **Rapid Fire**: a stream of call signs / words / number groups / states
   (optionally with ARRL/RAC Field Day sections) / contest serials (cut
   numbers optional) / names / power sent back to back at your chosen pace;
   type as you hear it, head-copy then type, key each one back, or just listen
   and review the transmitted list
+- **Daily Dit**: one five-letter word a day, sent in Morse and
+  the same for every player on a given date. Replay it as often as you like,
+  guess as many real five-letter words as it takes, each scored per letter
+  (right place, wrong place, not in the word); the code starts at the speed
+  you chose (up to 75 WPM) and steps down 5 WPM for every three listens and
+  every three wrong guesses, and your brag is the slowest speed you heard it
+  at before you got it. **Past puzzles** lists the last 30 days — copied,
+  not solved or missed — and opens any past day as practice, to catch up on
+  one you missed or replay one you copied; practice counts toward no streak
+  and never changes that day's result
 - **Games**: the six arcade games below sit behind one Games tile on the
   home screen (and under a Games heading in the mid-session mode switcher),
   so the main menu stays short as more games are added
@@ -90,14 +100,20 @@ the iOS app's navy/teal look.
   short words and callsigns that split into their characters when hit.
   Waves, lives, combos, three difficulties, a gentle speed ramp in hear-it
   mode, and every hit and miss feeds your stats
-- **Daily Dit**: one five-letter word a day, the same for everyone, sent in
-  Morse at a speed you pick (up to 75 WPM) and walked down 5 WPM for every
-  three listens and every three wrong guesses. Each guess is scored
-  letter by letter, and the result shares as a card with the slowest speed
-  you heard it at. **Past puzzles** lists the last 30 days — copied, not
-  solved or missed — and opens any past day as practice, to catch up on one
-  you missed or replay one you copied; practice counts toward no streak and
-  never changes that day's result
+- **Brass Knuckles Knock Out**: an arcade boxing game that teaches Morse,
+  created by Derick (KO6PBZ) for Kristen's (K5MME) HamCube PocketCW firmware
+  and sponsored by The Brass Knuckle Gang. The opponent sends a one- or
+  two-character tell; key it back before the punch lands to dodge, then every
+  character you send is a punch (dits jab, dahs hook, a mix throws a combo),
+  clean timing hits harder, and stars buy an uppercut. Eight fighters, four
+  stages, three rounds; each win unlocks the next fighter. GPL-3.0-or-later,
+  used with the authors' permission.
+- **The Daily DiDaaaaahDit**: a card on Home under Daily Dit. One short
+  sentence a day (about five words, the same for everyone on a date) is sent
+  in Morse at your own speed, then you answer a four-option question about it
+  (A-D) instead of copying it letter for letter. Replay as often as you like,
+  one answer a day; it keeps your daily streak going and is not ranked on the
+  leaderboard
 - **First Four**: just enough CW for a brand-new operator to hunt one POTA
   activator — enter your callsign and state, then hear and send your call,
   your state, ? and 73, and work through three short scenes: a busted call
@@ -118,7 +134,15 @@ the iOS app's navy/teal look.
   Kenwood, Elecraft and FlexRadio call them), plays the same pileup three
   ways (everyone zero beat, only you offset, everyone offset), lets you move
   an RIT and hear what it does, and drills tuning to zero beat by ear. "What
-  should you do?" deals ten situations from the lessons. Not a scored mode.
+  should you do?" deals ten situations from the lessons. A hunt simulator
+  puts you in a simulated POTA pileup: an activator works the hunters, who
+  include repeaters, tail-enders, zero-beaters and weak QRP stations, some
+  of whom you cannot hear; you call, answer a partial and send the exchange
+  and sign-off by keying, with an XIT control for your offset. Difficulty is
+  pileup size, speed, QSB, noise, hunters you cannot hear and how often the
+  activator mis-copies; a debrief sets what you heard beside what the
+  activator heard, each point linked to its lesson. Graded on procedure, not
+  speed, and not ranked. Not a scored mode.
   After WB0RLJ's "Advice for CW POTA Hunters" (linked, with his YouTube
   channel of daily activations) and the POTA CW Guide
 - **Pileup Runner**: a full QSO simulator: your callsign, eight exchange
@@ -136,20 +160,32 @@ the iOS app's navy/teal look.
   graded the ARRL VEC way: copy it, then fill in 10 blanks from your copy; pass
   on one minute of solid copy (25 / 65 / 100 in a row, numerals, punctuation and
   prosigns counting two) or 7 of 10 answers (random or a bundled passage)
-- **Sending Practice**: key it back (touch or MIDI key); quizzes can also be
-  answered by keying
+- **Sending Practice**: a dedicated hear-it, key-it-back mode on the adaptive
+  ladder, keyed on the on-screen key or a MIDI key, with live decode,
+  always-on replay, and a connected-MIDI-key readout
 - **On-screen paddles**: the on-screen key can be a straight key or a pair of
   touch paddles with a built-in Iambic A / Iambic B / Ultimatic keyer, dit and
   dah memory, and a left-handed swap — wherever you key on screen
+- **Continue with the key after a miss**: in the keyed-answer modes
+  (Characters with "Key answers", Sending Practice), keying the correct
+  answer again after a miss acts as Next, so you never leave the key; a wrong
+  re-key is ignored. Next still works, and Settings › Keys & Sending can turn
+  it off
 - **A hardware key wherever you type**: a Vail Adapter or other MIDI key
   also works in the Pileup Runner and Contest (what you key goes in the box
   and is sent when you stop keying; key CQ to call CQ), Type It, QRQ Speed,
   Daily Dit, Journey and Morse Defender's typed copy, decoded as you key
   with sidetone
-- **Repeater**: live CW over the Vail network with a server picker and
-  private-channel option, plus Vail Adapter support: MIDI key input *and*
-  output (keyer mode + speed, sidetone, opt-out RX piezo buzz), Bluetooth LE
-  MIDI keys, and unplug detection
+- **Vail repeater**: live CW over the [Vail](https://vail.woozle.org) network
+  with a server picker and private-channel option, plus Vail Adapter support:
+  MIDI key input *and* output (keyer modes, speed, sidetone, RX piezo buzz),
+  unplug detection, chat, and a signal timeline
+- **Bluetooth LE MIDI keys**: found by an in-app scan and paired from inside
+  the app, no system sheet needed (iOS pairs through the system MIDI sheet)
+- **Bluetooth keep-alive and band noise**: a near-silent floor (on by
+  default) that stops Bluetooth earbuds sleeping through the first character,
+  and a separate band-noise level to copy through (heard only while a mode,
+  game or lesson plays, with a short sample when the level is picked)
 - **Reference**: browsable, tap-to-hear chart of prosigns, Q-codes,
   abbreviations, ham lingo, cut numbers, and the full alphabet, with
   per-signal detail
@@ -172,6 +208,7 @@ the iOS app's navy/teal look.
 - **Voice answers**: speak your answer instead of tapping (microphone), with
   NATO/letter-name/digit-word matching, a "did you say…?" confirm-and-correct
   flow, and a learned per-user voice profile
+- **Answer by keying**: key the answer on a touch or hardware Morse key
 - **Keyboard-entry answers**: type the character or word you heard instead
   of picking it, in the choice quizzes, either always or as a progression
   step: each level starts at 4 choices, moves to 6, then to typing, and a
@@ -194,7 +231,8 @@ the iOS app's navy/teal look.
   by 5-WPM speed band, a shareable Brag Sheet, and personal bests including
   your best score in each arcade game, Contest, Pileup Runner and Rapid Fire
 - **Leaderboard**: an opt-in shared board across both apps for Rapid Fire,
-  Contest, Pileup Runner and the six arcade games, browsable by anyone, per
+  Contest, Pileup Runner and the seven arcade games (Brass Knuckles Knock Out
+  included: one transcript item per tell), browsable by anyone, per
   mode, from the Games sub-menu and from Progress without sharing. Off by
   default; turn it on in Settings › Leaderboard & Buddy with a display name, or from
   the one prompt offered the first time you start a game with sharing off
@@ -202,7 +240,10 @@ the iOS app's navy/teal look.
   (what was sent, what you answered) is graded by the server, which ranks
   the speed summed over the items you copied correctly, so a game's board
   number is not its on-screen score. Posting needs a genuine Play-installed
-  build (Play Integrity); a "Delete my scores" button removes everything
+  build (Play Integrity) on a device with Google Play services; without
+  them (LineageOS, Aurora installs) the app runs normally, every mode works,
+  scores stay local personal bests and Settings says in one line why sharing
+  and buddy pairing are off (#349); a "Delete my scores" button removes everything
   this install posted
 - **Buddy streak**: pair with up to ten people (on either app) and keep a
   separate streak with each: each day you both practice counts, a day
@@ -228,13 +269,11 @@ the iOS app's navy/teal look.
 - Timed practice sessions (1-30 min or open-ended) with mid-session timer
   controls and an end-of-session summary, and a mode switcher that jumps
   between drills without going home
+- A first-run question about how much Morse you already know, which seeds
+  the Characters ladder and unlocks the Journey that far
 - Daily practice reminders (streak-aware; inexact by a few minutes, see
   [PARITY.md](../PARITY.md))
-- **Settings**: character speed to 60 WPM, Farnsworth, sidetone pitch, a
-  Bluetooth keep-alive floor (on by default, so earbuds don't sleep through
-  the first character) and a separate band-noise level to copy through
-  (heard only while a mode, game or lesson plays, with a short sample when
-  the level is picked),
+- **Settings**: character speed to 60 WPM, Farnsworth, sidetone pitch,
   haptics, daily reminders, session length, custom word lists, punctuation
   opt-ins, and a slashed-zero display option
 - **Settings** grouped into eleven categories (Sound, Speed & Timing,

@@ -13,12 +13,12 @@ import Foundation
 
 // MARK: - Modes
 
-/// The nine ranked modes, by the id the server uses. Six of them ramp their
+/// The ten ranked modes, by the id the server uses. Seven of them ramp their
 /// speed within a run, so their transcript items carry their own `wpm`; the
 /// other three run at one fixed speed known from the run token.
 public enum LeaderboardMode: String, CaseIterable, Codable, Sendable, Identifiable {
     case rapidFire, contest, pileup
-    case invaders, galaga, defender, dungeon, frogger, asteroids
+    case invaders, galaga, defender, dungeon, frogger, asteroids, brassKnuckles
 
     public var id: String { rawValue }
 
@@ -27,7 +27,7 @@ public enum LeaderboardMode: String, CaseIterable, Codable, Sendable, Identifiab
     public var ramps: Bool {
         switch self {
         case .rapidFire, .contest, .pileup: return false
-        case .invaders, .galaga, .defender, .dungeon, .frogger, .asteroids: return true
+        case .invaders, .galaga, .defender, .dungeon, .frogger, .asteroids, .brassKnuckles: return true
         }
     }
 
@@ -55,6 +55,7 @@ public enum LeaderboardMode: String, CaseIterable, Codable, Sendable, Identifiab
         case .dungeon:    return "CW Dungeon"
         case .frogger:    return "CW Frogger"
         case .asteroids:  return "CW Asteroids"
+        case .brassKnuckles: return "Brass Knuckles"
         }
     }
 }
@@ -196,6 +197,34 @@ public enum LeaderboardDisplayName {
     static func isAlphanumeric(_ ch: Character) -> Bool {
         guard let a = ch.asciiValue else { return false }
         return (a >= 0x41 && a <= 0x5A) || (a >= 0x30 && a <= 0x39)
+    }
+}
+
+// MARK: - Result line
+
+/// The summary card's words for a run's leaderboard verdict (gap row-07),
+/// pinned by `fixtures/gap-lb-result-line.json` and mirrored by Android's
+/// `Leaderboard.resultLine`: a headline, then a detail line. A server verdict
+/// on the run is "not ranked"; the device or network getting in the way is
+/// "not posted".
+public enum LeaderboardResultLine {
+    public static func pending() -> (headline: String, detail: String?) {
+        ("Leaderboard: posting…", nil)
+    }
+
+    public static func posted(rank: Int, metric: Int, correct: Int, total: Int,
+                              personalBest: Bool) -> (headline: String, detail: String?) {
+        ("Leaderboard: #\(rank) · \(metric)",
+         personalBest ? "New personal best · \(correct)/\(total) graded correct"
+                      : "\(correct)/\(total) graded correct")
+    }
+
+    public static func refused(_ reason: String) -> (headline: String, detail: String?) {
+        ("Leaderboard: not ranked", reason)
+    }
+
+    public static func unavailable(_ reason: String) -> (headline: String, detail: String?) {
+        ("Leaderboard: not posted", reason)
     }
 }
 

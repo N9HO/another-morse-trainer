@@ -174,7 +174,7 @@ object BuddyClient {
      * section, where the user is looking at the answer.
      */
     fun refreshIfStale(evenIfUnpaired: Boolean = false) {
-        if (!LeaderboardClient.isInitialized || !LeaderboardClient.isConfigured) return
+        if (!LeaderboardClient.isInitialized || !LeaderboardClient.canAttest) return
         if (displayName() == null) return
         val status = Settings.buddyStatus
         val now = System.currentTimeMillis()
@@ -207,7 +207,7 @@ object BuddyClient {
      *   which day it was.
      */
     fun reportPracticeDay(today: LocalDate = LocalDate.now()) {
-        if (!LeaderboardClient.isInitialized || !LeaderboardClient.isConfigured) return
+        if (!LeaderboardClient.isInitialized || !LeaderboardClient.canAttest) return
         val status = Settings.buddyStatus ?: return
         if (!status.paired) return
         val day = Buddy.dayLabel(today)

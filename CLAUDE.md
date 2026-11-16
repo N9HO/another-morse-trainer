@@ -11,6 +11,9 @@ that span directories.
                 forked from android/ (its own Gradle root; see
                 docs/desktop-design.md)
     fixtures/   Shared test *data*, read by every tree. Not code — see below.
+    parity/     The parity guard: manifest.json (every feature, per-platform
+                status), per-tree extraction scripts and check.py. Python 3,
+                stdlib only. Reads source text; builds nothing.
     docs/       Design notes for work that is decided but not yet built.
                 Read the relevant one before starting such a feature;
                 `docs/high-scores-design.md` covers scorekeeping, personal
@@ -102,6 +105,36 @@ What this means when you make a change:
 - **Divergence in what is documented counts too.** The three app READMEs list
   the same features; a feature added to one list and not the others is a gap
   in the same sense.
+
+## The parity guard: three steps to add a feature
+
+Parity is no longer kept by manual audits. `python3 parity/check.py` (CI job
+*Parity check*, awaited by the merge gate) compares the three trees with
+`parity/manifest.json` and fails on any unrecorded drift: a mode, route,
+screen file, setting, option list, README heading or platform status that
+differs between iOS, Android and desktop without a manifest record that has a
+reason and a `PARITY.md` anchor. `--self-test` proves it fails on drifted data;
+`--gaps` lists the open gaps the manifest records.
+
+To add (or remove, or limit) a feature:
+
+1. **Edit all three trees**, one edit each, in that tree's language and idiom.
+2. **Add the manifest entry** in `parity/manifest.json`: the mode / route /
+   screen files / other files it claims per tree, its README heading per tree,
+   and a status per platform. A platform that will not get it is `limited` or
+   `absent` with a `notes` entry (reason + `PARITY.md#anchor`; a platform
+   limitation also gets an `ex-` row in `PARITY.md`). A new enumerated setting
+   also gets its list in `fixtures/option-lists.json` (and a test case in the
+   three trees) and its enum location in `parity/sources.json`.
+3. **Run `python3 parity/check.py`.** It must exit 0. Adding a mode to one
+   tree without the manifest entry fails with `unregistered:modes:<tree>:<name>`.
+
+A closed gap is deleted from `gaps` in the same PR (the check fails on a gap
+the source no longer shows). The check reads names and lists, not behaviour:
+ranges, defaults, layouts and scoring still need a shared fixture
+(`fixtures/`) or a reader. When it cannot find what it is told to look for
+(an enum renamed, the settings catalog reformatted) it fails loudly with
+exit 2; fix the pattern in `parity/_extract.py` rather than loosening it.
 
 ## The guide goes with the app
 
@@ -291,6 +324,11 @@ Standing traps, all deliberate:
   at 10x Linux billing.
 - Changing a path filter? Remember a *skipped* job reports no status, so a
   path-filtered job must never be a required status check on `main`.
+- `parity.yml` (the parity check, Linux, Python only) is filtered to `ios/**`,
+  `android/**`, `desktop/**`, `fixtures/**`, `parity/**`, `PARITY.md` and
+  itself. Like the platform builds it is required only through the merge gate,
+  which waits for "Parity check" on any PR whose diff matches that same list
+  (section 2 of `merge-gate.yml`); keep the two in step.
 
 ## Commit-message issue references
 

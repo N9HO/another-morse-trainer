@@ -30,7 +30,7 @@ object SyncWire {
 
     /**
      * The canonical mode id (the iOS `TrainingMode` raw value) for every mode
-     * string this port passes to `Stats.record`. All 25, pinned both ways by
+     * string this port passes to `Stats.record`. All 26, pinned both ways by
      * the fixture's `modeIds.kotlin`.
      */
     val modeIds: Map<String, String> = linkedMapOf(
@@ -58,7 +58,8 @@ object SyncWire {
         "Morse Defender" to "defender",
         "CW Dungeon" to "dungeon",
         "CW Frogger" to "frogger",
-        "CW Asteroids" to "asteroids"
+        "CW Asteroids" to "asteroids",
+        "Brass Knuckles" to "brassKnuckles"
     )
 
     private val localModes: Map<String, String> = modeIds.entries.associate { (title, id) -> id to title }

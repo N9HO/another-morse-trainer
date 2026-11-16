@@ -484,3 +484,46 @@ public final class AsteroidsGame {
         return nil
     }
 }
+
+/// What a tap on the Asteroids play field landed on (Copy mode).
+public enum AsteroidsTap: Equatable, Sendable {
+    /// The ship at the centre: replay the cue.
+    case ship
+    /// The asteroid with this id.
+    case rock(Int)
+    /// Empty space: nothing happens.
+    case empty
+}
+
+/// Where a tap lands on the play field (#350), as pure geometry so the harness
+/// can pin it. Distances are in points (dp); `density` scales them to the
+/// units of the tap. The ship wins inside `shipReachDp`; otherwise the nearest
+/// asteroid whose centre is within its drawn radius + `reachPaddingDp` is
+/// tapped (the first in field order on an exact tie). Pinned by
+/// `fixtures/asteroid-hit-test.json`.
+public enum AsteroidsHitTest {
+    public static let shipReachDp: Double = 30
+    public static let reachPaddingDp: Double = 14
+
+    /// Drawn radius for a label: single characters small, fragments smaller,
+    /// words wider for their letters.
+    public static func radiusDp(_ a: Asteroid) -> Double {
+        if a.isFragment { return 15 }
+        if a.label.count == 1 { return 19 }
+        return 16 + 6 * Double(a.label.count)
+    }
+
+    public static func target(x: Double, y: Double, width: Double, height: Double,
+                              density: Double, field: [Asteroid]) -> AsteroidsTap {
+        if hypot(x - width / 2, y - height / 2) <= shipReachDp * density { return .ship }
+        var best: (id: Int, d: Double)?
+        for a in field {
+            let d = hypot(x - a.x * width, y - a.y * height)
+            if d <= (radiusDp(a) + reachPaddingDp) * density, best == nil || d < best!.d {
+                best = (a.id, d)
+            }
+        }
+        if let best { return .rock(best.id) }
+        return .empty
+    }
+}

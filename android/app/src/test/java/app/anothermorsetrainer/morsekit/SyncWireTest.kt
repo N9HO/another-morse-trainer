@@ -104,11 +104,11 @@ class SyncWireTest {
     // ---- Mode ids ----
 
     @Test
-    fun `all 25 mode strings map to their canonical ids and back`() {
+    fun `all 26 mode strings map to their canonical ids and back`() {
         val ids = fixture.getJSONObject("modeIds")
         val table = ids.getJSONObject("kotlin")
         val canonical = strings(ids.getJSONArray("canonical"))
-        assertEquals(25, table.length())
+        assertEquals(26, table.length())
         assertEquals(table.keyNames(), SyncModes.wireIds.keys)
         for (local in table.keyNames()) {
             val wire = table.getString(local)

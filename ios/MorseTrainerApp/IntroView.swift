@@ -21,9 +21,13 @@ struct IntroView: View {
     @State private var pendingGameSetup = false
     @State private var showingSettings = false
     @State private var showingStats = false
+    @State private var showingBrag = false
     @State private var showingReference = false
     @State private var showingStartHere = false
     @State private var showingDailyDit = false
+    /// Daily Comprehension (#353): the card beside Daily Dit.
+    @State private var showingDailyComprehension = false
+    @ObservedObject private var dailyComprehension = DailyComprehensionStore.shared
     /// First Four (#265): the guided path to a first POTA contact.
     @State private var showingFirstFour = false
     @State private var firstFourProgress = FirstFourStore.load()
@@ -58,7 +62,10 @@ struct IntroView: View {
                         // sharing its height, so First Four is not a thin
                         // strip across the 960 pt column.
                         HStack(alignment: .top, spacing: 14) {
-                            dailyDitCard
+                            VStack(spacing: 14) {
+                                dailyDitCard
+                                dailyComprehensionCard
+                            }
                             VStack(spacing: 14) {
                                 startHereButton
                                 firstFourCard
@@ -68,6 +75,8 @@ struct IntroView: View {
                         .fixedSize(horizontal: false, vertical: true)
                     } else {
                         dailyDitCard
+
+                        dailyComprehensionCard
 
                         startHereButton
 
@@ -109,6 +118,12 @@ struct IntroView: View {
         .sheet(isPresented: $showingStats) {
             StatsView().environmentObject(model).pageSizedSheet()
         }
+        // Personal bests, lifetime totals and sharing from Home (gap row-13);
+        // Android's Progress screen carries the same, and the session toolbar
+        // opens this same sheet.
+        .sheet(isPresented: $showingBrag) {
+            BragSheetView().environmentObject(model)
+        }
         .sheet(isPresented: $showingReference) {
             ReferenceView().environmentObject(model).pageSizedSheet()
         }
@@ -117,6 +132,9 @@ struct IntroView: View {
         }
         .sheet(isPresented: $showingDailyDit) {
             DailyDitView().environmentObject(model).pageSizedSheet()
+        }
+        .sheet(isPresented: $showingDailyComprehension) {
+            DailyComprehensionView().environmentObject(model).pageSizedSheet()
         }
         .sheet(isPresented: $showingFirstFour, onDismiss: {
             firstFourProgress = FirstFourStore.load()
@@ -150,6 +168,7 @@ struct IntroView: View {
         }
         .onAppear {
             model.refreshDailyDit()
+            dailyComprehension.refresh()
             firstFourProgress = FirstFourStore.load()
             operatingProgress = OperatingProcedureStore.load()
             // Onboarding's "first POTA contact" button (#265) lands here.
@@ -167,7 +186,10 @@ struct IntroView: View {
         // already on screen. Without this the card would still be advertising
         // yesterday's puzzle until something else redrew it.
         .onChange(of: scenePhase) { phase in
-            if phase == .active { model.refreshDailyDit() }
+            if phase == .active {
+                model.refreshDailyDit()
+                dailyComprehension.refresh()
+            }
         }
     }
 
@@ -232,6 +254,13 @@ struct IntroView: View {
                     .padding(8)
             }
             .accessibilityLabel("Sending analyzer — send a text and see your accuracy and spacing")
+            Button { showingBrag = true } label: {
+                Image(systemName: "rosette")
+                    .font(.title3)
+                    .foregroundStyle(Theme.teal)
+                    .padding(8)
+            }
+            .accessibilityLabel("Brag sheet — personal bests, lifetime totals and sharing")
             Button { showingStats = true } label: {
                 Image(systemName: "chart.bar")
                     .font(.title3)
@@ -368,20 +397,48 @@ struct IntroView: View {
         .accessibilityLabel("Daily Dit. \(dailyDitSubtitle)")
     }
 
+    /// Daily Comprehension (#353): the day's sentence in Morse and a question
+    /// about it. Under Daily Dit, because it expires the same way.
+    private var dailyComprehensionCard: some View {
+        let game = dailyComprehension.game
+        let done = game.isFinished
+        let subtitle = done
+            ? "#\(game.puzzleNumber) \(game.isCorrect ? "answered correctly" : "answered") · \(game.listens) \(game.listens == 1 ? "listen" : "listens")"
+            : "Today's sentence in Morse, then a question about it"
+        return Button { showingDailyComprehension = true } label: {
+            HStack(spacing: 12) {
+                Image(systemName: done ? "checkmark.seal.fill" : "text.bubble")
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(done ? Theme.tealBright : Theme.teal)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("The Daily DiDaaaaahDit")
+                        .font(.subheadline.weight(.semibold))
+                    Text(subtitle)
+                        .font(.caption)
+                        .foregroundStyle(Theme.textSecondary)
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Theme.textSecondary)
+            }
+            .frame(maxHeight: .infinity)
+            .foregroundStyle(.white)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(Theme.navyElevated, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(Theme.tealBright.opacity(done ? 0.35 : 0.7), lineWidth: 1.5))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("The Daily DiDaaaaahDit. \(subtitle)")
+    }
+
     private var dailyDitSubtitle: String {
         let game = model.dailyDit
-        let counts = DailyDit.count(game.guessesUsed, "guess", "guesses")
-            + " · " + DailyDit.count(game.listens, "listen", "listens")
-        switch game.outcome {
-        case .solved:
-            let at = game.solvedWpm.map { "at \(DailyDit.format(wpm: $0)) WPM · " } ?? ""
-            return "#\(game.puzzleNumber) copied \(at)\(counts)"
-        case .playing where game.guessesUsed > 0 || game.listens > 0:
-            // A listen starts the day as much as a guess does (#168).
-            return "#\(game.puzzleNumber) · \(counts) so far"
-        case .playing:
-            return "Today's word in Morse — your speed, up to \(Int(DailyDit.startingSpeeds.max() ?? 75)) WPM"
-        }
+        return DailyDit.homeSubtitle(outcome: game.outcome, puzzleNumber: game.puzzleNumber,
+                                     solvedWpm: game.solvedWpm, guessesUsed: game.guessesUsed,
+                                     listens: game.listens)
     }
 
     /// The newcomer's way in (#96): the site's guide explains how to begin and
@@ -1075,7 +1132,7 @@ private struct ModeOptionsCard: View {
             inlinePicker(title: "Pace between items",
                          selection: rapidFirePaceBinding) { (p: RapidFirePace) in p.label }
 
-            Text("Speed, Farnsworth, and side tone are in Settings.")
+            Text("Character speed, Farnsworth, and sidetone pitch are in Settings.")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
         }
@@ -1155,7 +1212,7 @@ private struct ModeOptionsCard: View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Your callsign and name").font(.subheadline)
             HStack(spacing: 8) {
-                cw77StationField("Callsign", prompt: "W1AW", text: $model.settings.qso.myCall)
+                cw77CallsignField
                 cw77StationField("Name", prompt: "Optional", text: $model.settings.qso.myName)
             }
             Text("Once either is filled in, a switch below can add them to the CW 77 set. They're your station everywhere in the app, the same fields as Settings \u{203A} QSO & Pileups \u{203A} Your Station.")
@@ -1176,6 +1233,23 @@ private struct ModeOptionsCard: View {
             }
             .tint(Theme.teal)
         }
+    }
+
+    /// CW 77's callsign field: the same caption-over-entry look as the other
+    /// Your Station fields, with the validated callsign entry inside.
+    private var cw77CallsignField: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Callsign")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(Theme.textSecondary)
+            CallsignEntry(call: $model.settings.qso.myCall)
+                .font(.system(.body, design: .monospaced))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+                .background(Theme.navyRaised, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .accessibilityLabel("Your callsign")
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     /// One of CW 77's Your Station fields: a caption over a monospaced,

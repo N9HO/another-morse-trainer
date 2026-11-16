@@ -8,6 +8,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.content.edit
+import app.anothermorsetrainer.morsekit.InputRules
 import app.anothermorsetrainer.morsekit.AnswerEntryMode
 import app.anothermorsetrainer.morsekit.Buddy
 import app.anothermorsetrainer.morsekit.BuddyEntry
@@ -288,6 +289,12 @@ object Settings {
     /** Dah on the left, dit on the right — for a left-handed operator. */
     var paddleSwap by mutableStateOf(false)
         private set
+    /**
+     * After a miss in a keyed-answer mode, keying the correct answer again acts
+     * as Next (#352, #347). Next and a tap still work. See [ContinueAfterMiss].
+     */
+    var continueAfterMiss by mutableStateOf(true)
+        private set
 
     // ---- Short Stories (fables / serials / news) ----
 
@@ -527,7 +534,7 @@ object Settings {
             effectiveWpm = if (storedEffective != null && storedEffective < characterWpm) storedEffective else 18.0
         }
         effectiveWpm = effectiveWpm.coerceIn(MIN_EFFECTIVE_WPM, characterWpm)
-        sidetoneHz = prefs.getFloat("sidetone", 600f).toDouble()
+        sidetoneHz = InputRules.clampSidetone(prefs.getFloat("sidetone", 600f).toDouble())
         var storedNoise = runCatching {
             BackgroundNoiseLevel.valueOf(prefs.getString("backgroundNoise", null) ?: "KEEP_ALIVE")
         }.getOrDefault(BackgroundNoiseLevel.KEEP_ALIVE)
@@ -578,6 +585,7 @@ object Settings {
             .getOrDefault(OnScreenKeyType.STRAIGHT)
         paddleMode = PaddleKeyer.Mode.fromId(prefs.getString("paddleMode", null))
         paddleSwap = prefs.getBoolean("paddleSwap", false)
+        continueAfterMiss = prefs.getBoolean("continueAfterMiss", true)
         storyContent = runCatching { StoryContent.valueOf(prefs.getString("storyContent", null) ?: "FABLES") }
             .getOrDefault(StoryContent.FABLES)
         storySerialId = prefs.getString("storySerialId", "") ?: ""
@@ -733,7 +741,7 @@ object Settings {
     }
 
     fun updateSidetoneHz(value: Double) {
-        sidetoneHz = value.coerceIn(300.0, 1000.0)
+        sidetoneHz = InputRules.clampSidetone(value)
         persist()
     }
 
@@ -816,6 +824,11 @@ object Settings {
 
     fun updatePaddleSwap(value: Boolean) {
         paddleSwap = value
+        persist()
+    }
+
+    fun updateContinueAfterMiss(value: Boolean) {
+        continueAfterMiss = value
         persist()
     }
 
@@ -1274,6 +1287,7 @@ object Settings {
             putString("onScreenKey", onScreenKey.name)
             putString("paddleMode", paddleMode.id)
             putBoolean("paddleSwap", paddleSwap)
+            putBoolean("continueAfterMiss", continueAfterMiss)
             putString("storyContent", storyContent.name)
             putString("storySerialId", storySerialId)
             putString("newsSource", newsSource.name)

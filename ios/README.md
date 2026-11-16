@@ -46,6 +46,16 @@ testers, bug reports and feature chat live on
   with ARRL/RAC Field Day sections) / contest serials (cut numbers optional)
   / names / power, sent back to back at your pace; type, head-copy, key each
   one back, or just listen
+- **Daily Dit**: one five-letter word a day, sent in Morse and
+  the same for every player on a given date. Replay it as often as you like,
+  guess as many real five-letter words as it takes, each scored per letter
+  (right place, wrong place, not in the word); the code starts at the speed
+  you chose (up to 75 WPM) and steps down 5 WPM for every three listens and
+  every three wrong guesses, and your brag is the slowest speed you heard it
+  at before you got it. **Past puzzles** lists the last 30 days — copied,
+  not solved or missed — and opens any past day as practice, to catch up on
+  one you missed or replay one you copied; practice counts toward no streak
+  and never changes that day's result
 - **Games**: the six arcade games below sit behind one Games tile on the
   home screen (and under a Games heading in the mid-session mode switcher),
   so the main menu stays short as more games are added
@@ -92,14 +102,20 @@ testers, bug reports and feature chat live on
   short words and callsigns that split into their characters when hit.
   Waves, lives, combos, three difficulties, a gentle speed ramp in hear-it
   mode, and every hit and miss feeds your stats
-- **Daily Dit**: one five-letter word a day, the same for everyone, sent in
-  Morse at a speed you pick (up to 75 WPM) and walked down 5 WPM for every
-  three listens and every three wrong guesses. Each guess is scored
-  letter by letter, and the result shares as a card with the slowest speed
-  you heard it at. **Past puzzles** lists the last 30 days — copied, not
-  solved or missed — and opens any past day as practice, to catch up on one
-  you missed or replay one you copied; practice counts toward no streak and
-  never changes that day's result
+- **Brass Knuckles Knock Out**: an arcade boxing game that teaches Morse,
+  created by Derick (KO6PBZ) for Kristen's (K5MME) HamCube PocketCW firmware
+  and sponsored by The Brass Knuckle Gang. The opponent sends a one- or
+  two-character tell; key it back before the punch lands to dodge, then every
+  character you send is a punch (dits jab, dahs hook, a mix throws a combo),
+  clean timing hits harder, and stars buy an uppercut. Eight fighters, four
+  stages, three rounds; each win unlocks the next fighter. GPL-3.0-or-later,
+  used with the authors' permission.
+- **The Daily DiDaaaaahDit**: a card on Home under Daily Dit. One short
+  sentence a day (about five words, the same for everyone on a date) is sent
+  in Morse at your own speed, then you answer a four-option question about it
+  (A-D) instead of copying it letter for letter. Replay as often as you like,
+  one answer a day; it keeps your daily streak going and is not ranked on the
+  leaderboard
 - **First Four**: just enough CW for a brand-new operator to hunt one POTA
   activator — enter your callsign and state, then hear and send your call,
   your state, ? and 73, and work through three short scenes: a busted call
@@ -120,7 +136,15 @@ testers, bug reports and feature chat live on
   Kenwood, Elecraft and FlexRadio call them), plays the same pileup three
   ways (everyone zero beat, only you offset, everyone offset), lets you move
   an RIT and hear what it does, and drills tuning to zero beat by ear. "What
-  should you do?" deals ten situations from the lessons. Not a scored mode.
+  should you do?" deals ten situations from the lessons. A hunt simulator
+  puts you in a simulated POTA pileup: an activator works the hunters, who
+  include repeaters, tail-enders, zero-beaters and weak QRP stations, some
+  of whom you cannot hear; you call, answer a partial and send the exchange
+  and sign-off by keying, with an XIT control for your offset. Difficulty is
+  pileup size, speed, QSB, noise, hunters you cannot hear and how often the
+  activator mis-copies; a debrief sets what you heard beside what the
+  activator heard, each point linked to its lesson. Graded on procedure, not
+  speed, and not ranked. Not a scored mode.
   After WB0RLJ's "Advice for CW POTA Hunters" (linked, with his YouTube
   channel of daily activations) and the POTA CW Guide
 - **Pileup Runner**: call CQ and work a simulated pileup, with your own side
@@ -162,6 +186,11 @@ testers, bug reports and feature chat live on
 - **On-screen paddles**: the on-screen key can be a straight key or a pair of
   touch paddles with a built-in Iambic A / Iambic B / Ultimatic keyer, dit and
   dah memory, and a left-handed swap — wherever you key on screen
+- **Continue with the key after a miss**: in the keyed-answer modes
+  (Characters with "Key answers", Sending Practice), keying the correct
+  answer again after a miss acts as Next, so you never leave the key; a wrong
+  re-key is ignored. Next still works, and Settings › Keys & Sending can turn
+  it off
 - **A hardware key wherever you type**: a Vail Adapter or other MIDI key
   also works in the Pileup Runner and Contest (what you key goes in the box
   and is sent when you stop keying; key CQ to call CQ), Type It, QRQ Speed,
@@ -169,8 +198,10 @@ testers, bug reports and feature chat live on
   with sidetone
 - **Sending Practice**: a dedicated hear-it, key-it-back mode on the adaptive
   ladder, with live decode, always-on replay, and a connected-MIDI-key
-  readout; plus printable drill sheets built from what you've studied (even,
-  personalized, or numbers & punctuation)
+  readout
+- **Sending Drills**: printable practice sheets of random character groups
+  drawn from what you've studied (even, personalized, or numbers & punctuation),
+  ready to share or print
 - **Sending Analyzer**: send a pangram, call signs, words, your studied
   groups or your own text on a straight key, bug, cootie or paddles, through
   the on-screen key (straight or paddles, per Settings; the on-screen paddles
@@ -193,7 +224,8 @@ testers, bug reports and feature chat live on
   and a separate band-noise level to copy through (heard only while a mode,
   game or lesson plays, with a short sample when the level is picked)
 - **Leaderboard**: an opt-in shared board across both apps for Rapid Fire,
-  Contest, Pileup Runner and the six games. The server grades each run's
+  Contest, Pileup Runner and the seven games (Brass Knuckles Knock Out
+  included: one transcript item per tell). The server grades each run's
   transcript itself and ranks on the speed summed over correct items (so a
   game's board number is not its on-screen score); every post is attested
   with App Attest, so only the genuine app on a real device can rank. Pick a
@@ -277,7 +309,8 @@ there is one target and one code base; the Mac-only code is in
   opens the user guide.
 - **The leaderboard** needs App Attest to post. Where the Mac cannot attest,
   the boards stay readable and a run says why it was not posted, as in the
-  simulator.
+  simulator; Settings shows one line in place of the Share scores switch and
+  buddy pairing explains itself (#349, `AttestationAvailability`).
 - **Listen & Learn** keeps playing in the background: a Mac app is not
   suspended when its window is not in front.
 - **Sandbox**: the Mac build is sandboxed with network-client and

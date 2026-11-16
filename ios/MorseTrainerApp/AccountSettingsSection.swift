@@ -2,10 +2,11 @@
 // Settings › Account & Sync: the optional account (SyncCoordinator.swift).
 // Signed out, a line on what an account is for, an email field and Send
 // link, then the wait for the emailed link to be confirmed. Signed in, the
-// email, the editable callsign and name, last synced, Sync now, Sign out and
-// Delete account; the Devices section lists every device signed in to the
-// account. Its own views so `SettingsView` places each with one line, as it
-// does the buddy streak. Nothing here is needed for anything else in the
+// email, the editable callsign and name, last synced, Sync now and Sign out;
+// the Devices section lists every device signed in to the account, and the
+// Delete account section follows it, last, as on Android and desktop. Its
+// own views so `SettingsView` places each with one line, as it does the
+// buddy streak. Nothing here is needed for anything else in the
 // app: signing in is optional and off until the user does it.
 
 import SwiftUI
@@ -21,9 +22,6 @@ struct AccountSettingsSection: View {
     @State private var savingProfile = false
     @State private var profileProblem: String?
     @State private var profileSaved = false
-    @State private var confirmDelete = false
-    @State private var deleting = false
-    @State private var deleteProblem: String?
 
     var body: some View {
         Section {
@@ -183,32 +181,6 @@ struct AccountSettingsSection: View {
         } label: {
             Label("Sign out", systemImage: "rectangle.portrait.and.arrow.right")
         }
-        Button(role: .destructive) {
-            confirmDelete = true
-        } label: {
-            HStack {
-                Label("Delete account", systemImage: "trash")
-                if deleting { Spacer(); ProgressView() }
-            }
-        }
-        .disabled(deleting)
-        .confirmationDialog("Delete your account?", isPresented: $confirmDelete, titleVisibility: .visible) {
-            Button("Delete account", role: .destructive) {
-                deleting = true
-                deleteProblem = nil
-                Task {
-                    deleteProblem = await sync.deleteAccount()
-                    deleting = false
-                }
-            }
-        } message: {
-            Text("Deletes your account and the progress synced to it on the server, for every device. This device keeps its own data; clear it with Reset all progress under Characters & Lessons. This cannot be undone.")
-        }
-        if let deleteProblem {
-            Text(deleteProblem)
-                .font(.footnote)
-                .foregroundStyle(.orange)
-        }
     }
 
     private var lastSyncedText: String {
@@ -336,6 +308,52 @@ struct AccountDevicesSection: View {
         case "ipados": return "ipad"
         case "macos", "windows", "linux": return "desktopcomputer"
         default: return "iphone"
+        }
+    }
+}
+
+/// Settings › Account & Sync › Delete account: the last section, after
+/// Devices (the order Android and desktop have always had). Only while signed
+/// in; signed out there is nothing to delete.
+struct AccountDeleteSection: View {
+    @ObservedObject var sync: SyncCoordinator
+    var rowBackground: Color = Theme.navyElevated
+
+    @State private var confirmDelete = false
+    @State private var deleting = false
+    @State private var deleteProblem: String?
+
+    var body: some View {
+        if sync.isSignedIn {
+            Section {
+                Button(role: .destructive) {
+                    confirmDelete = true
+                } label: {
+                    HStack {
+                        Label("Delete account", systemImage: "trash")
+                        if deleting { Spacer(); ProgressView() }
+                    }
+                }
+                .disabled(deleting)
+                .confirmationDialog("Delete your account?", isPresented: $confirmDelete, titleVisibility: .visible) {
+                    Button("Delete account", role: .destructive) {
+                        deleting = true
+                        deleteProblem = nil
+                        Task {
+                            deleteProblem = await sync.deleteAccount()
+                            deleting = false
+                        }
+                    }
+                } message: {
+                    Text("Deletes your account and the progress synced to it on the server, for every device. This device keeps its own data; clear it with Reset all progress under Characters & Lessons. This cannot be undone.")
+                }
+                if let deleteProblem {
+                    Text(deleteProblem)
+                        .font(.footnote)
+                        .foregroundStyle(.orange)
+                }
+            }
+            .listRowBackground(rowBackground)
         }
     }
 }

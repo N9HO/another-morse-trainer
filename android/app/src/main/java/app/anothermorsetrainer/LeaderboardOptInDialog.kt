@@ -38,7 +38,7 @@ object LeaderboardOptIn {
      * actually post (an unconfigured build is never asked).
      */
     fun shouldOffer(): Boolean =
-        LeaderboardClient.isConfigured && !Settings.leaderboardEnabled && !Settings.leaderboardPromptDismissed
+        LeaderboardClient.canAttest && !Settings.leaderboardEnabled && !Settings.leaderboardPromptDismissed
 }
 
 /** The dialog itself. [onDone] starts the game and runs on every button. */

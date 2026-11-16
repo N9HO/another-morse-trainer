@@ -19,7 +19,7 @@ extension AppModel {
     var shouldOfferLeaderboardOptIn: Bool {
         !settings.leaderboard.shareScores
             && !settings.leaderboard.promptDismissed
-            && leaderboard.canAttest
+            && attestationFeatures.optInPromptOffered
     }
 
     /// "Share scores" on the prompt: the same switch as Settings, then the

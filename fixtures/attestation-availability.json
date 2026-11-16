@@ -1,0 +1,119 @@
+{
+  "_comment": "What the leaderboard and buddy-streak features do in each attestation state (#349), per docs/high-scores-design.md section 3a. Training modes and personal bests never depend on attestation; only ranked submission, Delete my scores and buddy pairing do. boardReadable is the public read-only GET, which needs no attestation. noteKey names the one-line explanation each app shows in place of the Share scores switch; each app words it in its own idiom.",
+  "states": [
+    {
+      "state": "available",
+      "shareSwitchVisible": true,
+      "optInPromptOffered": true,
+      "runsRanked": true,
+      "deleteScoresOffered": true,
+      "buddyActionsEnabled": true,
+      "boardReadable": true,
+      "personalBestsKept": true,
+      "trainingModesWork": true,
+      "noteKey": "none"
+    },
+    {
+      "state": "notConfigured",
+      "shareSwitchVisible": false,
+      "optInPromptOffered": false,
+      "runsRanked": false,
+      "deleteScoresOffered": false,
+      "buddyActionsEnabled": false,
+      "boardReadable": true,
+      "personalBestsKept": true,
+      "trainingModesWork": true,
+      "noteKey": "notConfigured"
+    },
+    {
+      "state": "noPlayServices",
+      "shareSwitchVisible": false,
+      "optInPromptOffered": false,
+      "runsRanked": false,
+      "deleteScoresOffered": false,
+      "buddyActionsEnabled": false,
+      "boardReadable": true,
+      "personalBestsKept": true,
+      "trainingModesWork": true,
+      "noteKey": "noPlayServices"
+    },
+    {
+      "state": "deviceUnsupported",
+      "shareSwitchVisible": false,
+      "optInPromptOffered": false,
+      "runsRanked": false,
+      "deleteScoresOffered": false,
+      "buddyActionsEnabled": false,
+      "boardReadable": true,
+      "personalBestsKept": true,
+      "trainingModesWork": true,
+      "noteKey": "deviceUnsupported"
+    },
+    {
+      "state": "noPlatformAttestation",
+      "shareSwitchVisible": false,
+      "optInPromptOffered": false,
+      "runsRanked": false,
+      "deleteScoresOffered": false,
+      "buddyActionsEnabled": false,
+      "boardReadable": true,
+      "personalBestsKept": true,
+      "trainingModesWork": true,
+      "noteKey": "noPlatformAttestation"
+    }
+  ],
+  "probe": {
+    "_comment": "Android only: configured + Play Store present + Play services present -> available. Checked in order: not configured first, then missing Play.",
+    "cases": [
+      {
+        "configured": true,
+        "playStore": true,
+        "playServices": true,
+        "expect": "available"
+      },
+      {
+        "configured": true,
+        "playStore": false,
+        "playServices": true,
+        "expect": "noPlayServices"
+      },
+      {
+        "configured": true,
+        "playStore": true,
+        "playServices": false,
+        "expect": "noPlayServices"
+      },
+      {
+        "configured": true,
+        "playStore": false,
+        "playServices": false,
+        "expect": "noPlayServices"
+      },
+      {
+        "configured": false,
+        "playStore": true,
+        "playServices": true,
+        "expect": "notConfigured"
+      },
+      {
+        "configured": false,
+        "playStore": false,
+        "playServices": false,
+        "expect": "notConfigured"
+      }
+    ]
+  },
+  "appleProbe": {
+    "_comment": "iOS, iPadOS and Mac: App Attest isSupported true -> available, false (simulator, unsupported device or Mac) -> deviceUnsupported.",
+    "cases": [
+      {
+        "supported": true,
+        "expect": "available"
+      },
+      {
+        "supported": false,
+        "expect": "deviceUnsupported"
+      }
+    ]
+  }
+}

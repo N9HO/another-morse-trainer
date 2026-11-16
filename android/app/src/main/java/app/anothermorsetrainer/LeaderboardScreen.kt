@@ -104,7 +104,7 @@ fun LeaderboardScreen(onBack: () -> Unit, initialMode: String? = null) {
                 modifier = Modifier.padding(bottom = 12.dp)
             )
 
-            // The nine modes as pills, in the order the server lists them.
+            // The ten modes as pills, in the order the server lists them.
             Row(
                 modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -169,6 +169,7 @@ private fun modeTitle(modeId: String): Int = when (modeId) {
     "dungeon" -> R.string.mode_dungeon
     "frogger" -> R.string.mode_frogger
     "asteroids" -> R.string.mode_asteroids
+    "brassKnuckles" -> R.string.mode_brass_knuckles
     else -> R.string.leaderboard_title
 }
 

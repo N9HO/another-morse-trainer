@@ -450,7 +450,7 @@ struct ReferenceAudioControls: View {
 
     var body: some View {
         VStack(spacing: 12) {
-            slider("Side tone", value: $model.settings.toneFrequency,
+            slider("Sidetone pitch", value: $model.settings.toneFrequency,
                    range: 300...1000, step: 10, format: "\(Int(model.settings.toneFrequency)) Hz")
             slider("Speed", value: $model.settings.wpm,
                    range: 15...60, step: 1, format: "\(Int(model.settings.wpm)) WPM")

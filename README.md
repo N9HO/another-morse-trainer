@@ -222,6 +222,13 @@ packaged app under Xvfb for two screenshots (the only way anyone sees it run),
 builds a Flatpak bundle, and builds the MSI and an unsigned MSIX on one
 `windows-latest` runner (2x Linux billing). No macOS runner.
 
+`parity.yml` runs `python3 parity/check.py` (and its `--self-test` negative
+control) on one Linux runner with nothing but Python's standard library: it
+reads the three trees' source and READMEs and compares them with
+`parity/manifest.json`, failing when iOS, Android and desktop drift apart
+unrecorded. It is path-filtered to the three trees, `fixtures/**`, `parity/**`
+and `PARITY.md`, so like the builds it is required only through the merge gate.
+
 A consequence worth knowing: **a skipped path-filtered job reports no status at
 all.** If either build is ever made a *required* status check on `main`,
 single-platform PRs will be blocked from merging forever. Use an always-runs gate

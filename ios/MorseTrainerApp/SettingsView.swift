@@ -118,7 +118,7 @@ struct SettingsView: View {
     /// its own copy of this control.)
     private static let hardwareKeyModes: Set<TrainingMode> =
         [.sending, .characters, .words, .cw77, .abbreviations, .qCodes, .prosigns,
-         .confusion, .rapidFire, .invaders, .galaga, .dungeon, .asteroids]
+         .confusion, .rapidFire, .invaders, .galaga, .dungeon, .asteroids, .brassKnuckles]
     /// Modes with a play → answer → reveal loop the Feedback section controls.
     private static let feedbackModes: Set<TrainingMode> =
         [.journey, .characters, .words, .cw77, .abbreviations, .qCodes, .prosigns,
@@ -148,7 +148,7 @@ struct SettingsView: View {
     /// had before #236, one line per section.
     private func isShown(_ section: SettingsSection) -> Bool {
         switch section {
-        case .sound, .reminders, .display, .leaderboard, .buddy, .account, .devices, .bugReports, .about: return true
+        case .sound, .reminders, .display, .leaderboard, .buddy, .account, .devices, .deleteAccount, .bugReports, .about: return true
         case .speed: return showsGlobalSpeed
         case .farnsworth: return showsFarnsworth
         case .proficiency: return shown(for: Self.proficiencyModes)
@@ -413,6 +413,7 @@ struct SettingsView: View {
         case .buddy: buddySection
         case .account: AccountSettingsSection(sync: SyncCoordinator.shared, rowBackground: rowBackground(.account))
         case .devices: AccountDevicesSection(sync: SyncCoordinator.shared, rowBackground: rowBackground(.devices))
+        case .deleteAccount: AccountDeleteSection(sync: SyncCoordinator.shared, rowBackground: rowBackground(.deleteAccount))
         case .bugReports: bugReportsSection
         case .about: aboutSection
         }
@@ -422,12 +423,13 @@ struct SettingsView: View {
 
     private var soundSection: some View {
         Section("Sound") {
-            sliderRow(title: "Side tone",
+            sliderRow(title: "Sidetone pitch",
                       value: $model.settings.toneFrequency,
-                      range: 300...1000, step: 10,
+                      range: InputRules.sidetoneMin...InputRules.sidetoneMax,
+                      step: InputRules.sidetoneStep,
                       format: { "\(Int($0)) Hz" })
             Button {
-                model.replay()
+                model.previewTone()
             } label: {
                 Label("Preview tone", systemImage: "speaker.wave.2.fill")
             }
@@ -457,7 +459,7 @@ struct SettingsView: View {
 
     private var speedSection: some View {
         Section("Speed") {
-            sliderRow(title: "Speed",
+            sliderRow(title: "Character speed",
                       value: $model.settings.wpm,
                       range: 15...60, step: 1,
                       format: { "\(Int($0)) WPM" })
@@ -677,7 +679,7 @@ struct SettingsView: View {
     private var feedbackSection: some View {
         Section("Feedback") {
             Toggle("Show right / wrong", isOn: $model.settings.showCorrectness)
-            Picker("Reveal the letter", selection: $model.settings.reveal) {
+            Picker("Reveal answer", selection: $model.settings.reveal) {
                 ForEach(RevealMode.allCases) { mode in
                     Text(mode.label).tag(mode)
                 }
@@ -755,12 +757,14 @@ struct SettingsView: View {
                 }
                 Toggle("Dah on the left", isOn: $model.settings.paddleSwap)
             }
+            Toggle("Continue with the key after a miss", isOn: $model.settings.continueAfterMiss)
         } header: {
             Text("On-screen key")
         } footer: {
             Text(model.settings.onScreenKey == .paddles
                  ? "Two touch paddles, dit and dah, timed at your speed. Hold one to repeat it; hold both to squeeze. Iambic A stops when you let go; Iambic B adds one more alternate element; Ultimatic repeats whichever paddle you pressed last. \"Dah on the left\" swaps them for a left-handed operator."
                  : "One hold-to-key pad: the tone sounds for as long as you hold it. Choose Paddles to key with two touch paddles and a built-in iambic keyer instead.")
+            + Text(" \"Continue with the key after a miss\": when a keyed answer is wrong, key the correct answer to move on, instead of tapping Next. Next still works.")
         }
         .listRowBackground(rowBackground(.onScreenKey))
     }
@@ -772,10 +776,8 @@ struct SettingsView: View {
             HStack {
                 Text("Your callsign")
                 Spacer()
-                TextField("W1AW", text: $model.settings.qso.myCall)
+                CallsignEntry(call: $model.settings.qso.myCall)
                     .multilineTextAlignment(.trailing)
-                    .textInputAutocapitalization(.characters)
-                    .autocorrectionDisabled()
                     .font(.system(.body, design: .monospaced))
             }
             HStack {
@@ -806,7 +808,7 @@ struct SettingsView: View {
 
     private var pileupRunnerSection: some View {
         Section {
-            Picker("Mode", selection: $model.settings.qso.mode) {
+            Picker("Pileup Runner mode", selection: $model.settings.qso.mode) {
                 ForEach(QSOContestMode.allCases) { Text($0.label).tag($0) }
             }
             if model.settings.qso.mode.isPileup {
@@ -816,14 +818,15 @@ struct SettingsView: View {
             }
             // Same 60 WPM ceiling as the global character speed, so QRQ
             // practice carries into the QSO simulator (issue #79).
-            sliderRow(title: "Min speed", value: $model.settings.qso.minWPM,
-                      range: 12...60, step: 1, format: { "\(Int($0)) WPM" })
-            sliderRow(title: "Max speed", value: $model.settings.qso.maxWPM,
-                      range: 12...60, step: 1, format: { "\(Int($0)) WPM" })
+            sliderRow(title: "Callers' min speed", value: $model.settings.qso.minWPM,
+                      range: InputRules.callerWpmMin...InputRules.callerWpmMax, step: 1, format: { "\(Int($0)) WPM" })
+            sliderRow(title: "Callers' max speed", value: $model.settings.qso.maxWPM,
+                      range: InputRules.callerWpmMin...InputRules.callerWpmMax, step: 1, format: { "\(Int($0)) WPM" })
             Toggle("Farnsworth spacing", isOn: $model.settings.qso.farnsworth)
             sliderRow(title: "Tone spread", value: $model.settings.qso.toneSpread,
-                      range: 0...500, step: 10,
-                      format: { $0 < 10 ? "Zero-beat" : "±\(Int($0)) Hz" })
+                      range: InputRules.toneSpreadMin...InputRules.toneSpreadMax,
+                      step: InputRules.toneSpreadStep,
+                      format: { InputRules.toneSpreadLabel($0) })
         } header: {
             Text("Pileup Runner")
         } footer: {
@@ -839,9 +842,9 @@ struct SettingsView: View {
                 ForEach(QRNLevel.allCases) { Text($0.label).tag($0) }
             }
             sliderRow(title: "Min wait", value: $model.settings.qso.minDelay,
-                      range: 0...3, step: 0.1, format: { String(format: "%.1f s", $0) })
+                      range: 0...InputRules.minWaitMax, step: 0.1, format: { String(format: "%.1f s", $0) })
             sliderRow(title: "Max wait", value: $model.settings.qso.maxDelay,
-                      range: 0...4, step: 0.1, format: { String(format: "%.1f s", $0) })
+                      range: 0...InputRules.maxWaitMax, step: 0.1, format: { String(format: "%.1f s", $0) })
         }
         .listRowBackground(rowBackground(.qsoSignals))
     }
@@ -854,7 +857,7 @@ struct SettingsView: View {
             if model.settings.qso.mode.includesRST {
                 Toggle("Copy RST too", isOn: $model.settings.qso.rstRequired)
             }
-            Toggle("Keep partial call in box", isOn: $model.settings.qso.keepPartialCall)
+            Toggle("Keep my partial call after \"?\"", isOn: $model.settings.qso.keepPartialCall)
             Toggle("Key my side in Morse", isOn: $model.settings.qso.keyMySide)
             Toggle("Pileup re-calls after TU", isOn: $model.settings.qso.autoRecall)
             Picker("On a busted call", selection: $model.settings.qso.bustBehavior) {
@@ -876,7 +879,7 @@ struct SettingsView: View {
         } header: {
             Text("QSO · Realism")
         } footer: {
-            Text("Keep partial call: a partly-copied call stays in the box so you can send “?” and add to it instead of retyping. Key my side: your CQ, calls and TU go out in Morse at your tone and speed before the stations reply; off, they are logged silently. Re-calls after TU: the stations still waiting call again on their own once you log a contact; off, send AGN or CQ yourself. Give-up: a station you keep busting drops out after a few misses, but the pileup continues — “Tell me who got away” then names the call you lost and what you had it as, either as it happens or in the end-of-run summary. Cut numbers send numerals as letters (0→T, 9→N) — you can type either form.")
+            Text("Keep my partial call after “?”: a partly-copied call stays in the box so you can send “?” and add to it instead of retyping. Key my side: your CQ, calls and TU go out in Morse at your tone and speed before the stations reply; off, they are logged silently. Re-calls after TU: the stations still waiting call again on their own once you log a contact; off, send AGN or CQ yourself. Give-up: a station you keep busting drops out after a few misses, but the pileup continues — “Tell me who got away” then names the call you lost and what you had it as, either as it happens or in the end-of-run summary. Cut numbers send numerals as letters (0→T, 9→N) — you can type either form.")
         }
         .listRowBackground(rowBackground(.qsoRealism))
     }
@@ -937,6 +940,14 @@ struct SettingsView: View {
     // what is wrong up front.
     private var leaderboardSection: some View {
         Section {
+            if let note = model.attestationNote {
+                // This device cannot attest (#349): the switch, the name and
+                // Delete my scores are gone and one line says why. Scores
+                // stay local personal bests.
+                Text(note)
+                    .font(.footnote)
+                    .foregroundStyle(.orange)
+            } else {
             Toggle("Share scores to the shared leaderboard", isOn: $model.settings.leaderboard.shareScores)
             HStack {
                 Text("Display name")
@@ -967,7 +978,7 @@ struct SettingsView: View {
                 }
             }
             .disabled(deletingScores)
-            .confirmationDialog("Delete every score this device has posted?",
+            .confirmationDialog("Delete your scores?",
                                 isPresented: $confirmDeleteScores, titleVisibility: .visible) {
                 Button("Delete my scores", role: .destructive) {
                     deletingScores = true
@@ -979,12 +990,13 @@ struct SettingsView: View {
                     }
                 }
             } message: {
-                Text("Removes this device's scores and submissions from the shared board. Your local stats and personal bests stay.")
+                Text("Removes every score this device has posted to the shared leaderboard, on every mode. Your local stats and personal bests stay. This cannot be undone.")
             }
             if let deleteScoresResult {
                 Text(deleteScoresResult)
                     .font(.footnote)
                     .foregroundStyle(.secondary)
+            }
             }
         } header: {
             Text("Leaderboard")
@@ -1220,6 +1232,34 @@ struct SettingsView: View {
     }
 }
 
+/// The "Your callsign" input in the one validated form every app uses
+/// (parity row 20): `InputRules.normalizeCallsign` as you type, and the bound
+/// value is `InputRules.storedCallsign`, so a blank field stores W1AW. It
+/// keeps its own draft, so clearing it to type another call does not snap to
+/// W1AW underneath you; the placeholder shows W1AW while it is empty.
+struct CallsignEntry: View {
+    @Binding var call: String
+    @State private var draft = ""
+
+    var body: some View {
+        TextField(InputRules.callsignPlaceholder, text: $draft)
+            .textInputAutocapitalization(.characters)
+            .autocorrectionDisabled()
+            .onAppear { draft = call }
+            .onChange(of: draft) { newValue in
+                let normalized = InputRules.normalizeCallsign(newValue)
+                if normalized != newValue { draft = normalized }
+                let stored = InputRules.storedCallsign(normalized)
+                if stored != call { call = stored }
+            }
+            .onChange(of: call) { newValue in
+                // Follow a change made elsewhere, but not the stored form of
+                // what is being typed.
+                if InputRules.storedCallsign(draft) != newValue { draft = newValue }
+            }
+    }
+}
+
 #Preview {
     SettingsView().environmentObject(AppModel())
 }
@@ -1261,6 +1301,20 @@ struct LicensesView: View {
                 Text("The audio decoder is vendored from the Carrier Wave firmware under the MIT license.")
             }
             .listRowBackground(Theme.navyElevated)
+
+            Section {
+                Text(LicenseNotices.brassKnuckles)
+            } header: {
+                Text("Brass Knuckles Knock Out")
+            }
+            .listRowBackground(Theme.navyElevated)
+
+            Section {
+                Text(LicenseNotices.b612)
+            } header: {
+                Text("B612 Mono font")
+            }
+            .listRowBackground(Theme.navyElevated)
         }
         .scrollContentBackground(.hidden)
         .readableWidth()
@@ -1278,6 +1332,10 @@ private enum LicenseNotices {
 
     This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
     """
+
+    static let brassKnuckles = "Brass Knuckles Knock Out was created by Derick (KO6PBZ) for the HamCube PocketCW firmware by Kristen (K5MME), sponsored by The Brass Knuckle Gang, and is used here with permission under the GNU General Public License, version 3 or later. Its pixel art and rules are theirs."
+
+    static let b612 = "The game's bitmap text is drawn from B612 Mono, Copyright 2012 The B612 Project Authors (https://github.com/polarsys/b612), licensed under the SIL Open Font License, Version 1.1 (https://openfontlicense.org)."
 
     static let cwDecoderMIT = """
     MIT License

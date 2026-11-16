@@ -59,6 +59,16 @@ public struct SendingDrill: Sendable, Equatable {
         self.rows = rows
     }
 
+    /// The characters the learner has studied: the Koch active set, i.e. the
+    /// characters they have actually been taught (the declared seed, every
+    /// unlock since, and any opted-in punctuation), in active-set order. A
+    /// character with recorded stats that is not in the active set (one not yet
+    /// reached, or an opted-out mark whose history is kept) has not been
+    /// studied. Pinned by `fixtures/gap-stats-studied.json`.
+    public static func studiedCharacters(of engine: TrainerEngine) -> [Character] {
+        engine.activeCharacters
+    }
+
     /// Build a sheet.
     ///
     /// - Parameters:

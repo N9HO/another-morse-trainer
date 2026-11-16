@@ -110,6 +110,23 @@ data class SessionRecord(
          */
         val PASSIVE_MODES: Set<String> = setOf("Listen", "Stories", "CW 77 Listen")
 
+        /**
+         * The name a session row and the session detail show for a stored
+         * [mode] string. Four modes are stored under a shorter name than the
+         * title the apps give them ("Sending", "Listen", "Pileup", "Stories");
+         * the stored strings stay as they are (they key the passive set, the
+         * sync table and every saved record), and only the display is mapped,
+         * so the rows read as they do on iOS. Any other mode is its own title.
+         * Pinned by `fixtures/gap-docs-mode-titles.json`.
+         */
+        fun displayTitle(mode: String): String = when (mode) {
+            "Sending" -> "Sending Practice"
+            "Listen" -> "Listen & Learn"
+            "Pileup" -> "Pileup Runner"
+            "Stories" -> "Short Stories"
+            else -> mode
+        }
+
         /** Whether sessions of [mode] grade answers at all. */
         fun isScoredMode(mode: String): Boolean = mode !in PASSIVE_MODES
 

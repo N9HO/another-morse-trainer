@@ -158,6 +158,7 @@ fun OperatingProcedureScreen(onBack: () -> Unit, onOpenFirstFour: () -> Unit) {
             OpPage.Home -> stringResource(R.string.op_title)
             is OpPage.Lesson -> OpCopy.title(p.lesson)
             OpPage.Scenarios -> stringResource(R.string.op_scenarios_title)
+            OpPage.Hunt -> stringResource(R.string.hunt_title)
         }
     }
     val inSubPage = !showingStation && page != OpPage.Home
@@ -242,6 +243,11 @@ fun OperatingProcedureScreen(onBack: () -> Unit, onOpenFirstFour: () -> Unit) {
                         audio = audio,
                         onOpenLesson = { open(OpPage.Lesson(it)) }
                     )
+                    OpPage.Hunt -> HuntSimPage(
+                        call = call,
+                        state = state,
+                        onOpenLesson = { open(OpPage.Lesson(it)) }
+                    )
                 }
             }
         }
@@ -273,6 +279,7 @@ private sealed interface OpPage {
     data object Home : OpPage
     data class Lesson(val lesson: OpLesson) : OpPage
     data object Scenarios : OpPage
+    data object Hunt : OpPage
 }
 
 /** iOS's `.orange` for a wrong answer or a warning. */
@@ -625,6 +632,26 @@ private fun OpHome(
                     fontSize = 12.sp,
                     color = Brand.textSecondary
                 )
+            }
+            OpChevron()
+        }
+
+        // The hunt simulator (#313): a full pileup, keyed by you.
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(Brand.navyElevated)
+                .border(1.dp, Brand.tealBright.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
+                .clickable { onOpen(OpPage.Hunt) }
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(Icons.Filled.CellTower, contentDescription = null, tint = Brand.teal, modifier = Modifier.size(24.dp))
+            Spacer(Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(stringResource(R.string.hunt_row_title), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Brand.textPrimary)
+                Text(stringResource(R.string.hunt_row_sub), fontSize = 12.sp, color = Brand.textSecondary)
             }
             OpChevron()
         }
@@ -1444,7 +1471,7 @@ private fun OpScenarioMode(modifier: Modifier, call: String, state: String, audi
  * The section's words, from strings.xml. The MorseKit rules pin ids and keys;
  * the words are kept in step with iOS's `OpCopy` and Android's strings.
  */
-private object OpCopy {
+internal object OpCopy {
     fun title(l: OpLesson): String = AppResources.getString(
         when (l) {
             OpLesson.SIGNALS -> R.string.op_lesson_signals_title

@@ -1,0 +1,65 @@
+name: Parity check
+
+# Runs parity/check.py: the guard that replaces the manual parity audits
+# (PARITY.md, #171). It reads the three trees' source text and READMEs, never
+# builds anything, and fails when iOS, Android and desktop diverge on a mode,
+# screen, setting, option list, README heading or platform status without a
+# record in parity/manifest.json. `--self-test` is its negative control: the
+# checker must FAIL on deliberately drifted data, so a green run cannot mean
+# "extracted nothing".
+#
+# Python 3 standard library only, no network, about a second on ubuntu-latest.
+#
+# This workflow is path-filtered like the platform builds, so it creates NO
+# check run on a PR that touches none of these paths, and it must therefore
+# never be marked a required status check on main. merge-gate.yml (no paths
+# filter, always reports) requires "Parity check" only for a PR whose diff
+# matches the filter below; keep the two in step (see its section 2).
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "ios/**"
+      - "android/**"
+      - "desktop/**"
+      - "fixtures/**"
+      - "parity/**"
+      - "PARITY.md"
+      - ".github/workflows/parity.yml"
+  pull_request:
+    paths:
+      - "ios/**"
+      - "android/**"
+      - "desktop/**"
+      - "fixtures/**"
+      - "parity/**"
+      - "PARITY.md"
+      - ".github/workflows/parity.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  parity:
+    name: Parity check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Compare the three trees with the manifest
+        run: python3 parity/check.py
+
+      - name: Negative control (the check must fail on drifted data)
+        run: python3 parity/check.py --self-test

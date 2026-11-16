@@ -32,6 +32,7 @@ class MainActivity : ComponentActivity() {
         PileupSettings.init(this)
         Stats.init(this)
         DailyDitStore.init(this)
+        DailyComprehensionStore.init(this)
         FirstFourStore.init(this)
         OperatingProcedureStore.init(this)
         JourneyStore.init(this)
@@ -172,6 +173,7 @@ private sealed interface Route {
     data object Dungeon : Route
     data object Frogger : Route
     data object Asteroids : Route
+    data object BrassKnuckles : Route
     data object Story : Route
     data object Sending : Route
     data object SendingDrills : Route
@@ -186,6 +188,8 @@ private sealed interface Route {
     data object DailyDitHistory : Route
     /** A past Daily Dit played from the history, as practice only (#333). */
     data class DailyDitPractice(val puzzleNumber: Int) : Route
+    /** Daily Comprehension (#353): the day's sentence in Morse and a question about it. */
+    data object DailyComprehension : Route
     /** First Four (#265): the guided path to a first POTA contact. */
     data object FirstFour : Route
     /** CW Operating Procedure (#294, #295): lessons, the zero-beat drill, "What should you do?". */
@@ -211,8 +215,8 @@ private val Route.playsBandNoise: Boolean
         Route.Journey, is Route.Quiz, Route.Pileup, Route.Contest, Route.Exam,
         Route.Listen, Route.Cw77, Route.HeadCopy, Route.TypeIt, Route.Qrq,
         Route.RapidFire, Route.Invaders, Route.Galaga, Route.Defender,
-        Route.Dungeon, Route.Frogger, Route.Asteroids, Route.Story, Route.Sending,
-        Route.DailyDit, is Route.DailyDitPractice, Route.FirstFour, Route.OperatingProcedure -> true
+        Route.Dungeon, Route.Frogger, Route.Asteroids, Route.BrassKnuckles, Route.Story, Route.Sending,
+        Route.DailyDit, is Route.DailyDitPractice, Route.DailyComprehension, Route.FirstFour, Route.OperatingProcedure -> true
         Route.DailyDitHistory -> false
         Route.Onboarding, Route.Home, Route.Games, Route.SendingDrills,
         Route.SendingAnalyzer, Route.Repeater, Route.CwDecoder, Route.Reference,
@@ -255,6 +259,7 @@ private fun routeTag(route: Route): String = when (route) {
     Route.Dungeon -> "dungeon"
     Route.Frogger -> "frogger"
     Route.Asteroids -> "asteroids"
+    Route.BrassKnuckles -> "brassknuckles"
     Route.Story -> "story"
     Route.Sending -> "sending"
     Route.SendingDrills -> "sendingDrills"
@@ -266,6 +271,7 @@ private fun routeTag(route: Route): String = when (route) {
     Route.DailyDit -> "dailyDit"
     Route.DailyDitHistory -> "dailyDitHistory"
     is Route.DailyDitPractice -> "dailyDitPractice:${route.puzzleNumber}"
+    Route.DailyComprehension -> "dailyComprehension"
     Route.FirstFour -> "firstFour"
     Route.OperatingProcedure -> "operatingProcedure"
     Route.Settings -> "settings"
@@ -294,6 +300,7 @@ private fun routeFrom(tag: String): Route? = when (tag) {
     "dungeon" -> Route.Dungeon
     "frogger" -> Route.Frogger
     "asteroids" -> Route.Asteroids
+    "brassknuckles" -> Route.BrassKnuckles
     "story" -> Route.Story
     "sending" -> Route.Sending
     "sendingDrills" -> Route.SendingDrills
@@ -304,6 +311,7 @@ private fun routeFrom(tag: String): Route? = when (tag) {
     "startHere" -> Route.StartHere
     "dailyDit" -> Route.DailyDit
     "dailyDitHistory" -> Route.DailyDitHistory
+    "dailyComprehension" -> Route.DailyComprehension
     "firstFour" -> Route.FirstFour
     "operatingProcedure" -> Route.OperatingProcedure
     "settings" -> Route.Settings
@@ -421,6 +429,7 @@ private fun AppRoot() {
             TrainingMode.DUNGEON -> route = Route.Dungeon
             TrainingMode.FROGGER -> route = Route.Frogger
             TrainingMode.ASTEROIDS -> route = Route.Asteroids
+            TrainingMode.BRASS_KNUCKLES -> route = Route.BrassKnuckles
         }
     }
 
@@ -433,6 +442,7 @@ private fun AppRoot() {
         Route.Home -> HomeScreen(
             onPickStartHere = { route = Route.StartHere },
             onPickDailyDit = { route = Route.DailyDit },
+            onPickDailyComprehension = { route = Route.DailyComprehension },
             onPickFirstFour = { route = Route.FirstFour },
             // Journey asks about its scoring first (the iOS setup card's
             // "Misses drain the bar" toggle), so it goes through the sheet.
@@ -512,6 +522,7 @@ private fun AppRoot() {
             onPickDungeon = { route = Route.Dungeon },
             onPickFrogger = { route = Route.Frogger },
             onPickAsteroids = { route = Route.Asteroids },
+            onPickBrassKnuckles = { route = Route.BrassKnuckles },
             onOpenLeaderboard = { route = Route.GamesLeaderboard }
         )
         // Back from a game lands on the Games sub-menu it was picked from
@@ -522,6 +533,7 @@ private fun AppRoot() {
         Route.Dungeon -> DungeonScreen(onBack = { route = Route.Games }, onSwitchMode = { switchTo(it) })
         Route.Frogger -> FroggerScreen(onBack = { route = Route.Games }, onSwitchMode = { switchTo(it) })
         Route.Asteroids -> AsteroidsScreen(onBack = { route = Route.Games }, onSwitchMode = { switchTo(it) })
+        Route.BrassKnuckles -> BoxingScreen(onBack = { route = Route.Games })
         Route.Story -> StoryScreen(onBack = { route = Route.Home }, onSwitchMode = { switchTo(it) })
         Route.Sending -> SendingPracticeScreen(onBack = { route = Route.Home }, onSwitchMode = { switchTo(it) })
         Route.SendingDrills -> SendingDrillScreen(onBack = { route = Route.Home })
@@ -547,6 +559,7 @@ private fun AppRoot() {
                 practicePuzzle = r.puzzleNumber
             )
         }
+        Route.DailyComprehension -> DailyComprehensionScreen(onBack = { route = Route.Home })
         Route.FirstFour -> FirstFourScreen(onBack = { route = Route.Home })
         Route.OperatingProcedure -> OperatingProcedureScreen(
             onBack = { route = Route.Home },

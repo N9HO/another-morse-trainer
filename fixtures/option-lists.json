@@ -1,0 +1,14 @@
+{
+  "about": "Enumerated option lists that must be the same, in the same order, on every app (the UI contract). Values are the case ids; the tests and parity/check.py fold them to lowercase letters and digits, so iambicA, IAMBIC_A and Iambic A all compare equal. Read by the Kotlin tests on android and desktop, by the Swift harness for the lists MorseKit exposes (paddleModes, answerEntryModes, answerEntryTiers, qsoExchangeModes), and by parity/check.py for all of them (the iOS app-target enums are not visible to the harness, so only the static check reads those). Add a list here when a new enumerated setting is added to the apps, and register its enum locations in parity/sources.json.",
+  "paddleModes": ["iambicA", "iambicB", "ultimatic"],
+  "onScreenKeyTypes": ["straight", "paddles"],
+  "revealModes": ["never", "onWrong", "always"],
+  "practiceDurations": ["oneMin", "fiveMin", "tenMin", "fifteenMin", "thirtyMin", "untilStop"],
+  "contestLengths": ["tenMin", "thirtyMin", "fullHour", "untilStop"],
+  "storyContent": ["fables", "serials", "news"],
+  "backgroundNoiseLevels": ["off", "keepAlive", "whisper", "low", "medium", "high"],
+  "answerEntryModes": ["choices", "progressive", "typed"],
+  "answerEntryTiers": ["fourChoices", "sixChoices", "typed"],
+  "qsoExchangeModes": ["singleCaller", "pota", "basicContest", "cwt", "sst", "mst", "sprint", "fieldDay"],
+  "listenGaps": ["standard", "rapidFire", "warp", "icr"]
+}

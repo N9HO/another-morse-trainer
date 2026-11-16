@@ -53,7 +53,7 @@
       "journey", "characters", "words", "cw77", "cw77Listen", "abbreviations",
       "qCodes", "prosigns", "headCopy", "typed", "sending", "confusion", "listen",
       "qso", "contest", "story", "exam", "qrq", "rapidFire", "invaders", "galaga",
-      "defender", "dungeon", "frogger", "asteroids"
+      "defender", "dungeon", "frogger", "asteroids", "brassKnuckles"
     ],
     "kotlin": {
       "Journey": "journey",
@@ -80,7 +80,8 @@
       "Morse Defender": "defender",
       "CW Dungeon": "dungeon",
       "CW Frogger": "frogger",
-      "CW Asteroids": "asteroids"
+      "CW Asteroids": "asteroids",
+      "Brass Knuckles": "brassKnuckles"
     },
     "passiveCanonical": ["listen", "story", "cw77Listen"],
     "unknownWireId": "futureMode"

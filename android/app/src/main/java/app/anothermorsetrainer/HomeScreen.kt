@@ -57,8 +57,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -68,8 +68,6 @@ import androidx.compose.ui.unit.sp
 import app.anothermorsetrainer.morsekit.Buddy
 import app.anothermorsetrainer.morsekit.BuddyStatus
 import app.anothermorsetrainer.morsekit.DailyDit
-import app.anothermorsetrainer.morsekit.DailyDitOutcome
-import kotlin.math.roundToInt
 
 /** A tappable home-menu tile. Shared with the Games sub-menu ([GamesScreen]). */
 internal data class HomeItem(
@@ -84,6 +82,7 @@ internal data class HomeItem(
 fun HomeScreen(
     onPickStartHere: () -> Unit,
     onPickDailyDit: () -> Unit,
+    onPickDailyComprehension: () -> Unit,
     onPickFirstFour: () -> Unit,
     onPickJourney: () -> Unit,
     onPickQuiz: (QuizMode) -> Unit,
@@ -235,7 +234,10 @@ fun HomeScreen(
             // Four is not a thin strip across the 960 dp column.
             if (wide) {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                    Box(Modifier.weight(1f)) { DailyDitCard(onPickDailyDit) }
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        DailyDitCard(onPickDailyDit)
+                        DailyComprehensionCard(onPickDailyComprehension)
+                    }
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         StartHereCard(onPickStartHere)
                         FirstFourCard(onPickFirstFour)
@@ -244,6 +246,8 @@ fun HomeScreen(
                 }
             } else {
                 DailyDitCard(onPickDailyDit)
+                Spacer(Modifier.height(12.dp))
+                DailyComprehensionCard(onPickDailyComprehension)
                 Spacer(Modifier.height(12.dp))
                 StartHereCard(onPickStartHere)
                 Spacer(Modifier.height(12.dp))
@@ -267,37 +271,72 @@ fun HomeScreen(
         }
 }
 
+/** Daily Comprehension (#353): the day's sentence in Morse and a question about it. */
+@Composable
+private fun DailyComprehensionCard(onClick: () -> Unit) {
+    // The app can sit open across midnight; don't advertise yesterday's question.
+    LaunchedEffect(Unit) { DailyComprehensionStore.refresh() }
+    val game = DailyComprehensionStore.game
+    val done = game.isFinished
+    val listensText = pluralStringResource(R.plurals.daily_comprehension_listens, game.listens, game.listens)
+    val subtitle = when {
+        !done -> stringResource(R.string.daily_comprehension_home_sub_new)
+        game.isCorrect -> stringResource(R.string.daily_comprehension_home_sub_correct, game.puzzleNumber, listensText)
+        else -> stringResource(R.string.daily_comprehension_home_sub_answered, game.puzzleNumber, listensText)
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .brandCard(cornerRadius = 14.dp)
+            .border(
+                1.5.dp,
+                Brand.tealBright.copy(alpha = if (done) 0.35f else 0.7f),
+                RoundedCornerShape(14.dp)
+            )
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Icon(
+            if (done) Icons.Filled.CheckCircle else Icons.Filled.QuestionAnswer,
+            contentDescription = null,
+            tint = if (done) Brand.tealBright else Brand.teal
+        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                stringResource(R.string.daily_comprehension_title),
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = Brand.textPrimary
+            )
+            Text(
+                subtitle,
+                style = MaterialTheme.typography.labelSmall,
+                color = Brand.textSecondary
+            )
+        }
+        Icon(
+            Icons.AutoMirrored.Filled.KeyboardArrowRight,
+            contentDescription = null,
+            tint = Brand.textSecondary
+        )
+    }
+}
+
 @Composable
 private fun DailyDitCard(onClick: () -> Unit) {
     // The app can sit open across midnight; don't advertise yesterday's puzzle.
     LaunchedEffect(Unit) { DailyDitStore.refresh() }
     val game = DailyDitStore.game
     val done = game.isFinished
-    val guessesText = pluralStringResource(R.plurals.daily_dit_guesses, game.guessesUsed, game.guessesUsed)
-    val listensText = pluralStringResource(R.plurals.daily_dit_listens, game.listens, game.listens)
-    val subtitle = when (game.outcome) {
-        DailyDitOutcome.SOLVED -> stringResource(
-            R.string.daily_dit_home_sub_solved,
-            game.puzzleNumber,
-            game.solvedWpm?.let { DailyDit.formatWpm(it) } ?: "",
-            guessesText,
-            listensText
-        )
-        // A listen starts the day as much as a guess does (#168).
-        DailyDitOutcome.PLAYING -> if (game.guessesUsed > 0 || game.listens > 0) {
-            stringResource(
-                R.string.daily_dit_home_sub_progress,
-                game.puzzleNumber,
-                guessesText,
-                listensText
-            )
-        } else {
-            stringResource(
-                R.string.daily_dit_home_sub_new,
-                (DailyDit.startingSpeeds.maxOrNull() ?: 75.0).roundToInt()
-            )
-        }
-    }
+    val subtitle = DailyDit.homeSubtitle(
+        outcome = game.outcome,
+        puzzleNumber = game.puzzleNumber,
+        solvedWpm = game.solvedWpm,
+        guessesUsed = game.guessesUsed,
+        listens = game.listens
+    )
     Row(
         modifier = Modifier
             .fillMaxWidth()
