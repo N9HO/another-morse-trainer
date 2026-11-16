@@ -61,9 +61,10 @@ permissions:
 jobs:
   build:
     name: Build debug APK
-    # Pull requests stay on GitHub-hosted runners (untrusted fork code must never
-    # reach the self-hosted box). Pushes to main and manual runs use hpbox1.
-    runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-latest' || fromJSON('["self-hosted","hpbox1"]') }}
+    # GitHub-hosted for every trigger. The hpbox1 self-hosted runner was tried and
+    # dropped (small speed gain, extra failure points); leaving it named here made
+    # pushes to main queue forever once the runner was gone.
+    runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: android
