@@ -673,6 +673,8 @@ private fun RapidFireRun(
                     pressed = keyPressed,
                     onKey = onKey,
                     onPaddleKey = onPaddleKey,
+                    // Live before the item has finished and after it, as on iOS
+                    // (PARITY.md row 17): key along with the tone if you can.
                     height = 110.dp,
                     glyphSize = 24.sp
                 )

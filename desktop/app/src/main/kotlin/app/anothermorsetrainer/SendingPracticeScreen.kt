@@ -478,6 +478,8 @@ fun SendingPracticeScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Un
                 pressed = keyPressed,
                 onKey = { keyPressed = it; keyer.touchKey(it) },
                 onPaddleKey = { down, ms -> keyer.touchKey(down, ms) },
+                // Live after the answer is revealed too, as on iOS (PARITY.md
+                // row 17): the held correction can be keyed along with.
                 height = 120.dp,
                 glyphSize = 26.sp
             )

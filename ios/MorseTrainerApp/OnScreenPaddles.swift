@@ -206,14 +206,10 @@ private struct KeyPressSurface: UIViewRepresentable {
         context.coordinator.onChange = onChange
     }
 
-    /// A key torn out of the hierarchy mid-press gets no touch callback.
-    /// Release it after this update rather than during it, so the closure
-    /// may set the screen's state.
+    /// A key torn out of the hierarchy mid-press gets no touch callback:
+    /// release it (`Coordinator.releaseAfterUpdate`).
     static func dismantleUIView(_ uiView: UIView, coordinator: Coordinator) {
-        guard coordinator.isDown else { return }
-        let onChange = coordinator.onChange
-        let atMs = wallClockMs(uptime: ProcessInfo.processInfo.systemUptime)
-        DispatchQueue.main.async { onChange(false, atMs) }
+        coordinator.releaseAfterUpdate(atMs: wallClockMs(uptime: ProcessInfo.processInfo.systemUptime))
     }
 
     /// A touch timestamp (seconds of system uptime) as wall-clock ms, the
@@ -244,6 +240,19 @@ private struct KeyPressSurface: UIViewRepresentable {
             guard down != isDown else { return }
             isDown = down
             onChange(down, KeyPressSurface.wallClockMs(uptime: uptime))
+        }
+
+        /// Release a key held as its view goes away, after this update rather
+        /// than during it, so `onChange` may set the screen's state. The task
+        /// is main-actor isolated and captures only this (main-actor, so
+        /// Sendable) coordinator, not the non-Sendable closure.
+        func releaseAfterUpdate(atMs: Int64) {
+            guard isDown else { return }
+            Task { @MainActor in
+                guard self.isDown else { return }
+                self.isDown = false
+                self.onChange(false, atMs)
+            }
         }
 
         func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,

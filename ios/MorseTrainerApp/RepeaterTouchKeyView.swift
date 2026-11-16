@@ -1,9 +1,9 @@
 import SwiftUI
 
-/// Big press-and-hold Morse key for the live repeater screen. `keyPress`
-/// reports the press and the release as they happen (a plain TapGesture only
-/// fires on release, which can't key Morse), even inside this screen's
-/// scroll view.
+/// Big press-and-hold Morse key for the live repeater screen, pinned under
+/// its scroll view (#372). `keyPress` reports the press and the release as
+/// they happen (a plain TapGesture only fires on release, which can't key
+/// Morse).
 struct RepeaterTouchKeyView: View {
     @EnvironmentObject var model: RepeaterModel
     @State private var isPressed = false
