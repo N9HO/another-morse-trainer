@@ -61,9 +61,9 @@ permissions:
 jobs:
   build:
     name: Build debug APK
-    # GitHub-hosted for every trigger. The hpbox1 self-hosted runner was tried and
-    # dropped (small speed gain, extra failure points); leaving it named here made
-    # pushes to main queue forever once the runner was gone.
+    # GitHub-hosted for every trigger. A self-hosted runner on hpbox1 was tried and
+    # dropped (small speed gain, extra failure points); builds stay on hosted
+    # runners.
     runs-on: ubuntu-latest
     defaults:
       run:
