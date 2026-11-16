@@ -21,7 +21,7 @@
     { "note": 2,  "contact": "dah",      "source": "Vail keyer" },
     { "note": 20, "contact": "dit",      "source": "Vail keyer, Morserino-32 Pocket MIDI" },
     { "note": 21, "contact": "dah",      "source": "Vail keyer, Morserino-32 Pocket MIDI" },
-    { "note": 30, "contact": "straight", "source": "Morserino-32 Pocket MIDI (PR #224)" },
+    { "note": 30, "contact": "dit", "source": "Morserino-32 Pocket MIDI (PR #224)" },
     { "note": 61, "contact": "dit",      "source": "Vail passthrough" },
     { "note": 62, "contact": "dah",      "source": "Vail passthrough" }
   ],
