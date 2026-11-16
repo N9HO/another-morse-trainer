@@ -3,7 +3,7 @@ name: iOS Build
 # Compiles the iOS app (which lives under ios/) remotely so changes made from the
 # Claude phone app can be verified without a laptop:
 #   * logic-job  - builds/runs the Foundation-only MorseKit package + MorseKitCheck
-#                  harness on Linux (fast feedback, no Xcode, no macOS runner)
+#                  harness (fast feedback, no Xcode needed)
 #   * ios-build  - real `xcodebuild` of the MorseTrainer iOS app on a macOS runner
 #   * mac-build  - the same app target built for Mac Catalyst (#264), so a change
 #                  that compiles for iPhone but not for the Mac is caught here
@@ -54,11 +54,7 @@ concurrency:
 jobs:
   logic-job:
     name: MorseKit logic checks
-    # Linux, not macOS: MorseKit is Foundation-only (no Apple frameworks) and
-    # CWDecoderCore is plain C99, so this job needs no Xcode. A Linux runner
-    # bills at a tenth of macos-15. The Xcode jobs below stay on macOS.
-    runs-on: ubuntu-latest
-    container: swift:6.2
+    runs-on: macos-15
     defaults:
       run:
         working-directory: ios
