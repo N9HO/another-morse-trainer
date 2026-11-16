@@ -40,6 +40,10 @@ name: Merge gate
 
 on:
   pull_request:
+    # `edited` re-runs only this gate when a PR description changes (ticking a
+    # Parity or Guide box), so nobody has to close and reopen the PR, which
+    # re-runs every platform workflow (iOS at 10x billing).
+    types: [opened, synchronize, reopened, edited]
   workflow_dispatch:
 
 permissions:
