@@ -69,7 +69,19 @@ public enum CallsignGenerator {
     public static func generate<R: RandomNumberGenerator>(
         formats: [CallsignFormat],
         usOnly: Bool,
-        shortOnly: Bool = false,
+        using rng: inout R
+    ) -> String {
+        generate(formats: formats, usOnly: usOnly, shortOnly: false, using: &rng)
+    }
+
+    /// The same, with `shortOnly` spelled out. A separate overload rather than
+    /// a defaulted parameter: with a default, the Swift 6.1 compiler crashes in
+    /// IR generation on callers that pass an `any RandomNumberGenerator`
+    /// (`AsteroidsGame`), so those keep the three-argument form.
+    public static func generate<R: RandomNumberGenerator>(
+        formats: [CallsignFormat],
+        usOnly: Bool,
+        shortOnly: Bool,
         using rng: inout R
     ) -> String {
         var pool = formats
