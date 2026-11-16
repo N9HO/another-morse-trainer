@@ -19,6 +19,9 @@ struct FirstFourView: View {
     @State private var callField = ""
     @State private var stateField = ""
     @State private var confirmingReset = false
+    /// Whether the open stage is showing its pinned key (#382), so a finger
+    /// drifting down during a dah can't drive the sheet's swipe-to-dismiss.
+    @State private var keyShowing = false
 
     private var call: String { FirstFour.normalizeCall(model.settings.qso.myCall) }
     private var state: String { FirstFour.normalizeState(model.settings.qso.myState) }
@@ -28,20 +31,26 @@ struct FirstFourView: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(spacing: 20) {
-                    if let stage = openStage {
-                        stageScreen(stage)
-                    } else if !stationReady || editingStation {
-                        stationCard
-                    } else {
-                        home
+            Group {
+                if let stage = openStage {
+                    // A stage brings its own ScrollView, with its key pinned
+                    // under it rather than inside it (#382): see `stageScreen`.
+                    stageScreen(stage)
+                } else {
+                    ScrollView {
+                        VStack(spacing: 20) {
+                            if !stationReady || editingStation {
+                                stationCard
+                            } else {
+                                home
+                            }
+                        }
+                        .padding()
+                        .readableWidth()
                     }
+                    .scrollContentBackground(.hidden)
                 }
-                .padding()
-                .readableWidth()
             }
-            .scrollContentBackground(.hidden)
             .background(Theme.Background())
             .navigationTitle(openStage.map(FirstFourView.title) ?? "First Four")
             .navigationBarTitleDisplayMode(.inline)
@@ -84,6 +93,10 @@ struct FirstFourView: View {
                 Text("Every stage goes back to not passed. Your callsign and state stay as they are.")
             }
         }
+        // With the key outside the ScrollView a downward drift during a dah
+        // would drive the sheet's dismiss pan directly, as in the Sending
+        // Analyzer (#363); Done still closes it.
+        .interactiveDismissDisabled(openStage != nil && keyShowing)
     }
 
     // MARK: - Stage titles
@@ -259,6 +272,15 @@ struct FirstFourView: View {
 
     // MARK: - A stage
 
+    /// Each stage is its own ScrollView, and pins its on-screen key under it
+    /// with `safeAreaInset` (#382), as the Sending Analyzer and On the Air do
+    /// (#363). Inside a ScrollView, UIKit's scroll view holds a touch back
+    /// until it knows the touch is not a scroll, so a press reached the key
+    /// late and a tap shorter than that delay arrived as a down and an up in
+    /// the same instant: short dits were lost and holds started late. The
+    /// key panel stays inside the stage that owns it, under the same
+    /// conditions as before, so its `SendingKeyer` lives and dies exactly as
+    /// it did.
     @ViewBuilder
     private func stageScreen(_ stage: FirstFourStage) -> some View {
         let next: () -> Void = {
@@ -266,10 +288,12 @@ struct FirstFourView: View {
             openStage = progress.nextStage
         }
         if let text = FirstFour.element(stage, call: call, state: state) {
-            FirstFourElementStage(stage: stage, text: text, progress: $progress, onNext: next)
+            FirstFourElementStage(stage: stage, text: text, progress: $progress,
+                                  keyShowing: $keyShowing, onNext: next)
                 .id(stage)
         } else {
-            FirstFourSceneStage(stage: stage, call: call, state: state, progress: $progress, onNext: next)
+            FirstFourSceneStage(stage: stage, call: call, state: state, progress: $progress,
+                                keyShowing: $keyShowing, onNext: next)
                 .id(stage)
         }
     }
@@ -311,6 +335,7 @@ private struct FirstFourElementStage: View {
     let stage: FirstFourStage
     let text: String
     @Binding var progress: FirstFourProgress
+    @Binding var keyShowing: Bool
     let onNext: () -> Void
 
     @State private var phase: FirstFourPhase = .copy
@@ -321,8 +346,33 @@ private struct FirstFourElementStage: View {
     @FocusState private var typing: Bool
 
     private var needed: Int { phase == .copy ? FirstFour.copyStreakToPass : FirstFour.sendStreakToPass }
+    /// The key is up while the send panel is: the same condition that once
+    /// placed it inside `sendPanel`.
+    private var showsKey: Bool { !stagePassed && phase == .send }
 
     var body: some View {
+        ScrollView {
+            content
+                .padding()
+                .readableWidth()
+        }
+        .scrollContentBackground(.hidden)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if showsKey {
+                FirstFourKeyPanel(expected: text, resetToken: keyReset, wpm: model.settings.wpm,
+                                  toneHz: model.settings.toneFrequency, onSubmit: checkSend)
+                    .firstFourKeyBand()
+            }
+        }
+        .onAppear {
+            phase = progress.openingPhase(stage)
+            keyShowing = showsKey
+            if phase == .copy { play() }
+        }
+        .onChange(of: showsKey) { keyShowing = $0 }
+    }
+
+    private var content: some View {
         VStack(spacing: 16) {
             Text(explanation)
                 .font(.subheadline)
@@ -352,10 +402,6 @@ private struct FirstFourElementStage: View {
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: .infinity)
             }
-        }
-        .onAppear {
-            phase = progress.openingPhase(stage)
-            if phase == .copy { play() }
         }
     }
 
@@ -442,8 +488,7 @@ private struct FirstFourElementStage: View {
                 Button { play() } label: { Label("Hear it", systemImage: "speaker.wave.2.fill") }
                     .buttonStyle(.bordered)
             }
-            FirstFourKeyPanel(expected: text, resetToken: keyReset, wpm: model.settings.wpm,
-                              toneHz: model.settings.toneFrequency, onSubmit: checkSend)
+            // The key itself is pinned under the ScrollView (see `body`, #382).
             Text("\(needed) right in a row to pass this stage.")
                 .font(.caption)
                 .foregroundStyle(Theme.textSecondary)
@@ -527,6 +572,7 @@ private struct FirstFourSceneStage: View {
     let call: String
     let state: String
     @Binding var progress: FirstFourProgress
+    @Binding var keyShowing: Bool
     let onNext: () -> Void
 
     @State private var scene = FirstFourScene(beats: [])
@@ -540,7 +586,49 @@ private struct FirstFourSceneStage: View {
     @State private var result: (clean: Bool, passedNow: Bool)?
     @State private var playToken = 0
 
+    /// The key is up on a send or wait beat while the run is going: the same
+    /// conditions that once placed it inside `beatPanel`.
+    private var showsKey: Bool {
+        guard result == nil, let kind = scene.current?.kind else { return false }
+        return kind == .send || kind == .wait
+    }
+
     var body: some View {
+        ScrollView {
+            content
+                .padding()
+                .readableWidth()
+        }
+        .scrollContentBackground(.hidden)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            // One branch per beat kind, as `beatPanel` had, so a send beat's
+            // key and a wait beat's key are separate panels with their own
+            // keyer, and consecutive send beats keep theirs (cleared by
+            // `keyReset`).
+            if result == nil, let beat = scene.current {
+                switch beat.kind {
+                case .send:
+                    FirstFourKeyPanel(expected: beat.text, resetToken: keyReset, wpm: model.settings.wpm,
+                                      toneHz: model.settings.toneFrequency) { respond(.sent($0)) }
+                        .firstFourKeyBand()
+                case .wait:
+                    FirstFourKeyPanel(expected: call, resetToken: keyReset, wpm: model.settings.wpm,
+                                      toneHz: model.settings.toneFrequency) { respond(.sent($0)) }
+                        .firstFourKeyBand()
+                case .hear, .silence, .copy:
+                    EmptyView()
+                }
+            }
+        }
+        .onAppear {
+            round = progress.cleanRuns(stage)
+            startRun()
+            keyShowing = showsKey
+        }
+        .onChange(of: showsKey) { keyShowing = $0 }
+    }
+
+    private var content: some View {
         VStack(spacing: 16) {
             Text(intro)
                 .font(.subheadline)
@@ -571,10 +659,6 @@ private struct FirstFourSceneStage: View {
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: .infinity)
             }
-        }
-        .onAppear {
-            round = progress.cleanRuns(stage)
-            startRun()
         }
     }
 
@@ -667,8 +751,7 @@ private struct FirstFourSceneStage: View {
                     }
                     Spacer()
                 }
-                FirstFourKeyPanel(expected: beat.text, resetToken: keyReset, wpm: model.settings.wpm,
-                                  toneHz: model.settings.toneFrequency) { respond(.sent($0)) }
+                // The key is pinned under the ScrollView (see `body`, #382).
             case .wait:
                 Button { respond(.waited) } label: {
                     Label("Wait and listen", systemImage: "ear")
@@ -678,8 +761,8 @@ private struct FirstFourSceneStage: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(Theme.teal)
-                FirstFourKeyPanel(expected: call, resetToken: keyReset, wpm: model.settings.wpm,
-                                  toneHz: model.settings.toneFrequency) { respond(.sent($0)) }
+                // Sending instead of waiting is the mistake this beat
+                // teaches; the key for it is pinned below (see `body`).
             }
         }
         .padding(14)
@@ -884,7 +967,8 @@ private struct FirstFourSceneStage: View {
 /// Vail / BLE-MIDI key, decoded by the same `SendingKeyer` every keying mode
 /// uses. Submits by itself once the decoded text is as long as `expected`
 /// and the key is idle, as Sending Practice does; Submit and Clear are there
-/// too. `resetToken` clears it from outside.
+/// too. `resetToken` clears it from outside. Hosted in a stage's bottom
+/// `safeAreaInset`, never inside its ScrollView (#382).
 private struct FirstFourKeyPanel: View {
     @EnvironmentObject var model: AppModel
     let expected: String
@@ -895,7 +979,10 @@ private struct FirstFourKeyPanel: View {
     /// A bigger key on a big iPad, as Sending Practice has (Theme.swift,
     /// `wideLayout`); the column itself stays readable-width either way.
     @Environment(\.wideLayout) private var wide
-    private var keyHeight: CGFloat { wide ? 150 : 100 }
+    /// Pinned under the stage, the panel takes height from the scrolling
+    /// part, so a phone on its side (vertically compact) gets a shorter key.
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
+    private var keyHeight: CGFloat { wide ? 150 : (verticalSizeClass == .compact ? 64 : 100) }
 
     init(expected: String, resetToken: Int, wpm: Double, toneHz: Double,
          onSubmit: @escaping (String) -> Void) {
@@ -979,5 +1066,18 @@ private struct FirstFourKeyPanel: View {
         let sent = FirstFour.compact(sender.decodedText)
         guard !sent.isEmpty, sent.count >= FirstFour.compact(expected).count else { return }
         submit()
+    }
+}
+
+private extension View {
+    /// The band a stage's pinned key sits on (#382), as the Sending Analyzer
+    /// and On the Air have theirs: the stage column's padding, capped to the
+    /// readable width so a full-screen iPad doesn't stretch it, on navy.
+    func firstFourKeyBand() -> some View {
+        self
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .readableWidth()
+            .background(Theme.navy)
     }
 }
