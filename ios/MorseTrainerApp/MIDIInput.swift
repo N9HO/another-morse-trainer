@@ -315,21 +315,18 @@ final class MIDIKeyRouter {
     /// judges as paddles through a keyer.
     var onAppKeyer: (() -> Void)?
 
-    private var heldNotes = Set<UInt8>()
-    /// Raw paddle notes down, by the paddle each was routed to when it went
-    /// down — so its release goes the same way even if the keyer mode changed
-    /// meanwhile, and two notes on one paddle (1 and 20) hold it until both
-    /// are up.
-    private var keyedNotes: [UInt8: PaddleKeyer.Element] = [:]
-    private var keyerDown = false
-    private var reported = false
+    /// The notes, the keyer's tone and the logical key: `MIDIKeyMerge`, pinned
+    /// by `fixtures/midi-key-merge.json`. This class runs the keyer and its
+    /// clock, and does what the merge says.
+    private var merge = MIDIKeyMerge()
     private let paddles: PaddleKeyerDriver
 
     init() {
         let settings = AppSettings.load()
         paddles = PaddleKeyerDriver(mode: settings.paddleMode, wpm: settings.wpm)
         paddles.onKey = { [weak self] isDown, atMs in
-            self?.keyerEdge(isDown: isDown, atMs: atMs)
+            guard let self else { return }
+            self.perform(self.merge.keyerTone(isDown: isDown, at: atMs))
         }
     }
 
@@ -341,61 +338,37 @@ final class MIDIKeyRouter {
             releaseAll()
             return
         }
-        let note = event.note
-        if !event.isDown {
-            if let element = keyedNotes.removeValue(forKey: note) {
-                paddles.paddle(element, isDown: keyedNotes.values.contains(element))
-            } else if heldNotes.remove(note) != nil {
-                report(atMs: event.timestampMs)
-            }
-            return
-        }
         let adapterMode = VailKeyerMode(rawValue: RepeaterModel.storedKeyerMode) ?? .straightKey
-        switch MIDIKeyParser.route(forNote: note, adapterSendsRawPaddles: adapterMode.sendsRawPaddles) {
-        case nil:
-            return
-        case .held?:
-            heldNotes.insert(note)
-            report(atMs: event.timestampMs)
-        case .keyerDit?:
-            keyerPress(note: note, element: .dit)
-        case .keyerDah?:
-            keyerPress(note: note, element: .dah)
-        }
+        perform(merge.note(event.note, isDown: event.isDown,
+                           rawPaddles: adapterMode.sendsRawPaddles, at: event.timestampMs))
     }
 
     /// Let go of everything: the screen is going away, or the key unplugged.
     func releaseAll() {
-        heldNotes.removeAll()
-        keyedNotes.removeAll()
-        paddles.stop()
-        report(atMs: Int64(Date().timeIntervalSince1970 * 1000))
+        perform(merge.releaseAll(at: Int64(Date().timeIntervalSince1970 * 1000)))
     }
 
-    private func keyerPress(note: UInt8, element: PaddleKeyer.Element) {
-        // Follow Settings, as the on-screen paddles do; the driver applies a
-        // change only once it is idle, so an element in flight keeps its
-        // timing. Read only from idle, so a squeeze doesn't decode settings.
-        if !paddles.isHeld(.dit), !paddles.isHeld(.dah) {
-            let settings = AppSettings.load()
-            paddles.configure(mode: settings.paddleMode, wpm: settings.wpm)
+    private func perform(_ actions: [MIDIKeyMerge.Action]) {
+        for action in actions {
+            switch action {
+            case .key(let isDown, let at):
+                onKey?(isDown, at)
+            case .paddle(let element, let isDown):
+                if isDown {
+                    // Follow Settings, as the on-screen paddles do; the driver
+                    // applies a change only once it is idle, so an element in
+                    // flight keeps its timing. Read only from idle, so a
+                    // squeeze doesn't decode settings.
+                    if !paddles.isHeld(.dit), !paddles.isHeld(.dah) {
+                        let settings = AppSettings.load()
+                        paddles.configure(mode: settings.paddleMode, wpm: settings.wpm)
+                    }
+                    onAppKeyer?()
+                }
+                paddles.paddle(element, isDown: isDown)
+            case .stopKeyer:
+                paddles.stop()
+            }
         }
-        keyedNotes[note] = element
-        onAppKeyer?()
-        paddles.paddle(element, isDown: true)
-    }
-
-    private func keyerEdge(isDown: Bool, atMs: Int64) {
-        keyerDown = isDown
-        report(atMs: atMs)
-    }
-
-    /// Down while any held note is down or the keyer's tone is on; reported
-    /// only when that changes.
-    private func report(atMs: Int64) {
-        let now = !heldNotes.isEmpty || keyerDown
-        guard now != reported else { return }
-        reported = now
-        onKey?(now, atMs)
     }
 }

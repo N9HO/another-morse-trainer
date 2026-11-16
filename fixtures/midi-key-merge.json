@@ -1,0 +1,112 @@
+{
+  "$comment": [
+    "A MIDI key's notes merged into the one logical key (#380), pinned for all three ports:",
+    "MIDIKeyMerge in ios/Sources/MorseKit/MIDIKeyMerge.swift and MidiKeyMerge.kt in",
+    "android/.../morsekit/ and desktop/.../morsekit/. Read by ios/Sources/MorseKitCheck/main.swift",
+    "and MidiKeyMergeFixtureTest.kt (android, desktop).",
+    "",
+    "The merge sits between the note parser and the app's paddle keyer. It is pure: the app runs",
+    "the keyer (PaddleKeyerDriver) on its own clock and feeds the keyer's tone back in, so a case",
+    "scripts the tone edges the keyer would produce. Times are the caller's clock (ms here).",
+    "",
+    "Each case starts from a fresh merge with the adapter Keyer mode in `adapter`",
+    "('passthrough' or 'other', any other mode). Events, in order:",
+    "  [note, \"down\" | \"up\", at]   a MIDI note went down or up",
+    "  [\"tone\", \"on\" | \"off\", at]  the app keyer's tone went on or off at the time it scheduled",
+    "  [\"release\", at]              let go of everything (the screen goes away, or the key unplugs)",
+    "  [\"mode\", \"passthrough\" | \"other\"]  the adapter Keyer mode changes for later presses",
+    "`actions` is everything the merge tells the caller to do, in order:",
+    "  [\"key\", \"down\" | \"up\", at]   the logical key changed",
+    "  [\"paddle\", \"dit\" | \"dah\", \"down\" | \"up\"]   press or release the keyer's paddle",
+    "  [\"stop\"]                     stop the keyer (both paddles up, tone cut at once)",
+    "Every value was worked out by hand from `derivation` and fixtures/midi-key-routing.json, not",
+    "captured from any port."
+  ],
+  "derivation": {
+    "route": "A note's press goes where fixtures/midi-key-routing.json sends it for the current adapter mode: 'held' or a keyer paddle. A note's release goes where its press went, whatever the mode is by then. A note already down that goes down again, and a note that goes nowhere, do nothing.",
+    "held": "A held note keys the logical key as it comes, at its own time; each held note is held separately.",
+    "keyer": "A keyer note presses its paddle unless another note already holds that paddle (1 and 20 are both dit), and releases it only when the last note holding it goes up. The merge itself sounds nothing: the keyer's tone comes back in as tone events.",
+    "merge": "The logical key is down while any held note is down or the keyer's tone is on; an action only when that changes, at the time of the input that changed it.",
+    "release": "Release lets go of every note. If a note holds a keyer paddle or the keyer's tone is on, the caller is told to stop the keyer first (an element in progress is cut, not finished). Then the key goes up at the release's time if it was down. A tone-off from the stopped keyer afterwards changes nothing."
+  },
+  "cases": [
+    {
+      "name": "A straight-key note keys the key as it comes",
+      "adapter": "other",
+      "events": [[0, "down", 100], [0, "up", 300]],
+      "actions": [["key", "down", 100], ["key", "up", 300]]
+    },
+    {
+      "name": "Two held notes that overlap hold the key until both are up",
+      "adapter": "other",
+      "events": [[0, "down", 0], [30, "down", 50], [0, "up", 100], [30, "up", 200]],
+      "actions": [["key", "down", 0], ["key", "up", 200]]
+    },
+    {
+      "name": "Outside Passthrough, a Vail Adapter's notes 1 and 2 are held",
+      "adapter": "other",
+      "events": [[1, "down", 0], [1, "up", 60], [2, "down", 120], [2, "up", 300]],
+      "actions": [["key", "down", 0], ["key", "up", 60], ["key", "down", 120], ["key", "up", 300]]
+    },
+    {
+      "name": "In Passthrough, note 1 presses the keyer's dit paddle and its tone keys the key",
+      "adapter": "passthrough",
+      "events": [[1, "down", 0], ["tone", "on", 0], [1, "up", 30], ["tone", "off", 60]],
+      "actions": [["paddle", "dit", "down"], ["key", "down", 0], ["paddle", "dit", "up"], ["key", "up", 60]]
+    },
+    {
+      "name": "The TinyMIDI's 20 and 21 press the keyer whatever the adapter mode",
+      "adapter": "other",
+      "events": [[20, "down", 0], [21, "down", 10], [20, "up", 40], [21, "up", 50]],
+      "actions": [["paddle", "dit", "down"], ["paddle", "dah", "down"], ["paddle", "dit", "up"], ["paddle", "dah", "up"]]
+    },
+    {
+      "name": "Two notes on one paddle (1 and 20) hold it until both are up",
+      "adapter": "passthrough",
+      "events": [[1, "down", 0], [20, "down", 10], [1, "up", 20], [20, "up", 30]],
+      "actions": [["paddle", "dit", "down"], ["paddle", "dit", "up"]]
+    },
+    {
+      "name": "A release goes where its press went, even after the adapter mode changed",
+      "adapter": "passthrough",
+      "events": [[1, "down", 0], ["mode", "other"], [1, "up", 50], [1, "down", 100], ["mode", "passthrough"], [1, "up", 150]],
+      "actions": [["paddle", "dit", "down"], ["paddle", "dit", "up"], ["key", "down", 100], ["key", "up", 150]]
+    },
+    {
+      "name": "A held note and the keyer's tone overlap: the key stays down until both are off",
+      "adapter": "other",
+      "events": [[0, "down", 0], [20, "down", 10], ["tone", "on", 10], [0, "up", 40], ["tone", "off", 70], [20, "up", 80]],
+      "actions": [["key", "down", 0], ["paddle", "dit", "down"], ["key", "up", 70], ["paddle", "dit", "up"]]
+    },
+    {
+      "name": "Release with a held note down lets the key up and leaves an idle keyer alone",
+      "adapter": "other",
+      "events": [[0, "down", 0], ["release", 100]],
+      "actions": [["key", "down", 0], ["key", "up", 100]]
+    },
+    {
+      "name": "Release with a paddle held stops the keyer and lets the key up at once",
+      "adapter": "other",
+      "events": [[20, "down", 0], ["tone", "on", 0], ["release", 30], ["tone", "off", 30]],
+      "actions": [["paddle", "dit", "down"], ["key", "down", 0], ["stop"], ["key", "up", 30]]
+    },
+    {
+      "name": "Release while the keyer finishes an element after the paddle let go still cuts it",
+      "adapter": "other",
+      "events": [[20, "down", 0], ["tone", "on", 0], [20, "up", 20], ["release", 40], ["tone", "off", 60]],
+      "actions": [["paddle", "dit", "down"], ["key", "down", 0], ["paddle", "dit", "up"], ["stop"], ["key", "up", 40]]
+    },
+    {
+      "name": "After a release the merge starts clean",
+      "adapter": "other",
+      "events": [[0, "down", 0], ["release", 10], [0, "up", 20], [0, "down", 30], [0, "up", 40]],
+      "actions": [["key", "down", 0], ["key", "up", 10], ["key", "down", 30], ["key", "up", 40]]
+    },
+    {
+      "name": "Notes that go nowhere, and a release with nothing held, do nothing",
+      "adapter": "passthrough",
+      "events": [[60, "down", 0], [60, "up", 10], ["release", 20]],
+      "actions": []
+    }
+  ]
+}
