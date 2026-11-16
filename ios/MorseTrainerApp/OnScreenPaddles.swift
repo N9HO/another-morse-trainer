@@ -35,8 +35,19 @@ extension PaddleKeyer.Mode: Identifiable {
 /// between deadlines resume here. Each edge carries the time the keyer
 /// scheduled it for, not the moment the sleep woke, so a late wake-up shifts
 /// when the tone is heard but never the element lengths a consumer measures.
+///
+/// `lagMs` runs the keyer that far behind real time, for paddles whose
+/// contacts arrive late (the on-screen paddles: `touchLagMs`). It then decides
+/// each next element on what the paddles were doing at that moment, not on
+/// what it has heard so far, and every edge sounds `lagMs` after its time.
+/// Without it, a paddle let go just before an element ended was heard after
+/// the keyer had sent one more. A MIDI paddle (`MIDIInput`) runs with none.
 @MainActor
 final class PaddleKeyerDriver: ObservableObject {
+    /// The on-screen paddles' lag. On an iPhone 17 Pro Max a touch reached
+    /// the app 18–48 ms after it happened, median 27 ms; 35 ms covered 99%.
+    static let touchLagMs: Double = 35
+
     @Published private(set) var ditHeld = false
     @Published private(set) var dahHeld = false
 
@@ -46,10 +57,16 @@ final class PaddleKeyerDriver: ObservableObject {
     /// A mode or speed change made while keying, applied once the keyer is idle
     /// so an element in flight is never re-timed.
     private var pending: (mode: PaddleKeyer.Mode, wpm: Double)?
+    private let lagMs: Double
+    /// How far the keyer has been run. No paddle is timed before it.
+    private var keyerMs = -Double.infinity
+    /// Edges decided but not yet due to sound.
+    private var queued: [PaddleKeyer.Edge] = []
     private var tick: Task<Void, Never>?
 
-    init(mode: PaddleKeyer.Mode, wpm: Double) {
+    init(mode: PaddleKeyer.Mode, wpm: Double, lagMs: Double = 0) {
         keyer = PaddleKeyer(mode: mode, wpm: wpm)
+        self.lagMs = lagMs
     }
 
     func configure(mode: PaddleKeyer.Mode, wpm: Double) {
@@ -61,39 +78,75 @@ final class PaddleKeyerDriver: ObservableObject {
         element == .dit ? ditHeld : dahHeld
     }
 
-    func paddle(_ element: PaddleKeyer.Element, isDown: Bool) {
+    /// A paddle went down or up. `atMs` is the touch's own time; nil means now.
+    /// Without a lag the paddle is timed from now, because its element is
+    /// scheduled from the moment the keyer hears it. With one it is timed from
+    /// `atMs`, but never before what the keyer has already decided.
+    func paddle(_ element: PaddleKeyer.Element, isDown: Bool, atMs: Int64? = nil) {
         guard isHeld(element) != isDown else { return }
         if element == .dit { ditHeld = isDown } else { dahHeld = isDown }
-        emit(keyer.paddle(element, isDown: isDown, atMs: Self.nowMs()))
-        schedule()
+        let now = Self.nowMs()
+        let t: Double
+        if lagMs > 0, let atMs {
+            t = min(now, max(keyerMs, Double(atMs)))
+        } else {
+            t = now
+        }
+        keyerMs = max(keyerMs, t)
+        run(keyer.paddle(element, isDown: isDown, atMs: t))
     }
 
     /// The screen is going away: let go of both paddles and cut any tone.
+    /// What was still waiting to sound goes out at once, ahead of the cut.
     func stop() {
         tick?.cancel()
         tick = nil
         ditHeld = false
         dahHeld = false
-        emit(keyer.releaseAll(atMs: Self.nowMs()))
+        let t = keyerTime()
+        let edges = queued + keyer.advance(toMs: t) + keyer.releaseAll(atMs: t)
+        queued = []
+        emit(edges)
         applyPendingIfIdle()
+    }
+
+    /// The time the keyer can be run to now: `lagMs` ago, never backwards.
+    private func keyerTime() -> Double {
+        keyerMs = max(keyerMs, Self.nowMs() - lagMs)
+        return keyerMs
+    }
+
+    /// Queue the keyer's new edges, sound those now due, and wake for the rest.
+    private func run(_ edges: [PaddleKeyer.Edge]) {
+        queued += edges
+        // Within a millisecond counts as due: `onKey` gets whole milliseconds.
+        let now = Self.nowMs()
+        let due = queued.prefix { $0.atMs + lagMs <= now + 1 }
+        queued.removeFirst(due.count)
+        emit(Array(due))
+        schedule()
     }
 
     private func schedule() {
         tick?.cancel()
         tick = nil
-        guard let deadline = keyer.nextDeadlineMs else {
-            applyPendingIfIdle()
-            return
-        }
-        let delayMs = max(0, deadline - Self.nowMs())
+        let deadline = keyer.nextDeadlineMs
+        if deadline == nil { applyPendingIfIdle() }
+        guard let next = [deadline, queued.first?.atMs].compactMap({ $0 }).min() else { return }
+        let delayMs = max(0, next + lagMs - Self.nowMs())
         tick = Task { [weak self] in
             // Zero tolerance: the default lets the system coalesce the wake-up,
             // which at 30+ WPM is a noticeable fraction of a dit.
             try? await Task.sleep(until: .now + .microseconds(Int64(delayMs * 1000)),
                                   tolerance: .zero, clock: .continuous)
             guard !Task.isCancelled, let self else { return }
-            self.emit(self.keyer.advance(toMs: max(deadline, Self.nowMs())))
-            self.schedule()
+            var to = self.keyerTime()
+            // Woken for a deadline: run to it even if the sleep ended early.
+            if let deadline, deadline <= next {
+                to = max(to, deadline)
+                self.keyerMs = to
+            }
+            self.run(self.keyer.advance(toMs: to))
         }
     }
 
@@ -288,7 +341,7 @@ struct OnScreenPaddlesView: View {
         self.wpm = wpm
         self.swapped = swapped
         self.onKey = onKey
-        _driver = StateObject(wrappedValue: PaddleKeyerDriver(mode: mode, wpm: wpm))
+        _driver = StateObject(wrappedValue: PaddleKeyerDriver(mode: mode, wpm: wpm, lagMs: PaddleKeyerDriver.touchLagMs))
     }
 
     var body: some View {
@@ -326,8 +379,8 @@ struct OnScreenPaddlesView: View {
         }
         .scaleEffect(pressed ? 0.98 : 1)
         .animation(.easeOut(duration: 0.06), value: pressed)
-        .keyPress { down, _ in
-            driver.paddle(element, isDown: down)
+        .keyPress { down, ms in
+            driver.paddle(element, isDown: down, atMs: ms)
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(element == .dit ? "Dit paddle" : "Dah paddle")
