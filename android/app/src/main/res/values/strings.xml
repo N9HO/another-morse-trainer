@@ -394,7 +394,6 @@
     <string name="cw77_now_playing_artist">Morse Trainer · CW 77</string>
     <string name="listen_blurb">Hear the code, then the answer spoken aloud — no tapping. Keeps playing with the screen locked.</string>
     <string name="listen_heard_count">%1$s heard</string>
-    <string name="listen_time_left">" · %1$d:%2$02d left"</string>
     <string name="listen_tap_play_prompt">Tap play to start a hands-free loop.</string>
     <string name="listen_status_paused">paused</string>
     <string name="listen_status_listening">"🎧  listening…"</string>

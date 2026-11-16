@@ -101,6 +101,14 @@ object ListenState {
     var activeSeconds by mutableIntStateOf(0)
     var limitSeconds by mutableStateOf<Int?>(null)
     var finishedNote by mutableStateOf<String?>(null)
+
+    /**
+     * The listened seconds left before the session ends itself, or null for
+     * an "Until I stop" session. What the timer menu shows and edits (#379);
+     * it does not move while paused, because [activeSeconds] does not.
+     */
+    val timeLeftSeconds: Int?
+        get() = limitSeconds?.let { maxOf(0, it - activeSeconds) }
 }
 
 /**

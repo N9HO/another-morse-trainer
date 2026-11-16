@@ -78,6 +78,18 @@ fun ListenScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}, 
         ) {
             TextButton(onClick = { leave() }) { Text(stringResource(R.string.common_back), color = Brand.teal) }
             Row(verticalAlignment = Alignment.CenterVertically) {
+                // The session timer menu (iOS `sessionBar`, #379), while a
+                // session runs, paused or not. The time is listened seconds,
+                // kept by the service, so the edits go there: it alone ticks
+                // the clock and ends the session.
+                if (running) {
+                    SessionTimerMenu(
+                        remaining = ListenState.timeLeftSeconds,
+                        onAddSeconds = { ListenService.addTime(it) },
+                        onSubtractSeconds = { ListenService.subtractTime(it) },
+                        onRemoveLimit = { ListenService.removeLimit() }
+                    )
+                }
                 // Switching stops the loop the way Back does, then lands on
                 // the picked mode's setup (iOS #42).
                 SwitchModeButton(if (cw77) TrainingMode.CW77 else TrainingMode.LISTEN) { mode ->
@@ -145,12 +157,11 @@ fun ListenScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}, 
                 }
 
                 Spacer(Modifier.height(16.dp))
-                // Session readout: items heard, and time left when a length is set.
+                // Session readout: items heard. The time left is the timer
+                // menu's, in the header (#379).
                 if (running) {
-                    val left = ListenState.limitSeconds?.let { maxOf(0, it - ListenState.activeSeconds) }
                     Text(
-                        stringResource(R.string.listen_heard_count, ListenState.itemsHeard) +
-                            (left?.let { stringResource(R.string.listen_time_left, it / 60, it % 60) } ?: ""),
+                        stringResource(R.string.listen_heard_count, ListenState.itemsHeard),
                         style = MaterialTheme.typography.labelMedium,
                         color = Brand.textSecondary
                     )
