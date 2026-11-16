@@ -845,7 +845,7 @@ do {
         let longOnly = CallsignGenerator.generate(formats: [.oneByThree], usOnly: false,
                                                   shortOnly: true, using: &shortRNG)
         let off = CallsignGenerator.generate(formats: [.oneByThree], usOnly: true, using: &shortRNG)
-        if usCall.count != 4 || anyCall.count != 4 { shortOK = false }
+        if usCall.count != 5 || anyCall.count != 4 { shortOK = false }
         if longOnly.count != 4 { fallbackOK = false }
         if off.count != 5 { offOK = false }
         if anyCall.first.map({ !"KNWA".contains($0) }) ?? false { sawDX = true }

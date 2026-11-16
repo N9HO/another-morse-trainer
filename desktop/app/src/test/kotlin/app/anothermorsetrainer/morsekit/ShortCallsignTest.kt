@@ -20,7 +20,7 @@ class ShortCallsignTest {
         repeat(400) {
             val us = CallsignGenerator.generate(all, usOnly = true, rng = rng, shortOnly = true)
             val any = CallsignGenerator.generate(all, usOnly = false, rng = rng, shortOnly = true)
-            assertEquals(us, 4, us.length)
+            assertEquals(us, 5, us.length)
             assertEquals(any, 4, any.length)
         }
     }
