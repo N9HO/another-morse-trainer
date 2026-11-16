@@ -9,6 +9,8 @@
     "wpm": "max(minimumWpm, startingWpm - speedStepWpm * (floor(listens / listensPerSpeedStep) + floor(wrongGuesses / guessesPerSpeedStep))) — listens and wrong guesses step the speed independently and the steps add; there is no cap on either",
     "shareText": "headline, then one emoji row per guess, then the link",
     "listens": "every play of the word before the win — the first and every replay — recorded at the speed in effect when it was played; the step lands on the play after it, as with guesses. Replays after the win are free and not recorded",
+    "roundWpm": "#367: a guess row is labelled with the speed the word was last HEARD at (the speed of the most recent recorded listen), not the ladder's next step, so a row never claims a speed the player never heard; with no listen yet it is the ladder speed at the time of the guess. See guessSpeeds[]",
+    "guessWpm": "the speed a guess made NOW would be labelled with, by the roundWpm rule (last heard, else the current ladder speed); the row being typed is tagged with it so its tag never changes on submit. guessSpeeds[].guessWpmAtStart is it before any play, and each play's guessWpm is it after that play. It can differ from the next listen's speed: after the third listen at 40 the ladder is at 35 but guessWpm is still 40",
     "solvedWpm": "the lowest speed the word was heard at before the correct guess (min of heard); a word never listened to reports the speed the winning guess was made at",
     "headline": "solved: 'Daily Dit #N — <solvedWpm> WPM · <g> guess(es) · <l> listen(s)'; playing: 'Daily Dit #N — <g> guess(es) · <l> listen(s) so far'; ' (no reference)' appended when hideReference. Singular at exactly 1. No guess cap, so no lost outcome",
     "quietWarning": "#252: a play asks 'play anyway?' first iff the game is not finished (so the play would spend a listen) AND volumeFraction < quietVolumeFraction, strictly below. volumeFraction is output volume over the device maximum; a muted stream counts as 0. 0.05 is under the quietest step on an iPhone (1/16 = 0.0625) and a 15-step Android media stream (1/15), so in practice it is 'at zero'; a 25-step stream's first step (0.04) is below it"
@@ -447,9 +449,9 @@
       50.0
     ],
     "roundWpms": [
-      55.0,
-      55.0,
-      55.0,
+      60.0,
+      60.0,
+      60.0,
       50.0
     ],
     "listens": 4,
@@ -511,6 +513,43 @@
       "solvedWpm": null,
       "hideReference": true,
       "headline": "Daily Dit #99 — 0 guesses · 1 listen so far (no reference)"
+    }
+  ],
+  "guessSpeeds": [
+    {
+      "name": "the #367 report: three listens at 40, a wrong guess between them, then the solve; the step to 35 lands after the third listen and was never heard",
+      "puzzleNumber": 315,
+      "answer": "SPEND",
+      "startingWpm": 40.0,
+      "hideReference": false,
+      "guessWpmAtStart": 40.0,
+      "plays": [
+        {"action": "listen", "guessWpm": 40.0},
+        {"action": "guess", "word": "CRANE", "guessWpm": 40.0},
+        {"action": "listen", "guessWpm": 40.0},
+        {"action": "listen", "guessWpm": 40.0},
+        {"action": "guess", "word": "SPEND", "guessWpm": 40.0}
+      ],
+      "heard": [40.0, 40.0, 40.0],
+      "roundWpms": [40.0, 40.0],
+      "solvedWpm": 40.0
+    },
+    {
+      "name": "no listens at all: three wrong guesses step the ladder, and with nothing heard the rows and the headline both use the ladder speed",
+      "puzzleNumber": 315,
+      "answer": "SPEND",
+      "startingWpm": 40.0,
+      "hideReference": false,
+      "guessWpmAtStart": 40.0,
+      "plays": [
+        {"action": "guess", "word": "CRANE", "guessWpm": 40.0},
+        {"action": "guess", "word": "MOUND", "guessWpm": 40.0},
+        {"action": "guess", "word": "ATLAS", "guessWpm": 35.0},
+        {"action": "guess", "word": "SPEND", "guessWpm": 35.0}
+      ],
+      "heard": [],
+      "roundWpms": [40.0, 40.0, 40.0, 35.0],
+      "solvedWpm": 35.0
     }
   ],
   "solvedSpeeds": [

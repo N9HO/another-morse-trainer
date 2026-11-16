@@ -258,6 +258,71 @@ class DailyDitTest {
         }
     }
 
+    /**
+     * #367: a row is labelled with the speed the word was last heard at, so it
+     * can never disagree with the headline's slowest-heard speed by naming a
+     * step the player never heard. Scripts and values are the fixture's.
+     */
+    @Test
+    fun guessRowsCarryTheSpeedLastHeardAsTheFixtureSays() {
+        val cases = fixture.getJSONArray("guessSpeeds")
+        assertTrue(cases.length() > 0)
+        for (i in 0 until cases.length()) {
+            val c = cases.getJSONObject(i)
+            val game = play(c)
+            val name = c.getString("name")
+            val heard = c.getJSONArray("heard")
+            assertEquals(name, heard.length(), game.heard.size)
+            for (j in 0 until heard.length()) {
+                assertEquals("$name: listen ${j + 1}", heard.getDouble(j), game.heard[j], 0.0)
+            }
+            val rows = c.getJSONArray("roundWpms")
+            assertEquals(name, rows.length(), game.rounds.size)
+            for (j in 0 until rows.length()) {
+                assertEquals("$name: guess ${j + 1}", rows.getDouble(j), game.rounds[j].wpm, 0.0)
+            }
+            assertEquals(name, c.getDouble("solvedWpm"), game.solvedWpm!!, 0.0)
+        }
+    }
+
+    /**
+     * #367: the row being typed is tagged with [DailyDitGame.guessWpm], the
+     * same value submit() records, so it is pinned before the first play and
+     * after every one, not only where a row was made. After the third listen
+     * the ladder is a step lower but nothing has been heard there, so
+     * guessWpm stays at the speed last heard.
+     */
+    @Test
+    fun theRowBeingTypedCarriesTheSpeedLastHeardAsTheFixtureSays() {
+        val cases = fixture.getJSONArray("guessSpeeds")
+        assertTrue(cases.length() > 0)
+        for (i in 0 until cases.length()) {
+            val c = cases.getJSONObject(i)
+            val name = c.getString("name")
+            var game = DailyDitGame(
+                puzzleNumber = c.getInt("puzzleNumber"),
+                answer = c.getString("answer"),
+                startingWpm = c.getDouble("startingWpm"),
+                hideReference = c.getBoolean("hideReference")
+            )
+            assertEquals("$name: at the start", c.getDouble("guessWpmAtStart"), game.guessWpm, 0.0)
+            val plays = c.getJSONArray("plays")
+            for (j in 0 until plays.length()) {
+                val p = plays.getJSONObject(j)
+                when (p.getString("action")) {
+                    "listen" -> game = game.listen().game
+                    "guess" -> {
+                        val result = game.submit(p.getString("word"))
+                        assertTrue("$name: ${p.getString("word")} should be accepted", result is DailyDitSubmission.Scored)
+                        game = (result as DailyDitSubmission.Scored).game
+                    }
+                    else -> throw AssertionError("unknown play ${p.getString("action")}")
+                }
+                assertEquals("$name: after play ${j + 1}", p.getDouble("guessWpm"), game.guessWpm, 0.0)
+            }
+        }
+    }
+
     @Test
     fun headlinesMatchTheFixture() {
         val miss = List(DailyDit.WORD_LENGTH) { DailyDitTile.ABSENT }

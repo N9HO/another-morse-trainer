@@ -3950,7 +3950,12 @@ struct DailyDitFixture: Decodable {
         let listens, wrongGuesses: Int
         let wpm: Double
     }
-    struct Play: Decodable { let action: String; let word: String? }
+    struct Play: Decodable {
+        let action: String
+        let word: String?
+        /// guessSpeeds only: `DailyDitGame.guessWpm` after this play.
+        let guessWpm: Double?
+    }
     struct Share: Decodable {
         let puzzleNumber: Int
         let answer: String
@@ -3970,6 +3975,17 @@ struct DailyDitFixture: Decodable {
         let headline: String
     }
     struct SolvedSpeed: Decodable { let heard: [Double]; let winningGuessWpm, solvedWpm: Double }
+    struct GuessSpeed: Decodable {
+        let name: String
+        let puzzleNumber: Int
+        let answer: String
+        let startingWpm: Double
+        let hideReference: Bool
+        let guessWpmAtStart: Double
+        let plays: [Play]
+        let heard, roundWpms: [Double]
+        let solvedWpm: Double
+    }
     struct QuietWarning: Decodable { let volumeFraction: Double; let isFinished, warns: Bool }
     let rules: Rules
     let wordLists: WordLists
@@ -3979,6 +3995,7 @@ struct DailyDitFixture: Decodable {
     let ladder: [Ladder]
     let share: Share
     let headlines: [Headline]
+    let guessSpeeds: [GuessSpeed]
     let solvedSpeeds: [SolvedSpeed]
     let quietWarnings: [QuietWarning]
     struct History: Decodable {
@@ -4177,6 +4194,37 @@ if let fx = loadDailyDitFixture() {
         }
     }
     check("headlines match the fixture across \(fx.headlines.count) outcomes (singulars and a 101-guess day included)", headlineOK)
+
+    // #367: a row is labelled with the speed the word was last heard at, so it
+    // never names a step the player did not hear. Scripts and values are the
+    // fixture's.
+    var guessSpeedOK = !fx.guessSpeeds.isEmpty
+    for c in fx.guessSpeeds {
+        var g = DailyDitGame(puzzleNumber: c.puzzleNumber, answer: c.answer,
+                             startingWpm: c.startingWpm, hideReference: c.hideReference)
+        // The row being typed is tagged with guessWpm, so it is pinned before
+        // the first play and after every one, not just where a row was made.
+        if g.guessWpm != c.guessWpmAtStart {
+            guessSpeedOK = false
+            print("      ↳ \(c.name): guessWpm \(g.guessWpm) at the start")
+        }
+        for (i, p) in c.plays.enumerated() {
+            switch p.action {
+            case "listen": g.listen()
+            case "guess": if case .rejected = g.submit(p.word ?? "") { guessSpeedOK = false }
+            default: guessSpeedOK = false
+            }
+            if p.guessWpm == nil || g.guessWpm != p.guessWpm {
+                guessSpeedOK = false
+                print("      ↳ \(c.name): guessWpm \(g.guessWpm) after play \(i + 1), fixture \(String(describing: p.guessWpm))")
+            }
+        }
+        if g.heard != c.heard || g.rounds.map(\.wpm) != c.roundWpms || g.solvedWpm != c.solvedWpm {
+            guessSpeedOK = false
+            print("      ↳ \(c.name): heard \(g.heard), rows \(g.rounds.map(\.wpm)), solved \(String(describing: g.solvedWpm))")
+        }
+    }
+    check("guess rows and the row being typed carry the speed last heard, matching the headline, across \(fx.guessSpeeds.count) scripts", guessSpeedOK)
 
     // History (#333): which days are listed, and which word each one is.
     let h = fx.history

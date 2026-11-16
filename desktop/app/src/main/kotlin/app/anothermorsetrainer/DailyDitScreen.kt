@@ -439,7 +439,9 @@ fun DailyDitScreen(
                 }
                 if (!game.isFinished) {
                     // The live row, so typing lands in the grid rather than off
-                    // to the side of it.
+                    // to the side of it. Tagged with the speed the guess will be
+                    // recorded at (last heard, #367), not the ladder's next step,
+                    // so the tag can't change on submit.
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -448,7 +450,7 @@ fun DailyDitScreen(
                         for (i in 0 until DailyDit.WORD_LENGTH) {
                             Tile(entry.getOrNull(i), null, Modifier.weight(1f))
                         }
-                        SpeedTag(game.currentWpm)
+                        SpeedTag(game.guessWpm)
                     }
                 }
             }

@@ -35,6 +35,24 @@ struct SendingAnalyzerView: View {
                     .padding(16)
                     .readableWidth()
                 }
+                // The on-screen key sits *outside* the ScrollView, pinned under
+                // it. Inside one, UIKit's scroll view holds a touch back until
+                // it knows the touch is not a scroll, so a press reached the
+                // key late and a tap shorter than that delay arrived as a down
+                // and an up in the same instant: short dits were lost and holds
+                // were late (#363). The games' play screens and Sending Keyer
+                // have no ScrollView around their key, and the repeater's key
+                // is pinned the same way. First Four's stage key is still
+                // inside its ScrollView.
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    if analyzer.phase == .sending && analyzer.input == .key {
+                        SendingKeyPad(analyzer: analyzer, keyer: analyzer.keyer)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 10)
+                            .frame(maxWidth: .infinity)
+                            .background(Theme.navy)
+                    }
+                }
             }
             .navigationTitle("Sending Analyzer")
             .navigationBarTitleDisplayMode(.inline)
@@ -47,6 +65,11 @@ struct SendingAnalyzerView: View {
         .onAppear { analyzer.appear() }
         .onDisappear { analyzer.disappear() }
         .presentationDetents([.large])
+        // While sending, the key is outside the ScrollView, so a finger that
+        // drifts down during a dah would drive the sheet's swipe-to-dismiss
+        // directly; if that won, the touch would be cancelled with the key
+        // still down. Done still closes it.
+        .interactiveDismissDisabled(analyzer.phase == .sending)
     }
 }
 
@@ -263,6 +286,55 @@ private struct LevelMeter: View {
     }
 }
 
+// MARK: - On-screen key
+
+/// The Sending Analyzer's on-screen key: the straight key or the paddles, as
+/// chosen in Settings › Keys & Sending › On-screen key (#233). The paddles'
+/// edges carry the time their keyer scheduled them for. Hosted outside the
+/// screen's ScrollView, see `SendingAnalyzerView` (#363).
+private struct SendingKeyPad: View {
+    @ObservedObject var analyzer: SendingAnalyzerModel
+    @ObservedObject var keyer: SendingKeyer
+    @State private var keyPressed = false
+
+    var body: some View {
+        OnScreenKeySwitch(onKey: { down, ms in analyzer.onScreenPaddleEdge(isDown: down, atMs: ms) }) {
+            keyButton
+        }
+        .frame(height: 140)
+    }
+
+    private var keyButton: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous)
+                .fill(keyPressed || keyer.isKeying ? Theme.teal : Theme.navyRaised)
+            RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous)
+                .strokeBorder(keyPressed ? Theme.tealBright : Theme.hairline, lineWidth: keyPressed ? 2 : 1)
+            VStack(spacing: 4) {
+                Image(systemName: "dot.radiowaves.left.and.right")
+                    .font(.system(size: 26, weight: .semibold))
+                    .foregroundStyle(keyPressed || keyer.isKeying ? Theme.navy : Theme.teal)
+                Text("HOLD TO KEY")
+                    .font(.system(size: 12, weight: .bold)).tracking(1.5)
+                    .foregroundStyle(keyPressed || keyer.isKeying ? Theme.navy : Theme.textSecondary)
+            }
+        }
+        .frame(height: 140)
+        .contentShape(Rectangle())
+        .gesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { _ in
+                    if !keyPressed { keyPressed = true; keyer.touchKey(isDown: true) }
+                }
+                .onEnded { _ in
+                    if keyPressed { keyPressed = false; keyer.touchKey(isDown: false) }
+                }
+        )
+        .accessibilityLabel("Morse key")
+        .accessibilityHint("Press and hold to send each dit and dah")
+    }
+}
+
 // MARK: - Sending
 
 private struct SendingSection: View {
@@ -270,7 +342,6 @@ private struct SendingSection: View {
     @ObservedObject var analyzer: SendingAnalyzerModel
     @ObservedObject var keyer: SendingKeyer
     @ObservedObject var mic: SendingMicInput
-    @State private var keyPressed = false
     @State private var showingBluetoothMIDI = false
 
     var body: some View {
@@ -287,13 +358,8 @@ private struct SendingSection: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             if analyzer.input == .key {
-                // Straight key or paddles, as chosen in Settings › Keys &
-                // Sending › On-screen key (#233). The paddles' edges carry
-                // the time their keyer scheduled them for.
-                OnScreenKeySwitch(onKey: { down, ms in analyzer.onScreenPaddleEdge(isDown: down, atMs: ms) }) {
-                    keyButton
-                }
-                .frame(height: 140)
+                // The key itself is `SendingKeyPad`, pinned below the scroll
+                // view (#363); the connected-key readout stays here.
                 midiStatus
             } else {
                 SectionCard(title: "Microphone") {
@@ -325,36 +391,6 @@ private struct SendingSection: View {
                 .foregroundStyle(Theme.textSecondary)
                 .multilineTextAlignment(.center)
         }
-    }
-
-    private var keyButton: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous)
-                .fill(keyPressed || keyer.isKeying ? Theme.teal : Theme.navyRaised)
-            RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous)
-                .strokeBorder(keyPressed ? Theme.tealBright : Theme.hairline, lineWidth: keyPressed ? 2 : 1)
-            VStack(spacing: 4) {
-                Image(systemName: "dot.radiowaves.left.and.right")
-                    .font(.system(size: 26, weight: .semibold))
-                    .foregroundStyle(keyPressed || keyer.isKeying ? Theme.navy : Theme.teal)
-                Text("HOLD TO KEY")
-                    .font(.system(size: 12, weight: .bold)).tracking(1.5)
-                    .foregroundStyle(keyPressed || keyer.isKeying ? Theme.navy : Theme.textSecondary)
-            }
-        }
-        .frame(height: 140)
-        .contentShape(Rectangle())
-        .gesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { _ in
-                    if !keyPressed { keyPressed = true; keyer.touchKey(isDown: true) }
-                }
-                .onEnded { _ in
-                    if keyPressed { keyPressed = false; keyer.touchKey(isDown: false) }
-                }
-        )
-        .accessibilityLabel("Morse key")
-        .accessibilityHint("Press and hold to send each dit and dah")
     }
 
     private var midiStatus: some View {

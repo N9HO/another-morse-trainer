@@ -389,6 +389,16 @@ public struct DailyDitGame: Sendable, Equatable, Codable {
         DailyDit.wpm(startingAt: startingWpm, listens: listens, wrongGuesses: wrongGuesses)
     }
 
+    /// The speed a guess made now is labelled with: the speed the word was
+    /// last *heard* at, not the ladder's next step. The third listen is heard
+    /// at the old speed, so a guess made right after it was made on code that
+    /// was never sent at the stepped-down speed, and labelling it so disagreed
+    /// with the headline's slowest-heard speed (#367). With no listen yet there
+    /// is nothing heard, so it falls back to the ladder's current speed. Both
+    /// `submit` and the row being typed read this, so the row's tag can't
+    /// change when it is submitted.
+    public var guessWpm: Double { heard.last ?? currentWpm }
+
     /// What the brag sheet reports: the slowest speed the word was heard at
     /// before the right guess. A word guessed without ever being played falls
     /// back to the speed the winning guess was made at.
@@ -423,11 +433,11 @@ public struct DailyDitGame: Sendable, Equatable, Codable {
         guard word.count == DailyDit.wordLength else { return .rejected(.wrongLength) }
         guard DailyDit.isAllowedGuess(word) else { return .rejected(.notAWord) }
 
-        // Read the speed *before* appending: a guess is played at the speed it
-        // was made at, and only the next one feels the step down.
+        // Labelled with the speed last heard, not the ladder's next step (#367);
+        // see `guessWpm`.
         let round = DailyDitRound(guess: word,
                                   tiles: DailyDit.score(guess: word, answer: answer),
-                                  wpm: currentWpm)
+                                  wpm: guessWpm)
         rounds.append(round)
         return .scored(round)
     }
