@@ -19,6 +19,7 @@ import androidx.core.app.NotificationChannelCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
+import app.anothermorsetrainer.morsekit.SessionClock
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -139,6 +140,20 @@ class ListenService : Service() {
                 }
             }
             ACTION_STOP -> stopEverything()
+            ACTION_ADD_TIME, ACTION_SUBTRACT_TIME, ACTION_REMOVE_LIMIT -> {
+                if (ListenState.running) {
+                    val seconds = intent?.getIntExtra(EXTRA_SECONDS, 0) ?: 0
+                    when (intent?.action) {
+                        ACTION_ADD_TIME -> applyAddTime(seconds)
+                        ACTION_SUBTRACT_TIME -> applySubtractTime(seconds)
+                        else -> ListenState.limitSeconds = null
+                    }
+                } else {
+                    // The session ended between the tap and delivery: this
+                    // command started the service for nothing.
+                    stopSelf()
+                }
+            }
         }
         return START_NOT_STICKY
     }
@@ -211,6 +226,37 @@ class ListenService : Service() {
                     break
                 }
             }
+        }
+    }
+
+    /**
+     * The session timer menu (iOS `addSessionTime`, #379). The limit is kept
+     * as listened seconds, so the time left is [ListenState.limitSeconds]
+     * less [ListenState.activeSeconds]; the arithmetic on it is
+     * [SessionClock]'s, pinned by fixtures/gap-timers-session-clock.json.
+     * Paused, the ticker does not count, so the frozen time left simply
+     * grows and resumes from there; on an "Until I stop" session the added
+     * seconds start a countdown the ticker then enforces.
+     */
+    private fun applyAddTime(seconds: Int) {
+        val left = SessionClock.added(ListenState.timeLeftSeconds, seconds) ?: return
+        ListenState.limitSeconds = ListenState.activeSeconds + left
+    }
+
+    /**
+     * The timer menu's "Subtract 1 minute" (iOS `reduceSessionTime`): the
+     * time left drops, and reaching zero ends the session at once — paused
+     * or not — the way running out of time does.
+     */
+    private fun applySubtractTime(seconds: Int) {
+        val current = ListenState.timeLeftSeconds ?: return
+        if (seconds <= 0) return
+        val left = SessionClock.reduced(current, seconds) ?: 0
+        if (left <= 0) {
+            ListenState.finishedNote = getString(R.string.listen_session_complete, ListenState.itemsHeard)
+            stopEverything()
+        } else {
+            ListenState.limitSeconds = ListenState.activeSeconds + left
         }
     }
 
@@ -406,6 +452,10 @@ class ListenService : Service() {
         const val ACTION_START = "app.anothermorsetrainer.listen.START"
         const val ACTION_TOGGLE = "app.anothermorsetrainer.listen.TOGGLE"
         const val ACTION_STOP = "app.anothermorsetrainer.listen.STOP"
+        const val ACTION_ADD_TIME = "app.anothermorsetrainer.listen.ADD_TIME"
+        const val ACTION_SUBTRACT_TIME = "app.anothermorsetrainer.listen.SUBTRACT_TIME"
+        const val ACTION_REMOVE_LIMIT = "app.anothermorsetrainer.listen.REMOVE_LIMIT"
+        private const val EXTRA_SECONDS = "seconds"
 
         fun ensureChannel(context: Context) {
             val channel = NotificationChannelCompat.Builder(CHANNEL_ID, NotificationManagerCompat.IMPORTANCE_LOW)
@@ -426,6 +476,25 @@ class ListenService : Service() {
 
         fun stop(context: Context) {
             context.startService(Intent(context, ListenService::class.java).setAction(ACTION_STOP))
+        }
+
+        /** The timer menu's "Add N minutes" (#379), applied by the running service. */
+        fun addTime(context: Context, seconds: Int) {
+            context.startService(
+                Intent(context, ListenService::class.java).setAction(ACTION_ADD_TIME).putExtra(EXTRA_SECONDS, seconds)
+            )
+        }
+
+        /** The timer menu's "Subtract 1 minute" (#379); to zero ends the session. */
+        fun subtractTime(context: Context, seconds: Int) {
+            context.startService(
+                Intent(context, ListenService::class.java).setAction(ACTION_SUBTRACT_TIME).putExtra(EXTRA_SECONDS, seconds)
+            )
+        }
+
+        /** The timer menu's "Remove time limit" (#379): keep listening open-ended. */
+        fun removeLimit(context: Context) {
+            context.startService(Intent(context, ListenService::class.java).setAction(ACTION_REMOVE_LIMIT))
         }
     }
 }

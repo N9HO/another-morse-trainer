@@ -1,5 +1,6 @@
 package app.anothermorsetrainer
 
+import app.anothermorsetrainer.morsekit.SessionClock
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -100,6 +101,44 @@ object ListenService {
     fun stop() {
         if (player == null) return
         stopEverything()
+    }
+
+    /**
+     * The session timer menu's "Add N minutes" (iOS `addSessionTime`, #379;
+     * Android's ACTION_ADD_TIME). The limit is kept as listened seconds, so
+     * the time left is [ListenState.limitSeconds] less
+     * [ListenState.activeSeconds]; the arithmetic on it is [SessionClock]'s,
+     * pinned by fixtures/gap-timers-session-clock.json. Paused, the ticker
+     * does not count, so the frozen time left simply grows and resumes from
+     * there; on an "Until I stop" session the added seconds start a
+     * countdown the ticker then enforces.
+     */
+    fun addTime(seconds: Int) {
+        if (!ListenState.running) return
+        val left = SessionClock.added(ListenState.timeLeftSeconds, seconds) ?: return
+        ListenState.limitSeconds = ListenState.activeSeconds + left
+    }
+
+    /**
+     * "Subtract 1 minute" (iOS `reduceSessionTime`; Android's
+     * ACTION_SUBTRACT_TIME): the time left drops, and reaching zero ends the
+     * session at once — paused or not — the way running out of time does.
+     */
+    fun subtractTime(seconds: Int) {
+        if (!ListenState.running || seconds <= 0) return
+        val current = ListenState.timeLeftSeconds ?: return
+        val left = SessionClock.reduced(current, seconds) ?: 0
+        if (left <= 0) {
+            ListenState.finishedNote = AppStrings.get(R.string.listen_session_complete, ListenState.itemsHeard)
+            stopEverything()
+        } else {
+            ListenState.limitSeconds = ListenState.activeSeconds + left
+        }
+    }
+
+    /** "Remove time limit" (Android's ACTION_REMOVE_LIMIT): keep listening open-ended. */
+    fun removeLimit() {
+        if (ListenState.running) ListenState.limitSeconds = null
     }
 
     private fun startLoop() {
