@@ -40,8 +40,10 @@ struct SendingAnalyzerView: View {
                 // it knows the touch is not a scroll, so a press reached the
                 // key late and a tap shorter than that delay arrived as a down
                 // and an up in the same instant: short dits were lost and holds
-                // were late (#363). Every game's key is outside its ScrollView
-                // for the same reason; the analyzer's was the exception.
+                // were late (#363). The games' play screens and Sending Keyer
+                // have no ScrollView around their key, and the repeater's key
+                // is pinned the same way. First Four's stage key is still
+                // inside its ScrollView.
                 .safeAreaInset(edge: .bottom, spacing: 0) {
                     if analyzer.phase == .sending && analyzer.input == .key {
                         SendingKeyPad(analyzer: analyzer, keyer: analyzer.keyer)
@@ -63,6 +65,11 @@ struct SendingAnalyzerView: View {
         .onAppear { analyzer.appear() }
         .onDisappear { analyzer.disappear() }
         .presentationDetents([.large])
+        // While sending, the key is outside the ScrollView, so a finger that
+        // drifts down during a dah would drive the sheet's swipe-to-dismiss
+        // directly; if that won, the touch would be cancelled with the key
+        // still down. Done still closes it.
+        .interactiveDismissDisabled(analyzer.phase == .sending)
     }
 }
 
