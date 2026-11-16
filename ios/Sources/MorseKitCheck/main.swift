@@ -3168,6 +3168,55 @@ if let fx = loadUIContractFixture("midi-key-routing.json"),
     check("fixtures/midi-key-routing.json is readable", false)
 }
 
+// fixtures/midi-key-merge.json (#380): a MIDI key's notes and the app keyer's
+// tone merged into the one logical key, with what the caller is told to do
+// with its keyer. Shared with both Kotlin ports.
+print("\nMIDI key merge, against fixtures/midi-key-merge.json:")
+if let fx = loadUIContractFixture("midi-key-merge.json"), let cases = fx["cases"] as? [[String: Any]] {
+    check("the merge fixture carries cases", !cases.isEmpty)
+    for c in cases {
+        guard let name = c["name"] as? String, let adapter = c["adapter"] as? String,
+              let events = c["events"] as? [[Any]], let want = c["actions"] as? [[Any]] else {
+            check("a merge fixture case is well formed", false)
+            continue
+        }
+        var merge = MIDIKeyMerge()
+        var raw = adapter == "passthrough"
+        var got: [String] = []
+        func record(_ actions: [MIDIKeyMerge.Action]) {
+            for a in actions {
+                switch a {
+                case .key(let down, let at): got.append("key \(down ? "down" : "up") \(at)")
+                case .paddle(let e, let down): got.append("paddle \(e == .dit ? "dit" : "dah") \(down ? "down" : "up")")
+                case .stopKeyer: got.append("stop")
+                }
+            }
+        }
+        for e in events {
+            switch e.first {
+            case let note as Int:
+                guard let what = e[1] as? String, let at = e[2] as? Int else { continue }
+                record(merge.note(UInt8(note), isDown: what == "down", rawPaddles: raw, at: Int64(at)))
+            case let tag as String where tag == "tone":
+                guard let what = e[1] as? String, let at = e[2] as? Int else { continue }
+                record(merge.keyerTone(isDown: what == "on", at: Int64(at)))
+            case let tag as String where tag == "release":
+                guard let at = e[1] as? Int else { continue }
+                record(merge.releaseAll(at: Int64(at)))
+            case let tag as String where tag == "mode":
+                raw = (e[1] as? String) == "passthrough"
+            default:
+                check("\(name): event \(e) is a note, tone, release or mode", false)
+            }
+        }
+        let expected = want.map { $0.map { "\($0)" }.joined(separator: " ") }
+        check(name, got == expected)
+        if got != expected { print("      ↳ got \(got), fixture says \(expected)") }
+    }
+} else {
+    check("fixtures/midi-key-merge.json is readable", false)
+}
+
 // MARK: - Shared timing fixture
 //
 // fixtures/timing.json at the repo root, consumed by this harness AND by
