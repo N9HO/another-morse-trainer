@@ -3,14 +3,14 @@
 //
 // Supported keys send MIDI note-on/off; velocity > 0 = pressed, velocity 0
 // (or Note Off status) = released. The note map (MorseKit's MIDIKeyParser):
-//   straight = 0 (Vail Adapter: straight key, and every element its keyer
-//              modes send, already timed) or 30 (Morserino-32 Pocket, keyer
-//              in Straight Key mode)
-//   dit      = 1 (Vail Passthrough), 20 (N6ARA TinyMIDI, Pocket), or 61
-//   dah      = 2 (Vail Passthrough), 21 (N6ARA TinyMIDI, Pocket), or 62
-// Notes 1/2/20/21 are raw paddle contacts that the device does not time;
-// 61/62 are older mappings with no known source. Every note still maps to the
-// one logical key, so raw paddles are not iambic-timed here (a known gap).
+//   straight = 0 (Vail Adapter straight key) or 30 (Morserino-32 Pocket,
+//              keyer in Straight Key mode)
+//   dit      = 1 (Vail Adapter), 20 (N6ARA TinyMIDI, Pocket), or 61
+//   dah      = 2 (Vail Adapter), 21 (N6ARA TinyMIDI, Pocket), or 62
+// 61/62 are older mappings with no known source. `MIDIInput` reports each
+// note's edges; `MIDIKeyRouter` (below) turns them into the one logical key,
+// holding some notes and timing raw paddle contacts with the app's own
+// paddle keyer (#380).
 //
 // MIDIPacket.timeStamp is in mach_absolute_time units — use this for accurate
 // key event timing (sub-millisecond), not the host's Date().
@@ -34,6 +34,8 @@ public final class MIDIInput {
 
     public struct Event: Sendable {
         public let key: Key
+        /// The note it came on, which decides its route (`MIDIKeyRouter`).
+        public let note: UInt8
         public let isDown: Bool
         /// mach_absolute_time at the moment the key event occurred.
         public let machTimestamp: UInt64
@@ -71,12 +73,12 @@ public final class MIDIInput {
     /// don't connect (and double-deliver) the same source twice.
     private var connectedRefs = Set<MIDIEndpointRef>()
     private var sourceNames: [String] = []
-    /// Paddles currently held, by the last edge each one sent. Kept so an
+    /// Notes currently held, by the last edge each one sent. Kept so an
     /// unplugged key — which can no longer send its note-offs — gets a key-up
     /// delivered on its behalf (see `connectAllSources`). Behind `stateLock`
     /// like the callbacks: written on the CoreMIDI packet thread, read and
     /// cleared on the notification thread.
-    private var heldKeys = Set<Key>()
+    private var heldNotes = Set<UInt8>()
     private let stateLock = NSLock()
 
     /// Names of the MIDI sources currently connected (e.g. "Vail Adapter").
@@ -160,16 +162,17 @@ public final class MIDIInput {
         // so a keyer sees an ordinary key-up rather than a transmit that
         // never ends (Android `MidiKeyInput.disconnect`). Taken under the
         // lock, delivered outside it — the handler may re-enter us.
-        let released: Set<Key> = removed ? heldKeys : []
-        if removed { heldKeys.removeAll() }
+        let released: Set<UInt8> = removed ? heldNotes : []
+        if removed { heldNotes.removeAll() }
         let handler = released.isEmpty ? nil : storedOnEvent
         stateLock.unlock()
         if changed { onSourcesChanged?(names) }
         if let handler, !released.isEmpty {
             let mach = mach_absolute_time()
             let ms = Int64(Date().timeIntervalSince1970 * 1000)
-            for key in released {
-                handler(Event(key: key, isDown: false, machTimestamp: mach, timestampMs: ms))
+            for note in released {
+                guard let key = MIDIKeyParser.paddle(forNote: note) else { continue }
+                handler(Event(key: key, note: note, isDown: false, machTimestamp: mach, timestampMs: ms))
             }
         }
     }
@@ -223,7 +226,7 @@ public final class MIDIInput {
         // as of the last packet delivered.
         stateLock.lock()
         for message in messages {
-            if message.isDown { heldKeys.insert(message.paddle) } else { heldKeys.remove(message.paddle) }
+            if message.isDown { heldNotes.insert(message.note) } else { heldNotes.remove(message.note) }
         }
         let handler = storedOnEvent
         stateLock.unlock()
@@ -232,6 +235,7 @@ public final class MIDIInput {
         for message in messages {
             handler(Event(
                 key: message.paddle,
+                note: message.note,
                 isDown: message.isDown,
                 machTimestamp: packet.timeStamp,
                 timestampMs: timestampMs
@@ -274,4 +278,111 @@ public final class MIDIInput {
 
 public enum MIDIInputError: Error {
     case osStatus(String, OSStatus)
+}
+
+/// Turns a MIDI key's notes into the one logical key the app keys from, the
+/// way a Vail Adapter in a keyer mode sends it (#380). Two kinds of note
+/// (`MIDIKeyParser.route`):
+///
+/// - Held notes key for as long as they are held: the straight keys, and 1/2
+///   while the adapter Keyer mode is anything but Passthrough (there the
+///   adapter has already timed each element, or the paddle is a straight
+///   key). Overlapping presses hold the key: down on the first, up only when
+///   the last is released.
+/// - Raw paddle contacts — 1/2 from a Vail Adapter in Passthrough, 20/21 from
+///   an N6ARA TinyMIDI or a Morserino-32 Pocket, 61/62 — go into a
+///   `PaddleKeyerDriver`, the on-screen paddles' keyer, at the Settings paddle
+///   mode and speed, so a squeeze is iambic keying rather than one long tone.
+///   Its elements key the same logical key.
+///
+/// Main-actor: `MIDIInput` delivers on a CoreMIDI thread, and its consumers
+/// hop here before calling `handle`. Mirrors the routing inside the Android
+/// and desktop `MidiKeyInput`.
+@MainActor
+final class MIDIKeyRouter {
+    /// Every change of the logical key, with when it happened in wall-clock
+    /// ms: the packet's own time for a held note, the time the keyer
+    /// scheduled it for an element.
+    var onKey: ((_ isDown: Bool, _ atMs: Int64) -> Void)?
+    /// A raw paddle press went to the app's keyer: the elements that follow
+    /// are the app's, made at the Settings speed, which the Sending Analyzer
+    /// judges as paddles through a keyer.
+    var onAppKeyer: (() -> Void)?
+
+    private var heldNotes = Set<UInt8>()
+    /// Raw paddle notes down, by the paddle each was routed to when it went
+    /// down — so its release goes the same way even if the keyer mode changed
+    /// meanwhile, and two notes on one paddle (1 and 20) hold it until both
+    /// are up.
+    private var keyedNotes: [UInt8: PaddleKeyer.Element] = [:]
+    private var keyerDown = false
+    private var reported = false
+    private let paddles: PaddleKeyerDriver
+
+    init() {
+        let settings = AppSettings.load()
+        paddles = PaddleKeyerDriver(mode: settings.paddleMode, wpm: settings.wpm)
+        paddles.onKey = { [weak self] isDown, atMs in
+            self?.keyerEdge(isDown: isDown, atMs: atMs)
+        }
+    }
+
+    func handle(_ event: MIDIInput.Event) {
+        let note = event.note
+        if !event.isDown {
+            if let element = keyedNotes.removeValue(forKey: note) {
+                paddles.paddle(element, isDown: keyedNotes.values.contains(element))
+            } else if heldNotes.remove(note) != nil {
+                report(atMs: event.timestampMs)
+            }
+            return
+        }
+        let adapterMode = VailKeyerMode(rawValue: RepeaterModel.storedKeyerMode) ?? .straightKey
+        switch MIDIKeyParser.route(forNote: note, adapterSendsRawPaddles: adapterMode.sendsRawPaddles) {
+        case nil:
+            return
+        case .held?:
+            heldNotes.insert(note)
+            report(atMs: event.timestampMs)
+        case .keyerDit?:
+            keyerPress(note: note, element: .dit)
+        case .keyerDah?:
+            keyerPress(note: note, element: .dah)
+        }
+    }
+
+    /// Let go of everything: the screen is going away, or the key unplugged.
+    func releaseAll() {
+        heldNotes.removeAll()
+        keyedNotes.removeAll()
+        paddles.stop()
+        report(atMs: Int64(Date().timeIntervalSince1970 * 1000))
+    }
+
+    private func keyerPress(note: UInt8, element: PaddleKeyer.Element) {
+        // Follow Settings, as the on-screen paddles do; the driver applies a
+        // change only once it is idle, so an element in flight keeps its
+        // timing. Read only from idle, so a squeeze doesn't decode settings.
+        if !paddles.isHeld(.dit), !paddles.isHeld(.dah) {
+            let settings = AppSettings.load()
+            paddles.configure(mode: settings.paddleMode, wpm: settings.wpm)
+        }
+        keyedNotes[note] = element
+        onAppKeyer?()
+        paddles.paddle(element, isDown: true)
+    }
+
+    private func keyerEdge(isDown: Bool, atMs: Int64) {
+        keyerDown = isDown
+        report(atMs: atMs)
+    }
+
+    /// Down while any held note is down or the keyer's tone is on; reported
+    /// only when that changes.
+    private func report(atMs: Int64) {
+        let now = !heldNotes.isEmpty || keyerDown
+        guard now != reported else { return }
+        reported = now
+        onKey?(now, atMs)
+    }
 }

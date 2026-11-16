@@ -2419,13 +2419,22 @@ private fun AdapterKeyerSetting(context: android.content.Context) {
                 color = Brand.textSecondary,
                 fontSize = 12.sp
             )
+        } else if (AdapterKeyer.sendsRawPaddles(mode)) {
+            // #380: Passthrough's raw paddle contacts are timed by the app.
+            Spacer(Modifier.height(8.dp))
+            Text(
+                stringResource(R.string.settings_keyer_mode_passthrough_note),
+                color = Brand.textSecondary,
+                fontSize = 12.sp
+            )
         }
     }
 }
 
 /**
- * On-screen key type, and — for paddles — the keyer mode and the left-handed
- * swap (#233). Mirrors the iOS "On-screen key" section in `SettingsView`.
+ * On-screen key type, the paddle keyer mode (which also times raw paddle
+ * contacts from a MIDI key, #380), and — for paddles — the left-handed swap
+ * (#233). Mirrors the iOS "On-screen key" section in `SettingsView`.
  */
 @Composable
 private fun OnScreenKeySetting() {
@@ -2437,15 +2446,17 @@ private fun OnScreenKeySetting() {
             name = { it.label },
             onPick = { Settings.updateOnScreenKey(it) }
         )
+        // Shown with either key: it also times raw paddle contacts from a
+        // MIDI key (#380), whichever on-screen key is chosen.
+        Spacer(Modifier.height(14.dp))
+        ChipPicker(
+            label = stringResource(R.string.settings_paddle_mode),
+            options = PaddleKeyer.Mode.entries,
+            selected = Settings.paddleMode,
+            name = { it.label },
+            onPick = { Settings.updatePaddleMode(it) }
+        )
         if (Settings.onScreenKey == OnScreenKeyType.PADDLES) {
-            Spacer(Modifier.height(14.dp))
-            ChipPicker(
-                label = stringResource(R.string.settings_paddle_mode),
-                options = PaddleKeyer.Mode.entries,
-                selected = Settings.paddleMode,
-                name = { it.label },
-                onPick = { Settings.updatePaddleMode(it) }
-            )
             Spacer(Modifier.height(6.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),

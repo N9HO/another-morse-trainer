@@ -168,17 +168,22 @@ public final class RepeaterModel: ObservableObject {
         var beginLocalMs: Int64 = 0
     }
 
-    private var keyState: [MIDIInput.Key: KeyState] = [
-        .straight: KeyState(),
-        .dit: KeyState(),
-        .dah: KeyState(),
-    ]
+    /// Where a key edge comes from: the on-screen key, or the hardware key's
+    /// one logical key out of `midiRouter` (which merges its notes and times
+    /// raw paddle contacts with the app's paddle keyer, #380).
+    private enum KeySource: Hashable { case screen, midi }
 
-    /// True while any paddle is down. The per-key states above are the
+    private var keyState: [KeySource: KeyState] = [
+        .screen: KeyState(),
+        .midi: KeyState(),
+    ]
+    private var midiRouter: MIDIKeyRouter?
+
+    /// True while any source is down. The per-source states above are the
     /// edges; this is the one logical key they aggregate into (Android
-    /// `MidiKeyInput.updateHeld`): sidetone and the transmitted tone start
-    /// when the first paddle goes down and stop when the *last* one comes
-    /// up, so a squeeze or an overlapping release is not cut short.
+    /// `MidiKeyInput.report`): sidetone and the transmitted tone start
+    /// when the first goes down and stop when the *last* one comes up, so an
+    /// overlapping release is not cut short.
     private var anyKeyDown: Bool {
         keyState.values.contains { $0.isDown }
     }
@@ -294,10 +299,17 @@ public final class RepeaterModel: ObservableObject {
 
         do {
             let m = try MIDIInput()
+            let router = MIDIKeyRouter()
+            router.onKey = { [weak self] isDown, ms in
+                self?.handleKeyEdge(.midi, isDown: isDown, atMs: ms)
+            }
+            midiRouter?.onKey = nil
+            midiRouter?.releaseAll()
+            midiRouter = router
             m.onEvent = { [weak self] event in
                 guard let self else { return }
                 Task { @MainActor in
-                    self.handleMIDIEvent(event)
+                    self.midiRouter?.handle(event)
                 }
             }
             m.onSourcesChanged = { [weak self] names in
@@ -359,6 +371,9 @@ public final class RepeaterModel: ObservableObject {
         stuckKeyTask?.cancel()
         stuckKeyTask = nil
         Task { await client.disconnect() }
+        // Let go of a squeeze the app's keyer is still timing (#380); its
+        // key-up goes through like any other, before the engine stops.
+        midiRouter?.releaseAll()
         keyer.stop()
     }
 
@@ -496,12 +511,12 @@ public final class RepeaterModel: ObservableObject {
 
     // MARK: - Key event handling
 
-    private func handleMIDIEvent(_ event: MIDIInput.Event) {
-        let wasDown = keyState[event.key]?.isDown ?? false
-        if event.isDown, !wasDown {
-            handleKeyDown(event)
-        } else if !event.isDown, wasDown {
-            handleKeyUp(event)
+    private func handleKeyEdge(_ source: KeySource, isDown: Bool, atMs: Int64) {
+        let wasDown = keyState[source]?.isDown ?? false
+        if isDown, !wasDown {
+            handleKeyDown(source, atMs: atMs)
+        } else if !isDown, wasDown {
+            handleKeyUp(source, atMs: atMs)
         }
     }
 
@@ -510,40 +525,34 @@ public final class RepeaterModel: ObservableObject {
     /// exactly; the straight key leaves it to "now".
     public func touchKey(isDown: Bool, atMs: Int64? = nil) {
         let nowMs = atMs ?? Int64(Date().timeIntervalSince1970 * 1000)
-        let event = MIDIInput.Event(
-            key: .straight,
-            isDown: isDown,
-            machTimestamp: mach_absolute_time(),
-            timestampMs: nowMs
-        )
-        handleMIDIEvent(event)
+        handleKeyEdge(.screen, isDown: isDown, atMs: nowMs)
     }
 
-    private func handleKeyDown(_ event: MIDIInput.Event) {
+    private func handleKeyDown(_ source: KeySource, atMs: Int64) {
         let wasHeld = anyKeyDown
-        keyState[event.key]?.isDown = true
-        keyState[event.key]?.beginLocalMs = event.timestampMs
-        // A second paddle joining a press keeps the tone that is already
+        keyState[source]?.isDown = true
+        keyState[source]?.beginLocalMs = atMs
+        // A second source joining a press keeps the tone that is already
         // sounding; only the first edge starts one.
         guard !wasHeld else { return }
-        toneBeginLocalMs = event.timestampMs
+        toneBeginLocalMs = atMs
 
         // Local sidetone fires immediately, regardless of break-in.
         keyer.beginTx()
         // Only show on the timeline when we're actually transmitting.
         if breakInEnabled {
-            liveOwnKeyStarts.append(event.timestampMs)
+            liveOwnKeyStarts.append(atMs)
         }
 
         startStuckKeyWatchdog()
     }
 
-    private func handleKeyUp(_ event: MIDIInput.Event) {
-        keyState[event.key]?.isDown = false
-        // Still held on another paddle: the tone carries on until it releases.
+    private func handleKeyUp(_ source: KeySource, atMs: Int64) {
+        keyState[source]?.isDown = false
+        // Still held on another source: the tone carries on until it releases.
         guard !anyKeyDown, let begin = toneBeginLocalMs else { return }
         toneBeginLocalMs = nil
-        let durationMs = max(0, event.timestampMs - begin)
+        let durationMs = max(0, atMs - begin)
 
         keyer.endTx()
 
