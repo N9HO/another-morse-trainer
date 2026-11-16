@@ -49,6 +49,7 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.anothermorsetrainer.morsekit.ContinueAfterMiss
 import app.anothermorsetrainer.morsekit.MorseData
 import app.anothermorsetrainer.morsekit.MorseTiming
 import app.anothermorsetrainer.morsekit.PhraseQuiz
@@ -123,12 +124,19 @@ fun TypedQuizScreen(
         player.play(drill.playable, Settings.sidetoneHz, timing()) { toneFinishedAt = System.nanoTime() }
     }
 
+    // A miss holds the correction for Next; keying the right answer again is
+    // Next too (#355, after #352). The decision lives in morsekit/ContinueAfterMiss.
+    val missAck = remember { ContinueAfterMiss() }
+    var ackAwaiting by remember { mutableStateOf(false) }
+
     // Correct answers keep the rhythm going; a miss waits for the Next tap so the
     // learner can compare what they typed against the answer.
     // Clear the reveal state in the same recomposition as the new drill —
     // LaunchedEffect(round) also resets it, but a frame later, and that stale
     // frame flashed the next answer's comparison view (issue #63).
     fun advance() {
+        missAck.reset()
+        ackAwaiting = false
         drill = source.nextDrill()
         revealed = false
         input = ""
@@ -203,7 +211,11 @@ fun TypedQuizScreen(
 
     BackHandler { if (phase == TqPhase.SUMMARY) onBack() else finish() }
 
-    fun submit() {
+    /**
+     * Grade the box. [byKey]: the hardware key's pause submitted it, the only
+     * case in which a miss arms key-to-continue (a typed miss keeps Next alone).
+     */
+    fun submit(byKey: Boolean = false) {
         if (revealed || phase != TqPhase.RUNNING) return
         val normalized = input.trim().uppercase()
         if (normalized.isEmpty()) return
@@ -221,6 +233,23 @@ fun TypedQuizScreen(
             if (outcome.correct) haptics.success() else haptics.error()
         }
         revealed = true
+        if (!outcome.correct && byKey) {
+            missAck.miss(drill.correct, System.nanoTime() / 1_000_000, Settings.continueAfterMiss)
+            ackAwaiting = missAck.isAwaiting
+        }
+    }
+
+    /**
+     * The key while a miss is held: the right answer moves on, anything else is
+     * dropped. ContinueAfterMiss keeps the run since the miss (the box itself is
+     * locked), drops anything inside the debounce and judges it.
+     */
+    fun acknowledge(outcome: ContinueAfterMiss.Outcome?) {
+        when (outcome) {
+            ContinueAfterMiss.Outcome.ADVANCE -> if (phase == TqPhase.RUNNING) advance()
+            ContinueAfterMiss.Outcome.INACTIVE -> ackAwaiting = false
+            else -> Unit   // wrong, debounced or still collecting
+        }
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -272,8 +301,18 @@ fun TypedQuizScreen(
         // A Vail Adapter / BLE-MIDI key types the answer too (#251): what you
         // key lands in the box, and stopping keying checks it.
         HardwareKeyInput(
-            onText = { if (!revealed) input = appendKeyed(input, it) },
-            onPause = { if (input.isNotBlank()) submit() }
+            onText = {
+                if (!revealed) {
+                    input = appendKeyed(input, it)
+                } else if (ackAwaiting) {
+                    acknowledge(missAck.keyed(it, System.nanoTime() / 1_000_000))
+                }
+            },
+            onPause = {
+                if (revealed) {
+                    if (ackAwaiting) acknowledge(missAck.paused(System.nanoTime() / 1_000_000))
+                } else if (input.isNotBlank()) submit(byKey = true)
+            }
         )
         // The app targets SDK 36, so it is always edge-to-edge and the window
         // does not resize when the IME opens; AppBackground insets for the
@@ -353,6 +392,14 @@ fun TypedQuizScreen(
 
             if (revealed) {
                 if (!lastCorrect) {
+                    if (ackAwaiting) {
+                        Text(
+                            stringResource(R.string.sending_key_to_continue, drill.correct),
+                            color = Brand.teal,
+                            fontSize = 13.sp
+                        )
+                        Spacer(Modifier.height(8.dp))
+                    }
                     // The held correction (issue #77): re-hear it as often as
                     // needed, move on when ready.
                     OutlinedButton(

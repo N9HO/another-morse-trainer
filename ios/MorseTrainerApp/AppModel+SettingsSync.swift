@@ -71,6 +71,7 @@ extension AppModel {
             return .object(["min": .int(s.rapidFire.wordMinLength), "max": .int(s.rapidFire.wordMaxLength)])
         case "setting.rapidFireNumberCount": return .int(s.rapidFire.numberCount)
         case "setting.rapidFireUsOnly": return .bool(s.rapidFire.callsignUSOnly)
+        case "setting.rapidFireShortOnly": return .bool(s.rapidFire.callsignShortOnly)
         case "setting.rapidFireFormats": return strings(s.rapidFire.callsignFormats.map(\.rawValue))
         case "setting.rapidFireStatesSections": return .bool(s.rapidFire.statesIncludeSections)
         case "setting.rapidFireSerialCut": return .bool(s.rapidFire.serialCutNumbers)
@@ -92,6 +93,7 @@ extension AppModel {
         case "setting.pileupGiveUp": return .bool(s.qso.giveUpEnabled)
         case "setting.pileupFormats": return strings(s.qso.formats.map(\.rawValue))
         case "setting.pileupUsOnly": return .bool(s.qso.usOnly)
+        case "setting.pileupShortOnly": return .bool(s.qso.shortOnly)
         case "setting.pileupKeepPartialCall": return .bool(s.qso.keepPartialCall)
         case "setting.pileupMissedCallerFeedback": return .string(s.qso.missedCallerFeedback.rawValue)
         case "setting.pileupKeyMySide": return .bool(s.qso.keyMySide)
@@ -203,6 +205,7 @@ extension AppModel {
             let range = RapidFireSettings.numberCountRange
             return set(int()) { s.rapidFire.numberCount = min(max($0, range.lowerBound), range.upperBound) }
         case "setting.rapidFireUsOnly": return set(bool()) { s.rapidFire.callsignUSOnly = $0 }
+        case "setting.rapidFireShortOnly": return set(bool()) { s.rapidFire.callsignShortOnly = $0 }
         case "setting.rapidFireFormats":
             let formats = Set((strings() ?? []).compactMap(CallsignFormat.init(rawValue:)))
             return set(formats.isEmpty ? nil : formats) { s.rapidFire.callsignFormats = $0 }
@@ -236,6 +239,7 @@ extension AppModel {
             let formats = Set((strings() ?? []).compactMap(CallsignFormat.init(rawValue:)))
             return set(formats.isEmpty ? nil : formats) { s.qso.formats = $0 }
         case "setting.pileupUsOnly": return set(bool()) { s.qso.usOnly = $0 }
+        case "setting.pileupShortOnly": return set(bool()) { s.qso.shortOnly = $0 }
         case "setting.pileupKeepPartialCall": return set(bool()) { s.qso.keepPartialCall = $0 }
         case "setting.pileupMissedCallerFeedback":
             return set(string().flatMap(MissedCallerFeedback.init(rawValue:))) { s.qso.missedCallerFeedback = $0 }

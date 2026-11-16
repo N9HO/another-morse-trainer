@@ -25,6 +25,18 @@ package app.anothermorsetrainer.morsekit
  * non-[Outcome.ADVANCE] result so a wrong attempt does not stay in the decoder
  * and spoil the next one.
  *
+ * The hardware-key screens (#355: Journey, Type It, QRQ Speed). There the
+ * decoder belongs to `HardwareKeyInput`, which the screen cannot clear, so the
+ * decoded runs come here through [keyed] and [paused], and this class owns the
+ * run keyed since the miss. A run that arrives inside the debounce window is
+ * dropped, not kept, so a stray dit from the wrong answer cannot glue itself
+ * onto the learner's real re-key. Outside the window runs are appended (no
+ * leading space into an empty run) and judged once the run, trimmed, is as
+ * long as the answer, or at the pause the key input reports when the learner
+ * stops short. The screen only maps [Outcome.ADVANCE] to Next. The Characters
+ * and Sending Practice screens own their keyer and keep calling [input]
+ * directly.
+ *
  * Pure: no clock, no keyer, no settings. The caller passes times in and applies
  * the outcome. Pinned by `fixtures/continue-after-miss.json`. Twin of
  * MorseKit/ContinueAfterMiss.swift (and of the desktop tree's copy) — keep in step.
@@ -44,6 +56,8 @@ class ContinueAfterMiss {
 
     private var target: String? = null
     private var missAtMs: Long = 0
+    /** What the hardware key has sent since the miss ([keyed]/[paused] only). */
+    private var keyedRun = ""
 
     /** True between a miss that armed this and the answer, [reset], or a new miss. */
     val isAwaiting: Boolean get() = target != null
@@ -55,6 +69,7 @@ class ContinueAfterMiss {
      */
     fun miss(target: String, atMs: Long, enabled: Boolean) {
         val wanted = normalize(target)
+        keyedRun = ""
         if (!enabled || wanted.isEmpty()) {
             this.target = null
             return
@@ -74,12 +89,61 @@ class ContinueAfterMiss {
         return Outcome.WRONG
     }
 
+    /**
+     * A run decoded from the hardware key at [atMs]. Idle: [Outcome.INACTIVE].
+     * Inside the debounce window: [Outcome.DEBOUNCED], and the run is dropped,
+     * not kept. Otherwise it is appended to the run since the miss; once that,
+     * trimmed, is as long as the answer it is judged ([Outcome.ADVANCE] or
+     * [Outcome.WRONG], and the run starts again), and until then the result is
+     * null: still collecting.
+     */
+    fun keyed(chunk: String, atMs: Long): Outcome? {
+        val wanted = target
+        if (wanted == null) {
+            keyedRun = ""
+            return Outcome.INACTIVE
+        }
+        if (atMs - missAtMs < DEBOUNCE_MS) return Outcome.DEBOUNCED
+        keyedRun = appending(keyedRun, chunk)
+        val sent = keyedRun.trim()
+        if (sent.length < wanted.length) return null
+        keyedRun = ""
+        return input(sent, atMs)
+    }
+
+    /**
+     * The key input reports that the learner stopped keying, at [atMs].
+     * Idle: [Outcome.INACTIVE]. A run short of the answer's length is judged
+     * now ([Outcome.ADVANCE] or [Outcome.WRONG]) and cleared; with nothing
+     * kept the result is null and nothing changes.
+     */
+    fun paused(atMs: Long): Outcome? {
+        if (target == null) {
+            keyedRun = ""
+            return Outcome.INACTIVE
+        }
+        val sent = keyedRun.trim()
+        keyedRun = ""
+        if (sent.isEmpty()) return null
+        return input(sent, atMs)
+    }
+
     /** Next was pressed by hand, or a new drill began. */
     fun reset() {
         target = null
+        keyedRun = ""
     }
 
     private fun normalize(s: String): String = s.trim().uppercase()
+
+    /**
+     * Append a decoded run: no leading space into an empty run or after a
+     * space (the rule the app's `appendKeyed` uses).
+     */
+    private fun appending(text: String, chunk: String): String {
+        val add = if (text.isEmpty() || text.endsWith(" ")) chunk.trimStart(' ') else chunk
+        return text + add
+    }
 
     companion object {
         /** Ignore keying this long after the miss feedback appears. */

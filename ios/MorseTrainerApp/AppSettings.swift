@@ -208,6 +208,8 @@ struct RapidFireSettings: Codable, Equatable {
     /// Call-sign shapes drawn from when `content == .callsigns` (or `.mixed`).
     var callsignFormats: Set<CallsignFormat> = Set(CallsignFormat.commonDefaults)
     var callsignUSOnly: Bool = true
+    /// Hold every call sign to four characters (#371).
+    var callsignShortOnly: Bool = false
     /// Inclusive word-length bounds for `content == .words`.
     var wordMinLength: Int = 3
     var wordMaxLength: Int = 6
@@ -228,7 +230,7 @@ struct RapidFireSettings: Codable, Equatable {
 // Resilient decoding so adding new Rapid Fire fields never wipes saved settings.
 extension RapidFireSettings {
     enum CodingKeys: String, CodingKey {
-        case content, callsignFormats, callsignUSOnly
+        case content, callsignFormats, callsignUSOnly, callsignShortOnly
         case wordMinLength, wordMaxLength, numberCount, response, pace
         case statesIncludeSections, serialCutNumbers
     }
@@ -239,6 +241,7 @@ extension RapidFireSettings {
         s.content = try c.decodeIfPresent(RapidFireContent.self, forKey: .content) ?? s.content
         s.callsignFormats = try c.decodeIfPresent(Set<CallsignFormat>.self, forKey: .callsignFormats) ?? s.callsignFormats
         s.callsignUSOnly = try c.decodeIfPresent(Bool.self, forKey: .callsignUSOnly) ?? s.callsignUSOnly
+        s.callsignShortOnly = try c.decodeIfPresent(Bool.self, forKey: .callsignShortOnly) ?? s.callsignShortOnly
         let lo = try c.decodeIfPresent(Int.self, forKey: .wordMinLength) ?? s.wordMinLength
         let hi = try c.decodeIfPresent(Int.self, forKey: .wordMaxLength) ?? s.wordMaxLength
         s.wordMinLength = min(max(lo, RapidFireSettings.wordLengthRange.lowerBound), RapidFireSettings.wordLengthRange.upperBound)
@@ -487,6 +490,8 @@ struct QSOSettings: Codable, Equatable {
     var giveUpEnabled: Bool = false
     var formats: Set<CallsignFormat> = Set(CallsignFormat.commonDefaults)
     var usOnly: Bool = true
+    /// Hold every caller's call to four characters (#371).
+    var shortOnly: Bool = false
     /// Keep a partially-typed call in the input box while still hunting in the
     /// pileup (send "?" without retyping) instead of clearing on every send (#29).
     var keepPartialCall: Bool = false
@@ -508,7 +513,7 @@ extension QSOSettings {
         case myCall, myName, myState, mode, maxStations, minWPM, maxWPM, farnsworth, toneSpread
         case minVolume, maxVolume, minDelay, maxDelay, qsbEnabled, qrn
         case cutNumbersEnabled, cutDigits, rstRequired, bustBehavior, giveUpEnabled
-        case formats, usOnly, keepPartialCall, missedCallerFeedback
+        case formats, usOnly, shortOnly, keepPartialCall, missedCallerFeedback
         case keyMySide, autoRecall
     }
 
@@ -539,6 +544,7 @@ extension QSOSettings {
         s.giveUpEnabled = try c.decodeIfPresent(Bool.self, forKey: .giveUpEnabled) ?? s.giveUpEnabled
         s.formats = try c.decodeIfPresent(Set<CallsignFormat>.self, forKey: .formats) ?? s.formats
         s.usOnly = try c.decodeIfPresent(Bool.self, forKey: .usOnly) ?? s.usOnly
+        s.shortOnly = try c.decodeIfPresent(Bool.self, forKey: .shortOnly) ?? s.shortOnly
         s.keepPartialCall = try c.decodeIfPresent(Bool.self, forKey: .keepPartialCall) ?? s.keepPartialCall
         s.missedCallerFeedback = try c.decodeIfPresent(MissedCallerFeedback.self, forKey: .missedCallerFeedback) ?? s.missedCallerFeedback
         s.keyMySide = try c.decodeIfPresent(Bool.self, forKey: .keyMySide) ?? s.keyMySide

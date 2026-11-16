@@ -53,6 +53,8 @@ class RapidFireQuiz(
         /** Call-sign shapes to draw from (1×2, 2×1, …). Empty falls back to the common defaults. */
         val callsignFormats: List<CallsignFormat> = CallsignFormat.commonDefaults,
         val callsignUSOnly: Boolean = true,
+        /** Hold every call sign to four characters (#371); see [CallsignGenerator]. */
+        val callsignShortOnly: Boolean = false,
         /** Inclusive word-length bounds for [RapidFireContent.WORDS]. */
         val wordMinLength: Int = 3,
         val wordMaxLength: Int = 6,
@@ -154,7 +156,7 @@ class RapidFireQuiz(
 
     private fun makeCallsign(): String {
         val formats = config.callsignFormats.ifEmpty { CallsignFormat.commonDefaults }
-        return CallsignGenerator.generate(formats = formats, usOnly = config.callsignUSOnly, rng = rng)
+        return CallsignGenerator.generate(formats = formats, usOnly = config.callsignUSOnly, rng = rng, shortOnly = config.callsignShortOnly)
     }
 
     private fun makeNumberGroup(): String {

@@ -128,6 +128,7 @@ fun RapidFireScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {
     val wordMax = Settings.rapidFireWordMax
     val numberCount = Settings.rapidFireNumberCount
     val usOnly = Settings.rapidFireUsOnly
+    val shortOnly = Settings.rapidFireShortOnly
     val formats = Settings.rapidFireFormats
     val sections = Settings.rapidFireSections
     val serialCut = Settings.rapidFireSerialCut
@@ -191,6 +192,7 @@ fun RapidFireScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {
         // In enum order so the same selection always yields the same list.
         callsignFormats = CallsignFormat.entries.filter { it in formats },
         callsignUSOnly = usOnly,
+        callsignShortOnly = shortOnly,
         wordMinLength = wordMin,
         wordMaxLength = wordMax,
         numberCount = numberCount,
@@ -380,6 +382,7 @@ fun RapidFireScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {
                 onWordMax = { Settings.updateRapidFireWordMax(it) },
                 numberCount = numberCount, onNumberCount = { Settings.updateRapidFireNumberCount(it) },
                 usOnly = usOnly, onUsOnly = { Settings.updateRapidFireUsOnly(it) },
+                shortOnly = shortOnly, onShortOnly = { Settings.updateRapidFireShortOnly(it) },
                 formats = formats, onToggleFormat = { Settings.toggleRapidFireFormat(it) },
                 sections = sections, onSections = { Settings.updateRapidFireSections(it) },
                 serialCut = serialCut, onSerialCut = { Settings.updateRapidFireSerialCut(it) },
@@ -473,6 +476,7 @@ private fun RapidFireSetup(
     wordMin: Int, wordMax: Int, onWordMin: (Int) -> Unit, onWordMax: (Int) -> Unit,
     numberCount: Int, onNumberCount: (Int) -> Unit,
     usOnly: Boolean, onUsOnly: (Boolean) -> Unit,
+    shortOnly: Boolean, onShortOnly: (Boolean) -> Unit,
     formats: Set<CallsignFormat>, onToggleFormat: (CallsignFormat) -> Unit,
     sections: Boolean, onSections: (Boolean) -> Unit,
     serialCut: Boolean, onSerialCut: (Boolean) -> Unit,
@@ -512,6 +516,7 @@ private fun RapidFireSetup(
                         ToggleRow(stringResource(R.string.rapidfire_include_sections), sections, onSections)
                     }
                     ToggleRow(stringResource(R.string.common_us_calls_only), usOnly, onUsOnly)
+                    ToggleRow(stringResource(R.string.common_short_calls_only), shortOnly, onShortOnly)
                     // Call-sign shapes (iOS rapidFireFormatChip): one chip per
                     // format; at least one always stays on.
                     SectionLabel(stringResource(R.string.rapidfire_callsign_shapes))

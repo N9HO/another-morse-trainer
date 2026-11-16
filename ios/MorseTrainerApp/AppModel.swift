@@ -1495,6 +1495,7 @@ final class AppModel: ObservableObject {
         c.giveUpEnabled = q.giveUpEnabled
         c.formats = q.formats.isEmpty ? CallsignFormat.commonDefaults : Array(q.formats)
         c.usOnly = q.usOnly
+        c.shortOnly = q.shortOnly
         return c
     }
 
@@ -1740,6 +1741,7 @@ final class AppModel: ObservableObject {
             callsignFormats: r.callsignFormats.isEmpty
                 ? CallsignFormat.commonDefaults : Array(r.callsignFormats),
             callsignUSOnly: r.callsignUSOnly,
+            callsignShortOnly: r.callsignShortOnly,
             wordMinLength: r.wordMinLength,
             wordMaxLength: r.wordMaxLength,
             numberCount: r.numberCount,

@@ -98,6 +98,9 @@ object PileupSettings {
         private set
     var usOnly by mutableStateOf(true)
         private set
+    /** Hold every caller's call to four characters (#371). */
+    var shortOnly by mutableStateOf(false)
+        private set
     /** Keep the partial call in the entry box after a typed repeat request ("W1?"). Off by default, as on iOS. */
     var keepPartialCall by mutableStateOf(false)
         private set
@@ -147,6 +150,7 @@ object PileupSettings {
                 .ifEmpty { CallsignFormat.commonDefaults.toSet() }
         }
         usOnly = prefs.getBoolean("usOnly", true)
+        shortOnly = prefs.getBoolean("shortOnly", false)
         keepPartialCall = prefs.getBoolean("keepPartial", false)
         keyMySide = prefs.getBoolean("keyMySide", true)
         autoRecall = prefs.getBoolean("autoRecall", true)
@@ -238,6 +242,7 @@ object PileupSettings {
     }
 
     fun updateUsOnly(value: Boolean) { usOnly = value; persist() }
+    fun updateShortOnly(value: Boolean) { shortOnly = value; persist() }
     fun updateKeepPartialCall(value: Boolean) { keepPartialCall = value; persist() }
     fun updateKeyMySide(value: Boolean) { keyMySide = value; persist() }
     fun updateAutoRecall(value: Boolean) { autoRecall = value; persist() }
@@ -262,7 +267,8 @@ object PileupSettings {
         bustBehavior = bustBehavior,
         giveUpEnabled = giveUpEnabled,
         formats = CallsignFormat.entries.filter { it in formats },
-        usOnly = usOnly
+        usOnly = usOnly,
+        shortOnly = shortOnly
     )
 
     private fun persist() {
@@ -288,6 +294,7 @@ object PileupSettings {
             putString("missedFeedback", missedCallerFeedback.code)
             putStringSet("formats", formats.map { it.code }.toSet())
             putBoolean("usOnly", usOnly)
+            putBoolean("shortOnly", shortOnly)
             putBoolean("keepPartial", keepPartialCall)
             putBoolean("keyMySide", keyMySide)
             putBoolean("autoRecall", autoRecall)

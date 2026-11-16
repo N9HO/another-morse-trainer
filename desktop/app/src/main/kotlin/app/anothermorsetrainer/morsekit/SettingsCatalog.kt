@@ -174,6 +174,8 @@ object SettingsCatalog {
         e("cutNumbers", "Cut numbers", listOf("cut", "abbreviated numbers", "digits", "t for 0", "n for 9"), SettingsSection.QSO_REALISM),
         e("usOnly", "US callsigns only", listOf("dx", "prefix", "foreign", "us", "usa"), SettingsSection.QSO_CALLSIGNS),
         e("callsignFormats", "Callsign formats", listOf("shape", "1x1", "1x2", "2x3", "format", "prefix"), SettingsSection.QSO_CALLSIGNS),
+        e("shortOnly", "Short callsigns only (4 characters)",
+            listOf("easy", "short", "four", "4 characters", "length", "beginner", "simple"), SettingsSection.QSO_CALLSIGNS),
 
         // Reminders
         e("dailyReminder", "Daily reminder", listOf("notification", "nudge", "alert", "streak", "reminder"), SettingsSection.REMINDERS),

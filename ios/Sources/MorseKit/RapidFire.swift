@@ -47,6 +47,8 @@ public final class RapidFireQuiz: QuizSource {
         /// common defaults.
         public var callsignFormats: [CallsignFormat]
         public var callsignUSOnly: Bool
+        /// Hold every call sign to four characters (#371); see `CallsignGenerator`.
+        public var callsignShortOnly: Bool
         /// Inclusive word-length bounds for the `.words` content.
         public var wordMinLength: Int
         public var wordMaxLength: Int
@@ -62,6 +64,7 @@ public final class RapidFireQuiz: QuizSource {
         public init(content: RapidFireContent = .callsigns,
                     callsignFormats: [CallsignFormat] = CallsignFormat.commonDefaults,
                     callsignUSOnly: Bool = true,
+                    callsignShortOnly: Bool = false,
                     wordMinLength: Int = 3,
                     wordMaxLength: Int = 6,
                     numberCount: Int = 5,
@@ -70,6 +73,7 @@ public final class RapidFireQuiz: QuizSource {
             self.content = content
             self.callsignFormats = callsignFormats
             self.callsignUSOnly = callsignUSOnly
+            self.callsignShortOnly = callsignShortOnly
             self.wordMinLength = wordMinLength
             self.wordMaxLength = wordMaxLength
             self.numberCount = numberCount
@@ -192,6 +196,7 @@ public final class RapidFireQuiz: QuizSource {
             ? CallsignFormat.commonDefaults : config.callsignFormats
         return CallsignGenerator.generate(formats: formats,
                                           usOnly: config.callsignUSOnly,
+                                          shortOnly: config.callsignShortOnly,
                                           using: &rng)
     }
 

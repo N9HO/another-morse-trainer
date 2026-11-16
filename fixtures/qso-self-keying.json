@@ -50,10 +50,11 @@
       "mode": "singleCaller", "maxStations": 1, "minWPM": 12, "maxWPM": 40,
       "toneSpread": 400, "minVolume": 0.3, "maxVolume": 0.9, "minDelay": 0.3, "maxDelay": 2.0,
       "qsbEnabled": true, "qrnLevel": 0.5, "cutNumbersEnabled": true, "cutDigits": "019",
-      "rstRequired": true, "bustBehavior": "nearest", "giveUpEnabled": true, "usOnly": false
+      "rstRequired": true, "bustBehavior": "nearest", "giveUpEnabled": true, "usOnly": false,
+      "shortOnly": true
     },
     "carried": ["toneSpread", "minVolume", "maxVolume", "minDelay", "maxDelay", "qsbEnabled", "qrnLevel",
-                "cutNumbersEnabled", "cutDigits", "bustBehavior", "giveUpEnabled", "usOnly"],
+                "cutNumbersEnabled", "cutDigits", "bustBehavior", "giveUpEnabled", "usOnly", "shortOnly"],
     "cases": [
       {"contest": "sst",      "maxCallers": 6, "mode": "sst",      "minWPM": 15, "maxWPM": 20, "maxStations": 6},
       {"contest": "mst",      "maxCallers": 8, "mode": "mst",      "minWPM": 20, "maxWPM": 25, "maxStations": 8},

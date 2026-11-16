@@ -62,6 +62,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.anothermorsetrainer.morsekit.AnswerKeys
+import app.anothermorsetrainer.morsekit.ContinueAfterMiss
 import app.anothermorsetrainer.morsekit.JourneyCurriculum
 import app.anothermorsetrainer.morsekit.JourneyLevel
 import app.anothermorsetrainer.morsekit.JourneyProgress
@@ -177,12 +178,19 @@ fun JourneyScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
         player.play(drill.playable, Settings.sidetoneHz, Settings.timing()) { toneFinishedAt = System.nanoTime() }
     }
 
+    // A miss holds the correction for Next; keying the right answer again is
+    // Next too (#355, after #352). The decision lives in morsekit/ContinueAfterMiss.
+    val missAck = remember { ContinueAfterMiss() }
+    var ackAwaiting by remember { mutableStateOf(false) }
+
     /**
      * Next drill, clearing the reveal state in the same recomposition as the
      * new drill — LaunchedEffect(round) resets it a frame later, and that
      * stale frame flashed the new answer in red (issue #63).
      */
     fun advanceNow() {
+        missAck.reset()
+        ackAwaiting = false
         drill = quiz.nextDrill()
         revealed = false
         chosen = null
@@ -256,7 +264,11 @@ fun JourneyScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
 
     BackHandler { if (phase == JyPhase.SUMMARY) onBack() else finish() }
 
-    fun answer(choice: String) {
+    /**
+     * Grade [choice]. [byKey]: it came from the hardware key, the only case in
+     * which a miss arms key-to-continue (a tapped or typed miss keeps Next alone).
+     */
+    fun answer(choice: String, byKey: Boolean = false) {
         if (revealed || phase != JyPhase.RUNNING) return
         val ttr = if (toneFinishedAt == 0L) 0.0 else (System.nanoTime() - toneFinishedAt) / 1_000_000_000.0
         lastTtr = ttr
@@ -288,6 +300,13 @@ fun JourneyScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
             clearedLabel = outcome.unlocked
         }
         revealed = true
+        // A keyed-answer miss: key it again to continue (#355). Only when the
+        // answer came from the hardware key; a meaning drill cannot be keyed
+        // back, so it keeps Next.
+        if (!outcome.correct && byKey && drill.isKeyable) {
+            missAck.miss(drill.correct, System.nanoTime() / 1_000_000, Settings.continueAfterMiss)
+            ackAwaiting = missAck.isAwaiting
+        }
     }
 
     // A hardware key (#251). Journey's choices take a keyboard, so they take
@@ -298,25 +317,47 @@ fun JourneyScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
     // iOS `journeyKeyedText`.
     var keyed by remember { mutableStateOf("") }
     LaunchedEffect(round) { keyed = "" }
+    // While a miss is held: the right answer keyed again moves on; a wrong or
+    // too-early re-key is dropped, with no new miss and no penalty (#355).
+    // ContinueAfterMiss keeps the run since the miss, drops anything inside
+    // the debounce and judges at the answer's length or at the pause.
+    fun acknowledge(outcome: ContinueAfterMiss.Outcome?) {
+        when (outcome) {
+            ContinueAfterMiss.Outcome.ADVANCE -> advanceNow()
+            ContinueAfterMiss.Outcome.INACTIVE -> ackAwaiting = false
+            else -> Unit   // wrong, debounced or still collecting
+        }
+    }
     fun keyedText(chunk: String) {
-        if (revealed || phase != JyPhase.RUNNING) { keyed = ""; return }
+        if (phase != JyPhase.RUNNING) { keyed = ""; return }
+        if (revealed) {
+            keyed = ""
+            if (ackAwaiting) acknowledge(missAck.keyed(chunk, System.nanoTime() / 1_000_000))
+            return
+        }
         keyed = appendKeyed(keyed, chunk)
         val sent = keyed.trim()
         if (drill.isKeyable) {
             if (sent.length < drill.correct.length) return
             keyed = ""
-            answer(sent)
+            answer(sent, byKey = true)
         } else if (sent.length == 1) {
             val index = AnswerKeys.optionFor(sent[0], drill.options) ?: return
             keyed = ""
-            answer(drill.options[index])
+            answer(drill.options[index], byKey = true)
         }
     }
     fun keyedPause() {
         val sent = keyed.trim()
         keyed = ""
-        if (revealed || phase != JyPhase.RUNNING || !drill.isKeyable || sent.isEmpty()) return
-        answer(sent)
+        if (revealed) {
+            if (ackAwaiting && phase == JyPhase.RUNNING) {
+                acknowledge(missAck.paused(System.nanoTime() / 1_000_000))
+            }
+            return
+        }
+        if (phase != JyPhase.RUNNING || !drill.isKeyable || sent.isEmpty()) return
+        answer(sent, byKey = true)
     }
     HardwareKeyInput(onText = { keyedText(it) }, onPause = { keyedPause() })
 
@@ -471,6 +512,14 @@ fun JourneyScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
                         )
                     }
                     if (!ok) {
+                        if (ackAwaiting) {
+                            Spacer(Modifier.height(6.dp))
+                            Text(
+                                stringResource(R.string.sending_key_to_continue, drill.correct),
+                                color = Brand.teal,
+                                fontSize = 13.sp
+                            )
+                        }
                         // The held correction (issue #77): re-hear it as often
                         // as needed, move on when ready.
                         Spacer(Modifier.height(18.dp))
@@ -496,7 +545,7 @@ fun JourneyScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
                 }
             }
 
-            JourneyOptionsGrid(drill = drill, revealed = revealed, chosen = chosen, onPick = ::answer)
+            JourneyOptionsGrid(drill = drill, revealed = revealed, chosen = chosen, onPick = { answer(it) })
             Spacer(Modifier.height(24.dp))
         }
     }

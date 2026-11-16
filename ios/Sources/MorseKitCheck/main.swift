@@ -832,6 +832,31 @@ do {
     }
     check("1×2 US callsigns have the shape L D L L", allGood)
 
+    // "Short callsigns only" (#371): every call is four characters, US or DX,
+    // whatever shapes are on; with no four-character shape on it falls back to
+    // 1×2 / 2×1; off, a 1×3 call is five characters as before.
+    var shortRNG = SeededRNG(seed: 371)
+    var shortOK = true, fallbackOK = true, offOK = true, sawDX = false
+    for _ in 0..<400 {
+        let usCall = CallsignGenerator.generate(formats: CallsignFormat.allCases, usOnly: true,
+                                                shortOnly: true, using: &shortRNG)
+        let anyCall = CallsignGenerator.generate(formats: CallsignFormat.allCases, usOnly: false,
+                                                 shortOnly: true, using: &shortRNG)
+        let longOnly = CallsignGenerator.generate(formats: [.oneByThree], usOnly: false,
+                                                  shortOnly: true, using: &shortRNG)
+        let off = CallsignGenerator.generate(formats: [.oneByThree], usOnly: true, using: &shortRNG)
+        if usCall.count != 4 || anyCall.count != 4 { shortOK = false }
+        if longOnly.count != 4 { fallbackOK = false }
+        if off.count != 5 { offOK = false }
+        if anyCall.first.map({ !"KNWA".contains($0) }) ?? false { sawDX = true }
+    }
+    check("short callsigns are four characters, US and DX", shortOK)
+    check("short callsigns still mix in DX prefixes", sawDX)
+    check("short callsigns fall back to 1×2/2×1 when only long shapes are on", fallbackOK)
+    check("short off leaves a 1×3 call five characters", offOK)
+    check("only 1×2 and 2×1 are four characters long",
+          CallsignFormat.allCases.filter { $0.length == CallsignFormat.shortLength } == [.oneByTwo, .twoByOne])
+
     // CQ produces a pileup whose voice count matches the active stations.
     var cfg = PileupConfig()
     cfg.mode = .pota
@@ -2402,6 +2427,14 @@ do {
     check("2×1 US call sign has shape L L D L",
           call.count == 4 && call[0].isLetter && call[1].isLetter && call[2].isNumber && call[3].isLetter)
 
+    // Short call signs only (#371): every drill is four characters.
+    let shortQ = RapidFireQuiz(config: .init(content: .callsigns,
+                                             callsignFormats: [.twoByThree, .oneByThree],
+                                             callsignUSOnly: false, callsignShortOnly: true),
+                               rng: SeededRNG(seed: 371))
+    check("Rapid Fire short call signs are four characters",
+          (0..<100).allSatisfy { _ in shortQ.nextDrill().correct.count == 4 })
+
     // Grading is case- and space-insensitive.
     let gQ = RapidFireQuiz(config: .init(content: .states), rng: SeededRNG(seed: 7))
     let answer = gQ.nextDrill().correct
@@ -3783,7 +3816,7 @@ struct QSORunFixture: Decodable {
         let maxStations: Int
         let minWPM, maxWPM, toneSpread, minDelay, maxDelay: Double
         let minVolume, maxVolume, qrnLevel: Float
-        let qsbEnabled, cutNumbersEnabled, rstRequired, giveUpEnabled, usOnly: Bool
+        let qsbEnabled, cutNumbersEnabled, rstRequired, giveUpEnabled, usOnly, shortOnly: Bool
         let cutDigits, bustBehavior: String
     }
     struct ContestCase: Decodable {
@@ -3824,12 +3857,14 @@ do {
         base.cutNumbersEnabled = r.cutNumbersEnabled; base.cutDigits = Set(r.cutDigits)
         base.rstRequired = r.rstRequired; base.giveUpEnabled = r.giveUpEnabled
         base.usOnly = r.usOnly
+        base.shortOnly = r.shortOnly
         let carriedFields: [String: (PileupConfig) -> AnyHashable] = [
             "toneSpread": { $0.toneSpread }, "minVolume": { $0.minVolume }, "maxVolume": { $0.maxVolume },
             "minDelay": { $0.minDelay }, "maxDelay": { $0.maxDelay }, "qsbEnabled": { $0.qsbEnabled },
             "qrnLevel": { $0.qrnLevel }, "cutNumbersEnabled": { $0.cutNumbersEnabled },
             "cutDigits": { $0.cutDigits }, "bustBehavior": { $0.bustBehavior },
             "giveUpEnabled": { $0.giveUpEnabled }, "usOnly": { $0.usOnly },
+            "shortOnly": { $0.shortOnly },
         ]
         for c in fx.contestConfig.cases {
             guard let type = ContestType(rawValue: c.contest) else {
@@ -10279,6 +10314,7 @@ struct ContinueAfterMissFixture: Decodable {
         let op: String
         let target: String?
         let text: String?
+        let chunk: String?
         let atMs: Int64?
         let expect: String?
         let awaiting: Bool
@@ -10290,6 +10326,8 @@ struct ContinueAfterMissFixture: Decodable {
     }
     let debounceMs: Int64
     let cases: [Case]
+    /// The hardware-key screens' runs and pauses (#355): `keyed`/`paused`.
+    let keyedCases: [Case]
 }
 func loadContinueAfterMissFixture() -> ContinueAfterMissFixture? {
     let root = URL(fileURLWithPath: #filePath)
@@ -10316,6 +10354,26 @@ if let fx = loadContinueAfterMissFixture() {
             if machine.isAwaiting != s.awaiting { ok = false }
         }
         check("continue after miss: \(c.name)", ok)
+    }
+    // "pending" in the fixture is a nil outcome: still collecting the run.
+    let ackLabel: (ContinueAfterMiss.Outcome?) -> String = { $0?.rawValue ?? "pending" }
+    check("fixture has keyed cases", !fx.keyedCases.isEmpty)
+    for c in fx.keyedCases {
+        var machine = ContinueAfterMiss()
+        var ok = true
+        for s in c.steps {
+            switch s.op {
+            case "miss": machine.miss(target: s.target ?? "", atMs: s.atMs ?? 0, enabled: c.enabled)
+            case "keyed":
+                if ackLabel(machine.keyed(s.chunk ?? "", atMs: s.atMs ?? 0)) != s.expect { ok = false }
+            case "paused":
+                if ackLabel(machine.paused(atMs: s.atMs ?? 0)) != s.expect { ok = false }
+            case "reset": machine.reset()
+            default: ok = false
+            }
+            if machine.isAwaiting != s.awaiting { ok = false }
+        }
+        check("continue after miss, keyed: \(c.name)", ok)
     }
 } else {
     check("fixtures/continue-after-miss.json loads and decodes", false)

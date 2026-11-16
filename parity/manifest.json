@@ -2851,6 +2851,44 @@
      "Continue with the key after a miss"
     ]
    }
+  },
+  {
+   "id": "shortCallsigns",
+   "name": "Short callsigns only",
+   "kind": "setting",
+   "status": {
+    "ios": "present",
+    "android": "present",
+    "desktop": "present"
+   },
+   "claims": {
+    "ios": {
+     "files": [
+      "Sources/MorseKit/Callsigns.swift"
+     ]
+    },
+    "android": {
+     "files": [
+      "morsekit/Callsigns.kt"
+     ]
+    },
+    "desktop": {
+     "files": [
+      "morsekit/Callsigns.kt"
+     ]
+    }
+   },
+   "readme": {
+    "ios": [
+     "Short callsigns only"
+    ],
+    "android": [
+     "Short callsigns only"
+    ],
+    "desktop": [
+     "Short callsigns only"
+    ]
+   }
   }
  ],
  "optionLists": {
