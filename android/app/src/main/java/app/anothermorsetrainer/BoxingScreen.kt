@@ -108,8 +108,9 @@ fun BoxingScreen(onBack: () -> Unit) {
     // Portrait on a phone: in landscape the ring, the tell panel and the key
     // pad do not fit one above another. A tablet (600 dp and up) keeps every
     // orientation; it has the height. iOS locks the same screen the same way.
+    // Keyed on the width, so a foldable opened on this screen unlocks.
     val smallestWidthDp = LocalConfiguration.current.smallestScreenWidthDp
-    DisposableEffect(Unit) {
+    DisposableEffect(smallestWidthDp) {
         val activity = context.findActivity()
         val before = activity?.requestedOrientation
         if (smallestWidthDp < 600) activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
@@ -552,54 +553,59 @@ private fun FightView(
     }
     val image = remember(frame) { bitmapOf(pixels, BkRing.ART_W, BkRing.ART_H) }
     Column(Modifier.fillMaxSize().background(BK_BG)) {
-        // Scoreboard.
-        Row(Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text(stringResource(R.string.bk_you), color = BK_PALE, fontSize = 11.sp)
-                Bar(f.myHp / BoxingRules.PLAYER_HP.toFloat(), Color(0xFF30C860), Modifier.fillMaxWidth())
+        // Everything above the key, in the height the key leaves: what the
+        // ring doesn't use falls below the tell panel, so the key stays at
+        // the bottom on a tall phone.
+        Column(Modifier.fillMaxWidth().weight(1f)) {
+            // Scoreboard.
+            Row(Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(stringResource(R.string.bk_you), color = BK_PALE, fontSize = 11.sp)
+                    Bar(f.myHp / BoxingRules.PLAYER_HP.toFloat(), Color(0xFF30C860), Modifier.fillMaxWidth())
+                }
+                Column(Modifier.padding(horizontal = 10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(stringResource(R.string.bk_round_of, f.round, BoxingRules.ROUNDS), color = BK_BRASS, fontSize = 11.sp)
+                    Text(mmss(f.clockMs(now)), color = BK_PALE, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
+                }
+                Column(Modifier.weight(1f)) {
+                    Text(f.foe.name, color = BK_PALE, fontSize = 11.sp, maxLines = 1)
+                    Bar(f.foeHp / f.foe.hp.toFloat(), BK_RED, Modifier.fillMaxWidth())
+                }
             }
-            Column(Modifier.padding(horizontal = 10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(stringResource(R.string.bk_round_of, f.round, BoxingRules.ROUNDS), color = BK_BRASS, fontSize = 11.sp)
-                Text(mmss(f.clockMs(now)), color = BK_PALE, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
-            }
-            Column(Modifier.weight(1f)) {
-                Text(f.foe.name, color = BK_PALE, fontSize = 11.sp, maxLines = 1)
-                Bar(f.foeHp / f.foe.hp.toFloat(), BK_RED, Modifier.fillMaxWidth())
-            }
-        }
-        // Fits the space left after the panels below (a phone in landscape),
-        // rather than filling the width and pushing the key pad off screen.
-        PixelImage(
-            image, Modifier.weight(4f, fill = false).align(Alignment.CenterHorizontally),
-            srcTop = BkRing.STAGE_Y, srcRows = BkRing.ART_H - BkRing.STAGE_Y
-        )
-        Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("★".repeat(f.stars) + "☆".repeat(BoxingRules.MAX_STARS - f.stars), color = BK_BRASS, fontSize = 18.sp)
-            Spacer(Modifier.weight(1f))
-            Text(f.score.toString(), color = BK_PALE, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
-            TextButton(onClick = onPause) { Text(stringResource(R.string.bk_pause), color = Brand.teal) }
-        }
-        // The tell and your keying.
-        Column(Modifier.fillMaxWidth().background(BK_PANEL).padding(10.dp)) {
-            val shown = when {
-                f.starring() -> f.word
-                phase == BoxingPhase.MeDown -> stringResource(R.string.bk_get_up, f.getUp.toString())
-                f.tellShown -> f.tell
-                else -> ""
-            }
-            Text(
-                shown.ifEmpty { if (f.telling()) "· · ·" else " " },
-                color = BK_BRASS, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 26.sp
+            // Takes the height the panels and the key leave, up to the picture's
+            // own shape, rather than filling the width and pushing the key pad off
+            // a short screen.
+            PixelImage(
+                image, Modifier.weight(1f, fill = false).align(Alignment.CenterHorizontally),
+                srcTop = BkRing.STAGE_Y, srcRows = BkRing.ART_H - BkRing.STAGE_Y
             )
-            val typed = if (f.starring()) f.typed else f.answer
-            Text(
-                typed + (if (marks.isNotEmpty()) "  $marks" else ""),
-                color = BK_PALE, fontFamily = FontFamily.Monospace, fontSize = 18.sp, maxLines = 1
-            )
-            f.window(now)?.let { (left, whole) -> Bar(left / whole.coerceAtLeast(1).toFloat(), BK_BRASS, Modifier.fillMaxWidth().padding(top = 4.dp)) }
-            f.callout?.let { (c, _) -> Text(calloutText(c), color = BK_RED, fontWeight = FontWeight.Bold, fontSize = 13.sp) }
+            Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("★".repeat(f.stars) + "☆".repeat(BoxingRules.MAX_STARS - f.stars), color = BK_BRASS, fontSize = 18.sp)
+                Spacer(Modifier.weight(1f))
+                Text(f.score.toString(), color = BK_PALE, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
+                TextButton(onClick = onPause) { Text(stringResource(R.string.bk_pause), color = Brand.teal) }
+            }
+            // The tell and your keying.
+            Column(Modifier.fillMaxWidth().background(BK_PANEL).padding(10.dp)) {
+                val shown = when {
+                    f.starring() -> f.word
+                    phase == BoxingPhase.MeDown -> stringResource(R.string.bk_get_up, f.getUp.toString())
+                    f.tellShown -> f.tell
+                    else -> ""
+                }
+                Text(
+                    shown.ifEmpty { if (f.telling()) "· · ·" else " " },
+                    color = BK_BRASS, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 26.sp
+                )
+                val typed = if (f.starring()) f.typed else f.answer
+                Text(
+                    typed + (if (marks.isNotEmpty()) "  $marks" else ""),
+                    color = BK_PALE, fontFamily = FontFamily.Monospace, fontSize = 18.sp, maxLines = 1
+                )
+                f.window(now)?.let { (left, whole) -> Bar(left / whole.coerceAtLeast(1).toFloat(), BK_BRASS, Modifier.fillMaxWidth().padding(top = 4.dp)) }
+                f.callout?.let { (c, _) -> Text(calloutText(c), color = BK_RED, fontWeight = FontWeight.Bold, fontSize = 13.sp) }
+            }
         }
-        Spacer(Modifier.weight(1f))
         if (f.paused()) {
             Column(Modifier.fillMaxWidth().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(stringResource(R.string.bk_paused), color = BK_PALE, fontWeight = FontWeight.Bold)

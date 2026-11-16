@@ -68,13 +68,14 @@ struct RootView: View {
 }
 
 /// The app delegate, for one thing only: which orientations the app allows
-/// right now. What the app has always allowed (no upside-down on iPhone),
-/// except while a screen holds `OrientationLock` to portrait.
+/// right now. What the app has always allowed (no upside-down on iPhone;
+/// every orientation on iPad and Mac Catalyst), except while a screen holds
+/// `OrientationLock` to portrait.
 final class OrientationDelegate: NSObject, UIApplicationDelegate {
     func application(_ application: UIApplication,
                       supportedInterfaceOrientationsFor window: UIWindow?) -> UIInterfaceOrientationMask {
         if OrientationLock.portraitOnly { return .portrait }
-        return UIDevice.current.userInterfaceIdiom == .pad ? .all : .allButUpsideDown
+        return UIDevice.current.userInterfaceIdiom == .phone ? .allButUpsideDown : .all
     }
 }
 
