@@ -183,6 +183,9 @@ fun DefenderScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
     // When each attacker's callsign finished sounding, by id, so a hit's
     // time-to-recognize runs from the end of the tone.
     val toneEnd = remember { HashMap<Int, Long>() }
+    // When each enemy appeared: a hit's reaction time runs from there while
+    // its sound is still waiting its turn, so no hit counts as 0 ms.
+    val appeared = remember { HashMap<Int, Long>() }
     // The one sound channel: a new attacker's callsign and a tapped replay
     // take turns instead of cutting into each other.
     val announcer = remember { GameAnnouncer() }
@@ -297,6 +300,7 @@ fun DefenderScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
         attackers = emptyList()
         assets = g.assets
         toneEnd.clear()
+        appeared.clear()
         announcer.reset()
         charResults.clear()
         typed = ""
@@ -357,7 +361,10 @@ fun DefenderScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
         val now = System.currentTimeMillis()
         val hit = result.attacker
         if (hit != null) {
-            val end = toneEnd.remove(hit.id)
+            // From the end of its sound; one hit while its sound still waits its
+            // turn counts from when it appeared, never 0.
+            val end = toneEnd.remove(hit.id) ?: appeared[hit.id]
+            appeared.remove(hit.id)
             announcer.forget(hit.id)
             val ttr = if (end != null) ((now - end).coerceAtLeast(0)) / 1000.0 else 0.0
             noteRoute(hit.callsign, hit.callsign, ttr)
@@ -423,9 +430,13 @@ fun DefenderScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
             var over = false
             for (event in g.advance(dt)) {
                 when (event) {
-                    is DefenderEvent.Launched -> announcer.arrived(event.attacker.id, event.attacker.callsign)
+                    is DefenderEvent.Launched -> {
+                        appeared.putIfAbsent(event.attacker.id, System.currentTimeMillis())
+                        announcer.arrived(event.attacker.id, event.attacker.callsign)
+                    }
                     is DefenderEvent.Struck -> {
                         toneEnd.remove(event.attacker.id)
+                        appeared.remove(event.attacker.id)
                         announcer.forget(event.attacker.id)
                         noteStrike(event.attacker.callsign)
                         lbItems.add(LeaderboardItem(event.attacker.callsign, "", 0, wpm))

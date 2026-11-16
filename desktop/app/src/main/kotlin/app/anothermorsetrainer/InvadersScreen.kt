@@ -164,6 +164,9 @@ fun InvadersScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
     // When each invader's Morse finished sounding (ICR), by id, so a hit's
     // time-to-recognize runs from the end of the tone.
     val toneEnd = remember { HashMap<Int, Long>() }
+    // When each enemy appeared: a hit's reaction time runs from there while
+    // its sound is still waiting its turn, so no hit counts as 0 ms.
+    val appeared = remember { HashMap<Int, Long>() }
     // The one sound channel (ICR): an arrival and a tapped replay take turns
     // instead of cutting into each other.
     val announcer = remember { GameAnnouncer() }
@@ -255,6 +258,7 @@ fun InvadersScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
         game = g
         field = emptyList()
         toneEnd.clear()
+        appeared.clear()
         announcer.reset()
         charResults.clear()
         flash = null
@@ -333,7 +337,10 @@ fun InvadersScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
         val shot = g.shoot(character)
         val hit = shot.invader
         if (hit != null) {
-            val end = toneEnd.remove(hit.id)
+            // From the end of its sound; one hit while its sound still waits its
+            // turn counts from when it appeared, never 0.
+            val end = toneEnd.remove(hit.id) ?: appeared[hit.id]
+            appeared.remove(hit.id)
             announcer.forget(hit.id)
             val ttr = if (end != null) ((now - end).coerceAtLeast(0)) / 1000.0 else 0.0
             engine.noteAttempt(hit.character, hit.character, ttr)
@@ -371,10 +378,12 @@ fun InvadersScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
             for (event in g.advance(dt)) {
                 when (event) {
                     is InvadersEvent.Spawned -> if (input == InvadersInput.ICR) {
+                        appeared.putIfAbsent(event.invader.id, System.currentTimeMillis())
                         announcer.arrived(event.invader.id, event.invader.character.toString())
                     }
                     is InvadersEvent.Escaped -> {
                         toneEnd.remove(event.invader.id)
+                        appeared.remove(event.invader.id)
                         announcer.forget(event.invader.id)
                         engine.noteMiss(event.invader.character)
                         tally(event.invader.character, false)

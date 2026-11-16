@@ -409,10 +409,9 @@ struct InvadersView: View {
         for event in game.advance(by: dt) {
             switch event {
             case .spawned(let inv):
-                if input == .icr { loop.announcer.arrived(id: inv.id, text: String(inv.character)) }
+                if input == .icr { loop.arrived(id: inv.id, text: String(inv.character), at: now) }
             case .escaped(let inv):
-                loop.toneEnd[inv.id] = nil
-                loop.announcer.forget(id: inv.id)
+                loop.forget(id: inv.id)
                 model.noteInvadersEscape(target: inv.character, wpm: game.currentWpm)
                 Haptics.error()
                 flash("\(inv.character) got through", for: 1.0)
@@ -444,9 +443,9 @@ struct InvadersView: View {
         let lowest = game.lowest
         let shot = game.shoot(character)
         if let hit = shot.invader {
-            let ttr = loop.toneEnd[hit.id].map { max(0, now.timeIntervalSince($0)) } ?? 0
-            loop.toneEnd[hit.id] = nil
-            loop.announcer.forget(id: hit.id)
+            // From the end of its sound; one hit while its sound still waits
+            // its turn counts from when it appeared (`ArcadeFrame.reactionTime`).
+            let ttr = loop.reactionTime(hit: hit.id, at: now)
             model.noteInvadersShot(target: hit.character, chosen: hit.character, ttr: ttr, wpm: game.currentWpm)
             Haptics.success()
             flash(shot.waveCleared ? "Wave \(game.wave)!" : "+\(shot.points)", for: 0.8)

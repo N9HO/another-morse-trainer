@@ -442,10 +442,9 @@ struct GalagaView: View {
         for event in game.advance(by: dt) {
             switch event {
             case .entered(let enemy), .dived(let enemy):
-                if input == .icr { loop.announcer.arrived(id: enemy.id, text: String(enemy.character)) }
+                if input == .icr { loop.arrived(id: enemy.id, text: String(enemy.character), at: now) }
             case .landed(let enemy):
-                loop.toneEnd[enemy.id] = nil
-                loop.announcer.forget(id: enemy.id)
+                loop.forget(id: enemy.id)
                 model.noteGalagaLanding(target: enemy.character, wpm: game.currentWpm)
                 Haptics.error()
                 flash("\(enemy.character) got through", for: 1.0)
@@ -478,9 +477,9 @@ struct GalagaView: View {
         let threat = game.mostThreatening
         let shot = game.shoot(character)
         if let hit = shot.enemy {
-            let ttr = loop.toneEnd[hit.id].map { max(0, now.timeIntervalSince($0)) } ?? 0
-            loop.toneEnd[hit.id] = nil
-            loop.announcer.forget(id: hit.id)
+            // From the end of its sound; one hit while its sound still waits
+            // its turn counts from when it appeared (`ArcadeFrame.reactionTime`).
+            let ttr = loop.reactionTime(hit: hit.id, at: now)
             model.noteGalagaShot(target: hit.character, chosen: hit.character, ttr: ttr, wpm: game.currentWpm)
             Haptics.success()
             flash(shot.waveCleared ? "Wave \(game.wave)!" : "+\(shot.points)", for: 0.8)
