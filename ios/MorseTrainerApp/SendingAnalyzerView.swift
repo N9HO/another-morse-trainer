@@ -41,9 +41,8 @@ struct SendingAnalyzerView: View {
                 // key late and a tap shorter than that delay arrived as a down
                 // and an up in the same instant: short dits were lost and holds
                 // were late (#363). The games' play screens and Sending Keyer
-                // have no ScrollView around their key, and the repeater's key
-                // is pinned the same way. First Four's stage key is still
-                // inside its ScrollView.
+                // have no ScrollView around their key, and the repeater's and
+                // First Four's stage keys (#382) are pinned the same way.
                 .safeAreaInset(edge: .bottom, spacing: 0) {
                     if analyzer.phase == .sending && analyzer.input == .key {
                         SendingKeyPad(analyzer: analyzer, keyer: analyzer.keyer)
