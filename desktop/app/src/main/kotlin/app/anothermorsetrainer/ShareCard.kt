@@ -22,7 +22,10 @@ import kotlin.math.roundToInt
  *
  * Desktop: there is no system share sheet, so [share] copies the image (with
  * the one-line text as a plain-text alternative) to the clipboard and [save]
- * asks where to write the PNG — both through [DesktopShare].
+ * asks where to write the PNG — both through [DesktopShare]. The clipboard
+ * holds one Transferable with two flavours, and a paste takes one or the
+ * other, never both, so nothing is posted twice; the phone apps' share sheets
+ * send the image alone for that reason (as Daily Dit does, #334).
  */
 object ShareCard {
     private val NAVY_TOP = Color(0x05, 0x12, 0x1C)
@@ -38,7 +41,7 @@ object ShareCard {
     /** Asks where to save the card as a PNG; the file written, or null if cancelled or failed. */
     fun save(): File? = DesktopShare.saveImage(render(), "brag-sheet.png")
 
-    /** The text that travels with the image, as the Android share intent's EXTRA_TEXT. */
+    /** The clipboard's plain-text flavour beside the image, for targets that paste only text. */
     private fun shareText(): String =
         "${Stats.currentStreak}-day Morse streak — ${Stats.totalAttempts} copied at " +
             "${(Stats.overallAccuracy * 100).roundToInt()}%. anothermorsetrainer.app"
