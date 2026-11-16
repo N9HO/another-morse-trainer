@@ -2139,10 +2139,13 @@ final class AppModel: ObservableObject {
     /// what holds a timed session open past its last second. Only the modes
     /// that hand out drills one at a time (`newDrill`); Listen, the stories,
     /// the exam, the pileups, Rapid Fire's review stream and the games run
-    /// on their own.
+    /// on their own. A ranked Rapid Fire run (one being posted) ends at 0:00
+    /// as before: held, it could score one more item and run up to 15 s
+    /// longer than the runs already on the board.
     private var drillAwaitsAnswer: Bool {
         guard drill != nil, introduction == nil, !mode.isGame, !isListen, !isStory,
               !isExam, !usesPileup, !isRapidFireReview else { return false }
+        if isRapidFire && leaderboardRunStart != nil { return false }
         switch phase {
         case .playing, .awaiting: return true
         case .revealed: return isHeadCopy   // shown, waiting to be self-graded

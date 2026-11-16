@@ -361,7 +361,10 @@ fun RapidFireScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {
     // At zero: end, or hold for the drill waiting on its answer (SessionKit).
     val timer = rememberSessionTimeUp(
         running = phase == RfPhase.RUNNING, remaining = remainingState, held = heldState,
-        awaitingAnswer = { drill != null && response != RapidFireResponse.REVIEW }, onEnd = { finishRun() }
+        // A ranked run (lbRun set) ends at 0:00 as before: held, it could score
+        // one more item and run up to 15 s longer than the runs on the board.
+        awaitingAnswer = { drill != null && response != RapidFireResponse.REVIEW && lbRun == null },
+        onEnd = { finishRun() }
     )
 
     // Mid-session Settings, drawn over the run so the stream lives on.
