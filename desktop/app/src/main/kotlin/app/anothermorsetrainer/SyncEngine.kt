@@ -376,7 +376,8 @@ class SyncEngine(
             // A setting goes only once stamped (a change made here, or a first
             // sign-in's non-default value), and always normalised.
             val value = if (SyncSettings.isSetting(key)) {
-                                SyncSettings.normalize(key, raw) ?: continue
+                if (key !in s.stateStamps) continue
+                SyncSettings.normalize(key, raw) ?: continue
             } else raw
             entries[key] = SyncWire.StateEntry(value, s.stateStamps[key] ?: UNSTAMPED)
         }
@@ -494,7 +495,7 @@ class SyncEngine(
                 // read is ignored, local value and stamp kept.
                 val mine = localStamps[key]
                 if (mine != null && theirs.updatedAt <= mine) continue
-                val normal = theirs.value
+                val normal = SyncSettings.normalize(key, theirs.value) ?: continue
                 winners[key] = SyncWire.StateEntry(normal, theirs.updatedAt)
                 continue
             }
