@@ -402,9 +402,13 @@ data class DailyDitGame(
         if (!DailyDit.isAllowedGuess(word)) {
             return DailyDitSubmission.Rejected(DailyDitRejection.NOT_A_WORD)
         }
-        // Read the speed *before* appending: a guess is played at the speed it
-        // was made at, and only the next one feels the step down.
-        val round = DailyDitRound(word, DailyDit.score(word, answer), currentWpm)
+        // The row's speed is the speed the word was last *heard* at, not the
+        // ladder's next step: the third listen is heard at the old speed, so a
+        // guess made right after it was made on code that was never sent at the
+        // stepped-down speed, and labelling it so disagreed with the headline's
+        // slowest-heard speed (#367). With no listen yet there is nothing heard,
+        // so it falls back to the ladder's current speed.
+        val round = DailyDitRound(word, DailyDit.score(word, answer), heard.lastOrNull() ?: currentWpm)
         return DailyDitSubmission.Scored(copy(rounds = rounds + round), round)
     }
 

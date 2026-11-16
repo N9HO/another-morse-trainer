@@ -362,11 +362,15 @@ public struct DailyDitGame: Sendable, Equatable, Codable {
         guard word.count == DailyDit.wordLength else { return .rejected(.wrongLength) }
         guard DailyDit.isAllowedGuess(word) else { return .rejected(.notAWord) }
 
-        // Read the speed *before* appending: a guess is played at the speed it
-        // was made at, and only the next one feels the step down.
+        // The row's speed is the speed the word was last *heard* at, not the
+        // ladder's next step: the third listen is heard at the old speed, so a
+        // guess made right after it was made on code that was never sent at the
+        // stepped-down speed, and labelling it so disagreed with the headline's
+        // slowest-heard speed (#367). With no listen yet there is nothing heard,
+        // so it falls back to the ladder's current speed.
         let round = DailyDitRound(guess: word,
                                   tiles: DailyDit.score(guess: word, answer: answer),
-                                  wpm: currentWpm)
+                                  wpm: heard.last ?? currentWpm)
         rounds.append(round)
         return .scored(round)
     }

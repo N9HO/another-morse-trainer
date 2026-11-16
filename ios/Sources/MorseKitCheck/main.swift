@@ -3927,6 +3927,16 @@ struct DailyDitFixture: Decodable {
         let headline: String
     }
     struct SolvedSpeed: Decodable { let heard: [Double]; let winningGuessWpm, solvedWpm: Double }
+    struct GuessSpeed: Decodable {
+        let name: String
+        let puzzleNumber: Int
+        let answer: String
+        let startingWpm: Double
+        let hideReference: Bool
+        let plays: [Play]
+        let heard, roundWpms: [Double]
+        let solvedWpm: Double
+    }
     struct QuietWarning: Decodable { let volumeFraction: Double; let isFinished, warns: Bool }
     let rules: Rules
     let wordLists: WordLists
@@ -3936,6 +3946,7 @@ struct DailyDitFixture: Decodable {
     let ladder: [Ladder]
     let share: Share
     let headlines: [Headline]
+    let guessSpeeds: [GuessSpeed]
     let solvedSpeeds: [SolvedSpeed]
     let quietWarnings: [QuietWarning]
 }
@@ -4115,6 +4126,27 @@ if let fx = loadDailyDitFixture() {
         }
     }
     check("headlines match the fixture across \(fx.headlines.count) outcomes (singulars and a 101-guess day included)", headlineOK)
+
+    // #367: a row is labelled with the speed the word was last heard at, so it
+    // never names a step the player did not hear. Scripts and values are the
+    // fixture's.
+    var guessSpeedOK = !fx.guessSpeeds.isEmpty
+    for c in fx.guessSpeeds {
+        var g = DailyDitGame(puzzleNumber: c.puzzleNumber, answer: c.answer,
+                             startingWpm: c.startingWpm, hideReference: c.hideReference)
+        for p in c.plays {
+            switch p.action {
+            case "listen": g.listen()
+            case "guess": if case .rejected = g.submit(p.word ?? "") { guessSpeedOK = false }
+            default: guessSpeedOK = false
+            }
+        }
+        if g.heard != c.heard || g.rounds.map(\.wpm) != c.roundWpms || g.solvedWpm != c.solvedWpm {
+            guessSpeedOK = false
+            print("      ↳ \(c.name): heard \(g.heard), rows \(g.rounds.map(\.wpm)), solved \(String(describing: g.solvedWpm))")
+        }
+    }
+    check("guess rows carry the speed last heard, matching the headline, across \(fx.guessSpeeds.count) scripts", guessSpeedOK)
 
     // The reported speed is the slowest the word was *heard* at, not the speed
     // at the winning guess. The dial can be raised before the first guess, so

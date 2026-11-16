@@ -258,6 +258,33 @@ class DailyDitTest {
         }
     }
 
+    /**
+     * #367: a row is labelled with the speed the word was last heard at, so it
+     * can never disagree with the headline's slowest-heard speed by naming a
+     * step the player never heard. Scripts and values are the fixture's.
+     */
+    @Test
+    fun guessRowsCarryTheSpeedLastHeardAsTheFixtureSays() {
+        val cases = fixture.getJSONArray("guessSpeeds")
+        assertTrue(cases.length() > 0)
+        for (i in 0 until cases.length()) {
+            val c = cases.getJSONObject(i)
+            val game = play(c)
+            val name = c.getString("name")
+            val heard = c.getJSONArray("heard")
+            assertEquals(name, heard.length(), game.heard.size)
+            for (j in 0 until heard.length()) {
+                assertEquals("$name: listen ${j + 1}", heard.getDouble(j), game.heard[j], 0.0)
+            }
+            val rows = c.getJSONArray("roundWpms")
+            assertEquals(name, rows.length(), game.rounds.size)
+            for (j in 0 until rows.length()) {
+                assertEquals("$name: guess ${j + 1}", rows.getDouble(j), game.rounds[j].wpm, 0.0)
+            }
+            assertEquals(name, c.getDouble("solvedWpm"), game.solvedWpm!!, 0.0)
+        }
+    }
+
     @Test
     fun headlinesMatchTheFixture() {
         val miss = List(DailyDit.WORD_LENGTH) { DailyDitTile.ABSENT }
