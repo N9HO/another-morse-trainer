@@ -30,7 +30,7 @@ struct BluetoothMIDISheet: UIViewControllerRepresentable {
     }
 
     func makeUIViewController(context: Context) -> UINavigationController {
-        let browser = CABTMIDICentralViewController()
+        let browser = BluetoothMIDIBrowser()
         browser.title = "Bluetooth Key"
         browser.navigationItem.rightBarButtonItem = UIBarButtonItem(
             barButtonSystemItem: .done,
@@ -52,6 +52,31 @@ struct BluetoothMIDISheet: UIViewControllerRepresentable {
         @objc func done() {
             onDone()
         }
+    }
+}
+
+/// iOS's BLE-MIDI browser, with `loadView` rebuilt so it doesn't crash on iOS 27.
+///
+/// The stock `loadView` sizes its table from `UIScreen.main.applicationFrame`,
+/// whose height is NaN on iOS 27, so `UITableView.init(frame:)` throws
+/// `CALayerInvalidGeometry` (a bare `loadViewIfNeeded()` throws too). This does
+/// what the stock method does (from its iOS 27.0 disassembly) with a zero
+/// frame, which the navigation controller replaces. The two flags the stock
+/// method clears are already false after `init`. Before iOS 27 the stock
+/// method runs.
+private final class BluetoothMIDIBrowser: CABTMIDICentralViewController {
+    override func loadView() {
+        guard #available(iOS 27, *) else {
+            super.loadView()
+            return
+        }
+        let table = UITableView(frame: .zero, style: .insetGrouped)
+        table.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        table.delegate = self
+        table.dataSource = self
+        table.allowsSelection = true
+        table.allowsMultipleSelectionDuringEditing = true
+        view = table
     }
 }
 #endif
