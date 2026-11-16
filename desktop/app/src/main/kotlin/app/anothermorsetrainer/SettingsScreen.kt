@@ -227,14 +227,7 @@ fun SettingsScreen(
      * Characters session underneath restarts its drill. Null falls back to
      * [onBack], the track already jumped and saved for the next start.
      */
-    onPreviewStage: (() -> Unit)? = null,
-    /**
-     * The drill item under way in the session that opened this (iOS `replay()`
-     * keys `drill.playable`), for the Preview tone row. Null, or an item that
-     * answers null, means there is no current drill item and PARIS is keyed
-     * instead; Home passes nothing.
-     */
-    previewItem: (() -> MorseItem.Playable?)? = null
+    onPreviewStage: (() -> Unit)? = null
 ) {
     val uriHandler = LocalUriHandler.current
     val player = remember { MorsePlayer() }
@@ -421,7 +414,7 @@ fun SettingsScreen(
                                     // session's next sound cut it.
                                     OutlinedButton(enabled = scope == null, onClick = {
                                         player.play(
-                                            previewItem?.invoke() ?: MorseItem.Playable.Text("PARIS"),
+                                            MorseItem.Playable.Text("PARIS"),
                                             Settings.sidetoneHz, Settings.timing()
                                         ) {}
                                     }) {
@@ -1307,8 +1300,7 @@ fun SessionSettingsButton(onOpen: () -> Unit) {
 fun SessionSettingsOverlay(
     scope: SettingsMode,
     onClose: () -> Unit,
-    onPreviewStage: (() -> Unit)? = null,
-    previewItem: (() -> MorseItem.Playable?)? = null
+    onPreviewStage: (() -> Unit)? = null
 ) {
     BackHandler { onClose() }
     Box(
@@ -1324,7 +1316,7 @@ fun SessionSettingsOverlay(
                 indication = null
             ) {}
     ) {
-        SettingsScreen(onBack = onClose, scope = scope, onPreviewStage = onPreviewStage, previewItem = previewItem)
+        SettingsScreen(onBack = onClose, scope = scope, onPreviewStage = onPreviewStage)
     }
 }
 

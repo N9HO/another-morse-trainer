@@ -2605,17 +2605,13 @@ final class AppModel: ObservableObject {
                                   timing: timing)
     }
 
-    /// Settings' Preview tone: replays the current drill item, and keys PARIS
-    /// only when there is no current drill item (parity row 21: every app does
-    /// both, so the row always sounds something).
+    /// Settings' Preview tone: keys PARIS at the current settings, as every
+    /// app does. It is off during a session (`SettingsView`), where it played
+    /// over the session's own sound, so there is no drill item to replay.
     func previewTone() {
-        if drill != nil {
-            replay()
-        } else {
-            player.replaySound(playable: .text("PARIS"),
-                               frequency: settings.toneFrequency,
-                               timing: timing)
-        }
+        player.replaySound(playable: .text("PARIS"),
+                           frequency: settings.toneFrequency,
+                           timing: timing)
     }
 
     func select(_ choice: String) {
@@ -2687,6 +2683,10 @@ final class AppModel: ObservableObject {
             // wrong while the answer shows (issue #77). Advancing first
             // (phase leaves .answered) cancels it, and so does a Replay the
             // learner pressed in that beat: the re-send would cut into it.
+            // Whatever is still sounding stops first, as on Android and desktop
+            // (`resendAfterMiss`): an answer is taken mid-prompt, and a Replay
+            // pressed before answering is of the same item.
+            player.stop()
             advanceGeneration += 1
             let token = advanceGeneration
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { [weak self] in

@@ -559,7 +559,7 @@ fun JourneyScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
     }
 
     if (showSettings) {
-        SessionSettingsOverlay(scope = SettingsMode.JOURNEY, onClose = { showSettings = false }, previewItem = { drill.playable })
+        SessionSettingsOverlay(scope = SettingsMode.JOURNEY, onClose = { showSettings = false })
     }
     }
 }
