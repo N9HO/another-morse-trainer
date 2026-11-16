@@ -12,6 +12,9 @@ class ArcadeFrame {
     /// When each enemy's sound finished, by id, so a hit's reaction time runs
     /// from the end of its sound.
     var toneEnd: [Int: Date] = [:]
+    /// When each enemy appeared, by id: a hit's reaction time runs from there
+    /// while its sound is still waiting its turn, so no hit counts as 0 ms.
+    var appeared: [Int: Date] = [:]
 
     /// Seconds since the last frame, capped at 0.1 so a long gap (the app was
     /// backgrounded) does not move the game on in one step; nil on a run's
@@ -27,6 +30,31 @@ class ArcadeFrame {
         lastFrame = nil
         announcer.reset()
         toneEnd = [:]
+        appeared = [:]
+    }
+
+    /// A new enemy to announce, which appeared at `now`. A Galaga diver is
+    /// announced again; it keeps the time it first appeared.
+    func arrived(id: Int, text: String, at now: Date) {
+        if appeared[id] == nil { appeared[id] = now }
+        announcer.arrived(id: id, text: text)
+    }
+
+    /// An enemy that is gone (shot, landed, destroyed): nothing more to
+    /// announce or time for it.
+    func forget(id: Int) {
+        toneEnd[id] = nil
+        appeared[id] = nil
+        announcer.forget(id: id)
+    }
+
+    /// The reaction time of a hit on `id` at `now`, then forgets it: from the
+    /// end of its sound, or, if its sound hasn't played yet (it was waiting
+    /// its turn), from when it appeared.
+    func reactionTime(hit id: Int, at now: Date) -> TimeInterval {
+        defer { forget(id: id) }
+        guard let from = toneEnd[id] ?? appeared[id] else { return 0 }
+        return max(0, now.timeIntervalSince(from))
     }
 
     /// Plays what the channel has waiting, if it is free: `send` sounds the

@@ -176,6 +176,9 @@ fun GalagaScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) 
     // When each enemy's Morse finished sounding (copy mode), by id, so a
     // hit's time-to-recognize runs from the end of the tone.
     val toneEnd = remember { HashMap<Int, Long>() }
+    // When each enemy appeared: a hit's reaction time runs from there while
+    // its sound is still waiting its turn, so no hit counts as 0 ms.
+    val appeared = remember { HashMap<Int, Long>() }
     // The one sound channel (copy mode): an entry, a dive and a tapped replay
     // take turns instead of cutting into each other.
     val announcer = remember { GameAnnouncer() }
@@ -269,6 +272,7 @@ fun GalagaScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) 
         game = g
         field = emptyList()
         toneEnd.clear()
+        appeared.clear()
         announcer.reset()
         charResults.clear()
         flash = null
@@ -346,7 +350,10 @@ fun GalagaScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) 
         val shot = g.shoot(character)
         val hit = shot.enemy
         if (hit != null) {
-            val end = toneEnd.remove(hit.id)
+            // From the end of its sound; one hit while its sound still waits its
+            // turn counts from when it appeared, never 0.
+            val end = toneEnd.remove(hit.id) ?: appeared[hit.id]
+            appeared.remove(hit.id)
             announcer.forget(hit.id)
             val ttr = if (end != null) ((now - end).coerceAtLeast(0)) / 1000.0 else 0.0
             engine.noteAttempt(hit.character, hit.character, ttr)
@@ -385,10 +392,12 @@ fun GalagaScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) 
                 when (event) {
                     is GalagaEvent.Entered, is GalagaEvent.Dived -> if (input == InvadersInput.ICR) {
                         val enemy = if (event is GalagaEvent.Entered) event.enemy else (event as GalagaEvent.Dived).enemy
+                        appeared.putIfAbsent(enemy.id, System.currentTimeMillis())
                         announcer.arrived(enemy.id, enemy.character.toString())
                     }
                     is GalagaEvent.Landed -> {
                         toneEnd.remove(event.enemy.id)
+                        appeared.remove(event.enemy.id)
                         announcer.forget(event.enemy.id)
                         engine.noteMiss(event.enemy.character)
                         tally(event.enemy.character, false)

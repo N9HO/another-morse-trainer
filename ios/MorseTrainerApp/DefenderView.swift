@@ -466,10 +466,9 @@ struct DefenderView: View {
         for event in game.advance(by: dt) {
             switch event {
             case .launched(let a):
-                loop.announcer.arrived(id: a.id, text: a.callsign)
+                loop.arrived(id: a.id, text: a.callsign, at: now)
             case .struck(let a, let asset):
-                loop.toneEnd[a.id] = nil
-                loop.announcer.forget(id: a.id)
+                loop.forget(id: a.id)
                 model.noteDefenderStrike(callsign: a.callsign, wpm: game.currentWpm)
                 Haptics.error()
                 struckId = asset.id
@@ -534,9 +533,9 @@ struct DefenderView: View {
         guard let game else { return }
         let now = Date()
         if let hit = result.attacker {
-            let ttr = loop.toneEnd[hit.id].map { max(0, now.timeIntervalSince($0)) } ?? 0
-            loop.toneEnd[hit.id] = nil
-            loop.announcer.forget(id: hit.id)
+            // From the end of its sound; one hit while its sound still waits
+            // its turn counts from when it appeared (`ArcadeFrame.reactionTime`).
+            let ttr = loop.reactionTime(hit: hit.id, at: now)
             model.noteDefenderRoute(target: hit.callsign, chosen: hit.callsign, ttr: ttr, wpm: game.currentWpm)
             Haptics.success()
             if let fresh = result.reinforced {
