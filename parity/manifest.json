@@ -1343,23 +1343,30 @@
    "claims": {
     "ios": {
      "screens": [
-      "DailyDitView.swift"
+      "DailyDitView.swift",
+      "DailyDitHistoryView.swift"
      ]
     },
     "android": {
      "routes": [
-      "dailydit"
+      "dailydit",
+      "dailydithistory",
+      "dailyditpractice"
      ],
      "screens": [
-      "DailyDitScreen.kt"
+      "DailyDitScreen.kt",
+      "DailyDitHistoryScreen.kt"
      ]
     },
     "desktop": {
      "routes": [
-      "dailydit"
+      "dailydit",
+      "dailydithistory",
+      "dailyditpractice"
      ],
      "screens": [
-      "DailyDitScreen.kt"
+      "DailyDitScreen.kt",
+      "DailyDitHistoryScreen.kt"
      ]
     }
    },

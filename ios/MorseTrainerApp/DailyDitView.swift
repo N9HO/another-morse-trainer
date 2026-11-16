@@ -10,9 +10,18 @@ import UniformTypeIdentifiers
 /// Speed is chosen before the first guess and then belongs to the day — the
 /// ladder walks it down as listens and wrong guesses are spent (#168), and the
 /// slowest speed you heard it at is what the share text brags about.
+///
+/// The same screen plays a past day from the history (#333) when given
+/// `practicePuzzle`: practice only, so it plays `AppModel.dailyDitPractice`
+/// through the practice calls — nothing saved, nothing counted — and has no
+/// Share or Copy, since a practice result is not that day's result.
 struct DailyDitView: View {
     @EnvironmentObject var model: AppModel
     @Environment(\.dismiss) private var dismiss
+
+    /// nil plays today's puzzle. A number plays that past day as practice,
+    /// pushed from `DailyDitHistoryView` inside today's navigation stack.
+    var practicePuzzle: Int? = nil
 
     @State private var entry = ""
     @State private var message: String?
@@ -25,30 +34,52 @@ struct DailyDitView: View {
     @State private var quietPlayAccepted = false
     @FocusState private var entryFocused: Bool
 
-    private var game: DailyDitGame { model.dailyDit }
+    private var isPractice: Bool { practicePuzzle != nil }
+
+    /// The game on screen: today's, or the practice game for `practicePuzzle`
+    /// (a fresh one until `startDailyDitPractice` has run for it).
+    private var game: DailyDitGame {
+        guard let number = practicePuzzle else { return model.dailyDit }
+        if let practice = model.dailyDitPractice, practice.puzzleNumber == number { return practice }
+        return DailyDitGame.forPuzzle(number,
+                                      startingWpm: model.settings.dailyDitStartingWpm,
+                                      hideReference: model.settings.dailyDitHideReference)
+    }
     private var isPlaying: Bool { (playingUntil ?? .distantPast) > Date() }
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(spacing: 20) {
-                    header
-                    playButton
-                    if game.isFinished { resultCard } else { entryRow }
-                    grid
-                    if !game.isFinished { letterTracker }
-                    if game.guessesUsed == 0 { setupCard } else { speedNote }
-                    if !game.hideReference { referenceCard }
-                    howItWorks
-                }
-                .padding()
-                .readableWidth()
+        // A practice day is pushed inside today's stack, so it brings none of
+        // its own.
+        if isPractice {
+            content
+        } else {
+            NavigationStack { content }
+        }
+    }
+
+    private var content: some View {
+        ScrollView {
+            VStack(spacing: 20) {
+                if isPractice { practiceBanner }
+                header
+                playButton
+                if game.isFinished { resultCard } else { entryRow }
+                grid
+                if !game.isFinished { letterTracker }
+                if game.guessesUsed == 0 { setupCard } else { speedNote }
+                if !game.hideReference { referenceCard }
+                if !isPractice { historyLink }
+                howItWorks
             }
-            .scrollContentBackground(.hidden)
-            .background(Theme.Background())
-            .navigationTitle("Daily Dit")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
+            .padding()
+            .readableWidth()
+        }
+        .scrollContentBackground(.hidden)
+        .background(Theme.Background())
+        .navigationTitle(isPractice ? "Practice" : "Daily Dit")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if !isPractice {
                 ToolbarItem(placement: .topBarLeading) {
                     if game.isFinished {
                         shareLink {
@@ -61,24 +92,78 @@ struct DailyDitView: View {
                     Button("Done") { dismiss() }
                 }
             }
-            .onAppear { model.refreshDailyDit() }
-            // Re-render on every finish transition: solving mid-screen, and the
-            // midnight rollover (refreshDailyDit) both change what the card says.
-            .task(id: game.isFinished) { renderShareImage() }
-            .onDisappear {
-                model.stopDailyDit()
-                model.releaseAudioIfIdle()   // no band noise on the menu after (#331)
-            }
-            .alert("Your device appears to be muted", isPresented: $confirmingQuietPlay) {
-                Button("Play anyway") {
-                    quietPlayAccepted = true
-                    play()
-                }
-                Button("Cancel", role: .cancel) {}
-            } message: {
-                Text("The volume is at or near zero. Every play before you solve the word counts as a listen, so turn it up first, or play anyway.")
+        }
+        .onAppear {
+            model.refreshDailyDit()
+            if let number = practicePuzzle, model.dailyDitPractice?.puzzleNumber != number {
+                model.startDailyDitPractice(puzzle: number)
             }
         }
+        // Re-render on every finish transition: solving mid-screen, and the
+        // midnight rollover (refreshDailyDit) both change what the card says.
+        .task(id: game.isFinished) { renderShareImage() }
+        .onDisappear {
+            model.stopDailyDit()
+            // No band noise on the menu after (#331) — nor on the history,
+            // which plays nothing, when this is today's screen pushed under it
+            // or a practice day popped back to it.
+            model.releaseAudioIfIdle()
+        }
+        .alert("Your device appears to be muted", isPresented: $confirmingQuietPlay) {
+            Button("Play anyway") {
+                quietPlayAccepted = true
+                play()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("The volume is at or near zero. Every play before you solve the word counts as a listen, so turn it up first, or play anyway.")
+        }
+    }
+
+    // MARK: - Practice (#333)
+
+    private var practiceBanner: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Label("Practice", systemImage: "arrow.counterclockwise")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(Theme.tealBright)
+            Text("The word everyone got on \(DailyDitHistoryView.dateLabel(forPuzzle: game.puzzleNumber)). Practice only: it doesn't count toward your streak, change that day's result, or share.")
+                .font(.caption)
+                .foregroundStyle(Theme.textSecondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(12)
+        .background(Theme.navyElevated, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .accessibilityElement(children: .combine)
+    }
+
+    private var historyLink: some View {
+        NavigationLink {
+            DailyDitHistoryView()
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "calendar")
+                    .font(.title3)
+                    .foregroundStyle(Theme.teal)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Past puzzles")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white)
+                    Text("The last \(DailyDit.historyDays) days. Catch up on one you missed, or replay one, as practice.")
+                        .font(.caption)
+                        .foregroundStyle(Theme.textSecondary)
+                        .multilineTextAlignment(.leading)
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(Theme.textSecondary)
+            }
+            .padding(14)
+            .background(Theme.navyElevated,
+                        in: RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous))
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Header
@@ -144,7 +229,7 @@ struct DailyDitView: View {
     /// when it is heard, so a silent play would burn one for nothing. Cancel
     /// costs nothing. Free replays after the win never ask.
     private func requestPlay() {
-        if !quietPlayAccepted && model.dailyDitPlayNeedsVolumeConfirmation {
+        if !quietPlayAccepted && model.dailyDitPlayNeedsVolumeConfirmation(for: game) {
             confirmingQuietPlay = true
         } else {
             play()
@@ -152,7 +237,7 @@ struct DailyDitView: View {
     }
 
     private func play() {
-        let duration = model.playDailyDit()
+        let duration = isPractice ? model.playDailyDitPractice() : model.playDailyDit()
         guard duration > 0 else { return }
         playingUntil = Date().addingTimeInterval(duration)
         // Nothing depends on this firing — it only un-animates the button — so
@@ -232,7 +317,7 @@ struct DailyDitView: View {
     }
 
     private func submit() {
-        switch model.submitDailyDit(entry) {
+        switch isPractice ? model.submitDailyDitPractice(entry) : model.submitDailyDit(entry) {
         case .scored(let round):
             entry = ""
             message = nil
@@ -356,52 +441,84 @@ struct DailyDitView: View {
                            label: game.listens == 1 ? "listen" : "listens")
             }
 
-            Text(game.shareText)
-                .font(.system(.footnote, design: .monospaced))
-                .foregroundStyle(Theme.textSecondary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(12)
-                .background(Theme.navyRaised,
-                            in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                .accessibilityLabel("Your shareable result")
-
-            HStack(spacing: 12) {
-                Button {
-                    copyResult()
-                    Haptics.success()
-                    message = "Copied."
-                } label: {
-                    Label("Copy", systemImage: "doc.on.doc")
-                        .font(.headline)
-                        .foregroundStyle(Theme.prominentLabel(on: Theme.teal))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                        .background(Theme.teal,
-                                    in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                }
-                .buttonStyle(.plain)
-
-                shareLink {
-                    Label("Share", systemImage: "square.and.arrow.up")
-                        .font(.headline)
-                        .foregroundStyle(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                        .background(Theme.navyRaised,
-                                    in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                }
-                .buttonStyle(.plain)
+            if isPractice {
+                practiceResultFooter
+            } else {
+                shareableResult
             }
-            if let message {
-                Text(message).font(.footnote).foregroundStyle(Theme.tealBright)
-            }
-            Text("Next puzzle tomorrow.")
-                .font(.caption)
-                .foregroundStyle(Theme.textSecondary)
         }
         .padding(16)
         .background(Theme.navyElevated,
                     in: RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous))
+    }
+
+    /// A practice result is not shared (#333): it isn't that day's result, and
+    /// a share card would read as if it were. Starting over is free.
+    private var practiceResultFooter: some View {
+        VStack(spacing: 10) {
+            Button {
+                Haptics.selection()
+                if let number = practicePuzzle { model.startDailyDitPractice(puzzle: number) }
+            } label: {
+                Label("Play it again", systemImage: "arrow.counterclockwise")
+                    .font(.headline)
+                    .foregroundStyle(Theme.prominentLabel(on: Theme.teal))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(Theme.teal,
+                                in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            }
+            .buttonStyle(.plain)
+            Text("Practice only — not counted and not shared.")
+                .font(.caption)
+                .foregroundStyle(Theme.textSecondary)
+        }
+    }
+
+    @ViewBuilder
+    private var shareableResult: some View {
+        Text(game.shareText)
+            .font(.system(.footnote, design: .monospaced))
+            .foregroundStyle(Theme.textSecondary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(12)
+            .background(Theme.navyRaised,
+                        in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .accessibilityLabel("Your shareable result")
+
+        HStack(spacing: 12) {
+            Button {
+                copyResult()
+                Haptics.success()
+                message = "Copied."
+            } label: {
+                Label("Copy", systemImage: "doc.on.doc")
+                    .font(.headline)
+                    .foregroundStyle(Theme.prominentLabel(on: Theme.teal))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(Theme.teal,
+                                in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            }
+            .buttonStyle(.plain)
+
+            shareLink {
+                Label("Share", systemImage: "square.and.arrow.up")
+                    .font(.headline)
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(Theme.navyRaised,
+                                in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            }
+            .buttonStyle(.plain)
+        }
+        if let message {
+            Text(message).font(.footnote).foregroundStyle(Theme.tealBright)
+        }
+        Text("Next puzzle tomorrow.")
+            .font(.caption)
+            .foregroundStyle(Theme.textSecondary)
     }
 
     private func resultStat(value: String, label: String) -> some View {
@@ -434,7 +551,8 @@ struct DailyDitView: View {
             Toggle(isOn: hideReferenceBinding) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Hide the chart").font(.subheadline.weight(.semibold))
-                    Text("No dit-dah reference — your share text says so.")
+                    Text(isPractice ? "No dit-dah reference."
+                                    : "No dit-dah reference — your share text says so.")
                         .font(.caption)
                         .foregroundStyle(Theme.textSecondary)
                 }
@@ -455,8 +573,7 @@ struct DailyDitView: View {
                 let selected = game.startingWpm == speed
                 Button {
                     Haptics.selection()
-                    model.configureDailyDit(startingWpm: speed,
-                                            hideReference: game.hideReference)
+                    configure(startingWpm: speed, hideReference: game.hideReference)
                 } label: {
                     Text("\(DailyDit.format(wpm: speed))")
                         .font(.subheadline.weight(.semibold).monospacedDigit())
@@ -475,8 +592,18 @@ struct DailyDitView: View {
     private var hideReferenceBinding: Binding<Bool> {
         Binding(
             get: { game.hideReference },
-            set: { model.configureDailyDit(startingWpm: game.startingWpm, hideReference: $0) }
+            set: { configure(startingWpm: game.startingWpm, hideReference: $0) }
         )
+    }
+
+    /// Today's game stores the choice as the preference for next time; a
+    /// practice game only re-bases itself.
+    private func configure(startingWpm: Double, hideReference: Bool) {
+        if isPractice {
+            model.configureDailyDitPractice(startingWpm: startingWpm, hideReference: hideReference)
+        } else {
+            model.configureDailyDit(startingWpm: startingWpm, hideReference: hideReference)
+        }
     }
 
     private var speedNote: some View {
@@ -541,7 +668,7 @@ struct DailyDitView: View {
     }
 
     @MainActor private func renderShareImage() {
-        guard game.isFinished else {
+        guard game.isFinished, !isPractice else {
             shareURL = nil
             return
         }

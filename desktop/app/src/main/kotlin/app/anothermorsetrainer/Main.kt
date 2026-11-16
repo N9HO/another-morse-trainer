@@ -3,6 +3,7 @@ package app.anothermorsetrainer
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.Saver
@@ -218,6 +219,10 @@ private sealed interface Route {
     data object Reference : Route
     data object StartHere : Route
     data object DailyDit : Route
+    /** Daily Dit's Past puzzles (#333). */
+    data object DailyDitHistory : Route
+    /** A past Daily Dit played from the history, as practice only (#333). */
+    data class DailyDitPractice(val puzzleNumber: Int) : Route
     /** Daily Comprehension (#353): the day's sentence in Morse and a question about it. */
     data object DailyComprehension : Route
     /** First Four (#265, #280): the guided path to a first POTA contact. */
@@ -244,7 +249,8 @@ private val Route.playsBandNoise: Boolean
         Route.Listen, Route.Cw77, Route.HeadCopy, Route.TypeIt, Route.Qrq,
         Route.RapidFire, Route.Invaders, Route.Galaga, Route.Defender,
         Route.Dungeon, Route.Frogger, Route.Asteroids, Route.BrassKnuckles, Route.Story, Route.Sending,
-        Route.DailyDit, Route.DailyComprehension, Route.FirstFour, Route.OperatingProcedure -> true
+        Route.DailyDit, is Route.DailyDitPractice, Route.DailyComprehension, Route.FirstFour, Route.OperatingProcedure -> true
+        Route.DailyDitHistory -> false
         Route.Onboarding, Route.Home, Route.Games, Route.SendingDrills,
         Route.SendingAnalyzer, Route.Repeater, Route.CwDecoder, Route.Reference,
         Route.StartHere, Route.Settings, Route.Stats, Route.Leaderboard,
@@ -296,6 +302,8 @@ private fun routeTag(route: Route): String = when (route) {
     Route.Reference -> "reference"
     Route.StartHere -> "startHere"
     Route.DailyDit -> "dailyDit"
+    Route.DailyDitHistory -> "dailyDitHistory"
+    is Route.DailyDitPractice -> "dailyDitPractice:${route.puzzleNumber}"
     Route.DailyComprehension -> "dailyComprehension"
     Route.FirstFour -> "firstFour"
     Route.Settings -> "settings"
@@ -335,6 +343,7 @@ private fun routeFrom(tag: String): Route? = when (tag) {
     "reference" -> Route.Reference
     "startHere" -> Route.StartHere
     "dailyDit" -> Route.DailyDit
+    "dailyDitHistory" -> Route.DailyDitHistory
     "dailyComprehension" -> Route.DailyComprehension
     "firstFour" -> Route.FirstFour
     "settings" -> Route.Settings
@@ -343,9 +352,12 @@ private fun routeFrom(tag: String): Route? = when (tag) {
     "gamesLeaderboard" -> Route.GamesLeaderboard
     // Keyed by title rather than list index: a mode reordered in QUIZ_MODES
     // between save and restore would otherwise silently resume the wrong quiz.
-    else -> tag.removePrefix("quiz:").takeIf { it != tag }
-        ?.let { title -> QUIZ_MODES.firstOrNull { it.title == title } }
-        ?.let(Route::Quiz)
+    else -> tag.removePrefix("dailyDitPractice:").takeIf { it != tag }
+        ?.toIntOrNull()
+        ?.let(Route::DailyDitPractice)
+        ?: tag.removePrefix("quiz:").takeIf { it != tag }
+            ?.let { title -> QUIZ_MODES.firstOrNull { it.title == title } }
+            ?.let(Route::Quiz)
 }
 
 private val RouteSaver: Saver<Route, String> = Saver(
@@ -570,7 +582,23 @@ private fun AppRoot() {
         Route.CwDecoder -> CwDecoderScreen(onBack = { route = Route.Home })
         Route.Reference -> ReferenceScreen(onBack = { route = Route.Home })
         Route.StartHere -> StartHereScreen(onBack = { route = Route.Home })
-        Route.DailyDit -> DailyDitScreen(onBack = { route = Route.Home })
+        Route.DailyDit -> DailyDitScreen(
+            onBack = { route = Route.Home },
+            onOpenHistory = { route = Route.DailyDitHistory }
+        )
+        Route.DailyDitHistory -> DailyDitHistoryScreen(
+            onBack = { route = Route.DailyDit },
+            onOpenToday = { route = Route.DailyDit },
+            onPractice = { route = Route.DailyDitPractice(it) }
+        )
+        // Back from a practice day lands on the history it was picked from.
+        // Keyed by the puzzle so a different day never inherits another's game.
+        is Route.DailyDitPractice -> key(r.puzzleNumber) {
+            DailyDitScreen(
+                onBack = { route = Route.DailyDitHistory },
+                practicePuzzle = r.puzzleNumber
+            )
+        }
         Route.DailyComprehension -> DailyComprehensionScreen(onBack = { route = Route.Home })
         Route.FirstFour -> FirstFourScreen(onBack = { route = Route.Home })
         Route.Settings -> SettingsScreen(

@@ -228,6 +228,19 @@ object PileupSettings {
         if (next.isNotEmpty()) { formats = next; persist() }
     }
 
+    /** Replace the call-sign shapes (account sync); an empty set is refused, as the toggle refuses it. */
+    fun updateFormats(value: Set<CallsignFormat>) {
+        if (value.isEmpty()) return
+        formats = value
+        persist()
+    }
+
+    /** Replace the cut digits (account sync); digits that cannot be cut are dropped. */
+    fun updateCutDigits(value: Set<Char>) {
+        cutDigits = value.filter { it in CutNumbers.cuttableDigits }.toSet()
+        persist()
+    }
+
     fun updateUsOnly(value: Boolean) { usOnly = value; persist() }
     fun updateShortOnly(value: Boolean) { shortOnly = value; persist() }
     fun updateKeepPartialCall(value: Boolean) { keepPartialCall = value; persist() }
@@ -286,5 +299,6 @@ object PileupSettings {
             putBoolean("keyMySide", keyMySide)
             putBoolean("autoRecall", autoRecall)
         }
+        SyncCoordinator.settingsChanged()
     }
 }
