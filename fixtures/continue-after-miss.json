@@ -3,206 +3,729 @@
   "derivation": "Worked from the design rule, not by running any port. State: idle, or awaiting(target, missAtMs). 'miss' arms it with the target when the setting is on and the target has a non-blank trimmed form; otherwise it stays idle. 'input' while idle -> inactive. While awaiting: atMs - missAtMs < debounceMs -> debounced; else the text, trimmed and upper-cased, equal to the target upper-cased -> advance (and idle); else wrong (still awaiting). 'reset' (Next pressed, or any new drill) -> idle. The debounce boundary is inclusive: exactly debounceMs after the miss is accepted. 'awaiting' on a step is the state after that step.",
   "debounceMs": 600,
   "cases": [
-    { "name": "the correct character after the pause advances",
+    {
+      "name": "the correct character after the pause advances",
       "enabled": true,
       "steps": [
-        { "op": "miss", "target": "D", "atMs": 1000, "awaiting": true },
-        { "op": "input", "text": "D", "atMs": 1700, "expect": "advance", "awaiting": false }
-      ] },
-    { "name": "case and surrounding spaces do not matter",
+        {
+          "op": "miss",
+          "target": "D",
+          "atMs": 1000,
+          "awaiting": true
+        },
+        {
+          "op": "input",
+          "text": "D",
+          "atMs": 1700,
+          "expect": "advance",
+          "awaiting": false
+        }
+      ]
+    },
+    {
+      "name": "case and surrounding spaces do not matter",
       "enabled": true,
       "steps": [
-        { "op": "miss", "target": "D", "atMs": 0, "awaiting": true },
-        { "op": "input", "text": " d ", "atMs": 5000, "expect": "advance", "awaiting": false }
-      ] },
-    { "name": "a wrong re-key is ignored and the right one still advances",
+        {
+          "op": "miss",
+          "target": "D",
+          "atMs": 0,
+          "awaiting": true
+        },
+        {
+          "op": "input",
+          "text": " d ",
+          "atMs": 5000,
+          "expect": "advance",
+          "awaiting": false
+        }
+      ]
+    },
+    {
+      "name": "a wrong re-key is ignored and the right one still advances",
       "enabled": true,
       "steps": [
-        { "op": "miss", "target": "D", "atMs": 1000, "awaiting": true },
-        { "op": "input", "text": "7", "atMs": 1700, "expect": "wrong", "awaiting": true },
-        { "op": "input", "text": "K", "atMs": 2400, "expect": "wrong", "awaiting": true },
-        { "op": "input", "text": "D", "atMs": 3100, "expect": "advance", "awaiting": false }
-      ] },
-    { "name": "keying inside the debounce is ignored even when it is right",
+        {
+          "op": "miss",
+          "target": "D",
+          "atMs": 1000,
+          "awaiting": true
+        },
+        {
+          "op": "input",
+          "text": "7",
+          "atMs": 1700,
+          "expect": "wrong",
+          "awaiting": true
+        },
+        {
+          "op": "input",
+          "text": "K",
+          "atMs": 2400,
+          "expect": "wrong",
+          "awaiting": true
+        },
+        {
+          "op": "input",
+          "text": "D",
+          "atMs": 3100,
+          "expect": "advance",
+          "awaiting": false
+        }
+      ]
+    },
+    {
+      "name": "keying inside the debounce is ignored even when it is right",
       "enabled": true,
       "steps": [
-        { "op": "miss", "target": "Z", "atMs": 1000, "awaiting": true },
-        { "op": "input", "text": "Z", "atMs": 1000, "expect": "debounced", "awaiting": true },
-        { "op": "input", "text": "Z", "atMs": 1599, "expect": "debounced", "awaiting": true },
-        { "op": "input", "text": "Z", "atMs": 1600, "expect": "advance", "awaiting": false }
-      ] },
-    { "name": "a wrong re-key inside the debounce is debounced, not wrong",
+        {
+          "op": "miss",
+          "target": "Z",
+          "atMs": 1000,
+          "awaiting": true
+        },
+        {
+          "op": "input",
+          "text": "Z",
+          "atMs": 1000,
+          "expect": "debounced",
+          "awaiting": true
+        },
+        {
+          "op": "input",
+          "text": "Z",
+          "atMs": 1599,
+          "expect": "debounced",
+          "awaiting": true
+        },
+        {
+          "op": "input",
+          "text": "Z",
+          "atMs": 1600,
+          "expect": "advance",
+          "awaiting": false
+        }
+      ]
+    },
+    {
+      "name": "a wrong re-key inside the debounce is debounced, not wrong",
       "enabled": true,
       "steps": [
-        { "op": "miss", "target": "Z", "atMs": 1000, "awaiting": true },
-        { "op": "input", "text": "7", "atMs": 1200, "expect": "debounced", "awaiting": true }
-      ] },
-    { "name": "nothing is armed before a miss",
+        {
+          "op": "miss",
+          "target": "Z",
+          "atMs": 1000,
+          "awaiting": true
+        },
+        {
+          "op": "input",
+          "text": "7",
+          "atMs": 1200,
+          "expect": "debounced",
+          "awaiting": true
+        }
+      ]
+    },
+    {
+      "name": "nothing is armed before a miss",
       "enabled": true,
       "steps": [
-        { "op": "input", "text": "D", "atMs": 100, "expect": "inactive", "awaiting": false }
-      ] },
-    { "name": "the setting off arms nothing",
+        {
+          "op": "input",
+          "text": "D",
+          "atMs": 100,
+          "expect": "inactive",
+          "awaiting": false
+        }
+      ]
+    },
+    {
+      "name": "the setting off arms nothing",
       "enabled": false,
       "steps": [
-        { "op": "miss", "target": "D", "atMs": 1000, "awaiting": false },
-        { "op": "input", "text": "D", "atMs": 5000, "expect": "inactive", "awaiting": false }
-      ] },
-    { "name": "once advanced, the same key press does not advance twice",
+        {
+          "op": "miss",
+          "target": "D",
+          "atMs": 1000,
+          "awaiting": false
+        },
+        {
+          "op": "input",
+          "text": "D",
+          "atMs": 5000,
+          "expect": "inactive",
+          "awaiting": false
+        }
+      ]
+    },
+    {
+      "name": "once advanced, the same key press does not advance twice",
       "enabled": true,
       "steps": [
-        { "op": "miss", "target": "D", "atMs": 1000, "awaiting": true },
-        { "op": "input", "text": "D", "atMs": 2000, "expect": "advance", "awaiting": false },
-        { "op": "input", "text": "D", "atMs": 2100, "expect": "inactive", "awaiting": false }
-      ] },
-    { "name": "Next pressed by hand disarms it",
+        {
+          "op": "miss",
+          "target": "D",
+          "atMs": 1000,
+          "awaiting": true
+        },
+        {
+          "op": "input",
+          "text": "D",
+          "atMs": 2000,
+          "expect": "advance",
+          "awaiting": false
+        },
+        {
+          "op": "input",
+          "text": "D",
+          "atMs": 2100,
+          "expect": "inactive",
+          "awaiting": false
+        }
+      ]
+    },
+    {
+      "name": "Next pressed by hand disarms it",
       "enabled": true,
       "steps": [
-        { "op": "miss", "target": "D", "atMs": 1000, "awaiting": true },
-        { "op": "reset", "awaiting": false },
-        { "op": "input", "text": "D", "atMs": 3000, "expect": "inactive", "awaiting": false }
-      ] },
-    { "name": "a later miss re-arms with its own target and debounce",
+        {
+          "op": "miss",
+          "target": "D",
+          "atMs": 1000,
+          "awaiting": true
+        },
+        {
+          "op": "reset",
+          "awaiting": false
+        },
+        {
+          "op": "input",
+          "text": "D",
+          "atMs": 3000,
+          "expect": "inactive",
+          "awaiting": false
+        }
+      ]
+    },
+    {
+      "name": "a later miss re-arms with its own target and debounce",
       "enabled": true,
       "steps": [
-        { "op": "miss", "target": "D", "atMs": 1000, "awaiting": true },
-        { "op": "input", "text": "D", "atMs": 2000, "expect": "advance", "awaiting": false },
-        { "op": "miss", "target": "K", "atMs": 5000, "awaiting": true },
-        { "op": "input", "text": "D", "atMs": 6000, "expect": "wrong", "awaiting": true },
-        { "op": "input", "text": "K", "atMs": 6100, "expect": "advance", "awaiting": false }
-      ] },
-    { "name": "a word target needs the whole word",
+        {
+          "op": "miss",
+          "target": "D",
+          "atMs": 1000,
+          "awaiting": true
+        },
+        {
+          "op": "input",
+          "text": "D",
+          "atMs": 2000,
+          "expect": "advance",
+          "awaiting": false
+        },
+        {
+          "op": "miss",
+          "target": "K",
+          "atMs": 5000,
+          "awaiting": true
+        },
+        {
+          "op": "input",
+          "text": "D",
+          "atMs": 6000,
+          "expect": "wrong",
+          "awaiting": true
+        },
+        {
+          "op": "input",
+          "text": "K",
+          "atMs": 6100,
+          "expect": "advance",
+          "awaiting": false
+        }
+      ]
+    },
+    {
+      "name": "a word target needs the whole word",
       "enabled": true,
       "steps": [
-        { "op": "miss", "target": "CQ", "atMs": 0, "awaiting": true },
-        { "op": "input", "text": "C", "atMs": 1000, "expect": "wrong", "awaiting": true },
-        { "op": "input", "text": "CA", "atMs": 2000, "expect": "wrong", "awaiting": true },
-        { "op": "input", "text": "cq", "atMs": 3000, "expect": "advance", "awaiting": false }
-      ] },
-    { "name": "a target of spaces arms nothing",
+        {
+          "op": "miss",
+          "target": "CQ",
+          "atMs": 0,
+          "awaiting": true
+        },
+        {
+          "op": "input",
+          "text": "C",
+          "atMs": 1000,
+          "expect": "wrong",
+          "awaiting": true
+        },
+        {
+          "op": "input",
+          "text": "CA",
+          "atMs": 2000,
+          "expect": "wrong",
+          "awaiting": true
+        },
+        {
+          "op": "input",
+          "text": "cq",
+          "atMs": 3000,
+          "expect": "advance",
+          "awaiting": false
+        }
+      ]
+    },
+    {
+      "name": "a target of spaces arms nothing",
       "enabled": true,
       "steps": [
-        { "op": "miss", "target": "  ", "atMs": 0, "awaiting": false },
-        { "op": "input", "text": "", "atMs": 5000, "expect": "inactive", "awaiting": false }
-      ] },
-    { "name": "blank keying after a miss is wrong, never an advance",
+        {
+          "op": "miss",
+          "target": "  ",
+          "atMs": 0,
+          "awaiting": false
+        },
+        {
+          "op": "input",
+          "text": "",
+          "atMs": 5000,
+          "expect": "inactive",
+          "awaiting": false
+        }
+      ]
+    },
+    {
+      "name": "blank keying after a miss is wrong, never an advance",
       "enabled": true,
       "steps": [
-        { "op": "miss", "target": "D", "atMs": 0, "awaiting": true },
-        { "op": "input", "text": "  ", "atMs": 5000, "expect": "wrong", "awaiting": true }
-      ] }
+        {
+          "op": "miss",
+          "target": "D",
+          "atMs": 0,
+          "awaiting": true
+        },
+        {
+          "op": "input",
+          "text": "  ",
+          "atMs": 5000,
+          "expect": "wrong",
+          "awaiting": true
+        }
+      ]
+    }
   ],
   "keyedAbout": "The hardware-key screens (#355: Journey, Type It, QRQ Speed), whose decoder the screen cannot clear, hand each decoded run to 'keyed' and the key input's end-of-keying pause to 'paused'; the machine keeps the run keyed since the miss. Read by the same three readers as 'cases'.",
   "keyedDerivation": "Worked from the design rule, not by running any port. Same states, 'miss' and 'reset' as above; both also empty the kept run. 'keyed' while idle -> inactive. While awaiting: atMs - missAtMs < debounceMs -> debounced, and the chunk is dropped, not kept (the inclusive boundary as above). Otherwise the chunk is appended to the kept run, with its leading spaces dropped when the run is empty or ends in a space; if the run, trimmed, is at least as long as the target it is judged as 'input' would judge it (advance or wrong) and the kept run is emptied; otherwise 'pending' (nothing judged, still awaiting). 'paused' while idle -> inactive. While awaiting: the kept run, trimmed, is taken and the kept run emptied; empty -> pending; else judged as 'input' would judge it at that atMs. 'expect': pending means the call returns no outcome.",
   "keyedCases": [
-    { "name": "a stray run inside the debounce is dropped, not glued onto the re-key",
+    {
+      "name": "a stray run inside the debounce is dropped, not glued onto the re-key",
       "enabled": true,
       "steps": [
-        { "op": "miss", "target": "D", "atMs": 1000, "awaiting": true },
-        { "op": "keyed", "chunk": "E", "atMs": 1100, "expect": "debounced", "awaiting": true },
-        { "op": "keyed", "chunk": "D", "atMs": 2000, "expect": "advance", "awaiting": false }
-      ] },
-    { "name": "a pause after a dropped stray judges nothing",
+        {
+          "op": "miss",
+          "target": "D",
+          "atMs": 1000,
+          "awaiting": true
+        },
+        {
+          "op": "keyed",
+          "chunk": "E",
+          "atMs": 1100,
+          "expect": "debounced",
+          "awaiting": true
+        },
+        {
+          "op": "keyed",
+          "chunk": "D",
+          "atMs": 2000,
+          "expect": "debounced",
+          "awaiting": false
+        }
+      ]
+    },
+    {
+      "name": "a pause after a dropped stray judges nothing",
       "enabled": true,
       "steps": [
-        { "op": "miss", "target": "D", "atMs": 1000, "awaiting": true },
-        { "op": "keyed", "chunk": "E", "atMs": 1100, "expect": "debounced", "awaiting": true },
-        { "op": "paused", "atMs": 1500, "expect": "pending", "awaiting": true },
-        { "op": "keyed", "chunk": "D", "atMs": 1700, "expect": "advance", "awaiting": false }
-      ] },
-    { "name": "a run exactly at the end of the debounce is kept",
+        {
+          "op": "miss",
+          "target": "D",
+          "atMs": 1000,
+          "awaiting": true
+        },
+        {
+          "op": "keyed",
+          "chunk": "E",
+          "atMs": 1100,
+          "expect": "debounced",
+          "awaiting": true
+        },
+        {
+          "op": "paused",
+          "atMs": 1500,
+          "expect": "pending",
+          "awaiting": true
+        },
+        {
+          "op": "keyed",
+          "chunk": "D",
+          "atMs": 1700,
+          "expect": "advance",
+          "awaiting": false
+        }
+      ]
+    },
+    {
+      "name": "a run exactly at the end of the debounce is kept",
       "enabled": true,
       "steps": [
-        { "op": "miss", "target": "D", "atMs": 1000, "awaiting": true },
-        { "op": "keyed", "chunk": "D", "atMs": 1600, "expect": "advance", "awaiting": false }
-      ] },
-    { "name": "a one-character answer is judged as soon as one character is keyed",
+        {
+          "op": "miss",
+          "target": "D",
+          "atMs": 1000,
+          "awaiting": true
+        },
+        {
+          "op": "keyed",
+          "chunk": "D",
+          "atMs": 1600,
+          "expect": "advance",
+          "awaiting": false
+        }
+      ]
+    },
+    {
+      "name": "a one-character answer is judged as soon as one character is keyed",
       "enabled": true,
       "steps": [
-        { "op": "miss", "target": "D", "atMs": 0, "awaiting": true },
-        { "op": "keyed", "chunk": "K", "atMs": 1000, "expect": "wrong", "awaiting": true },
-        { "op": "keyed", "chunk": "d", "atMs": 2000, "expect": "advance", "awaiting": false }
-      ] },
-    { "name": "a word answer is collected across runs and judged at its length",
+        {
+          "op": "miss",
+          "target": "D",
+          "atMs": 0,
+          "awaiting": true
+        },
+        {
+          "op": "keyed",
+          "chunk": "K",
+          "atMs": 1000,
+          "expect": "wrong",
+          "awaiting": true
+        },
+        {
+          "op": "keyed",
+          "chunk": "d",
+          "atMs": 2000,
+          "expect": "advance",
+          "awaiting": false
+        }
+      ]
+    },
+    {
+      "name": "a word answer is collected across runs and judged at its length",
       "enabled": true,
       "steps": [
-        { "op": "miss", "target": "CQ", "atMs": 0, "awaiting": true },
-        { "op": "keyed", "chunk": "C", "atMs": 1000, "expect": "pending", "awaiting": true },
-        { "op": "keyed", "chunk": "Q", "atMs": 1200, "expect": "advance", "awaiting": false }
-      ] },
-    { "name": "a wrong run of the answer's length is judged and the next run starts empty",
+        {
+          "op": "miss",
+          "target": "CQ",
+          "atMs": 0,
+          "awaiting": true
+        },
+        {
+          "op": "keyed",
+          "chunk": "C",
+          "atMs": 1000,
+          "expect": "pending",
+          "awaiting": true
+        },
+        {
+          "op": "keyed",
+          "chunk": "Q",
+          "atMs": 1200,
+          "expect": "advance",
+          "awaiting": false
+        }
+      ]
+    },
+    {
+      "name": "a wrong run of the answer's length is judged and the next run starts empty",
       "enabled": true,
       "steps": [
-        { "op": "miss", "target": "CQ", "atMs": 0, "awaiting": true },
-        { "op": "keyed", "chunk": "CA", "atMs": 1000, "expect": "wrong", "awaiting": true },
-        { "op": "keyed", "chunk": "C", "atMs": 2000, "expect": "pending", "awaiting": true },
-        { "op": "keyed", "chunk": "Q", "atMs": 2200, "expect": "advance", "awaiting": false }
-      ] },
-    { "name": "a run longer than the answer is wrong",
+        {
+          "op": "miss",
+          "target": "CQ",
+          "atMs": 0,
+          "awaiting": true
+        },
+        {
+          "op": "keyed",
+          "chunk": "CA",
+          "atMs": 1000,
+          "expect": "wrong",
+          "awaiting": true
+        },
+        {
+          "op": "keyed",
+          "chunk": "C",
+          "atMs": 2000,
+          "expect": "pending",
+          "awaiting": true
+        },
+        {
+          "op": "keyed",
+          "chunk": "Q",
+          "atMs": 2200,
+          "expect": "advance",
+          "awaiting": false
+        }
+      ]
+    },
+    {
+      "name": "a run longer than the answer is wrong",
       "enabled": true,
       "steps": [
-        { "op": "miss", "target": "D", "atMs": 0, "awaiting": true },
-        { "op": "keyed", "chunk": "ED", "atMs": 1000, "expect": "wrong", "awaiting": true }
-      ] },
-    { "name": "stopping short of the answer's length judges what was kept",
+        {
+          "op": "miss",
+          "target": "D",
+          "atMs": 0,
+          "awaiting": true
+        },
+        {
+          "op": "keyed",
+          "chunk": "ED",
+          "atMs": 1000,
+          "expect": "wrong",
+          "awaiting": true
+        }
+      ]
+    },
+    {
+      "name": "stopping short of the answer's length judges what was kept",
       "enabled": true,
       "steps": [
-        { "op": "miss", "target": "CQ", "atMs": 0, "awaiting": true },
-        { "op": "keyed", "chunk": "C", "atMs": 1000, "expect": "pending", "awaiting": true },
-        { "op": "paused", "atMs": 2500, "expect": "wrong", "awaiting": true },
-        { "op": "keyed", "chunk": "CQ", "atMs": 3000, "expect": "advance", "awaiting": false }
-      ] },
-    { "name": "a pause with nothing kept judges nothing",
+        {
+          "op": "miss",
+          "target": "CQ",
+          "atMs": 0,
+          "awaiting": true
+        },
+        {
+          "op": "keyed",
+          "chunk": "C",
+          "atMs": 1000,
+          "expect": "pending",
+          "awaiting": true
+        },
+        {
+          "op": "paused",
+          "atMs": 2500,
+          "expect": "wrong",
+          "awaiting": true
+        },
+        {
+          "op": "keyed",
+          "chunk": "CQ",
+          "atMs": 3000,
+          "expect": "advance",
+          "awaiting": false
+        }
+      ]
+    },
+    {
+      "name": "a pause with nothing kept judges nothing",
       "enabled": true,
       "steps": [
-        { "op": "miss", "target": "D", "atMs": 0, "awaiting": true },
-        { "op": "paused", "atMs": 1000, "expect": "pending", "awaiting": true }
-      ] },
-    { "name": "a leading space on the first run does not count",
+        {
+          "op": "miss",
+          "target": "D",
+          "atMs": 0,
+          "awaiting": true
+        },
+        {
+          "op": "paused",
+          "atMs": 1000,
+          "expect": "pending",
+          "awaiting": true
+        }
+      ]
+    },
+    {
+      "name": "a leading space on the first run does not count",
       "enabled": true,
       "steps": [
-        { "op": "miss", "target": "D", "atMs": 0, "awaiting": true },
-        { "op": "keyed", "chunk": "  D", "atMs": 1000, "expect": "advance", "awaiting": false }
-      ] },
-    { "name": "a run of spaces keeps nothing",
+        {
+          "op": "miss",
+          "target": "D",
+          "atMs": 0,
+          "awaiting": true
+        },
+        {
+          "op": "keyed",
+          "chunk": "  D",
+          "atMs": 1000,
+          "expect": "advance",
+          "awaiting": false
+        }
+      ]
+    },
+    {
+      "name": "a run of spaces keeps nothing",
       "enabled": true,
       "steps": [
-        { "op": "miss", "target": "D", "atMs": 0, "awaiting": true },
-        { "op": "keyed", "chunk": " ", "atMs": 1000, "expect": "pending", "awaiting": true },
-        { "op": "paused", "atMs": 2000, "expect": "pending", "awaiting": true }
-      ] },
-    { "name": "a new miss starts with an empty run",
+        {
+          "op": "miss",
+          "target": "D",
+          "atMs": 0,
+          "awaiting": true
+        },
+        {
+          "op": "keyed",
+          "chunk": " ",
+          "atMs": 1000,
+          "expect": "pending",
+          "awaiting": true
+        },
+        {
+          "op": "paused",
+          "atMs": 2000,
+          "expect": "pending",
+          "awaiting": true
+        }
+      ]
+    },
+    {
+      "name": "a new miss starts with an empty run",
       "enabled": true,
       "steps": [
-        { "op": "miss", "target": "CQ", "atMs": 0, "awaiting": true },
-        { "op": "keyed", "chunk": "C", "atMs": 1000, "expect": "pending", "awaiting": true },
-        { "op": "miss", "target": "CQ", "atMs": 5000, "awaiting": true },
-        { "op": "keyed", "chunk": "Q", "atMs": 6000, "expect": "pending", "awaiting": true },
-        { "op": "paused", "atMs": 7000, "expect": "wrong", "awaiting": true }
-      ] },
-    { "name": "Next pressed by hand drops the kept run",
+        {
+          "op": "miss",
+          "target": "CQ",
+          "atMs": 0,
+          "awaiting": true
+        },
+        {
+          "op": "keyed",
+          "chunk": "C",
+          "atMs": 1000,
+          "expect": "pending",
+          "awaiting": true
+        },
+        {
+          "op": "miss",
+          "target": "CQ",
+          "atMs": 5000,
+          "awaiting": true
+        },
+        {
+          "op": "keyed",
+          "chunk": "Q",
+          "atMs": 6000,
+          "expect": "pending",
+          "awaiting": true
+        },
+        {
+          "op": "paused",
+          "atMs": 7000,
+          "expect": "wrong",
+          "awaiting": true
+        }
+      ]
+    },
+    {
+      "name": "Next pressed by hand drops the kept run",
       "enabled": true,
       "steps": [
-        { "op": "miss", "target": "CQ", "atMs": 0, "awaiting": true },
-        { "op": "keyed", "chunk": "C", "atMs": 1000, "expect": "pending", "awaiting": true },
-        { "op": "reset", "awaiting": false },
-        { "op": "keyed", "chunk": "Q", "atMs": 2000, "expect": "inactive", "awaiting": false },
-        { "op": "paused", "atMs": 3000, "expect": "inactive", "awaiting": false }
-      ] },
-    { "name": "after advancing, a trailing run or pause is inactive",
+        {
+          "op": "miss",
+          "target": "CQ",
+          "atMs": 0,
+          "awaiting": true
+        },
+        {
+          "op": "keyed",
+          "chunk": "C",
+          "atMs": 1000,
+          "expect": "pending",
+          "awaiting": true
+        },
+        {
+          "op": "reset",
+          "awaiting": false
+        },
+        {
+          "op": "keyed",
+          "chunk": "Q",
+          "atMs": 2000,
+          "expect": "inactive",
+          "awaiting": false
+        },
+        {
+          "op": "paused",
+          "atMs": 3000,
+          "expect": "inactive",
+          "awaiting": false
+        }
+      ]
+    },
+    {
+      "name": "after advancing, a trailing run or pause is inactive",
       "enabled": true,
       "steps": [
-        { "op": "miss", "target": "D", "atMs": 0, "awaiting": true },
-        { "op": "keyed", "chunk": "D", "atMs": 1000, "expect": "advance", "awaiting": false },
-        { "op": "keyed", "chunk": "D", "atMs": 1100, "expect": "inactive", "awaiting": false },
-        { "op": "paused", "atMs": 1500, "expect": "inactive", "awaiting": false }
-      ] },
-    { "name": "the setting off keeps nothing and judges nothing",
+        {
+          "op": "miss",
+          "target": "D",
+          "atMs": 0,
+          "awaiting": true
+        },
+        {
+          "op": "keyed",
+          "chunk": "D",
+          "atMs": 1000,
+          "expect": "advance",
+          "awaiting": false
+        },
+        {
+          "op": "keyed",
+          "chunk": "D",
+          "atMs": 1100,
+          "expect": "inactive",
+          "awaiting": false
+        },
+        {
+          "op": "paused",
+          "atMs": 1500,
+          "expect": "inactive",
+          "awaiting": false
+        }
+      ]
+    },
+    {
+      "name": "the setting off keeps nothing and judges nothing",
       "enabled": false,
       "steps": [
-        { "op": "miss", "target": "D", "atMs": 0, "awaiting": false },
-        { "op": "keyed", "chunk": "D", "atMs": 1000, "expect": "inactive", "awaiting": false },
-        { "op": "paused", "atMs": 2000, "expect": "inactive", "awaiting": false }
-      ] }
+        {
+          "op": "miss",
+          "target": "D",
+          "atMs": 0,
+          "awaiting": false
+        },
+        {
+          "op": "keyed",
+          "chunk": "D",
+          "atMs": 1000,
+          "expect": "inactive",
+          "awaiting": false
+        },
+        {
+          "op": "paused",
+          "atMs": 2000,
+          "expect": "inactive",
+          "awaiting": false
+        }
+      ]
+    }
   ]
 }
