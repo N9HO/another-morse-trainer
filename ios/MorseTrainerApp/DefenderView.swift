@@ -494,7 +494,7 @@ struct DefenderView: View {
                                              farnsworthWpm: model.settings.farnsworth ? model.settings.effectiveWpm : nil)
         // At the ramp's current speed, which the hits and strikes in this
         // same step may just have moved.
-        loop.announce(at: now, wordGap: timing.wordGap) { text in
+        loop.announce(at: now, gap: timing.characterGap) { text in
             model.playDefenderCallsign(text, wpm: game.currentWpm)
         }
     }

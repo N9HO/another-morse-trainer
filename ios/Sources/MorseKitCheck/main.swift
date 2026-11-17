@@ -4990,7 +4990,7 @@ struct GameAnnouncerFixture: Decodable {
     struct Play: Decodable { let at: Double; let sound: String }
     struct Scenario: Decodable { let name: String; let steps: [Step]; let plays: [Play] }
     let durations: [String: Double]
-    let wordGap: Double
+    let gap: Double
     let scenarios: [Scenario]
 }
 
@@ -5022,7 +5022,7 @@ do {
                 case .replay(let text): label = "replay \(text)"
                 }
                 played.append("\(step.at) \(label)")
-                announcer.started(at: step.at, duration: fx.durations[sound.text] ?? -1, wordGap: fx.wordGap)
+                announcer.started(at: step.at, duration: fx.durations[sound.text] ?? -1, gap: fx.gap)
             }
             let expected = sc.plays.map { "\($0.at) \($0.sound)" }
             if played != expected { print("      ↳ played \(played)") }

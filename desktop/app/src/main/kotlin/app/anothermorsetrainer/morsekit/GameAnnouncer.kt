@@ -8,7 +8,9 @@ package app.anothermorsetrainer.morsekit
  * mid-character and the two ran together.
  *
  * Now a sound asked for while another plays waits until that one has ended
- * and a word space has passed; on a free channel it starts at once. New
+ * and the caller's gap has passed (a character space at the game's speed:
+ * each enemy stays a separate letter, and the channel keeps up at the fastest
+ * waves); on a free channel it starts at once. New
  * enemies are announced in the order they arrived, and one already waiting is
  * not queued twice. A tap queues one replay, heard after any announcement
  * already waiting, and a later tap replaces it. An enemy shot, destroyed or
@@ -34,7 +36,7 @@ class GameAnnouncer {
 
     private val arrivals = ArrayDeque<Sound.Arrival>()
     private var waitingReplay: String? = null
-    /** When the channel is free: the last sound's end plus a word space. */
+    /** When the channel is free: the last sound's end plus the gap. */
     private var freeAt = Double.NEGATIVE_INFINITY
 
     /** A new enemy is on the field: announce it in its turn, unless it is already waiting. */
@@ -74,9 +76,9 @@ class GameAnnouncer {
 
     /**
      * The sound [next] returned started at [now] and lasts [duration]; the
-     * channel is free again a [wordGap] after it ends.
+     * channel is free again a [gap] after it ends.
      */
-    fun started(now: Double, duration: Double, wordGap: Double) {
-        freeAt = now + duration + wordGap
+    fun started(now: Double, duration: Double, gap: Double) {
+        freeAt = now + duration + gap
     }
 }
