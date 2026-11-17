@@ -106,7 +106,7 @@
       "name": "Notes that go nowhere do nothing; a release with nothing held still stops the keyer",
       "adapter": "passthrough",
       "events": [[60, "down", 0], [60, "up", 10], ["release", 20]],
-      "actions": [[]]
+      "actions": [["stop"]]
     },
     {
       "name": "A note already down that goes down again does nothing, held or keyer",
