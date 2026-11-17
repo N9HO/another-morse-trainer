@@ -24,6 +24,10 @@ name: Desktop CI
 #
 # Nothing is published: artifacts only. Release tags will be desktop-v*.
 #
+# The unit-test job also runs desktop/packaging/versions.py: the shared
+# version, the AppStream metainfo and the MSIX/MSI version derivation must
+# agree, or the job fails before Gradle starts.
+#
 # Triggers mirror android-ci.yml, for the same reasons (see its header): the
 # pull_request paths filter is evaluated against the whole PR diff, which is
 # what merge-gate.yml assumes when it decides these checks are required. These
@@ -61,6 +65,10 @@ jobs:
         working-directory: desktop
     steps:
       - uses: actions/checkout@v5
+
+      # Cheap and first: a version mismatch fails before Gradle downloads anything.
+      - name: Check that the version strings agree
+        run: python3 packaging/versions.py check
 
       - name: Set up JDK 21
         uses: actions/setup-java@v5
@@ -303,8 +311,24 @@ jobs:
           if (-not $exe) { throw "No AnotherMorseTrainer.exe in the app image" }
           $img = $exe.Directory.FullName
           Write-Host "app image: $img"
-          $version = (Select-String -Path app/build.gradle.kts -Pattern 'val desktopVersionName = "([0-9.]+)"').Matches[0].Groups[1].Value + ".0"
+          # MAJOR.MINOR.desktopVersionCode.0, not the shared version + ".0":
+          # every Store submission needs a higher version, and this gives one
+          # per build without moving the shared version (versions.py says why).
+          $version = "$(python packaging/versions.py field msix)".Trim()
+          if ($LASTEXITCODE -ne 0 -or $version -notmatch '^\d+\.\d+\.\d+\.0$') { throw "packaging/versions.py gave no MSIX version ('$version')" }
           Write-Host "MSIX version: $version"
+
+          # The MSI must carry MAJOR.MINOR.desktopVersionCode too, or two
+          # builds at the same shared version share a ProductCode and the
+          # second will not install over the first. jpackage names the file
+          # <packageName>-<version>.msi.
+          $msiVersion = "$(python packaging/versions.py field msi)".Trim()
+          $msi = Get-ChildItem -Recurse app/build/compose/binaries/main/msi -Filter "AnotherMorseTrainer-$msiVersion.msi" | Select-Object -First 1
+          if (-not $msi) {
+            Get-ChildItem -Recurse app/build/compose/binaries/main/msi | Format-Table Name, Length
+            throw "No AnotherMorseTrainer-$msiVersion.msi: the MSI is not built at MAJOR.MINOR.desktopVersionCode (msiPackageVersion in app/build.gradle.kts)"
+          }
+          Write-Host "MSI version: $msiVersion"
 
           $layout = Join-Path $env:RUNNER_TEMP 'msix-layout'
           New-Item -ItemType Directory -Force -Path $layout | Out-Null
