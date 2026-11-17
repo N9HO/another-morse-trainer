@@ -278,6 +278,40 @@ jobs:
           name: desktop-linux-app-image
           path: desktop/build/flatpak-src
 
+      # The image ships org.freedesktop.Sdk/Platform 25.08 preinstalled in the
+      # system installation, /var/lib/flatpak, i.e. in a read-only lower
+      # layer of the container's overlay root. Flathub has newer commits, so
+      # flatpak-builder's --install-deps-from always runs `flatpak update`,
+      # and flatpak retires the old deployment by rename(2)-ing its directory
+      # into /var/lib/flatpak/.removed. overlayfs refuses to rename a
+      # lower-layer directory with EXDEV unless the mount has redirect_dir
+      # enabled, which some hosted runners' Docker does and some does not:
+      # that is the "Failed to update org.freedesktop.Sdk: Invalid
+      # cross-device link" (then a segfault, exit 139) that failed this job
+      # on roughly half its runs, always on one runner image (AWS-hosted
+      # ubuntu26/20261111.82), never on the other (Azure .196).
+      #
+      # So take the installation off the overlay before anything updates it:
+      # copy it to the runner's own disk (RUNNER_TEMP is a bind mount from the
+      # host) and bind-mount the copy over /var/lib/flatpak (the container is
+      # --privileged). Renames there are ordinary same-filesystem renames, and
+      # the update keeps its delta download from the preinstalled commits.
+      - name: Move the Flatpak system installation off the overlay
+        run: |
+          set -eu
+          echo "root: $(grep ' / ' /proc/mounts || true)"
+          dst="$RUNNER_TEMP/flatpak-system"
+          mkdir -p "$dst"
+          cp -a /var/lib/flatpak/. "$dst/"
+          mount --bind "$dst" /var/lib/flatpak
+          fstype=$(stat -f -c %T /var/lib/flatpak)
+          echo "/var/lib/flatpak is now on: $fstype ($(du -sh "$dst" | cut -f1))"
+          if [ "$fstype" = overlayfs ]; then
+            echo "::error::/var/lib/flatpak is still on overlayfs; the runtime update would fail with EXDEV"
+            exit 1
+          fi
+          flatpak --system list --runtime
+
       - name: Build the Flatpak bundle
         uses: flatpak/flatpak-github-actions/flatpak-builder@v6
         with:
