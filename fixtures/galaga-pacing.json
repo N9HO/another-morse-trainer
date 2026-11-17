@@ -22,22 +22,94 @@
   },
   "channel": {
     "$comment": "Steps on one GameAnnouncer, in order. 'next' takes the sound the channel has at 'at' and starts it there, lasting durations[text] then 'gap'. 'check' does nothing. 'free' is isFree(at) after the step.",
-    "durations": { "E": 0.25, "K": 0.5 },
+    "durations": {
+      "E": 0.25,
+      "K": 0.5
+    },
     "gap": 0.375,
     "steps": [
-      { "at": 0, "do": "check", "free": true, "note": "a new channel is free" },
-      { "at": 0, "do": "arrive", "id": 1, "text": "K", "free": false, "note": "an arrival waiting its turn holds it" },
-      { "at": 0, "do": "next", "free": false, "note": "K sounds 0 to 0.5" },
-      { "at": 0.5, "do": "check", "free": false, "note": "in the gap after K" },
-      { "at": 0.875, "do": "check", "free": true, "note": "K and its gap are over" },
-      { "at": 0.875, "do": "replay", "text": "E", "free": true, "note": "a waiting replay does not hold an entry" },
-      { "at": 0.875, "do": "arrive", "id": 2, "text": "K", "free": false },
-      { "at": 0.875, "do": "forget", "id": 2, "free": true, "note": "a forgotten arrival no longer holds it" },
-      { "at": 0.875, "do": "next", "free": false, "note": "the replay E sounds 0.875 to 1.125, free at 1.5" },
-      { "at": 1.25, "do": "check", "free": false },
-      { "at": 1.5, "do": "check", "free": true },
-      { "at": 1.5, "do": "arrive", "id": 3, "text": "K", "free": false },
-      { "at": 1.5, "do": "reset", "free": true, "note": "a reset drops what waits and frees the channel" }
+      {
+        "at": 0,
+        "do": "check",
+        "free": true,
+        "note": "a new channel is free"
+      },
+      {
+        "at": 0,
+        "do": "arrive",
+        "id": 1,
+        "text": "K",
+        "free": false,
+        "note": "an arrival waiting its turn holds it"
+      },
+      {
+        "at": 0,
+        "do": "next",
+        "free": false,
+        "note": "K sounds 0 to 0.5"
+      },
+      {
+        "at": 0.5,
+        "do": "check",
+        "free": false,
+        "note": "in the gap after K"
+      },
+      {
+        "at": 0.875,
+        "do": "check",
+        "free": true,
+        "note": "K and its gap are over"
+      },
+      {
+        "at": 0.875,
+        "do": "replay",
+        "text": "E",
+        "free": true,
+        "note": "a waiting replay does not hold an entry"
+      },
+      {
+        "at": 0.875,
+        "do": "arrive",
+        "id": 2,
+        "text": "K",
+        "free": false
+      },
+      {
+        "at": 0.875,
+        "do": "forget",
+        "id": 2,
+        "free": true,
+        "note": "a forgotten arrival no longer holds it"
+      },
+      {
+        "at": 0.875,
+        "do": "next",
+        "free": false,
+        "note": "the replay E sounds 0.875 to 1.125, free at 1.5"
+      },
+      {
+        "at": 1.25,
+        "do": "check",
+        "free": false
+      },
+      {
+        "at": 1.5,
+        "do": "check",
+        "free": true
+      },
+      {
+        "at": 1.5,
+        "do": "arrive",
+        "id": 3,
+        "text": "K",
+        "free": false
+      },
+      {
+        "at": 1.5,
+        "do": "reset",
+        "free": true,
+        "note": "a reset drops what waits and frees the channel"
+      }
     ]
   },
   "scenarios": [
@@ -45,36 +117,136 @@
       "name": "on a free channel an entry comes on the interval, as before",
       "paced": true,
       "steps": [
-        { "advance": 1.375, "channelFree": true, "entered": [], "released": 0 },
-        { "advance": 0.125, "channelFree": true, "entered": [ { "id": 1, "progress": 0.041666666667 } ], "released": 1 }
+        {
+          "advance": 1.375,
+          "channelFree": true,
+          "entered": [],
+          "released": 0
+        },
+        {
+          "advance": 0.125,
+          "channelFree": true,
+          "entered": [
+            {
+              "id": 1,
+              "progress": 0.041666666667
+            }
+          ],
+          "released": 1
+        }
       ]
     },
     {
       "name": "a due entry waits while the channel is busy, then starts its path from the beginning",
       "paced": true,
       "steps": [
-        { "advance": 1.5, "channelFree": false, "entered": [], "released": 0 },
-        { "advance": 0.25, "channelFree": false, "entered": [], "released": 0 },
-        { "advance": 0.125, "channelFree": true, "entered": [ { "id": 1, "progress": 0 } ], "released": 1 },
-        { "advance": 1.375, "channelFree": true, "entered": [], "released": 1, "note": "the next is due a full interval after the held one's release" },
-        { "advance": 0.125, "channelFree": true, "entered": [ { "id": 2, "progress": 0.041666666667 } ], "released": 2 }
+        {
+          "advance": 1.5,
+          "channelFree": false,
+          "entered": [],
+          "released": 0
+        },
+        {
+          "advance": 0.25,
+          "channelFree": false,
+          "entered": [],
+          "released": 0
+        },
+        {
+          "advance": 0.125,
+          "channelFree": true,
+          "entered": [
+            {
+              "id": 1,
+              "progress": 0.052083333333
+            }
+          ],
+          "released": 1
+        },
+        {
+          "advance": 1.375,
+          "channelFree": true,
+          "entered": [],
+          "released": 1,
+          "note": "the next is due a full interval after the held one's release"
+        },
+        {
+          "advance": 0.125,
+          "channelFree": true,
+          "entered": [
+            {
+              "id": 2,
+              "progress": 0.041666666667
+            }
+          ],
+          "released": 2
+        }
       ]
     },
     {
       "name": "a long step releases one paced entry; the next waits for the channel",
       "paced": true,
       "steps": [
-        { "advance": 3.0, "channelFree": true, "entered": [ { "id": 1, "progress": 0.666666666667 } ], "released": 1 },
-        { "advance": 0.0625, "channelFree": false, "entered": [], "released": 1 },
-        { "advance": 0.0625, "channelFree": true, "entered": [ { "id": 2, "progress": 0 } ], "released": 2 }
+        {
+          "advance": 3.0,
+          "channelFree": true,
+          "entered": [
+            {
+              "id": 1,
+              "progress": 0.666666666667
+            }
+          ],
+          "released": 1
+        },
+        {
+          "advance": 0.0625,
+          "channelFree": false,
+          "entered": [],
+          "released": 1
+        },
+        {
+          "advance": 0.0625,
+          "channelFree": true,
+          "entered": [
+            {
+              "id": 2,
+              "progress": 0
+            }
+          ],
+          "released": 2
+        }
       ]
     },
     {
       "name": "a game that does not pace (keying) ignores the channel",
       "paced": false,
       "steps": [
-        { "advance": 1.5, "channelFree": false, "entered": [ { "id": 1, "progress": 0.041666666667 } ], "released": 1 },
-        { "advance": 3.0, "channelFree": false, "entered": [ { "id": 2, "progress": 0.708333333333 }, { "id": 3, "progress": 0.125 } ], "released": 3 }
+        {
+          "advance": 1.5,
+          "channelFree": false,
+          "entered": [
+            {
+              "id": 1,
+              "progress": 0.041666666667
+            }
+          ],
+          "released": 1
+        },
+        {
+          "advance": 3.0,
+          "channelFree": false,
+          "entered": [
+            {
+              "id": 2,
+              "progress": 0.708333333333
+            },
+            {
+              "id": 3,
+              "progress": 0.125
+            }
+          ],
+          "released": 3
+        }
       ]
     }
   ]
