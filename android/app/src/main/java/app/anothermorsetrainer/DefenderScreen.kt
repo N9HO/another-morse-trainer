@@ -1,5 +1,9 @@
 package app.anothermorsetrainer
 
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.platform.LocalDensity
+import app.anothermorsetrainer.morsekit.GameAnnouncer
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -179,6 +183,12 @@ fun DefenderScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
     // When each attacker's callsign finished sounding, by id, so a hit's
     // time-to-recognize runs from the end of the tone.
     val toneEnd = remember { HashMap<Int, Long>() }
+    // When each enemy appeared: a hit while its sound is still waiting its
+    // turn is timed from there, not posted as 0 ms.
+    val appeared = remember { HashMap<Int, Long>() }
+    // The one sound channel: a new attacker's callsign and a tapped replay
+    // take turns instead of cutting into each other.
+    val announcer = remember { GameAnnouncer() }
     val charResults = remember { HashMap<Char, IntArray>() }   // attempts, correct
     // The shared leaderboard (docs/high-scores-design.md, step 2): the run's
     // registration and one item per shot or decision, each carrying the
@@ -268,11 +278,17 @@ fun DefenderScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
         }
     }
 
-    fun sendCallsign(g: DefenderGame, callsign: String): Double {
+    /**
+     * Start the sound the channel has waiting, if it is free: a new attacker's
+     * callsign, or a tapped replay ([GameAnnouncer]).
+     */
+    fun announce() {
+        val g = game ?: return
+        if (phase != DefPhase.RUNNING) return
         // At the ramp's current speed, with Farnsworth spacing honoured when
         // the switch is on: a callsign has gaps to stretch.
         val timing = DefenderGame.sendTiming(g.currentWpm, if (Settings.farnsworthEnabled) Settings.effectiveWpm else null)
-        return player.replaySound(MorseItem.Playable.Text(callsign), Settings.sidetoneHz, timing)
+        announcer.playNext(player, timing, toneEnd)
     }
 
     fun startGame() {
@@ -284,6 +300,8 @@ fun DefenderScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
         attackers = emptyList()
         assets = g.assets
         toneEnd.clear()
+        appeared.clear()
+        announcer.reset()
         charResults.clear()
         typed = ""
         flash = null
@@ -303,6 +321,7 @@ fun DefenderScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
     fun finishGame() {
         val g = game ?: return
         player.stop()
+        announcer.reset()
         syncHud(g)
         recordRun(g.hits + g.misses, g.hits, ((System.currentTimeMillis() - startedAtMs) / 1000L).toInt())
         EngineStore.save()
@@ -313,6 +332,7 @@ fun DefenderScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
     fun abandonRun() {
         val g = game
         player.stop()
+        announcer.reset()
         if (g != null && phase == DefPhase.RUNNING) {
             recordRun(g.hits + g.misses, g.hits, ((System.currentTimeMillis() - startedAtMs) / 1000L).toInt())
             EngineStore.save()
@@ -341,7 +361,11 @@ fun DefenderScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
         val now = System.currentTimeMillis()
         val hit = result.attacker
         if (hit != null) {
-            val end = toneEnd.remove(hit.id)
+            // From the end of its sound (0 while it is still playing); a hit
+            // before its sound plays counts from when it appeared.
+            val end = toneEnd.remove(hit.id) ?: appeared[hit.id]
+            appeared.remove(hit.id)
+            announcer.forget(hit.id)
             val ttr = if (end != null) ((now - end).coerceAtLeast(0)) / 1000.0 else 0.0
             noteRoute(hit.callsign, hit.callsign, ttr)
             lbItems.add(LeaderboardItem(hit.callsign, hit.callsign, Leaderboard.clampReaction((ttr * 1000).toLong()), wpm))
@@ -407,11 +431,13 @@ fun DefenderScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
             for (event in g.advance(dt)) {
                 when (event) {
                     is DefenderEvent.Launched -> {
-                        val secs = sendCallsign(g, event.attacker.callsign)
-                        toneEnd[event.attacker.id] = System.currentTimeMillis() + (secs * 1000).toLong()
+                        appeared.putIfAbsent(event.attacker.id, System.currentTimeMillis())
+                        announcer.arrived(event.attacker.id, event.attacker.callsign)
                     }
                     is DefenderEvent.Struck -> {
                         toneEnd.remove(event.attacker.id)
+                        appeared.remove(event.attacker.id)
+                        announcer.forget(event.attacker.id)
                         noteStrike(event.attacker.callsign)
                         lbItems.add(LeaderboardItem(event.attacker.callsign, "", 0, wpm))
                         if (Settings.hapticsEnabled) haptics.error()
@@ -422,6 +448,7 @@ fun DefenderScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
                     DefenderEvent.GameOver -> over = true
                 }
             }
+            announce()
             attackers = g.attackers
             assets = g.assets
             syncHud(g)
@@ -478,22 +505,27 @@ fun DefenderScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
                         chunk.uppercase().filter { it in pool }.forEach { typedKey(it) }
                     })
                 }
+                // Built once a game, not every frame: the keyboard's alphabet was
+                // a fresh list on every recomposition, so the keys could never
+                // be skipped.
+                val runPool = remember(game) { game?.keyboardPool.orEmpty() }
                 DefenderRun(
                     input = input,
-                    attackers = attackers,
+                    attackers = { attackers },
                     assets = assets,
                     score = score, wave = wave, live = live, total = total, multiplier = multiplier, wpm = wpm,
                     flash = flash,
                     struck = struck,
                     typed = typed,
-                    pool = game?.keyboardPool ?: emptyList(),
+                    pool = runPool,
                     onRoute = { routeTo(it) },
                     onType = { typedKey(it) },
                     onBackspace = { if (typed.isNotEmpty()) typed = typed.dropLast(1) },
                     onReplay = { column ->
                         val g = game ?: return@DefenderRun
                         val nearest = g.attackers.minByOrNull { abs(it.column - column) } ?: return@DefenderRun
-                        sendCallsign(g, nearest.callsign)
+                        announcer.replay(nearest.callsign)
+                        announce()
                     },
                     onEnd = { abandonRun() },
                     onSwitchMode = ::switchTo
@@ -582,7 +614,9 @@ private fun DefenderSetup(
 @Composable
 private fun DefenderRun(
     input: DefenderInput,
-    attackers: List<DefenderAttacker>,
+    // Read only while drawing, so a frame that moves the attackers redraws
+    // the field without recomposing the screen.
+    attackers: () -> List<DefenderAttacker>,
     assets: List<DefenderAsset>,
     score: Int, wave: Int, live: Int, total: Int, multiplier: Int, wpm: Int,
     flash: Pair<String, Long>?,
@@ -596,6 +630,16 @@ private fun DefenderRun(
     onEnd: () -> Unit,
     onSwitchMode: (TrainingMode) -> Unit
 ) {
+    // Each sprite drawn once into a bitmap and stamped, and each callsign
+    // measured once: drawing every square and measuring every label on every
+    // frame made the field slow to draw.
+    val density = LocalDensity.current
+    val sprites = remember(density) {
+        val px = with(density) { 3.dp.toPx() }
+        pixelSprite(DEFENDER_CITY_SPRITE, px, Brand.tealBright) to
+            pixelSprite(DEFENDER_ATTACKER_SPRITE, px, DEFENDER_ATTACKER_COLOR)
+    }
+    val labels = remember(density) { HashMap<Pair<String, Boolean>, TextLayoutResult>() }
     val measurer = rememberTextMeasurer()
     val columns = DefenderGame.defaultColumns
     Column(modifier = Modifier.fillMaxSize().widthIn(max = CONTENT_MAX_WIDTH).padding(horizontal = 16.dp)) {
@@ -643,15 +687,8 @@ private fun DefenderRun(
         ) {
             val rowTop = size.height - DEFENDER_ASSET_ROW.toPx()
             drawLine(Brand.teal.copy(alpha = 0.4f), Offset(0f, rowTop), Offset(size.width, rowTop), strokeWidth = 1.dp.toPx())
-            val px = 3.dp.toPx()
-            fun drawSprite(sprite: List<String>, cx: Float, cy: Float, color: Color) {
-                val ox = cx - sprite[0].length * px / 2
-                val oy = cy - sprite.size * px / 2
-                sprite.forEachIndexed { r, row ->
-                    row.forEachIndexed { c, cell ->
-                        if (cell == '#') drawRect(color, Offset(ox + c * px, oy + r * px), Size(px, px))
-                    }
-                }
+            fun drawSprite(sprite: ImageBitmap, cx: Float, cy: Float) {
+                drawImage(sprite, topLeft = Offset(cx - sprite.width / 2f, cy - sprite.height / 2f))
             }
             // Assets along the bottom, evenly spaced; rubble stays in place.
             val now = System.currentTimeMillis()
@@ -659,12 +696,12 @@ private fun DefenderRun(
             assets.forEachIndexed { i, asset ->
                 val x = (i + 0.5f) * slot
                 if (asset.isAlive) {
-                    drawSprite(DEFENDER_CITY_SPRITE, x, rowTop + 16.dp.toPx(), Brand.tealBright)
-                    val measured = measurer.measure(asset.callsign, callStyle)
+                    drawSprite(sprites.first, x, rowTop + 16.dp.toPx())
+                    val measured = labels.getOrPut(asset.callsign to true) { measurer.measure(asset.callsign, callStyle) }
                     drawText(measured, topLeft = Offset(x - measured.size.width / 2, rowTop + 40.dp.toPx() - measured.size.height / 2))
                 } else {
                     drawRect(Brand.textSecondary.copy(alpha = 0.4f), Offset(x - 12.dp.toPx(), rowTop + 22.dp.toPx()), Size(24.dp.toPx(), 6.dp.toPx()))
-                    val measured = measurer.measure(asset.callsign, rubbleStyle)
+                    val measured = labels.getOrPut(asset.callsign to false) { measurer.measure(asset.callsign, rubbleStyle) }
                     drawText(measured, topLeft = Offset(x - measured.size.width / 2, rowTop + 40.dp.toPx() - measured.size.height / 2))
                 }
                 if (struck != null && struck.first == asset.id && struck.second > now) {
@@ -675,10 +712,10 @@ private fun DefenderRun(
             // each is heading — only the callsign it sent does.
             val colWidth = size.width / columns
             val top = 18.dp.toPx()
-            for (a in attackers) {
+            for (a in attackers()) {
                 val x = (a.column + 0.5f) * colWidth
                 val y = top + a.progress.toFloat() * (rowTop - top - 14.dp.toPx())
-                drawSprite(DEFENDER_ATTACKER_SPRITE, x, y, DEFENDER_ATTACKER_COLOR)
+                drawSprite(sprites.second, x, y)
             }
             if (flash != null && flash.second > now) {
                 val measured = measurer.measure(flash.first, flashStyle)

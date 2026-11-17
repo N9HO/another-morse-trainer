@@ -25,14 +25,17 @@ struct DefenderView: View {
     /// Play again while sharing is off and unanswered, never mid-game.
     @State private var optInPrompt = false
     @State private var game: DefenderGame?
-    /// Snapshots of the field for drawing; refreshed every frame from `game`.
+    /// Who is on the field, for the accessibility count, and the assets:
+    /// refreshed when they change. The canvas draws attackers' positions
+    /// straight from `game`, so a frame that only moves them re-renders
+    /// nothing else.
     @State private var attackers: [DefenderAttacker] = []
     @State private var assets: [DefenderAsset] = []
     @State private var hud = HUD()
-    @State private var lastFrame: Date?
-    /// When each attacker's callsign finished sounding, keyed by attacker id,
-    /// so a hit's time-to-recognize runs from the end of the tone.
-    @State private var toneEnd: [Int: Date] = [:]
+    /// What every frame touches (`ArcadeFrame`), in a reference so writing
+    /// it does not re-render the view.
+    @State private var loop = ArcadeFrame()
+
     /// The callsign typed so far (typed input).
     @State private var typed = ""
     /// A flash of feedback on the field: the last hit's points, or "miss".
@@ -209,7 +212,7 @@ struct DefenderView: View {
             hudBar
             GeometryReader { geo in
                 TimelineView(.animation) { context in
-                    canvas(size: geo.size)
+                    canvas(size: geo.size, now: context.date)
                         // The frame clock: every tick moves the game on by the
                         // real time elapsed, so a dropped frame costs no distance.
                         .onChange(of: context.date) { now in step(now: now) }
@@ -271,7 +274,10 @@ struct DefenderView: View {
     /// The asset row's height at the bottom of the field: sprite plus label.
     private static let assetRowHeight: CGFloat = 54
 
-    private func canvas(size: CGSize) -> some View {
+    /// `now` is the frame's time, and the drawing reads it: that is what makes
+    /// each tick a new canvas to SwiftUI. The attackers' positions come from
+    /// `game`, which a frame changes without touching any state.
+    private func canvas(size: CGSize, now: Date) -> some View {
         Canvas { context, size in
             let rowTop = size.height - Self.assetRowHeight
             var line = Path()
@@ -308,12 +314,12 @@ struct DefenderView: View {
             // each is heading — only the callsign it sent does.
             let colWidth = size.width / CGFloat(columns)
             let top: CGFloat = 18
-            for a in attackers {
+            for a in game?.attackers ?? [] {
                 let x = (CGFloat(a.column) + 0.5) * colWidth
                 let y = top + CGFloat(a.progress) * (rowTop - top - 14)
                 context.fill(Self.spritePath(Self.attackerSprite, centre: CGPoint(x: x, y: y)), with: .color(.orange))
             }
-            if flashUntil > Date() {
+            if flashUntil > now {
                 context.draw(Text(flashText).font(.headline).foregroundColor(Theme.tealBright),
                              at: CGPoint(x: size.width / 2, y: 14))
             }
@@ -339,7 +345,8 @@ struct DefenderView: View {
         } else {
             let column = Int(location.x / max(1, size.width) * CGFloat(columns))
             guard let nearest = game.attackers.min(by: { abs($0.column - column) < abs($1.column - column) }) else { return }
-            model.playDefenderCallsign(nearest.callsign, wpm: game.currentWpm)
+            loop.announcer.replay(nearest.callsign)
+            announce(now: Date())
         }
     }
 
@@ -445,31 +452,23 @@ struct DefenderView: View {
         game = g
         attackers = []
         assets = g.assets
-        toneEnd = [:]
         typed = ""
         flashUntil = .distantPast
         struckId = nil
-        lastFrame = nil
+        loop.reset()
         syncHUD(g)
         phase = .playing
     }
 
     private func step(now: Date) {
         guard phase == .playing, let game else { return }
-        defer { lastFrame = now }
-        guard let last = lastFrame else { return }
-        // Cap a long gap (the app was backgrounded) so the field does not
-        // empty onto the assets in one step.
-        let dt = min(0.1, now.timeIntervalSince(last))
+        guard let dt = loop.step(to: now) else { return }
         for event in game.advance(by: dt) {
             switch event {
             case .launched(let a):
-                // At the ramp's current speed, which the hits and strikes in
-                // this same step may just have moved.
-                let duration = model.playDefenderCallsign(a.callsign, wpm: game.currentWpm)
-                toneEnd[a.id] = now.addingTimeInterval(duration)
+                loop.arrived(id: a.id, text: a.callsign, at: now)
             case .struck(let a, let asset):
-                toneEnd[a.id] = nil
+                loop.forget(id: a.id)
                 model.noteDefenderStrike(callsign: a.callsign, wpm: game.currentWpm)
                 Haptics.error()
                 struckId = asset.id
@@ -477,12 +476,27 @@ struct DefenderView: View {
                 flash("\(asset.callsign) lost", for: 1.0)
             case .gameOver:
                 model.stopDefender()
+                loop.reset()
                 phase = .over
             }
         }
-        attackers = game.attackers
-        assets = game.assets
+        announce(now: now)
+        if attackers.map(\.id) != game.attackers.map(\.id) { attackers = game.attackers }
+        if assets != game.assets { assets = game.assets }
         syncHUD(game)
+    }
+
+    /// Start the sound the channel has waiting, if it is free: a new
+    /// attacker's callsign, or a tapped replay (`GameAnnouncer`).
+    private func announce(now: Date) {
+        guard phase == .playing, let game else { return }
+        let timing = DefenderGame.sendTiming(wpm: game.currentWpm,
+                                             farnsworthWpm: model.settings.farnsworth ? model.settings.effectiveWpm : nil)
+        // At the ramp's current speed, which the hits and strikes in this
+        // same step may just have moved.
+        loop.announce(at: now, gap: timing.characterGap) { text in
+            model.playDefenderCallsign(text, wpm: game.currentWpm)
+        }
     }
 
     /// Tap input: the defence goes to `asset`.
@@ -519,8 +533,9 @@ struct DefenderView: View {
         guard let game else { return }
         let now = Date()
         if let hit = result.attacker {
-            let ttr = toneEnd[hit.id].map { max(0, now.timeIntervalSince($0)) } ?? 0
-            toneEnd[hit.id] = nil
+            // From the end of its sound; one hit while its sound still waits
+            // its turn counts from when it appeared (`ArcadeFrame.reactionTime`).
+            let ttr = loop.reactionTime(hit: hit.id, at: now)
             model.noteDefenderRoute(target: hit.callsign, chosen: hit.callsign, ttr: ttr, wpm: game.currentWpm)
             Haptics.success()
             if let fresh = result.reinforced {

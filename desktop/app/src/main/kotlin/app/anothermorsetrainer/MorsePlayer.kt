@@ -48,6 +48,17 @@ class MorsePlayer {
     /** Distinguishes completion callbacks so a previous tone's timer can't fire for the current one. */
     private var generation = 0
 
+    /** When what was last started ([play] or [replaySound]) finishes sounding; [stop] clears it. */
+    @Volatile private var soundingUntilMs = 0L
+
+    /**
+     * True while a sound this player started with [play] or [replaySound] is
+     * still playing (pileups are not tracked): so an automatic sound (the
+     * replay after a miss) can wait its turn instead of cutting one the
+     * learner asked for.
+     */
+    val isSounding: Boolean get() = System.currentTimeMillis() < soundingUntilMs
+
     /**
      * What the feeder should be playing. Immutable and swapped whole, so the
      * feeder only ever reads a consistent pair; [generation] tells it when the
@@ -90,6 +101,7 @@ class MorsePlayer {
         startProgram(Program(nextProgramGeneration(), synth, null))
 
         val durationMs = (synth.totalSamples.toDouble() / sampleRate * 1000).toLong()
+        soundingUntilMs = System.currentTimeMillis() + durationMs
         mainHandler.postDelayed({ if (generation == token) onFinished() }, durationMs)
     }
 
@@ -102,7 +114,9 @@ class MorsePlayer {
         val synth = synthFor(playable, timing, frequency)
         if (synth.totalSamples == 0) return 0.0
         startProgram(Program(nextProgramGeneration(), synth, null))
-        return synth.totalSamples.toDouble() / sampleRate
+        val seconds = synth.totalSamples.toDouble() / sampleRate
+        soundingUntilMs = System.currentTimeMillis() + (seconds * 1000).toLong()
+        return seconds
     }
 
     // ---- Pileup (multiple simultaneous transmissions) ----
@@ -178,6 +192,7 @@ class MorsePlayer {
     }
 
     fun stop() {
+        soundingUntilMs = 0L
         mainHandler.removeCallbacksAndMessages(null)
         // A silent program rather than a torn-down track: the feeder cross-fades
         // out of whatever was sounding, so stopping mid-tone is as quiet as

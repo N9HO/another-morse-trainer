@@ -490,7 +490,9 @@ fun KeyedTextHeader(prompt: String, text: String, hardwareKeyConnected: Boolean)
     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Text(prompt, style = MaterialTheme.typography.labelSmall, color = Brand.textSecondary)
         Spacer(Modifier.weight(1f))
-        SlashableText(text.ifEmpty { "—" }, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.SemiBold, fontSize = 22.sp, color = Brand.textPrimary)
+        // Never the decoder's trailing word space: it shifted the text left.
+        // A text that is only that space shows the placeholder.
+        SlashableText(text.trimEnd().ifEmpty { "—" }, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.SemiBold, fontSize = 22.sp, color = Brand.textPrimary)
         if (hardwareKeyConnected) {
             Text("  🎹", color = Brand.teal, modifier = Modifier.semantics { contentDescription = "Hardware key connected" })
         }

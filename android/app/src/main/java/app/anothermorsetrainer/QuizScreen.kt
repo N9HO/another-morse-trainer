@@ -228,9 +228,18 @@ fun QuizScreen(
     // see android:configChanges in the manifest — so this is only for that.)
     var phase by rememberSaveable { mutableStateOf(QuizPhase.RUNNING) }
     var tally by rememberSaveable(stateSaver = TallySaver) { mutableStateOf(Tally()) }
-    var remaining by rememberSaveable(stateSaver = OptionalIntSaver) {
+    val remainingState = rememberSaveable(stateSaver = OptionalIntSaver) {
         mutableStateOf<Int?>(Settings.practiceDuration.seconds)
     }
+    var remaining by remainingState
+    // The run's first sound waits until the screen has drawn its first frame,
+    // then SessionClock.FIRST_SOUND_BEAT_MS more: Start used to sound it
+    // before the drill screen had arrived.
+    var leadIn by remember { mutableStateOf(true) }
+    // The countdown ran out with a drill still waiting for its answer: the
+    // session is held for that answer, and moving on ends it (SessionClock).
+    val heldState = rememberSaveable { mutableStateOf(false) }
+    var timeUpHeld by heldState
     var recorded by rememberSaveable { mutableStateOf(false) }
     var milestone by remember { mutableStateOf<Int?>(null) }
 
@@ -319,6 +328,7 @@ fun QuizScreen(
     /** Close the running session and show the summary (timer expiry or End). */
     fun endSession() {
         if (phase == QuizPhase.SUMMARY) return
+        timeUpHeld = false
         player.stop()
         recognizer.cancel()
         listening = false
@@ -340,6 +350,9 @@ fun QuizScreen(
      * where the replay button sits, leaking the upcoming answer (issue #63).
      */
     fun advance() {
+        // The countdown ran out while this drill waited for its answer: it
+        // has been answered, so the session ends here (SessionClock).
+        if (timeUpHeld) { endSession(); return }
         missAck.reset()
         ackAwaiting = false
         applyChoiceCount()
@@ -365,6 +378,7 @@ fun QuizScreen(
 
     /** Start a fresh session from the summary screen. */
     fun practiceAgain() {
+        leadIn = true
         tally = Tally()
         recorded = false
         milestone = null
@@ -386,6 +400,7 @@ fun QuizScreen(
         voiceHeard = emptyList()
         recognizer.cancel()
         keyer.clear()
+        if (leadIn) { leadIn = false; awaitScreenThenBeat() }
         val introducing = intro
         if (introducing != null) {
             // The new item on its own; the drill plays once it is started.
@@ -401,8 +416,7 @@ fun QuizScreen(
                 // A miss holds the correction until Next is pressed (issue
                 // #77) — and after a beat repeats what was actually sent, so
                 // you re-hear the sound you got wrong while the answer shows.
-                delay(450)
-                player.replaySound(drill.playable, Settings.sidetoneHz, Settings.timing())
+                player.resendAfterMiss(drill.playable, Settings.sidetoneHz, Settings.timing()) { phase == QuizPhase.RUNNING }
                 return@LaunchedEffect
             }
             // A promotion up the answer-entry ladder is held until Next,
@@ -413,23 +427,13 @@ fun QuizScreen(
         }
     }
 
-    // Session countdown: ticks only while running and only when a length is set.
-    // Also keyed on whether a limit exists, so the timer menu starting a
-    // countdown on an open-ended run (or dropping one) restarts the loop.
-    // Reaching zero (or subtracting the last minute) ends it.
-    LaunchedEffect(phase, remaining == null) {
-        if (phase != QuizPhase.RUNNING) return@LaunchedEffect
-        while (true) {
-            val r = remaining ?: return@LaunchedEffect
-            if (r <= 0) return@LaunchedEffect
-            delay(1000)
-            remaining = remaining?.minus(1)
-        }
-    }
-    LaunchedEffect(phase, remaining) {
-        val r = remaining
-        if (phase == QuizPhase.RUNNING && r != null && r <= 0) endSession()
-    }
+    // The session countdown, and what reaching zero does (SessionKit): end,
+    // or hold for the drill waiting on its answer.
+    SessionTick(running = phase == QuizPhase.RUNNING, remaining = remainingState)
+    val timer = rememberSessionTimeUp(
+        running = phase == QuizPhase.RUNNING, remaining = remainingState, held = heldState,
+        awaitingAnswer = { intro == null && !revealed }, onEnd = { endSession() }
+    )
 
     DisposableEffect(Unit) { onDispose { player.release(); recognizer.release() } }
 
@@ -638,9 +642,9 @@ fun QuizScreen(
                 if (phase == QuizPhase.RUNNING) {
                     SessionTimerMenu(
                         remaining = remaining,
-                        onAddSeconds = { remaining = (remaining ?: 0) + it },
-                        onSubtractSeconds = { remaining = SessionClock.reduced(remaining, it) },
-                        onRemoveLimit = { remaining = null }
+                        onAddSeconds = timer::add,
+                        onSubtractSeconds = timer::subtract,
+                        onRemoveLimit = timer::removeLimit
                     )
                     SessionSettingsButton { showSettings = true }
                 }
@@ -684,7 +688,9 @@ fun QuizScreen(
                         EngineStore.save()
                         summary = source.summary
                         stageRev++
-                        advance()
+                        // Not while the run-out holds the session for the drill on screen:
+                        // a new drill there would end it (iOS draws none on a pin).
+                        if (!timeUpHeld) advance()
                     }
                 }
             }
@@ -844,7 +850,7 @@ fun QuizScreen(
                     Spacer(Modifier.height(6.dp))
                 }
                 KeyedAnswerPanel(
-                    decoded = keyer.decodedText,
+                    decoded = keyer.shownText,
                     keyPressed = keyPressed,
                     enabled = !revealed || ackAwaiting,
                     midiDevice = midiDevice,
@@ -954,7 +960,6 @@ fun QuizScreen(
             SessionSettingsOverlay(
                 scope = settingsMode,
                 onClose = { showSettings = false },
-                previewItem = { drill.playable },
                 // The developer Preview Stage row jumped the shared track
                 // underneath: start drilling the new stage, as iOS does.
                 onPreviewStage = if (progressive != null) {

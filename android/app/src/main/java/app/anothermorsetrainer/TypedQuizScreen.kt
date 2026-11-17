@@ -110,9 +110,18 @@ fun TypedQuizScreen(
     // see android:configChanges in the manifest — so this is only for that.)
     var phase by rememberSaveable { mutableStateOf(TqPhase.RUNNING) }
     var tally by rememberSaveable(stateSaver = TallySaver) { mutableStateOf(Tally()) }
-    var remaining by rememberSaveable(stateSaver = OptionalIntSaver) {
+    val remainingState = rememberSaveable(stateSaver = OptionalIntSaver) {
         mutableStateOf<Int?>(Settings.practiceDuration.seconds)
     }
+    var remaining by remainingState
+    // The run's first sound waits until the screen has drawn its first frame,
+    // then SessionClock.FIRST_SOUND_BEAT_MS more: Start used to sound it
+    // before the drill screen had arrived.
+    var leadIn by remember { mutableStateOf(true) }
+    // The countdown ran out with a drill still waiting for its answer: the
+    // session is held for that answer, and moving on ends it (SessionClock).
+    val heldState = rememberSaveable { mutableStateOf(false) }
+    var timeUpHeld by heldState
     var recorded by rememberSaveable { mutableStateOf(false) }
     var milestone by remember { mutableStateOf<Int?>(null) }
 
@@ -121,6 +130,7 @@ fun TypedQuizScreen(
         input = ""
         lastCorrect = false
         toneFinishedAt = 0L
+        if (leadIn) { leadIn = false; awaitScreenThenBeat() }
         player.play(drill.playable, Settings.sidetoneHz, timing()) { toneFinishedAt = System.nanoTime() }
     }
 
@@ -128,36 +138,6 @@ fun TypedQuizScreen(
     // Next too (#355, after #352). The decision lives in morsekit/ContinueAfterMiss.
     val missAck = remember { ContinueAfterMiss() }
     var ackAwaiting by remember { mutableStateOf(false) }
-
-    // Correct answers keep the rhythm going; a miss waits for the Next tap so the
-    // learner can compare what they typed against the answer.
-    // Clear the reveal state in the same recomposition as the new drill —
-    // LaunchedEffect(round) also resets it, but a frame later, and that stale
-    // frame flashed the next answer's comparison view (issue #63).
-    fun advance() {
-        missAck.reset()
-        ackAwaiting = false
-        drill = source.nextDrill()
-        revealed = false
-        input = ""
-        lastCorrect = false
-        round++
-    }
-
-    LaunchedEffect(revealed) {
-        if (!revealed || phase != TqPhase.RUNNING) return@LaunchedEffect
-        if (lastCorrect) {
-            delay(900)
-            advance()
-        } else {
-            // The held correction repeats what was sent after a beat, so you
-            // re-hear the sound you got wrong while the answer shows (#77).
-            delay(450)
-            player.replaySound(drill.playable, Settings.sidetoneHz, timing())
-        }
-    }
-
-    DisposableEffect(Unit) { onDispose { player.release() } }
 
     /** Persist the session once (summary entry or an early Back, whichever first). */
     fun recordSession(): Int? {
@@ -174,10 +154,43 @@ fun TypedQuizScreen(
 
     fun endSession() {
         if (phase == TqPhase.SUMMARY) return
+        timeUpHeld = false
         player.stop()
         milestone = recordSession()
         phase = TqPhase.SUMMARY
     }
+
+    // Clear the reveal state in the same recomposition as the new drill —
+    // LaunchedEffect(round) also resets it, but a frame later, and that stale
+    // frame flashed the next answer's comparison view (issue #63).
+    fun advance() {
+        // The countdown ran out while this drill waited for its answer: it
+        // has been answered, so the session ends here (SessionClock).
+        if (timeUpHeld) { endSession(); return }
+        missAck.reset()
+        ackAwaiting = false
+        drill = source.nextDrill()
+        revealed = false
+        input = ""
+        lastCorrect = false
+        round++
+    }
+
+    // Correct answers keep the rhythm going; a miss waits for the Next tap so the
+    // learner can compare what they typed against the answer.
+    LaunchedEffect(revealed) {
+        if (!revealed || phase != TqPhase.RUNNING) return@LaunchedEffect
+        if (lastCorrect) {
+            delay(900)
+            if (phase == TqPhase.RUNNING) advance()
+        } else {
+            // The held correction repeats what was sent after a beat, so you
+            // re-hear the sound you got wrong while the answer shows (#77).
+            player.resendAfterMiss(drill.playable, Settings.sidetoneHz, timing()) { phase == TqPhase.RUNNING }
+        }
+    }
+
+    DisposableEffect(Unit) { onDispose { player.release() } }
 
     fun finish() {
         recordSession()
@@ -185,6 +198,7 @@ fun TypedQuizScreen(
     }
 
     fun practiceAgain() {
+        leadIn = true
         tally = Tally()
         recorded = false
         milestone = null
@@ -193,23 +207,13 @@ fun TypedQuizScreen(
         advance()
     }
 
-    // Session countdown: ticks only while running and only when a length is set.
-    // Also keyed on whether a limit exists, so the timer menu starting a
-    // countdown on an open-ended run (or dropping one) restarts the loop.
-    // Reaching zero (or subtracting the last minute) ends it.
-    LaunchedEffect(phase, remaining == null) {
-        if (phase != TqPhase.RUNNING) return@LaunchedEffect
-        while (true) {
-            val r = remaining ?: return@LaunchedEffect
-            if (r <= 0) return@LaunchedEffect
-            delay(1000)
-            remaining = remaining?.minus(1)
-        }
-    }
-    LaunchedEffect(phase, remaining) {
-        val r = remaining
-        if (phase == TqPhase.RUNNING && r != null && r <= 0) endSession()
-    }
+    // The session countdown, and what reaching zero does (SessionKit): end,
+    // or hold for the drill waiting on its answer.
+    SessionTick(running = phase == TqPhase.RUNNING, remaining = remainingState)
+    val timer = rememberSessionTimeUp(
+        running = phase == TqPhase.RUNNING, remaining = remainingState, held = heldState,
+        awaitingAnswer = { !revealed }, onEnd = { endSession() }
+    )
 
     BackHandler { if (phase == TqPhase.SUMMARY) onBack() else finish() }
 
@@ -272,9 +276,9 @@ fun TypedQuizScreen(
                 if (phase == TqPhase.RUNNING) {
                     SessionTimerMenu(
                         remaining = remaining,
-                        onAddSeconds = { remaining = (remaining ?: 0) + it },
-                        onSubtractSeconds = { remaining = SessionClock.reduced(remaining, it) },
-                        onRemoveLimit = { remaining = null }
+                        onAddSeconds = timer::add,
+                        onSubtractSeconds = timer::subtract,
+                        onRemoveLimit = timer::removeLimit
                     )
                     SessionSettingsButton { showSettings = true }
                 }
@@ -437,7 +441,7 @@ fun TypedQuizScreen(
         }  // end of the header + drill Column
 
         if (showSettings) {
-            SessionSettingsOverlay(scope = settingsMode, onClose = { showSettings = false }, previewItem = { drill.playable })
+            SessionSettingsOverlay(scope = settingsMode, onClose = { showSettings = false })
         }
     }
 }

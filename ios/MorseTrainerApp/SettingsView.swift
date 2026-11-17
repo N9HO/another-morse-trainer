@@ -433,6 +433,12 @@ struct SettingsView: View {
             } label: {
                 Label("Preview tone", systemImage: "speaker.wave.2.fill")
             }
+            .disabled(activeMode != nil)
+            if activeMode != nil {
+                Text("Off during a session: it would play over the session's own sound. The next item plays at the new pitch.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
             Toggle("Keep Bluetooth audio awake", isOn: $model.settings.bluetoothKeepAlive)
             Label {
                 Text("Plays a floor deliberately just above silence — too quiet to hear — so Bluetooth earbuds never idle between transmissions: truly silent audio lets some headsets sleep, and they wake a moment late and clip the first character.")

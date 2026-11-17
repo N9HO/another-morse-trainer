@@ -121,9 +121,18 @@ fun SendingPracticeScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Un
     // Session length (iOS usesSessionLength): the countdown the Session Length
     // picker set and the timer menu adjusts; expiry shows the summary.
     var phase by rememberSaveable { mutableStateOf(SpPhase.RUNNING) }
-    var remaining by rememberSaveable(stateSaver = OptionalIntSaver) {
+    val remainingState = rememberSaveable(stateSaver = OptionalIntSaver) {
         mutableStateOf<Int?>(Settings.practiceDuration.seconds)
     }
+    var remaining by remainingState
+    // The run's first sound waits until the screen has drawn its first frame,
+    // then SessionClock.FIRST_SOUND_BEAT_MS more: Start used to sound it
+    // before the drill screen had arrived.
+    var leadIn by remember { mutableStateOf(true) }
+    // The countdown ran out with a drill still waiting for its answer: the
+    // session is held for that answer, and moving on ends it (SessionClock).
+    val heldState = rememberSaveable { mutableStateOf(false) }
+    var timeUpHeld by heldState
     var recorded by rememberSaveable { mutableStateOf(false) }
     var milestone by remember { mutableStateOf<Int?>(null) }
 
@@ -145,6 +154,7 @@ fun SendingPracticeScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Un
         sentAnswer = ""
         toneFinishedAt = 0L
         keyer.clear()
+        if (leadIn) { leadIn = false; awaitScreenThenBeat() }
         player.play(drill.playable, Settings.sidetoneHz, Settings.timing()) { toneFinishedAt = System.nanoTime() }
     }
 
@@ -194,49 +204,6 @@ fun SendingPracticeScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Un
         }
     }
 
-    /**
-     * Next drill, clearing the reveal state in the same recomposition as the
-     * new drill — LaunchedEffect(round) resets it a frame later, and that
-     * stale frame flashed the next item's answer (issue #63).
-     */
-    fun advanceNow() {
-        missAck.reset()
-        ackAwaiting = false
-        drill = source.nextDrill()
-        revealed = false
-        sentAnswer = ""
-        round++
-    }
-
-    // While a miss is held: the right answer keyed again moves on; a wrong or
-    // too-early re-key is dropped, with no new miss and no penalty.
-    LaunchedEffect(keyer.decodedText, keyer.isKeying, revealed) {
-        if (!revealed || !ackAwaiting || keyer.isKeying) return@LaunchedEffect
-        val sent = keyer.decodedText.trim()
-        if (sent.isEmpty() || sent.length < drill.correct.length) return@LaunchedEffect
-        when (missAck.input(sent, System.nanoTime() / 1_000_000)) {
-            ContinueAfterMiss.Outcome.ADVANCE -> { keyer.clear(); advanceNow() }
-            ContinueAfterMiss.Outcome.WRONG, ContinueAfterMiss.Outcome.DEBOUNCED -> keyer.clear()
-            ContinueAfterMiss.Outcome.INACTIVE -> ackAwaiting = false
-        }
-    }
-
-    // After grading, pause on the result, then advance — unless it was a
-    // miss: that holds the correction until Next is pressed (issue #77),
-    // repeating the target after a beat so you re-hear what you should
-    // have keyed while the comparison shows.
-    LaunchedEffect(revealed) {
-        if (revealed) {
-            if (!lastCorrect) {
-                delay(450)
-                if (phase == SpPhase.RUNNING) player.replaySound(drill.playable, Settings.sidetoneHz, Settings.timing())
-                return@LaunchedEffect
-            }
-            delay(1200)
-            if (phase == SpPhase.RUNNING) advanceNow()
-        }
-    }
-
     /** Persist the session once (the summary's entry or an early Back, whichever first). */
     fun recordRun(): Int? {
         if (recorded) return null
@@ -252,10 +219,56 @@ fun SendingPracticeScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Un
     /** The timer ran out or End was tapped: record the session and show the summary. */
     fun endSession() {
         if (phase == SpPhase.SUMMARY) return
+        timeUpHeld = false
         player.stop()
         keyer.clear()
         milestone = recordRun()
         phase = SpPhase.SUMMARY
+    }
+
+    /**
+     * Next drill, clearing the reveal state in the same recomposition as the
+     * new drill — LaunchedEffect(round) resets it a frame later, and that
+     * stale frame flashed the next item's answer (issue #63).
+     */
+    fun advanceNow() {
+        // The countdown ran out while this drill waited for its answer: it
+        // has been answered, so the session ends here (SessionClock).
+        if (timeUpHeld) { endSession(); return }
+        missAck.reset()
+        ackAwaiting = false
+        drill = source.nextDrill()
+        revealed = false
+        sentAnswer = ""
+        round++
+    }
+
+    // While a miss is held: the right answer keyed again moves on; a wrong or
+    // too-early re-key is dropped, with no new miss and no penalty.
+    LaunchedEffect(keyer.decodedText, keyer.isKeying, revealed) {
+        if (!revealed || !ackAwaiting || keyer.isKeying) return@LaunchedEffect
+        val sent = keyer.decodedText.trim()
+        if (sent.isEmpty() || sent.length < drill.correct.length) return@LaunchedEffect
+        when (missAck.input(sent, System.nanoTime() / 1_000_000)) {
+            ContinueAfterMiss.Outcome.ADVANCE -> { keyer.clear(); if (phase == SpPhase.RUNNING) advanceNow() }
+            ContinueAfterMiss.Outcome.WRONG, ContinueAfterMiss.Outcome.DEBOUNCED -> keyer.clear()
+            ContinueAfterMiss.Outcome.INACTIVE -> ackAwaiting = false
+        }
+    }
+
+    // After grading, pause on the result, then advance — unless it was a
+    // miss: that holds the correction until Next is pressed (issue #77),
+    // repeating the target after a beat so you re-hear what you should
+    // have keyed while the comparison shows.
+    LaunchedEffect(revealed) {
+        if (revealed) {
+            if (!lastCorrect) {
+                player.resendAfterMiss(drill.playable, Settings.sidetoneHz, Settings.timing()) { phase == SpPhase.RUNNING }
+                return@LaunchedEffect
+            }
+            delay(1200)
+            if (phase == SpPhase.RUNNING) advanceNow()
+        }
     }
 
     fun finish() {
@@ -265,6 +278,7 @@ fun SendingPracticeScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Un
 
     /** Start a fresh session from the summary screen. */
     fun practiceAgain() {
+        leadIn = true
         tally = Tally()
         recorded = false
         milestone = null
@@ -274,22 +288,14 @@ fun SendingPracticeScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Un
     }
     BackHandler { if (phase == SpPhase.SUMMARY) onBack() else finish() }
 
-    // Session countdown; also keyed on whether a limit exists, so the timer
-    // menu starting a countdown on an open-ended run (or dropping one)
-    // restarts the loop. Reaching zero (or subtracting the last minute) ends it.
-    LaunchedEffect(phase, remaining == null) {
-        if (phase != SpPhase.RUNNING) return@LaunchedEffect
-        while (true) {
-            val r = remaining ?: return@LaunchedEffect
-            if (r <= 0) return@LaunchedEffect
-            delay(1000)
-            remaining = remaining?.minus(1)
-        }
-    }
-    LaunchedEffect(phase, remaining) {
-        val r = remaining
-        if (phase == SpPhase.RUNNING && r != null && r <= 0) endSession()
-    }
+    // The session countdown (SessionKit); what reaching zero does is
+    // rememberSessionTimeUp, below.
+    SessionTick(running = phase == SpPhase.RUNNING, remaining = remainingState)
+    // At zero: end, or hold for the drill waiting on its answer (SessionKit).
+    val timer = rememberSessionTimeUp(
+        running = phase == SpPhase.RUNNING, remaining = remainingState, held = heldState,
+        awaitingAnswer = { !revealed }, onEnd = { endSession() }
+    )
 
     // Mid-session Settings, drawn over the session so its state lives on.
     var showSettings by remember { mutableStateOf(false) }
@@ -322,9 +328,9 @@ fun SendingPracticeScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Un
                 if (phase == SpPhase.RUNNING) {
                     SessionTimerMenu(
                         remaining = remaining,
-                        onAddSeconds = { remaining = (remaining ?: 0) + it },
-                        onSubtractSeconds = { remaining = SessionClock.reduced(remaining, it) },
-                        onRemoveLimit = { remaining = null }
+                        onAddSeconds = timer::add,
+                        onSubtractSeconds = timer::subtract,
+                        onRemoveLimit = timer::removeLimit
                     )
                 }
                 // Switching records the run the way Back does, then lands on
@@ -370,7 +376,9 @@ fun SendingPracticeScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Un
                     EngineStore.save()
                     summary = source.summary
                     stageRev++
-                    advanceNow()
+                    // Not while the run-out holds the session for the drill on screen:
+                    // a new drill there would end it (iOS draws none on a pin).
+                    if (!timeUpHeld) advanceNow()
                 }
             }
             Spacer(Modifier.height(2.dp))
@@ -459,7 +467,7 @@ fun SendingPracticeScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Un
             ) {
                 Text(stringResource(R.string.common_you_sent), fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Brand.textSecondary)
                 Spacer(Modifier.height(4.dp))
-                val decoded = keyer.decodedText
+                val decoded = keyer.shownText
                 Text(
                     text = if (decoded.isEmpty()) "—" else decoded,
                     fontSize = 32.sp,
@@ -513,7 +521,7 @@ fun SendingPracticeScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Un
         }
 
         if (showSettings) {
-            SessionSettingsOverlay(scope = SettingsMode.SENDING, onClose = { showSettings = false }, previewItem = { drill.playable })
+            SessionSettingsOverlay(scope = SettingsMode.SENDING, onClose = { showSettings = false })
         }
     }
 }

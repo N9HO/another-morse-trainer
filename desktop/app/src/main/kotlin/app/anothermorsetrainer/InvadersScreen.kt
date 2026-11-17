@@ -60,7 +60,9 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.sp
+import app.anothermorsetrainer.morsekit.GameAnnouncer
 import app.anothermorsetrainer.morsekit.InvadersCharacterSet
 import app.anothermorsetrainer.morsekit.InvadersDifficulty
 import app.anothermorsetrainer.morsekit.InvadersEvent
@@ -162,6 +164,12 @@ fun InvadersScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
     // When each invader's Morse finished sounding (ICR), by id, so a hit's
     // time-to-recognize runs from the end of the tone.
     val toneEnd = remember { HashMap<Int, Long>() }
+    // When each enemy appeared: a hit while its sound is still waiting its
+    // turn is timed from there, not posted as 0 ms.
+    val appeared = remember { HashMap<Int, Long>() }
+    // The one sound channel (ICR): an arrival and a tapped replay take turns
+    // instead of cutting into each other.
+    val announcer = remember { GameAnnouncer() }
     val charResults = remember { HashMap<Char, IntArray>() }   // attempts, correct
     // The shared leaderboard (docs/high-scores-design.md, step 2): the run's
     // registration and one item per shot or decision, each carrying the
@@ -250,6 +258,8 @@ fun InvadersScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
         game = g
         field = emptyList()
         toneEnd.clear()
+        appeared.clear()
+        announcer.reset()
         charResults.clear()
         flash = null
         startedAtMs = System.currentTimeMillis()
@@ -270,6 +280,7 @@ fun InvadersScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
     fun finishGame() {
         val g = game ?: return
         player.stop()
+        announcer.reset()
         syncHud(g)
         recordRun(g.hits + g.misses, g.hits, ((System.currentTimeMillis() - startedAtMs) / 1000L).toInt())
         EngineStore.save()
@@ -280,6 +291,7 @@ fun InvadersScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
     fun abandonRun() {
         val g = game
         player.stop()
+        announcer.reset()
         if (g != null && phase == InvPhase.RUNNING) {
             recordRun(g.hits + g.misses, g.hits, ((System.currentTimeMillis() - startedAtMs) / 1000L).toInt())
             EngineStore.save()
@@ -304,6 +316,19 @@ fun InvadersScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
         if (phase != InvPhase.SETUP) phase = InvPhase.SETUP
     }
 
+    /**
+     * Start the sound the channel has waiting, if it is free: a new invader's
+     * character, or a tapped replay ([GameAnnouncer]).
+     */
+    fun announce() {
+        val g = game ?: return
+        if (phase != InvPhase.RUNNING || input != InvadersInput.ICR) return
+        // At the ramp's current speed (#178), not the session timing: a
+        // single character has no gaps for Farnsworth to stretch.
+        val timing = MorseTiming(g.currentWpm)
+        announcer.playNext(player, timing, toneEnd)
+    }
+
     fun shoot(character: Char) {
         val g = game ?: return
         if (phase != InvPhase.RUNNING) return
@@ -312,7 +337,11 @@ fun InvadersScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
         val shot = g.shoot(character)
         val hit = shot.invader
         if (hit != null) {
-            val end = toneEnd.remove(hit.id)
+            // From the end of its sound (0 while it is still playing); a hit
+            // before its sound plays counts from when it appeared.
+            val end = toneEnd.remove(hit.id) ?: appeared[hit.id]
+            appeared.remove(hit.id)
+            announcer.forget(hit.id)
             val ttr = if (end != null) ((now - end).coerceAtLeast(0)) / 1000.0 else 0.0
             engine.noteAttempt(hit.character, hit.character, ttr)
             tally(hit.character, true)
@@ -349,17 +378,13 @@ fun InvadersScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
             for (event in g.advance(dt)) {
                 when (event) {
                     is InvadersEvent.Spawned -> if (input == InvadersInput.ICR) {
-                        // At the ramp's current speed (#178), not the session
-                        // timing: a single character has no gaps for
-                        // Farnsworth to stretch.
-                        val secs = player.replaySound(
-                            MorseItem.Playable.Text(event.invader.character.toString()),
-                            Settings.sidetoneHz, MorseTiming(g.currentWpm)
-                        )
-                        toneEnd[event.invader.id] = System.currentTimeMillis() + (secs * 1000).toLong()
+                        appeared.putIfAbsent(event.invader.id, System.currentTimeMillis())
+                        announcer.arrived(event.invader.id, event.invader.character.toString())
                     }
                     is InvadersEvent.Escaped -> {
                         toneEnd.remove(event.invader.id)
+                        appeared.remove(event.invader.id)
+                        announcer.forget(event.invader.id)
                         engine.noteMiss(event.invader.character)
                         tally(event.invader.character, false)
                         lbItems.add(LeaderboardItem(event.invader.character.toString(), "", 0, wpm))
@@ -369,6 +394,7 @@ fun InvadersScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
                     InvadersEvent.GameOver -> over = true
                 }
             }
+            announce()
             field = g.invaders
             syncHud(g)
             if (over) { finishGame(); return@LaunchedEffect }
@@ -414,12 +440,15 @@ fun InvadersScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
             }
             InvPhase.RUNNING -> {
                 BackHandler { abandonRun() }
+                // Built once a game, not every frame: a fresh list each frame
+                // rebuilt the whole keyboard 120 times a second.
+                val runPool = remember(game) { characterPool() }
                 InvadersRun(
                     input = input,
-                    field = field,
+                    field = { field },
                     score = score, wave = wave, lives = lives, multiplier = multiplier, wpm = wpm,
                     flash = flash,
-                    pool = characterPool(),
+                    pool = runPool,
                     decoded = keyer.decodedText,
                     keyPressed = keyPressed,
                     midiDevice = midiDevice,
@@ -429,7 +458,8 @@ fun InvadersScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
                     onReplay = { column ->
                         val g = game ?: return@InvadersRun
                         val nearest = g.invaders.minByOrNull { abs(it.column - column) } ?: return@InvadersRun
-                        player.replaySound(MorseItem.Playable.Text(nearest.character.toString()), Settings.sidetoneHz, MorseTiming(g.currentWpm))
+                        announcer.replay(nearest.character.toString())
+                        announce()
                     },
                     onEnd = { abandonRun() },
                     onSwitchMode = ::switchTo
@@ -507,7 +537,9 @@ private fun InvadersSetup(
 @Composable
 private fun InvadersRun(
     input: InvadersInput,
-    field: List<Invader>,
+    // Read only while drawing, so a frame that moves the invaders redraws the
+    // field without recomposing the screen (that cost about 6 ms a frame).
+    field: () -> List<Invader>,
     score: Int, wave: Int, lives: Int, multiplier: Int, wpm: Int,
     flash: Pair<String, Long>?,
     pool: List<Char>,
@@ -522,6 +554,11 @@ private fun InvadersRun(
     onSwitchMode: (TrainingMode) -> Unit
 ) {
     val measurer = rememberTextMeasurer()
+    // The alien (#179), drawn once into a bitmap and stamped per invader:
+    // painting its 46 squares one by one for every invader, every frame, made
+    // the field slow to draw.
+    val density = LocalDensity.current
+    val sprite = remember(density) { pixelSprite(INVADER_SPRITE, with(density) { 3.dp.toPx() }, Brand.tealBright) }
     Column(modifier = Modifier.fillMaxSize().widthIn(max = CONTENT_MAX_WIDTH).padding(horizontal = 16.dp)) {
         Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             TextButton(onClick = onEnd) { Text(stringResource(R.string.invaders_end_game), color = Brand.teal) }
@@ -565,17 +602,10 @@ private fun InvadersRun(
             val reach = 18.dp.toPx()
             // The alien (#179) instead of a "?", which read as a literal
             // character: 3 dp a pixel, 33×24 dp, about what the glyph took.
-            val px = 3.dp.toPx()
             fun drawSprite(cx: Float, cy: Float) {
-                val ox = cx - INVADER_SPRITE[0].length * px / 2
-                val oy = cy - INVADER_SPRITE.size * px / 2
-                INVADER_SPRITE.forEachIndexed { r, row ->
-                    row.forEachIndexed { c, cell ->
-                        if (cell == '#') drawRect(Brand.tealBright, Offset(ox + c * px, oy + r * px), Size(px, px))
-                    }
-                }
+                drawImage(sprite, topLeft = Offset(cx - sprite.width / 2f, cy - sprite.height / 2f))
             }
-            for (inv in field) {
+            for (inv in field()) {
                 val x = (inv.column + 0.5f) * colWidth
                 val y = top + inv.progress.toFloat() * (ground - top - reach)
                 // ICR keeps the character to the ear; keying shows it directly

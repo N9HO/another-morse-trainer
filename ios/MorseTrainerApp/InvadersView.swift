@@ -23,13 +23,14 @@ struct InvadersView: View {
     /// Play again while sharing is off and unanswered, never mid-game.
     @State private var optInPrompt = false
     @State private var game: InvadersGame?
-    /// A snapshot of the field for drawing; refreshed every frame from `game`.
+    /// Who is on the field, for the accessibility count: refreshed when an
+    /// invader arrives or leaves. The canvas draws positions straight from
+    /// `game`, so a frame that only moves invaders re-renders nothing else.
     @State private var field: [Invader] = []
     @State private var hud = HUD()
-    @State private var lastFrame: Date?
-    /// When each invader's Morse finished sounding (ICR), keyed by invader id,
-    /// so a hit's time-to-recognize runs from the end of the tone.
-    @State private var toneEnd: [Int: Date] = [:]
+    /// What every frame touches (`ArcadeFrame`), in a reference so writing
+    /// it does not re-render the view.
+    @State private var loop = ArcadeFrame()
     /// A flash of feedback on the field: the last hit's points, or "miss".
     @State private var flashText = ""
     @State private var flashUntil = Date.distantPast
@@ -185,7 +186,7 @@ struct InvadersView: View {
             hudBar
             GeometryReader { geo in
                 TimelineView(.animation) { context in
-                    canvas(width: geo.size.width)
+                    canvas(width: geo.size.width, now: context.date)
                         // The frame clock: every tick moves the game on by the
                         // real time elapsed, so a dropped frame costs no distance.
                         .onChange(of: context.date) { now in step(now: now) }
@@ -243,7 +244,10 @@ struct InvadersView: View {
         }
     }
 
-    private func canvas(width: CGFloat) -> some View {
+    /// `now` is the frame's time, and the drawing reads it: that is what
+    /// makes each tick a new canvas to SwiftUI. The positions themselves come
+    /// from `game`, which a frame changes without touching any state.
+    private func canvas(width: CGFloat, now: Date) -> some View {
         Canvas { context, size in
             let ground = size.height - 18
             var line = Path()
@@ -257,7 +261,7 @@ struct InvadersView: View {
             // Keying shows the character above its sprite, so the field
             // starts lower to leave the label room at the top.
             let top: CGFloat = input == .keying ? 30 : 18
-            for inv in field {
+            for inv in game?.invaders ?? [] {
                 let x = (CGFloat(inv.column) + 0.5) * colWidth
                 let y = top + CGFloat(inv.progress) * (ground - top - 18)
                 // The alien (#179) instead of a "?", which read as a literal
@@ -273,7 +277,7 @@ struct InvadersView: View {
                                  with: .color(Theme.tealBright))
                 }
             }
-            if flashUntil > Date() {
+            if flashUntil > now {
                 context.draw(Text(flashText).font(.headline).foregroundColor(Theme.tealBright),
                              at: CGPoint(x: size.width / 2, y: 14))
             }
@@ -291,7 +295,8 @@ struct InvadersView: View {
         guard input == .icr, let game else { return }
         let column = Int(location.x / max(1, width) * CGFloat(columns))
         guard let nearest = game.invaders.min(by: { abs($0.column - column) < abs($1.column - column) }) else { return }
-        model.playInvader(nearest.character, wpm: game.currentWpm)
+        loop.announcer.replay(String(nearest.character))
+        announce(now: Date())
     }
 
     /// ICR: a QWERTY keyboard (#178) — `InvadersKeyboard.rows` lays it out: a
@@ -392,41 +397,44 @@ struct InvadersView: View {
         // timing bound to measure: only hear-it runs are ranked (#leaderboard).
         if input == .keying { model.leaderboardCancelRun() }
         field = []
-        toneEnd = [:]
         flashUntil = .distantPast
-        lastFrame = nil
+        loop.reset()
         syncHUD(g)
         phase = .playing
     }
 
     private func step(now: Date) {
         guard phase == .playing, let game else { return }
-        defer { lastFrame = now }
-        guard let last = lastFrame else { return }
-        // Cap a long gap (the app was backgrounded) so the field does not
-        // empty onto the ground in one step.
-        let dt = min(0.1, now.timeIntervalSince(last))
+        guard let dt = loop.step(to: now) else { return }
         for event in game.advance(by: dt) {
             switch event {
             case .spawned(let inv):
-                if input == .icr {
-                    // At the ramp's current speed (#178), which the hits and
-                    // landings in this same step may just have moved.
-                    let duration = model.playInvader(inv.character, wpm: game.currentWpm)
-                    toneEnd[inv.id] = now.addingTimeInterval(duration)
-                }
+                if input == .icr { loop.arrived(id: inv.id, text: String(inv.character), at: now) }
             case .escaped(let inv):
-                toneEnd[inv.id] = nil
+                loop.forget(id: inv.id)
                 model.noteInvadersEscape(target: inv.character, wpm: game.currentWpm)
                 Haptics.error()
                 flash("\(inv.character) got through", for: 1.0)
             case .gameOver:
                 model.stopInvaders()
+                loop.reset()
                 phase = .over
             }
         }
-        field = game.invaders
+        announce(now: now)
+        if field.map(\.id) != game.invaders.map(\.id) { field = game.invaders }
         syncHUD(game)
+    }
+
+    /// Start the sound the channel has waiting, if it is free: a new invader's
+    /// character, or a tapped replay (`GameAnnouncer`).
+    private func announce(now: Date) {
+        guard input == .icr, phase == .playing, let game else { return }
+        // At the ramp's current speed (#178), which the hits and landings in
+        // this same step may just have moved.
+        loop.announce(at: now, gap: MorseTiming(wpm: game.currentWpm).characterGap) { text in
+            model.playInvader(Character(text), wpm: game.currentWpm)
+        }
     }
 
     private func shoot(_ character: Character) {
@@ -435,8 +443,9 @@ struct InvadersView: View {
         let lowest = game.lowest
         let shot = game.shoot(character)
         if let hit = shot.invader {
-            let ttr = toneEnd[hit.id].map { max(0, now.timeIntervalSince($0)) } ?? 0
-            toneEnd[hit.id] = nil
+            // From the end of its sound; one hit while its sound still waits
+            // its turn counts from when it appeared (`ArcadeFrame.reactionTime`).
+            let ttr = loop.reactionTime(hit: hit.id, at: now)
             model.noteInvadersShot(target: hit.character, chosen: hit.character, ttr: ttr, wpm: game.currentWpm)
             Haptics.success()
             flash(shot.waveCleared ? "Wave \(game.wave)!" : "+\(shot.points)", for: 0.8)

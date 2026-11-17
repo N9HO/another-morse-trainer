@@ -57,7 +57,18 @@ struct RootView: View {
             } else if started {
                 ContentView(onExit: { withAnimation { started = false; reopenSetup = true } })
             } else {
-                IntroView(onStart: { withAnimation { started = true } },
+                IntroView(onStart: {
+                              // The session's first sound waits for this
+                              // transition, and the setup sheet closing with it,
+                              // to finish (`AppModel.screenArrived`).
+                              if #available(iOS 17, *) {
+                                  withAnimation { started = true } completion: { model.screenArrived() }
+                              } else {
+                                  withAnimation { started = true }
+                                  // No completion on iOS 16: the default animation's length.
+                                  DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { model.screenArrived() }
+                              }
+                          },
                           openSetup: $reopenSetup)
             }
         }

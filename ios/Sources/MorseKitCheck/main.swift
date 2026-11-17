@@ -4980,6 +4980,59 @@ if let fx = loadInvadersRampFixture() {
     check("fixtures/invaders-ramp.json loads and decodes", false)
 }
 
+// MARK: - Arcade games' sound channel
+//
+// fixtures/game-announcer.json, consumed by this harness AND by the android
+// and desktop GameAnnouncerTest: in Invaders, Galaga and Defender an
+// announcement and a tapped replay never cut into each other or run together.
+struct GameAnnouncerFixture: Decodable {
+    struct Step: Decodable { let at: Double; let `do`: String; let id: Int?; let text: String? }
+    struct Play: Decodable { let at: Double; let sound: String }
+    struct Scenario: Decodable { let name: String; let steps: [Step]; let plays: [Play] }
+    let durations: [String: Double]
+    let gap: Double
+    let scenarios: [Scenario]
+}
+
+print("\nArcade games' sound channel (fixtures/game-announcer.json):")
+do {
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent()
+        .deletingLastPathComponent().deletingLastPathComponent()
+    if let data = try? Data(contentsOf: root.appendingPathComponent("fixtures/game-announcer.json")),
+       let fx = try? JSONDecoder().decode(GameAnnouncerFixture.self, from: data) {
+        check("the fixture has scenarios", !fx.scenarios.isEmpty)
+        for sc in fx.scenarios {
+            var announcer = GameAnnouncer()
+            var played: [String] = []
+            var known = true
+            for step in sc.steps {
+                switch step.do {
+                case "arrive": announcer.arrived(id: step.id ?? -1, text: step.text ?? "?")
+                case "replay": announcer.replay(step.text ?? "?")
+                case "forget": announcer.forget(id: step.id ?? -1)
+                case "reset": announcer.reset()
+                case "tick": break
+                default: known = false
+                }
+                guard let sound = announcer.next(at: step.at) else { continue }
+                let label: String
+                switch sound {
+                case .arrival(let id, let text): label = "arrival \(id) \(text)"
+                case .replay(let text): label = "replay \(text)"
+                }
+                played.append("\(step.at) \(label)")
+                announcer.started(at: step.at, duration: fx.durations[sound.text] ?? -1, gap: fx.gap)
+            }
+            let expected = sc.plays.map { "\($0.at) \($0.sound)" }
+            if played != expected { print("      ↳ played \(played)") }
+            check("sound channel: \(sc.name)", known && played == expected)
+        }
+    } else {
+        check("fixtures/game-announcer.json loads and decodes", false)
+    }
+}
+
 // MARK: - Shared activity fixture
 //
 // fixtures/activity.json, consumed by this harness AND by android
@@ -10492,8 +10545,16 @@ func loadGapLbFixture(_ name: String) -> [String: Any]? {
 // subtract arithmetic, derived from the documented menu rules.
 struct SessionClockFixture: Decodable {
     struct Case: Decodable { let remaining: Int?; let seconds: Int; let expected: Int? }
+    struct TimeUp: Decodable {
+        struct Case: Decodable { let held: Bool; let overdue: Int; let expected: Bool }
+        let graceSeconds: Int
+        let cases: [Case]
+    }
+    struct Beat: Decodable { let seconds: Double }
     let add: [Case]
     let subtract: [Case]
+    let timeUp: TimeUp
+    let firstSoundBeat: Beat
 }
 
 func loadSessionClockFixture() -> SessionClockFixture? {
@@ -10644,7 +10705,7 @@ if let fx = loadGapFixtureObject("gap-analyzer-mic-state.json"),
     check("fixtures/gap-analyzer-mic-state.json loads and decodes", false)
 }
 
-print("\nSession clock (timer menu add / subtract), against fixtures/gap-timers-session-clock.json:")
+print("\nSession clock (timer menu add / subtract, run-out hold), against fixtures/gap-timers-session-clock.json:")
 if let fx = loadSessionClockFixture() {
     func intOrNil(_ v: TimeInterval?) -> Int? {
         guard let v else { return nil }
@@ -10666,6 +10727,17 @@ if let fx = loadSessionClockFixture() {
         print("      ↳ subtract \(c.seconds) from \(String(describing: c.remaining)): fixture says \(String(describing: c.expected))")
     }
     check("subtracting time follows the fixture (\(fx.subtract.count) cases)", subOK)
+    check("the first sound's beat after the screen arrives is the fixture's (\(fx.firstSoundBeat.seconds) s)",
+          SessionClock.firstSoundBeat == fx.firstSoundBeat.seconds)
+    check("the run-out hold lasts the fixture's grace (\(fx.timeUp.graceSeconds) s)",
+          SessionClock.timeUpGraceSeconds == TimeInterval(fx.timeUp.graceSeconds))
+    var upOK = !fx.timeUp.cases.isEmpty
+    for c in fx.timeUp.cases
+    where SessionClock.endsAfterTimeUp(held: c.held, overdue: TimeInterval(c.overdue)) != c.expected {
+        upOK = false
+        print("      ↳ run out, held \(c.held), \(c.overdue) s overdue: fixture says ends = \(c.expected)")
+    }
+    check("a run-out countdown ends or holds as the fixture says (\(fx.timeUp.cases.count) cases)", upOK)
 } else {
     check("fixtures/gap-timers-session-clock.json loads and decodes", false)
 }

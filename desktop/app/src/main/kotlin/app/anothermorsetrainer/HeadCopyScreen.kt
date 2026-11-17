@@ -103,9 +103,18 @@ fun HeadCopyScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
     // process, so rememberSaveable behaves as remember here.
     var phase by rememberSaveable { mutableStateOf(HcPhase.RUNNING) }
     var tally by rememberSaveable(stateSaver = TallySaver) { mutableStateOf(Tally()) }
-    var remaining by rememberSaveable(stateSaver = OptionalIntSaver) {
+    val remainingState = rememberSaveable(stateSaver = OptionalIntSaver) {
         mutableStateOf<Int?>(Settings.practiceDuration.seconds)
     }
+    var remaining by remainingState
+    // The run's first sound waits until the screen has drawn its first frame,
+    // then SessionClock.FIRST_SOUND_BEAT_MS more: Start used to sound it
+    // before the drill screen had arrived.
+    var leadIn by remember { mutableStateOf(true) }
+    // The countdown ran out with a drill still waiting for its answer: the
+    // session is held for that answer, and moving on ends it (SessionClock).
+    val heldState = rememberSaveable { mutableStateOf(false) }
+    var timeUpHeld by heldState
     var recorded by rememberSaveable { mutableStateOf(false) }
     var milestone by remember { mutableStateOf<Int?>(null) }
 
@@ -126,6 +135,7 @@ fun HeadCopyScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
         lastRecallSec = 0.0
         autoRepeatsLeft = Settings.headCopyRepeats
         manualWaitMs = 0L
+        if (leadIn) { leadIn = false; awaitScreenThenBeat() }
         player.play(drill.playable, Settings.sidetoneHz, Settings.timing()) { toneFinishedAt = System.nanoTime() }
     }
 
@@ -148,6 +158,7 @@ fun HeadCopyScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
         }
         while (autoRepeatsLeft > 0) {
             delay(HC_REPEAT_GAP_MS)
+            if (phase != HcPhase.RUNNING) return@LaunchedEffect
             autoRepeatsLeft -= 1
             val dur = player.replaySound(drill.playable, Settings.sidetoneHz, Settings.timing())
             delay((dur * 1000).toLong())
@@ -160,7 +171,7 @@ fun HeadCopyScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
             n -= 1
         }
         countdown = null
-        doReveal()
+        if (phase == HcPhase.RUNNING) doReveal()
     }
 
     /** Replay now: skip the remaining auto-repeats, then restart the reveal countdown after the sound. */
@@ -191,6 +202,7 @@ fun HeadCopyScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
 
     fun endSession() {
         if (phase == HcPhase.SUMMARY) return
+        timeUpHeld = false
         player.stop()
         milestone = recordSession()
         phase = HcPhase.SUMMARY
@@ -202,6 +214,7 @@ fun HeadCopyScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
     }
 
     fun practiceAgain() {
+        leadIn = true
         tally = Tally()
         recorded = false
         milestone = null
@@ -212,23 +225,13 @@ fun HeadCopyScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
         round++
     }
 
-    // Session countdown: ticks only while running and only when a length is set.
-    // Also keyed on whether a limit exists, so the timer menu starting a
-    // countdown on an open-ended run (or dropping one) restarts the loop.
-    // Reaching zero (or subtracting the last minute) ends it.
-    LaunchedEffect(phase, remaining == null) {
-        if (phase != HcPhase.RUNNING) return@LaunchedEffect
-        while (true) {
-            val r = remaining ?: return@LaunchedEffect
-            if (r <= 0) return@LaunchedEffect
-            delay(1000)
-            remaining = remaining?.minus(1)
-        }
-    }
-    LaunchedEffect(phase, remaining) {
-        val r = remaining
-        if (phase == HcPhase.RUNNING && r != null && r <= 0) endSession()
-    }
+    // The session countdown, and what reaching zero does (SessionKit): end,
+    // or hold for the drill waiting on its answer.
+    SessionTick(running = phase == HcPhase.RUNNING, remaining = remainingState)
+    val timer = rememberSessionTimeUp(
+        running = phase == HcPhase.RUNNING, remaining = remainingState, held = heldState,
+        awaitingAnswer = { true }, onEnd = { endSession() }
+    )
 
     BackHandler { if (phase == HcPhase.SUMMARY) onBack() else finish() }
 
@@ -244,6 +247,9 @@ fun HeadCopyScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
             if (outcome.correct) haptics.success() else haptics.error()
         }
         summary = source.summary
+        // The countdown ran out while this drill waited for its answer: it
+        // has been answered, so the session ends here (SessionClock).
+        if (timeUpHeld) { endSession(); return }
         // Hide the reveal in the same recomposition as the new drill —
         // LaunchedEffect(round) resets it a frame later, and that stale frame
         // flashed the next item's answer (issue #63).
@@ -297,9 +303,9 @@ fun HeadCopyScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
                 if (phase == HcPhase.RUNNING) {
                     SessionTimerMenu(
                         remaining = remaining,
-                        onAddSeconds = { remaining = (remaining ?: 0) + it },
-                        onSubtractSeconds = { remaining = SessionClock.reduced(remaining, it) },
-                        onRemoveLimit = { remaining = null }
+                        onAddSeconds = timer::add,
+                        onSubtractSeconds = timer::subtract,
+                        onRemoveLimit = timer::removeLimit
                     )
                     SessionSettingsButton { showSettings = true }
                 }
@@ -438,7 +444,7 @@ fun HeadCopyScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
         }
 
         if (showSettings) {
-            SessionSettingsOverlay(scope = SettingsMode.HEAD_COPY, onClose = { showSettings = false }, previewItem = { drill.playable })
+            SessionSettingsOverlay(scope = SettingsMode.HEAD_COPY, onClose = { showSettings = false })
         }
     }
 }

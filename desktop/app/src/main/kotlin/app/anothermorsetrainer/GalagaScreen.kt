@@ -1,5 +1,8 @@
 package app.anothermorsetrainer
 
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.platform.LocalDensity
+import app.anothermorsetrainer.morsekit.GameAnnouncer
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -170,6 +173,12 @@ fun GalagaScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) 
     // When each enemy's Morse finished sounding (copy mode), by id, so a
     // hit's time-to-recognize runs from the end of the tone.
     val toneEnd = remember { HashMap<Int, Long>() }
+    // When each enemy appeared: a hit while its sound is still waiting its
+    // turn is timed from there, not posted as 0 ms.
+    val appeared = remember { HashMap<Int, Long>() }
+    // The one sound channel (copy mode): an entry, a dive and a tapped replay
+    // take turns instead of cutting into each other.
+    val announcer = remember { GameAnnouncer() }
     val charResults = remember { HashMap<Char, IntArray>() }   // attempts, correct
     // The shared leaderboard (docs/high-scores-design.md, step 2): the run's
     // registration and one item per shot or decision, each carrying the
@@ -259,6 +268,8 @@ fun GalagaScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) 
         game = g
         field = emptyList()
         toneEnd.clear()
+        appeared.clear()
+        announcer.reset()
         charResults.clear()
         flash = null
         startedAtMs = System.currentTimeMillis()
@@ -279,6 +290,7 @@ fun GalagaScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) 
     fun finishGame() {
         val g = game ?: return
         player.stop()
+        announcer.reset()
         syncHud(g)
         recordRun(g.hits + g.misses, g.hits, ((System.currentTimeMillis() - startedAtMs) / 1000L).toInt())
         EngineStore.save()
@@ -289,6 +301,7 @@ fun GalagaScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) 
     fun abandonRun() {
         val g = game
         player.stop()
+        announcer.reset()
         if (g != null && phase == GalPhase.RUNNING) {
             recordRun(g.hits + g.misses, g.hits, ((System.currentTimeMillis() - startedAtMs) / 1000L).toInt())
             EngineStore.save()
@@ -313,6 +326,19 @@ fun GalagaScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) 
         if (phase != GalPhase.SETUP) phase = GalPhase.SETUP
     }
 
+    /**
+     * Start the sound the channel has waiting, if it is free: an enemy's
+     * character on entry or dive, or a tapped replay ([GameAnnouncer]).
+     */
+    fun announce() {
+        val g = game ?: return
+        if (phase != GalPhase.RUNNING || input != InvadersInput.ICR) return
+        // At the ramp's current speed, not the session timing: a single
+        // character has no gaps for Farnsworth to stretch.
+        val timing = MorseTiming(g.currentWpm)
+        announcer.playNext(player, timing, toneEnd)
+    }
+
     fun shoot(character: Char) {
         val g = game ?: return
         if (phase != GalPhase.RUNNING) return
@@ -321,7 +347,11 @@ fun GalagaScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) 
         val shot = g.shoot(character)
         val hit = shot.enemy
         if (hit != null) {
-            val end = toneEnd.remove(hit.id)
+            // From the end of its sound (0 while it is still playing); a hit
+            // before its sound plays counts from when it appeared.
+            val end = toneEnd.remove(hit.id) ?: appeared[hit.id]
+            appeared.remove(hit.id)
+            announcer.forget(hit.id)
             val ttr = if (end != null) ((now - end).coerceAtLeast(0)) / 1000.0 else 0.0
             engine.noteAttempt(hit.character, hit.character, ttr)
             tally(hit.character, true)
@@ -357,10 +387,15 @@ fun GalagaScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) 
             var over = false
             for (event in g.advance(dt)) {
                 when (event) {
-                    is GalagaEvent.Entered -> sendEnemy(player, event.enemy, g, input, toneEnd)
-                    is GalagaEvent.Dived -> sendEnemy(player, event.enemy, g, input, toneEnd)
+                    is GalagaEvent.Entered, is GalagaEvent.Dived -> if (input == InvadersInput.ICR) {
+                        val enemy = if (event is GalagaEvent.Entered) event.enemy else (event as GalagaEvent.Dived).enemy
+                        appeared.putIfAbsent(enemy.id, System.currentTimeMillis())
+                        announcer.arrived(enemy.id, enemy.character.toString())
+                    }
                     is GalagaEvent.Landed -> {
                         toneEnd.remove(event.enemy.id)
+                        appeared.remove(event.enemy.id)
+                        announcer.forget(event.enemy.id)
                         engine.noteMiss(event.enemy.character)
                         tally(event.enemy.character, false)
                         lbItems.add(LeaderboardItem(event.enemy.character.toString(), "", 0, wpm))
@@ -370,6 +405,7 @@ fun GalagaScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) 
                     GalagaEvent.GameOver -> over = true
                 }
             }
+            announce()
             field = g.enemies
             syncHud(g)
             if (over) { finishGame(); return@LaunchedEffect }
@@ -415,13 +451,16 @@ fun GalagaScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) 
             }
             GalPhase.RUNNING -> {
                 BackHandler { abandonRun() }
+                // Built once a game, not every frame: a fresh list each frame
+                // rebuilt the whole keyboard 60-120 times a second.
+                val runPool = remember(game) { characterPool() }
                 GalagaRun(
                     input = input,
-                    field = field,
+                    field = { field },
                     columns = columns,
                     score = score, wave = wave, lives = lives, multiplier = multiplier, wpm = wpm,
                     flash = flash,
-                    pool = characterPool(),
+                    pool = runPool,
                     decoded = keyer.decodedText,
                     keyPressed = keyPressed,
                     midiDevice = midiDevice,
@@ -430,7 +469,8 @@ fun GalagaScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) 
                     onShoot = { shoot(it) },
                     onReplay = { enemy ->
                         val g = game ?: return@GalagaRun
-                        player.replaySound(MorseItem.Playable.Text(enemy.character.toString()), Settings.sidetoneHz, MorseTiming(g.currentWpm))
+                        announcer.replay(enemy.character.toString())
+                        announce()
                     },
                     onEnd = { abandonRun() },
                     onSwitchMode = ::switchTo
@@ -449,21 +489,6 @@ fun GalagaScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) 
             }
         }
     }
-}
-
-/**
- * Copy mode sends an enemy's character as it enters and again as it dives,
- * at the ramp's current speed, not the session timing: a single character
- * has no gaps for Farnsworth to stretch. Dates the tone's end for the
- * time-to-recognize clock.
- */
-private fun sendEnemy(player: MorsePlayer, enemy: GalagaEnemy, g: GalagaGame, input: InvadersInput, toneEnd: HashMap<Int, Long>) {
-    if (input != InvadersInput.ICR) return
-    val secs = player.replaySound(
-        MorseItem.Playable.Text(enemy.character.toString()),
-        Settings.sidetoneHz, MorseTiming(g.currentWpm)
-    )
-    toneEnd[enemy.id] = System.currentTimeMillis() + (secs * 1000).toLong()
 }
 
 @Composable
@@ -525,7 +550,9 @@ private fun GalagaSetup(
 @Composable
 private fun GalagaRun(
     input: InvadersInput,
-    field: List<GalagaEnemy>,
+    // Read only while drawing (and by the tap handler), so a frame that moves
+    // the enemies redraws the field without recomposing the screen.
+    field: () -> List<GalagaEnemy>,
     columns: Int,
     score: Int, wave: Int, lives: Int, multiplier: Int, wpm: Int,
     flash: Pair<String, Long>?,
@@ -541,6 +568,16 @@ private fun GalagaRun(
     onSwitchMode: (TrainingMode) -> Unit
 ) {
     val measurer = rememberTextMeasurer()
+    // The sprite drawn once per tint into a bitmap and stamped per enemy:
+    // painting its squares one by one for up to 24 enemies, every frame, made
+    // the field slow to draw. Send mode's labels are measured once per
+    // character for the same reason.
+    val density = LocalDensity.current
+    val sprites = remember(density) {
+        val px = with(density) { 3.dp.toPx() }
+        pixelSprite(GALAGA_SPRITE, px, Brand.teal) to pixelSprite(GALAGA_SPRITE, px, Brand.tealBright)
+    }
+    val labels = remember(density) { HashMap<Char, TextLayoutResult>() }
     // The tap handler reads the field as it is now without restarting on
     // every frame, which would cancel a tap in progress.
     val latestField = rememberUpdatedState(field)
@@ -585,7 +622,7 @@ private fun GalagaRun(
                         val top = 18.dp.toPx()
                         val bottom = size.height - 36.dp.toPx()
                         val cols = latestColumns.value
-                        val nearest = latestField.value.minByOrNull { e ->
+                        val nearest = latestField.value().minByOrNull { e ->
                             val p = canvasPoint(GalagaPath.position(e, cols), size.width.toFloat(), size.height.toFloat(), inset, top, bottom)
                             hypot(p.x - offset.x, p.y - offset.y)
                         }
@@ -610,24 +647,18 @@ private fun GalagaRun(
             val top = (if (input == InvadersInput.KEYING) 30.dp else 18.dp).toPx()
             val bottom = size.height - 36.dp.toPx()
             // The sprite: 3 dp a pixel, 33×24 dp, the Invaders sprite's size.
-            val px = 3.dp.toPx()
             fun drawSprite(cx: Float, cy: Float, tint: androidx.compose.ui.graphics.Color) {
-                val ox = cx - GALAGA_SPRITE[0].length * px / 2
-                val oy = cy - GALAGA_SPRITE.size * px / 2
-                GALAGA_SPRITE.forEachIndexed { r, row ->
-                    row.forEachIndexed { c, cell ->
-                        if (cell == '#') drawRect(tint, Offset(ox + c * px, oy + r * px), Size(px, px))
-                    }
-                }
+                val sprite = if (tint == Brand.tealBright) sprites.second else sprites.first
+                drawImage(sprite, topLeft = Offset(cx - sprite.width / 2f, cy - sprite.height / 2f))
             }
-            for (enemy in field) {
+            for (enemy in field()) {
                 val p = canvasPoint(GalagaPath.position(enemy, columns), size.width, size.height, inset, top, bottom)
                 val tint = if (enemy.state == GalagaEnemyState.DIVING) Brand.tealBright else Brand.teal
                 // Copy mode keeps the character to the ear; send mode shows
                 // it directly above the sprite to key.
                 if (input == InvadersInput.KEYING) {
                     drawSprite(p.x, p.y + 6.dp.toPx(), tint)
-                    val measured = measurer.measure(enemy.character.toString(), labelStyle)
+                    val measured = labels.getOrPut(enemy.character) { measurer.measure(enemy.character.toString(), labelStyle) }
                     drawText(measured, topLeft = Offset(p.x - measured.size.width / 2, p.y - 14.dp.toPx() - measured.size.height / 2))
                 } else {
                     drawSprite(p.x, p.y, tint)

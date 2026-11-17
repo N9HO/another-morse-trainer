@@ -27,14 +27,16 @@ struct GalagaView: View {
     /// Play again while sharing is off and unanswered, never mid-game.
     @State private var optInPrompt = false
     @State private var game: GalagaGame?
-    /// A snapshot of the field for drawing; refreshed every frame from `game`.
+    /// Who is on the field, for the accessibility count: refreshed when an
+    /// enemy arrives or leaves. The canvas draws positions straight from
+    /// `game`, so a frame that only moves enemies re-renders nothing else.
     @State private var field: [GalagaEnemy] = []
     @State private var columns = 4
     @State private var hud = HUD()
-    @State private var lastFrame: Date?
-    /// When each enemy's Morse finished sounding (copy mode), keyed by enemy
-    /// id, so a hit's time-to-recognize runs from the end of the tone.
-    @State private var toneEnd: [Int: Date] = [:]
+    /// What every frame touches (`ArcadeFrame`), in a reference so writing
+    /// it does not re-render the view.
+    @State private var loop = ArcadeFrame()
+
     /// A flash of feedback on the field: the last hit's points, or "miss".
     @State private var flashText = ""
     @State private var flashUntil = Date.distantPast
@@ -207,7 +209,7 @@ struct GalagaView: View {
             hudBar
             GeometryReader { geo in
                 TimelineView(.animation) { context in
-                    canvas(size: geo.size)
+                    canvas(size: geo.size, now: context.date)
                         // The frame clock: every tick moves the game on by the
                         // real time elapsed, so a dropped frame costs no distance.
                         .onChange(of: context.date) { now in step(now: now) }
@@ -276,7 +278,10 @@ struct GalagaView: View {
                        y: top + CGFloat(p.y) * (bottom - top))
     }
 
-    private func canvas(size: CGSize) -> some View {
+    /// `now` is the frame's time, and the drawing reads it: that is what makes
+    /// each tick a new canvas to SwiftUI. The positions themselves come from
+    /// `game`, which a frame changes without touching any state.
+    private func canvas(size: CGSize, now: Date) -> some View {
         Canvas { context, size in
             let ground = size.height - 18
             var line = Path()
@@ -288,7 +293,7 @@ struct GalagaView: View {
 
             let font = Theme.copyFont(size: 22, weight: .bold, monospaced: true,
                                       slashedZero: model.settings.slashedZero)
-            for enemy in field {
+            for enemy in game?.enemies ?? [] {
                 let p = canvasPoint(GalagaPath.position(of: enemy, columns: columns), in: size)
                 let tint = enemy.state == .diving ? Theme.tealBright : Theme.teal
                 // Copy mode keeps the character to the ear; send mode shows
@@ -301,7 +306,7 @@ struct GalagaView: View {
                     context.fill(Self.spritePath(centre: p), with: .color(tint))
                 }
             }
-            if flashUntil > Date() {
+            if flashUntil > now {
                 context.draw(Text(flashText).font(.headline).foregroundColor(Theme.tealBright),
                              at: CGPoint(x: size.width / 2, y: 14))
             }
@@ -323,7 +328,8 @@ struct GalagaView: View {
             return hypot(pa.x - location.x, pa.y - location.y) < hypot(pb.x - location.x, pb.y - location.y)
         }
         guard let nearest else { return }
-        model.playGalaga(nearest.character, wpm: game.currentWpm)
+        loop.announcer.replay(String(nearest.character))
+        announce(now: Date())
     }
 
     /// Copy mode: the arcade games' QWERTY keyboard — `InvadersKeyboard.rows`
@@ -424,42 +430,45 @@ struct GalagaView: View {
         if input == .keying { model.leaderboardCancelRun() }
         field = []
         columns = g.formation.columns
-        toneEnd = [:]
         flashUntil = .distantPast
-        lastFrame = nil
+        loop.reset()
         syncHUD(g)
         phase = .playing
     }
 
     private func step(now: Date) {
         guard phase == .playing, let game else { return }
-        defer { lastFrame = now }
-        guard let last = lastFrame else { return }
-        // Cap a long gap (the app was backgrounded) so a dive does not land
-        // in one step.
-        let dt = min(0.1, now.timeIntervalSince(last))
+        guard let dt = loop.step(to: now) else { return }
         for event in game.advance(by: dt) {
             switch event {
             case .entered(let enemy), .dived(let enemy):
-                if input == .icr {
-                    // At the ramp's current speed, which the hits and
-                    // landings in this same step may just have moved.
-                    let duration = model.playGalaga(enemy.character, wpm: game.currentWpm)
-                    toneEnd[enemy.id] = now.addingTimeInterval(duration)
-                }
+                if input == .icr { loop.arrived(id: enemy.id, text: String(enemy.character), at: now) }
             case .landed(let enemy):
-                toneEnd[enemy.id] = nil
+                loop.forget(id: enemy.id)
                 model.noteGalagaLanding(target: enemy.character, wpm: game.currentWpm)
                 Haptics.error()
                 flash("\(enemy.character) got through", for: 1.0)
             case .gameOver:
                 model.stopGalaga()
+                loop.reset()
                 phase = .over
             }
         }
-        field = game.enemies
-        columns = game.formation.columns
+        announce(now: now)
+        if field.map(\.id) != game.enemies.map(\.id) { field = game.enemies }
+        if columns != game.formation.columns { columns = game.formation.columns }
         syncHUD(game)
+    }
+
+    /// Start the sound the channel has waiting, if it is free: an enemy's
+    /// character on entry or dive, or a tapped replay (`GameAnnouncer`).
+    private func announce(now: Date) {
+        guard input == .icr, phase == .playing, let game else { return }
+        // At the ramp's current speed, which the hits and landings in this
+        // same step may just have moved.
+        loop.announce(at: now, gap: MorseTiming(wpm: game.currentWpm).characterGap) { text in
+            model.playGalaga(Character(text), wpm: game.currentWpm)
+        }
     }
 
     private func shoot(_ character: Character) {
@@ -468,8 +477,9 @@ struct GalagaView: View {
         let threat = game.mostThreatening
         let shot = game.shoot(character)
         if let hit = shot.enemy {
-            let ttr = toneEnd[hit.id].map { max(0, now.timeIntervalSince($0)) } ?? 0
-            toneEnd[hit.id] = nil
+            // From the end of its sound; one hit while its sound still waits
+            // its turn counts from when it appeared (`ArcadeFrame.reactionTime`).
+            let ttr = loop.reactionTime(hit: hit.id, at: now)
             model.noteGalagaShot(target: hit.character, chosen: hit.character, ttr: ttr, wpm: game.currentWpm)
             Haptics.success()
             flash(shot.waveCleared ? "Wave \(game.wave)!" : "+\(shot.points)", for: 0.8)

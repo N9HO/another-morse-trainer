@@ -329,6 +329,12 @@ idiom, and both READMEs and the guide move with it.
   `vail/VailClient.kt`; same transcript capture; same opt-in; board screen.
   Written blind and verified by CI only, so keep the network layer small
   and the parsing in plain Kotlin that the JUnit suite can cover.
+- Reaction time in the hear-it arcade games (Invaders, Galaga, Defender)
+  runs from the end of the enemy's sound, and a hit while that sound is
+  still playing is sent as 0 ms. The games share one sound channel
+  (`GameAnnouncer`), so an enemy can also be hit before its sound has
+  played at all, while it waits its turn; such a hit counts from when the
+  enemy appeared rather than as 0 ms.
 - Both: submission is **opt-in** and off by default; a display name is
   chosen at opt-in; a "delete my scores" action in Settings calls the
   server (needed for both stores' data-deletion requirements).

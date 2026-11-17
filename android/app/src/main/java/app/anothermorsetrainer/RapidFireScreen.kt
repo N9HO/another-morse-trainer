@@ -104,7 +104,16 @@ fun RapidFireScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {
     // ranked, and iOS ranks it with no length adjustment - the board's number is
     // the server-graded run however long it ran, and the personal best is the
     // correct count - so a run of any length is posted and recorded the same way.
-    var remaining by rememberSaveable(stateSaver = OptionalIntSaver) { mutableStateOf<Int?>(null) }
+    val remainingState = rememberSaveable(stateSaver = OptionalIntSaver) { mutableStateOf<Int?>(null) }
+    var remaining by remainingState
+    // The run's first sound waits until the screen has drawn its first frame,
+    // then SessionClock.FIRST_SOUND_BEAT_MS more: Start used to sound it
+    // before the drill screen had arrived.
+    var leadIn by remember { mutableStateOf(true) }
+    // The countdown ran out with a drill still waiting for its answer: the
+    // session is held for that answer, and moving on ends it (SessionClock).
+    val heldState = rememberSaveable { mutableStateOf(false) }
+    var timeUpHeld by heldState
 
     // Setup selections persist across launches in Settings, field for field
     // with the iOS RapidFireSettings — so a reclaimed process and the next
@@ -198,7 +207,9 @@ fun RapidFireScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {
         toneEndedStep = -1
         revealBox = response == RapidFireResponse.TYPE
         startedAtMs = System.currentTimeMillis()
+        leadIn = true
         remaining = Settings.practiceDuration.seconds
+        timeUpHeld = false
         runAttempts = 0
         runCorrect = 0
         lastSeenMs = startedAtMs
@@ -244,6 +255,7 @@ fun RapidFireScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {
     }
 
     fun finishRun() {
+        timeUpHeld = false
         recordRun()
         phase = RfPhase.SUMMARY
     }
@@ -299,6 +311,9 @@ fun RapidFireScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {
         runAttempts = transcript.count { it.correct != null }
         runCorrect = transcript.count { it.correct == true }
         lastSeenMs = System.currentTimeMillis()
+        // The countdown ran out while this drill waited for its answer: it
+        // has been answered, so the session ends here (SessionClock).
+        if (timeUpHeld) { finishRun(); return }
         drill = q.nextDrill()
         typed = ""
         keyer.clear()
@@ -311,6 +326,7 @@ fun RapidFireScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {
         if (phase != RfPhase.RUNNING || step <= 0) return@LaunchedEffect
         val d = drill ?: return@LaunchedEffect
         revealBox = response == RapidFireResponse.TYPE
+        if (leadIn) { leadIn = false; awaitScreenThenBeat() }
         player.play(d.playable, Settings.sidetoneHz, Settings.timing()) {
             toneEndedAtMs = System.currentTimeMillis()
             toneEndedStep = step
@@ -337,23 +353,17 @@ fun RapidFireScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {
         if (sent.isNotEmpty() && sent.length >= d.correct.length) advance()
     }
 
-    // Session countdown; also keyed on whether a limit exists, so the timer
-    // menu starting a countdown on an open-ended run (or dropping one)
-    // restarts the loop. Reaching zero (or subtracting the last minute) ends
-    // the run as Done does.
-    LaunchedEffect(phase, remaining == null) {
-        if (phase != RfPhase.RUNNING) return@LaunchedEffect
-        while (true) {
-            val r = remaining ?: return@LaunchedEffect
-            if (r <= 0) return@LaunchedEffect
-            delay(1000)
-            remaining = remaining?.minus(1)
-        }
-    }
-    LaunchedEffect(phase, remaining) {
-        val r = remaining
-        if (phase == RfPhase.RUNNING && r != null && r <= 0) finishRun()
-    }
+    // The session countdown (SessionKit); what reaching zero does is
+    // rememberSessionTimeUp, below.
+    SessionTick(running = phase == RfPhase.RUNNING, remaining = remainingState)
+    // At zero: end, or hold for the drill waiting on its answer (SessionKit).
+    val timer = rememberSessionTimeUp(
+        running = phase == RfPhase.RUNNING, remaining = remainingState, held = heldState,
+        // A ranked run (lbRun set) ends at 0:00 as before: held, it could score
+        // one more item and run up to 15 s longer than the runs on the board.
+        awaitingAnswer = { drill != null && response != RapidFireResponse.REVIEW && lbRun == null },
+        onEnd = { finishRun() }
+    )
 
     // Mid-session Settings, drawn over the run so the stream lives on.
     var showSettings by remember { mutableStateOf(false) }
@@ -391,16 +401,16 @@ fun RapidFireScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {
                 timerBar = {
                     SessionTimerBar(
                         remaining = remaining,
-                        onAddSeconds = { remaining = (remaining ?: 0) + it },
-                        onSubtractSeconds = { remaining = SessionClock.reduced(remaining, it) },
-                        onRemoveLimit = { remaining = null }
+                        onAddSeconds = timer::add,
+                        onSubtractSeconds = timer::subtract,
+                        onRemoveLimit = timer::removeLimit
                     )
                 },
                 response = response,
                 revealBox = revealBox,
                 typed = typed,
                 onTyped = { typed = it },
-                decoded = keyer.decodedText,
+                decoded = keyer.shownText,
                 keyPressed = keyPressed,
                 onPaddleKey = { down, ms -> keyer.touchKey(down, ms) },
                 onKey = { down ->
@@ -430,7 +440,7 @@ fun RapidFireScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {
     }
 
     if (showSettings) {
-        SessionSettingsOverlay(scope = SettingsMode.RAPID_FIRE, onClose = { showSettings = false }, previewItem = { drill?.playable })
+        SessionSettingsOverlay(scope = SettingsMode.RAPID_FIRE, onClose = { showSettings = false })
     }
     }
 }

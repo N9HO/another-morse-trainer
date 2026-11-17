@@ -321,6 +321,18 @@ final class AppModel: ObservableObject {
     /// (the configured duration under-counted: "Until I stop" logged zero).
     private var sessionStartDate: Date?
     private var sessionTimer: Timer?
+    /// When the countdown ran out with a drill still waiting for its answer:
+    /// the session is held for that answer (`SessionClock.endsAfterTimeUp`),
+    /// and the next drill ends it instead of starting. Nil otherwise.
+    private var sessionTimeUpDate: Date?
+    /// The session's first sound (a drill's, or Rapid Fire's first item) waits
+    /// for its screen: Start used to sound it while the setup sheet was
+    /// closing and the drill screen was still arriving. It is held here until
+    /// `screenArrived()`: the app calls that when the screen's transition
+    /// completes, and `startSession` itself when no new screen arrives. Then
+    /// it plays a beat later (`SessionClock.firstSoundBeat`).
+    private var awaitingScreen = false
+    private var firstSound: (() -> Void)?
     private var sessionAttempts = 0
     private var sessionCorrect = 0
     private var sessionFastest: TimeInterval?
@@ -355,6 +367,9 @@ final class AppModel: ObservableObject {
     var operatingGeneration = 0
     /// …and for the pieces of one clip (an error plays as its own piece).
     var operatingClipGeneration = 0
+    /// Clears the highlight of a demo transcript still running
+    /// (`AppModel+OperatingProcedure.swift`); nil when none is.
+    var operatingLinesEnded: (() -> Void)?
     private let speech = SpeechPlayer()
     private var toneEndDate: Date?
     private var advanceGeneration = 0
@@ -1778,21 +1793,25 @@ final class AppModel: ObservableObject {
         summary = rapidFireQuiz.summary
         lastTTR = nil
         phase = .playing
-        player.play(playable: item.playable,
-                    frequency: settings.toneFrequency,
-                    timing: timing) { [weak self] in
-            guard let self, gen == self.rapidFireGeneration,
-                  self.isRapidFire, !self.sessionEnded else { return }
-            self.rapidFireTranscript.append(
-                RapidFireResult(text: item.correct, typed: nil, correct: nil))
-            self.markPracticedToday()
-            self.sessionAttempts += 1
-            self.phase = .revealed
-            let gap = self.settings.rapidFire.pace.seconds
-            DispatchQueue.main.asyncAfter(deadline: .now() + gap) {
-                guard gen == self.rapidFireGeneration,
+        // The run's first item waits for the screen, as a drill's does.
+        whenScreenReady { [weak self] in
+            guard let self else { return }
+            self.player.play(playable: item.playable,
+                             frequency: self.settings.toneFrequency,
+                             timing: self.timing) { [weak self] in
+                guard let self, gen == self.rapidFireGeneration,
                       self.isRapidFire, !self.sessionEnded else { return }
-                self.rapidFireStep(gen: gen)
+                self.rapidFireTranscript.append(
+                    RapidFireResult(text: item.correct, typed: nil, correct: nil))
+                self.markPracticedToday()
+                self.sessionAttempts += 1
+                self.phase = .revealed
+                let gap = self.settings.rapidFire.pace.seconds
+                DispatchQueue.main.asyncAfter(deadline: .now() + gap) {
+                    guard gen == self.rapidFireGeneration,
+                          self.isRapidFire, !self.sessionEnded else { return }
+                    self.rapidFireStep(gen: gen)
+                }
             }
         }
     }
@@ -1839,6 +1858,10 @@ final class AppModel: ObservableObject {
         listenPaused = true
         listenGeneration += 1   // cancel the in-flight chain
         speech.stop()
+        // The item sounding stops too, as on Android and desktop: left to
+        // play, it ran on through the pause and was cut mid-character by the
+        // next item on resume.
+        player.stop()
         phase = .idle
         pauseSessionTimer()     // freeze the countdown while paused (issue #37)
         updateNowPlaying()
@@ -2063,7 +2086,12 @@ final class AppModel: ObservableObject {
 
     /// Begin a fresh practice session: apply the chosen learning style, reset
     /// the running tally, start the countdown (if any), and hand out a drill.
-    func startSession() {
+    func startSession(awaitingScreen: Bool = false) {
+        // The first sound always waits: for the screen (Start, from the
+        // setup sheet), or, when no new screen arrives (Practice again, a
+        // mode switch), just the beat after `start()` below.
+        self.awaitingScreen = true
+        firstSound = nil
         mode = learningMode
         sessionEnded = false
         sessionStartDate = Date()
@@ -2079,6 +2107,7 @@ final class AppModel: ObservableObject {
         newMilestone = nil
         sessionTimer?.invalidate()
         sessionTimer = nil
+        sessionTimeUpDate = nil
 
         // Contest mode runs its own clock (the real one-hour event or a sprint);
         // every other mode uses the generic practice-duration picker.
@@ -2107,16 +2136,45 @@ final class AppModel: ObservableObject {
         // clock covers the whole run (AppModel+Leaderboard.swift).
         leaderboardBeginRun()
         start()
+        if !awaitingScreen { screenArrived() }
     }
 
     private func sessionTick() {
+        if let timeUp = sessionTimeUpDate {
+            // Held for the drill that was waiting: answering it ends the
+            // session (newDrill); this only enforces the grace.
+            if SessionClock.endsAfterTimeUp(held: true, overdue: -timeUp.timeIntervalSinceNow) { endSession() }
+            return
+        }
         guard let end = sessionEndDate else { return }
         let remaining = end.timeIntervalSinceNow
         if remaining <= 0 {
             sessionRemaining = 0
-            endSession()
+            if SessionClock.endsAfterTimeUp(held: drillAwaitsAnswer, overdue: 0) {
+                endSession()
+            } else {
+                sessionTimeUpDate = Date()
+            }
         } else {
             sessionRemaining = remaining
+        }
+    }
+
+    /// A drill has been sent, or is being sent, and waits for its answer:
+    /// what holds a timed session open past its last second. Only the modes
+    /// that hand out drills one at a time (`newDrill`); Listen, the stories,
+    /// the exam, the pileups, Rapid Fire's review stream and the games run
+    /// on their own. A ranked Rapid Fire run (one being posted) ends at 0:00
+    /// as before: held, it could score one more item and run up to 15 s
+    /// longer than the runs already on the board.
+    private var drillAwaitsAnswer: Bool {
+        guard drill != nil, introduction == nil, !mode.isGame, !isListen, !isStory,
+              !isExam, !usesPileup, !isRapidFireReview else { return false }
+        if isRapidFire && leaderboardRunStart != nil { return false }
+        switch phase {
+        case .playing, .awaiting: return true
+        case .revealed: return isHeadCopy   // shown, waiting to be self-graded
+        case .idle, .answered: return false
         }
     }
 
@@ -2169,8 +2227,11 @@ final class AppModel: ObservableObject {
         if let end = sessionEndDate {
             // The arithmetic is SessionClock's, pinned by
             // fixtures/gap-timers-session-clock.json (Android and desktop
-            // run the same rule in their own SessionClock).
-            let remaining = SessionClock.added(end.timeIntervalSinceNow, by: seconds) ?? seconds
+            // run the same rule in their own SessionClock). A held session
+            // has 0 left, and the added time lifts the hold.
+            let left = sessionTimeUpDate == nil ? end.timeIntervalSinceNow : 0
+            sessionTimeUpDate = nil
+            let remaining = SessionClock.added(left, by: seconds) ?? seconds
             sessionEndDate = Date().addingTimeInterval(remaining)
             sessionRemaining = remaining
         } else {
@@ -2189,7 +2250,8 @@ final class AppModel: ObservableObject {
             return
         }
         guard !sessionEnded, seconds > 0, let end = sessionEndDate else { return }
-        let remaining = SessionClock.reduced(end.timeIntervalSinceNow, by: seconds) ?? 0
+        let left = sessionTimeUpDate == nil ? end.timeIntervalSinceNow : 0
+        let remaining = SessionClock.reduced(left, by: seconds) ?? 0
         if remaining <= 0 { sessionRemaining = 0; endSession(); return }
         sessionEndDate = Date().addingTimeInterval(remaining)
         sessionRemaining = remaining
@@ -2201,6 +2263,7 @@ final class AppModel: ObservableObject {
         guard !sessionEnded else { return }
         sessionTimer?.invalidate()
         sessionTimer = nil
+        sessionTimeUpDate = nil
         sessionEndDate = nil
         sessionRemaining = nil
     }
@@ -2216,6 +2279,9 @@ final class AppModel: ObservableObject {
         guard !sessionEnded else { return }
         sessionTimer?.invalidate()
         sessionTimer = nil
+        sessionTimeUpDate = nil
+        awaitingScreen = false
+        firstSound = nil
         sessionEndDate = nil
         advanceGeneration += 1   // cancel any pending auto-advance
         cancelHeadCopyAuto()     // cancel any pending head-copy repeat/reveal
@@ -2411,6 +2477,12 @@ final class AppModel: ObservableObject {
     }
 
     private func newDrill() {
+        // The countdown ran out while the last drill waited: that drill has
+        // now been answered, so the session ends here instead.
+        if sessionTimeUpDate != nil {
+            endSession()
+            return
+        }
         advanceGeneration += 1   // cancel any pending auto-advance
         cancelHeadCopyAuto()     // cancel any pending repeat/reveal from the last item
         resetVoiceRound()
@@ -2450,13 +2522,43 @@ final class AppModel: ObservableObject {
         }
     }
 
-    /// Sound the introduced item (again). Returns the sound's duration.
+    /// Sound the introduced item (again). Returns the sound's duration, or 0
+    /// while the session's screen is still arriving.
     @discardableResult
     func playIntroduction() -> TimeInterval {
         guard let introduction else { return 0 }
-        return player.replaySound(playable: introduction.playable,
-                                  frequency: settings.toneFrequency,
-                                  timing: timing)
+        let playable = introduction.playable
+        var duration: TimeInterval = 0
+        whenScreenReady { [weak self] in
+            guard let self else { return }
+            duration = self.player.replaySound(playable: playable,
+                                               frequency: self.settings.toneFrequency,
+                                               timing: self.timing)
+        }
+        return duration
+    }
+
+    /// Run `play` now, or, while the session's screen is still arriving, as
+    /// soon as it has (`screenArrived`). Dropped if the session moves on (an
+    /// answer, End) before then, as a pending auto-advance is.
+    private func whenScreenReady(_ play: @escaping () -> Void) {
+        guard awaitingScreen else { play(); return }
+        let token = advanceGeneration
+        firstSound = { [weak self] in
+            guard let self, self.advanceGeneration == token, !self.sessionEnded else { return }
+            play()
+        }
+    }
+
+    /// The session's screen has finished arriving: play the sound that was
+    /// waiting for it after a short beat (`SessionClock.firstSoundBeat`), so
+    /// it does not land the instant the screen settles, and the rest as they
+    /// come.
+    func screenArrived() {
+        awaitingScreen = false
+        guard let sound = firstSound else { return }
+        firstSound = nil
+        DispatchQueue.main.asyncAfter(deadline: .now() + SessionClock.firstSoundBeat) { sound() }
     }
 
     /// The learner has heard enough: remember the item as met and start the
@@ -2467,21 +2569,28 @@ final class AppModel: ObservableObject {
             settings.introducedItems.append(introduction.id)
         }
         self.introduction = nil
+        // An introduction sound still waiting for the screen must not follow
+        // the drill it introduced.
+        advanceGeneration += 1
         playCurrentTone()
     }
 
     func playCurrentTone() {
         guard let drill else { return }
         phase = .playing
-        player.play(playable: drill.playable,
-                    frequency: settings.toneFrequency,
-                    timing: timing) { [weak self] in
+        let playable = drill.playable
+        whenScreenReady { [weak self] in
             guard let self else { return }
-            self.toneEndDate = Date()   // TTR clock starts when the last tone ends
-            if self.phase == .playing {
-                self.phase = .awaiting
-                if self.usesVoiceResponse { self.beginVoiceListening() }
-                else if self.isHeadCopy { self.startHeadCopyAuto() }
+            self.player.play(playable: playable,
+                             frequency: self.settings.toneFrequency,
+                             timing: self.timing) { [weak self] in
+                guard let self else { return }
+                self.toneEndDate = Date()   // TTR clock starts when the last tone ends
+                if self.phase == .playing {
+                    self.phase = .awaiting
+                    if self.usesVoiceResponse { self.beginVoiceListening() }
+                    else if self.isHeadCopy { self.startHeadCopyAuto() }
+                }
             }
         }
     }
@@ -2496,17 +2605,13 @@ final class AppModel: ObservableObject {
                                   timing: timing)
     }
 
-    /// Settings' Preview tone: replays the current drill item, and keys PARIS
-    /// only when there is no current drill item (parity row 21: every app does
-    /// both, so the row always sounds something).
+    /// Settings' Preview tone: keys PARIS at the current settings, as every
+    /// app does. It is off during a session (`SettingsView`), where it played
+    /// over the session's own sound, so there is no drill item to replay.
     func previewTone() {
-        if drill != nil {
-            replay()
-        } else {
-            player.replaySound(playable: .text("PARIS"),
-                               frequency: settings.toneFrequency,
-                               timing: timing)
-        }
+        player.replaySound(playable: .text("PARIS"),
+                           frequency: settings.toneFrequency,
+                           timing: timing)
     }
 
     func select(_ choice: String) {
@@ -2576,12 +2681,17 @@ final class AppModel: ObservableObject {
             // A miss already holds the correction until Next — after a beat,
             // re-send the item so the learner re-hears the sound they got
             // wrong while the answer shows (issue #77). Advancing first
-            // (phase leaves .answered) cancels it.
+            // (phase leaves .answered) cancels it, and so does a Replay the
+            // learner pressed in that beat: the re-send would cut into it.
+            // Whatever is still sounding stops first, as on Android and desktop
+            // (`resendAfterMiss`): an answer is taken mid-prompt, and a Replay
+            // pressed before answering is of the same item.
+            player.stop()
             advanceGeneration += 1
             let token = advanceGeneration
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { [weak self] in
                 guard let self, self.advanceGeneration == token,
-                      self.phase == .answered else { return }
+                      self.phase == .answered, !self.player.isSounding else { return }
                 _ = self.replay()
             }
         }

@@ -1716,7 +1716,9 @@ private struct SessionSetupSheet: View {
             .safeAreaInset(edge: .bottom) {
                 Button {
                     Haptics.tap()
-                    model.startSession()
+                    // The first sound waits until the drill screen has arrived
+                    // (`onStart`'s transition calls `screenArrived`).
+                    model.startSession(awaitingScreen: true)
                     onStart()
                     dismiss()
                 } label: {

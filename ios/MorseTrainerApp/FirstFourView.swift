@@ -343,6 +343,8 @@ private struct FirstFourElementStage: View {
     @State private var feedback: (String, Bool)?
     @State private var stagePassed = false
     @State private var keyReset = 0
+    /// The stage has been left: a play scheduled before that must not sound.
+    @State private var gone = false
     @FocusState private var typing: Bool
 
     private var needed: Int { phase == .copy ? FirstFour.copyStreakToPass : FirstFour.sendStreakToPass }
@@ -365,10 +367,12 @@ private struct FirstFourElementStage: View {
             }
         }
         .onAppear {
+            gone = false
             phase = progress.openingPhase(stage)
             keyShowing = showsKey
             if phase == .copy { play() }
         }
+        .onDisappear { gone = true }
         .onChange(of: showsKey) { keyShowing = $0 }
     }
 
@@ -555,7 +559,11 @@ private struct FirstFourElementStage: View {
         } else if correct {
             feedback = ("Right — \(progress.streak) of \(needed).", true)
             if phase == .copy {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { play() }
+                // Not once the stage is left, and not over a Play the learner
+                // pressed in the meantime.
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                    if !gone, !model.player.isSounding { play() }
+                }
             }
         } else {
             let shown = FirstFour.compact(heard).isEmpty ? "nothing" : "“\(heard.uppercased())”"
@@ -585,6 +593,8 @@ private struct FirstFourSceneStage: View {
     @State private var keyReset = 0
     @State private var result: (clean: Bool, passedNow: Bool)?
     @State private var playToken = 0
+    /// The stage has been left: a beat scheduled before that must not sound.
+    @State private var gone = false
 
     /// The key is up on a send or wait beat while the run is going: the same
     /// conditions that once placed it inside `beatPanel`.
@@ -621,10 +631,12 @@ private struct FirstFourSceneStage: View {
             }
         }
         .onAppear {
+            gone = false
             round = progress.cleanRuns(stage)
             startRun()
             keyShowing = showsKey
         }
+        .onDisappear { gone = true }
         .onChange(of: showsKey) { keyShowing = $0 }
     }
 
@@ -888,7 +900,7 @@ private struct FirstFourSceneStage: View {
             } else {
                 // A short pause before the activator answers, as on the air.
                 let delay: Double = scene.current?.kind == .hear || scene.current?.kind == .copy ? 0.6 : 0
-                DispatchQueue.main.asyncAfter(deadline: .now() + delay) { beginBeat() }
+                DispatchQueue.main.asyncAfter(deadline: .now() + delay) { if !gone { beginBeat() } }
             }
         case .finished:
             break
@@ -1003,9 +1015,9 @@ private struct FirstFourKeyPanel: View {
                         .font(.caption).foregroundStyle(Theme.teal).lineLimit(1)
                 }
             }
-            Text(sender.decodedText.isEmpty ? "—" : sender.decodedText)
+            Text(sender.shownText.isEmpty ? "—" : sender.shownText)
                 .font(Theme.copyFont(size: 26, weight: .semibold, monospaced: true, slashedZero: model.settings.slashedZero))
-                .foregroundStyle(sender.decodedText.isEmpty ? Theme.textSecondary : .white)
+                .foregroundStyle(sender.shownText.isEmpty ? Theme.textSecondary : .white)
                 .lineLimit(1).minimumScaleFactor(0.5)
                 .frame(maxWidth: .infinity, minHeight: 36)
             OnScreenKey(sender: sender, height: keyHeight, hint: "Press and hold to send each dit and dah")

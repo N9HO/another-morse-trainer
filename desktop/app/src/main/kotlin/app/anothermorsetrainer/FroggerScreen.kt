@@ -1,5 +1,6 @@
 package app.anothermorsetrainer
 
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -155,6 +156,9 @@ fun FroggerScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
     var game by remember { mutableStateOf<FroggerGame?>(null) }
     var objects by remember { mutableStateOf<List<FroggerObject>>(emptyList()) }
     var frog by remember { mutableStateOf(FroggerFrog(FroggerGame.startRow, 0.5)) }
+    // The frog's row alone, for the board's description: its position moves
+    // every frame on a log, its row only on a hop.
+    var frogRow by remember { mutableIntStateOf(FroggerGame.startRow) }
     var visibleRows by remember { mutableStateOf<Set<Int>>(emptySet()) }
     var nextCueRow by remember { mutableStateOf<Int?>(null) }
     var stage by remember { mutableStateOf(FroggerLabelStage.VISIBLE) }
@@ -176,6 +180,9 @@ fun FroggerScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
     // Characters waiting to be sent (the traffic announcing itself in the
     // hidden stage), played one after another behind whatever is sounding.
     val soundQueue = remember { ArrayList<Char>() }
+    // A cue that came while a traffic character was still sounding: it waits
+    // out the gap (soundBusyUntil), then goes first.
+    val pendingCue = remember { ArrayList<Pair<Char, Int>>(1) }
     var soundBusyUntil by remember { mutableLongStateOf(0L) }
     val charResults = remember { HashMap<Char, IntArray>() }   // attempts, correct
     // The shared leaderboard (docs/high-scores-design.md, step 2): the run's
@@ -196,6 +203,7 @@ fun FroggerScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
     fun syncBoard(g: FroggerGame) {
         objects = g.objects
         frog = g.frog
+        frogRow = g.frog.row
         visibleRows = FroggerGame.lanes.map { it.row }.filter { g.isLabelVisible(it) }.toSet()
         nextCueRow = g.nextCueRow
         stage = g.labelStage
@@ -248,13 +256,33 @@ fun FroggerScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
         Stats.recordChar(ch.toString(), correct, null)
     }
 
-    /** Send a lane's cue now, ahead of anything queued. */
-    fun playCue(character: Char, row: Int, wpmNow: Double) {
-        soundQueue.clear()
+    fun sendCue(character: Char, row: Int, wpmNow: Double) {
         val secs = player.replaySound(MorseItem.Playable.Text(character.toString()), Settings.sidetoneHz, MorseTiming(wpmNow))
         val now = System.currentTimeMillis()
         soundBusyUntil = now + (secs * 1000).toLong() + 350
         cueToneEnd[row] = now + (secs * 1000).toLong()
+    }
+
+    /**
+     * Send a lane's cue ahead of anything queued: now, or, if a sound is still
+     * playing or its gap has not passed, once the gap is over (a sound still
+     * playing is cut), so the fragment and the cue do not run together.
+     */
+    fun playCue(character: Char, row: Int, wpmNow: Double) {
+        soundQueue.clear()
+        pendingCue.clear()
+        val now = System.currentTimeMillis()
+        if (now < soundBusyUntil) {
+            // Still sounding, or inside the gap after a sound: a sound still
+            // playing is cut, and the cue goes once the gap has passed.
+            if (player.isSounding) {
+                player.stop()
+                soundBusyUntil = now + 350
+            }
+            pendingCue.add(character to row)
+            return
+        }
+        sendCue(character, row, wpmNow)
     }
 
     fun startGame() {
@@ -264,6 +292,7 @@ fun FroggerScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
         game = g
         cueToneEnd.clear()
         soundQueue.clear()
+        pendingCue.clear()
         soundBusyUntil = 0L
         charResults.clear()
         flash = null
@@ -413,7 +442,10 @@ fun FroggerScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
             last = nanos
             val over = handle(g.advance(dt), g)
             val now = System.currentTimeMillis()
-            if (now >= soundBusyUntil && soundQueue.isNotEmpty()) {
+            if (now >= soundBusyUntil && pendingCue.isNotEmpty()) {
+                val (ch, row) = pendingCue.removeAt(0)
+                sendCue(ch, row, g.currentWpm)
+            } else if (now >= soundBusyUntil && soundQueue.isNotEmpty()) {
                 val next = soundQueue.removeAt(0)
                 val secs = player.replaySound(MorseItem.Playable.Text(next.toString()), Settings.sidetoneHz, MorseTiming(g.currentWpm))
                 soundBusyUntil = now + (secs * 1000).toLong() + 350
@@ -463,7 +495,7 @@ fun FroggerScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {})
             FrogPhase.RUNNING -> {
                 BackHandler { abandonRun() }
                 FroggerRun(
-                    objects = objects, frog = frog, visibleRows = visibleRows, nextCueRow = nextCueRow, stage = stage,
+                    objects = { objects }, frog = { frog }, frogRow = frogRow, visibleRows = visibleRows, nextCueRow = nextCueRow, stage = stage,
                     score = score, wave = wave, lives = lives, multiplier = multiplier, wpm = wpm,
                     flash = flash,
                     onHop = { hop(it) },
@@ -540,8 +572,11 @@ private fun FroggerSetup(
 
 @Composable
 private fun FroggerRun(
-    objects: List<FroggerObject>,
-    frog: FroggerFrog,
+    // The traffic and the frog are read only while drawing, so a frame that
+    // moves them redraws the board without recomposing the screen.
+    objects: () -> List<FroggerObject>,
+    frog: () -> FroggerFrog,
+    frogRow: Int,
     visibleRows: Set<Int>,
     nextCueRow: Int?,
     stage: FroggerLabelStage,
@@ -553,6 +588,9 @@ private fun FroggerRun(
     onSwitchMode: (TrainingMode) -> Unit
 ) {
     val measurer = rememberTextMeasurer()
+    // Each traffic label measured once per size, not every frame: there are
+    // more of them than the measurer's own cache holds.
+    val labels = remember { HashMap<Pair<Char, Float>, TextLayoutResult>() }
     Column(modifier = Modifier.fillMaxSize().widthIn(max = CONTENT_MAX_WIDTH).padding(horizontal = 16.dp)) {
         Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             TextButton(onClick = onEnd) { Text(stringResource(R.string.frogger_end_game), color = Brand.teal) }
@@ -572,7 +610,7 @@ private fun FroggerRun(
         }
         Spacer(Modifier.height(10.dp))
         val flashStyle = TextStyle(fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Brand.tealBright)
-        val boardDescription = stringResource(R.string.frogger_board_description, frog.row, FroggerGame.rows - 1)
+        val boardDescription = stringResource(R.string.frogger_board_description, frogRow, FroggerGame.rows - 1)
         Canvas(
             modifier = Modifier
                 .weight(1f)
@@ -616,7 +654,7 @@ private fun FroggerRun(
             }
 
             // Vehicles and logs, drawn twice where they straddle an edge.
-            for (obj in objects) {
+            for (obj in objects()) {
                 val w = obj.width.toFloat() * size.width
                 val h = rowHeight * (if (obj.kind == FroggerLaneKind.ROAD) 0.58f else 0.5f)
                 val y = top(obj.row) + (rowHeight - h) / 2
@@ -627,7 +665,7 @@ private fun FroggerRun(
                     if (cx + w / 2 < 0 || cx - w / 2 > size.width) continue
                     drawRoundRect(colour, Offset(cx - w / 2, y), Size(w, h), CornerRadius(radius, radius))
                     if (obj.row in visibleRows) {
-                        val measured = measurer.measure(obj.character.toString(), labelStyle)
+                        val measured = labels.getOrPut(obj.character to labelStyle.fontSize.value) { measurer.measure(obj.character.toString(), labelStyle) }
                         drawText(measured, topLeft = Offset(cx - measured.size.width / 2, y + h / 2 - measured.size.height / 2))
                     }
                 }
@@ -635,8 +673,9 @@ private fun FroggerRun(
 
             // The frog.
             val frogSize = min(rowHeight * 0.62f, size.width * FroggerGame.hop.toFloat() * 0.8f)
-            val fx = frog.x.toFloat() * size.width
-            val fy = top(frog.row) + rowHeight / 2
+            val f = frog()
+            val fx = f.x.toFloat() * size.width
+            val fy = top(f.row) + rowHeight / 2
             drawRoundRect(FROG_FROG, Offset(fx - frogSize / 2, fy - frogSize / 2), Size(frogSize, frogSize), CornerRadius(frogSize * 0.35f, frogSize * 0.35f))
             val eye = frogSize * 0.16f
             for (dx in listOf(-0.22f, 0.22f)) {
