@@ -133,7 +133,16 @@ class VailRepeater {
         client.baseUrl = serverUrl
     }
 
+    /**
+     * Between [start] and [stop]. A key edge outside it is ignored: an
+     * on-screen key let go as its screen closes can land after [stop], and
+     * with break-in on it would queue a transmit. Mirrors iOS
+     * `RepeaterModel.isRunning`.
+     */
+    private var running = false
+
     fun start() {
+        running = true
         client.onEvent = { handleEvent(it) }
         sidetone = newSidetone(txTone)
         midi.start(
@@ -153,6 +162,10 @@ class VailRepeater {
     }
 
     fun stop() {
+        // Let go of a key still held, while the client is connected, so the
+        // next start doesn't find it down; its own late key-up is then ignored.
+        touchKey(false)
+        running = false
         main.removeCallbacks(stuckKey)
         main.removeCallbacks(rosterPrune)
         client.disconnect()
@@ -305,6 +318,7 @@ class VailRepeater {
     // ---- Keying ----
 
     fun touchKey(isDown: Boolean, atMs: Long? = null) {
+        if (!running) return
         // [atMs]: when the edge happened, for the on-screen paddles (#233),
         // whose keyer times each element exactly; the straight key means "now".
         val nowMs = atMs ?: System.currentTimeMillis()
