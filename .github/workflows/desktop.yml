@@ -22,7 +22,14 @@ name: Desktop CI
 #                               certificate). Windows bills at 2x Linux, so only
 #                               what needs Windows runs there. No macOS runner.
 #
-# Nothing is published: artifacts only. Release tags will be desktop-v*.
+# Nothing is published here: artifacts only. desktop-release.yml calls this
+# workflow (workflow_call) to build a release, so what ships is exactly what
+# these jobs build and check, and publishes the artifacts as a GitHub Release.
+# Called that way, the jobs report as "Build / Desktop unit tests" and so on
+# under the release run. Runs triggered here directly (push, pull_request)
+# keep the plain job names that merge-gate.yml waits for, so adding the
+# workflow_call trigger changed nothing the gate sees. Rename a job, and
+# merge-gate.yml's name map changes with it.
 #
 # The unit-test job also runs desktop/packaging/versions.py: the shared
 # version, the AppStream metainfo and the MSIX/MSI version derivation must
@@ -47,7 +54,14 @@ on:
       - "fixtures/**"
       - ".github/workflows/desktop.yml"
   workflow_dispatch:
+  # desktop-release.yml. No inputs: the jobs read every version from
+  # desktop/app/build.gradle.kts through packaging/versions.py.
+  workflow_call:
 
+# Under workflow_call, github.workflow is the CALLER's name, so this group
+# becomes "<caller>-<ref>". desktop-release.yml uses a fixed group of its own
+# ("desktop-release"), which must stay different from that, or the called run
+# waits on its caller forever.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true

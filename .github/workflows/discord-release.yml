@@ -1,6 +1,6 @@
 name: Discord release announcement
 
-# Announces a release on Discord, for BOTH apps.
+# Announces a release on Discord, for every app.
 #
 # Triggered by the release workflows *finishing successfully* — not by the tag.
 # That ordering matters: when this fired on the tag directly, it raced the build
@@ -15,11 +15,12 @@ name: Discord release announcement
 # workflow's `tag` job uploads; a manual release run is on `main`, so its
 # head_branch names no tag. (A tag-push run from before that artifact existed
 # falls back to head_branch.) No artifact and no tag means nothing shipped, a
-# dry run for instance, and nothing is announced. Five tag shapes:
+# dry run for instance, and nothing is announced. Seven tag shapes:
 #   ios-v*          App Store submission     android-v*       Play production
 #   ios-beta-v*     TestFlight build         android-beta-v*  Play alpha/internal
 #   mac-beta-v*     Mac TestFlight build (Mac Catalyst)
-#   desktop-v*      Desktop GitHub Release (a -beta suffix marks a beta); manual runs only
+#   desktop-v*      Desktop GitHub Release   desktop-beta-v*  Desktop pre-release
+#                   (both from desktop-release.yml)
 # The changelog runs from the previous tag of the same platform, of either
 # kind, so every build lists only what is new since the one before it.
 #
@@ -39,11 +40,12 @@ on:
     workflows:
       - "iOS release (App Store upload)"
       - "Android release (Google Play upload)"
+      - "Desktop release (GitHub Releases)"
     types: [completed]
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Tag to announce (ios-v*, ios-beta-v*, mac-beta-v*, android-v*, android-beta-v* or desktop-v*)'
+        description: 'Tag to announce (ios-v*, ios-beta-v*, mac-beta-v*, android-v*, android-beta-v*, desktop-v* or desktop-beta-v*)'
         required: false
       testflight_link:
         description: 'Public TestFlight join link to include (https://testflight.apple.com/join/…)'
@@ -109,7 +111,7 @@ jobs:
             android-v*)         PLATFORM=android; KIND=release ;;
             android-beta-v*)    PLATFORM=android; KIND=beta ;;
             mac-beta-v*)        PLATFORM=mac;     KIND=beta ;;
-            desktop-v*-beta*)   PLATFORM=desktop; KIND=beta ;;
+            desktop-beta-v*)    PLATFORM=desktop; KIND=beta ;;
             desktop-v*)         PLATFORM=desktop; KIND=release ;;
             *)
               echo "::notice::'$TAG' is not a release tag (workflow: ${RUN_WORKFLOW:-manual}) — nothing to announce."
@@ -248,7 +250,11 @@ jobs:
             BLURB="A new Mac TestFlight build is out. Testers get it once Apple's beta review passes; install TestFlight from the Mac App Store first."
           elif [ "$PLATFORM" = "desktop" ]; then
             EMOJI="🖥️"; LABEL="Desktop"; COLOR=15105570
-            BLURB="New desktop downloads are on the release page."
+            if [ "$KIND" = "beta" ]; then
+              BLURB="A new desktop testing build for Windows and Linux is on the release page (marked pre-release)."
+            else
+              BLURB="New desktop downloads for Windows and Linux are on the release page."
+            fi
           else
             EMOJI="🤖"; LABEL="Android"; COLOR=3066993
             if [ "$KIND" = "beta" ]; then
