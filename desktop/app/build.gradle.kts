@@ -8,14 +8,30 @@ plugins {
 }
 
 // ---- Version ----
-// The shared app version, the same on every platform (CLAUDE.md, "Versions,
-// tags, CI"); desktopVersionCode is desktop's own build counter.
-// jpackage's MSI wants MAJOR.MINOR.PATCH with MAJOR > 0; the MSIX manifest
-// wants four parts with the last one 0 (the Store reserves it), so the MSIX
-// version is "$desktopVersionName.0" and every Store submission moves PATCH.
-// Release tags are desktop-v<versionName>.
+// desktopVersionName is the version every app shares (CLAUDE.md, "Versions,
+// tags, CI"): it moves on all three trees together, and only when the
+// maintainer says so. desktopVersionCode is desktop's own build counter: bump
+// it for every build that is released, testing builds included, and never
+// reuse one.
+//
+// The Windows packages cannot carry the shared version as it is.
+// desktopPackageVersion is MAJOR.MINOR.desktopVersionCode (e.g. 2.0.4):
+//  - the MSI's ProductVersion. Windows Installer compares only the first three
+//    fields, and jpackage derives the MSI ProductCode from vendor, name and
+//    version, so two MSIs both at 2.0.0 share a ProductCode and the second
+//    refuses to install over the first. A higher third field is a major
+//    upgrade under the fixed upgradeUuid below.
+//  - the MSIX Identity Version, as "$desktopPackageVersion.0" (desktop.yml;
+//    the Store reserves the fourth part). Every Store submission needs a
+//    higher version, and this gives one per build without a shared bump.
+// The app itself (BuildInfo, About, the Linux packages) still says 2.0.0.
+// desktop/packaging/versions.py derives the same values for CI and fails if
+// this wiring, the AppStream metainfo or the MSIX manifest disagrees.
+// Release tags: desktop-v<name>-b<code>, testing builds
+// desktop-beta-v<name>-b<code> (.github/workflows/desktop-release.yml).
 val desktopVersionName = "2.0.0"
 val desktopVersionCode = 4
+val desktopPackageVersion = desktopVersionName.split(".").take(2).joinToString(".") + ".$desktopVersionCode"
 
 kotlin {
     jvmToolchain(21)
@@ -152,6 +168,9 @@ compose.desktop {
                 // Fixed forever: the MSI upgrade code is how Windows knows a
                 // new MSI replaces the old install. Never change it.
                 upgradeUuid = "6f0d3c1e-8a2b-4f5e-9c47-2d8e1b6a0f35"
+                // MAJOR.MINOR.desktopVersionCode, so each build upgrades the
+                // last (see "Version" at the top of this file).
+                msiPackageVersion = desktopPackageVersion
                 iconFile.set(rootProject.file("packaging/icons/icon.ico"))
             }
             linux {

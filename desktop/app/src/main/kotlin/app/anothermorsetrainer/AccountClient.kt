@@ -337,7 +337,7 @@ class AccountClient(
 
     companion object {
         /** The accounts Worker. */
-        const val BASE_URL = "https://amt-accounts.n9ho-amt.workers.dev"
+        const val BASE_URL = "https://amt-accounts.n9ho.workers.dev"
 
         /** The app's client: OkHttp and the owner-only token file in [AppDirs.config]. */
         val shared: AccountClient by lazy {

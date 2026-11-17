@@ -221,6 +221,11 @@ jobs:
           fi
 
           # Map the slugs back to the real check-run names (which contain spaces).
+          # desktop.yml is also a reusable workflow (desktop-release.yml calls
+          # it), where its jobs report as "Build / Desktop unit tests" and so on;
+          # its own pull_request runs keep the plain names below, and those are
+          # the runs this gate reads. Rename a desktop.yml job and this map
+          # changes in the same PR.
           name_for() {
             case "$1" in
               MorseKit-logic-checks)   echo "MorseKit logic checks" ;;

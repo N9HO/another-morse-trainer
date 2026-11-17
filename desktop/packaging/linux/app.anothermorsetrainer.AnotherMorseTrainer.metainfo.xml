@@ -2,8 +2,10 @@
 <!--
   AppStream metadata for Flathub and Linux software centres.
   Before submitting to Flathub (docs/desktop-design.md, §6): add at least one
-  <screenshot> with an https URL hosted on anothermorsetrainer.app, and a
-  <release> entry for every desktop-v* version.
+  <screenshot> with an https URL hosted on anothermorsetrainer.app. The newest
+  <release> must name desktopVersionName (packaging/versions.py checks it in
+  CI): add one at the top when the shared version moves, and set its date to
+  the day it is released.
 -->
 <component type="desktop-application">
   <id>app.anothermorsetrainer.AnotherMorseTrainer</id>
@@ -49,7 +51,7 @@
     <control>pointing</control>
   </supports>
   <releases>
-    <release version="1.0.0" date="2026-09-30">
+    <release version="2.0.0" date="2026-11-16">
       <description>
         <p>First desktop release for Windows and Linux.</p>
       </description>
