@@ -421,8 +421,11 @@ struct GalagaView: View {
     // MARK: - Game loop
 
     private func startGame() {
+        // Hear-it mode paces entries to the sound channel, so each enemy is
+        // announced as it enters (#396); keying mode sounds nothing.
         let config = GalagaGame.Config(characters: pool, difficulty: difficulty,
-                                       characterWpm: model.settings.wpm)
+                                       characterWpm: model.settings.wpm,
+                                       pacesEntriesToSound: input == .icr)
         let g = GalagaGame(config: config)
         game = g
         // Keying mode plays no Morse, so there is no audio for the server's
@@ -439,7 +442,7 @@ struct GalagaView: View {
     private func step(now: Date) {
         guard phase == .playing, let game else { return }
         guard let dt = loop.step(to: now) else { return }
-        for event in game.advance(by: dt) {
+        for event in game.advance(by: dt, channelFree: loop.channelFree(at: now)) {
             switch event {
             case .entered(let enemy), .dived(let enemy):
                 if input == .icr { loop.arrived(id: enemy.id, text: String(enemy.character), at: now) }

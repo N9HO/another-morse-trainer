@@ -110,15 +110,21 @@ public final class GalagaGame {
         public var lives: Int
         /// The learner's character speed: where the speed ramp ends.
         public var characterWpm: Double
+        /// Hold each entry until the sound channel is free (hear-it mode), so
+        /// every enemy is announced as it enters: see `advance(by:channelFree:)`.
+        /// Off for keying mode, which sounds nothing.
+        public var pacesEntriesToSound: Bool
 
         public init(characters: [Character],
                     difficulty: InvadersDifficulty = .normal,
                     lives: Int = 3,
-                    characterWpm: Double = 20) {
+                    characterWpm: Double = 20,
+                    pacesEntriesToSound: Bool = false) {
             self.characters = characters
             self.difficulty = difficulty
             self.lives = lives
             self.characterWpm = characterWpm
+            self.pacesEntriesToSound = pacesEntriesToSound
         }
 
         /// Where a game's speed starts: `GalagaGame.rampStart(characterWpm:)`.
@@ -251,6 +257,8 @@ public final class GalagaGame {
     public private(set) var released = 0
 
     private var sinceEntry: Double
+    /// A paced entry fell due while the channel was busy and is waiting for it.
+    private var entryWaiting = false
     private var sinceDive = 0.0
     private var nextId = 1
 
@@ -309,8 +317,19 @@ public final class GalagaGame {
     /// reaches the bottom costs a life, the entry clock releases the next of
     /// the formation and the dive clock sends one down. Returns what
     /// happened, in order. A finished game ignores time.
+    ///
+    /// `channelFree` is whether the sound channel could announce a new enemy
+    /// now (`GameAnnouncer.isFree(at:)`). With `pacesEntriesToSound` an entry
+    /// that falls due while it is not free waits: the entry clock stops at
+    /// the interval, and the enemy is released on the first step the channel
+    /// is free, at the start of its path; the next falls due a full interval
+    /// later. A release makes the channel busy, so one step releases at most
+    /// one paced entry. At the top waves the entries then come as fast as
+    /// Morse can announce them, never faster, and each is heard as it enters
+    /// (#396). Flights and dives never wait. A game that does not pace ignores
+    /// `channelFree`. Pinned by `fixtures/galaga-pacing.json`.
     @discardableResult
-    public func advance(by seconds: Double) -> [GalagaEvent] {
+    public func advance(by seconds: Double, channelFree: Bool = true) -> [GalagaEvent] {
         guard !isOver, seconds > 0 else { return [] }
         var events: [GalagaEvent] = []
         elapsed += seconds
@@ -345,8 +364,17 @@ public final class GalagaGame {
         }
 
         if released < formation.size {
-            sinceEntry += seconds
+            // A waiting entry is already due; its clock does not run on.
+            if !entryWaiting { sinceEntry += seconds }
+            var free = channelFree || !config.pacesEntriesToSound
             while sinceEntry >= entryInterval && released < formation.size {
+                guard free else {
+                    sinceEntry = entryInterval
+                    entryWaiting = true
+                    break
+                }
+                if config.pacesEntriesToSound { free = false }
+                entryWaiting = false
                 sinceEntry -= entryInterval
                 // Born partway along when the step overshot its release
                 // time, so a long frame does not gift it extra hang time.
@@ -406,6 +434,7 @@ public final class GalagaGame {
             wave += 1
             released = 0
             sinceEntry = -Self.waveGap
+            entryWaiting = false
             sinceDive = 0
             cleared = true
         }

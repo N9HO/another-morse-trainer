@@ -335,6 +335,29 @@ idiom, and both READMEs and the guide move with it.
   (`GameAnnouncer`), so an enemy can also be hit before its sound has
   played at all, while it waits its turn; such a hit counts from when the
   enemy appeared rather than as 0 ms.
+- CW Galaga paces its entries to that channel in hear-it mode (#396): an
+  entry that falls due while a sound is playing, in its gap or waiting its
+  turn waits until the channel is free, so each enemy's sound starts as it
+  enters (`GalagaGame.advance(by:channelFree:)`, pinned by
+  `fixtures/galaga-pacing.json`). Before this, the top waves entered an
+  enemy every 0.5 s, faster than Morse at 15–20 WPM can announce them, and
+  with a large character set up to a third of enemies dived and landed
+  before they had been heard. What that does to the board: from about
+  wave 12 on, at the slower speeds and with the larger sets, every enemy is
+  now heard before it can land, so runs there lose fewer lives to enemies
+  nobody could have named, last longer and post more hits and fewer
+  landings; the entries come slower than the 0.5 s floor there (about one
+  per sound plus a character gap). At 25–30 WPM with the beginner set the
+  channel already kept up, and those runs are nearly unchanged. So Galaga
+  runs before and after the change are not like-for-like at the slow
+  speeds: a post-change run at 15–20 WPM with the full set can rank higher
+  for the same ear, mostly because it lasts longer (the metric sums speed
+  over correct items). The server needs no change: it grades the
+  transcript and checks no entry schedule, and its plausibility bounds are
+  lower bounds on time (playback, total duration), which slower entries
+  cannot trip. The Galaga board may want resetting, or its older rows
+  marking, when this ships. Keying-mode runs sound nothing, are not paced, and stay
+  unranked as before.
 - Both: submission is **opt-in** and off by default; a display name is
   chosen at opt-in; a "delete my scores" action in Settings calls the
   server (needed for both stores' data-deletion requirements).

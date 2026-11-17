@@ -263,7 +263,10 @@ fun GalagaScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) 
     fun startGame() {
         val g = GalagaGame(GalagaGame.Config(
             characters = characterPool(), difficulty = difficulty,
-            characterWpm = Settings.characterWpm
+            characterWpm = Settings.characterWpm,
+            // Hear-it mode paces entries to the sound channel, so each enemy
+            // is announced as it enters (#396); keying mode sounds nothing.
+            pacesEntriesToSound = input == InvadersInput.ICR
         ))
         game = g
         field = emptyList()
@@ -385,7 +388,7 @@ fun GalagaScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}) 
             val dt = ((nanos - last) / 1e9).coerceAtMost(0.1)
             last = nanos
             var over = false
-            for (event in g.advance(dt)) {
+            for (event in g.advance(dt, channelFree = announcer.isFreeNow())) {
                 when (event) {
                     is GalagaEvent.Entered, is GalagaEvent.Dived -> if (input == InvadersInput.ICR) {
                         val enemy = if (event is GalagaEvent.Entered) event.enemy else (event as GalagaEvent.Dived).enemy
