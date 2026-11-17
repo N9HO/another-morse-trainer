@@ -58,6 +58,13 @@ class ArcadeFrame {
         return max(0, now.timeIntervalSince(from))
     }
 
+    /// Whether the channel could announce a new enemy at `now`, on the same
+    /// clock `announce` keeps (`GameAnnouncer.isFree(at:)`): CW Galaga holds
+    /// a due entry until it is.
+    func channelFree(at now: Date) -> Bool {
+        announcer.isFree(at: now.timeIntervalSinceReferenceDate)
+    }
+
     /// Plays what the channel has waiting, if it is free: `send` sounds the
     /// text and returns its length, and the channel is free again `gap`
     /// after it ends (the games pass a character gap: a word gap queued

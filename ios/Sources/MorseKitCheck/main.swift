@@ -5550,6 +5550,76 @@ if let fx = loadGalagaFixture() {
     check("fixtures/galaga.json loads and decodes", false)
 }
 
+// CW Galaga's entries paced to the sound channel (#396), against
+// fixtures/galaga-pacing.json - read by this harness AND by the android and
+// desktop GalagaPacingTest. Expected values come from the fixture's rule, not
+// from running either port.
+struct GalagaPacingFixture: Decodable {
+    struct ChannelStep: Decodable { let at: Double; let `do`: String; let id: Int?; let text: String?; let free: Bool }
+    struct Channel: Decodable { let durations: [String: Double]; let gap: Double; let steps: [ChannelStep] }
+    struct Entry: Decodable { let id: Int; let progress: Double }
+    struct Step: Decodable { let advance: Double; let channelFree: Bool; let entered: [Entry]; let released: Int }
+    struct Scenario: Decodable { let name: String; let paced: Bool; let steps: [Step] }
+    let channel: Channel
+    let scenarios: [Scenario]
+}
+
+print("\nCW Galaga entries paced to the sound (fixtures/galaga-pacing.json):")
+do {
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent()
+        .deletingLastPathComponent().deletingLastPathComponent()
+    if let data = try? Data(contentsOf: root.appendingPathComponent("fixtures/galaga-pacing.json")),
+       let fx = try? JSONDecoder().decode(GalagaPacingFixture.self, from: data) {
+        var announcer = GameAnnouncer()
+        var channelOK = !fx.channel.steps.isEmpty
+        for (j, step) in fx.channel.steps.enumerated() {
+            switch step.do {
+            case "arrive": announcer.arrived(id: step.id ?? -1, text: step.text ?? "?")
+            case "replay": announcer.replay(step.text ?? "?")
+            case "forget": announcer.forget(id: step.id ?? -1)
+            case "reset": announcer.reset()
+            case "next":
+                if let sound = announcer.next(at: step.at) {
+                    announcer.started(at: step.at, duration: fx.channel.durations[sound.text] ?? -1, gap: fx.channel.gap)
+                } else {
+                    channelOK = false
+                    print("      ↳ channel step \(j): nothing to start at \(step.at)")
+                }
+            case "check": break
+            default:
+                channelOK = false
+                print("      ↳ channel step \(j): unknown step '\(step.do)'")
+            }
+            if announcer.isFree(at: step.at) != step.free {
+                channelOK = false
+                print("      ↳ channel step \(j) (\(step.do) at \(step.at)): isFree \(!step.free), fixture says \(step.free)")
+            }
+        }
+        check("galaga pacing: the channel is free when the fixture says, across \(fx.channel.steps.count) steps", channelOK)
+        check("galaga pacing: the fixture has scenarios", !fx.scenarios.isEmpty)
+        for sc in fx.scenarios {
+            let g = GalagaGame(config: .init(characters: ["K"], pacesEntriesToSound: sc.paced),
+                               rng: SeededRNG(seed: 1))
+            var ok = true
+            for (j, step) in sc.steps.enumerated() {
+                let entered = g.advance(by: step.advance, channelFree: step.channelFree).compactMap { ev -> GalagaEnemy? in
+                    if case .entered(let e) = ev { return e } else { return nil }
+                }
+                let match = entered.count == step.entered.count
+                    && zip(entered, step.entered).allSatisfy { $0.id == $1.id && abs($0.progress - $1.progress) < 1e-9 }
+                if !match || g.released != step.released {
+                    ok = false
+                    print("      ↳ step \(j): entered \(entered.map { ($0.id, $0.progress) }), released \(g.released); fixture says \(step.entered.map { ($0.id, $0.progress) }), \(step.released)")
+                }
+            }
+            check("galaga pacing: \(sc.name)", ok)
+        }
+    } else {
+        check("fixtures/galaga-pacing.json loads and decodes", false)
+    }
+}
+
 // Morse Defender (#188), against fixtures/defender.json — read by this harness
 // AND by the Kotlin DefenderTest. The expected values were worked out from the
 // rules in the fixture's derivation block, not captured from either port.

@@ -90,7 +90,13 @@ class GalagaGame(
         val difficulty: InvadersDifficulty = InvadersDifficulty.NORMAL,
         val lives: Int = 3,
         /** The learner's character speed: where the speed ramp ends. */
-        val characterWpm: Double = 20.0
+        val characterWpm: Double = 20.0,
+        /**
+         * Hold each entry until the sound channel is free (hear-it mode), so
+         * every enemy is announced as it enters: see [advance]. Off for keying
+         * mode, which sounds nothing.
+         */
+        val pacesEntriesToSound: Boolean = false
     ) {
         /** Where a game's speed starts: [GalagaGame.rampStart]. */
         val startWpm: Double get() = rampStart(characterWpm)
@@ -140,6 +146,8 @@ class GalagaGame(
 
     // The first entry comes one interval in, as every later one does.
     private var sinceEntry = 0.0
+    /** A paced entry fell due while the channel was busy and is waiting for it. */
+    private var entryWaiting = false
     private var sinceDive = 0.0
     private var nextId = 1
 
@@ -167,8 +175,19 @@ class GalagaGame(
      * reaches the bottom costs a life, the entry clock releases the next of
      * the formation and the dive clock sends one down. Returns what happened,
      * in order. A finished game ignores time.
+     *
+     * [channelFree] is whether the sound channel could announce a new enemy
+     * now ([GameAnnouncer.isFree]). With [Config.pacesEntriesToSound] an entry
+     * that falls due while it is not free waits: the entry clock stops at the
+     * interval, and the enemy is released on the first step the channel is
+     * free, at the start of its path; the next falls due a full interval
+     * later. A release makes the channel busy, so one step releases at most
+     * one paced entry. At the top waves the entries then come as fast as
+     * Morse can announce them, never faster, and each is heard as it enters
+     * (#396). Flights and dives never wait. A game that does not pace ignores
+     * [channelFree]. Pinned by `fixtures/galaga-pacing.json`.
      */
-    fun advance(seconds: Double): List<GalagaEvent> {
+    fun advance(seconds: Double, channelFree: Boolean = true): List<GalagaEvent> {
         if (isOver || seconds <= 0) return emptyList()
         val events = ArrayList<GalagaEvent>()
         elapsed += seconds
@@ -199,8 +218,17 @@ class GalagaGame(
         }
 
         if (released < formation.size) {
-            sinceEntry += seconds
+            // A waiting entry is already due; its clock does not run on.
+            if (!entryWaiting) sinceEntry += seconds
+            var free = channelFree || !config.pacesEntriesToSound
             while (sinceEntry >= entryInterval && released < formation.size) {
+                if (!free) {
+                    sinceEntry = entryInterval
+                    entryWaiting = true
+                    break
+                }
+                if (config.pacesEntriesToSound) free = false
+                entryWaiting = false
                 sinceEntry -= entryInterval
                 // Born partway along when the step overshot its release time,
                 // so a long frame does not gift it extra hang time.
@@ -258,6 +286,7 @@ class GalagaGame(
             wave += 1
             released = 0
             sinceEntry = -waveGap
+            entryWaiting = false
             sinceDive = 0.0
             cleared = true
         }

@@ -30,6 +30,12 @@ fun pixelSprite(pattern: List<String>, px: Float, tint: Color): ImageBitmap {
 }
 
 /**
+ * Whether the channel could announce a new enemy now, on the clock [playNext]
+ * keeps ([GameAnnouncer.isFree]): CW Galaga holds a due entry until it is.
+ */
+fun GameAnnouncer.isFreeNow(): Boolean = isFree(System.nanoTime() / 1e9)
+
+/**
  * Plays what the channel has waiting, if it is free, at [timing] in the
  * sidetone pitch: a new enemy's character or callsign, or a tapped replay.
  * An arrival's end goes to [toneEnd], so a hit's reaction time runs from the

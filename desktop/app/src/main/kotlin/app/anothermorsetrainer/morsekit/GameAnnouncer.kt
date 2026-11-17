@@ -63,6 +63,16 @@ class GameAnnouncer {
     }
 
     /**
+     * Whether the channel could start a new enemy's sound at [now]: nothing is
+     * sounding, the gap after the last sound has passed, and no arrival is
+     * waiting its turn. A waiting replay does not count, since an arrival goes
+     * ahead of it. CW Galaga holds a due entry until this is true
+     * ([GalagaGame.advance] with `channelFree`), so every enemy is heard the
+     * moment it enters. Pinned by `fixtures/galaga-pacing.json`.
+     */
+    fun isFree(now: Double): Boolean = now >= freeAt && arrivals.isEmpty()
+
+    /**
      * The sound to start at [now], if the channel is free and one is waiting.
      * The caller plays it and reports its length with [started].
      */

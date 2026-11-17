@@ -1,0 +1,81 @@
+{
+  "$comment": [
+    "CW Galaga's entries paced to the sound channel (#396), pinned for all three",
+    "ports: GameAnnouncer.isFree and GalagaGame.advance(channelFree) in",
+    "ios/Sources/MorseKit/{GameAnnouncer,Galaga}.swift and",
+    "{android,desktop}/.../morsekit/{GameAnnouncer,Galaga}.kt. Read by",
+    "ios/Sources/MorseKitCheck/main.swift and the android and desktop",
+    "GalagaPacingTest. Data, not code - see CLAUDE.md's separate-ports rule.",
+    "",
+    "Every expected value below was worked out by hand from the rules in",
+    "'derivation', not captured from any port. Do not regenerate it to make a",
+    "failing test pass; change it only when a rule is meant to change."
+  ],
+  "derivation": {
+    "problem": "at its top waves CW Galaga enters an enemy every 0.5 s (0.375 s on Fast), faster than Morse at 15-20 WPM can announce them one at a time; announcements queued and up to a third of enemies dived and landed before their sound had played",
+    "channelFree": "the sound channel is free at a time when nothing is sounding, the gap after the last sound has passed, and no arrival is waiting its turn. A waiting replay does not count: an arrival is announced ahead of it",
+    "rule": "when the game paces its entries to the sound (hear-it mode), an entry that falls due while the channel is not free waits: the entry clock stops at the interval and the enemy is released on the first step the channel is free, at the start of its path (progress 0); the next entry falls due a full entryInterval after that release. A release makes the channel busy, so one step releases at most one paced entry. An entry released on time, on a free channel, is born partway along when the step overshot its due time, as before",
+    "unpaced": "a game that does not pace (keying mode sounds nothing) ignores the channel and keeps the old schedule, releasing every entry a long step overshot",
+    "unchanged": "flights, dives, the dive clock, the formation, timings and scoring are untouched: a held entry only waits",
+    "why it is fair": "a paced entry's sound starts the step it enters, so a listener who answers 0.6 s after the sound ends shoots it at most longest-character + 0.6 s after entry (1.52 + 0.6 = 2.12 s for 0 at 15 WPM); the earliest it can land is entryTime + diveTime after entry (3.0 s on Normal, 2.25 s on Fast)",
+    "game": "every scenario is wave 1 on Normal with a one-character pool [K]: entryInterval 1.4 s, entryTime 2.4 s, the first entry due 1.4 s in. 'entered' lists the Entered events of that step, in order, with the enemy's id and its progress along its entry path; 'released' is how many of the wave's formation have been released after the step"
+  },
+  "channel": {
+    "$comment": "Steps on one GameAnnouncer, in order. 'next' takes the sound the channel has at 'at' and starts it there, lasting durations[text] then 'gap'. 'check' does nothing. 'free' is isFree(at) after the step.",
+    "durations": { "E": 0.25, "K": 0.5 },
+    "gap": 0.375,
+    "steps": [
+      { "at": 0, "do": "check", "free": true, "note": "a new channel is free" },
+      { "at": 0, "do": "arrive", "id": 1, "text": "K", "free": false, "note": "an arrival waiting its turn holds it" },
+      { "at": 0, "do": "next", "free": false, "note": "K sounds 0 to 0.5" },
+      { "at": 0.5, "do": "check", "free": false, "note": "in the gap after K" },
+      { "at": 0.875, "do": "check", "free": true, "note": "K and its gap are over" },
+      { "at": 0.875, "do": "replay", "text": "E", "free": true, "note": "a waiting replay does not hold an entry" },
+      { "at": 0.875, "do": "arrive", "id": 2, "text": "K", "free": false },
+      { "at": 0.875, "do": "forget", "id": 2, "free": true, "note": "a forgotten arrival no longer holds it" },
+      { "at": 0.875, "do": "next", "free": false, "note": "the replay E sounds 0.875 to 1.125, free at 1.5" },
+      { "at": 1.25, "do": "check", "free": false },
+      { "at": 1.5, "do": "check", "free": true },
+      { "at": 1.5, "do": "arrive", "id": 3, "text": "K", "free": false },
+      { "at": 1.5, "do": "reset", "free": true, "note": "a reset drops what waits and frees the channel" }
+    ]
+  },
+  "scenarios": [
+    {
+      "name": "on a free channel an entry comes on the interval, as before",
+      "paced": true,
+      "steps": [
+        { "advance": 1.375, "channelFree": true, "entered": [], "released": 0 },
+        { "advance": 0.125, "channelFree": true, "entered": [ { "id": 1, "progress": 0.041666666667 } ], "released": 1 }
+      ]
+    },
+    {
+      "name": "a due entry waits while the channel is busy, then starts its path from the beginning",
+      "paced": true,
+      "steps": [
+        { "advance": 1.5, "channelFree": false, "entered": [], "released": 0 },
+        { "advance": 0.25, "channelFree": false, "entered": [], "released": 0 },
+        { "advance": 0.125, "channelFree": true, "entered": [ { "id": 1, "progress": 0 } ], "released": 1 },
+        { "advance": 1.375, "channelFree": true, "entered": [], "released": 1, "note": "the next is due a full interval after the held one's release" },
+        { "advance": 0.125, "channelFree": true, "entered": [ { "id": 2, "progress": 0.041666666667 } ], "released": 2 }
+      ]
+    },
+    {
+      "name": "a long step releases one paced entry; the next waits for the channel",
+      "paced": true,
+      "steps": [
+        { "advance": 3.0, "channelFree": true, "entered": [ { "id": 1, "progress": 0.666666666667 } ], "released": 1 },
+        { "advance": 0.0625, "channelFree": false, "entered": [], "released": 1 },
+        { "advance": 0.0625, "channelFree": true, "entered": [ { "id": 2, "progress": 0 } ], "released": 2 }
+      ]
+    },
+    {
+      "name": "a game that does not pace (keying) ignores the channel",
+      "paced": false,
+      "steps": [
+        { "advance": 1.5, "channelFree": false, "entered": [ { "id": 1, "progress": 0.041666666667 } ], "released": 1 },
+        { "advance": 3.0, "channelFree": false, "entered": [ { "id": 2, "progress": 0.708333333333 }, { "id": 3, "progress": 0.125 } ], "released": 3 }
+      ]
+    }
+  ]
+}
