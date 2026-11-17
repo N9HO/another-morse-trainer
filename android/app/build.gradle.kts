@@ -25,7 +25,7 @@ android {
         // app's runtime behaviour on Android 17 devices, which nothing here can
         // test (the smoke test emulator runs API 34). Move it as its own change.
         targetSdk = 36
-        versionCode = 31
+        versionCode = 32
         versionName = "2.0.0"
     }
 

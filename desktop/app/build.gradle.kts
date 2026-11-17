@@ -15,7 +15,7 @@ plugins {
 // version is "$desktopVersionName.0" and every Store submission moves PATCH.
 // Release tags are desktop-v<versionName>.
 val desktopVersionName = "2.0.0"
-val desktopVersionCode = 3
+val desktopVersionCode = 4
 
 kotlin {
     jvmToolchain(21)
