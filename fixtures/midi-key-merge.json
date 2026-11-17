@@ -27,7 +27,7 @@
     "held": "A held note keys the logical key as it comes, at its own time; each held note is held separately.",
     "keyer": "A keyer note presses its paddle unless another note already holds that paddle (1 and 20 are both dit), and releases it only when the last note holding it goes up. The merge itself sounds nothing: the keyer's tone comes back in as tone events.",
     "merge": "The logical key is down while any held note is down or the keyer's tone is on; an action only when that changes, at the time of the input that changed it.",
-    "release": "Release lets go of every note. If a note holds a keyer paddle or the keyer's tone is on, the caller is told to stop the keyer first (an element in progress is cut, not finished). Then the key goes up at the release's time if it was down. A tone-off from the stopped keyer afterwards changes nothing."
+    "release": "Release lets go of every note. The caller is always told to stop the keyer first (an element in progress is cut, not finished): the merge can't know the keyer is idle, because with no paddle held and its tone off it may still owe a remembered dit or dah, or iambic B's extra element, and stopping an idle keyer emits nothing. Then the key goes up at the release's time if it was down. A tone-off from the stopped keyer afterwards changes nothing."
   },
   "cases": [
     {
@@ -79,10 +79,10 @@
       "actions": [["key", "down", 0], ["paddle", "dit", "down"], ["key", "up", 70], ["paddle", "dit", "up"]]
     },
     {
-      "name": "Release with a held note down lets the key up and leaves an idle keyer alone",
+      "name": "Release with a held note down stops the keyer anyway and lets the key up",
       "adapter": "other",
       "events": [[0, "down", 0], ["release", 100]],
-      "actions": [["key", "down", 0], ["key", "up", 100]]
+      "actions": [["key", "down", 0], ["stop"], ["key", "up", 100]]
     },
     {
       "name": "Release with a paddle held stops the keyer and lets the key up at once",
@@ -100,13 +100,31 @@
       "name": "After a release the merge starts clean",
       "adapter": "other",
       "events": [[0, "down", 0], ["release", 10], [0, "up", 20], [0, "down", 30], [0, "up", 40]],
-      "actions": [["key", "down", 0], ["key", "up", 10], ["key", "down", 30], ["key", "up", 40]]
+      "actions": [["key", "down", 0], ["stop"], ["key", "up", 10], ["key", "down", 30], ["key", "up", 40]]
     },
     {
-      "name": "Notes that go nowhere, and a release with nothing held, do nothing",
+      "name": "Notes that go nowhere do nothing; a release with nothing held still stops the keyer",
       "adapter": "passthrough",
       "events": [[60, "down", 0], [60, "up", 10], ["release", 20]],
-      "actions": []
+      "actions": [["stop"]]
+    },
+    {
+      "name": "A note already down that goes down again does nothing, held or keyer",
+      "adapter": "other",
+      "events": [[0, "down", 0], [0, "down", 50], [20, "down", 60], [20, "down", 70], [0, "up", 100], [20, "up", 110]],
+      "actions": [["key", "down", 0], ["paddle", "dit", "down"], ["key", "up", 100], ["paddle", "dit", "up"]]
+    },
+    {
+      "name": "In Passthrough, note 2 presses the keyer's dah paddle and its tone keys the key",
+      "adapter": "passthrough",
+      "events": [[2, "down", 0], ["tone", "on", 0], [2, "up", 100], ["tone", "off", 180]],
+      "actions": [["paddle", "dah", "down"], ["key", "down", 0], ["paddle", "dah", "up"], ["key", "up", 180]]
+    },
+    {
+      "name": "In Passthrough, note 0 is still a held note",
+      "adapter": "passthrough",
+      "events": [[0, "down", 0], [0, "up", 120]],
+      "actions": [["key", "down", 0], ["key", "up", 120]]
     }
   ]
 }

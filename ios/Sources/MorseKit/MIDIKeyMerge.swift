@@ -68,12 +68,13 @@ public struct MIDIKeyMerge: Sendable {
     }
 
     /// Let go of everything at `at`: the screen is going away, or the key was
-    /// unplugged. A keyer that holds a paddle or is still sounding is stopped
-    /// (its element is cut, not finished), and the key goes up now. The
-    /// stopped keyer's own tone-off then changes nothing.
+    /// unplugged. The keyer is always stopped first (its element is cut, not
+    /// finished): with no paddle held and its tone off it may still owe a
+    /// remembered dit or dah, or iambic B's extra element, which the merge
+    /// can't see, and stopping an idle keyer emits nothing. Then the key goes
+    /// up now. The stopped keyer's own tone-off then changes nothing.
     public mutating func releaseAll(at: Int64) -> [Action] {
-        var actions: [Action] = []
-        if !keyed.isEmpty || keyerDown { actions.append(.stopKeyer) }
+        let actions: [Action] = [.stopKeyer]
         held.removeAll()
         keyed.removeAll()
         keyerDown = false

@@ -98,6 +98,9 @@ class MidiKeyInput {
     fun start(onKey: (isDown: Boolean, atMs: Long) -> Unit, onConnected: (String?) -> Unit) {
         this.onKey = onKey
         this.onConnected = onConnected
+        // A note posted to the main thread after the last stop() may have left
+        // state in the merge: start clean, as iOS does with a new router.
+        merge = MidiKeyMerge()
         startKeyer()
         if (!isSupported) { onConnected(null); return }
         onConnected(null)
@@ -176,8 +179,8 @@ class MidiKeyInput {
             runCatching { gone.device.close() }
         }
         // The unplugged key can't send its note-offs any more: let go of its
-        // notes, and cut the keyer's tone at once if it holds a paddle or is
-        // still sounding.
+        // notes, and stop the keyer at once (it may still be sounding, or owe
+        // a remembered element after the paddles let go).
         perform(merge.releaseAll(System.nanoTime()))
         onConnected?.invoke(open.lastOrNull()?.name)
     }
