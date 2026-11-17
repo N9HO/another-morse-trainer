@@ -432,7 +432,7 @@ struct InvadersView: View {
         guard input == .icr, phase == .playing, let game else { return }
         // At the ramp's current speed (#178), which the hits and landings in
         // this same step may just have moved.
-        loop.announce(at: now, wordGap: MorseTiming(wpm: game.currentWpm).wordGap) { text in
+        loop.announce(at: now, gap: MorseTiming(wpm: game.currentWpm).characterGap) { text in
             model.playInvader(Character(text), wpm: game.currentWpm)
         }
     }

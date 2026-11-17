@@ -2,12 +2,12 @@
   "$comment": "The hear-it arcade games' one sound channel (Morse Invaders, CW Galaga, Morse Defender), consumed by the iOS MorseKitCheck harness, android GameAnnouncerTest and desktop GameAnnouncerTest. Data, not code - see CLAUDE.md's separate-ports rule. Expected plays are derived from the rules in `derivation`, not captured from any implementation.",
   "derivation": {
     "problem": "a new enemy's sound (an invader's or Galaga enemy's character, a Defender callsign) and a tapped replay each replaced whatever was sounding, so one cut into the other mid-character and the two ran together",
-    "channel": "one sound at a time: a sound asked for while another plays waits until that one has ended and a word space (at the game's speed) has passed; on a free channel it starts at once",
+    "channel": "one sound at a time: a sound asked for while another plays waits until that one has ended and the gap has passed (the games use a character space at their speed); on a free channel it starts at once",
     "arrivals": "new enemies are announced in the order they arrived; one already waiting is not queued twice (a Galaga enemy can dive before its entry has been heard)",
     "replay": "a tap queues one replay, heard after any arrival already waiting; a later tap replaces a replay still waiting",
     "forget": "an enemy shot, destroyed or landed before its turn is never announced; one already sounding plays out",
     "reset": "a new game, or the end of one, drops everything waiting and frees the channel",
-    "runner": "apply each step in order; after each one, if the announcer has a sound to start at that step's time, record it and report it started there, lasting `durations[text]`, followed by `wordGap`. `plays` lists every start, in order. Times are seconds, chosen to be exact in binary."
+    "runner": "apply each step in order; after each one, if the announcer has a sound to start at that step's time, record it and report it started there, lasting `durations[text]`, followed by `gap`. `plays` lists every start, in order. Times are seconds, chosen to be exact in binary."
   },
   "durations": {
     "E": 0.25,
@@ -16,7 +16,7 @@
     "Q": 0.75,
     "CQ": 1.5
   },
-  "wordGap": 0.5,
+  "gap": 0.5,
   "scenarios": [
     {
       "name": "an arrival on a free channel is announced at once",
@@ -28,7 +28,7 @@
       ]
     },
     {
-      "name": "a tap during an announcement waits for it and a word space",
+      "name": "a tap during an announcement waits for it and the gap",
       "steps": [
         { "at": 0, "do": "arrive", "id": 1, "text": "K" },
         { "at": 0.25, "do": "replay", "text": "E" },
@@ -109,7 +109,7 @@
       ]
     },
     {
-      "name": "the channel is free again exactly when the word space ends",
+      "name": "the channel is free again exactly when the gap ends",
       "steps": [
         { "at": 0, "do": "arrive", "id": 1, "text": "E" },
         { "at": 0.75, "do": "arrive", "id": 2, "text": "T" }

@@ -7,7 +7,9 @@ import Foundation
 /// mid-character and the two ran together.
 ///
 /// Now a sound asked for while another plays waits until that one has ended
-/// and a word space has passed; on a free channel it starts at once. New
+/// and the caller's gap has passed (a character space at the game's speed:
+/// each enemy stays a separate letter, and the channel keeps up at the fastest
+/// waves); on a free channel it starts at once. New
 /// enemies are announced in the order they arrived, and one already waiting
 /// is not queued twice. A tap queues one replay, heard after any announcement
 /// already waiting, and a later tap replaces it. An enemy shot, destroyed or
@@ -17,7 +19,7 @@ import Foundation
 ///
 /// The announcer only decides; the screen plays. Each frame (and after a tap)
 /// it asks `next(at:)` for a sound to start, plays it, and reports how long it
-/// lasts with `started(at:duration:wordGap:)`. Times are seconds on any one
+/// lasts with `started(at:duration:gap:)`. Times are seconds on any one
 /// clock the caller keeps to.
 public struct GameAnnouncer: Sendable {
     public enum Sound: Equatable, Sendable {
@@ -36,7 +38,7 @@ public struct GameAnnouncer: Sendable {
 
     private var arrivals: [(id: Int, text: String)] = []
     private var waitingReplay: String?
-    /// When the channel is free: the last sound's end plus a word space.
+    /// When the channel is free: the last sound's end plus the gap.
     private var freeAt = -Double.infinity
 
     public init() {}
@@ -82,8 +84,8 @@ public struct GameAnnouncer: Sendable {
     }
 
     /// The sound `next` returned started at `now` and lasts `duration`; the
-    /// channel is free again a `wordGap` after it ends.
-    public mutating func started(at now: Double, duration: Double, wordGap: Double) {
-        freeAt = now + duration + wordGap
+    /// channel is free again a `gap` after it ends.
+    public mutating func started(at now: Double, duration: Double, gap: Double) {
+        freeAt = now + duration + gap
     }
 }

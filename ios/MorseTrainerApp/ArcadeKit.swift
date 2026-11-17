@@ -59,13 +59,15 @@ class ArcadeFrame {
     }
 
     /// Plays what the channel has waiting, if it is free: `send` sounds the
-    /// text and returns its length, and the channel is free again `wordGap`
-    /// after it ends. An arrival's end goes to `toneEnd`.
-    func announce(at now: Date, wordGap: TimeInterval, send: (String) -> TimeInterval) {
+    /// text and returns its length, and the channel is free again `gap`
+    /// after it ends (the games pass a character gap: a word gap queued
+    /// sounds slower than the fastest waves bring enemies). An arrival's end
+    /// goes to `toneEnd`.
+    func announce(at now: Date, gap: TimeInterval, send: (String) -> TimeInterval) {
         let clock = now.timeIntervalSinceReferenceDate
         guard let sound = announcer.next(at: clock) else { return }
         let duration = send(sound.text)
         if case .arrival(let id, _) = sound { toneEnd[id] = now.addingTimeInterval(duration) }
-        announcer.started(at: clock, duration: duration, wordGap: wordGap)
+        announcer.started(at: clock, duration: duration, gap: gap)
     }
 }

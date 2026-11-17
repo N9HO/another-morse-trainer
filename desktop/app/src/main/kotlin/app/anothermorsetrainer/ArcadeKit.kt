@@ -42,5 +42,7 @@ fun GameAnnouncer.playNext(player: MorsePlayer, timing: MorseTiming, toneEnd: Mu
     if (sound is GameAnnouncer.Sound.Arrival) {
         toneEnd[sound.id] = System.currentTimeMillis() + (secs * 1000).toLong()
     }
-    started(now, secs, timing.wordGap)
+    // A character gap, not a word gap: queued at a word gap, the sounds came
+    // slower than the fastest waves bring enemies, and some landed unheard.
+    started(now, secs, timing.characterGap)
 }

@@ -28,7 +28,7 @@ class GameAnnouncerTest {
     @Test
     fun `the sound channel plays as the fixture says`() {
         val durations = fixture.getJSONObject("durations")
-        val wordGap = fixture.getDouble("wordGap")
+        val gap = fixture.getDouble("gap")
         val scenarios = fixture.getJSONArray("scenarios")
         assertTrue("fixture has no scenarios", scenarios.length() > 0)
         for (i in 0 until scenarios.length()) {
@@ -50,7 +50,7 @@ class GameAnnouncerTest {
                 }
                 val sound = announcer.next(at) ?: continue
                 played += "$at ${label(sound)}"
-                announcer.started(at, durations.getDouble(sound.text), wordGap)
+                announcer.started(at, durations.getDouble(sound.text), gap)
             }
             val plays = sc.getJSONArray("plays")
             val expected = (0 until plays.length()).map {

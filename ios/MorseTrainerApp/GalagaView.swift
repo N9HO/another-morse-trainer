@@ -466,7 +466,7 @@ struct GalagaView: View {
         guard input == .icr, phase == .playing, let game else { return }
         // At the ramp's current speed, which the hits and landings in this
         // same step may just have moved.
-        loop.announce(at: now, wordGap: MorseTiming(wpm: game.currentWpm).wordGap) { text in
+        loop.announce(at: now, gap: MorseTiming(wpm: game.currentWpm).characterGap) { text in
             model.playGalaga(Character(text), wpm: game.currentWpm)
         }
     }
