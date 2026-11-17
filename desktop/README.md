@@ -3,8 +3,8 @@
 The desktop port of [Another Morse Trainer](https://anothermorsetrainer.app), for
 Windows and Linux. Its siblings in this repo are the SwiftUI app at
 [`ios/`](../ios) (iPhone, iPad and Mac) and the Android app at
-[`android/`](../android) — separate, independently-versioned implementations,
-not shared modules. This one began as a copy of the Android tree (#264) and is
+[`android/`](../android) — separate implementations, not shared modules, that
+carry the same version number. This one began as a copy of the Android tree (#264) and is
 kept as its own port. Learn to copy Morse code (CW) by ear with the Koch method.
 
 **Not released yet.** It is planned for the Microsoft Store (MSIX) and Flathub,
@@ -321,8 +321,13 @@ Linux the app renders in software by default; `AMT_RENDER=opengl` uses the GPU.
 - `packaging/linux/`: the `.desktop` entry and AppStream metainfo.
 - `packaging/icons/`: the `.ico` for the MSI and the 512 px PNG.
 
-Release tags will be `desktop-v*`; the version is `desktopVersionName` in
-`app/build.gradle.kts`, independent of both phone apps.
+The version is `desktopVersionName` in `app/build.gradle.kts`, the one every
+app shares; `desktopVersionCode` is the desktop's own build counter, and the
+MSI and MSIX carry `MAJOR.MINOR.desktopVersionCode` so each build upgrades the
+last (`packaging/versions.py` derives and checks these). Releases are
+published to GitHub Releases by `.github/workflows/desktop-release.yml`,
+tagged `desktop-v<name>-b<code>` (testing builds `desktop-beta-v<name>-b<code>`);
+see `docs/desktop-design.md` §4.
 
 ## License
 

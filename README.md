@@ -137,7 +137,7 @@ both release workflows:
 | Tag | Fires | Effect |
 |---|---|---|
 | `ios-v*` | `.github/workflows/ios-release.yml` | Builds and uploads the iOS build to App Store Connect, then submits it to App Review with release-after-approval (What's New from `ios/tools/whatsnew/`) |
-| `desktop-v*` | nothing yet | Reserved for desktop releases (`desktopVersionName` in `desktop/app/build.gradle.kts`, independent of both phone apps); `desktop.yml` builds artifacts only |
+| `desktop-v*` | `.github/workflows/desktop-release.yml` | Builds the Windows and Linux packages (through `desktop.yml`) and publishes them as a GitHub Release: MSI, AppImage, Flatpak bundle and tarball. Tag `desktop-v<desktopVersionName>-b<desktopVersionCode>`; a manual run makes a `desktop-beta-v*` pre-release, or a dry run that publishes nothing |
 | `android-v*` | `.github/workflows/android-release.yml` | Builds the signed AAB and rolls it out on the Play **production** track (release notes from `android/store-assets/whatsnew/`) |
 
 **A tag is a production release.** Both workflows used to target the beta
