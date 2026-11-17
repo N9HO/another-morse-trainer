@@ -10,7 +10,7 @@ import android.media.midi.MidiReceiver
 import android.os.Handler
 import android.os.Looper
 import app.anothermorsetrainer.morsekit.MidiKeyParser
-import app.anothermorsetrainer.morsekit.MidiKeyRoute
+import app.anothermorsetrainer.morsekit.MidiKeyMerge
 import app.anothermorsetrainer.morsekit.PaddleKeyer
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.MainScope
@@ -69,22 +69,14 @@ class MidiKeyInput(private val context: Context) {
      */
     var onAppKeyer: (() -> Unit)? = null
 
-    /** Per-note key state: the held (straight-routed) notes currently down. */
-    private val heldNotes = mutableSetOf<Int>()
-
     /**
-     * Raw paddle notes currently down, by the keyer paddle each was routed to
-     * when it went down — so its release goes the same way even if the keyer
-     * mode changed while it was held, and two notes on one paddle (1 and 20)
-     * hold it until both are up.
+     * The notes, the keyer's tone and the logical key: [MidiKeyMerge], pinned
+     * by `fixtures/midi-key-merge.json`. This class runs the keyer and its
+     * clock (times in [System.nanoTime] terms), and does what the merge says.
      */
-    private val keyedNotes = mutableMapOf<Int, PaddleKeyer.Element>()
+    private var merge = MidiKeyMerge()
     private var keyerScope: CoroutineScope? = null
     private var paddles: PaddleKeyerDriver? = null
-    /** Whether the app keyer's tone is on. */
-    private var keyerDown = false
-    /** The logical key as last reported. */
-    private var reported = false
 
     private val deviceCallback = object : MidiManager.DeviceCallback() {
         override fun onDeviceAdded(device: MidiDeviceInfo) = connect(device)
@@ -118,6 +110,9 @@ class MidiKeyInput(private val context: Context) {
     fun start(onKey: (isDown: Boolean, atMs: Long) -> Unit, onConnected: (String?) -> Unit) {
         this.onKey = onKey
         this.onConnected = onConnected
+        // A note posted to the main thread after the last stop() may have left
+        // state in the merge: start clean, as iOS does with a new router.
+        merge = MidiKeyMerge()
         startKeyer()
         if (!isSupported) { onConnected(null); return }
         val mgr = context.getSystemService(Context.MIDI_SERVICE) as? MidiManager ?: run {
@@ -136,9 +131,8 @@ class MidiKeyInput(private val context: Context) {
             try { it.device.close() } catch (_: Exception) {}
         }
         open.clear()
-        heldNotes.clear()
+        merge = MidiKeyMerge()
         stopKeyer()
-        reported = false
         manager = null
         onKey = null; onConnected = null; onKeyTimed = null; onAppKeyer = null
     }
@@ -157,8 +151,6 @@ class MidiKeyInput(private val context: Context) {
         paddles = null
         keyerScope?.cancel()
         keyerScope = null
-        keyedNotes.clear()
-        keyerDown = false
     }
 
     private fun connect(info: MidiDeviceInfo) {
@@ -186,13 +178,9 @@ class MidiKeyInput(private val context: Context) {
         try { gone.port.close() } catch (_: Exception) {}
         try { gone.device.close() } catch (_: Exception) {}
         // The unplugged key can't send its note-offs any more: let go of its
-        // held notes and of the keyer's paddles (which ends any tone at once).
-        heldNotes.clear()
-        if (keyedNotes.isNotEmpty()) {
-            keyedNotes.clear()
-            paddles?.stop()
-        }
-        report(System.nanoTime())
+        // notes, and stop the keyer at once (it may still be sounding, or owe
+        // a remembered element after the paddles let go).
+        perform(merge.releaseAll(System.nanoTime()))
         onConnected?.invoke(open.lastOrNull()?.name)
     }
 
@@ -202,60 +190,42 @@ class MidiKeyInput(private val context: Context) {
      * mode in use when it went down (#380).
      */
     private fun handleNote(note: Int, isDown: Boolean, atNanos: Long) {
-        if (!isDown) {
-            val element = keyedNotes.remove(note)
-            if (element != null) {
-                paddles?.paddle(element, keyedNotes.containsValue(element))
-            } else if (heldNotes.remove(note)) {
-                report(atNanos)
-            }
-            return
-        }
         val raw = AdapterKeyer.sendsRawPaddles(AdapterKeyer.mode(context))
-        when (MidiKeyParser.routeForNote(note, raw)) {
-            null -> return
-            MidiKeyRoute.HELD -> {
-                heldNotes.add(note)
-                report(atNanos)
-            }
-            MidiKeyRoute.KEYER_DIT -> keyerPress(note, PaddleKeyer.Element.DIT)
-            MidiKeyRoute.KEYER_DAH -> keyerPress(note, PaddleKeyer.Element.DAH)
-        }
-    }
-
-    private fun keyerPress(note: Int, element: PaddleKeyer.Element) {
-        val driver = paddles ?: return
-        // Follow Settings, as the on-screen paddles do; the driver applies a
-        // change only once it is idle, so an element in flight keeps its timing.
-        driver.configure(Settings.paddleMode, Settings.characterWpm)
-        keyedNotes[note] = element
-        onAppKeyer?.invoke()
-        driver.paddle(element, true)
+        perform(merge.note(note, isDown, raw, atNanos))
     }
 
     /**
      * An edge from the app's keyer, at the time it scheduled it
      * ([System.currentTimeMillis] terms, as [PaddleKeyerDriver] keeps it),
-     * moved onto the [System.nanoTime] clock [onKeyTimed] reports in.
+     * moved onto the [System.nanoTime] clock the merge and [onKeyTimed] use.
      */
     private fun keyerEdge(isDown: Boolean, atWallMs: Long) {
-        keyerDown = isDown
-        report(System.nanoTime() - (System.currentTimeMillis() - atWallMs) * 1_000_000L)
+        perform(merge.keyerTone(isDown, System.nanoTime() - (System.currentTimeMillis() - atWallMs) * 1_000_000L))
     }
 
-    /**
-     * Aggregate into one logical key: down while any held note is down or the
-     * keyer's tone is on, reported only when that changes.
-     */
-    private fun report(atNanos: Long) {
-        val now = heldNotes.isNotEmpty() || keyerDown
-        if (now == reported) return
-        reported = now
-        // The edge's own time in wall-clock ms (the packet's, or when the
-        // keyer scheduled the element), so a late main-thread hop can't
-        // change an element's length. iOS passes `atMs` the same way.
-        onKey?.invoke(now, System.currentTimeMillis() - (System.nanoTime() - atNanos) / 1_000_000L)
-        onKeyTimed?.invoke(now, atNanos)
+    private fun perform(actions: List<MidiKeyMerge.Action>) {
+        for (action in actions) {
+            when (action) {
+                is MidiKeyMerge.Action.Key -> {
+                    // The edge's own time in wall-clock ms (the packet's, or when the
+                    // keyer scheduled the element), so a late main-thread hop can't
+                    // change an element's length. iOS passes `atMs` the same way.
+                    onKey?.invoke(action.isDown, System.currentTimeMillis() - (System.nanoTime() - action.at) / 1_000_000L)
+                    onKeyTimed?.invoke(action.isDown, action.at)
+                }
+                is MidiKeyMerge.Action.Paddle -> {
+                    val driver = paddles ?: continue
+                    if (action.isDown) {
+                        // Follow Settings, as the on-screen paddles do; the driver applies a
+                        // change only once it is idle, so an element in flight keeps its timing.
+                        driver.configure(Settings.paddleMode, Settings.characterWpm)
+                        onAppKeyer?.invoke()
+                    }
+                    driver.paddle(action.element, action.isDown)
+                }
+                MidiKeyMerge.Action.StopKeyer -> paddles?.stop()
+            }
+        }
     }
 
     /**
