@@ -293,9 +293,11 @@ jobs:
       #
       # So take the installation off the overlay before anything updates it:
       # copy it to the runner's own disk (RUNNER_TEMP is a bind mount from the
-      # host) and bind-mount the copy over /var/lib/flatpak (the container is
-      # --privileged). Renames there are ordinary same-filesystem renames, and
-      # the update keeps its delta download from the preinstalled commits.
+      # host) and point flatpak at the copy with FLATPAK_SYSTEM_DIR, which
+      # every later flatpak call inherits (flatpak-builder runs the flatpak
+      # CLI). The image has no mount(8), so no bind mount. Renames in the copy
+      # are ordinary same-filesystem renames, and the update keeps its delta
+      # download from the preinstalled commits.
       - name: Move the Flatpak system installation off the overlay
         run: |
           set -eu
@@ -303,14 +305,14 @@ jobs:
           dst="$RUNNER_TEMP/flatpak-system"
           mkdir -p "$dst"
           cp -a /var/lib/flatpak/. "$dst/"
-          mount --bind "$dst" /var/lib/flatpak
-          fstype=$(stat -f -c %T /var/lib/flatpak)
-          echo "/var/lib/flatpak is now on: $fstype ($(du -sh "$dst" | cut -f1))"
+          fstype=$(stat -f -c %T "$dst")
+          echo "$dst is on: $fstype ($(du -sh "$dst" | cut -f1))"
           if [ "$fstype" = overlayfs ]; then
-            echo "::error::/var/lib/flatpak is still on overlayfs; the runtime update would fail with EXDEV"
+            echo "::error::$dst is on overlayfs too; the runtime update would fail with EXDEV"
             exit 1
           fi
-          flatpak --system list --runtime
+          echo "FLATPAK_SYSTEM_DIR=$dst" >> "$GITHUB_ENV"
+          FLATPAK_SYSTEM_DIR="$dst" flatpak --system list --runtime
 
       - name: Build the Flatpak bundle
         uses: flatpak/flatpak-github-actions/flatpak-builder@v6
