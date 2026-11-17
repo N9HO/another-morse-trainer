@@ -223,6 +223,17 @@ missing feature.
 - **Audio-stack reset recovery.** iOS rebuilds the engine on
   `mediaServicesWereReset` (`AudioSession.swift`); Android has no such
   event and catches `IllegalStateException` instead.
+- <a id="idiom-paddle-touch-timing"></a>**On-screen paddle timing.** iOS
+  times each touch from the touch's own timestamp and runs its paddle keyer
+  `PaddleKeyerDriver.touchLagMs` (35 ms) behind real time, because iOS delivers
+  touches late (18–48 ms, median 27 ms, measured on an iPhone 17 Pro Max):
+  timed on arrival, a release made just before an element ended reached the
+  keyer after it had started one more. Brass Knuckles reads its keying on
+  the same delayed clock. Android delivers touches in about 4 ms (13 ms at
+  most, measured on a Galaxy S21 Ultra), so it times them on arrival with no
+  delay, which would only add sidetone latency there; desktop keys from the
+  keyboard and mouse. Same feature: on every app the paddles send what the
+  fingers did.
 
 ## Audits are replaced by a check
 

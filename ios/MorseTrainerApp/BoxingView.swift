@@ -266,7 +266,11 @@ final class BoxingController: ObservableObject {
                 f.tellPlayed(now: now)
             }
             f.update(now: now)
-            if let j = keying.poll(nowMs: now, ditMs: ditMs()) {
+            // On the clock the edges are stamped with: the on-screen paddles
+            // run `PaddleKeyerDriver.touchLagMs` behind, and their edges arrive
+            // that late, so "two dots up" read on the wall clock split fast
+            // letters.
+            if let j = keying.poll(nowMs: now &- UInt32(PaddleKeyerDriver.touchLagMs), ditMs: ditMs()) {
                 if let c = j.char {
                     f.key(c, quality: j.quality, now: now)
                 } else {
