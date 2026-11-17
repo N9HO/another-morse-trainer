@@ -1014,7 +1014,7 @@ private fun cueText(beat: FirstFourBeat, activator: FirstFourStation): String = 
 private fun FirstFourKeyPanel(expected: String, resetToken: Int, onSubmit: (String) -> Unit) {
     val keyer = remember { SendingKeyer() }
     val midi = remember { HardwareKey() }
-    AdapterConfigSync(midi)
+    AdapterConfigSync(midi, keyer)
     val scope = rememberCoroutineScope()
     var keyPressed by remember { mutableStateOf(false) }
     var midiDevice by remember { mutableStateOf<String?>(null) }

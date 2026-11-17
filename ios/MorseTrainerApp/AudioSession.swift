@@ -142,12 +142,29 @@ final class AudioSession: @unchecked Sendable {
 
     // MARK: - State
 
+    /// What one claim asked for.
+    private struct Request {
+        let profile: Profile
+        let lowLatency: Bool
+    }
+
+    /// The I/O buffer while a key is live, about 256 frames at 48 kHz. At the
+    /// default (around 20 ms) a key edge waited up to a buffer to be heard,
+    /// and a 36 ms dit at 33 WPM could move by half its length. It costs a
+    /// little battery, so it is held only while a keyer claim is.
+    static let lowLatencyIOBufferDuration: TimeInterval = 0.005
+
     private let lock = NSLock()
-    private var claims: [Claim: Profile] = [:]
+    private var claims: [Claim: Request] = [:]
     /// Last profile successfully pushed to the session, so a repeat claim of the
     /// same profile is a no-op. Re-poking the session on every play was causing
     /// intermittent dropouts, which is why MorsePlayer only ever configured once.
     private var applied: Profile?
+    /// Whether the short I/O buffer is the session's preference now.
+    private var appliedLowLatency = false
+    /// The buffer the session ran at before it was first shortened, put back
+    /// when the last low-latency claim goes.
+    private var normalIOBufferDuration: TimeInterval?
     private var observers: [Observation: @MainActor @Sendable (Event) -> Void] = [:]
     private var nextObservationID = 0
     private var resets = 0
@@ -193,11 +210,14 @@ final class AudioSession: @unchecked Sendable {
     /// Configure the session for `profile` and keep it there until the returned
     /// claim is released. Synchronous: on return the category is in effect, so a
     /// caller may install a tap or start an engine on the next line.
+    ///
+    /// `lowLatency` is for a live key's sidetone: while any claim asks for it,
+    /// the session runs the short I/O buffer `lowLatencyIOBufferDuration`.
     @discardableResult
-    func claim(_ profile: Profile) -> Claim {
+    func claim(_ profile: Profile, lowLatency: Bool = false) -> Claim {
         let claim = Claim(id: UUID())
         lock.lock()
-        claims[claim] = profile
+        claims[claim] = Request(profile: profile, lowLatency: lowLatency)
         applyLocked()
         lock.unlock()
         return claim
@@ -216,21 +236,47 @@ final class AudioSession: @unchecked Sendable {
     /// Push the strongest live claim to the session, or hand the session back
     /// when there is none. Caller holds `lock`.
     private func applyLocked() {
-        guard let wanted = claims.values.max() else {
+        guard let wanted = claims.values.map(\.profile).max() else {
             deactivateLocked()
             return
         }
-        guard wanted != applied else { return }
+        if wanted != applied {
+            let session = AVAudioSession.sharedInstance()
+            do {
+                try session.setCategory(wanted.category, mode: wanted.mode, options: wanted.options)
+                try session.setActive(true)
+                applied = wanted
+                log.info("Audio session → \(wanted.description, privacy: .public)")
+            } catch {
+                // Leave `applied` alone so the next claim retries rather than
+                // believing a configuration that never landed.
+                log.error("Audio session → \(wanted.description, privacy: .public) failed: \(error.localizedDescription, privacy: .public)")
+            }
+        }
+        applyIOBufferLocked(lowLatency: claims.values.contains { $0.lowLatency })
+    }
+
+    /// Shorten the I/O buffer while a low-latency claim is held, and put the
+    /// session's own back when the last one goes. A preference, not a
+    /// command: the system may round it, or keep a longer buffer (a Bluetooth
+    /// route does). Caller holds `lock`.
+    private func applyIOBufferLocked(lowLatency wanted: Bool) {
+        guard wanted != appliedLowLatency else { return }
         let session = AVAudioSession.sharedInstance()
         do {
-            try session.setCategory(wanted.category, mode: wanted.mode, options: wanted.options)
-            try session.setActive(true)
-            applied = wanted
-            log.info("Audio session → \(wanted.description, privacy: .public)")
+            if wanted {
+                if normalIOBufferDuration == nil {
+                    normalIOBufferDuration = session.ioBufferDuration
+                }
+                try session.setPreferredIOBufferDuration(Self.lowLatencyIOBufferDuration)
+            } else if let normal = normalIOBufferDuration {
+                try session.setPreferredIOBufferDuration(normal)
+            }
+            appliedLowLatency = wanted
+            let actualMs = session.ioBufferDuration * 1000
+            log.info("Audio I/O buffer → \(wanted ? "low latency" : "normal", privacy: .public), now \(actualMs, format: .fixed(precision: 1)) ms")
         } catch {
-            // Leave `applied` alone so the next claim retries rather than
-            // believing a configuration that never landed.
-            log.error("Audio session → \(wanted.description, privacy: .public) failed: \(error.localizedDescription, privacy: .public)")
+            log.error("Audio I/O buffer preference failed: \(error.localizedDescription, privacy: .public)")
         }
     }
 
@@ -241,6 +287,9 @@ final class AudioSession: @unchecked Sendable {
     /// subsystem holds a claim, and Listen holds MorsePlayer's for as long as
     /// it runs. Caller holds `lock`.
     private func deactivateLocked() {
+        // Before the guard: an interruption clears `applied`, and the short
+        // buffer must not outlive the last key because one came in between.
+        applyIOBufferLocked(lowLatency: false)
         guard applied != nil else { return }
         // Whatever happens, the next claim must reconfigure from scratch
         // rather than trust a cache of a session we tried to give up.
@@ -350,6 +399,10 @@ final class AudioSession: @unchecked Sendable {
         lock.lock()
         resets += 1
         invalidateLocked()
+        // A reset session is back at the system's own buffer, which is the
+        // one to restore to from here on.
+        appliedLowLatency = false
+        normalIOBufferDuration = nil
         // Reconfigure from the claims we still hold before telling anyone to
         // rebuild, so the engines come up against a live session.
         applyLocked()

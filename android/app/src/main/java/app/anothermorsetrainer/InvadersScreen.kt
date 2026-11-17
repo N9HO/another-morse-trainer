@@ -185,7 +185,7 @@ fun InvadersScreen(onBack: () -> Unit, onSwitchMode: (TrainingMode) -> Unit = {}
     // must still be attached once the run starts (see BluetoothKeyButton).
     val ble = remember { BleMidi(context) }
     DisposableEffect(Unit) { onDispose { ble.release() } }
-    AdapterConfigSync(midi)
+    AdapterConfigSync(midi, keyer)
     val scope = rememberCoroutineScope()
     var keyPressed by remember { mutableStateOf(false) }
     var midiDevice by remember { mutableStateOf<String?>(null) }

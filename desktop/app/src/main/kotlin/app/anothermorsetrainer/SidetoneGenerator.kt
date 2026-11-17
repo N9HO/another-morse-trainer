@@ -12,7 +12,7 @@ import kotlin.math.sin
  *
  * Port of the TX path of the iOS `KeyerEngine` `ToneGenerator` (the RX / received
  * tone scheduling lives with the Vail repeater work). The audio render runs on a
- * dedicated thread; the only shared state is the [keyDown] flag. The samples
+ * dedicated thread; the shared state is [keyDown] and [frequencyHz]. The samples
  * themselves come from a [SidetoneSynth], which knows nothing about the track.
  *
  * [focusGain] is what the generator asks of other apps' audio for as long as it
@@ -22,13 +22,16 @@ import kotlin.math.sin
  * session.
  */
 class SidetoneGenerator(
-    private val frequencyHz: Double = 600.0,
+    frequencyHz: Double = 600.0,
     private val focusGain: AudioFocus.Gain = AudioFocus.Gain.EXCLUSIVE
 ) {
 
     private val sampleRate = 44_100
     private val amplitude = 0.5f
     private val rampSeconds = 0.005
+
+    /** The pitch; a change reaches the next block ([SendingKeyer.applyConfig]). */
+    @Volatile var frequencyHz: Double = frequencyHz
 
     private val keyDown = AtomicBoolean(false)
     @Volatile private var running = false
@@ -78,6 +81,7 @@ class SidetoneGenerator(
         val buf = FloatArray(block)
         val synth = SidetoneSynth(sampleRate, frequencyHz, amplitude, rampSeconds)
         while (running) {
+            synth.frequencyHz = frequencyHz
             synth.render(buf, block, keyDown.get())
             if (!t.write(buf, block)) break
         }
@@ -99,13 +103,20 @@ class SidetoneGenerator(
  * and only because the two targets happened to be the clamp's two bounds.
  */
 internal class SidetoneSynth(
-    sampleRate: Int,
+    private val sampleRate: Int,
     frequencyHz: Double,
     /** The gain the envelope sits at while the key is held. */
     val amplitude: Float,
     rampSeconds: Double
 ) {
-    private val omega = 2.0 * PI * frequencyHz / sampleRate
+    /** The pitch, changeable while it plays; the phase carries over, so it never clicks. */
+    var frequencyHz: Double = frequencyHz
+        set(value) {
+            if (value == field) return
+            field = value
+            omega = 2.0 * PI * value / sampleRate
+        }
+    private var omega = 2.0 * PI * frequencyHz / sampleRate
     /** Per-sample gain step: the full range in [rampSeconds]. */
     val rampStep = (amplitude / (rampSeconds * sampleRate)).toFloat()
     private var phase = 0.0

@@ -33,8 +33,16 @@ public final class KeyerEngine {
 
     // MARK: - Public state
 
+    /// The local sidetone's pitch in Hz. Sending practice sets the exact tone
+    /// setting; rounding it to a MIDI note, as before, played 600 Hz as 587 Hz.
+    public var localTxFrequency: Double = KeyerEngine.midiNoteToHz(72) {
+        didSet { txGenerator.frequency = localTxFrequency }
+    }
+
+    /// The repeater's TX tone as a MIDI note, the form the repeater protocol
+    /// carries it in. Setting it sets `localTxFrequency` to that note.
     public var localTxToneMIDI: Int = 72 {
-        didSet { txGenerator.frequency = Self.midiNoteToHz(localTxToneMIDI) }
+        didSet { localTxFrequency = Self.midiNoteToHz(localTxToneMIDI) }
     }
 
     public private(set) var sampleRate: Double = 48000
@@ -73,7 +81,7 @@ public final class KeyerEngine {
 
         // TX path: continuous source node, gated by atomic bool inside.
         txGenerator.sampleRate = sampleRate
-        txGenerator.frequency = Self.midiNoteToHz(localTxToneMIDI)
+        txGenerator.frequency = localTxFrequency
         engine.attach(txGenerator.node)
         engine.connect(txGenerator.node, to: mixer, format: monoFormat)
 
@@ -83,6 +91,9 @@ public final class KeyerEngine {
     }
 
     public func stop() {
+        // Close the gate too: the generator outlives the engine, and a key
+        // held when it stopped would otherwise sound on the next start.
+        txGenerator.setKeyDown(false)
         engine.stop()
         rxPlayers.removeAll()
         if let claim = sessionClaim {
@@ -101,10 +112,11 @@ public final class KeyerEngine {
 
     /// The repeater mixes rather than taking the route, so it can run alongside
     /// a radio app. Released in `stop()`, which drops the session back to plain
-    /// `.playback` for the rest of the trainer.
+    /// `.playback` for the rest of the trainer. Low latency: this engine is a
+    /// live key's sidetone, which the operator times their sending by.
     private func configureAudioSession() {
         guard sessionClaim == nil else { return }
-        sessionClaim = AudioSession.shared.claim(.repeaterMix)
+        sessionClaim = AudioSession.shared.claim(.repeaterMix, lowLatency: true)
     }
 
     // MARK: - TX
@@ -259,14 +271,13 @@ private final class ToneGenerator {
     init(initialFrequency: Double) {
         let stateRef = state
 
-        // The format here is the source node's *output* format. AVAudioEngine
-        // negotiates with the connection's format param during engine.connect.
-        // Standard 48k mono is a safe default; actual sampleRate is updated
-        // before render via the State and reflected in the omega calc.
-        let format = AVAudioFormat(standardFormatWithSampleRate: 48000, channels: 1)!
+        // No format of its own: the block renders at the connection's rate,
+        // which `start()` also stores as `sampleRate`. A node built with a
+        // format renders at that rate and is resampled, so a 48 kHz node on a
+        // 44.1 kHz output played every pitch 9% sharp (600 Hz as 653 Hz).
         state.withLock { $0.frequency = initialFrequency }
 
-        node = AVAudioSourceNode(format: format) { _, _, frameCount, audioBufferList -> OSStatus in
+        node = AVAudioSourceNode { _, _, frameCount, audioBufferList -> OSStatus in
             let abl = UnsafeMutableAudioBufferListPointer(audioBufferList)
             guard let buffer = abl.first else { return noErr }
             let ptr = buffer.mData!.assumingMemoryBound(to: Float.self)
