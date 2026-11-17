@@ -289,7 +289,18 @@ screens take Space and `[` `]`; Escape is Back.
 - The manifest declares `runFullTrust` (a jpackage app is a Win32 desktop
   app; the Store accepts it for desktop-bridge packages) and the
   `microphone` device capability (decoder, Sending Analyzer). Version is
-  `MAJOR.MINOR.PATCH.0`: the Store reserves the fourth part.
+  `MAJOR.MINOR.desktopVersionCode.0` (e.g. 2.0.4.0): the Store reserves the
+  fourth part, and taking the third from the build counter gives every Store
+  submission a higher version without moving the shared version (§4,
+  "Versions").
+- The **MSI's** ProductVersion is likewise `MAJOR.MINOR.desktopVersionCode`
+  (`msiPackageVersion` in `app/build.gradle.kts`). jpackage derives the MSI
+  ProductCode from vendor, name and version, and Windows Installer compares
+  only the first three version fields, so two MSIs both at 2.0.0 would share
+  a ProductCode and the second would refuse to install over the first. With
+  the build counter in the third field, each MSI is a major upgrade of the
+  last under the fixed upgrade UUID. The app's own About screen and the Linux
+  packages still say the shared version.
 
 ### Linux
 
@@ -336,11 +347,44 @@ the other two. Jobs:
 
 Windows bills at 2x Linux, so only the packaging that needs Windows runs
 there; tests run once, on Linux. No macOS runner is used. Artifacts are
-uploaded; nothing is published. Releases will be tagged **`desktop-v*`**
-(and `desktop-beta-v*` if a testing channel is added), with a version
-independent of both phone apps (`desktopVersionName` in
-`desktop/app/build.gradle.kts`). A release workflow that uploads to the
-Store and Flathub is later work (§7).
+uploaded; nothing is published by `desktop.yml`. Its unit-test job first
+runs `desktop/packaging/versions.py check`, which fails unless the shared
+version, the AppStream metainfo's newest release and the MSIX manifest's
+`@VERSION@` token agree with the derivation below.
+
+### Versions
+
+The desktop carries the **one version every app shares** (CLAUDE.md,
+"Versions, tags, CI"): `desktopVersionName` in `desktop/app/build.gradle.kts`,
+which moves on all three trees together and only when the maintainer says so.
+`desktopVersionCode` is the desktop's own build counter; it goes up for every
+released build, testing builds included, and is never reused. The Windows
+packages need a version that rises with every build, so they carry
+`MAJOR.MINOR.desktopVersionCode` (MSI) and `MAJOR.MINOR.desktopVersionCode.0`
+(MSIX); see §3.
+
+### Releases: `.github/workflows/desktop-release.yml`
+
+The first channel is **GitHub Releases**. The release workflow calls
+`desktop.yml` as a reusable workflow, so the shipped files are exactly the
+ones its jobs built and checked (tests, Xvfb launch of every screen, Flatpak
+build), then attaches the MSI, the AppImage, the Flatpak bundle, the
+app-image tarball and `SHA256SUMS.txt` to a GitHub Release. The unsigned MSIX
+is not attached (it cannot be installed); it stays a workflow artifact for a
+Partner Center upload. Nothing is code-signed.
+
+- A pushed tag `desktop-v<name>-b<code>` (or `desktop-v<name>`) publishes a
+  production release.
+- A manual run takes `channel` (`beta` or `release`) and `dry_run` (default
+  true). `beta` publishes a pre-release tagged `desktop-beta-v<name>-b<code>`;
+  `release` one tagged `desktop-v<name>-b<code>`. The workflow pushes the tag
+  itself, as the phone release workflows do. A dry run builds and assembles
+  everything into the `desktop-release-files` artifact and publishes nothing.
+- The tag must name the commit's `desktopVersionName`/`desktopVersionCode`,
+  and a build number already used by another desktop tag is refused.
+- `discord-release.yml` announces both kinds.
+
+Store and Flathub uploads are later work (§6, §7).
 
 The Xvfb screenshots are the only way anyone sees the app run, the job the
 Android emulator smoke test does for that tree. The packaged app is launched
@@ -456,9 +500,8 @@ Order:
    best English one; the distributions are ~100 MB compressed, and a
    ProGuard pass over the release build (Compose Desktop supports one) would
    shrink them once someone can test the result.
-5. Store and Flathub submission (§6), with the from-source Flatpak manifest
-   and a `desktop-release.yml` that builds tagged `desktop-v*` releases and
-   attaches the MSI, MSIX and AppImage.
+5. GitHub Releases through `desktop-release.yml` (§4, done), then Store and
+   Flathub submission (§6), with the from-source Flatpak manifest.
 6. Follow-ups that are possible with native work: the daily reminder
    (scheduled toast / Background portal), espeak-ng in the Flatpak, and BLE
    keys via a WinRT bridge.

@@ -1,0 +1,352 @@
+name: Desktop release (GitHub Releases)
+
+# Publishes the Windows and Linux desktop app (desktop/, #264) as a GitHub
+# Release: the MSI, the AppImage, the Flatpak bundle and the app-image
+# tarball, with SHA256SUMS.txt. The unsigned MSIX is NOT attached: nobody can
+# install it (an MSIX has to be signed, and only the Store signs ours); it
+# stays a workflow artifact for a Partner Center upload. Nothing is
+# code-signed, so Windows SmartScreen warns on the MSI; the notes say so.
+#
+# Two ways in, the same two the phone release workflows have:
+#
+#   - Push a production tag by hand:
+#       git tag desktop-v2.0.0-b4 && git push origin desktop-v2.0.0-b4
+#     (desktop-v<desktopVersionName>-b<desktopVersionCode>; the short form
+#     desktop-v<desktopVersionName> is accepted too, once per version.)
+#   - Run it from the Actions tab (workflow_dispatch) with
+#       channel  beta     a testing build: a pre-release, tagged
+#                         desktop-beta-v<name>-b<code>
+#                release  a production release, tagged desktop-v<name>-b<code>
+#       dry_run  true (the default) builds, tests and assembles everything,
+#                uploads the release files as the workflow artifact
+#                `desktop-release-files`, prints the notes, and stops: no tag,
+#                no release, no announcement. Only a dry run may start from a
+#                branch other than the default one.
+#
+# The tag must name the version in desktop/app/build.gradle.kts, checked by
+# desktop/packaging/versions.py before anything is built: a tag on a commit
+# whose desktopVersionName/Code say otherwise fails, and so does a build
+# number some other desktop tag already used. Bump desktopVersionCode for every
+# release, testing builds included. desktopVersionName is the version every app
+# shares; never move it here (CLAUDE.md, "Versions, tags, CI").
+#
+# The build is desktop.yml itself, called as a reusable workflow: what ships is
+# exactly what that workflow builds and checks on every pull request (unit
+# tests, the version check, the Xvfb launch of every screen, the Flatpak
+# build, the MSI/MSIX build). Called that way its jobs report as
+# "Build / Desktop unit tests" and so on, under this run only; merge-gate.yml
+# waits for the plain names, which desktop.yml's own runs keep.
+#
+# A manual run creates its tag in the `publish` job with GITHUB_TOKEN, and
+# GitHub never starts a workflow from a GITHUB_TOKEN push, so it cannot
+# re-fire this workflow; desktop-beta-v* does not match the trigger either
+# way. An existing tag is never moved, and an existing release is never
+# overwritten. `publish` uploads the `release-tag` artifact that
+# discord-release.yml reads to announce the release.
+#
+# NO `paths:` FILTER, deliberately, as in ios-release.yml: on a tag push
+# GitHub evaluates `paths:` against the tagged commit's own changes, so a
+# filter would silently skip a release whose last commit touched no desktop
+# file. There is no pull_request trigger, so it cannot run on a PR, and it is
+# never a required check. Cost: one windows-latest job (2x Linux) per run.
+
+on:
+  push:
+    tags:
+      - "desktop-v*"
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: "beta = pre-release tagged desktop-beta-v*; release = production, tagged desktop-v*"
+        required: true
+        default: beta
+        type: choice
+        options:
+          - beta
+          - release
+      dry_run:
+        description: "Build and assemble only: no tag, no GitHub Release"
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+# A fixed group, different from desktop.yml's "<workflow>-<ref>" (which, when
+# called from here, becomes "Desktop release (GitHub Releases)-<ref>"): equal
+# groups would deadlock the called workflow on its caller. Never cancel a
+# release half way.
+concurrency:
+  group: desktop-release
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    name: Check the version and the tag
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      tag: ${{ steps.plan.outputs.tag }}
+      kind: ${{ steps.plan.outputs.kind }}
+      dry_run: ${{ steps.plan.outputs.dry_run }}
+      name: ${{ steps.v.outputs.name }}
+      code: ${{ steps.v.outputs.code }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Read the versions (and check they agree)
+        id: v
+        run: python3 desktop/packaging/versions.py github-output
+
+      - name: Name the release and check the tag
+        id: plan
+        env:
+          EVENT: ${{ github.event_name }}
+          CHANNEL: ${{ inputs.channel }}
+          DRY_INPUT: ${{ inputs.dry_run }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          NAME: ${{ steps.v.outputs.name }}
+          CODE: ${{ steps.v.outputs.code }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT" = "push" ]; then
+            TAG="$GITHUB_REF_NAME"
+            DRY=false
+          else
+            DRY="${DRY_INPUT:-true}"
+            if [ "$CHANNEL" = "release" ]; then
+              TAG="desktop-v${NAME}-b${CODE}"
+            else
+              TAG="desktop-beta-v${NAME}-b${CODE}"
+            fi
+            if [ "$DRY" != "true" ] && [ "$GITHUB_REF" != "refs/heads/$DEFAULT_BRANCH" ]; then
+              echo "::error::Only a dry run may start from $GITHUB_REF. Publish from $DEFAULT_BRANCH."
+              exit 1
+            fi
+          fi
+          # Fails unless the tag names desktopVersionName/Code of this commit.
+          KIND="$(python3 desktop/packaging/versions.py tag "$TAG")"
+
+          # In a dry run every problem below is a warning; in a real one, an error.
+          problem() {
+            if [ "$DRY" = "true" ]; then echo "::warning::$1 (a real run would stop here)"
+            else echo "::error::$1"; exit 1; fi
+          }
+
+          # The tag may exist only as the one this run was pushed for.
+          if AT="$(git rev-parse -q --verify "refs/tags/${TAG}^{commit}")"; then
+            if [ "$AT" != "$GITHUB_SHA" ]; then
+              problem "$TAG already exists at ${AT:0:12}, not this commit ${GITHUB_SHA:0:12}. Bump desktopVersionCode."
+            elif [ "$EVENT" != "push" ]; then
+              problem "$TAG already exists. Bump desktopVersionCode for a new build."
+            fi
+          fi
+          # A build number is spent once, whatever kind of tag spent it.
+          USED="$(git tag -l "desktop-*-b${CODE}" | grep -vxF "$TAG" || true)"
+          if [ -n "$USED" ]; then
+            problem "desktopVersionCode $CODE is already used by: $(echo $USED). Bump it."
+          fi
+
+          {
+            echo "tag=$TAG"
+            echo "kind=$KIND"
+            echo "dry_run=$DRY"
+          } >> "$GITHUB_OUTPUT"
+          echo "Release: $TAG ($KIND), dry run: $DRY, at ${GITHUB_SHA:0:12}"
+
+  build:
+    name: Build
+    needs: prepare
+    permissions:
+      contents: read
+    uses: ./.github/workflows/desktop.yml
+
+  assemble:
+    name: Assemble the release files
+    needs: [prepare, build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # Tags, for the changelog's starting point.
+          fetch-depth: 0
+
+      - name: Download everything the build uploaded
+        uses: actions/download-artifact@v8
+        with:
+          path: ${{ runner.temp }}/built
+
+      - name: Pick, rename and checksum the release files
+        env:
+          BUILT: ${{ runner.temp }}/built
+          NAME: ${{ needs.prepare.outputs.name }}
+          CODE: ${{ needs.prepare.outputs.code }}
+        run: |
+          set -euo pipefail
+          find "$BUILT" -type f | sed "s|^$BUILT/|  |"
+          one() {   # exactly one file matching $1, or fail
+            mapfile -t hits < <(find "$BUILT" -type f -name "$1")
+            if [ "${#hits[@]}" -ne 1 ]; then
+              echo "::error::Expected one $1 from the build, found ${#hits[@]}." >&2
+              exit 1
+            fi
+            printf '%s' "${hits[0]}"
+          }
+          BASE="AnotherMorseTrainer-${NAME}-b${CODE}"
+          mkdir -p release
+          cp "$(one '*.msi')"         "release/${BASE}-windows-x64.msi"
+          cp "$(one '*.AppImage')"    "release/${BASE}-linux-x86_64.AppImage"
+          cp "$(one '*.flatpak')"     "release/${BASE}-linux-x86_64.flatpak"
+          cp "$(one 'app-image.tar.gz')" "release/${BASE}-linux-x86_64.tar.gz"
+          # Never the MSIX: unsigned, it cannot be installed (header).
+          ( cd release && sha256sum -- * > SHA256SUMS.txt )
+          ls -l release
+          cat release/SHA256SUMS.txt
+
+      - name: Write the release notes
+        env:
+          TAG: ${{ needs.prepare.outputs.tag }}
+          KIND: ${{ needs.prepare.outputs.kind }}
+          NAME: ${{ needs.prepare.outputs.name }}
+          CODE: ${{ needs.prepare.outputs.code }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          BASE="AnotherMorseTrainer-${NAME}-b${CODE}"
+          # Changelog as discord-release.yml writes it: desktop commits since
+          # the previous desktop tag of either kind, packaging excluded.
+          PREV="$(git describe --tags --abbrev=0 --match 'desktop-v*' --match 'desktop-beta-v*' \
+                   "${GITHUB_SHA}^" 2>/dev/null || true)"
+          if [ -n "$PREV" ]; then RANGE="${PREV}..${GITHUB_SHA}"; else RANGE="$GITHUB_SHA"; fi
+          LOG="$(git log --no-merges -40 --pretty=format:'- %s' "$RANGE" -- \
+                 desktop ':(exclude)desktop/packaging')"
+          [ -z "$LOG" ] && LOG="- (no desktop commits since ${PREV:-the start})"
+          {
+            if [ "$KIND" = "beta" ]; then
+              echo "**Testing build** ${CODE} of Another Morse Trainer ${NAME} for Windows and Linux. It may have rough edges; please report what you find in the issues or on Discord."
+            else
+              echo "Another Morse Trainer ${NAME} for Windows and Linux (desktop build ${CODE})."
+            fi
+            echo
+            echo "## Downloads"
+            echo
+            echo "| File | For |"
+            echo "|---|---|"
+            echo "| \`${BASE}-windows-x64.msi\` | Windows 10 or 11 (x64). Installs for the current user and upgrades an earlier MSI in place. The installer is not code-signed, so SmartScreen may say \"Windows protected your PC\": choose **More info**, then **Run anyway**. |"
+            echo "| \`${BASE}-linux-x86_64.AppImage\` | Most x86_64 Linux desktops: \`chmod +x\` it and run it. |"
+            echo "| \`${BASE}-linux-x86_64.flatpak\` | \`flatpak install --user ${BASE}-linux-x86_64.flatpak\`. It needs the freedesktop 25.08 runtime from Flathub; if Flatpak cannot find it, first run \`flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo\`. |"
+            echo "| \`${BASE}-linux-x86_64.tar.gz\` | The app image itself (bundled Java runtime): unpack it and run \`bin/AnotherMorseTrainer\`. |"
+            echo "| \`SHA256SUMS.txt\` | Checksums: \`sha256sum -c SHA256SUMS.txt\`. |"
+            echo
+            echo "Scores made on the desktop are personal bests and are not ranked on the shared leaderboard. Bluetooth Morse keys are not supported on desktop; USB keys such as the Vail Adapter, and the keyboard, are. The user guide is at https://anothermorsetrainer.app/guide/."
+            echo
+            echo "## Changes"
+            echo
+            echo "$LOG"
+            if [ -n "$PREV" ]; then
+              echo
+              echo "Full diff: https://github.com/${REPO}/compare/${PREV}...${TAG}"
+            fi
+          } > release/NOTES.md
+          cat release/NOTES.md
+
+      - name: Keep the release files (also the dry run's result)
+        uses: actions/upload-artifact@v6
+        with:
+          name: desktop-release-files
+          path: release/
+          if-no-files-found: error
+
+      - name: Dry run — nothing published
+        if: needs.prepare.outputs.dry_run == 'true'
+        env:
+          TAG: ${{ needs.prepare.outputs.tag }}
+        run: |
+          echo "::notice::Dry run: $TAG was built, tested and assembled (artifact desktop-release-files). No tag pushed, no release created, nothing announced."
+
+  # Separate from the build so the write permission is held only here, by a
+  # job that runs no project code.
+  publish:
+    name: Tag and publish the release
+    needs: [prepare, assemble]
+    if: needs.prepare.outputs.dry_run != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Fetch the release files
+        uses: actions/download-artifact@v8
+        with:
+          name: desktop-release-files
+          path: release
+
+      - name: Push the tag (never moves an existing one)
+        env:
+          TAG: ${{ needs.prepare.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if git fetch -q --depth=1 origin "refs/tags/${TAG}:refs/tags/${TAG}" 2>/dev/null; then
+            AT="$(git rev-parse "${TAG}^{commit}")"
+            if [ "$AT" = "$GITHUB_SHA" ]; then
+              echo "$TAG already points at this commit."
+              exit 0
+            fi
+            # Unlike the store workflows, the release would attach this run's
+            # files to another commit's tag; refuse.
+            echo "::error::$TAG already exists at ${AT:0:12}, not ${GITHUB_SHA:0:12}. Bump desktopVersionCode."
+            exit 1
+          fi
+          git -c user.name="github-actions[bot]" \
+              -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+              tag -a "$TAG" -m "$TAG" "$GITHUB_SHA"
+          git push origin "refs/tags/$TAG"
+          echo "Pushed $TAG at ${GITHUB_SHA:0:12}."
+
+      - name: Create the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+          KIND: ${{ needs.prepare.outputs.kind }}
+          NAME: ${{ needs.prepare.outputs.name }}
+          CODE: ${{ needs.prepare.outputs.code }}
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "::error::A release for $TAG already exists; it is never overwritten. Delete it by hand if it is wrong, or bump desktopVersionCode."
+            exit 1
+          fi
+          if [ "$KIND" = "beta" ]; then
+            TITLE="Desktop ${NAME} testing build ${CODE}"
+            FLAGS=(--prerelease)
+          else
+            TITLE="Desktop ${NAME} (build ${CODE})"
+            FLAGS=()
+          fi
+          mapfile -t FILES < <(find release -type f ! -name NOTES.md | sort)
+          gh release create "$TAG" "${FILES[@]}" \
+            --verify-tag \
+            --title "$TITLE" \
+            --notes-file release/NOTES.md \
+            "${FLAGS[@]}"
+          gh release view "$TAG" --json url,isPrerelease,assets \
+            --jq '"\(.url)  prerelease=\(.isPrerelease)\n" + ([.assets[].name] | join("\n"))'
+
+      # discord-release.yml reads this to know what the run released: a
+      # manual run's head_branch is the branch, not a tag.
+      - name: Record the tag for the announcement
+        env:
+          TAG: ${{ needs.prepare.outputs.tag }}
+        run: printf '%s\n' "$TAG" > release-tag.txt
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: release-tag
+          path: release-tag.txt
+          retention-days: 7

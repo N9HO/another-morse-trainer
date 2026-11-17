@@ -22,7 +22,18 @@ name: Desktop CI
 #                               certificate). Windows bills at 2x Linux, so only
 #                               what needs Windows runs there. No macOS runner.
 #
-# Nothing is published: artifacts only. Release tags will be desktop-v*.
+# Nothing is published here: artifacts only. desktop-release.yml calls this
+# workflow (workflow_call) to build a release, so what ships is exactly what
+# these jobs build and check, and publishes the artifacts as a GitHub Release.
+# Called that way, the jobs report as "Build / Desktop unit tests" and so on
+# under the release run. Runs triggered here directly (push, pull_request)
+# keep the plain job names that merge-gate.yml waits for, so adding the
+# workflow_call trigger changed nothing the gate sees. Rename a job, and
+# merge-gate.yml's name map changes with it.
+#
+# The unit-test job also runs desktop/packaging/versions.py: the shared
+# version, the AppStream metainfo and the MSIX/MSI version derivation must
+# agree, or the job fails before Gradle starts.
 #
 # Triggers mirror android-ci.yml, for the same reasons (see its header): the
 # pull_request paths filter is evaluated against the whole PR diff, which is
@@ -43,7 +54,14 @@ on:
       - "fixtures/**"
       - ".github/workflows/desktop.yml"
   workflow_dispatch:
+  # desktop-release.yml. No inputs: the jobs read every version from
+  # desktop/app/build.gradle.kts through packaging/versions.py.
+  workflow_call:
 
+# Under workflow_call, github.workflow is the CALLER's name, so this group
+# becomes "<caller>-<ref>". desktop-release.yml uses a fixed group of its own
+# ("desktop-release"), which must stay different from that, or the called run
+# waits on its caller forever.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -61,6 +79,10 @@ jobs:
         working-directory: desktop
     steps:
       - uses: actions/checkout@v5
+
+      # Cheap and first: a version mismatch fails before Gradle downloads anything.
+      - name: Check that the version strings agree
+        run: python3 packaging/versions.py check
 
       - name: Set up JDK 21
         uses: actions/setup-java@v5
@@ -303,8 +325,24 @@ jobs:
           if (-not $exe) { throw "No AnotherMorseTrainer.exe in the app image" }
           $img = $exe.Directory.FullName
           Write-Host "app image: $img"
-          $version = (Select-String -Path app/build.gradle.kts -Pattern 'val desktopVersionName = "([0-9.]+)"').Matches[0].Groups[1].Value + ".0"
+          # MAJOR.MINOR.desktopVersionCode.0, not the shared version + ".0":
+          # every Store submission needs a higher version, and this gives one
+          # per build without moving the shared version (versions.py says why).
+          $version = "$(python packaging/versions.py field msix)".Trim()
+          if ($LASTEXITCODE -ne 0 -or $version -notmatch '^\d+\.\d+\.\d+\.0$') { throw "packaging/versions.py gave no MSIX version ('$version')" }
           Write-Host "MSIX version: $version"
+
+          # The MSI must carry MAJOR.MINOR.desktopVersionCode too, or two
+          # builds at the same shared version share a ProductCode and the
+          # second will not install over the first. jpackage names the file
+          # <packageName>-<version>.msi.
+          $msiVersion = "$(python packaging/versions.py field msi)".Trim()
+          $msi = Get-ChildItem -Recurse app/build/compose/binaries/main/msi -Filter "AnotherMorseTrainer-$msiVersion.msi" | Select-Object -First 1
+          if (-not $msi) {
+            Get-ChildItem -Recurse app/build/compose/binaries/main/msi | Format-Table Name, Length
+            throw "No AnotherMorseTrainer-$msiVersion.msi: the MSI is not built at MAJOR.MINOR.desktopVersionCode (msiPackageVersion in app/build.gradle.kts)"
+          }
+          Write-Host "MSI version: $msiVersion"
 
           $layout = Join-Path $env:RUNNER_TEMP 'msix-layout'
           New-Item -ItemType Directory -Force -Path $layout | Out-Null
