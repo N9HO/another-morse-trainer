@@ -17,7 +17,7 @@ extension AccountClient {
 /// `AccountTransport` over URLSession, configured like LeaderboardClient's.
 struct URLSessionAccountTransport: AccountTransport {
     /// The accounts Worker (its README is the API contract).
-    static let baseURL = URL(string: "https://amt-accounts.n9ho-amt.workers.dev")!
+    static let baseURL = URL(string: "https://amt-accounts.n9ho.workers.dev")!
     /// Short: sync runs in the background and simply tries again later.
     static let timeout: TimeInterval = 10
 

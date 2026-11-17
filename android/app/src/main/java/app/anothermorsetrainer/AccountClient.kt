@@ -34,7 +34,7 @@ import kotlin.coroutines.resumeWithException
 object AccountClient {
 
     /** The accounts Worker. */
-    const val BASE_URL = "https://amt-accounts.n9ho-amt.workers.dev"
+    const val BASE_URL = "https://amt-accounts.n9ho.workers.dev"
 
     /** The first-party `client` this port signs in as. */
     const val CLIENT = "amt-android"
