@@ -41,7 +41,7 @@ store's answers change for #237.
 
 Its own opt-in: nothing is sent until the user signs in under **Settings ›
 Account & Sync** (signed out by default). The service is a separate Worker,
-`amt-accounts.n9ho-amt.workers.dev` (repository
+`amt-accounts.n9ho.workers.dev` (repository
 `N9HO/another-morse-trainer-accounts`, whose README section 12 lists exactly
 what it stores). Once signed in:
 
