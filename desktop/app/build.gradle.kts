@@ -30,7 +30,7 @@ plugins {
 // Release tags: desktop-v<name>-b<code>, testing builds
 // desktop-beta-v<name>-b<code> (.github/workflows/desktop-release.yml).
 val desktopVersionName = "2.0.0"
-val desktopVersionCode = 3
+val desktopVersionCode = 4
 val desktopPackageVersion = desktopVersionName.split(".").take(2).joinToString(".") + ".$desktopVersionCode"
 
 kotlin {

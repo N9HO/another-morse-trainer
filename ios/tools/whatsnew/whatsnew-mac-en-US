@@ -1,6 +1,9 @@
-• NEW: Brass Knuckles Knock Out, an arcade boxing game that teaches Morse, created by Derick (KO6PBZ) for Kristen's (K5MME) PocketCW firmware. Key the tell back to dodge, then every character you send is a punch.
-• The Daily DiDaaaaahDit: copy a sentence by ear, then answer a question about it.
-• POTA hunt simulator in CW Operating Procedure.
-• Continue with the key after a miss.
-• Fixes: CW Asteroids taps, the clipped Keyer mode row.
-Please try: Brass Knuckles Knock Out with the keyboard or a Vail Adapter, and resizing the window.
+• Optional account: sign in under Settings and your progress and training settings sync across your Mac, iPhone, iPad, Android and PC.
+• A new on-screen key on every keying screen, and a sidetone that plays the exact pitch you set and answers sooner.
+• MIDI paddles timed by the app: a Vail Adapter in Passthrough or an N6ARA TinyMIDI now keys iambic at your Paddle mode and speed. A Morserino-32 straight key (MIDI note 30) works too.
+• Daily Dit: Past puzzles plays the last 30 days as practice, and each guess row shows the speed you actually heard.
+• Key to continue after a miss in Journey, Type It and QRQ Speed. New "Short callsigns only (4 characters)" option for Pileup, Contest and Rapid Fire.
+• When a timed session runs out, the drill on screen waits for your answer.
+• Drill and game sounds take turns instead of cutting into each other; CW Galaga paces enemies so every one is heard; smoother arcade frames.
+• Also new since build 41: Brass Knuckles Knock Out (Games), the Daily DiDaaaaahDit and the POTA hunt simulator.
+Please try: signing in here and on another device, then changing a setting on one; a Vail Adapter or MIDI paddle; and a few waves of CW Galaga.
